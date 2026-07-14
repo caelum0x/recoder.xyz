@@ -1,7 +1,46 @@
 // Copyright 2025, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer } from "electron";
+
+function isLoopbackHostname(hostname: string): boolean {
+    return hostname == "127.0.0.1" || hostname == "localhost" || hostname == "[::1]";
+}
+
+// Recoder cockpit bridge — only exposed to pages served from the loopback
+// backend (the embedded cockpit). This is a convenience seam, NOT the trust
+// boundary: the host webview re-validates guest origin + payload before acting
+// (frontend/app/view/recoder/recoder-open-terminal.ts), and the main process
+// re-verifies event.senderFrame.url against the real backend origin before
+// handing back any config — arbitrary sites get null.
+//
+// exposeInMainWorld is once-per-key, so the terminal action and the runtime
+// config ({backendUrl, token} — the seam cockpit/src/lib/config.ts reads) are
+// resolved first and exposed together in a single call.
+try {
+    const loc = globalThis.location;
+    if (loc != null && loc.protocol == "http:" && isLoopbackHostname(loc.hostname)) {
+        void (async () => {
+            const bridge: Record<string, unknown> = {
+                openWorkspaceTerminal: (payload: { sessionName: string; cwd?: string }) => {
+                    ipcRenderer.sendToHost("recoder:open-workspace-terminal", payload);
+                },
+            };
+            try {
+                const cfg = await ipcRenderer.invoke("recoder:cockpit-config");
+                if (cfg != null && typeof cfg.backendUrl == "string") {
+                    bridge.backendUrl = cfg.backendUrl;
+                    bridge.token = cfg.token;
+                }
+            } catch (e) {
+                console.log("recoder:cockpit-config unavailable", e);
+            }
+            contextBridge.exposeInMainWorld("__RECODER_COCKPIT__", bridge);
+        })();
+    }
+} catch (e) {
+    console.log("recoder cockpit bridge not exposed", e);
+}
 
 document.addEventListener("contextmenu", (event) => {
     console.log("contextmenu event", event);

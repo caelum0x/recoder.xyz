@@ -396,17 +396,14 @@ body {
 .ws-center-spacer { flex: 1; }
 .ws-center-meta { font-size: 11px; color: var(--text-faint); font-family: var(--mono); white-space: nowrap; }
 
-/* Terminal / Chat mode toggle for the center — terminal-first surface. */
-.ws-center-modes { display: inline-flex; gap: 2px; background: var(--bg-inset, #1b1b1b); border-radius: var(--radius-sm, 6px); padding: 2px; }
-.ws-center-mode {
-  background: none; border: none; cursor: pointer; font: inherit;
-  font-size: 11px; padding: 3px 10px; border-radius: 4px; color: var(--text-dim);
+/* "Open in terminal" — the wave-host handoff that replaced the embedded
+   terminal surfaces (fusion §5). Disabled state carries the truthful hint in
+   its title; failures render as a compact inline note. */
+.open-in-terminal { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.open-in-terminal-error {
+  color: var(--bad, #e5484d); font-size: 11px; max-width: 260px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.ws-center-mode:hover { color: var(--text); }
-.ws-center-mode-active { background: var(--bg-card, #2a2a2a); color: var(--text); }
-/* The real terminal fills the center; xterm sizes itself inside. */
-.ws-center-terminal { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.ws-center-terminal > * { flex: 1 1 auto; min-height: 0; }
 
 /* Center sub-tabs: All changes / <task> / Review branch changes. */
 .ws-center-tabs { display: flex; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--border); }
@@ -739,29 +736,8 @@ body {
 .detail-output-log { border-top: 1px solid var(--border); display: flex; flex-direction: column; min-height: 160px; }
 .detail-output-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); padding: 8px 12px 0; }
 
-/* Terminal tab — "Run | Terminal" header over the live session pane. */
-.detail-terminal { display: flex; flex-direction: column; min-height: 0; height: 100%; }
-.detail-terminal-head {
-  display: flex; align-items: center; gap: 14px; padding: 8px 14px;
-  border-bottom: 1px solid var(--border); background: var(--bg-inset);
-}
-.detail-terminal-tab { font-size: 11px; color: var(--text-faint); padding-bottom: 2px; border-bottom: 2px solid transparent; }
-.detail-terminal-tab-active { color: var(--text); border-bottom-color: var(--accent); }
-/* The Chat | Terminal surface toggle — buttons styled as the existing flat tabs
-   (transparent button reset, accent underline on the active skin). */
-.detail-terminal-tab-btn {
-  background: none; border: none; border-bottom: 2px solid transparent;
-  cursor: pointer; font: inherit; font-size: 11px; padding: 0 0 2px;
-  transition: color 0.12s, border-color 0.12s;
-}
-.detail-terminal-tab-btn:hover { color: var(--text-dim); }
-.detail-terminal-branch {
-  margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--text-dim);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;
-}
-
-/* Friendly ConversationView — the calm "not scary" skin of the surface toggle.
-   Muted, Cursor-style, reusing the existing neutral tokens (no vibrant noise). */
+/* Friendly ConversationView — the calm chat skin over the workspace's live
+   RunEvent stream. Muted, Cursor-style, reusing the existing neutral tokens. */
 .conv { display: flex; flex-direction: column; min-height: 0; height: 100%; }
 .conv-scroll {
   flex: 1; min-height: 0; overflow: auto; padding: 14px 16px;
@@ -941,82 +917,14 @@ body {
 .view-more-item:hover { color: var(--text); background: var(--bg-card); }
 .view-more-item-active { color: var(--text); background: var(--bg-card); }
 
-/* Sessions surface */
-.sessions-surface { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; height: 100%; overflow: auto; }
-.sessions-toolbar { display: flex; align-items: center; justify-content: space-between; }
-.sessions-title { display: flex; align-items: center; gap: 10px; }
 .panel-title { font-weight: 600; font-size: 13px; }
-.session-start {
-  background: var(--bg-elev); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); padding: 14px; display: grid; gap: 8px;
-  grid-template-columns: 1fr 1fr;
-}
-.session-start .modal-actions { grid-column: 1 / -1; }
-.session-start .form-error { grid-column: 1 / -1; }
 
-.sessions-split { display: grid; grid-template-columns: 280px 1fr; gap: 12px; min-height: 320px; }
-.sessions-list { display: flex; flex-direction: column; gap: 6px; overflow: auto; }
-.session-row {
-  position: relative; text-align: left; background: var(--bg-card);
-  border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px;
-  cursor: pointer; color: var(--text); display: flex; flex-direction: column; gap: 4px;
-  transition: border-color 0.12s, background 0.12s;
-}
-.session-row:hover { border-color: var(--border-strong); background: var(--bg-elev); }
-.session-row-active { border-color: var(--accent); }
-.session-row-main { display: flex; justify-content: space-between; gap: 8px; }
-.session-name { font-weight: 600; font-size: 12px; }
-.session-branch { color: var(--text-faint); font-family: var(--mono); font-size: 11px; }
-.session-row-sub { color: var(--text-dim); font-family: var(--mono); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 48px; }
-.session-kill { position: absolute; top: 8px; right: 8px; }
-
-.sessions-detail {
-  background: var(--bg-elev); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); min-height: 320px; display: flex; flex-direction: column;
-}
-
-/* Terminal */
-.terminal-shell { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; height: 100%; }
-.terminal-mode { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.terminal-status { color: var(--text-faint); font-size: 11px; font-family: var(--mono); }
-.terminal-screen {
-  flex: 1; min-height: 220px; max-height: 420px; overflow: auto;
+/* Run tab — read-only live output of the run session's tmux pane (HTTP poll). */
+.run-panel-screen {
+  flex: 1; min-height: 220px; overflow: auto;
   background: #000; border: 1px solid var(--border); border-radius: 6px; padding: 8px;
-  cursor: text;
 }
-.terminal-screen:focus { outline: 1px solid var(--accent); }
-.terminal-screen-ro { cursor: default; }
-.terminal-buffer { margin: 0; font-family: var(--mono); font-size: 11px; line-height: 1.4; color: #d6f5d6; white-space: pre-wrap; word-break: break-all; }
-.terminal-input-row { display: flex; gap: 6px; }
-.terminal-input {
-  flex: 1; background: var(--bg-inset); color: var(--text);
-  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
-  padding: 7px 10px; font-size: 12px; font-family: var(--mono);
-  transition: border-color 0.12s, box-shadow 0.12s;
-}
-.terminal-input:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
-.terminal-hint { color: var(--text-faint); font-size: 10px; margin: 0; }
-.terminal-hint code { font-family: var(--mono); color: var(--text-dim); }
-
-/* dmux panel */
-.dmux-panel {
-  background: var(--bg-elev); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); padding: 14px; display: flex; flex-direction: column; gap: 10px;
-}
-.dmux-head { display: flex; align-items: center; gap: 10px; }
-.dmux-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 11px; }
-.dmux-meta .meta-k { color: var(--text-faint); margin-right: 6px; }
-.dmux-meta .meta-v { color: var(--text-dim); font-family: var(--mono); }
-.dmux-grid { display: flex; flex-direction: column; gap: 6px; }
-.dmux-grid-label { color: var(--text-faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
-.dmux-session-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.dmux-session {
-  display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px;
-  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px 8px; color: var(--text-dim);
-}
-.dmux-launch { display: flex; gap: 6px; }
-.dmux-launched { display: flex; flex-direction: column; gap: 4px; }
-.dmux-attach { font-family: var(--mono); font-size: 11px; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px; color: var(--text-dim); word-break: break-all; }
+.run-panel-buffer { margin: 0; font-family: var(--mono); font-size: 11px; line-height: 1.4; color: #d6f5d6; white-space: pre-wrap; word-break: break-all; }
 
 /* Sign-in overlay — real "Sign in to Recoder" panel shown on 401/403. */
 .signin-overlay {
@@ -1269,26 +1177,3 @@ body {
 .brain-metric { font-size: 16px; font-weight: 600; color: var(--text); }
 .brain-idle-note { line-height: 1.5; margin: 0; }
 .brain-tiphash { white-space: normal; word-break: break-all; }
-
-/* Recoder Terminal — the real embedded xterm pane (RecoderTerminal.tsx). */
-.rterm { display: flex; flex-direction: column; height: 100%; min-height: 240px; background: #181818; }
-.rterm-host { flex: 1 1 auto; min-height: 0; padding: 6px 8px; }
-.rterm-host .xterm { height: 100%; }
-.rterm-exited { padding: 6px 10px; font-size: 11px; color: var(--text-faint); border-top: 1px solid var(--border); background: var(--bg-elev); }
-.rterm-unsupported { padding: 16px; font-size: 12px; color: var(--text-dim); line-height: 1.5; display: flex; flex-direction: column; gap: 4px; }
-/* Friendly PTY-unavailable notice — calm, two-line, never jargon ("PTY"/"TTY"). */
-.rterm-notice-title { color: var(--text-dim); font-weight: 600; font-size: 12px; }
-.rterm-notice-body { color: var(--text-faint); font-size: 11.5px; line-height: 1.5; }
-
-/* "Show terminal" / "Hide terminal" affordance — the gentle, one-line reveal of
-   the real xterm from the friendly default (the "not scary" vision principle).
-   Muted, reusing existing neutral tokens; no vibrant noise. */
-.detail-terminal-skin { font-size: 11px; color: var(--text-dim); font-weight: 600; }
-.detail-terminal-spacer { flex: 1 1 auto; }
-.detail-terminal-toggle {
-  background: none; border: 1px solid var(--border); border-radius: var(--radius);
-  cursor: pointer; font: inherit; font-size: 11px; color: var(--text-faint);
-  padding: 3px 10px; transition: color 0.12s, border-color 0.12s, background 0.12s;
-}
-.detail-terminal-toggle:hover { color: var(--text-dim); border-color: var(--border-strong); background: var(--bg-elev); }
-.detail-terminal-toggle[aria-pressed='true'] { color: var(--text-dim); border-color: var(--border-strong); }

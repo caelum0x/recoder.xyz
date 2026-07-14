@@ -1,10 +1,10 @@
 /**
- * ConversationView — the FRIENDLY skin of the workspace detail surface toggle.
+ * ConversationView — the FRIENDLY chat skin of the workspace detail Chat tab.
  *
  * This is the "not scary" half of the Recoder Terminal vision
  * (docs/architecture/RECODER-TERMINAL-VISION.md): the SAME conductor session the
- * full RecoderTerminal attaches a PTY to, shown instead as a calm, chat-like
- * conversation. It reads the exact same RunEvent stream
+ * wave host attaches a real terminal to (via "Open in terminal"), shown instead
+ * as a calm, chat-like conversation. It reads the exact same RunEvent stream
  * (`mergeEvents(listEvents, openStream)`) the center pane uses — never a second
  * source of truth, never a fake TTY.
  *

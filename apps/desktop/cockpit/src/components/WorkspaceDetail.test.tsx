@@ -16,15 +16,17 @@
  *      3. Non-409 error (500) → plain action-error (not the gate card)
  *      4. Successful merge (200) → action-note 'Merged.' (no gate card)
  *
- * B. CHAT <-> TERMINAL SURFACE AFFORDANCE ("not scary" terminal, W4):
+ * B. CHAT TAB + "OPEN IN TERMINAL" HANDOFF (wave-desktop fusion §5):
  *
- *    The Terminal tab defaults to the calm Chat skin; "Show terminal" reveals
- *    the real embedded PTY on demand; "no real PTY" degrades to HTTP surface.
+ *    The embedded terminal surfaces are retired. The Chat tab renders the calm
+ *    ConversationView; the "Open in terminal" action hands the workspace's tmux
+ *    session to the wave host via the preload bridge
+ *    (window.__RECODER_COCKPIT__.openWorkspaceTerminal) — disabled with a
+ *    truthful hint when the bridge is absent (plain browser).
  *
  * Drives the production <WorkspaceDetail/> Preact tree in a real jsdom DOM with
- * only the runtime seams doubled — `fetch`/`window` (api + config) and the
- * desktop PTY bridge (`window.recoderDesktop`), exactly like WorkspaceCenter.test.tsx.
- * Nothing in the cockpit is stubbed.
+ * only the runtime seams doubled — `fetch`/`window` (api + config + host
+ * bridge), exactly like WorkspaceCenter.test.tsx. Nothing in the cockpit is stubbed.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'preact';
@@ -35,10 +37,10 @@ import type { Workspace } from '../types';
 const BACKEND_URL = 'http://localhost:3100';
 
 /**
- * Words that must NEVER reach the friendly TERMINAL surface — raw machine
+ * Words that must NEVER reach the friendly CHAT surface — raw machine
  * internals. Note: the detail HEADER legitimately shows the substrate label
  * ("tmux_worktree"), a truthful control-plane fact, so we assert only over the
- * terminal surface region, and the list targets genuine scary jargon (the dead-
+ * chat surface region, and the list targets genuine scary jargon (the dead-
  * pane banner, node-pty, the bare PTY/TTY acronyms) — not the substrate name.
  */
 const SCARY_WORDS = ['Pane is dead', 'node-pty', 'PTY', 'TTY', 'stderr', 'exit code'];
@@ -73,26 +75,30 @@ function makeResponse(opts: { status?: number; ok?: boolean; body?: unknown }): 
   return { status, ok, text: async () => text } as unknown as Response;
 }
 
-/** A minimal desktop PTY bridge double. `ptyUnavailable` drives the spawn result. */
-function installBridge(opts: { ptyUnavailable?: boolean } = {}): {
-  spawnCalls: Array<{ command?: string; args?: string[] }>;
+/**
+ * Install the wave host's open-as-terminal bridge on the injected cockpit
+ * config (the same seam the desktop preload exposes). In the page the config
+ * object is one global (`window === globalThis`); under vitest's jsdom the
+ * two are distinct objects, so we set it on both — config.ts reads
+ * `window.__RECODER_COCKPIT__`, lib/wave-bridge reads
+ * `globalThis.__RECODER_COCKPIT__`. Returns the recorded calls so tests can
+ * assert the real handoff payload.
+ */
+function installTerminalBridge(): {
+  openCalls: Array<{ sessionName?: string; cwd?: string }>;
 } {
-  const spawnCalls: Array<{ command?: string; args?: string[] }> = [];
-  const w = globalThis as Record<string, unknown>;
-  (w.window as Record<string, unknown>).recoderDesktop = {
-    spawnTerminal: async (o: { command?: string; args?: string[] }) => {
-      spawnCalls.push({ command: o.command, args: o.args });
-      return opts.ptyUnavailable
-        ? { id: '', success: false, ptyUnavailable: true }
-        : { id: 'pty-1', success: true };
+  const openCalls: Array<{ sessionName?: string; cwd?: string }> = [];
+  const config = {
+    backendUrl: BACKEND_URL,
+    token: 't',
+    openWorkspaceTerminal: (req: { sessionName?: string; cwd?: string }) => {
+      openCalls.push({ sessionName: req.sessionName, cwd: req.cwd });
     },
-    terminalWrite: async () => true,
-    terminalResize: async () => true,
-    terminalKill: async () => true,
-    onTerminalData: () => () => undefined,
-    onTerminalExit: () => () => undefined,
   };
-  return { spawnCalls };
+  const realWindow = (globalThis as Record<string, unknown>).window as Record<string, unknown>;
+  realWindow.__RECODER_COCKPIT__ = config;
+  (globalThis as Record<string, unknown>).__RECODER_COCKPIT__ = config;
+  return { openCalls };
 }
 
 function mount(ws: Workspace): HTMLDivElement {
@@ -121,9 +127,9 @@ function clickButtonByText(c: HTMLDivElement, text: string): void {
   });
 }
 
-/** Assert no scary jargon over the friendly terminal surface (not the header). */
+/** Assert no scary jargon over the friendly chat surface (not the header). */
 function assertNoScaryWording(c: HTMLDivElement): void {
-  const surface = c.querySelector('.detail-terminal') ?? c;
+  const surface = c.querySelector('.conv') ?? c.querySelector('.detail-body') ?? c;
   const text = surface.textContent ?? '';
   for (const word of SCARY_WORDS) {
     expect(text).not.toContain(word);
@@ -146,8 +152,8 @@ beforeEach(() => {
       removeListener: () => undefined,
     });
   }
-  // RecoderTerminal observes its host for resize; jsdom omits ResizeObserver, so
-  // provide a no-op stand-in (the resize callback is irrelevant to these tests).
+  // jsdom omits ResizeObserver; provide a no-op stand-in so any component that
+  // observes its host for resize keeps working (irrelevant to these tests).
   if (typeof (globalThis as Record<string, unknown>).ResizeObserver !== 'function') {
     class NoopResizeObserver {
       observe(): void {
@@ -187,101 +193,79 @@ afterEach(() => {
     delete realWindow.__RECODER_COCKPIT__;
     delete realWindow.recoderDesktop;
   }
+  delete (globalThis as Record<string, unknown>).__RECODER_COCKPIT__;
   delete (globalThis as Record<string, unknown>).fetch;
 });
 
-describe('WorkspaceDetail Chat <-> Terminal affordance', () => {
-  it('lands on the friendly Chat skin with a single "Show terminal" reveal (collapsed by default)', async () => {
-    installBridge();
+describe('WorkspaceDetail chat tab + "Open in terminal" handoff (fusion §5)', () => {
+  it('offers no embedded Terminal tab any more — Chat renders the calm conversation', async () => {
     const c = mount(workspace());
     await flush(10);
 
-    clickButtonByText(c, 'Terminal'); // open the Terminal tab
-    await flush(10);
-
-    // Default skin is the calm conversation, not the raw terminal.
-    expect(c.querySelector('.conv')).toBeTruthy();
-    expect(c.querySelector('.rterm')).toBeNull();
-    expect(c.querySelector('.rterm-host')).toBeNull();
-
-    // The reveal affordance is the gentle one-line "Show terminal".
-    const toggle = c.querySelector('.detail-terminal-toggle') as HTMLButtonElement;
-    expect(toggle).toBeTruthy();
-    expect(toggle.textContent?.trim()).toBe('Show terminal');
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
-    expect(c.querySelector('.detail-terminal-skin')?.textContent).toBe('Chat');
-
-    assertNoScaryWording(c);
-  });
-
-  it('reveals the REAL embedded terminal on flip — actually spawns the PTY for the tmux session', async () => {
-    const { spawnCalls } = installBridge();
-    const c = mount(workspace());
-    await flush(10);
-
-    clickButtonByText(c, 'Terminal');
-    await flush(10);
-
-    clickButtonByText(c, 'Show terminal');
-    await flush(10);
-
-    // The genuine xterm host is mounted (one engine, never a chat reskin).
-    expect(c.querySelector('.rterm')).toBeTruthy();
-    expect(c.querySelector('.conv')).toBeNull();
-
-    // It actually drove the desktop bridge to spawn a PTY attaching to THIS
-    // workspace's real tmux session — same engine/source as the conductor.
-    expect(spawnCalls.length).toBe(1);
-    expect(spawnCalls[0].args).toEqual(['attach', '-t', 'recoder-ws-detail']);
-
-    // The affordance now collapses the terminal, gently.
-    const toggle = c.querySelector('.detail-terminal-toggle') as HTMLButtonElement;
-    expect(toggle.textContent?.trim()).toBe('Hide terminal');
-    expect(toggle.getAttribute('aria-pressed')).toBe('true');
-    expect(c.querySelector('.detail-terminal-skin')?.textContent).toBe('Terminal');
-  });
-
-  it('flips back to Chat with "Hide terminal" — the real terminal collapses on demand', async () => {
-    installBridge();
-    const c = mount(workspace());
-    await flush(10);
-
-    clickButtonByText(c, 'Terminal');
-    await flush(10);
-    clickButtonByText(c, 'Show terminal');
-    await flush(10);
-    expect(c.querySelector('.rterm')).toBeTruthy();
-
-    clickButtonByText(c, 'Hide terminal');
-    await flush(10);
-
-    // Back to the calm default; the raw terminal is gone, not merely hidden.
-    expect(c.querySelector('.conv')).toBeTruthy();
-    expect(c.querySelector('.rterm')).toBeNull();
-    expect((c.querySelector('.detail-terminal-toggle') as HTMLButtonElement).textContent?.trim()).toBe(
-      'Show terminal',
+    // The terminal-era tab and toggle are retired.
+    const tabTexts = Array.from(c.querySelectorAll('.detail-tabs .tab')).map((t) =>
+      (t.textContent ?? '').trim(),
     );
+    expect(tabTexts).not.toContain('Terminal');
+    expect(c.querySelector('.detail-terminal-toggle')).toBeNull();
+
+    clickButtonByText(c, 'Chat');
+    await flush(10);
+
+    // The calm conversation skin, never an embedded terminal.
+    expect(c.querySelector('.conv')).toBeTruthy();
+    expect(c.querySelector('.rterm')).toBeNull();
+    expect(c.querySelector('.terminal-shell')).toBeNull();
     assertNoScaryWording(c);
   });
 
-  it('falls back to the truthful HTTP session surface (no jargon) when the main process reports no real PTY', async () => {
-    const { spawnCalls } = installBridge({ ptyUnavailable: true });
+  it('hands the tmux session to the wave host via the bridge with sessionName + cwd', async () => {
+    const { openCalls } = installTerminalBridge();
     const c = mount(workspace());
     await flush(10);
 
-    clickButtonByText(c, 'Terminal');
-    await flush(10);
-    clickButtonByText(c, 'Show terminal');
-    await flush(20);
+    const btn = Array.from(c.querySelectorAll('button')).find(
+      (b) => (b.textContent ?? '').trim() === 'Open in terminal',
+    ) as HTMLButtonElement;
+    expect(btn, 'the Open in terminal action is rendered next to the tab strip').toBeTruthy();
+    expect(btn.disabled).toBe(false);
 
-    // The embedded xterm genuinely TRIED to spawn (real engine on flip)…
-    expect(spawnCalls.length).toBe(1);
-    // …and on the "no real PTY" report, WorkspaceDetail gracefully replaces the
-    // dead embedded terminal with the truthful HTTP /sessions surface — never a
-    // dead terminal, never the raw node-pty/PTY jargon.
-    expect(c.querySelector('.rterm')).toBeNull();
-    expect(c.querySelector('.terminal-shell')).toBeTruthy();
-    assertNoScaryWording(c);
+    await act(async () => {
+      btn.click();
+    });
+    await flush(10);
+
+    // The REAL handoff payload: this workspace's tmux session + worktree cwd.
+    expect(openCalls).toEqual([
+      { sessionName: 'recoder-ws-detail', cwd: '/tmp/wt/ws-detail' },
+    ]);
+    // No inline failure note on a successful handoff.
+    expect(c.querySelector('.open-in-terminal-error')).toBeNull();
+  });
+
+  it('disables the action with a truthful hint when the bridge is absent (plain browser)', async () => {
+    const c = mount(workspace());
+    await flush(10);
+
+    const btn = Array.from(c.querySelectorAll('button')).find(
+      (b) => (b.textContent ?? '').trim() === 'Open in terminal',
+    ) as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    expect(btn.disabled).toBe(true);
+    expect(btn.title).toContain('Recoder desktop app');
+  });
+
+  it('disables the action when the workspace has no tmux session yet', async () => {
+    installTerminalBridge();
+    const c = mount(workspace({ sessionName: undefined }));
+    await flush(10);
+
+    const btn = Array.from(c.querySelectorAll('button')).find(
+      (b) => (b.textContent ?? '').trim() === 'Open in terminal',
+    ) as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    expect(btn.disabled).toBe(true);
+    expect(btn.title).toContain('No agent session');
   });
 });
 

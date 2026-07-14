@@ -13,6 +13,7 @@ import {
     SuggestionControlNoData,
     SuggestionControlNoResults,
 } from "@/app/suggestion/suggestion";
+import { OpenWorkspaceTerminalChannel, handleOpenWorkspaceTerminalIpc } from "@/app/view/recoder/recoder-open-terminal";
 import { MockBoundary } from "@/app/waveenv/mockboundary";
 import { useWaveEnv } from "@/app/waveenv/waveenv";
 import { openLink } from "@/store/global";
@@ -1071,7 +1072,16 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
         const handleMediaPaused = () => {
             model.setMediaPlaying(false);
         };
+        // Embedded-cockpit bridge: origin + payload validation happens inside
+        // handleOpenWorkspaceTerminalIpc (the guest is never trusted directly).
+        const handleIpcMessage = (e: any) => {
+            if (e.channel != OpenWorkspaceTerminalChannel) {
+                return;
+            }
+            fireAndForget(() => handleOpenWorkspaceTerminalIpc(webview.getURL(), e.args?.[0]));
+        };
 
+        webview.addEventListener("ipc-message", handleIpcMessage);
         webview.addEventListener("did-frame-navigate", navigateListener);
         webview.addEventListener("did-navigate-in-page", navigateListener);
         webview.addEventListener("did-navigate", navigateListener);
@@ -1088,6 +1098,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
 
         // Clean up event listeners on component unmount
         return () => {
+            webview.removeEventListener("ipc-message", handleIpcMessage);
             webview.removeEventListener("did-frame-navigate", navigateListener);
             webview.removeEventListener("did-navigate", navigateListener);
             webview.removeEventListener("did-navigate-in-page", navigateListener);

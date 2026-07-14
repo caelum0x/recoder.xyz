@@ -3,10 +3,12 @@
 
 import * as electron from "electron";
 import * as child_process from "node:child_process";
+import * as path from "node:path";
 import * as readline from "readline";
 import { WebServerEndpointVarName, WSServerEndpointVarName } from "../frontend/util/endpoints";
 import { AuthKey, WaveAuthKeyEnv } from "./authkey";
 import { setForceQuit, setUserConfirmedQuit } from "./emain-activity";
+import { getPlannedGatewayEndpoint, resolveTmuxBinForApp } from "./emain-backend";
 import {
     getElectronAppResourcesPath,
     getElectronAppUnpackedBasePath,
@@ -70,6 +72,19 @@ export function runWaveSrv(handleWSEvent: (evtMsg: WSEventType) => void): Promis
     envCopy[WaveAuthKeyEnv] = AuthKey;
     envCopy[WaveDataHomeVarName] = getWaveDataDir();
     envCopy[WaveConfigHomeVarName] = getWaveConfigDir();
+    // Same pinned tmux as the embedded Node backend, so wave terminal blocks
+    // resolve the SAME tmux server the conductor drives.
+    const tmuxBin = resolveTmuxBinForApp();
+    envCopy["CONDUCTOR_TMUX_BIN"] = tmuxBin;
+    envCopy["RECODER_TMUX_BUILD_PATH"] = tmuxBin;
+    envCopy["TMUX_BIN"] = tmuxBin;
+    envCopy["PATH"] = `${path.dirname(tmuxBin)}${path.delimiter}${envCopy["PATH"] ?? ""}`;
+    // Provider-"wave" AI modes honor this env var; openai-provider modes get
+    // the endpoint via the config-dir waveai.json override instead.
+    const gatewayEndpoint = getPlannedGatewayEndpoint();
+    if (gatewayEndpoint != null) {
+        envCopy["WAVETERM_WAVEAI_ENDPOINT"] = gatewayEndpoint;
+    }
     const waveSrvCmd = getWaveSrvPath();
     console.log("trying to run local server", waveSrvCmd);
     const proc = child_process.spawn(getWaveSrvPath(), {
@@ -107,9 +122,7 @@ export function runWaveSrv(handleWSEvent: (evtMsg: WSEventType) => void): Promis
     });
     rlStderr.on("line", (line) => {
         if (line.includes("WAVESRV-ESTART")) {
-            const startParams = /ws:([a-z0-9.:]+) web:([a-z0-9.:]+) version:([a-z0-9.-]+) buildtime:(\d+)/gm.exec(
-                line
-            );
+            const startParams = /ws:([a-z0-9.:]+) web:([a-z0-9.:]+) version:([a-z0-9.-]+) buildtime:(\d+)/gm.exec(line);
             if (startParams == null) {
                 console.log("error parsing WAVESRV-ESTART line", line);
                 setUserConfirmedQuit(true);

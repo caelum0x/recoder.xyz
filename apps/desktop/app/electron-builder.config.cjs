@@ -36,6 +36,56 @@ const config = {
             from: "dist/tsunamiscaffold",
             to: "tsunamiscaffold",
         },
+        // Embedded Node backend (spawned by emain-backend.ts with
+        // ELECTRON_RUN_AS_NODE=1 + process.execPath, running
+        // <resources>/backend/dist/server.js).
+        {
+            from: "../../../backend/dist",
+            to: "backend/dist",
+            filter: ["**/*"],
+        },
+        {
+            from: "../../../backend/node_modules",
+            to: "backend/node_modules",
+            filter: ["**/*"],
+        },
+        {
+            from: "../../../backend/package.json",
+            to: "backend/package.json",
+        },
+        {
+            from: "../../../backend/data",
+            to: "backend/data-template",
+            filter: ["**/*"],
+        },
+        // Pinned tmux binary the conductor (and wave terminal blocks) drive.
+        {
+            from: "../engines/tmux/tmux",
+            to: "backend/engines/tmux/tmux",
+        },
+        // Native NAPI addons the backend loads in-process.
+        {
+            from: "../../../backend/engines/rust/recoder-governance/target/release/recoder-governance-napi.node",
+            to: "native/recoder-governance-napi.node",
+        },
+        {
+            from: "../../../crates/lance/npm-bindings/target/release/lance_npm_bindings.node",
+            to: "native/lance_npm_bindings.node",
+        },
+        {
+            from: "../../../backend/engines/rust/openfang/target/release/openfang_napi.node",
+            to: "native/openfang_napi.node",
+        },
+        {
+            from: "../../../backend/engines/rust/tensorzero/crates/target/release/tensorzero_gateway_napi.node",
+            to: "native/tensorzero_gateway_napi.node",
+        },
+        // Cockpit SPA served by the embedded backend in packaged builds (W3).
+        {
+            from: "../cockpit/dist",
+            to: "cockpit/dist",
+            filter: ["**/*"],
+        },
     ],
     directories: {
         output: "make",

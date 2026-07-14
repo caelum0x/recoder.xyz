@@ -3,7 +3,7 @@
  *
  * Reads the aggregated /health/full (ConductorHealth) endpoint and maps a
  * panel's `healthKey` to a readiness boolean. This gives panels a uniform way
- * to declare "I need the dmux subsystem" or "I need the substrate" without each
+ * to declare "I need the substrate" or "I need a runtime" without each
  * panel making its own health fetch.
  *
  * CURRENT BACKEND SHAPE (backend/src/conductor/conductor.routes.ts):
@@ -29,13 +29,11 @@ const HEALTH_POLL_MS = 30_000;
  *
  * Rules:
  *  - 'substrate': health.substrate.available
- *  - 'dmux':      health.dmux?.available
  *  - 'runtimes':  at least one runtime is available
  *  - anything else or unrecognised key: true (always available)
  */
 function deriveAvailability(health: ConductorHealth, key: string): boolean {
   if (key === 'substrate') return Boolean(health.substrate?.available);
-  if (key === 'dmux') return Boolean(health.dmux?.available);
   if (key === 'runtimes') return health.runtimes?.some((r) => r.available) ?? true;
   // Unknown key: optimistic — let the panel's own fetch surface errors.
   return true;

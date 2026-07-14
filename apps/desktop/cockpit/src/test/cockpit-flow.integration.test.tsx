@@ -260,15 +260,18 @@ describe('cockpit create -> events -> diff -> terminate (real UI vs stub conduct
     expect(stub.workspaces()[0].state).toBe('archived');
   }, 30_000);
 
-  it('keeps backend-capability surfaces (dmux) OUT of the human nav but deep-link reachable', async () => {
+  it('fully retires the terminal-era surfaces: no Runs/dmux nav, dmux deep link is ignored (fusion §5)', async () => {
     await act(async () => {
       render(<App />, container);
     });
     await flush(50);
 
-    // The cockpit is a TERMINAL, not an infra dashboard: dmux (a backend
-    // operator capability) is NOT surfaced in the nav. If a "More" menu exists
-    // it must not offer dmux — the nav stays plain (Board + the curated few).
+    // The terminal-era surfaces are GONE, not merely hidden: no "Runs" primary
+    // tab, and if a "More" menu exists it must not offer dmux.
+    const tabTexts = Array.from(container.querySelectorAll('.view-tabs .view-tab')).map(
+      (b) => (b.textContent ?? '').trim(),
+    );
+    expect(tabTexts, 'the Runs (sessions) tab is retired').not.toContain('Runs');
     const moreTrigger = Array.from(container.querySelectorAll('.view-tabs .view-tab')).find(
       (b) => b.textContent?.startsWith('More'),
     ) as HTMLButtonElement | undefined;
@@ -285,19 +288,19 @@ describe('cockpit create -> events -> diff -> terminate (real UI vs stub conduct
       });
     }
 
-    // But the capability is still reachable programmatically via the navigate
-    // event (deep link / launcher), so power tooling can open it on demand.
+    // A stale deep link / launcher navigate event targeting the retired view is
+    // IGNORED (the registry no longer knows it) — the cockpit stays on the
+    // board instead of rendering a dead surface.
     await act(async () => {
       window.dispatchEvent(
         new CustomEvent(COCKPIT_NAVIGATE_EVENT, { detail: { view: 'dmux' } }),
       );
     });
-    await waitForDom(
-      () =>
-        container.querySelector('.dmux-panel') !== null &&
-        text().includes('dmux console') &&
-        text().includes('available'),
-    );
-    expect(text()).toContain('/usr/local/bin/dmux');
+    await flush(100);
+    expect(container.querySelector('.dmux-panel')).toBeNull();
+    expect(
+      container.querySelector('.main-3pane'),
+      'the board (3-pane main) is still the active view',
+    ).toBeTruthy();
   }, 20_000);
 });

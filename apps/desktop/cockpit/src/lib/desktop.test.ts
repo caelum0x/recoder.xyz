@@ -6,11 +6,7 @@
  * IPC result and the form's repoPath string — it must never fabricate a path.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  hasFolderPicker,
-  pickedFolderPath,
-  spawnedTerminalId,
-} from './desktop';
+import { hasFolderPicker, pickedFolderPath } from './desktop';
 
 afterEach(() => {
   delete (globalThis as Record<string, unknown>).window;
@@ -62,12 +58,5 @@ describe('hasFolderPicker', () => {
       recoderDesktop: { openFolder: async () => null },
     };
     expect(hasFolderPicker()).toBe(true);
-  });
-});
-
-describe('spawnedTerminalId', () => {
-  it('normalizes both the bare-string and { id } shapes', () => {
-    expect(spawnedTerminalId('term-1')).toBe('term-1');
-    expect(spawnedTerminalId({ id: 'term-2' })).toBe('term-2');
   });
 });

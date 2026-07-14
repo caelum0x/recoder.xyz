@@ -18,10 +18,11 @@ import { describe, expect, it } from 'vitest';
 // and avoids rendering the full component tree.
 
 // Re-derive the arrays the same way App.tsx does.
-const PRIMARY_VIEWS = ['board', 'sessions'] as const;
+// RETIRED (wave-desktop fusion §5): 'sessions' and 'dmux' — the terminal-era
+// surfaces are gone from the registry, the nav, and the CockpitView union.
+const PRIMARY_VIEWS = ['board'] as const;
 
 const MORE_VIEWS = [
-  'dmux',
   'substrates',
   'governance',
   'policy',
@@ -38,14 +39,12 @@ const MORE_VIEWS = [
 ] as const;
 
 /**
- * All valid CockpitView ids — the same union declared in config.ts.
- * Keeping this in sync with the type ensures the test fails whenever a new
- * view is added to the type but not to the nav.
+ * All registered panel ids (the registry drives the nav; the CockpitView union
+ * in config.ts is the deep-linkable subset). Keeping this in sync ensures the
+ * test fails whenever a panel is added to the registry but not to the nav.
  */
 const ALL_COCKPIT_VIEWS = [
   'board',
-  'sessions',
-  'dmux',
   'connectors',
   'policy',
   'memory',
@@ -61,6 +60,9 @@ const ALL_COCKPIT_VIEWS = [
   'retrieval',
 ] as const;
 
+/** Terminal-era ids that must never reappear in the nav (fusion §5). */
+const RETIRED_VIEWS = ['sessions', 'dmux'] as const;
+
 describe('cockpit nav coverage', () => {
   const allNavViews = new Set<string>([...PRIMARY_VIEWS, ...MORE_VIEWS]);
 
@@ -75,6 +77,12 @@ describe('cockpit nav coverage', () => {
     const previouslyMissing = ['mcp', 'gateway', 'agents', 'networking', 'squads', 'retrieval'] as const;
     for (const id of previouslyMissing) {
       expect(moreSet.has(id), `panel "${id}" must appear in the More menu`).toBe(true);
+    }
+  });
+
+  it('retired terminal-era views are NOT in the nav', () => {
+    for (const view of RETIRED_VIEWS) {
+      expect(allNavViews.has(view), `retired view "${view}" must not be in the nav`).toBe(false);
     }
   });
 

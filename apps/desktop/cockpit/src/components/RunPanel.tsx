@@ -2,7 +2,8 @@
  * RunPanel — the "Run" tab: run the workspace's app (its dev server) in a real
  * tmux session and watch it live, conductor-style ("Start Run"). Reuses the
  * existing conductor session plumbing (POST /sessions in the worktree) and the
- * HTTP SessionTerminal — no new terminal infrastructure.
+ * HTTP /sessions/:id/output poll — no terminal infrastructure (the cockpit no
+ * longer embeds terminals; wave-desktop fusion §5).
  *
  * The dev command is detected from the project (GET /dev-command) but stays
  * editable, so a user can run anything. Truthful + degrade-safe: a workspace with
@@ -13,12 +14,10 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { api } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { extractPreviewUrl } from '../lib/preview-url';
-import { SessionTerminal } from './SessionTerminal';
 import type { ConductorSession, Workspace } from '../types';
 
 interface RunPanelProps {
   workspace: Workspace;
-  tmuxBin?: string;
 }
 
 function errText(err: unknown): string {
@@ -33,18 +32,23 @@ function errText(err: unknown): string {
 function RunningView({
   session,
   workspaceId,
-  tmuxBin,
   busy,
   onStop,
 }: {
   session: ConductorSession;
   workspaceId: string;
-  tmuxBin?: string;
   busy: boolean;
   onStop: () => void;
 }) {
   const output = usePoll(() => api.sessionOutput(session.sessionId, 200), 3000, [session.sessionId]);
   const previewUrl = extractPreviewUrl(output.data?.output);
+  const screenRef = useRef<HTMLDivElement>(null);
+
+  // Keep the live output pinned to the bottom as new lines arrive.
+  useEffect(() => {
+    const el = screenRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [output.data]);
 
   // Persist the sniffed dev-server URL to the workspace so the agent-facing
   // preview engine (preview.health) and the board can light up. Fire once per
@@ -74,12 +78,23 @@ function RunningView({
           {busy ? 'Stopping…' : 'Stop'}
         </button>
       </div>
-      <SessionTerminal session={session} tmuxBin={tmuxBin} />
+      {/* Read-only live output of the run's tmux pane over the same HTTP poll
+          that feeds the preview sniffer — truthful: errors and emptiness are
+          shown as-is, never a fabricated "running" screen. */}
+      <div class="run-panel-screen" ref={screenRef}>
+        {output.error ? (
+          <span class="log-error">Output unavailable: {output.error.message}</span>
+        ) : output.data?.output ? (
+          <pre class="run-panel-buffer">{output.data.output}</pre>
+        ) : (
+          <span class="log-empty">Waiting for output…</span>
+        )}
+      </div>
     </div>
   );
 }
 
-export function RunPanel({ workspace, tmuxBin }: RunPanelProps) {
+export function RunPanel({ workspace }: RunPanelProps) {
   const runSessionId = `run-${workspace.workspaceId}`;
   const canRun = Boolean(workspace.worktreePath);
 
@@ -145,7 +160,6 @@ export function RunPanel({ workspace, tmuxBin }: RunPanelProps) {
       <RunningView
         session={session}
         workspaceId={workspace.workspaceId}
-        tmuxBin={tmuxBin}
         busy={busy}
         onStop={stop}
       />

@@ -20,8 +20,16 @@
  * but the upstream call fails) this returns a TRUTHFUL OpenAI-style error body
  * with an honest status code — never a fabricated completion.
  *
- * STREAMING: `stream:true` is not implemented yet; the route returns a truthful
- * 400 rather than silently downgrading to a non-streamed body.
+ * STREAMING: `stream:true` is served as valid OpenAI `chat.completion.chunk`
+ * SSE. The underlying `LlmGatewayPort` is single-shot (no token seam), so v1
+ * buffers the full completion and emits it as ONE content chunk framed by a
+ * role chunk, a finish chunk (with usage when known), and `data: [DONE]`.
+ * Wave's eventsource consumer checks status before reading the stream, so
+ * pre-stream failures (validation, unconfigured, upstream error) stay plain
+ * JSON with honest status codes.
+ * TODO(gateway-stream-v2): real token-granular streaming needs a
+ * `completeStream(req, onDelta)` seam on `LlmGatewayPort` backed by
+ * TensorZero's OpenAI-compatible SSE upstream.
  *
  * INJECTABLE DEPS: the gateway `client`, the auth middleware, and the id/clock
  * factories are all injected, so the mapping unit-tests with a fake client and
@@ -102,6 +110,63 @@ function sendOpenAiError(res: Response, status: number, message: string, type: s
   res.status(status).json({ error: { message, type, code: null, param: null } });
 }
 
+/** Fields shared by every chunk of one streamed completion. */
+interface SseEnvelope {
+  id: string;
+  created: number;
+  model: string;
+}
+
+/** OpenAI usage block mapped from the gateway result (snake_case wire shape). */
+interface OpenAiUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+}
+
+/** Frame one OpenAI `chat.completion.chunk` as an SSE `data:` event. */
+export function formatSseChunk(
+  envelope: SseEnvelope,
+  delta: Record<string, unknown>,
+  finishReason: string | null,
+  usage?: OpenAiUsage,
+): string {
+  const payload = {
+    id: envelope.id,
+    object: 'chat.completion.chunk',
+    created: envelope.created,
+    model: envelope.model,
+    choices: [{ index: 0, delta, finish_reason: finishReason }],
+    ...(usage ? { usage } : {}),
+  };
+  return `data: ${JSON.stringify(payload)}\n\n`;
+}
+
+/**
+ * Emit a buffered completion as a valid OpenAI SSE stream:
+ * role chunk → single content chunk → finish chunk (+usage) → [DONE].
+ * Exported for direct unit testing with a fake `res`.
+ */
+export function streamSingleChunkCompletion(
+  res: Response,
+  envelope: SseEnvelope,
+  content: string,
+  usage?: OpenAiUsage,
+): void {
+  res.status(200);
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  // flushHeaders is present on real Express responses; guard for test fakes.
+  (res as { flushHeaders?: () => void }).flushHeaders?.();
+
+  res.write(formatSseChunk(envelope, { role: 'assistant' }, null));
+  res.write(formatSseChunk(envelope, { content }, null));
+  res.write(formatSseChunk(envelope, {}, 'stop', usage));
+  res.write('data: [DONE]\n\n');
+  res.end();
+}
+
 /**
  * Core handler: OpenAI chat-completion request → gateway.complete → OpenAI body.
  * Exported for direct unit testing with a fake `client` and fake `res`.
@@ -114,15 +179,6 @@ export async function handleChatCompletion(deps: OpenAiCompatDeps, req: Request,
     max_tokens?: unknown;
     stream?: unknown;
   };
-
-  if (body.stream === true) {
-    return sendOpenAiError(
-      res,
-      400,
-      'streaming not supported yet — retry with "stream": false',
-      'invalid_request_error',
-    );
-  }
 
   if (typeof body.model !== 'string' || !body.model.trim()) {
     return sendOpenAiError(res, 400, 'model (string) is required', 'invalid_request_error');
@@ -147,6 +203,8 @@ export async function handleChatCompletion(deps: OpenAiCompatDeps, req: Request,
 
   if (!result.routed) {
     // Truthful degrade: unconfigured => 503, upstream failure => 502. Never fake.
+    // Headers are not sent yet, so this stays plain JSON even for stream:true —
+    // wave's eventsource consumer checks the status before reading the stream.
     const status = result.configured ? 502 : 503;
     return sendOpenAiError(res, status, result.reason ?? 'gateway unavailable', 'gateway_error');
   }
@@ -163,6 +221,17 @@ export async function handleChatCompletion(deps: OpenAiCompatDeps, req: Request,
           total_tokens: (result.usage.inputTokens ?? 0) + (result.usage.outputTokens ?? 0),
         }
       : undefined;
+
+  if (body.stream === true) {
+    // Buffered-then-emitted SSE: one content chunk, correct wire format.
+    // TODO(gateway-stream-v2): token granularity needs a streaming port seam.
+    return streamSingleChunkCompletion(
+      res,
+      { id: makeId(), created: now(), model: body.model.trim() },
+      result.content ?? '',
+      usage,
+    );
+  }
 
   res.status(200).json({
     id: makeId(),
