@@ -33,7 +33,7 @@ import (
 var serverCmd = &cobra.Command{
 	Use:    "connserver",
 	Hidden: true,
-	Short:  "remote server to power wave blocks",
+	Short:  "remote server to power Recoder blocks",
 	Args:   cobra.NoArgs,
 	RunE:   serverRun,
 }

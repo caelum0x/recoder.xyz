@@ -1,8 +1,8 @@
-# Wave AI Architecture Documentation
+# Recoder AI Architecture Documentation
 
 ## Overview
 
-Wave AI is a chat-based AI assistant feature integrated into Wave Terminal. It provides a conversational interface for interacting with various AI providers (OpenAI, Anthropic, Perplexity, Google, and Wave's cloud proxy) through a unified streaming architecture. The feature is implemented as a block view within Wave Terminal's modular system.
+Recoder AI is a chat-based AI assistant feature integrated into Recoder Terminal. It provides a conversational interface for interacting with various AI providers (OpenAI, Anthropic, Perplexity, Google, and Wave's cloud proxy) through a unified streaming architecture. The feature is implemented as a block view within Recoder Terminal's modular system.
 
 ## Architecture Components
 

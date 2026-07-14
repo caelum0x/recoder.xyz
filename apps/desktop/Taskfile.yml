@@ -4,15 +4,15 @@
 version: "3"
 
 vars:
-    APP_NAME: "Wave"
+    APP_NAME: "Recoder"
     BIN_DIR: "bin"
     VERSION:
         sh: node app/version.cjs
     RMRF: '{{if eq OS "windows"}}powershell -NoProfile -NonInteractive Remove-Item -Force -Recurse -ErrorAction SilentlyContinue{{else}}rm -rf{{end}}'
     DATE: '{{if eq OS "windows"}}powershell -NoProfile -NonInteractive Get-Date -UFormat{{else}}date{{end}}'
-    ARTIFACTS_BUCKET: waveterm-github-artifacts/staging-w2
-    RELEASES_BUCKET: dl.waveterm.dev/releases-w2
-    WINGET_PACKAGE: CommandLine.Wave
+    ARTIFACTS_BUCKET: recoder-github-artifacts/staging
+    RELEASES_BUCKET: dl.recoder.xyz/releases
+    WINGET_PACKAGE: Recoder.Recoder
 
 tasks:
     electron:dev:
@@ -27,9 +27,9 @@ tasks:
             - build:tsunamiscaffold
         env:
             WAVETERM_ENVFILE: "{{.ROOT_DIR}}/.env"
-            WCLOUD_PING_ENDPOINT: "https://ping-dev.waveterm.dev/central"
-            WCLOUD_ENDPOINT: "https://api-dev.waveterm.dev/central"
-            WCLOUD_WS_ENDPOINT: "wss://wsapi-dev.waveterm.dev"
+            WCLOUD_PING_ENDPOINT: "https://ping-dev.recoder.xyz/central"
+            WCLOUD_ENDPOINT: "https://api-dev.recoder.xyz/central"
+            WCLOUD_WS_ENDPOINT: "wss://wsapi-dev.recoder.xyz"
             WAVETERM_NOCONFIRMQUIT: "1"
 
     electron:start:
@@ -43,9 +43,9 @@ tasks:
             - build:backend
         env:
             WAVETERM_ENVFILE: "{{.ROOT_DIR}}/.env"
-            WCLOUD_PING_ENDPOINT: "https://ping-dev.waveterm.dev/central"
-            WCLOUD_ENDPOINT: "https://api-dev.waveterm.dev/central"
-            WCLOUD_WS_ENDPOINT: "wss://wsapi-dev.waveterm.dev"
+            WCLOUD_PING_ENDPOINT: "https://ping-dev.recoder.xyz/central"
+            WCLOUD_ENDPOINT: "https://api-dev.recoder.xyz/central"
+            WCLOUD_WS_ENDPOINT: "wss://wsapi-dev.recoder.xyz"
 
     electron:quickdev:
         desc: Run the Electron application via the Vite dev server (quick dev - no docsite, arm64 only, no generate, no wsh).
@@ -56,9 +56,9 @@ tasks:
             - build:backend:quickdev
         env:
             WAVETERM_ENVFILE: "{{.ROOT_DIR}}/.env"
-            WCLOUD_PING_ENDPOINT: "https://ping-dev.waveterm.dev/central"
-            WCLOUD_ENDPOINT: "https://api-dev.waveterm.dev/central"
-            WCLOUD_WS_ENDPOINT: "wss://wsapi-dev.waveterm.dev/"
+            WCLOUD_PING_ENDPOINT: "https://ping-dev.recoder.xyz/central"
+            WCLOUD_ENDPOINT: "https://api-dev.recoder.xyz/central"
+            WCLOUD_WS_ENDPOINT: "wss://wsapi-dev.recoder.xyz/"
             WAVETERM_NOCONFIRMQUIT: "1"
 
     preview:
@@ -84,9 +84,9 @@ tasks:
             - build:backend:quickdev:windows
         env:
             WAVETERM_ENVFILE: "{{.ROOT_DIR}}/.env"
-            WCLOUD_PING_ENDPOINT: "https://ping-dev.waveterm.dev/central"
-            WCLOUD_ENDPOINT: "https://api-dev.waveterm.dev/central"
-            WCLOUD_WS_ENDPOINT: "wss://wsapi-dev.waveterm.dev/"
+            WCLOUD_PING_ENDPOINT: "https://ping-dev.recoder.xyz/central"
+            WCLOUD_ENDPOINT: "https://api-dev.recoder.xyz/central"
+            WCLOUD_WS_ENDPOINT: "wss://wsapi-dev.recoder.xyz/"
 
     docs:npm:install:
         desc: Runs `npm install` in docs directory
@@ -428,7 +428,7 @@ tasks:
             CHANNEL: '{{if contains "beta" .UP_VERSION}}beta{{else}}beta,stable{{end}}'
         cmd: |
             echo "Releasing to channels: [{{.CHANNEL}}]"
-            for file in waveterm_{{.UP_VERSION}}_*.snap; do
+            for file in recoder-terminal_{{.UP_VERSION}}_*.snap; do
                 echo "Publishing $file"
                 snapcraft upload --release={{.CHANNEL}} $file
                 echo "Finished publishing $file"

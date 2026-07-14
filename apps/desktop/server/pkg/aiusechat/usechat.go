@@ -678,7 +678,7 @@ func WaveAIPostMessageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	aiOpts, err := getWaveAISettings(premium, builderMode, *rtInfo, req.AIMode)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("WaveAI configuration error: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Recoder AI configuration error: %v", err), http.StatusInternalServerError)
 		return
 	}
 

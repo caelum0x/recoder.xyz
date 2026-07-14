@@ -1,4 +1,4 @@
-# useChat Compatible Backend Design for Wave Terminal
+# useChat Compatible Backend Design for Recoder Terminal
 
 ## Overview
 
@@ -40,7 +40,7 @@ GET  /api/ai/conversations/{blockId}     # Load conversation
 ```
 
 **Why this approach:**
-- `blockId`: Identifies the conversation context (existing Wave concept)
+- `blockId`: Identifies the conversation context (existing Recoder Terminal concept)
 - `preset`: URL parameter for AI configuration preset
 - **Separate persistence**: Clean separation of streaming vs storage
 - **Fast localhost calls**: Frontend can call both endpoints quickly
@@ -52,7 +52,7 @@ GET  /api/ai/conversations/{blockId}     # Load conversation
 - Frontend manages **entire conversation state** (like all modern chat apps)
 - Frontend sends **complete message history** with each request
 - Backend just processes the messages and streams response
-- Frontend handles persistence via existing Wave file system
+- Frontend handles persistence via existing Recoder Terminal wavefile system
 
 **Standard useChat() Request:**
 ```json

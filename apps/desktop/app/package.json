@@ -1,14 +1,14 @@
 {
     "name": "recoder-terminal",
     "author": {
-        "name": "Command Line Inc",
-        "email": "info@commandline.dev"
+        "name": "Recoder",
+        "email": "info@recoder.xyz"
     },
     "productName": "Recoder",
     "description": "Open-Source AI-Native Terminal Built for Seamless Workflows",
     "license": "Apache-2.0",
     "version": "0.14.5",
-    "homepage": "https://waveterm.dev",
+    "homepage": "https://recoder.xyz",
     "build": {
         "appId": "xyz.recoder.terminal"
     },

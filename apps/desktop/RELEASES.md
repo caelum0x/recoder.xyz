@@ -1,5 +1,10 @@
 # Building for release
 
+> **Note:** This document describes the release pipeline inherited from the upstream
+> [Wave Terminal](https://github.com/wavetermdev/waveterm) project. The workflow, S3, and
+> package-manager references below point at upstream infrastructure and do not apply to
+> Recoder Terminal releases; a Recoder release pipeline has not been set up yet.
+
 ## Step-by-step guide
 
 1. Go to the [Actions tab](https://github.com/wavetermdev/waveterm/actions) and select "Bump Version" from the left sidebar.
@@ -60,7 +65,7 @@ With each release, YAML files will be produced that point to the newest release 
 
 #### Update channels
 
-We utilize update channels to roll out beta and stable releases. These are determined based on the package versioning [described above](#bump-version-workflow). Users can select their update channel using the `autoupdate:channel` setting in Wave. See [here](https://www.electron.build/tutorials/release-using-channels.html) for more information.
+We utilize update channels to roll out beta and stable releases. These are determined based on the package versioning [described above](#bump-version-workflow). Users can select their update channel using the `autoupdate:channel` setting in the app. See [here](https://www.electron.build/tutorials/release-using-channels.html) for more information.
 
 ### Package Managers
 

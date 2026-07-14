@@ -120,7 +120,7 @@ const config = {
     },
     publish: {
         provider: "generic",
-        url: "https://dl.waveterm.dev/releases-w2",
+        url: "https://dl.recoder.xyz/releases",
     },
     afterPack: (context) => {
         // This is a workaround to restore file permissions to the recoder-server binaries on macOS after packaging the universal binary.
