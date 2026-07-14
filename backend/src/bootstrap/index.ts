@@ -20,14 +20,16 @@ import expressWs from 'express-ws';
 import type { AppConfig } from '../shared/app-config.js';
 import type { Logger } from '../shared/logger.js';
 import { childLogger, rootLogger } from '../shared/logger.js';
-import { TOKENS, createToken } from '../shared/di-tokens.js';
+import { TOKENS, createToken, DOMAIN_TOKENS } from '../shared/di-tokens.js';
 import { errorEnvelope, notFound } from '../shared/errors.js';
+import { DOMAIN_REGISTRY } from '../shared/domain-registry.js';
 
 import { loadConfig, type EnvSource } from './config.js';
 import { createContainer, Container } from './container.js';
 import { createHealthRegistry, HealthRegistry } from './health-registry.js';
 import { createEngineSupervisor, EngineSupervisor } from './engine-supervisor.js';
 import { createLifecycle, Lifecycle } from './lifecycle.js';
+import { createPersistenceModule } from '../domains/persistence/index.js';
 
 /** Bootstrap-owned DI tokens (beyond the shared foundation tokens). */
 export const BOOT_TOKENS = {
@@ -143,8 +145,12 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // The engine supervisor reports its own (Phase-0 truthful) health.
   healthRegistry.register({ name: 'engine-supervisor', health: () => engineSupervisor.health() });
 
-  // --- Phase 1+: register domain modules into `container` here, each also
-  //     registering a HealthSource + (Phase 4) a RouteProvider. ---
+  // --- Phase 1: Persistence — the data authority beneath every stateful
+  //     domain. Registered into the container + health registry; its routes
+  //     mount under /internal/persistence; boot-time migrate is degrade-safe. ---
+  const persistence = createPersistenceModule({ config, logger: childLogger('persistence') });
+  container.registerValue(DOMAIN_TOKENS.persistence, persistence);
+  healthRegistry.register(persistence);
 
   // 3. App.
   const { app, server } = buildApp(config, log);
@@ -152,12 +158,18 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // 4. Health.
   mountHealth(app, healthRegistry, config);
 
+  // Mount the persistence internal edges (edge domain owns the auth chain later).
+  app.use(DOMAIN_REGISTRY.persistence.mountBase, persistence.routes());
+
   // Terminal 404 + error envelope (domain routers mount before these in later phases).
   app.use(notFound());
   app.use(errorEnvelope({ error: (obj, msg) => log.error(obj, msg) }));
 
-  // 5. Listen.
+  // 5. Listen. Persistence boots first (degrade-safe migrate + KV hydrate) so
+  //    the schema is ready before the server accepts traffic; a DB-less boot
+  //    still starts (in-memory KV fallback), never blocking.
   await engineSupervisor.start();
+  await persistence.start();
   await listen(server, config);
   const url = `http://${config.server.host}:${config.server.port}`;
   log.info({ url, healthSources: healthRegistry.count }, 'recoder-backend listening');
@@ -165,6 +177,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // 6. Lifecycle wiring.
   lifecycle
     .onStop('http-server', () => closeServer(server))
+    .onStop('persistence', () => persistence.stop())
     .onStop('engine-supervisor', () => engineSupervisor.stop());
   if (options.installSignalHandlers !== false) {
     lifecycle.installSignalHandlers();
