@@ -24,19 +24,19 @@ import { fastWriteFile, fastWriteFiles } from './fast-file-writer.js';
 import * as pty from 'node-pty';
 import { WebSocketRPC } from './websocket-rpc.js';
 import { devServerManager, detectFrameworkFromContainer, getInstallCommand, getDevCommand, getExpectedPorts, setExpoPublicHostname } from './dev-server.js';
-import { ContainerLifecycleManager } from './container-lifecycle.js';
-import { snapshotManager, registerDaytonaId, unregisterDaytonaId } from './snapshot-manager.js';
-import { contextCache, computeFileHash, computeFileHashes, type ContextDiff } from './context-cache.js';
-import { autoRestoreManager, parseAllErrors, hasBlockingErrors } from './auto-restore.js';
-import { searchService } from './search.js';
+import { ContainerLifecycleManager } from './sandbox/container-lifecycle.js';
+import { snapshotManager, registerDaytonaId, unregisterDaytonaId } from './sandbox/snapshot-manager.js';
+import { contextCache, computeFileHash, computeFileHashes, type ContextDiff } from './engines/context-cache.js';
+import { autoRestoreManager, parseAllErrors, hasBlockingErrors } from './sandbox/auto-restore.js';
+import { searchService } from './code/search.js';
 import { fileWatcher } from './file-watcher.js';
-import { sessionStore } from './session-store.js';
-import { containerPool } from './container-pool.js';
+import { sessionStore } from './sandbox/session-store.js';
+import { containerPool } from './sandbox/container-pool.js';
 // mcpManager / PREINSTALLED_SERVERS / NPX_SERVERS are now consumed inside
 // ./routes/mcp.routes.ts after the MCP route extraction.
 import { packageManagerService } from './package-manager.js';
 import { secretsManager } from './secrets-manager.js';
-import { gitOperations } from './git-operations.js';
+import { gitOperations } from './code/git-operations.js';
 import { getWsRateLimiter, getAllWsRateLimitStats } from './security/ws-rate-limiter.js';
 import {
   abusePrevention,
@@ -64,7 +64,7 @@ import { identityRouter } from './public-api/routes/identity.js';
 import { moltbookAuthRouter } from './public-api/routes/auth-moltbook.js';
 import { appKeysRouter } from './public-api/routes/app-keys.js';
 import { domainRouter } from './public-api/routes/domains.js';
-import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
+import { a2aRouter, getDockerBackendAgentCard } from './a2a/a2a-gateway.js';
 import { createAgentMcpRouter, createAgentOsGitHubWebhookRouter, createAgentOsRouter, createInternalAgentOsRouter } from './agent-os/index.js';
 import { createConductorRouter } from './conductor/conductor.routes.js';
 import { isSoloMode } from './conductor/solo-mode.js';
@@ -80,7 +80,7 @@ import { createConnectorsWebhookRouter } from './connectors/webhook-ingress.js';
 import { reconcile as reconcileConductor } from './conductor/workspace-service.js';
 import { startAgentOsOutboxDrainLoop } from './agent-os/outbox-drain-loop.js';
 import { agentOsContainer } from './agent-os/service-container';
-import { openclawAdapterRouter } from './a2a-openclaw-adapter.js';
+import { openclawAdapterRouter } from './a2a/a2a-openclaw-adapter.js';
 import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, opencodeConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, agentRegistryRouter, getIntegrationWiringService, disposeTaskLifecycleService } from './a2a/index.js';
 import { workspaceRouter as a2aWorkspaceRouter } from './a2a/workspace.routes.js';
 import { memoryRouter } from './a2a/memory.routes.js';
@@ -103,12 +103,12 @@ import {
   updateShareTarget,
   getPublishedShareUrl,
 } from './zrok-preview.js';
-import { getDaytonaPreviewAccess } from './daytona-preview.js';
-import { DAYTONA_WORKSPACE_ROOT } from './daytona-runtime.js';
+import { getDaytonaPreviewAccess } from './sandbox/daytona-preview.js';
+import { DAYTONA_WORKSPACE_ROOT } from './sandbox/daytona-runtime.js';
 import { patternRouter } from './a2a/patterns/index.js';
 import { approvalRouter } from './policy/index.js';
-import { startA2AIntentWorker } from './a2a-intent-worker.js';
-import { startAgentWorkers } from './a2a-agent-workers.js';
+import { startA2AIntentWorker } from './a2a/a2a-intent-worker.js';
+import { startAgentWorkers } from './a2a/a2a-agent-workers.js';
 import { wireAutonomousRouting } from './a2a/autonomous-routing.service.js';
 import type { RedisBackedPersistenceAdapter } from '@recoder/shared/a2a';
 import {
@@ -133,7 +133,7 @@ import { MetricType } from './metering/types.js';
 // are now consumed inside ./routes/api-keys.routes.ts after the route extraction.
 import { healthMonitor, type HealthStatus } from './health-monitor.js';
 import { resourceOptimizer } from './resource-optimizer.js';
-import { getDaytonaClient, isDaytonaConfigured } from './daytona-client.js';
+import { getDaytonaClient, isDaytonaConfigured } from './sandbox/daytona-client.js';
 import {
   type ContainerEntry,
   isDaytonaSandbox,
@@ -151,14 +151,14 @@ import {
   ensureDaytonaSandboxRunning,
   daytonaDeleteSandbox,
   daytonaGetLogs,
-} from './daytona-file-ops.js';
-import { recoverContainerFromDocker } from './container-recovery.js';
+} from './sandbox/daytona-file-ops.js';
+import { recoverContainerFromDocker } from './sandbox/container-recovery.js';
 import { templateManager } from './templates/index.js';
 import {
   buildOpencodeSandboxCommand,
   parseOpencodeSandboxOutput,
   type OpencodeSandboxProviderKeys,
-} from './opencode-sandbox.js';
+} from './sandbox/opencode-sandbox.js';
 import {
   getAnonymousIdFromRequest,
   extractPlatformApiKeyCandidate,
@@ -169,7 +169,7 @@ import {
   resolveInternalServiceSession,
 } from './auth-utils.js';
 import { validateApiKey as validatePlatformApiKey } from './public-api/api-keys.js';
-import { type ContainerCreationEntry, withCreationTimeout, isCreationStale } from './container-creation.js';
+import { type ContainerCreationEntry, withCreationTimeout, isCreationStale } from './sandbox/container-creation.js';
 import { bootstrapDaytonaPreview } from './preview';
 // Deployment modules are lazily imported to avoid requiring node-fetch/form-data at startup
 const getVercelDeploy = () => import('./deployment/vercel.js');
@@ -10195,7 +10195,7 @@ import {
   getIndexStats,
   getIndexingProgress,
   clearIndex,
-} from './code-index.js';
+} from './code/code-index.js';
 
 // Index workspace
 app.post('/api/code-index/:projectId/index', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
@@ -12259,7 +12259,7 @@ import { createAdminOperationsRouter } from './routes/admin-operations.routes.js
 import { createContextCacheRouter } from './routes/context-cache.routes.js';
 
 // Initialize sandbox routes — prefer Daytona if configured, fall back to Docker
-import { createDaytonaSandboxDeps } from './daytona-sandbox-deps.js';
+import { createDaytonaSandboxDeps } from './sandbox/daytona-sandbox-deps.js';
 const daytonaDeps = createDaytonaSandboxDeps();
 initSandboxRoutes(daytonaDeps || sandboxDependencies);
 
@@ -12493,7 +12493,7 @@ void ensureOpsRecorderDaemon()
 // gateway for logging, routing, and experiment tracking. Degrade-safe: when
 // unconfigured/absent the run loop falls back to direct provider calls (no fake
 // success). Fire-and-forget; a gateway problem never blocks boot.
-import { ensureTensorzeroGateway } from './tensorzero-client.js';
+import { ensureTensorzeroGateway } from './engines/tensorzero-client.js';
 void ensureTensorzeroGateway()
   .then((gw) => {
     if (gw) {
@@ -12609,12 +12609,12 @@ app.use(['/api/a2a/messages', '/api/a2a/delegations', '/api/a2a/handoffs'], auth
 app.use('/api/a2a', workflowMessagingRouter);
 
 // Cross-app A2A workflows (agents↔PM↔agency)
-import { crossAppWorkflowRouter } from './a2a-cross-app-workflows.js';
+import { crossAppWorkflowRouter } from './a2a/a2a-cross-app-workflows.js';
 app.use('/api/a2a/workflows', authenticateRequest, crossAppWorkflowRouter);
 app.use('/api/a2a/admin', authenticateRequest, adminRouter);
 
 // Daytona LSP integration for code intelligence
-import { daytonaLspRouter } from './daytona-lsp.js';
+import { daytonaLspRouter } from './sandbox/daytona-lsp.js';
 app.use('/api/daytona/lsp', authenticateRequest, daytonaLspRouter);
 
 // Unified activity feed + dashboard metrics
