@@ -60,6 +60,16 @@ billing/enterprise/lsp/public-api/etc. lanes, or re-add specific ones deliberate
 
 ## Phase A — Auth + Data Spine (item 1: "backend owns all auth + DB for desktop and website")
 
+> **Owner decisions locked (2026-07-15):**
+> 1. **Backend owns the Better Auth surface.** The Node backend hosts `/api/auth/[...all]` and reads
+>    the DB directly; the Next.js website proxies to it. One config, one identity authority.
+> 2. **Unify into ONE identity model.** Migrate legacy plural `users`/`sessions` into Better Auth
+>    `user`/`session`, delete the raw-SQL compat bridge (`packages/auth/src/session.ts:43-113`). No
+>    more web-`user` vs CLI-`users` split — CLI/device/`sk_` identities live in the unified model.
+> 3. **Full website in scope.** Reconcile the duplicated site copies (gutted main-tree `app/` vs the
+>    full worktree copy), fix the broken Dockerfiles, and bring the site apps
+>    (`recoder-web`/`recoder-agents`/`recoder-pm`/`recoder-agency`) onto the new spine.
+
 **Goal:** the backend becomes the single identity + data authority both the desktop app and the
 website consume — one Better Auth config, one identity model, one place `sk_` keys live.
 
@@ -177,11 +187,13 @@ Phase 0 (unblock server.ts)  ──►  Phase A (auth+data spine)
 
 ---
 
-## Open decisions for the owner (blocking specifics)
+## Open decisions
 
-1. **Phase 0:** confirm the target `server.ts` capability surface (which deleted lanes stay pruned).
-2. **Phase A:** unify or keep the web-`user` / CLI-`users` identity split? Backend owns
-   `/api/auth/[...all]` or the Next.js app keeps it?
-3. **Website:** is the full site (the worktree `app/` + `recoder-web`/`recoder-agents`/`recoder-pm`)
-   in scope for this epoch, or is "website" here just the auth/identity surface it shares with
-   desktop? (Changes Phase A's blast radius significantly.)
+**Resolved (2026-07-15):** backend owns `/api/auth/[...all]`; one unified identity model (no
+web/CLI split); full website in scope. See the Phase A decision box.
+
+**Still open:**
+1. **Phase 0:** confirm the target `server.ts` capability surface — which deleted lanes stay pruned
+   vs get deliberately re-added. Proposed default: keep conductor + agent-os + MCP host + connectors
+   + gateway + a2a; drop the deleted billing/enterprise/lsp/public-api/deployment/fleet lanes unless
+   named. (Some — like `public-api` for `sk_` keys — Phase A may re-introduce in DB-backed form.)
