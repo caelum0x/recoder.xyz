@@ -7,7 +7,7 @@ import type { McpServerRegistration } from '../registry';
  * `retrieval.search` (embed the query → vector search → ColBERT rerank → passages).
  *
  * The package stays runtime-agnostic: it owns NO engine logic and assumes no
- * backing service. The host (docker-backend) injects a concrete `RetrievalPort`
+ * backing service. The host (backend) injects a concrete `RetrievalPort`
  * built over the shared vector foundation (`vector-store.ts`) + `@recoder/retrieval`.
  * Every handler degrades truthfully — the engine returns a `not_configured` status
  * (never throws, never fabricates) when no embedder/vector store is present.

@@ -2,7 +2,7 @@
  * approval-gate-adapter — route gated handoffs through approval.
  *
  * MERGED from the approval-required branch of
- * `docker-backend/src/a2a/autonomous-routing.service.ts` (`processHandoff`):
+ * `backend/src/a2a/autonomous-routing.service.ts` (`processHandoff`):
  * when the workspace/space required approval, the source opened an approval,
  * marked the handoff `awaiting-approval`, registered an `onResolved` callback,
  * and only continued the delegation when the approval was `granted`.

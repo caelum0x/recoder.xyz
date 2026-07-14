@@ -3,7 +3,7 @@
  *
  * The conductor is the parallel-agent control plane: workspaces (isolated git
  * worktree + branch + tmux session) and raw tmux sessions. This client mirrors
- * the backend route contract in docker-backend/src/conductor/conductor.routes.ts
+ * the backend route contract in backend/src/conductor/conductor.routes.ts
  * exactly, including the `{ success, data, error }` response envelope.
  *
  * Auth + base URL are resolved via `conductor-config` (env-first, then the

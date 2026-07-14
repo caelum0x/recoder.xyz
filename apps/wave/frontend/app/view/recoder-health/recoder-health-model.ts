@@ -7,7 +7,7 @@ import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { RecoderHealthView } from "./recoder-health";
 
 // Mirrors the conductor /api/conductor/health/full response (see
-// docker-backend/src/conductor/conductor-health.ts). Only the fields the
+// backend/src/conductor/conductor-health.ts). Only the fields the
 // terminal renders are declared; everything is optional/degrade-safe.
 type HealthStatus = "healthy" | "degraded" | "unhealthy";
 

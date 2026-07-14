@@ -337,7 +337,7 @@ export const workspaceCommand: SlashCommand = {
                 'Failed to connect to workspace.',
                 '',
                 'Possible reasons:',
-                '  - docker-backend is not running',
+                '  - backend is not running',
                 '  - Workspace ID does not exist',
                 '  - Authentication token is invalid',
                 '',

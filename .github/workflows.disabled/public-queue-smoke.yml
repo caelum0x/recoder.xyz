@@ -29,8 +29,8 @@ jobs:
 
       - name: Run queue smoke script
         run: |
-          chmod +x docker-backend/scripts/smoke-public-queue.sh
-          BACKEND_URL="${BACKEND_URL}" EXPECTED_QUEUE_BACKEND="${EXPECTED_QUEUE_BACKEND}" docker-backend/scripts/smoke-public-queue.sh
+          chmod +x backend/scripts/smoke-public-queue.sh
+          BACKEND_URL="${BACKEND_URL}" EXPECTED_QUEUE_BACKEND="${EXPECTED_QUEUE_BACKEND}" backend/scripts/smoke-public-queue.sh
 
       - name: Summary
         if: always()

@@ -3,7 +3,7 @@
  *
  * Exposes a typed control-plane client ({@link ConductorClient}) plus a
  * prompt-first helper, all mirroring the real backend contract in
- * docker-backend/src/conductor/conductor.routes.ts.
+ * backend/src/conductor/conductor.routes.ts.
  */
 export { ConductorClient, ConductorError } from './client.js';
 export {

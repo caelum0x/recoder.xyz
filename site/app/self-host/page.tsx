@@ -35,7 +35,7 @@ interface StackRow {
 const STACK: StackRow[] = [
   {
     service: "backend",
-    image: "docker-backend (built)",
+    image: "backend (built)",
     role: "The Recoder control plane — the product itself.",
   },
   {

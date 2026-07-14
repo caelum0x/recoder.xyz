@@ -19,7 +19,7 @@ Behavior:
       DAYTONA_API_KEY
     or
       DAYTONA_JWT_TOKEN + DAYTONA_ORGANIZATION_ID
-  - Normalizes the local Daytona API URL for Recoder docker-backend usage
+  - Normalizes the local Daytona API URL for Recoder backend usage
   - Prints the values or writes them into .env.production via scripts/set-production-vars.sh
 
 Notes:

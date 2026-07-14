@@ -3,7 +3,7 @@
  * decode it back, with a stable dedup-key derivation and a sign/verify seam.
  *
  * The `dedupKey` is the idempotency anchor the bus + ledger key on (MERGED from
- * the `_localEventIds` dedup of `docker-backend/src/a2a/a2a-event-bus.ts`, made
+ * the `_localEventIds` dedup of `backend/src/a2a/a2a-event-bus.ts`, made
  * a deterministic content key here so two processes derive the same key for the
  * same handoff). Signing is left as a seam: an optional `SignFn` produces a
  * detached signature over the canonical bytes; verification re-derives the

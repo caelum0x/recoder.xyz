@@ -2,7 +2,7 @@
  * tail-registry — the active-tails map (design §4.7).
  *
  * Promoted from the module-level `Map` in
- * docker-backend/src/conductor/run-tailer.ts, hardened into an instance (not a
+ * backend/src/conductor/run-tailer.ts, hardened into an instance (not a
  * process global) so the engine, tests, and the backend can each own their
  * wiring. Idempotent per workspace: a second `register` for a live workspace
  * returns the existing handle, so a reconcile rebind while the original tail is

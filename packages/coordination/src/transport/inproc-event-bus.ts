@@ -1,6 +1,6 @@
 /**
  * InProcEventBus — an in-process `EventBusPort` (MERGED from the local-dispatch
- * path of `docker-backend/src/a2a/a2a-event-bus.ts`). Publishes
+ * path of `backend/src/a2a/a2a-event-bus.ts`). Publishes
  * CoordinationEvents synchronously to in-process subscribers whose scope filter
  * matches the event's scope. The NATS adapter (wave-2) mirrors the same port
  * onto JetStream for cross-process fan-out.

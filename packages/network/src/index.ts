@@ -14,7 +14,7 @@
  * Ports (ports.ts) inject the real @recoder/governance capabilities (the policy
  * engine, the Merkle audit store). IO — the ext_authz HTTP handler and Express
  * route mounting — and the concrete governance-backed port implementations stay
- * in the adopting service (docker-backend) as thin adapters.
+ * in the adopting service (backend) as thin adapters.
  */
 export * from './types';
 export * from './ports';

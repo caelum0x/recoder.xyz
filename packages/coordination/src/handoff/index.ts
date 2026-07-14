@@ -1,5 +1,5 @@
 /**
- * handoff barrel — the A2A handoff bus module. Fuses the docker-backend a2a
+ * handoff barrel — the A2A handoff bus module. Fuses the backend a2a
  * event-bus dedup, autonomous-routing intent/flow, delegation-chain depth+cycle,
  * and context-bridge transfer into one pure-core/effects module.
  */

@@ -8,7 +8,7 @@
  * ports so the package stays free of runtime/IO concerns and depends only on the
  * type surface of @recoder/governance and @recoder/agent-os.
  *
- * The adopting service (docker-backend) constructs the concrete adapters:
+ * The adopting service (backend) constructs the concrete adapters:
  *   - a PolicyAdvisorPort backed by @recoder/governance `evaluatePolicy`
  *   - an AuditSinkPort backed by @recoder/governance `InMemoryAuditStore`
  */

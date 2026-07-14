@@ -10,7 +10,7 @@ import type { McpServerRegistration } from '../registry';
  * server (`modules/communication/pal-mcp-server`); it does not replace or disturb it.
  *
  * The package stays runtime-agnostic: it owns NO planning logic and assumes no
- * config. The host (docker-backend) injects a concrete `PalPlanPort` backed by
+ * config. The host (backend) injects a concrete `PalPlanPort` backed by
  * `@recoder/pal`'s pure decision functions. The handler is DENY-BIASED and
  * degrade-safe — it never throws on missing/invalid input; the engine returns a
  * conservative default decision (`approvalRequired: true`, no grants) instead.

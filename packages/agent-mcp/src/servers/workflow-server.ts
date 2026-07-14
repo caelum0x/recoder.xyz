@@ -9,7 +9,7 @@ import type { McpServerRegistration } from '../registry';
  * `{ status, findings[] }`).
  *
  * The package stays runtime-agnostic: it owns NO engine logic. The host
- * (docker-backend) injects a concrete `WorkflowPort` built over
+ * (backend) injects a concrete `WorkflowPort` built over
  * `@recoder/workflow-engine` (which skins `@recoder/agent-workflows` +
  * `@recoder/agent-hooks`). Every handler degrades truthfully — the engine returns a
  * `not_configured` status (never throws, never fabricates) when no verification

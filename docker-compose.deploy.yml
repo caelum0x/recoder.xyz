@@ -27,11 +27,11 @@ services:
     networks:
       - recoder
 
-  docker-backend:
+  backend:
     build:
       context: .
-      dockerfile: docker-backend/Dockerfile
-    container_name: recoder-docker-backend
+      dockerfile: backend/Dockerfile
+    container_name: recoder-backend
     restart: unless-stopped
     command: ["node", "dist/server.js"]
     ports:
@@ -42,7 +42,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:
-      - ./docker-backend/.env
+      - ./backend/.env
     environment:
       - NODE_ENV=production
       - PORT=3100
@@ -63,11 +63,11 @@ services:
       - RECODER_A2A_CANVAS_HANDLER_URL=http://recoder-agents:3001/api/canvas/push
       - RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
       # A2A gateway identity and security
-      - RECODER_A2A_AGENT_ID=docker-backend
+      - RECODER_A2A_AGENT_ID=backend
       - RECODER_A2A_ADMIN_TOKEN=${RECODER_A2A_ADMIN_TOKEN:-}
       - RECODER_A2A_BRIDGE_TOKEN=${RECODER_A2A_BRIDGE_TOKEN:-}
       - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-web:5173,http://openclaw-gateway:18789
-      - RECODER_A2A_ALLOWED_AGENTS=codex,claude_code,recoder-web,docker-backend,openclaw-gateway,recoder-agency,recoder-pm
+      - RECODER_A2A_ALLOWED_AGENTS=codex,claude_code,recoder-web,backend,openclaw-gateway,recoder-agency,recoder-pm
       - QDRANT_URL=http://qdrant:6333
       - MEILISEARCH_URL=http://meilisearch:7700
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?MEILI_MASTER_KEY must be set}
@@ -77,7 +77,7 @@ services:
       - USE_DAYTONA_CONTAINERS=${USE_DAYTONA_CONTAINERS:-true}
       - DAYTONA_SERVER_URL=${DAYTONA_SERVER_URL:-http://host.docker.internal:3900/api}
       # The live preview path uses the separate zrok2 stack in
-      # docker-compose.zrok.yml. Set ZROK_API_URL explicitly in docker-backend/.env
+      # docker-compose.zrok.yml. Set ZROK_API_URL explicitly in backend/.env
       # when wiring that stack; do not rely on the deprecated legacy services
       # below.
       - ZROK_API_URL=${ZROK_API_URL:-http://zrok-controller:18080}
@@ -129,20 +129,20 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5173
-      - DOCKER_BACKEND_URL=http://recoder-docker-backend:3100
-      - VITE_DOCKER_BACKEND_URL=http://recoder-docker-backend:3100
+      - DOCKER_BACKEND_URL=http://recoder-backend:3100
+      - VITE_DOCKER_BACKEND_URL=http://recoder-backend:3100
       - MAIN_SITE_URL=https://recoder.xyz
       - MAIN_SITE_INTERNAL_URL=http://host.docker.internal:3000
       - VITE_MAIN_SITE_URL=https://recoder.xyz
       - RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
       - RECODER_A2A_AGENT_ID=recoder-web
       - RECODER_A2A_REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - RECODER_A2A_PLAN_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/plan
-      - RECODER_A2A_EXECUTE_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/execute
-      - RECODER_A2A_HANDOFF_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/handoff
-      - RECODER_A2A_TOOL_CALL_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/tool_call
+      - RECODER_A2A_PLAN_HANDLER_URL=http://recoder-backend:3100/api/a2a/intent/plan
+      - RECODER_A2A_EXECUTE_HANDLER_URL=http://recoder-backend:3100/api/a2a/intent/execute
+      - RECODER_A2A_HANDOFF_HANDLER_URL=http://recoder-backend:3100/api/a2a/intent/handoff
+      - RECODER_A2A_TOOL_CALL_HANDLER_URL=http://recoder-backend:3100/api/a2a/intent/tool_call
       - RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
-      - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-docker-backend:3100
+      - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-backend:3100
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -178,14 +178,14 @@ services:
       - PORT=3000
       - NEXT_PUBLIC_APP_URL=https://recoder.xyz
       - NEXT_PUBLIC_RECODER_WEB_URL=https://web.recoder.xyz
-      - BACKEND_URL=http://recoder-docker-backend:3100
+      - BACKEND_URL=http://recoder-backend:3100
       - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_main
       - AUTH_DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_main
       - REDIS_URL=redis://recoder-redis:6379
     depends_on:
       redis:
         condition: service_healthy
-      docker-backend:
+      backend:
         condition: service_healthy
     healthcheck:
       # Use node fetch instead of curl: recoder-app can hit its 2G cgroup limit,
@@ -231,7 +231,7 @@ services:
       - NODE_ENV=production
       - PORT=3001
       - NEXT_PUBLIC_APP_URL=https://agents.recoder.xyz
-      - NEXT_PUBLIC_API_URL=http://recoder-docker-backend:3100
+      - NEXT_PUBLIC_API_URL=http://recoder-backend:3100
       - NEXT_PUBLIC_AUTH_URL=https://recoder.xyz
       - AUTH_DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_main
     healthcheck:
@@ -467,7 +467,7 @@ services:
 
   # Build the base workspace image
   recoder-base:
-    build: ./docker-backend/docker
+    build: ./backend/docker
     image: recoder-workspace:latest
     profiles:
       - build-base
@@ -878,7 +878,7 @@ services:
       - FORCE_SSL=false
       - ENABLE_ACCOUNT_SIGNUP=false
       - FRONTEND_URL=https://chat.recoder.xyz
-      - RECODER_A2A_WEBHOOK_URL=http://docker-backend:3100/api/a2a/webhook/chatwoot
+      - RECODER_A2A_WEBHOOK_URL=http://backend:3100/api/a2a/webhook/chatwoot
     depends_on:
       redis:
         condition: service_healthy
@@ -904,8 +904,8 @@ services:
       - FORCE_SSL=false
       - ENABLE_ACCOUNT_SIGNUP=false
       - FRONTEND_URL=https://chat.recoder.xyz
-      # Webhook back to docker-backend A2A gateway
-      - RECODER_A2A_WEBHOOK_URL=http://docker-backend:3100/api/a2a/webhook/chatwoot
+      # Webhook back to backend A2A gateway
+      - RECODER_A2A_WEBHOOK_URL=http://backend:3100/api/a2a/webhook/chatwoot
     depends_on:
       redis:
         condition: service_healthy

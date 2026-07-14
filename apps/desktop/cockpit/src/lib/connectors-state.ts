@@ -5,8 +5,8 @@
  * result the gateway reported.
  *
  * Source of truth for the contract:
- *  - docker-backend/src/connectors/gateway.ts (ChannelHealth)
- *  - docker-backend/src/connectors/index.ts (config-derived inert snapshot)
+ *  - backend/src/connectors/gateway.ts (ChannelHealth)
+ *  - backend/src/connectors/index.ts (config-derived inert snapshot)
  *
  * The four honest statuses, in precedence order:
  *  - 'live'             : configured AND a real probe reported connected.

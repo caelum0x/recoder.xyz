@@ -2,7 +2,7 @@
  * orchestrator — selects the pattern and returns a dispatch plan (no IO).
  *
  * MERGED from the pattern-selection head of
- * `docker-backend/src/a2a/multi-dispatch.service.ts` (`request.orchestrationPattern
+ * `backend/src/a2a/multi-dispatch.service.ts` (`request.orchestrationPattern
  * ?? ws.settings.defaultOrchestrationPattern`). Pure dispatcher over the four
  * pattern planners. The manager passes the routed agents and the parent task's
  * target scope; the orchestrator returns the `OrchestrationPlan` the planner

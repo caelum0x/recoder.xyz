@@ -1,7 +1,7 @@
 /**
  * Daytona substrate tests (design §11).
  *
- * Ported from docker-backend/src/conductor/substrate-daytona.test.ts to the
+ * Ported from backend/src/conductor/substrate-daytona.test.ts to the
  * package's node:test runner + an injected fake DaytonaClientPort (no module
  * mocking, no real network). They prove the hardened `alive()` / `exitCode()`
  * correctly read the `.recoder/agent.exit` sentinel and — critically —

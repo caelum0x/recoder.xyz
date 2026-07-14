@@ -3,7 +3,7 @@
 # Server: Hetzner 8 vCPU, 16GB RAM (77.42.23.19)
 #
 # Services monitored (10):
-#   Docker: recoder-app(:3000), recoder-frontend(:3001), docker-backend(:3100),
+#   Docker: recoder-app(:3000), recoder-frontend(:3001), backend(:3100),
 #           recoder-web(:5173), openclaw-gateway(:18789), redis(:6379)
 #   PM2 (when deployed): recoder-pm(:3004), recoder-studio(:3005), recoder-agency(:3007)
 #   Infra (when deployed): node-exporter(:9100), redis-exporter(:9121)
@@ -481,7 +481,7 @@ groups:
   # 9. A2A Connector SLO Alerts
   # ──────────────────────────────────────────────
   # --- A2A connector SLO rules (disabled: custom metrics not yet instrumented) ---
-  # TODO: Enable when docker-backend exposes recoder_a2a_connector_* and
+  # TODO: Enable when backend exposes recoder_a2a_connector_* and
   #       recoder_a2a_approval_turnaround_p95_ms via /metrics endpoint
   # - name: a2a_connector_slo
   #   interval: 60s

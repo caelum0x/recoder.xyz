@@ -130,7 +130,7 @@ export async function verifySessionFromCookieStore(
  * Requires server runtime (Prisma/database access).
  *
  * Useful for cross-service calls where only the raw header is available
- * (e.g., docker-backend, Python backend, or proxy routes).
+ * (e.g., backend, Python backend, or proxy routes).
  */
 export async function verifySessionFromHeader(
   cookieHeader: string,

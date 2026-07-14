@@ -16,12 +16,12 @@ describe('forbidden-path rule', () => {
   });
 
   it('denies writes to a billing path', () => {
-    const d = evaluateForbiddenPath(writeInput('docker-backend/src/billing/stripe.ts'));
+    const d = evaluateForbiddenPath(writeInput('backend/src/billing/stripe.ts'));
     assert.equal(d?.effect, 'deny');
   });
 
   it('denies writes to a security directory', () => {
-    const d = evaluateForbiddenPath(writeInput('docker-backend/src/security/index.ts'));
+    const d = evaluateForbiddenPath(writeInput('backend/src/security/index.ts'));
     assert.equal(d?.effect, 'deny');
   });
 

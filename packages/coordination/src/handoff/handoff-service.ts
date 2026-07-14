@@ -2,7 +2,7 @@
  * handoff-service — initiate / accept / complete a handoff.
  *
  * MERGED from the `processHandoff` / `executeDelegation` flow of
- * `docker-backend/src/a2a/autonomous-routing.service.ts`, decoupled from the
+ * `backend/src/a2a/autonomous-routing.service.ts`, decoupled from the
  * backend singletons (`getTaskLifecycleService` / `getApprovalGateService` /
  * `getA2AEventBus`). Instead of globals it takes PORTS
  * (`agent-directory`, `approval-gate`, `handoff-store`, `id-generator`, `clock`)

@@ -149,7 +149,7 @@ run_step "P3.0 required artifacts present" required local /bin/zsh -lc '
     scripts/phase1-main-branch-smoke.sh
     scripts/a2a-production-smoke.sh
     app/scripts/smoke-static-assets.sh
-    docker-backend/scripts/smoke-public-queue.sh
+    backend/scripts/smoke-public-queue.sh
     docs/PHASE3_PRODUCTION_HARDENING_PACK.md
     docs/SMOKE_COMMAND_INDEX.md
     docs/A2A_CONNECTOR_INCIDENT_RUNBOOK.md
@@ -192,11 +192,11 @@ fi
 
 if [[ "$PHASE3_MODE" == "production" ]]; then
   run_step "P3.4 phase1 smoke gate" required network env BILLING_ACTIONS_ENABLED="$BILLING_ACTIONS_ENABLED" RECODER_WEB_URL="$RECODER_WEB_URL" BACKEND_URL="$BACKEND_URL" EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" pnpm -C "$REPO_ROOT" run smoke:phase1 || [[ $? -eq 2 ]] && true
-  run_step "P3.5 docker backend queue smoke" required network env BACKEND_URL="$BACKEND_URL" EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" pnpm -C "$REPO_ROOT/docker-backend" run smoke:queue || [[ $? -eq 2 ]] && true
+  run_step "P3.5 docker backend queue smoke" required network env BACKEND_URL="$BACKEND_URL" EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" pnpm -C "$REPO_ROOT/backend" run smoke:queue || [[ $? -eq 2 ]] && true
   run_step "P3.6 static asset smoke" required network env BASE_URL="$BASE_URL" pnpm -C "$REPO_ROOT/app" run smoke:static || [[ $? -eq 2 ]] && true
 else
   run_step "P3.4 phase1 smoke gate (local-dev advisory)" optional network env BILLING_ACTIONS_ENABLED="$BILLING_ACTIONS_ENABLED" RECODER_WEB_URL="$RECODER_WEB_URL" BACKEND_URL="$BACKEND_URL" EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" pnpm -C "$REPO_ROOT" run smoke:phase1 || true
-  run_step "P3.5 docker backend queue smoke (local-dev advisory)" optional network env BACKEND_URL="$BACKEND_URL" EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" pnpm -C "$REPO_ROOT/docker-backend" run smoke:queue || true
+  run_step "P3.5 docker backend queue smoke (local-dev advisory)" optional network env BACKEND_URL="$BACKEND_URL" EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" pnpm -C "$REPO_ROOT/backend" run smoke:queue || true
   run_step "P3.6 static asset smoke (local-dev advisory)" optional network env BASE_URL="$BASE_URL" pnpm -C "$REPO_ROOT/app" run smoke:static || true
 fi
 

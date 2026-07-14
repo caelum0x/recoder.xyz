@@ -393,7 +393,7 @@ export function emitYaml(bootstrap: EnvoyBootstrap): string {
 export function defaultNetworkConfig(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): NetworkConfig {
-  const authzHost = env.NETWORK_AUTHZ_HOST ?? 'docker-backend';
+  const authzHost = env.NETWORK_AUTHZ_HOST ?? 'backend';
   const authzPort = Number(env.NETWORK_AUTHZ_PORT ?? '3100');
 
   return {
@@ -408,7 +408,7 @@ export function defaultNetworkConfig(
       minVersion: 'TLSv1_2',
     },
     upstreams: [
-      { name: 'docker-backend', host: env.SVC_DOCKER_BACKEND_HOST ?? 'docker-backend', port: 3100 },
+      { name: 'backend', host: env.SVC_DOCKER_BACKEND_HOST ?? 'backend', port: 3100 },
       { name: 'recoder-app', host: env.SVC_RECODER_APP_HOST ?? 'recoder-app', port: 3000 },
     ],
     extAuthz: {

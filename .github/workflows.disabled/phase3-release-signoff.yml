@@ -68,7 +68,7 @@ on:
           - "false"
           - "true"
       backend_url:
-        description: "docker-backend URL"
+        description: "backend URL"
         required: true
         default: "https://docker.recoder.xyz"
         type: string

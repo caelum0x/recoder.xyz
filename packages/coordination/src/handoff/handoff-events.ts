@@ -2,7 +2,7 @@
  * handoff-events — map handoff transitions to `CoordinationEvent`s.
  *
  * MERGED from the `bus.publish({ type: HandoffInitiated | HandoffCompleted })`
- * calls in `docker-backend/src/a2a/autonomous-routing.service.ts`, re-shaped to
+ * calls in `backend/src/a2a/autonomous-routing.service.ts`, re-shaped to
  * the CloudEvent-style `CoordinationEvent` envelope. Pure: builds the event
  * value (the caller turns it into a `PublishEventEffect`). Ids/time come in from
  * the id/clock ports so this stays deterministic.

@@ -121,7 +121,7 @@ function InlineGateVerdict({
 
 /**
  * The narrow, cockpit-side view of the PALPlan annotation the workspace create
- * path persists onto `metadata.palPlan` (docker-backend pal-plan.ts). Provenance
+ * path persists onto `metadata.palPlan` (backend pal-plan.ts). Provenance
  * DISPLAY only — it never drives an action or gate (D1: risk is advisory).
  */
 export type PalPlanMeta = {

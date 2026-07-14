@@ -24,8 +24,8 @@ rsync -avz --relative \
 
 # Docker-backend
 rsync -avz --relative \
-  docker-backend/src/preview.ts \
-  docker-backend/src/server.ts \
+  backend/src/preview.ts \
+  backend/src/server.ts \
   -e "ssh -i ~/.ssh/id_ed25519_hetzner" \
   ${SERVER}:${BASE}/
 
@@ -65,9 +65,9 @@ echo "=== Step 3: Restart backend ==="
 $SSH "pm2 restart recoder-backend && sleep 2 && pm2 logs recoder-backend --err --lines 3 --nostream"
 
 echo ""
-echo "=== Step 4: Build docker-backend ==="
-$SSH "cd ${BASE}/docker-backend && npx tsc 2>&1 | tail -5 && echo TSC_OK"
-$SSH "cd ${BASE} && docker compose -f docker-compose.production.yml restart docker-backend 2>&1 | tail -3"
+echo "=== Step 4: Build backend ==="
+$SSH "cd ${BASE}/backend && npx tsc 2>&1 | tail -5 && echo TSC_OK"
+$SSH "cd ${BASE} && docker compose -f docker-compose.production.yml restart backend 2>&1 | tail -3"
 
 echo ""
 echo "=== Step 5: Build + restart agents (memory-limited) ==="

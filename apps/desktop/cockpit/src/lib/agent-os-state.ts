@@ -10,7 +10,7 @@
  * Source of truth for the contracts:
  *  - packages/agent-os/src/domain/policy-decision.ts (PolicyDecisionEffect)
  *  - packages/agent-os/src/domain/agent-profile.ts (AgentPermissionPolicy)
- *  - docker-backend/src/agent-os/routes/policy-evaluate.routes.ts (required actor shape)
+ *  - backend/src/agent-os/routes/policy-evaluate.routes.ts (required actor shape)
  *  - packages/agent-os/src/domain/memory-item.ts (MemoryCandidateStatus, scopes)
  */
 import type {

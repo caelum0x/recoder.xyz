@@ -4,7 +4,7 @@
  * Ports multica's squad-leader no-action evaluation
  * (`modules/squads/multica/server/internal/service/squad_no_action.go`,
  * `HasSquadLeaderNoActionEvaluationForTask`) fused with the A2A squad team
- * model (`docker-backend/src/a2a/squad.service.ts`). The rule, ported (not
+ * model (`backend/src/a2a/squad.service.ts`). The rule, ported (not
  * transpiled):
  *
  *  - A squad with a designated leader gates member engagement behind a leader

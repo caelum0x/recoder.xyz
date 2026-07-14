@@ -3,7 +3,7 @@
  *
  * The shape returned by ConductorSubstrate.available(): promoted from the inline
  * `{ available: boolean; reason?: string }` return in
- * docker-backend/src/conductor/substrate.ts, with an optional structured
+ * backend/src/conductor/substrate.ts, with an optional structured
  * `detail` for richer (still truthful) diagnostics.
  *
  * Invariant (design §8): missing git/tmux/gh/Daytona creds returns

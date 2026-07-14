@@ -150,7 +150,7 @@ export class PlatformSyncService extends EventEmitter {
     }
 
     // Try to extract from volume name (container labels)
-    // This is set by docker-backend when creating containers
+    // This is set by backend when creating containers
     try {
       const hostname = fs.readFileSync('/etc/hostname', 'utf-8').trim();
       if (hostname.startsWith('recoder-')) {
@@ -165,13 +165,13 @@ export class PlatformSyncService extends EventEmitter {
 
   /**
    * Get preview URL - constructed from env vars
-   * Preview is proxied through docker-backend at /preview/{projectId}
+   * Preview is proxied through backend at /preview/{projectId}
    */
   private async detectPreviewUrl(): Promise<string | undefined> {
     const projectId = process.env['RECODER_PROJECT_ID'];
     if (!projectId) return undefined;
     
-    // Preview is accessible via docker-backend proxy
+    // Preview is accessible via backend proxy
     return `${DOCKER_BACKEND_URL}/preview/${projectId}`;
   }
 

@@ -161,8 +161,8 @@ test.describe('Web IDE', () => {
     console.log(`Web IDE: status=${status}, redirected to ${finalUrl}`);
   });
 
-  test('docker-backend health check', async ({ request }) => {
-    // docker-backend serves at docker.recoder.xyz, proxied through nginx
+  test('backend health check', async ({ request }) => {
+    // backend serves at docker.recoder.xyz, proxied through nginx
     const response = await request.get('https://docker.recoder.xyz/health');
     expect(response.status()).toBeLessThan(500);
   });

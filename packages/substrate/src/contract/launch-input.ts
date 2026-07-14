@@ -1,7 +1,7 @@
 /**
  * SubstrateLaunchInput — the substrate-agnostic launch request.
  *
- * Promoted verbatim from docker-backend/src/conductor/substrate.ts. The engine
+ * Promoted verbatim from backend/src/conductor/substrate.ts. The engine
  * resolves the real headless `command` (see ../command) and hands the substrate
  * everything it needs to provision isolation and start the agent CLI inside it.
  */

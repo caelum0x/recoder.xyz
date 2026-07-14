@@ -3,7 +3,7 @@ import { decideNetworkAuthz, extractAuthzRequest } from '../src/ext-authz';
 import type { NetworkAuthzRequest } from '../src/types';
 import { governancePolicyAdvisor } from './governance-ports';
 
-const TRUSTED = 'spiffe://recoder.xyz/svc/docker-backend';
+const TRUSTED = 'spiffe://recoder.xyz/svc/backend';
 
 /** The real governance engine, injected as the policy advisor port. */
 const advisor = governancePolicyAdvisor;
@@ -29,7 +29,7 @@ describe('decideNetworkAuthz (default-deny / hostile-by-default)', () => {
 
   it('DENIES a request with no principal on a non-public path', () => {
     process.env.NETWORK_PUBLIC_PREFIXES = '/recoder-app/';
-    const req: NetworkAuthzRequest = { method: 'GET', path: '/docker-backend/secret', headers: {} };
+    const req: NetworkAuthzRequest = { method: 'GET', path: '/backend/secret', headers: {} };
     const d = decideNetworkAuthz(req, advisor);
     expect(d.effect).toBe('deny');
   });
@@ -46,7 +46,7 @@ describe('decideNetworkAuthz (default-deny / hostile-by-default)', () => {
     process.env.NETWORK_TRUSTED_PRINCIPALS = TRUSTED;
     const req: NetworkAuthzRequest = {
       method: 'GET',
-      path: '/docker-backend/api',
+      path: '/backend/api',
       headers: {},
       principal: 'spiffe://evil/attacker',
     };
@@ -59,10 +59,10 @@ describe('decideNetworkAuthz (default-deny / hostile-by-default)', () => {
     process.env.NETWORK_TRUSTED_PRINCIPALS = TRUSTED;
     const req: NetworkAuthzRequest = {
       method: 'GET',
-      path: '/docker-backend/api/health',
+      path: '/backend/api/health',
       headers: {},
       principal: TRUSTED,
-      destination: 'docker-backend',
+      destination: 'backend',
     };
     const d = decideNetworkAuthz(req, advisor);
     expect(d.effect).toBe('allow');
@@ -105,7 +105,7 @@ describe('extractAuthzRequest', () => {
       method: 'POST',
       headers: {
         'x-envoy-original-method': 'GET',
-        'x-envoy-original-path': '/docker-backend/api/health',
+        'x-envoy-original-path': '/backend/api/health',
         'x-forwarded-client-cert-uri': TRUSTED,
         'x-forwarded-for': '10.0.0.5, 10.0.0.1',
       },
@@ -113,7 +113,7 @@ describe('extractAuthzRequest', () => {
       ip: '127.0.0.1',
     });
     expect(req.method).toBe('GET');
-    expect(req.path).toBe('/docker-backend/api/health');
+    expect(req.path).toBe('/backend/api/health');
     expect(req.principal).toBe(TRUSTED);
     expect(req.sourceIp).toBe('10.0.0.5');
   });

@@ -13,7 +13,7 @@ export const tasksMcpServer: McpServerRegistration = {
 
 /**
  * The injected agent-os task repository port. This is the SAME read/write
- * contract a runtime backend (docker-backend) implements over its store of
+ * contract a runtime backend (backend) implements over its store of
  * record. agent-mcp stays runtime-agnostic: it never owns task state, it only
  * operates over the port the host injects. All transitions go through the
  * agent-os {@link TaskService} so only legal state changes are persisted.

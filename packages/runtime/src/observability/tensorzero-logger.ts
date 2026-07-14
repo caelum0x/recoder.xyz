@@ -7,7 +7,7 @@
  * "gateway unavailable" results; the run loop falls back to direct provider
  * calls unchanged.
  *
- * This is a THIN CLIENT — it does not spawn processes. The docker-backend
+ * This is a THIN CLIENT — it does not spawn processes. The backend
  * supervisor (tensorzero-client.ts) owns the binary lifecycle; this file reads
  * the resolved URL from env and forwards inference calls over HTTP.
  *

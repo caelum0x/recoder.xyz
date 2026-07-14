@@ -3,7 +3,7 @@
  *
  * Mobile is a READ-ONLY monitor + approve client, not an authoring surface.
  * These types mirror the canonical Recoder control-plane contracts exposed by
- * docker-backend:
+ * backend:
  *   - Workspace / RunEvent  -> @recoder/agent-os domain (GET /api/conductor/*)
  *   - Approval              -> @recoder/agent-os domain (/api/agent-os/approvals)
  *

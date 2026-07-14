@@ -253,7 +253,7 @@ export function compileForEval(input: {
       goal: input.prompt,
       repo: 'caelum0x/recoder.xyz',
       space_id: 'space_eval',
-      target_paths: ['docker-backend/**', 'packages/**'],
+      target_paths: ['backend/**', 'packages/**'],
       forbidden_paths: input.forbiddenPaths ?? [],
       acceptance: ['Task reaches completed state', 'Artifacts and verification evidence are present'],
       verify: input.verify ?? [],
@@ -275,7 +275,7 @@ export function compileForEval(input: {
     memory: input.memory ?? [],
     pathRules: [
       {
-        glob: 'docker-backend/**',
+        glob: 'backend/**',
         instruction: 'Attach instruction bundle provenance to task artifacts.',
       },
     ],

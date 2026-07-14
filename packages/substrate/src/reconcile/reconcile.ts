@@ -2,7 +2,7 @@
  * Reconciler — restart survivability (substrate.md §4.6).
  *
  * Ported VERBATIM (behavior-preserving) from
- * docker-backend/src/conductor/workspace-service.ts's `reconcile`. After a
+ * backend/src/conductor/workspace-service.ts's `reconcile`. After a
  * backend restart the in-memory session map is empty, so reconcile queries the
  * REAL execution substrate directly (live sessions + worktrees, via the injected
  * SubstrateScanPort) and joins them against persisted workspaces to report the

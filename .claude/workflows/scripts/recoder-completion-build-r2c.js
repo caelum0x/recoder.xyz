@@ -1,8 +1,8 @@
 export const meta = {
   name: 'recoder-completion-build-r2c',
-  description: 'Round 2c (concurrent with 2b, disjoint trees): deeper completion on docker-backend, packages, apps, shared, crates, tools. Real code, no stubs, verify each.',
+  description: 'Round 2c (concurrent with 2b, disjoint trees): deeper completion on backend, packages, apps, shared, crates, tools. Real code, no stubs, verify each.',
   phases: [
-    { title: 'Build', detail: 'docker-backend/packages/apps/shared/crates/tools: deeper backlog + verify' },
+    { title: 'Build', detail: 'backend/packages/apps/shared/crates/tools: deeper backlog + verify' },
   ],
 }
 
@@ -50,14 +50,14 @@ const SCHEMA = {
 
 const TREES = [
   {
-    key: 'docker-backend',
-    path: `${ROOT}/docker-backend`,
+    key: 'backend',
+    path: `${ROOT}/backend`,
     tasks: [
       'CONDUCTOR — deeper survivability + delivery (additive; the routes/governor/lifecycle from the last round are committed — extend, do not rewrite).',
       '1) RESTART SURVIVABILITY in reconcile() (src/conductor/workspace-service.ts): for workspaces whose tmux session is still LIVE, rebind the run-tailer (startRunTail) so streaming resumes after a backend restart; re-acquire the work-lock (a self-reacquire that does not conflict with itself); for non-terminal workspaces whose session is GONE, read substrate.exitCode and emit a terminal RunEvent + advance the record to a terminal state (finalize crashed orphans) instead of leaving them dangling.',
       '2) If conductor-locks.ts lacks a self-safe re-acquire path, add a rehydrateLock()/reacquire that treats the same workspaceId as the owner (no self-conflict).',
       '3) Wire the steer + per-workspace status routes fully in conductor.routes.ts if the last round left them partial (resolve the substrate handle from the workspace record; steer via substrate send-keys; status via capture + alive + exitCode).',
-      'Verify: `cd docker-backend && npx tsc --noEmit 2>&1 | grep -c "error TS"` stays 0; run conductor unit tests `npx vitest run src/conductor/conductor-locks.test.ts src/connectors/gateway.test.ts src/conductor/workspace-lifecycle.test.ts` (paste tail); add a focused no-tmux reconcile unit test if feasible.',
+      'Verify: `cd backend && npx tsc --noEmit 2>&1 | grep -c "error TS"` stays 0; run conductor unit tests `npx vitest run src/conductor/conductor-locks.test.ts src/connectors/gateway.test.ts src/conductor/workspace-lifecycle.test.ts` (paste tail); add a focused no-tmux reconcile unit test if feasible.',
     ].join('\n'),
   },
   {

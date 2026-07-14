@@ -2,7 +2,7 @@
  * WorkspaceEngine — the orchestration brain (substrate-agnostic lifecycle).
  *
  * Ported VERBATIM (behavior-preserving) from
- * docker-backend/src/conductor/workspace-service.ts's lifecycle. Owns the
+ * backend/src/conductor/workspace-service.ts's lifecycle. Owns the
  * persisted Workspace lifecycle (control-plane state of record) and drives the
  * selected execution substrate through injected ports. Every state change is
  * written to the repository BEFORE/AFTER the substrate action, so a backend

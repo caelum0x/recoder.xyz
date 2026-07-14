@@ -3,7 +3,7 @@
  *
  * Makes the Electron desktop app SELF-CONTAINED: instead of expecting an
  * externally-run backend at DOCKER_BACKEND_URL, the desktop process boots a
- * local docker-backend on a free loopback port and hands the cockpit the
+ * local backend on a free loopback port and hands the cockpit the
  * resulting { backendUrl, apiKey } so it can drive the conductor (tmux + the
  * engines) with no external dependency.
  *
@@ -750,7 +750,7 @@ class BackendSupervisor {
   }
 
   /**
-   * Decide what to exec. Dev: tsx src/server.ts from docker-backend in the repo.
+   * Decide what to exec. Dev: tsx src/server.ts from backend in the repo.
    * Packaged: node <resourcesPath>/backend/dist/server.js.
    * @returns {{ command: string, args: string[], cwd: string }}
    */
@@ -763,7 +763,7 @@ class BackendSupervisor {
         cwd: backendDir,
       };
     }
-    const backendDir = nodePath.join(this.repoRoot, 'docker-backend');
+    const backendDir = nodePath.join(this.repoRoot, 'backend');
     const tsxBin = nodePath.join(backendDir, 'node_modules', '.bin', 'tsx');
     return {
       command: tsxBin,
@@ -783,7 +783,7 @@ class BackendSupervisor {
     return new Promise((resolve, reject) => {
       const backendDir = this.isPackaged && this.resourcesPath
         ? nodePath.join(this.resourcesPath, 'backend')
-        : nodePath.join(this.repoRoot, 'docker-backend');
+        : nodePath.join(this.repoRoot, 'backend');
 
       let command;
       let args;

@@ -67,7 +67,7 @@ step_remote_basic_access() {
 
 step_connector_env_flags() {
   local values
-  values="$(remote "docker exec recoder-docker-backend sh -lc 'echo \${RECODER_A2A_ENABLE_CODEX:-unset},\${RECODER_A2A_ENABLE_CLAUDE_CODE:-unset}'")"
+  values="$(remote "docker exec recoder-backend sh -lc 'echo \${RECODER_A2A_ENABLE_CODEX:-unset},\${RECODER_A2A_ENABLE_CLAUDE_CODE:-unset}'")"
   echo "flags=$values"
   local codex_flag="${values%%,*}"
   local claude_flag="${values##*,}"
@@ -75,7 +75,7 @@ step_connector_env_flags() {
 }
 
 step_connector_binaries_present() {
-  remote "docker exec recoder-docker-backend sh -lc 'command -v codex >/dev/null && command -v claude >/dev/null'"
+  remote "docker exec recoder-backend sh -lc 'command -v codex >/dev/null && command -v claude >/dev/null'"
 }
 
 step_connector_status_endpoints() {
@@ -102,7 +102,7 @@ PY"
 step_tier1_http_smoke() {
   # Run on Hetzner with the deployed shared secret to avoid local env drift.
   remote "cd /root/recoder.xyz && \
-    RECODER_A2A_SHARED_SECRET=\$(docker exec recoder-docker-backend sh -lc 'printf \"%s\" \"\$RECODER_A2A_SHARED_SECRET\"') \
+    RECODER_A2A_SHARED_SECRET=\$(docker exec recoder-backend sh -lc 'printf \"%s\" \"\$RECODER_A2A_SHARED_SECRET\"') \
     RECODER_A2A_SMOKE_ENDPOINT='$BACKEND_URL/api/a2a/envelope' \
     pnpm run a2a:smoke:codex-claude"
 }
@@ -113,7 +113,7 @@ echo "backend_url: $BACKEND_URL" | tee -a "$LOG_FILE"
 
 run_step "P16-T1.1 remote access" "SSH/control-plane reachability" step_remote_basic_access
 run_step "P16-T1.2 connector enable flags" "RECODER_A2A_ENABLE_CODEX and RECODER_A2A_ENABLE_CLAUDE_CODE must be true" step_connector_env_flags
-run_step "P16-T1.3 connector binaries available" "codex and claude binaries must exist in docker-backend runtime" step_connector_binaries_present
+run_step "P16-T1.3 connector binaries available" "codex and claude binaries must exist in backend runtime" step_connector_binaries_present
 run_step "P16-T1.4 connector status endpoints" "codex + claude status endpoints must be reachable after start attempt" step_connector_status_endpoints
 run_step "P16-T1.5 Tier-1 HTTP smoke" "signed envelope smoke for codex<->claude path" step_tier1_http_smoke
 

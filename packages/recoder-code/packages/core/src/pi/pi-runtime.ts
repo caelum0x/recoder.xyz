@@ -7,7 +7,7 @@
  * core — not just a vendored package.
  *
  * pi is ESM-only with an exports map; load it via a dynamic import that survives
- * CJS output (mirrors docker-backend's A2A pi runtime adapter).
+ * CJS output (mirrors backend's A2A pi runtime adapter).
  *
  * Type-only `import('@recoder/pi-coding-agent')` references the real declarations
  * (emitted to dist/index.d.ts) without producing a static runtime import, so the

@@ -2,7 +2,7 @@
  * SubstrateRegistry — pluggable registry of ConductorSubstrate impls.
  *
  * Promoted from the module-level `Map` + register/get/list functions in
- * docker-backend/src/conductor/substrate.ts, hardened into an instance (not a
+ * backend/src/conductor/substrate.ts, hardened into an instance (not a
  * process global) so the engine, tests, and the backend can each own their
  * wiring. `get` throws a typed SubstrateNotRegisteredError (was a bare Error).
  */

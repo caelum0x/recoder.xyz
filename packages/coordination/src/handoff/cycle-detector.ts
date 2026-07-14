@@ -2,7 +2,7 @@
  * cycle-detector — pure detection of A→B→A delegation cycles.
  *
  * MERGED from the circular-detection path of
- * `docker-backend/src/a2a/delegation-chain.service.ts`
+ * `backend/src/a2a/delegation-chain.service.ts`
  * (`getAgentsInChainAbove` + the `agentsInChain.has(toAgentId)` check, plus the
  * self-delegation guard). Extracted as pure functions over an explicit
  * participant set so there is no in-memory `Map` traversal and no IO.

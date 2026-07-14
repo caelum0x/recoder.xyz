@@ -35,7 +35,7 @@ try {
   checkDirectory(path.join(rootDir, 'packages/cli'), 'CLI Package');
   checkDirectory(path.join(rootDir, 'packages/shared'), 'Shared Package');
   checkDirectory(path.join(rootDir, 'backend'), 'Backend');
-  checkDirectory(path.join(rootDir, 'docker-backend'), 'Docker Backend');
+  checkDirectory(path.join(rootDir, 'backend'), 'Docker Backend');
   console.log('');
 
   console.log('📦 Installing dependencies...\n');
@@ -58,9 +58,9 @@ try {
     runCommand('npm install', path.join(rootDir, 'backend'), 'Installing backend dependencies');
   }
 
-  // Install docker-backend dependencies
-  if (fs.existsSync(path.join(rootDir, 'docker-backend'))) {
-    runCommand('npm install', path.join(rootDir, 'docker-backend'), 'Installing docker-backend dependencies');
+  // Install backend dependencies
+  if (fs.existsSync(path.join(rootDir, 'backend'))) {
+    runCommand('npm install', path.join(rootDir, 'backend'), 'Installing backend dependencies');
   }
 
   console.log('🔧 Setting up environment...\n');
@@ -93,9 +93,9 @@ try {
     }
   }
 
-  if (fs.existsSync(path.join(rootDir, 'docker-backend'))) {
+  if (fs.existsSync(path.join(rootDir, 'backend'))) {
     try {
-      runCommand('npm run build', path.join(rootDir, 'docker-backend'), 'Building docker-backend');
+      runCommand('npm run build', path.join(rootDir, 'backend'), 'Building backend');
     } catch {
       console.log('⚠️ Docker-backend build not configured, skipping...\n');
     }
@@ -125,7 +125,7 @@ try {
   console.log('npm install --ignore-workspace-root-check');
   console.log('cd packages/cli && npm install && cd ../..');
   console.log('cd backend && npm install && cd ..');
-  console.log('cd docker-backend && npm install && cd ..');
+  console.log('cd backend && npm install && cd ..');
   console.log('cd packages/cli && npm link');
   process.exit(1);
 }

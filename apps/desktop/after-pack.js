@@ -203,7 +203,7 @@ exports.default = async function afterPack(context) {
     fail(
       'governance daemon is only partially bundled in the embedded backend dist ' +
         `(resource-governor.js: ${governorPresent}, governance-gate.js: ${gatePresent}). ` +
-        'Expected both or neither. Check the docker-backend tsc output.',
+        'Expected both or neither. Check the backend tsc output.',
     );
   }
   const governanceBundled = governorPresent && gatePresent;

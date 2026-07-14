@@ -64,14 +64,14 @@
     }
     ,
     {
-      "label": "docker-backend ci determinism (frozen)",
+      "label": "backend ci determinism (frozen)",
       "result": "failed",
       "exitCode": 10,
       "classification": "env_blocker"
     }
     ,
     {
-      "label": "docker-backend ci determinism (local fallback)",
+      "label": "backend ci determinism (local fallback)",
       "result": "skipped",
       "exitCode": 0,
       "classification": "skipped_redundant"

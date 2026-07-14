@@ -12,10 +12,10 @@
  *    so the Governance panel never shows a faked approval state.
  *
  * Source of truth:
- *  - docker-backend/src/conductor/conductor-health.ts (ConductorHealth)
- *  - docker-backend/src/conductor/substrate.ts (registered substrate ids)
- *  - docker-backend/src/conductor/conductor.routes.ts (409 delivery-gate data)
- *  - docker-backend/src/conductor/delivery-approval.ts (awaiting_approval state)
+ *  - backend/src/conductor/conductor-health.ts (ConductorHealth)
+ *  - backend/src/conductor/substrate.ts (registered substrate ids)
+ *  - backend/src/conductor/conductor.routes.ts (409 delivery-gate data)
+ *  - backend/src/conductor/delivery-approval.ts (awaiting_approval state)
  */
 import { ApiError } from './api';
 import type {

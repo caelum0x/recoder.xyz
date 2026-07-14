@@ -3,7 +3,7 @@
  *
  * MERGED from the private `candidate()` method of
  * `packages/agent-os/src/services/task-routing-service.ts`, with the capability
- * dimension folded in from `docker-backend/src/a2a/capability-matcher.service.ts`.
+ * dimension folded in from `backend/src/a2a/capability-matcher.service.ts`.
  * Preserves the source's scoring weights and reason/warning text:
  *  - health:            healthy +30 / degraded +15        (health-filter)
  *  - requested assignee: +50 (match) or a disqualifying reason (mismatch)

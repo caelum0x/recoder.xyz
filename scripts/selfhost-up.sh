@@ -101,8 +101,8 @@ if [ "${#missing[@]}" -gt 0 ]; then
 fi
 
 # --- Build prerequisites the Dockerfile assumes (honest check, no silent stub) ---
-[ -f "$ROOT_DIR/docker-backend/dist/server.js" ] \
-  || die "docker-backend/dist/server.js is missing. Build it first: (cd docker-backend && pnpm install && pnpm build). See deploy/README.md."
+[ -f "$ROOT_DIR/backend/dist/server.js" ] \
+  || die "backend/dist/server.js is missing. Build it first: (cd backend && pnpm install && pnpm build). See deploy/README.md."
 if [ ! -d "$ROOT_DIR/pi-mono-dist" ]; then
   cat >&2 <<'EOF'
 ERROR: pi-mono-dist/ is missing. The backend Dockerfile copies it for the

@@ -8,7 +8,7 @@
  * Env vars used:
  *   RECODER_AGENT_ID     — agent type (e.g. "claude_code", "codex")
  *   RECODER_SESSION_ID   — unique session ID for this terminal instance
- *   RECODER_DOCKER_URL   — docker-backend URL for registration endpoint
+ *   RECODER_DOCKER_URL   — backend URL for registration endpoint
  *   DOCKER_BACKEND_URL   — fallback backend URL
  *   RECODER_CALLBACK_URL — optional callback URL for push notifications
  *

@@ -2,7 +2,7 @@
  * Squad — a named team of agents and humans, with a leader, per-member roles,
  * and an activity log.
  *
- * MERGED from `docker-backend/src/a2a/squad.service.ts`
+ * MERGED from `backend/src/a2a/squad.service.ts`
  * (`Squad`/`SquadMember`/`SquadActivityEntry`/`MemberKind`). The TS service's
  * JSON persistence is split off into `persistence/*-squad-store.ts`; the *type*
  * lives here. The squad-leader / no-action gating concepts from multica

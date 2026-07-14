@@ -7,7 +7,7 @@ import type { McpServerRegistration } from '../registry';
  * configured webhook).
  *
  * The package stays runtime-agnostic: it owns NO engine logic and assumes no
- * backing service. The host (docker-backend) injects a concrete `NotifyPort` built
+ * backing service. The host (backend) injects a concrete `NotifyPort` built
  * over the owned `@recoder/agent-notify` engine. Every handler degrades truthfully
  * — the engine returns a `not_configured` status (never throws, never fabricates a
  * send) when no webhook url is resolvable.

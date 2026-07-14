@@ -24,7 +24,7 @@ type RecoderRunEvent = {
     data?: Record<string, unknown>;
 };
 
-// The frames attachWorkspaceStream emits (docker-backend conductor/live-events.ts).
+// The frames attachWorkspaceStream emits (backend conductor/live-events.ts).
 type StreamMessage =
     | { type: "event"; event: RecoderRunEvent }
     | { type: "error"; message?: string }

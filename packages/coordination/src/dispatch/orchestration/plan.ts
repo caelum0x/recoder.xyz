@@ -6,7 +6,7 @@
  * reservations + effects.
  *
  * MERGED from the orchestration-pattern selection of
- * `docker-backend/src/a2a/multi-dispatch.service.ts`.
+ * `backend/src/a2a/multi-dispatch.service.ts`.
  */
 
 import type { AggregationStrategy, OrchestrationPattern } from '../../domain';

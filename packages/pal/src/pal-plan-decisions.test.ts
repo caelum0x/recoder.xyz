@@ -74,7 +74,7 @@ const decisionTable: DecisionCase[] = [
     name: 'billing change is high risk and approval-gated',
     overrides: {
       goal: 'Update billing webhooks',
-      targetPaths: ['docker-backend/src/billing/webhooks.ts'],
+      targetPaths: ['backend/src/billing/webhooks.ts'],
     },
     expected: {
       primaryRuntime: 'claude_code',
@@ -87,7 +87,7 @@ const decisionTable: DecisionCase[] = [
     name: 'backend API change is medium risk without approvals',
     overrides: {
       goal: 'Add an API route',
-      targetPaths: ['docker-backend/src/api/routes.ts'],
+      targetPaths: ['backend/src/api/routes.ts'],
     },
     expected: {
       primaryRuntime: 'claude_code',
@@ -141,7 +141,7 @@ const decisionTable: DecisionCase[] = [
     name: 'explicit + sensitive-path approvals stack',
     overrides: {
       goal: 'Rotate secrets and deploy',
-      targetPaths: ['docker-backend/src/secrets/store.ts'],
+      targetPaths: ['backend/src/secrets/store.ts'],
       approvalRequired: ['rotate production secrets'],
     },
     expected: {
@@ -167,7 +167,7 @@ describe('planTask decision table (goal/scope → runtime + risk + approval)', (
 
   it('risk estimates and approval gates agree with the plan output', () => {
     const task = makeTask({
-      targetPaths: ['docker-backend/src/billing/webhooks.ts'],
+      targetPaths: ['backend/src/billing/webhooks.ts'],
       approvalRequired: ['ship billing change'],
     });
     const plan = planTask(task, FIXED_NOW);

@@ -1,7 +1,7 @@
 /**
  * BrainPort — the prompt-enrichment seam (design §4.5 / §7).
  *
- * `docker-backend/src/conductor/bundle.ts` enriches a raw prompt with task
+ * `backend/src/conductor/bundle.ts` enriches a raw prompt with task
  * constraints, a git-nexus ContextPack, mem0 recall, and context7 docs. The
  * engine reaches it through this port so the substrate package stays
  * backend-free; if no brain is wired the engine uses the raw prompt unchanged.

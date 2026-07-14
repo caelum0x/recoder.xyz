@@ -122,7 +122,7 @@ const dockerWorkflowApiUrl = process.env.DOCKER_BACKEND_URL || 'http://localhost
 // ============================================================================
 // Embedded backend supervisor
 // ============================================================================
-// Self-contained mode: boot a local docker-backend on a free loopback port so
+// Self-contained mode: boot a local backend on a free loopback port so
 // opening the app runs agents on the whole stack (tmux + the engines) with no
 // externally-run backend. Default ON for packaged builds; in dev it is gated on
 // RECODER_EMBEDDED_BACKEND so it does not collide with a manually-run backend.
@@ -153,7 +153,7 @@ function resolveRepoRoot() {
 }
 
 // ============================================================================
-// TMUX_BIN resolution (mirrors docker-backend/src/conductor/tmux-path.ts)
+// TMUX_BIN resolution (mirrors backend/src/conductor/tmux-path.ts)
 // ============================================================================
 // The embedded PTY must attach with the SAME tmux binary the conductor used to
 // create the session. We resolve it here in the main process instead of trusting
@@ -366,7 +366,7 @@ const desktopSubagentWorkflowLanes = [
   { laneId: 'A3', title: 'Frontend and mobile', paths: ['/Users/arhansubasi/recoder.xyz/apps/frontend', '/Users/arhansubasi/recoder.xyz/apps/mobile'] },
   { laneId: 'A4', title: 'Studio and ui.recoder.xyz', paths: ['/Users/arhansubasi/recoder.xyz/recoder-studio', '/Users/arhansubasi/recoder.xyz/apps/ui.giselles.ai'] },
   { laneId: 'A5', title: 'Python backend', paths: ['/Users/arhansubasi/recoder.xyz/backend'] },
-  { laneId: 'A6', title: 'Docker backend', paths: ['/Users/arhansubasi/recoder.xyz/docker-backend'] },
+  { laneId: 'A6', title: 'Docker backend', paths: ['/Users/arhansubasi/recoder.xyz/backend'] },
   { laneId: 'A7', title: 'OpenClaw ecosystem', paths: ['/Users/arhansubasi/recoder.xyz/openclaw'] },
   { laneId: 'A8', title: 'Shared packages', paths: ['/Users/arhansubasi/recoder.xyz/packages'] },
   { laneId: 'A9', title: 'Agency product', paths: ['/Users/arhansubasi/recoder.xyz/recoder-agency'] },
@@ -572,7 +572,7 @@ function resolveDesktopSessionTokenDetailed() {
 /**
  * The Better Auth session-token cookie names the backend accepts, in priority
  * order. This mirrors getSessionTokenFromRequest() in
- * docker-backend/src/server.ts so the cockpit reuses the SAME session the web
+ * backend/src/server.ts so the cockpit reuses the SAME session the web
  * app established — no new auth scheme is invented here.
  */
 const BETTER_AUTH_SESSION_COOKIE_NAMES = [
@@ -3049,7 +3049,7 @@ ipcMain.handle('cockpit:deviceLogin', async (event) => {
 ipcMain.handle('agent:getWorkflowPlan', async (_event, payload = {}) => {
   try {
     const remote = await fetchDesktopWorkflowFromBackend(payload);
-    return { success: true, source: 'docker-backend', workflow: remote.workflow, backend: remote.meta, fallbackReason: null };
+    return { success: true, source: 'backend', workflow: remote.workflow, backend: remote.meta, fallbackReason: null };
   } catch (error) {
     const fallbackReason = error instanceof Error ? error.message : String(error);
     const backend = error && error.backendMeta ? error.backendMeta : null;

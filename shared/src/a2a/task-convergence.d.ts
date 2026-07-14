@@ -42,7 +42,7 @@
  * The exported `A2ATask` interface keeps the exact same field set, names, and
  * optionality it has always had. `control-plane.ts` re-exports this type under
  * the same name, so every existing importer (in-tree and downstream
- * docker-backend) continues to typecheck unchanged.
+ * backend) continues to typecheck unchanged.
  */
 import type { RecoderAgentIdentity, RecoderA2AEnvelope } from './types';
 import type { TaskEnvelope, TaskState, TaskAgentRef, TaskConnectorInfo } from './schemas/task-envelope';

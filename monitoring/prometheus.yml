@@ -27,16 +27,16 @@ alerting:
 
 scrape_configs:
   # Docker backend metrics
-  - job_name: 'docker-backend'
+  - job_name: 'backend'
     static_configs:
-      - targets: ['docker-backend:3100']
+      - targets: ['backend:3100']
     metrics_path: /api/metrics/prometheus
     scrape_interval: 30s
 
   # A2A SLO metrics (connector success rates, circuit breakers, latency)
-  - job_name: 'docker-backend-a2a'
+  - job_name: 'backend-a2a'
     static_configs:
-      - targets: ['docker-backend:3100']
+      - targets: ['backend:3100']
     metrics_path: /api/a2a/metrics/prometheus
     scrape_interval: 30s
 

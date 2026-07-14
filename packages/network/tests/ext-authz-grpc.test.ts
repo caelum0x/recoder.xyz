@@ -16,7 +16,7 @@ import { DECISION_HEADER } from '../src/ext-authz';
 import type { PolicyAdvisorPort } from '../src/ports';
 import { governancePolicyAdvisor } from './governance-ports';
 
-const TRUSTED = 'spiffe://recoder.xyz/svc/docker-backend';
+const TRUSTED = 'spiffe://recoder.xyz/svc/backend';
 const advisor = governancePolicyAdvisor;
 
 /** A policy advisor that ALWAYS throws — to prove the handler fails closed. */
@@ -58,10 +58,10 @@ function checkReq(over: {
 describe('checkRequestToAuthz (Envoy v3 CheckRequest mapping)', () => {
   it('maps method/path/principal/source from the attribute context', () => {
     const authz = checkRequestToAuthz(
-      checkReq({ method: 'post', path: '/docker-backend/x?a=1', principal: TRUSTED, sourceIp: '10.0.0.5' }),
+      checkReq({ method: 'post', path: '/backend/x?a=1', principal: TRUSTED, sourceIp: '10.0.0.5' }),
     );
     expect(authz.method).toBe('POST');
-    expect(authz.path).toBe('/docker-backend/x'); // query stripped
+    expect(authz.path).toBe('/backend/x'); // query stripped
     expect(authz.principal).toBe(TRUSTED);
     expect(authz.sourceIp).toBe('10.0.0.5');
   });
@@ -103,7 +103,7 @@ describe('handleCheck — ALLOW / DENY (Envoy v3 CheckResponse)', () => {
   it('ALLOWS a trusted principal read => status OK (0) + ok_response', () => {
     process.env.NETWORK_TRUSTED_PRINCIPALS = TRUSTED;
     const { response, decision } = handleCheck(
-      checkReq({ method: 'GET', path: '/docker-backend/api/health', principal: TRUSTED, destination: 'docker-backend' }),
+      checkReq({ method: 'GET', path: '/backend/api/health', principal: TRUSTED, destination: 'backend' }),
       advisor,
     );
     expect(decision.effect).toBe('allow');
@@ -132,7 +132,7 @@ describe('handleCheck — ALLOW / DENY (Envoy v3 CheckResponse)', () => {
   it('DENIES an unrecognized mTLS principal', () => {
     process.env.NETWORK_TRUSTED_PRINCIPALS = TRUSTED;
     const { response, decision } = handleCheck(
-      checkReq({ principal: 'spiffe://evil/attacker', path: '/docker-backend/api' }),
+      checkReq({ principal: 'spiffe://evil/attacker', path: '/backend/api' }),
       advisor,
     );
     expect(decision.effect).toBe('deny');
@@ -161,9 +161,9 @@ describe('handleCheck — FAIL CLOSED', () => {
     // MUST deny — fail closed, never allow on a port error/timeout.
     const req = checkReq({
       method: 'GET',
-      path: '/docker-backend/api/health',
+      path: '/backend/api/health',
       principal: TRUSTED,
-      destination: 'docker-backend',
+      destination: 'backend',
     });
     const { response, decision } = handleCheck(req, throwingAdvisor);
     expect(decision.effect).toBe('deny');
@@ -182,7 +182,7 @@ describe('handleCheck — FAIL CLOSED', () => {
   it('async wrapper also fails closed on a throwing advisor', async () => {
     process.env.NETWORK_TRUSTED_PRINCIPALS = TRUSTED;
     const { response, decision } = await handleCheckAsync(
-      checkReq({ principal: TRUSTED, path: '/docker-backend/api/health', destination: 'docker-backend' }),
+      checkReq({ principal: TRUSTED, path: '/backend/api/health', destination: 'backend' }),
       throwingAdvisor,
     );
     expect(decision.effect).toBe('deny');
@@ -193,7 +193,7 @@ describe('handleCheck — FAIL CLOSED', () => {
     process.env.NETWORK_TRUSTED_PRINCIPALS = TRUSTED;
     expect(() =>
       handleCheck(
-        checkReq({ principal: TRUSTED, path: '/docker-backend/api/health', destination: 'docker-backend' }),
+        checkReq({ principal: TRUSTED, path: '/backend/api/health', destination: 'backend' }),
         advisor,
         () => {
           throw new Error('disk full');
@@ -229,7 +229,7 @@ describe('handleCheck — access log emission', () => {
   it('an ALLOW emits a benign access-log line (no UAEX flag)', () => {
     process.env.NETWORK_TRUSTED_PRINCIPALS = TRUSTED;
     const record = buildAccessLogRecord(
-      checkRequestToAuthz(checkReq({ principal: TRUSTED, path: '/docker-backend/api/health', destination: 'docker-backend' })),
+      checkRequestToAuthz(checkReq({ principal: TRUSTED, path: '/backend/api/health', destination: 'backend' })),
       { effect: 'allow', status: 200, reason: 'ok', decisionId: 'netauthz_x' },
     );
     expect(record.response_code).toBe(200);

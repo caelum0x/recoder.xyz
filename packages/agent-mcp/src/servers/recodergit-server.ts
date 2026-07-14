@@ -11,7 +11,7 @@ import type { McpServerRegistration } from '../registry';
  * Registration is governed and FLAG-GATED: this object is only added to the live
  * server list by the host when RECODER_CODE_GRAPH_ENABLED is on AND the
  * supervised `mcp --http` process is being brought up (see the host wiring in
- * docker-backend). It is never a raw passthrough — calls still flow through
+ * backend). It is never a raw passthrough — calls still flow through
  * checkMcpToolPermission + audit.
  */
 export const recodergitMcpServer: McpServerRegistration = {

@@ -26,7 +26,7 @@ It makes four classes of failure **structurally impossible or loudly detected**:
   around Recoder state, never owners of it.
 
 It fuses three owned sources — agent-os `WorkLock`/`WorkSignal`/`TaskRouting`,
-the docker-backend A2A bus/squad/delegation services, and ported multica claim
+the backend A2A bus/squad/delegation services, and ported multica claim
 semantics — into one deterministic engine.
 
 ## Status

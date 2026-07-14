@@ -1,6 +1,6 @@
 /**
  * AgentPresence — online/busy/idle + last-seen, derived from heartbeats.
- * MERGED from `docker-backend/src/a2a/heartbeat-tracker.service.ts`
+ * MERGED from `backend/src/a2a/heartbeat-tracker.service.ts`
  * (`HEARTBEAT_TIMEOUT_MS` online/offline). The coherence `stale-presence` check
  * marks an agent offline when its heartbeat is older than the timeout.
  */

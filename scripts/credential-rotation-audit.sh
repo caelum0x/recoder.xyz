@@ -19,7 +19,7 @@ if [[ "$TARGET" == "local" ]]; then
     exit 1
   }
 
-  for c in recoder-app recoder-docker-backend recoder-web recoder-redis; do
+  for c in recoder-app recoder-backend recoder-web recoder-redis; do
     echo "=== ${c} ==="
     if ! docker inspect "$c" >/dev/null 2>&1; then
       echo "(missing; skipped)"
@@ -36,7 +36,7 @@ fi
 if [[ "$TARGET" == "remote" ]]; then
   ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$REMOTE_HOST" '
     set -e
-    for c in recoder-app recoder-docker-backend recoder-web recoder-redis; do
+    for c in recoder-app recoder-backend recoder-web recoder-redis; do
       echo "=== ${c} ==="
       if ! docker inspect "$c" >/dev/null 2>&1; then
         echo "(missing; skipped)"

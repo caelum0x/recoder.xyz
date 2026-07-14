@@ -68,7 +68,7 @@ const TREES = [
     path: `${ROOT}/go`,
     tasks: [
       'One safe, high-leverage win only.',
-      'Add scripts/build-bd.sh + a Makefile target that builds the `bd` binary reproducibly from go/beads (source .buildflags && go build with CGO + gms_pure_go tag) — the conductor depends on `bd` (docker-backend bundle.ts) but the only working binary is a developer-local install.',
+      'Add scripts/build-bd.sh + a Makefile target that builds the `bd` binary reproducibly from go/beads (source .buildflags && go build with CGO + gms_pure_go tag) — the conductor depends on `bd` (backend bundle.ts) but the only working binary is a developer-local install.',
       'Do NOT modify the gitignored upstream clones source. The ziti recoder/ seam is large and absent — DEFER and report in remaining[].',
       'Verify: run the new build script, confirm a `bd` binary is produced (paste version output), or report the exact build blocker honestly.',
     ].join('\n'),

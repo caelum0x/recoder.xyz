@@ -11,7 +11,7 @@
  *   src/components/Foo.tsx   |   4 ++--
  *    3 files changed, 16 insertions(+), 5 deletions(-)
  *
- * Source of truth: docker-backend conductor diff route → WorkspaceDiff.
+ * Source of truth: backend conductor diff route → WorkspaceDiff.
  */
 import type { WorkspaceDiff } from '../types';
 

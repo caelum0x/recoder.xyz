@@ -2,7 +2,7 @@
  * context-transfer — carry source-task context to the target task on handoff.
  *
  * MERGED from `transferContext` in
- * `docker-backend/src/a2a/context-bridge.service.ts`. The original copied every
+ * `backend/src/a2a/context-bridge.service.ts`. The original copied every
  * context entry from `fromTaskId` to `toTaskId` (fresh ids/timestamps, source
  * left intact) through a `ContextStore`, enforcing a per-task byte ceiling. Here:
  *  - the actual entry persistence is a PORT (`ContextTransferPort`) so this stays

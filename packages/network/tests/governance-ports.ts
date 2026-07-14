@@ -1,6 +1,6 @@
 /**
  * Test wiring: the REAL @recoder/governance capabilities as @recoder/network
- * ports. This is the exact same wiring the adopting service (docker-backend)
+ * ports. This is the exact same wiring the adopting service (backend)
  * uses in production — not a mock or stub. The tests exercise the package logic
  * against the real policy engine and the real Merkle audit store.
  */

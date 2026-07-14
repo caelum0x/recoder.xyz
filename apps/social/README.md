@@ -69,7 +69,7 @@ App-only (`SOCIAL_*`):
 | `SOCIAL_HOST` | `127.0.0.1` | Status listener bind host (loopback by default). |
 | `SOCIAL_PORT` | `7391` | Status listener port (`0` = ephemeral). Invalid values fail fast. |
 
-Shared connectors surface (same vocabulary as the docker-backend bridge; each
+Shared connectors surface (same vocabulary as the backend bridge; each
 also honors the `RECODER_CONNECTORS_*` / legacy `OPENCLAW_*` prefixes):
 
 | Var | Default | Meaning |
@@ -98,5 +98,5 @@ src/main.ts      supervised boot + graceful shutdown
 ```
 
 The webhook/signed-ingress path (LINE/Slack HTTP events, `@recoder/interop`
-seal+admit) remains owned by `docker-backend/src/connectors/` — this app does
+seal+admit) remains owned by `backend/src/connectors/` — this app does
 not duplicate it; wiring an ingress here is future work.

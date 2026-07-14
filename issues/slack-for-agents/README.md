@@ -6,7 +6,7 @@ Generated from `SLACK_FOR_AGENTS_GITHUB_ISSUES.md`.
 - `issues/slack-for-agents/apps-desktop.md`
 - `issues/slack-for-agents/apps-mobile.md`
 - `issues/slack-for-agents/backend.md`
-- `issues/slack-for-agents/docker-backend.md`
+- `issues/slack-for-agents/backend.md`
 - `issues/slack-for-agents/openclaw.md`
 - `issues/slack-for-agents/packages.md`
 - `issues/slack-for-agents/recoder-agency.md`

@@ -5,17 +5,17 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 APP_ENV="${APP_ENV:-$REPO_ROOT/app/.env.production}"
 WEB_ENV="${WEB_ENV:-$REPO_ROOT/recoder-web/.env.local}"
-DOCKER_ENV="${DOCKER_ENV:-$REPO_ROOT/docker-backend/.env}"
+DOCKER_ENV="${DOCKER_ENV:-$REPO_ROOT/backend/.env}"
 INTERNAL_SERVICE_KEY_VALUE="${INTERNAL_SERVICE_KEY:-}"
 
 usage() {
   cat <<'EOF'
-Sync INTERNAL_SERVICE_KEY across app/recoder-web/docker-backend env files.
+Sync INTERNAL_SERVICE_KEY across app/recoder-web/backend env files.
 
 Defaults:
   APP_ENV=app/.env.production
   WEB_ENV=recoder-web/.env.local   # optional retired surface; skipped when absent
-  DOCKER_ENV=docker-backend/.env
+  DOCKER_ENV=backend/.env
 
 Provide key via env:
   INTERNAL_SERVICE_KEY=<64-char-hex> bash scripts/sync-internal-service-key.sh

@@ -9,7 +9,7 @@ inside that isolation, observes the run, and tears down — over **one contract*
 (`ConductorSubstrate`), with two real backends: local `tmux` + git worktrees, and remote
 Daytona sandboxes.
 
-It is the first-class promotion of the proven code in `docker-backend/src/conductor/*`.
+It is the first-class promotion of the proven code in `backend/src/conductor/*`.
 The backend keeps a thin adapter (`/api/conductor` routes, container glue, reconcile cron);
 the engine lives here.
 

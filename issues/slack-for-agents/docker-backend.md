@@ -1,11 +1,11 @@
-# Slack for Agents Issues: docker-backend
+# Slack for Agents Issues: backend
 
 Generated from `SLACK_FOR_AGENTS_GITHUB_ISSUES.md`.
 
 ## SFA-003
-Title: `[SFA-003] docker-backend: enforce canonical task lifecycle transitions`
-Labels: `area/a2a`, `repo/docker-backend`, `priority/p0`, `type/feature`
-Repo: `docker-backend`
+Title: `[SFA-003] backend: enforce canonical task lifecycle transitions`
+Labels: `area/a2a`, `repo/backend`, `priority/p0`, `type/feature`
+Repo: `backend`
 Body:
 - Objective: Enforce canonical task lifecycle (`submitted -> working -> terminal`) in orchestrator.
 - Scope:
@@ -22,9 +22,9 @@ Body:
   - [ ] trace logging assertion
 
 ## SFA-004
-Title: `[SFA-004] docker-backend: add policy hook middleware for privileged actions`
-Labels: `area/security`, `repo/docker-backend`, `priority/p0`, `type/feature`
-Repo: `docker-backend`
+Title: `[SFA-004] backend: add policy hook middleware for privileged actions`
+Labels: `area/security`, `repo/backend`, `priority/p0`, `type/feature`
+Repo: `backend`
 Body:
 - Objective: Route privileged connector actions through policy/approval middleware.
 - Scope:
@@ -41,9 +41,9 @@ Body:
   - [ ] audit event emission test
 
 ## SFA-010
-Title: `[SFA-010] docker-backend: implement OpenClaw adapter endpoint with trace propagation`
-Labels: `area/a2a`, `repo/docker-backend`, `priority/p1`, `type/feature`
-Repo: `docker-backend`
+Title: `[SFA-010] backend: implement OpenClaw adapter endpoint with trace propagation`
+Labels: `area/a2a`, `repo/backend`, `priority/p1`, `type/feature`
+Repo: `backend`
 Body:
 - Objective: Add adapter endpoint that converts OpenClaw events into traceable A2A tasks.
 - Scope:

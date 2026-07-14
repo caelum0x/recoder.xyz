@@ -10,7 +10,7 @@ import type { McpServerRegistration } from '../registry';
  * This is DISTINCT from the older `recoder.browser` server (open/snapshot/verify,
  * a puppeteer session an agent verifies its own work in). This one is the owned,
  * Phase-2-style engine: the package owns NO engine logic and assumes no backing
- * browser. The host (docker-backend) injects a concrete `BrowserEnginePort` built
+ * browser. The host (backend) injects a concrete `BrowserEnginePort` built
  * over `@recoder/agent-browser` (puppeteer, lazily imported; or a browser-use HTTP
  * service). Every handler degrades truthfully — the engine returns a
  * `not_configured` status (never throws, never fabricates) when no driver is wired.

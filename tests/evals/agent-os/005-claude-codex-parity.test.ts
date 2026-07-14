@@ -8,13 +8,13 @@ test('Claude and Codex receive the same task contract with runtime-specific prom
     agent: createEvalAgent('claude_code', 'claude'),
     prompt: 'Add regression test for signup crash',
     intent: TaskIntentEnum.TestGeneration,
-    verify: ['pnpm -C docker-backend exec vitest run signup.test.ts'],
+    verify: ['pnpm -C backend exec vitest run signup.test.ts'],
   });
   const codexBundle = compileForEval({
     agent: createEvalAgent('codex', 'codex'),
     prompt: 'Add regression test for signup crash',
     intent: TaskIntentEnum.TestGeneration,
-    verify: ['pnpm -C docker-backend exec vitest run signup.test.ts'],
+    verify: ['pnpm -C backend exec vitest run signup.test.ts'],
   });
 
   assert.deepEqual(claudeBundle.acceptance_criteria, codexBundle.acceptance_criteria);

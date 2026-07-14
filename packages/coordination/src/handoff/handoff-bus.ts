@@ -1,7 +1,7 @@
 /**
  * handoff-bus — publish/subscribe handoffs, typed + deduplicated.
  *
- * MERGED from the core of `docker-backend/src/a2a/a2a-event-bus.ts` but narrowed
+ * MERGED from the core of `backend/src/a2a/a2a-event-bus.ts` but narrowed
  * to coordination handoffs: the generic transport mechanics (NATS mirror, ring
  * buffer retention, redaction, raw scoped EventEmitter keys) live in
  * `transport/`; here we keep the part that matters for handoffs — effectively-once

@@ -3,7 +3,7 @@
 # Master plan wave 6: "single-command self-hosted Recoder (compose + daemon)".
 #
 # Brings up the full control plane and its data dependencies:
-#   backend   the Recoder control plane (docker-backend, port 3100, built from
+#   backend   the Recoder control plane (backend, port 3100, built from
 #             its Dockerfile — includes the substrate stage that bakes the pinned
 #             tmux + bd binaries the Conductor drives)
 #   postgres  postgres:17 with an init that creates recoder_main / recoder_backend
@@ -12,7 +12,7 @@
 #   qdrant    vector store (mem0 / embeddings)
 #   recoder-xds       Go Envoy xDS (ADS) control plane — serves DYNAMIC
 #                     LDS/CDS/RDS so Envoy gets live network-config updates
-#                     without a restart (mirrors docker-backend/src/network).
+#                     without a restart (mirrors backend/src/network).
 #   recoder-governance  Rust governance daemon — boots a deny-biased
 #                     GovernanceKernel and serves the typed IPC over a
 #                     Unix-domain socket on a SHARED volume. The backend's
@@ -28,9 +28,9 @@
 # .env.selfhost.example — the up-script and your own .env.selfhost carry them.
 #
 # IMPORTANT build context: the backend image is built with the REPO ROOT as
-# context (`context: .`) because docker-backend/Dockerfile copies sibling paths
+# context (`context: .`) because backend/Dockerfile copies sibling paths
 # (packages/, shared/, pi-mono-dist/, c/, go/, scripts/) and the prebuilt
-# docker-backend/dist/server.js. See deploy/README.md for the prerequisites.
+# backend/dist/server.js. See deploy/README.md for the prerequisites.
 
 name: recoder-selfhost
 
@@ -88,8 +88,8 @@ services:
   backend:
     build:
       context: .
-      dockerfile: docker-backend/Dockerfile
-    image: recoder/docker-backend:selfhost
+      dockerfile: backend/Dockerfile
+    image: recoder/backend:selfhost
     <<: *restart
     depends_on:
       postgres:
@@ -109,7 +109,7 @@ services:
       # The Conductor manages sibling containers (agent sandboxes) via the host
       # Docker socket. Mounted read-write because it must create/stop containers.
       - /var/run/docker.sock:/var/run/docker.sock
-      - backenddata:/app/docker-backend/data
+      - backenddata:/app/backend/data
       # Shared governance IPC socket dir. The recoder-governance daemon binds the
       # socket here; the backend delegates to it via GOVERNANCE_SOCKET. Both run as
       # uid 1001 so peer-cred (same-uid) auth succeeds across containers.
@@ -156,7 +156,7 @@ services:
 
   # ── Envoy xDS (ADS) control plane ──────────────────────────────────────────
   # Serves DYNAMIC LDS/CDS/RDS so Envoy receives live network-config updates with
-  # no restart. It REUSES the backend image (recoder/docker-backend:selfhost),
+  # no restart. It REUSES the backend image (recoder/backend:selfhost),
   # which bakes the recoder-xds binary at /opt/recoder/bin/recoder-xds in its
   # substrate stage — so no second large build. The `build:` block is identical to
   # `backend` so compose resolves the SAME image tag (built once) and this service
@@ -168,8 +168,8 @@ services:
   recoder-xds:
     build:
       context: .
-      dockerfile: docker-backend/Dockerfile
-    image: recoder/docker-backend:selfhost
+      dockerfile: backend/Dockerfile
+    image: recoder/backend:selfhost
     <<: *restart
     depends_on:
       backend:

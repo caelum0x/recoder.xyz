@@ -1,6 +1,6 @@
 /**
  * DelegationChain — the root + ordered links + depth + cycle-set of a handoff
- * chain. MERGED from `docker-backend/src/a2a/delegation-chain.service.ts`
+ * chain. MERGED from `backend/src/a2a/delegation-chain.service.ts`
  * (`DelegationChain`, depth tracking, circular detection). Kept as a pure value;
  * the depth/cycle guards live in `handoff/{depth-guard,cycle-detector}`.
  */

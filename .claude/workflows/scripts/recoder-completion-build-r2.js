@@ -3,7 +3,7 @@ export const meta = {
   description: 'Completion build round 2: one agent per tree IMPLEMENTS the top concrete incomplete features from the completion spec. Real code, no stubs, verify each.',
   phases: [
     { title: 'Build', detail: 'one agent per tree: implement top backlog features for real + verify' },
-    { title: 'Regression', detail: 'docker-backend tsc + cockpit tests sanity' },
+    { title: 'Regression', detail: 'backend tsc + cockpit tests sanity' },
   ],
 }
 
@@ -59,15 +59,15 @@ const SCHEMA = {
 
 const TREES = [
   {
-    key: 'docker-backend',
-    path: `${ROOT}/docker-backend`,
+    key: 'backend',
+    path: `${ROOT}/backend`,
     tasks: [
       'CONDUCTOR — highest value, all additive and safe:',
       '1) MOUNT THE DEAD CAPABILITY ROUTES. The multi-agent workflow runner, rich health, resources, status, and steer handlers are already WRITTEN/imported but not exposed. In src/conductor/conductor.routes.ts add the 5 route handlers wiring the already-present symbols (resolve the substrate handle from the workspace record for status/steer). This unlocks the headline "many parallel agents" feature that is already built.',
       '2) ENFORCE THE RESOURCE GOVERNOR on the primary path: in src/conductor/workspace-service.ts call admitWorkspace(projectId, createdBy) right after persisting state "created"; on rejection short-circuit to "failed" with the reason (do not launch). Map admission rejection to HTTP 429 in conductor.routes.ts.',
       '3) FIX THE LIFECYCLE: (a) in src/conductor/tmux-orchestrator.ts set remain-on-exit per-session immediately after new-session so clean exit-code-0 detection is deterministic; (b) make teardown advance the workspace RECORD to a terminal state (e.g. archived/completed) — currently teardown kills the substrate but leaves the record "running" (confirmed via a real live run), which the reconciler then flags as orphaned.',
       '4) AUTO-APPLY POSTGRES MIGRATIONS on boot when AGENT_OS_REPOSITORY=postgres (run 0002-conductor-workspaces.sql idempotently) so the missing-table blocker is gone. Keep degrade-safe.',
-      'Verify: `cd docker-backend && npx tsc --noEmit 2>&1 | grep -c "error TS"` stays 0, plus targeted vitest for any touched conductor unit (e.g. conductor-locks, gateway, and a new route-mount smoke if feasible without tmux/pg).',
+      'Verify: `cd backend && npx tsc --noEmit 2>&1 | grep -c "error TS"` stays 0, plus targeted vitest for any touched conductor unit (e.g. conductor-locks, gateway, and a new route-mount smoke if feasible without tmux/pg).',
     ].join('\n'),
   },
   {
@@ -77,7 +77,7 @@ const TREES = [
       'Highest-integrity, smallest win: GRADUATE WORK-LOCKS TO POSTGRES (durable, cross-process) with an in-memory fallback.',
       '- Implement packages/coordination/src/persistence/postgres/postgres-lock-store.ts (LockStorePort with compare-and-set on the fence token that conductor-locks.ts relies on) and postgres-lease-fencer.ts (LeaseFencerPort, monotonic per-scope tokens).',
       '- Export them from coordination/src/persistence/postgres/index.ts and the persistence barrel; keep the memory impls as the degrade fallback.',
-      '- Do NOT attempt the XL @recoder/runtime wiring this round (risky, would touch docker-backend too). If you have spare safe scope, instead solidify coordination exports/types.',
+      '- Do NOT attempt the XL @recoder/runtime wiring this round (risky, would touch backend too). If you have spare safe scope, instead solidify coordination exports/types.',
       'Verify: `pnpm -F @recoder/coordination check-types` and `pnpm -F @recoder/coordination test` (paste tail). If a live Postgres is unavailable, unit-test the CAS logic against a fake pool you own (the store logic, not a mock of the store).',
     ].join('\n'),
   },
@@ -86,7 +86,7 @@ const TREES = [
     path: `${ROOT}/ts`,
     tasks: [
       'Make @recoder/connectors actually consumable + give it a real dispatch half.',
-      '1) EXPORT THE CLEAN PER-CHANNEL ADAPTERS from ts/extracted-from-openclaw/src index barrel so the 6 typecheck-clean adapters (telegram + the others that compile) are importable by docker-backend. Do NOT export the known-broken discord adapter (139 errors) — leave it out and note it.',
+      '1) EXPORT THE CLEAN PER-CHANNEL ADAPTERS from ts/extracted-from-openclaw/src index barrel so the 6 typecheck-clean adapters (telegram + the others that compile) are importable by backend. Do NOT export the known-broken discord adapter (139 errors) — leave it out and note it.',
       '2) Implement a CONCRETE EmbeddedRunner backed by the pi-agent (src/agents/embedded-runner.ts is currently interface-only) — a real runner that takes a normalized inbound message + gate result and produces a reply via the pi coding-agent harness. Real implementation; gate external SDKs behind the existing optional-peer pattern so install stays ENOSPC-safe.',
       '3) Add the inbound -> gating -> embedded-agent -> outbound dispatch pipeline wiring (a ConnectorRegistry/dispatchInbound) — real, exercised by the existing 13 gating tests + at least one new pure dispatch test.',
       'Verify: per-package `npx tsc --noEmit` (0 errors) and the package test script (paste tail). Rebuild dist if the package ships a build.',
@@ -137,7 +137,7 @@ const TREES = [
     path: `${ROOT}/go`,
     tasks: [
       'One safe, high-leverage win only this round.',
-      'Add scripts/build-bd.sh + a Makefile target that builds the `bd` binary reproducibly from go/beads (source .buildflags && go build with the CGO + gms_pure_go tag) — the conductor depends on `bd` (docker-backend bundle.ts) but the only working binary is a developer-local install. Make it reproducible.',
+      'Add scripts/build-bd.sh + a Makefile target that builds the `bd` binary reproducibly from go/beads (source .buildflags && go build with the CGO + gms_pure_go tag) — the conductor depends on `bd` (backend bundle.ts) but the only working binary is a developer-local install. Make it reproducible.',
       'Do NOT modify the gitignored upstream clones (beads/ziti/multica) source. The ziti recoder/ seam is large and absent — DEFER it this round and report in remaining[].',
       'Verify: run the new build script and confirm a `bd` binary is produced (paste the version output), or report the exact build blocker honestly.',
     ].join('\n'),
@@ -194,9 +194,9 @@ phase('Regression')
 const regression = await agent(
   [
     'Regression sanity after the completion build. Fix ONLY a regression you directly find; otherwise change nothing.',
-    'Run: `cd /Users/arhansubasi/recoder.xyz/docker-backend && npx tsc --noEmit 2>&1 | grep -c "error TS"` (expect 0).',
+    'Run: `cd /Users/arhansubasi/recoder.xyz/backend && npx tsc --noEmit 2>&1 | grep -c "error TS"` (expect 0).',
     'Run: `cd /Users/arhansubasi/recoder.xyz/apps/desktop/cockpit && npx vitest run 2>&1 | tail -6`.',
-    'Return structured result tree="regression"; verify.passed=true only if docker-backend tsc==0 AND cockpit tests pass. Name any regression file/line in remaining[].',
+    'Return structured result tree="regression"; verify.passed=true only if backend tsc==0 AND cockpit tests pass. Name any regression file/line in remaining[].',
   ].join('\n'),
   { label: 'regression', phase: 'Regression', schema: SCHEMA, effort: 'high' },
 )

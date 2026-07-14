@@ -13,8 +13,8 @@
  *  - 'reporting' : brain enabled AND report.available — real reuse to show.
  *
  * Source of truth for the contract:
- *  - docker-backend/src/agent-os/routes/brain-stats.routes.ts (BrainStatsResponseData)
- *  - docker-backend/src/agent-os/brain-service.ts (BrainCacheStatus)
+ *  - backend/src/agent-os/routes/brain-stats.routes.ts (BrainStatsResponseData)
+ *  - backend/src/agent-os/brain-service.ts (BrainCacheStatus)
  *  - packages/brain/src/runtime/cache-doctor.ts (CacheReport)
  */
 import type { BrainStats, GovernanceAudit } from '../types';

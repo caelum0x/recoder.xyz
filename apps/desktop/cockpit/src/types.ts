@@ -4,7 +4,7 @@
  * Source of truth:
  *  - packages/agent-os/src/domain/workspace.ts (Workspace, WorkspaceState)
  *  - packages/agent-os/src/domain/event.ts (RunEvent)
- *  - docker-backend/src/conductor/{conductor.routes,review,review-publish,runtime-commands}.ts
+ *  - backend/src/conductor/{conductor.routes,review,review-publish,runtime-commands}.ts
  *
  * These are intentionally read-only descriptions of what the backend returns;
  * the cockpit never invents fields the API does not send.
@@ -114,7 +114,7 @@ export interface SubstrateAvailability {
 /**
  * GET /health/full — the unified conductor health snapshot.
  *
- * Source of truth: docker-backend/src/conductor/conductor-health.ts
+ * Source of truth: backend/src/conductor/conductor-health.ts
  * (ConductorHealth). This is the single endpoint an operator/monitor checks:
  * truthful substrate, runtime, resource, tail, and workspace state — never faked.
  */
@@ -164,7 +164,7 @@ export interface ConductorHealth {
  * The structured `data` the conductor PR/merge delivery gate attaches to a 409
  * when an action is blocked awaiting approval.
  *
- * Source of truth: docker-backend/src/conductor/conductor.routes.ts (the
+ * Source of truth: backend/src/conductor/conductor.routes.ts (the
  * `DeliveryApprovalRequiredError` 409 handler) which serializes
  * `{ state, action, approvalId, transitioned }`. The human-readable gate reason
  * is the envelope `error` message (carried separately on the thrown ApiError).
@@ -290,7 +290,7 @@ export interface DmuxLaunchResult {
 /**
  * GET /api/connectors — per-channel connector health.
  *
- * Source of truth: docker-backend/src/connectors/gateway.ts
+ * Source of truth: backend/src/connectors/gateway.ts
  * (ConnectorsHealth / ChannelHealth). NOTE this route is mounted at
  * /api/connectors, NOT under /api/conductor.
  */
@@ -330,8 +330,8 @@ export interface ConnectorsHealth {
  * audit integrity.
  *
  * Source of truth:
- *  - docker-backend/src/agent-os/routes/brain-stats.routes.ts (BrainStatsResponseData)
- *  - docker-backend/src/agent-os/brain-service.ts (BrainCacheStatus)
+ *  - backend/src/agent-os/routes/brain-stats.routes.ts (BrainStatsResponseData)
+ *  - backend/src/agent-os/brain-service.ts (BrainCacheStatus)
  *  - packages/brain/src/runtime/cache-doctor.ts (CacheReport)
  *
  * Mounted under /api/agent-os (NOT /api/conductor).
@@ -383,8 +383,8 @@ export interface BrainStats {
  * Source of truth:
  *  - packages/agent-os/src/domain/policy-decision.ts (PolicyDecision, effect)
  *  - packages/agent-os/src/domain/memory-item.ts (MemoryCandidate, MemoryItem, scopes/status)
- *  - docker-backend/src/agent-os/routes/policy-evaluate.routes.ts (request shape)
- *  - docker-backend/src/agent-os/routes/memory-candidate.routes.ts (propose/review shapes)
+ *  - backend/src/agent-os/routes/policy-evaluate.routes.ts (request shape)
+ *  - backend/src/agent-os/routes/memory-candidate.routes.ts (propose/review shapes)
  *  - packages/agent-memory/src/memory-review-workflow.ts (ReviewMemoryResult)
  */
 
@@ -522,7 +522,7 @@ export interface ReviewMemoryResult {
  * MCP control-plane types — mirror the real /api/mcp endpoint shapes.
  *
  * Source of truth:
- *  - docker-backend/src/agent-os/routes/mcp-control.routes.ts (createAgentMcpRouter)
+ *  - backend/src/agent-os/routes/mcp-control.routes.ts (createAgentMcpRouter)
  *  - packages/agent-mcp/src/registry.ts (McpServerRegistration, McpServerKind)
  *  - packages/agent-mcp/src/policy/audit.ts (McpToolAuditEvent, McpToolCall)
  *
@@ -627,8 +627,8 @@ export interface McpToolCheckResult {
  * TensorZero gateway surface types — mirror the real /api/gateway endpoint shapes.
  *
  * Source of truth:
- *  - docker-backend/src/routes/tensorzero.routes.ts
- *  - docker-backend/src/tensorzero-client.ts (TensorzeroHealth)
+ *  - backend/src/routes/tensorzero.routes.ts
+ *  - backend/src/tensorzero-client.ts (TensorzeroHealth)
  *
  * Mounted at /api/gateway (NOT /api/conductor or /api/agent-os).
  */
@@ -677,8 +677,8 @@ export interface GatewayInferenceBody {
  * Zero-Trust Networking (OpenZiti) surface types — mirror the real /api/ziti/* endpoint shapes.
  *
  * Source of truth:
- *  - docker-backend/src/routes/ziti.routes.ts
- *  - docker-backend/src/ziti-client.ts (ZitiHealth, ZitiIdentity)
+ *  - backend/src/routes/ziti.routes.ts
+ *  - backend/src/ziti-client.ts (ZitiHealth, ZitiIdentity)
  *
  * Mounted at /api/ziti (NOT /api/conductor or /api/agent-os).
  */
@@ -711,7 +711,7 @@ export interface ZitiIdentityList {
  * OpenFang agent surface types — mirror the real /api/agents/openfang endpoint shapes.
  *
  * Source of truth:
- *  - docker-backend/src/conductor/openfang-daemon.ts (createOpenfangAgentRouter)
+ *  - backend/src/conductor/openfang-daemon.ts (createOpenfangAgentRouter)
  *
  * Mounted at /api/agents/openfang (NOT /api/conductor or /api/agent-os).
  */
@@ -740,8 +740,8 @@ export interface OpenfangAgentCard {
  * Multica managed-agents/squads surface types — mirror the real /api/multica/* shapes.
  *
  * Source of truth:
- *  - docker-backend/src/routes/multica.routes.ts (createMulticaRouter)
- *  - docker-backend/src/multica-client.ts (MulticaSquad, MulticaHealthResult)
+ *  - backend/src/routes/multica.routes.ts (createMulticaRouter)
+ *  - backend/src/multica-client.ts (MulticaSquad, MulticaHealthResult)
  *
  * Mounted at /api/multica (NOT /api/conductor or /api/agent-os).
  */
@@ -783,7 +783,7 @@ export interface MulticaSquadsResult {
  * Retrieval (RAG) surface types — mirror the real /api/retrieval/* endpoint shapes.
  *
  * Source of truth:
- *  - docker-backend/src/routes/retrieval.routes.ts (createRetrievalRouter)
+ *  - backend/src/routes/retrieval.routes.ts (createRetrievalRouter)
  *
  * Mounted at /api/retrieval (NOT /api/conductor or /api/agent-os).
  */

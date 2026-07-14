@@ -2,7 +2,7 @@
  * Device-flow auth client for the conductor CLI (RFC 8628).
  *
  * Hits the canonical recoder.xyz CLI auth endpoints mounted at `/api/auth/cli`
- * (see docker-backend/src/distribution/cli-auth.routes.ts), which are backed by
+ * (see backend/src/distribution/cli-auth.routes.ts), which are backed by
  * `@recoder/distribution`. recoder.xyz is the source of truth — the browser
  * approval step verifies the user's recoder.xyz session.
  *

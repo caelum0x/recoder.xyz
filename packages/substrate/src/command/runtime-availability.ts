@@ -1,7 +1,7 @@
 /**
  * runtimeAvailability — which installed CLIs Conductor can actually launch.
  *
- * Promoted verbatim from docker-backend/src/conductor/runtime-commands.ts.
+ * Promoted verbatim from backend/src/conductor/runtime-commands.ts.
  * Truthful: probes PATH for each runtime's binary; never assumes presence.
  */
 import type { RuntimeAvailability } from '../types/command.js';

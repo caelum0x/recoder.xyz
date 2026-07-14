@@ -2,12 +2,12 @@
 set -euo pipefail
 
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-DOCKER_BACKEND_DIR="${REPO_ROOT}/docker-backend"
+DOCKER_BACKEND_DIR="${REPO_ROOT}/backend"
 SRC_DIR="${DOCKER_BACKEND_DIR}/src"
 DIST_DIR="${DOCKER_BACKEND_DIR}/dist"
 
 run_backend_build() {
-  echo "docker-backend-dist-parity: rebuilding docker-backend dist"
+  echo "backend-dist-parity: rebuilding backend dist"
 
   if command -v pnpm >/dev/null 2>&1; then
     pnpm --dir "${DOCKER_BACKEND_DIR}" run build
@@ -19,7 +19,7 @@ run_backend_build() {
     return
   fi
 
-  echo "docker-backend-dist-parity: FAIL (pnpm not found; cannot rebuild dist)"
+  echo "backend-dist-parity: FAIL (pnpm not found; cannot rebuild dist)"
   exit 1
 }
 
@@ -89,20 +89,20 @@ for source_file in src_dir.rglob("*"):
             )
 
 if missing:
-    print("docker-backend-dist-parity: FAIL")
+    print("backend-dist-parity: FAIL")
     for item in missing:
         print(f"  {item}")
     sys.exit(1)
 
-print("docker-backend-dist-parity: PASS")
+print("backend-dist-parity: PASS")
 PY
 }
 
-echo "== docker-backend Dist Parity Check =="
+echo "== backend Dist Parity Check =="
 echo "repo: ${REPO_ROOT}"
 
 if [[ ! -d "${SRC_DIR}" ]]; then
-  echo "docker-backend-dist-parity: FAIL (missing src dir: ${SRC_DIR})"
+  echo "backend-dist-parity: FAIL (missing src dir: ${SRC_DIR})"
   exit 1
 fi
 

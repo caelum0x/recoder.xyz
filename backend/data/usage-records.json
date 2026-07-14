@@ -1,0 +1,1160 @@
+{
+  "records": [
+    {
+      "id": "6e795e19-4a6b-43b0-832f-4e983855e0dc",
+      "userId": "anonymous",
+      "projectId": "project-1770127174411",
+      "metricType": "compute_seconds",
+      "value": 1.0565894246342695,
+      "periodStart": "2026-02-03T13:00:00.000Z",
+      "periodEnd": "2026-02-03T14:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T14:00:17.439Z",
+      "metadata": {
+        "count": 3,
+        "min": 0.02789769820971867,
+        "max": 0.9513078880407124,
+        "avg": 0.35219647487808986
+      }
+    },
+    {
+      "id": "a6ddbfb1-2aec-4e0d-a779-a2be30a7002f",
+      "userId": "anonymous",
+      "projectId": "project-1770127174411",
+      "metricType": "memory_bytes",
+      "value": 111386624,
+      "periodStart": "2026-02-03T13:00:00.000Z",
+      "periodEnd": "2026-02-03T14:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T14:00:17.439Z",
+      "metadata": {
+        "count": 3,
+        "min": 37122048,
+        "max": 37134336,
+        "avg": 37128874.666666664
+      }
+    },
+    {
+      "id": "499aa2bb-c9bf-4b0d-a689-5ecd91208649",
+      "userId": "anonymous",
+      "projectId": "project-1770127174411",
+      "metricType": "bandwidth_bytes",
+      "value": 510,
+      "periodStart": "2026-02-03T13:00:00.000Z",
+      "periodEnd": "2026-02-03T14:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T14:00:17.439Z",
+      "metadata": {
+        "count": 2,
+        "min": 126,
+        "max": 384,
+        "avg": 255
+      }
+    },
+    {
+      "id": "80f7187a-3d05-44f8-b3b5-ed8848a9224e",
+      "userId": "anonymous",
+      "projectId": "project-1770144970306",
+      "metricType": "compute_seconds",
+      "value": 0.3998067827961651,
+      "periodStart": "2026-02-03T18:00:00.000Z",
+      "periodEnd": "2026-02-03T19:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T19:00:05.261Z",
+      "metadata": {
+        "count": 20,
+        "min": 0.013954659949622167,
+        "max": 0.04423057644110276,
+        "avg": 0.019990339139808255
+      }
+    },
+    {
+      "id": "f6c7e7e5-839c-43d4-a300-9a6375342331",
+      "userId": "anonymous",
+      "projectId": "project-1770144970306",
+      "metricType": "memory_bytes",
+      "value": 680517632,
+      "periodStart": "2026-02-03T18:00:00.000Z",
+      "periodEnd": "2026-02-03T19:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T19:00:05.261Z",
+      "metadata": {
+        "count": 23,
+        "min": 8167424,
+        "max": 63143936,
+        "avg": 29587723.13043478
+      }
+    },
+    {
+      "id": "a458a6bb-1c78-4f6a-86c7-19c8795c1c75",
+      "userId": "anonymous",
+      "projectId": "project-1770144976293",
+      "metricType": "compute_seconds",
+      "value": 0.24227438118872385,
+      "periodStart": "2026-02-03T18:00:00.000Z",
+      "periodEnd": "2026-02-03T19:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T19:00:05.261Z",
+      "metadata": {
+        "count": 10,
+        "min": 0.013969696969696969,
+        "max": 0.04440201005025125,
+        "avg": 0.024227438118872385
+      }
+    },
+    {
+      "id": "4aa9affd-684d-477b-9af4-bc526470fdc6",
+      "userId": "anonymous",
+      "projectId": "project-1770144976293",
+      "metricType": "memory_bytes",
+      "value": 195256320,
+      "periodStart": "2026-02-03T18:00:00.000Z",
+      "periodEnd": "2026-02-03T19:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T19:00:05.261Z",
+      "metadata": {
+        "count": 23,
+        "min": 8163328,
+        "max": 10629120,
+        "avg": 8489405.217391305
+      }
+    },
+    {
+      "id": "c00fe910-db62-4394-a6e3-66ad2b13b0ad",
+      "userId": "anonymous",
+      "projectId": "project-1770144970306",
+      "metricType": "bandwidth_bytes",
+      "value": 5984,
+      "periodStart": "2026-02-03T18:00:00.000Z",
+      "periodEnd": "2026-02-03T19:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T19:00:05.261Z",
+      "metadata": {
+        "count": 11,
+        "min": 84,
+        "max": 902,
+        "avg": 544
+      }
+    },
+    {
+      "id": "9680ec2c-faef-4aee-833d-181fd78667cd",
+      "userId": "anonymous",
+      "projectId": "project-1770144976293",
+      "metricType": "bandwidth_bytes",
+      "value": 5846,
+      "periodStart": "2026-02-03T18:00:00.000Z",
+      "periodEnd": "2026-02-03T19:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T19:00:05.261Z",
+      "metadata": {
+        "count": 14,
+        "min": 84,
+        "max": 902,
+        "avg": 417.57142857142856
+      }
+    },
+    {
+      "id": "5244fbcd-0c3b-4fea-bd24-068b35ca3c0f",
+      "userId": "anonymous",
+      "projectId": "analytics-dashboard",
+      "metricType": "compute_seconds",
+      "value": 14.901402121693181,
+      "periodStart": "2026-02-03T19:00:00.000Z",
+      "periodEnd": "2026-02-03T20:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T20:00:55.368Z",
+      "metadata": {
+        "count": 30,
+        "min": 0.0022842767295597486,
+        "max": 5.001577889447236,
+        "avg": 0.4967134040564394
+      }
+    },
+    {
+      "id": "8b603bb5-505b-4c37-857c-192567005bf8",
+      "userId": "anonymous",
+      "projectId": "analytics-dashboard",
+      "metricType": "memory_bytes",
+      "value": 11182403584,
+      "periodStart": "2026-02-03T19:00:00.000Z",
+      "periodEnd": "2026-02-03T20:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T20:00:55.368Z",
+      "metadata": {
+        "count": 37,
+        "min": 9211904,
+        "max": 481656832,
+        "avg": 302227123.8918919
+      }
+    },
+    {
+      "id": "28073f35-e4fe-48cc-bc57-6dd6b65aaedb",
+      "userId": "anonymous",
+      "projectId": "analytics-dashboard",
+      "metricType": "bandwidth_bytes",
+      "value": 57102284,
+      "periodStart": "2026-02-03T19:00:00.000Z",
+      "periodEnd": "2026-02-03T20:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T20:00:55.368Z",
+      "metadata": {
+        "count": 20,
+        "min": 84,
+        "max": 28050783,
+        "avg": 2855114.2
+      }
+    },
+    {
+      "id": "407d2862-425e-4b84-ae4b-afca2bfd8c6c",
+      "userId": "anonymous",
+      "projectId": "analytics-dashboard",
+      "metricType": "storage_bytes",
+      "value": 0,
+      "periodStart": "2026-02-03T19:00:00.000Z",
+      "periodEnd": "2026-02-03T20:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T20:00:55.368Z",
+      "metadata": {
+        "count": 1,
+        "min": 0,
+        "max": 0,
+        "avg": 0
+      }
+    },
+    {
+      "id": "faadb94f-3a5c-41da-b49d-75f4fd527cb5",
+      "userId": "anonymous",
+      "projectId": "hello-world",
+      "metricType": "compute_seconds",
+      "value": 20.92503889987632,
+      "periodStart": "2026-02-03T20:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T21:00:49.857Z",
+      "metadata": {
+        "count": 10,
+        "min": 0.025445665445665445,
+        "max": 10.31620725388601,
+        "avg": 2.092503889987632
+      }
+    },
+    {
+      "id": "388222c9-f0b9-47d9-a754-7531c7af1d23",
+      "userId": "anonymous",
+      "projectId": "hello-world",
+      "metricType": "memory_bytes",
+      "value": 11207766016,
+      "periodStart": "2026-02-03T20:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T21:00:49.857Z",
+      "metadata": {
+        "count": 47,
+        "min": 9994240,
+        "max": 357740544,
+        "avg": 238463106.72340426
+      }
+    },
+    {
+      "id": "c10e52b3-cf78-4ecc-bfd2-5b8d968f0868",
+      "userId": "anonymous",
+      "projectId": "hello-world",
+      "metricType": "bandwidth_bytes",
+      "value": 46879858,
+      "periodStart": "2026-02-03T20:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T21:00:49.857Z",
+      "metadata": {
+        "count": 26,
+        "min": 42,
+        "max": 36186342,
+        "avg": 1803071.4615384615
+      }
+    },
+    {
+      "id": "7c91d4e3-b776-48a6-99c7-7d8458f1918a",
+      "userId": "anonymous",
+      "projectId": "project-1770152045638",
+      "metricType": "compute_seconds",
+      "value": 12.316144271560534,
+      "periodStart": "2026-02-03T20:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T21:00:49.857Z",
+      "metadata": {
+        "count": 28,
+        "min": 0.03103875968992248,
+        "max": 9.632597640891218,
+        "avg": 0.4398622954128762
+      }
+    },
+    {
+      "id": "f7039ef4-ac41-459f-b25f-76454bd6c3b9",
+      "userId": "anonymous",
+      "projectId": "project-1770152045638",
+      "metricType": "memory_bytes",
+      "value": 3349774336,
+      "periodStart": "2026-02-03T20:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T21:00:49.857Z",
+      "metadata": {
+        "count": 35,
+        "min": 9322496,
+        "max": 292311040,
+        "avg": 95707838.17142858
+      }
+    },
+    {
+      "id": "3ac3379a-6f1e-42a9-971f-ad3a32ff437b",
+      "userId": "anonymous",
+      "projectId": "project-1770152045638",
+      "metricType": "bandwidth_bytes",
+      "value": 27951310,
+      "periodStart": "2026-02-03T20:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T21:00:49.857Z",
+      "metadata": {
+        "count": 33,
+        "min": 3840,
+        "max": 20074728,
+        "avg": 847009.3939393939
+      }
+    },
+    {
+      "id": "f1ca620a-0b49-42fc-a822-f0802a15ec49",
+      "userId": "anonymous",
+      "projectId": "hello-world",
+      "metricType": "storage_bytes",
+      "value": 0,
+      "periodStart": "2026-02-03T20:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T21:00:49.857Z",
+      "metadata": {
+        "count": 1,
+        "min": 0,
+        "max": 0,
+        "avg": 0
+      }
+    },
+    {
+      "id": "e1341cac-beb8-4e94-a690-e18a62814b96",
+      "userId": "anonymous",
+      "projectId": "project-1770152045638",
+      "metricType": "storage_bytes",
+      "value": 0,
+      "periodStart": "2026-02-03T20:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T21:00:49.857Z",
+      "metadata": {
+        "count": 1,
+        "min": 0,
+        "max": 0,
+        "avg": 0
+      }
+    },
+    {
+      "id": "d415a32a-b61f-406c-b014-3c01131b1b84",
+      "userId": "anonymous",
+      "projectId": "hello-world",
+      "metricType": "compute_seconds",
+      "value": 20.92503889987632,
+      "periodStart": "2026-02-02T21:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "day",
+      "createdAt": "2026-02-03T21:00:49.859Z",
+      "metadata": {
+        "count": 10,
+        "min": 0.025445665445665445,
+        "max": 10.31620725388601,
+        "avg": 2.092503889987632
+      }
+    },
+    {
+      "id": "6a7c7535-d7ed-419f-a288-8947f8666648",
+      "userId": "anonymous",
+      "projectId": "hello-world",
+      "metricType": "memory_bytes",
+      "value": 11207766016,
+      "periodStart": "2026-02-02T21:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "day",
+      "createdAt": "2026-02-03T21:00:49.859Z",
+      "metadata": {
+        "count": 47,
+        "min": 9994240,
+        "max": 357740544,
+        "avg": 238463106.72340426
+      }
+    },
+    {
+      "id": "a9e84db9-4699-4d18-80a3-1c51bf5b8aac",
+      "userId": "anonymous",
+      "projectId": "hello-world",
+      "metricType": "bandwidth_bytes",
+      "value": 46879858,
+      "periodStart": "2026-02-02T21:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "day",
+      "createdAt": "2026-02-03T21:00:49.859Z",
+      "metadata": {
+        "count": 26,
+        "min": 42,
+        "max": 36186342,
+        "avg": 1803071.4615384615
+      }
+    },
+    {
+      "id": "78908ae4-8ab3-427a-a9fd-2015e203413d",
+      "userId": "anonymous",
+      "projectId": "project-1770152045638",
+      "metricType": "compute_seconds",
+      "value": 12.316144271560534,
+      "periodStart": "2026-02-02T21:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "day",
+      "createdAt": "2026-02-03T21:00:49.859Z",
+      "metadata": {
+        "count": 28,
+        "min": 0.03103875968992248,
+        "max": 9.632597640891218,
+        "avg": 0.4398622954128762
+      }
+    },
+    {
+      "id": "08e47e7b-f609-46f1-8aa9-c76d705884ea",
+      "userId": "anonymous",
+      "projectId": "project-1770152045638",
+      "metricType": "memory_bytes",
+      "value": 3349774336,
+      "periodStart": "2026-02-02T21:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "day",
+      "createdAt": "2026-02-03T21:00:49.859Z",
+      "metadata": {
+        "count": 35,
+        "min": 9322496,
+        "max": 292311040,
+        "avg": 95707838.17142858
+      }
+    },
+    {
+      "id": "477873fb-0dfe-4fa3-9aec-e7fdbb1bef47",
+      "userId": "anonymous",
+      "projectId": "project-1770152045638",
+      "metricType": "bandwidth_bytes",
+      "value": 27951310,
+      "periodStart": "2026-02-02T21:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "day",
+      "createdAt": "2026-02-03T21:00:49.859Z",
+      "metadata": {
+        "count": 33,
+        "min": 3840,
+        "max": 20074728,
+        "avg": 847009.3939393939
+      }
+    },
+    {
+      "id": "230aae17-3794-44cc-9862-c3b634d91c6e",
+      "userId": "anonymous",
+      "projectId": "hello-world",
+      "metricType": "storage_bytes",
+      "value": 0,
+      "periodStart": "2026-02-02T21:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "day",
+      "createdAt": "2026-02-03T21:00:49.859Z",
+      "metadata": {
+        "count": 1,
+        "min": 0,
+        "max": 0,
+        "avg": 0
+      }
+    },
+    {
+      "id": "98cac394-0bef-4ec4-9508-69aff1684661",
+      "userId": "anonymous",
+      "projectId": "project-1770152045638",
+      "metricType": "storage_bytes",
+      "value": 0,
+      "periodStart": "2026-02-02T21:00:00.000Z",
+      "periodEnd": "2026-02-03T21:00:00.000Z",
+      "aggregationPeriod": "day",
+      "createdAt": "2026-02-03T21:00:49.859Z",
+      "metadata": {
+        "count": 1,
+        "min": 0,
+        "max": 0,
+        "avg": 0
+      }
+    },
+    {
+      "id": "3685956e-f650-468b-a485-1e61531afe1f",
+      "userId": "anonymous",
+      "projectId": "project-1770155217725",
+      "metricType": "compute_seconds",
+      "value": 0.03499880684077953,
+      "periodStart": "2026-02-03T21:00:00.000Z",
+      "periodEnd": "2026-02-03T22:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T22:00:15.029Z",
+      "metadata": {
+        "count": 2,
+        "min": 0.01473684210526316,
+        "max": 0.02026196473551637,
+        "avg": 0.017499403420389765
+      }
+    },
+    {
+      "id": "0f14fb3b-0801-403b-a395-e8a1f2ccfd06",
+      "userId": "anonymous",
+      "projectId": "project-1770155217725",
+      "metricType": "memory_bytes",
+      "value": 653041664,
+      "periodStart": "2026-02-03T21:00:00.000Z",
+      "periodEnd": "2026-02-03T22:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T22:00:15.029Z",
+      "metadata": {
+        "count": 77,
+        "min": 8151040,
+        "max": 10633216,
+        "avg": 8481060.57142857
+      }
+    },
+    {
+      "id": "878ec4a1-0221-4ea9-96b6-1e3041159adb",
+      "userId": "anonymous",
+      "projectId": "project-1770155217725",
+      "metricType": "bandwidth_bytes",
+      "value": 21830,
+      "periodStart": "2026-02-03T21:00:00.000Z",
+      "periodEnd": "2026-02-03T22:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T22:00:15.029Z",
+      "metadata": {
+        "count": 28,
+        "min": 84,
+        "max": 1490,
+        "avg": 779.6428571428571
+      }
+    },
+    {
+      "id": "b7bb8593-8937-4dbe-b127-52be68ffd805",
+      "userId": "anonymous",
+      "projectId": "project-1770155235205",
+      "metricType": "compute_seconds",
+      "value": 94.55281151464084,
+      "periodStart": "2026-02-03T21:00:00.000Z",
+      "periodEnd": "2026-02-03T22:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T22:00:15.029Z",
+      "metadata": {
+        "count": 61,
+        "min": 0.0018058007566204288,
+        "max": 10.524368352788587,
+        "avg": 1.5500460904039481
+      }
+    },
+    {
+      "id": "32707362-61ca-462a-9c2f-0e626e51f2b5",
+      "userId": "anonymous",
+      "projectId": "project-1770155235205",
+      "metricType": "memory_bytes",
+      "value": 44298272768,
+      "periodStart": "2026-02-03T21:00:00.000Z",
+      "periodEnd": "2026-02-03T22:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T22:00:15.029Z",
+      "metadata": {
+        "count": 76,
+        "min": 2318336,
+        "max": 2148126720,
+        "avg": 582872010.1052631
+      }
+    },
+    {
+      "id": "09d70fa1-b1d7-435f-9873-41a4a8a92d5a",
+      "userId": "anonymous",
+      "projectId": "project-1770155235205",
+      "metricType": "bandwidth_bytes",
+      "value": 871305752,
+      "periodStart": "2026-02-03T21:00:00.000Z",
+      "periodEnd": "2026-02-03T22:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T22:00:15.029Z",
+      "metadata": {
+        "count": 58,
+        "min": 198,
+        "max": 122556250,
+        "avg": 15022512.965517242
+      }
+    },
+    {
+      "id": "6247af5f-0bd4-41b1-bef9-284e15467332",
+      "userId": "anonymous",
+      "projectId": "project-1770155217725",
+      "metricType": "storage_bytes",
+      "value": 0,
+      "periodStart": "2026-02-03T21:00:00.000Z",
+      "periodEnd": "2026-02-03T22:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T22:00:15.029Z",
+      "metadata": {
+        "count": 2,
+        "min": 0,
+        "max": 0,
+        "avg": 0
+      }
+    },
+    {
+      "id": "a69642d1-7c4a-465b-838f-e01930e967a1",
+      "userId": "anonymous",
+      "projectId": "project-1770155235205",
+      "metricType": "storage_bytes",
+      "value": 0,
+      "periodStart": "2026-02-03T21:00:00.000Z",
+      "periodEnd": "2026-02-03T22:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T22:00:15.029Z",
+      "metadata": {
+        "count": 2,
+        "min": 0,
+        "max": 0,
+        "avg": 0
+      }
+    },
+    {
+      "id": "3f7dc04a-6f3c-40e9-85a8-c755d9687440",
+      "userId": "anonymous",
+      "projectId": "hello-world-nextjs",
+      "metricType": "compute_seconds",
+      "value": 0.39614115223627155,
+      "periodStart": "2026-02-03T21:00:00.000Z",
+      "periodEnd": "2026-02-03T22:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T22:00:15.030Z",
+      "metadata": {
+        "count": 5,
+        "min": 0.024291091593475533,
+        "max": 0.13634343434343435,
+        "avg": 0.07922823044725431
+      }
+    },
+    {
+      "id": "d45ed684-9d79-474f-b031-e940b170ea80",
+      "userId": "anonymous",
+      "projectId": "hello-world-nextjs",
+      "metricType": "memory_bytes",
+      "value": 54484992,
+      "periodStart": "2026-02-03T21:00:00.000Z",
+      "periodEnd": "2026-02-03T22:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T22:00:15.030Z",
+      "metadata": {
+        "count": 5,
+        "min": 10113024,
+        "max": 11620352,
+        "avg": 10896998.4
+      }
+    },
+    {
+      "id": "37a72ebd-5d40-4db6-b191-192815a25874",
+      "userId": "anonymous",
+      "projectId": "hello-world-nextjs",
+      "metricType": "bandwidth_bytes",
+      "value": 118032,
+      "periodStart": "2026-02-03T21:00:00.000Z",
+      "periodEnd": "2026-02-03T22:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T22:00:15.030Z",
+      "metadata": {
+        "count": 4,
+        "min": 20658,
+        "max": 39680,
+        "avg": 29508
+      }
+    },
+    {
+      "id": "921a22da-3ff5-47bb-b2ed-def5e0edb3e6",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "compute_seconds",
+      "value": 476.13907775129917,
+      "periodStart": "2026-02-03T22:00:00.000Z",
+      "periodEnd": "2026-02-03T23:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T23:00:11.292Z",
+      "metadata": {
+        "count": 124,
+        "min": 0.008915723270440254,
+        "max": 460.517,
+        "avg": 3.8398312721878964
+      }
+    },
+    {
+      "id": "4e7e5b30-ef47-4e57-ab53-b206a3ba4c07",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "memory_bytes",
+      "value": 9265737728,
+      "periodStart": "2026-02-03T22:00:00.000Z",
+      "periodEnd": "2026-02-03T23:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T23:00:11.292Z",
+      "metadata": {
+        "count": 136,
+        "min": 8757248,
+        "max": 529403904,
+        "avg": 68130424.47058824
+      }
+    },
+    {
+      "id": "0c4ceb35-e289-487c-86e3-cbfe2ac599fb",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "bandwidth_bytes",
+      "value": 8769065,
+      "periodStart": "2026-02-03T22:00:00.000Z",
+      "periodEnd": "2026-02-03T23:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T23:00:11.292Z",
+      "metadata": {
+        "count": 117,
+        "min": 168,
+        "max": 5821850,
+        "avg": 74949.2735042735
+      }
+    },
+    {
+      "id": "b20481f5-4225-4795-b9ca-e2c0fba3ca7f",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "storage_bytes",
+      "value": 0,
+      "periodStart": "2026-02-03T22:00:00.000Z",
+      "periodEnd": "2026-02-03T23:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-03T23:00:11.292Z",
+      "metadata": {
+        "count": 5,
+        "min": 0,
+        "max": 0,
+        "avg": 0
+      }
+    },
+    {
+      "id": "b7fbde0d-1d69-4464-82db-d266e0ca2110",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "compute_seconds",
+      "value": 1344.0714489383354,
+      "periodStart": "2026-02-03T23:00:00.000Z",
+      "periodEnd": "2026-02-04T00:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T00:08:52.938Z",
+      "metadata": {
+        "count": 45,
+        "min": 0.010978616352201258,
+        "max": 1340.137,
+        "avg": 29.868254420851898
+      }
+    },
+    {
+      "id": "fd4bcb95-c683-4a8e-906d-2c32219098ae",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "memory_bytes",
+      "value": 418504704,
+      "periodStart": "2026-02-03T23:00:00.000Z",
+      "periodEnd": "2026-02-04T00:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T00:08:52.938Z",
+      "metadata": {
+        "count": 44,
+        "min": 9388032,
+        "max": 10010624,
+        "avg": 9511470.545454545
+      }
+    },
+    {
+      "id": "74cbd37a-036d-4dce-9509-361a6e4d79a1",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "bandwidth_bytes",
+      "value": 57128,
+      "periodStart": "2026-02-03T23:00:00.000Z",
+      "periodEnd": "2026-02-04T00:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T00:08:52.938Z",
+      "metadata": {
+        "count": 43,
+        "min": 980,
+        "max": 1842,
+        "avg": 1328.5581395348838
+      }
+    },
+    {
+      "id": "ff129754-256d-4739-94f9-7886ee302547",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "storage_bytes",
+      "value": 0,
+      "periodStart": "2026-02-03T23:00:00.000Z",
+      "periodEnd": "2026-02-04T00:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T00:08:52.938Z",
+      "metadata": {
+        "count": 1,
+        "min": 0,
+        "max": 0,
+        "avg": 0
+      }
+    },
+    {
+      "id": "ed870189-ae0f-4c9b-8fe9-c153d9e5b325",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "compute_seconds",
+      "value": 5.712139289907293,
+      "periodStart": "2026-02-04T11:00:00.000Z",
+      "periodEnd": "2026-02-04T12:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T12:00:08.374Z",
+      "metadata": {
+        "count": 29,
+        "min": 0.006719999999999999,
+        "max": 3.256,
+        "avg": 0.1969703203416308
+      }
+    },
+    {
+      "id": "4282fb97-2821-4b7a-bb8d-7f6d7d20860d",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "memory_bytes",
+      "value": 1642123264,
+      "periodStart": "2026-02-04T11:00:00.000Z",
+      "periodEnd": "2026-02-04T12:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T12:00:08.374Z",
+      "metadata": {
+        "count": 57,
+        "min": 8765440,
+        "max": 107687936,
+        "avg": 28809180.07017544
+      }
+    },
+    {
+      "id": "18affa9e-27d1-4be9-ab10-fafa773af160",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "bandwidth_bytes",
+      "value": 385738,
+      "periodStart": "2026-02-04T11:00:00.000Z",
+      "periodEnd": "2026-02-04T12:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T12:00:08.374Z",
+      "metadata": {
+        "count": 48,
+        "min": 734,
+        "max": 202346,
+        "avg": 8036.208333333333
+      }
+    },
+    {
+      "id": "f5b2d7aa-5fea-4714-a882-1340515c9b92",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "storage_bytes",
+      "value": 0,
+      "periodStart": "2026-02-04T11:00:00.000Z",
+      "periodEnd": "2026-02-04T12:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T12:00:08.374Z",
+      "metadata": {
+        "count": 2,
+        "min": 0,
+        "max": 0,
+        "avg": 0
+      }
+    },
+    {
+      "id": "993eb065-4c82-45ed-984b-68b25ffeb78a",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "compute_seconds",
+      "value": 799.0865204656769,
+      "periodStart": "2026-02-04T13:00:00.000Z",
+      "periodEnd": "2026-02-04T14:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T14:06:50.460Z",
+      "metadata": {
+        "count": 39,
+        "min": 0.0069772151898734175,
+        "max": 786.384,
+        "avg": 20.489397960658383
+      }
+    },
+    {
+      "id": "b4e53999-e98e-42ea-88ea-596b6249f2ae",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "memory_bytes",
+      "value": 2169815040,
+      "periodStart": "2026-02-04T13:00:00.000Z",
+      "periodEnd": "2026-02-04T14:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T14:06:50.460Z",
+      "metadata": {
+        "count": 82,
+        "min": 8736768,
+        "max": 111595520,
+        "avg": 26461159.024390243
+      }
+    },
+    {
+      "id": "28b6f310-1504-49e7-8f18-ef38b20c76a1",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "bandwidth_bytes",
+      "value": 396127,
+      "periodStart": "2026-02-04T13:00:00.000Z",
+      "periodEnd": "2026-02-04T14:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T14:06:50.460Z",
+      "metadata": {
+        "count": 79,
+        "min": 896,
+        "max": 26214,
+        "avg": 5014.265822784811
+      }
+    },
+    {
+      "id": "f1f360d9-550c-49bb-aac5-1097e2cae5d4",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "storage_bytes",
+      "value": 0,
+      "periodStart": "2026-02-04T13:00:00.000Z",
+      "periodEnd": "2026-02-04T14:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T14:06:50.460Z",
+      "metadata": {
+        "count": 4,
+        "min": 0,
+        "max": 0,
+        "avg": 0
+      }
+    },
+    {
+      "id": "6d6f9858-3200-4170-88cb-8ed7031baa7a",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "storage_bytes",
+      "value": 0,
+      "periodStart": "2026-02-04T14:00:00.000Z",
+      "periodEnd": "2026-02-04T15:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T15:10:35.217Z",
+      "metadata": {
+        "count": 2,
+        "min": 0,
+        "max": 0,
+        "avg": 0
+      }
+    },
+    {
+      "id": "17b8dd58-e0ac-4812-a0a3-b87cea197c70",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "compute_seconds",
+      "value": 1941.1971922630719,
+      "periodStart": "2026-02-04T14:00:00.000Z",
+      "periodEnd": "2026-02-04T15:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T15:10:35.217Z",
+      "metadata": {
+        "count": 6,
+        "min": 0.03833333333333333,
+        "max": 1940.067,
+        "avg": 323.53286537717867
+      }
+    },
+    {
+      "id": "57c62f6a-bfdc-45d6-ba56-2fb64aeae734",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "memory_bytes",
+      "value": 434769920,
+      "periodStart": "2026-02-04T14:00:00.000Z",
+      "periodEnd": "2026-02-04T15:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T15:10:35.217Z",
+      "metadata": {
+        "count": 5,
+        "min": 86601728,
+        "max": 87232512,
+        "avg": 86953984
+      }
+    },
+    {
+      "id": "9e0cd5fa-d90a-4ca4-9cc1-133923e564a2",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "bandwidth_bytes",
+      "value": 72073,
+      "periodStart": "2026-02-04T14:00:00.000Z",
+      "periodEnd": "2026-02-04T15:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T15:10:35.217Z",
+      "metadata": {
+        "count": 4,
+        "min": 11495,
+        "max": 21502,
+        "avg": 18018.25
+      }
+    },
+    {
+      "id": "bb5d054b-77cd-4d61-afe0-29cab6c0e226",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "compute_seconds",
+      "value": 8.345894032103294,
+      "periodStart": "2026-02-04T16:00:00.000Z",
+      "periodEnd": "2026-02-04T17:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T17:00:49.514Z",
+      "metadata": {
+        "count": 13,
+        "min": 0.030977443609022555,
+        "max": 6.358773130544994,
+        "avg": 0.6419918486233303
+      }
+    },
+    {
+      "id": "5546ba44-8e1c-474d-887d-285684172520",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "memory_bytes",
+      "value": 3853336576,
+      "periodStart": "2026-02-04T16:00:00.000Z",
+      "periodEnd": "2026-02-04T17:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T17:00:49.514Z",
+      "metadata": {
+        "count": 28,
+        "min": 8781824,
+        "max": 361889792,
+        "avg": 137619163.42857143
+      }
+    },
+    {
+      "id": "7e968f41-e46c-439b-8c71-928dc9e59528",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "bandwidth_bytes",
+      "value": 640913,
+      "periodStart": "2026-02-04T16:00:00.000Z",
+      "periodEnd": "2026-02-04T17:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T17:00:49.514Z",
+      "metadata": {
+        "count": 26,
+        "min": 1792,
+        "max": 551569,
+        "avg": 24650.5
+      }
+    },
+    {
+      "id": "307270e6-9e81-4131-890d-6ba63276b5bd",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "storage_bytes",
+      "value": 0,
+      "periodStart": "2026-02-04T16:00:00.000Z",
+      "periodEnd": "2026-02-04T17:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T17:00:49.514Z",
+      "metadata": {
+        "count": 1,
+        "min": 0,
+        "max": 0,
+        "avg": 0
+      }
+    },
+    {
+      "id": "72e934a7-b432-40c5-a9cb-6369b4b2a867",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "memory_bytes",
+      "value": 3546595328,
+      "periodStart": "2026-02-04T17:00:00.000Z",
+      "periodEnd": "2026-02-04T18:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T18:00:49.816Z",
+      "metadata": {
+        "count": 360,
+        "min": 8941568,
+        "max": 10604544,
+        "avg": 9851653.688888889
+      }
+    },
+    {
+      "id": "e9e84a39-d52e-4f1e-a874-52aab4bbda3c",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "bandwidth_bytes",
+      "value": 1055826,
+      "periodStart": "2026-02-04T17:00:00.000Z",
+      "periodEnd": "2026-02-04T18:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T18:00:49.816Z",
+      "metadata": {
+        "count": 360,
+        "min": 2304,
+        "max": 3890,
+        "avg": 2932.85
+      }
+    },
+    {
+      "id": "25c05d25-e3b6-4009-8cd8-d89cca6f19c1",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "compute_seconds",
+      "value": 2.1126928525615027,
+      "periodStart": "2026-02-04T17:00:00.000Z",
+      "periodEnd": "2026-02-04T18:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T18:00:49.816Z",
+      "metadata": {
+        "count": 119,
+        "min": 0.0024130162703379222,
+        "max": 0.2865252173913043,
+        "avg": 0.01775372145009666
+      }
+    },
+    {
+      "id": "f39ceb03-7d84-41f9-86ea-e9a8b8c8898c",
+      "userId": "anonymous",
+      "projectId": "basic-landing-page",
+      "metricType": "storage_bytes",
+      "value": 0,
+      "periodStart": "2026-02-04T17:00:00.000Z",
+      "periodEnd": "2026-02-04T18:00:00.000Z",
+      "aggregationPeriod": "hour",
+      "createdAt": "2026-02-04T18:00:49.816Z",
+      "metadata": {
+        "count": 12,
+        "min": 0,
+        "max": 0,
+        "avg": 0
+      }
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 /**
  * SubstrateDiff — a reviewable diff of a workspace's work against its base ref.
  *
- * Promoted verbatim from docker-backend/src/conductor/substrate.ts. Both the
+ * Promoted verbatim from backend/src/conductor/substrate.ts. Both the
  * local (host-side git over the worktree) and remote (git inside the sandbox)
  * substrates produce this identical shape.
  */

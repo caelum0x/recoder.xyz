@@ -16,7 +16,7 @@ import type { BrainPassage } from "../domain/passage.types";
  * ({@link RetrievalSearchPort}) — mirroring the package's `RetrievalEngine.search`
  * / `SearchResult` / `RetrievalPassage` shapes — so `@recoder/retrieval`'s engine
  * is structurally assignable and brain gains no new workspace dependency. The
- * composition root (docker-backend, which already depends on both engines) injects
+ * composition root (backend, which already depends on both engines) injects
  * the concrete engine, exactly as the mem0 / context7 adapters take an injected
  * transport rather than importing the SDK.
  *

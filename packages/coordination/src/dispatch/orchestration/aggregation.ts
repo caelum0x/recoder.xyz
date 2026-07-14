@@ -1,7 +1,7 @@
 /**
  * aggregation — combine results from multiple agents working one parent task.
  *
- * MERGED from `docker-backend/src/a2a/task-result-aggregator.ts`. The four
+ * MERGED from `backend/src/a2a/task-result-aggregator.ts`. The four
  * strategies are ported verbatim in behavior and mapped onto coordination's
  * `AggregationStrategy` domain values:
  *   domain 'all'          ← source 'all'         (merge all successful)

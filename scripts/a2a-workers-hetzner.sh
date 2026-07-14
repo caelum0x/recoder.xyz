@@ -129,7 +129,7 @@ kill_existing_workers() {
   # Best-effort cleanup for orphan worker processes from previous runs.
   pkill -f "pnpm -C recoder-agency/apps/agency a2a:worker" 2>/dev/null || true
   pkill -f "pnpm -C recoder-pm/apps/api a2a:worker" 2>/dev/null || true
-  pkill -f "pnpm -C docker-backend a2a:worker" 2>/dev/null || true
+  pkill -f "pnpm -C backend a2a:worker" 2>/dev/null || true
   pkill -f "a2a-intent-worker" 2>/dev/null || true
   rm -f "$RUN_DIR"/*.pid 2>/dev/null || true
 }
@@ -139,12 +139,12 @@ case "${1:-}" in
     kill_existing_workers
     start_worker "recoder-agency" "pnpm -C recoder-agency/apps/agency a2a:worker" "recoder_agency" "${RECODER_AGENCY_INTERNAL_URL:-http://127.0.0.1:3007}"
     start_worker "recoder-pm-api" "pnpm -C recoder-pm/apps/api a2a:worker" "recoder_pm" "${RECODER_PM_API_INTERNAL_URL:-http://127.0.0.1:3004}"
-    start_worker "docker-backend" "pnpm -C docker-backend a2a:worker" "recoder_backend" "${DOCKER_BACKEND_INTERNAL_URL:-http://127.0.0.1:3100}"
+    start_worker "backend" "pnpm -C backend a2a:worker" "recoder_backend" "${DOCKER_BACKEND_INTERNAL_URL:-http://127.0.0.1:3100}"
     ;;
   stop)
     stop_worker "recoder-agency" "pnpm -C recoder-agency/apps/agency a2a:worker"
     stop_worker "recoder-pm-api" "pnpm -C recoder-pm/apps/api a2a:worker"
-    stop_worker "docker-backend" "pnpm -C docker-backend a2a:worker"
+    stop_worker "backend" "pnpm -C backend a2a:worker"
     kill_existing_workers
     ;;
   restart)
@@ -154,7 +154,7 @@ case "${1:-}" in
   status)
     status_worker "recoder-agency" "pnpm -C recoder-agency/apps/agency a2a:worker"
     status_worker "recoder-pm-api" "pnpm -C recoder-pm/apps/api a2a:worker"
-    status_worker "docker-backend" "pnpm -C docker-backend a2a:worker"
+    status_worker "backend" "pnpm -C backend a2a:worker"
     ;;
   logs)
     tail -n 150 -f "$LOG_DIR"/*.log

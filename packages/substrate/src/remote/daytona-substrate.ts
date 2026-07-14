@@ -1,7 +1,7 @@
 /**
  * createDaytonaSubstrate — the remote-sandbox ConductorSubstrate (`daytona`).
  *
- * Ported from docker-backend/src/conductor/substrate-daytona.ts (the proven impl)
+ * Ported from backend/src/conductor/substrate-daytona.ts (the proven impl)
  * into the package behind the injected `DaytonaClientPort`, so `@recoder/substrate`
  * provides the remote path WITHOUT importing the backend's `getDaytonaClient()` or
  * the Daytona SDK (design §4.9 — dependency inversion).

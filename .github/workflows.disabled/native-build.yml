@@ -530,12 +530,12 @@ jobs:
       # ── Build the embedded backend ───────────────────────────────────────
       # The packager (before-build.js) also triggers this, but running it
       # explicitly gives CI a clean step and the correct working directory.
-      - name: Install docker-backend dependencies
-        working-directory: docker-backend
+      - name: Install backend dependencies
+        working-directory: backend
         run: npm ci
 
       - name: Build embedded backend (tsc)
-        working-directory: docker-backend
+        working-directory: backend
         run: npx tsc
 
       # ── Generate icon assets ─────────────────────────────────────────────

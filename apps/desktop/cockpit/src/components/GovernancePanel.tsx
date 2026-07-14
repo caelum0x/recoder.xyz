@@ -6,7 +6,7 @@
  * delivery (PR / merge) is approval-gated, and when no approval exists the
  * backend returns a 409 whose body is
  *   { success:false, error:<reason>, data:{ state:'awaiting_approval', action, approvalId?, transitioned? } }
- * (docker-backend/src/conductor/conductor.routes.ts → DeliveryApprovalRequiredError).
+ * (backend/src/conductor/conductor.routes.ts → DeliveryApprovalRequiredError).
  *
  * The operator triggers a real delivery attempt; this renders the genuine
  * awaiting_approval verdict (tier/action + reason + whether the workspace was

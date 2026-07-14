@@ -19,7 +19,7 @@ user-facing identity + the Go module path + the server binary name were changed.
 ## What this fork is (and isn't)
 - **Is:** L3 — the terminal-native surface. It renders blocks; a block can be a live agent session or a
   Recoder control-plane widget.
-- **Isn't:** an engine. `docker-backend` remains THE control plane; the engines + governance + service
+- **Isn't:** an engine. `backend` remains THE control plane; the engines + governance + service
   fleet mount behind it unchanged (RECODER-ENGINES §10/§27). A fork is a surface swap, not an engine swap.
 
 ## What has landed (Recoder-ification)
@@ -60,7 +60,7 @@ npm run build:dev                  # electron-vite build --mode development
 RECODER_BACKEND_URL=http://127.0.0.1:3100 npm run dev
 ```
 
-Start `docker-backend` on `:3100` first so the Recoder blocks have data (they degrade safely if it's
+Start `backend` on `:3100` first so the Recoder blocks have data (they degrade safely if it's
 down). **Disk note:** the APFS volume runs ~98% full; reclaim with `pnpm store prune` + `go clean -cache`
 before a full `task build` (Go all-arches + electron-vite) to avoid ENOSPC.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # recoder-services.sh — single launcher for the py/ sidecar services that the
-# docker-backend connects to via env-var seams.
+# backend connects to via env-var seams.
 #
 #   colbert  → COLBERT_RERANK_URL   (POST /rerank, GET /health)        :8893
 #   billing  → BILLING_BASE_URL     (/internal/agent-os/billing/health):8896

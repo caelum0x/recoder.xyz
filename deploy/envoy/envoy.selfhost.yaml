@@ -12,7 +12,7 @@
 #   docker compose -f docker-compose.selfhost.yml restart envoy
 #
 # This config is intentionally minimal and correct: an L7 HTTP listener on :8080
-# that proxies to the docker-backend control plane (service name `backend`,
+# that proxies to the backend control plane (service name `backend`,
 # port 3100) with health checks and access logging, plus the Envoy admin
 # interface on :9901. It validates with `envoy --mode validate`.
 #

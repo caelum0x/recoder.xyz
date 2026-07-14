@@ -2,9 +2,9 @@
  * ports/ barrel — every dependency-inversion seam (design §4.9 / §7).
  *
  * Dependency inversion is what lets `@recoder/substrate` stay free of
- * `docker-backend`, the logger, the Daytona client, the brain, and governance.
+ * `backend`, the logger, the Daytona client, the brain, and governance.
  * Every external dependency is an interface here; the backend's
- * `docker-backend/src/conductor/wiring/*` provides the concrete adapters.
+ * `backend/src/conductor/wiring/*` provides the concrete adapters.
  */
 export type { LoggerPort } from './logger.port.js';
 export type { ClockPort } from './clock.port.js';

@@ -1293,7 +1293,7 @@ async function searchWeb(args: any) {
       }
     }
 
-    // Strategy 2: Recoder docker-backend proxy — accessible from any machine via HTTPS
+    // Strategy 2: Recoder backend proxy — accessible from any machine via HTTPS
     // No auth required on this endpoint; it proxies to SearXNG internally.
     const recoderApiBase = process.env.RECODER_API_URL || "https://docker.recoder.xyz";
     try {
