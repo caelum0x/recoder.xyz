@@ -66,7 +66,7 @@ const fakeStatus: GatewayStatus = {
 const unavailableHealth: GatewayHealth = {
   available: false,
   mode: 'unconfigured',
-  reason: 'Set TENSORZERO_URL or build modules/inference/tensorzero to enable the gateway',
+  reason: 'Set TENSORZERO_URL or build backend/engines/rust/tensorzero to enable the gateway',
 };
 
 beforeEach(() => {

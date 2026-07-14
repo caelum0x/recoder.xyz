@@ -27,7 +27,7 @@
  * mounted routes are untouched.
  *
  * Rust kernel seam: when the OWNED governance daemon binary
- * (modules/governance/recoder-governance) is present — or an externally-managed daemon has
+ * (backend/engines/rust/recoder-governance) is present — or an externally-managed daemon has
  * published `GOVERNANCE_SOCKET` — the gate builds its `Governance` with that
  * `daemonSocketPath`, so every delivery `decide()` goes through the real Rust
  * kernel over the UDS. When the binary is absent the gate degrades to the pure-TS
@@ -95,7 +95,7 @@ let governanceSingleton: Promise<Governance> | undefined;
  * default: a delivery only clears the needs_approval gate via a real control-plane
  * Approval record (or an explicit autonomous context), never silently.
  *
- * Rust kernel seam: ensure the owned governance daemon (modules/governance/recoder-governance)
+ * Rust kernel seam: ensure the owned governance daemon (backend/engines/rust/recoder-governance)
  * is up FIRST. When its prebuilt binary is present, `ensureGovernanceDaemon()`
  * spawns it and returns the UDS path, which we hand to `Governance.create` as
  * `daemonSocketPath` so `decide()` delegates to the real Rust kernel (per-call

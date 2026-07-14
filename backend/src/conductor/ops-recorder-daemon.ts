@@ -1,12 +1,12 @@
 /**
  * ops-recorder work-signals sidecar spawn seam — supervise
- * `modules/signals/ops-recorder/work-signals/main.py` (the FastAPI stuck-work detector)
+ * `backend/engines/py/ops-recorder/work-signals/main.py` (the FastAPI stuck-work detector)
  * as an app-owned loopback subprocess, mirroring the proven
  * `colbert-daemon.ts` pattern (resolve → spawn → wait-for-health →
  * auto-restart with capped backoff → degrade-safe).
  *
- * FUSION MODE (RECODER-DEEP-FUSION-PLAN.md §modules/signals/ops-recorder "keep/supervise"):
- * `modules/signals/ops-recorder` was an HTTP-URL seam — something external had to start it
+ * FUSION MODE (RECODER-DEEP-FUSION-PLAN.md §backend/engines/py/ops-recorder "keep/supervise"):
+ * `backend/engines/py/ops-recorder` was an HTTP-URL seam — something external had to start it
  * and export `OPS_RECORDER_URL`. This module makes backend the owner:
  * it spawns and supervises the Python process itself and exports the URL the
  * existing consumer (`conductor/ops-recorder-adapter.ts`, which reads
@@ -38,9 +38,9 @@
  *   1. `OPS_RECORDER_URL` env already set → externally managed service; we
  *      do NOT spawn a second one — just report and trust the existing seam.
  *   2. Spawn: python interpreter (`OPS_RECORDER_PYTHON` env →
- *      `modules/signals/ops-recorder/work-signals/.venv` → `modules/signals/ops-recorder/.venv` →
+ *      `backend/engines/py/ops-recorder/work-signals/.venv` → `backend/engines/py/ops-recorder/.venv` →
  *      `py/.venv` → first `python3` on PATH) running
- *      `python -m uvicorn main:app` from `<repo>/modules/signals/ops-recorder/work-signals`,
+ *      `python -m uvicorn main:app` from `<repo>/backend/engines/py/ops-recorder/work-signals`,
  *      bound to `OPS_RECORDER_LISTEN` (default 127.0.0.1:8073 — the fleet
  *      manifest's canonical ops-recorder port).
  *   3. Neither → resolve `undefined`; the inline ingest stays forward-free.
@@ -84,11 +84,11 @@ const BACKOFF_BASE_MS = 1_000;
 const BACKOFF_CAP_MS = 30_000;
 
 /** Repo-relative path of the work-signals service directory. */
-const SERVICE_REL_PATH = ['py', 'ops-recorder', 'work-signals'] as const;
+const SERVICE_REL_PATH = ['backend', 'engines', 'py', 'ops-recorder', 'work-signals'] as const;
 
 /**
  * Walk up from this module to the repo root (the dir holding
- * `modules/signals/ops-recorder/work-signals/main.py`). Returns undefined if not found
+ * `backend/engines/py/ops-recorder/work-signals/main.py`). Returns undefined if not found
  * within a bounded number of parents (never loops).
  */
 function findRepoRoot(): string | undefined {
@@ -128,10 +128,10 @@ export function resolveOpsRecorderPython(
     candidates.push(
       join(root, ...SERVICE_REL_PATH, '.venv', 'bin', 'python3'),
       join(root, ...SERVICE_REL_PATH, '.venv', 'bin', 'python'),
-      join(root, 'py', 'ops-recorder', '.venv', 'bin', 'python3'),
-      join(root, 'py', 'ops-recorder', '.venv', 'bin', 'python'),
-      join(root, 'py', '.venv', 'bin', 'python3'),
-      join(root, 'py', '.venv', 'bin', 'python'),
+      join(root, 'backend', 'engines', 'py', 'ops-recorder', '.venv', 'bin', 'python3'),
+      join(root, 'backend', 'engines', 'py', 'ops-recorder', '.venv', 'bin', 'python'),
+      join(root, 'backend', 'engines', 'py', '.venv', 'bin', 'python3'),
+      join(root, 'backend', 'engines', 'py', '.venv', 'bin', 'python'),
     );
   }
   for (const dir of (env.PATH ?? '').split(delimiter)) {
@@ -248,7 +248,7 @@ async function startOpsRecorderDaemon(): Promise<OpsRecorderDaemonHandle | undef
   const entrypoint = resolveOpsRecorderEntrypoint();
   if (!entrypoint) {
     logger.info(
-      'modules/signals/ops-recorder/work-signals/main.py not found — staying on the no-forward path (degrade-safe).',
+      'backend/engines/py/ops-recorder/work-signals/main.py not found — staying on the no-forward path (degrade-safe).',
     );
     return undefined;
   }
@@ -337,7 +337,7 @@ async function spawnOpsRecorder(
       logger.warn(
         { pythonBin, entrypoint, listenAddr, exitCode: child.exitCode, attempt },
         'ops-recorder sidecar did not pass health check in time — staying on no-forward path ' +
-          '(deps installed? Try `pip install -r modules/signals/ops-recorder/work-signals/requirements.txt`; ' +
+          '(deps installed? Try `pip install -r backend/engines/py/ops-recorder/work-signals/requirements.txt`; ' +
           'port free? Try OPS_RECORDER_LISTEN=127.0.0.1:8074 if 8073 is taken)',
       );
       suppressRestart = true;

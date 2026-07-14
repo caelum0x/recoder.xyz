@@ -1,5 +1,5 @@
 /**
- * Provider-priority model routing ported from modules/communication/pal-mcp-server.
+ * Provider-priority model routing ported from backend/engines/py/pal-mcp-server.
  *
  * Sources:
  * - providers/registry.py:38-46 (PROVIDER_PRIORITY_ORDER)

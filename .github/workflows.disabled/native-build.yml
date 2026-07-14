@@ -19,7 +19,7 @@
 #
 # Crate build notes
 # -----------------
-#   recoder-governance-napi  — standalone workspace (modules/governance/recoder-governance/).
+#   recoder-governance-napi  — standalone workspace (backend/engines/rust/recoder-governance/).
 #                              No DATABASE_URL requirement.  Builds with stable
 #                              Rust via plain `cargo build --release`.
 #
@@ -27,7 +27,7 @@
 #                              No DATABASE_URL requirement.  Heavy dependency
 #                              surface (~2–3 GB on first run; cached).
 #
-#   tensorzero-gateway-napi  — workspace root modules/inference/tensorzero/crates/.
+#   tensorzero-gateway-napi  — workspace root backend/engines/rust/tensorzero/crates/.
 #                              Rust toolchain pinned to 1.94.0 (rust-toolchain.toml).
 #                              tensorzero-core carries sqlx macros that embed
 #                              compile-time query metadata.  Set SQLX_OFFLINE=true
@@ -42,7 +42,7 @@
 #                              sqlx error — set continue-on-error: true handles
 #                              this without failing the matrix.
 #
-#   openfang-napi            — workspace root modules/agent-engine/openfang/.
+#   openfang-napi            — workspace root backend/engines/rust/openfang/.
 #                              Uses stable toolchain.  Heavy tokio/async surface.
 #
 #   claw-code-parity-napi    — workspace root crates/claw-code-parity/rust/.
@@ -109,9 +109,9 @@ jobs:
             arch: arm64
             os_label: mac
             crate: recoder-governance-napi
-            workspace_dir: modules/governance/recoder-governance
+            workspace_dir: backend/engines/rust/recoder-governance
             cargo_pkg: recoder-governance-napi
-            output_node: modules/governance/recoder-governance/target/release/recoder-governance-napi.node
+            output_node: backend/engines/rust/recoder-governance/target/release/recoder-governance-napi.node
             staging_name: recoder-governance-napi.node
             continue_on_error: false
             rust_toolchain_file: ''
@@ -133,21 +133,21 @@ jobs:
             arch: arm64
             os_label: mac
             crate: tensorzero-gateway-napi
-            workspace_dir: modules/inference/tensorzero/crates
+            workspace_dir: backend/engines/rust/tensorzero/crates
             cargo_pkg: tensorzero-gateway-napi
-            output_node: modules/inference/tensorzero/crates/target/release/tensorzero_gateway_napi.node
+            output_node: backend/engines/rust/tensorzero/crates/target/release/tensorzero_gateway_napi.node
             staging_name: tensorzero_gateway_napi.node
             continue_on_error: true
-            rust_toolchain_file: modules/inference/tensorzero/crates/rust-toolchain.toml
+            rust_toolchain_file: backend/engines/rust/tensorzero/crates/rust-toolchain.toml
 
           - runner: macos-latest
             target: aarch64-apple-darwin
             arch: arm64
             os_label: mac
             crate: openfang-napi
-            workspace_dir: modules/agent-engine/openfang
+            workspace_dir: backend/engines/rust/openfang
             cargo_pkg: openfang-napi
-            output_node: modules/agent-engine/openfang/target/release/libopenfang_napi.dylib
+            output_node: backend/engines/rust/openfang/target/release/libopenfang_napi.dylib
             staging_name: openfang_napi.node
             continue_on_error: true
             rust_toolchain_file: ''
@@ -170,9 +170,9 @@ jobs:
             arch: x64
             os_label: mac
             crate: recoder-governance-napi
-            workspace_dir: modules/governance/recoder-governance
+            workspace_dir: backend/engines/rust/recoder-governance
             cargo_pkg: recoder-governance-napi
-            output_node: modules/governance/recoder-governance/target/x86_64-apple-darwin/release/recoder-governance-napi.node
+            output_node: backend/engines/rust/recoder-governance/target/x86_64-apple-darwin/release/recoder-governance-napi.node
             staging_name: recoder-governance-napi.node
             continue_on_error: false
             rust_toolchain_file: ''
@@ -194,21 +194,21 @@ jobs:
             arch: x64
             os_label: mac
             crate: tensorzero-gateway-napi
-            workspace_dir: modules/inference/tensorzero/crates
+            workspace_dir: backend/engines/rust/tensorzero/crates
             cargo_pkg: tensorzero-gateway-napi
-            output_node: modules/inference/tensorzero/crates/target/x86_64-apple-darwin/release/tensorzero_gateway_napi.node
+            output_node: backend/engines/rust/tensorzero/crates/target/x86_64-apple-darwin/release/tensorzero_gateway_napi.node
             staging_name: tensorzero_gateway_napi.node
             continue_on_error: true
-            rust_toolchain_file: modules/inference/tensorzero/crates/rust-toolchain.toml
+            rust_toolchain_file: backend/engines/rust/tensorzero/crates/rust-toolchain.toml
 
           - runner: macos-13
             target: x86_64-apple-darwin
             arch: x64
             os_label: mac
             crate: openfang-napi
-            workspace_dir: modules/agent-engine/openfang
+            workspace_dir: backend/engines/rust/openfang
             cargo_pkg: openfang-napi
-            output_node: modules/agent-engine/openfang/target/x86_64-apple-darwin/release/libopenfang_napi.dylib
+            output_node: backend/engines/rust/openfang/target/x86_64-apple-darwin/release/libopenfang_napi.dylib
             staging_name: openfang_napi.node
             continue_on_error: true
             rust_toolchain_file: ''
@@ -231,9 +231,9 @@ jobs:
             arch: x64
             os_label: linux
             crate: recoder-governance-napi
-            workspace_dir: modules/governance/recoder-governance
+            workspace_dir: backend/engines/rust/recoder-governance
             cargo_pkg: recoder-governance-napi
-            output_node: modules/governance/recoder-governance/target/release/recoder-governance-napi.node
+            output_node: backend/engines/rust/recoder-governance/target/release/recoder-governance-napi.node
             staging_name: recoder-governance-napi.node
             continue_on_error: false
             rust_toolchain_file: ''
@@ -255,21 +255,21 @@ jobs:
             arch: x64
             os_label: linux
             crate: tensorzero-gateway-napi
-            workspace_dir: modules/inference/tensorzero/crates
+            workspace_dir: backend/engines/rust/tensorzero/crates
             cargo_pkg: tensorzero-gateway-napi
-            output_node: modules/inference/tensorzero/crates/target/release/tensorzero_gateway_napi.node
+            output_node: backend/engines/rust/tensorzero/crates/target/release/tensorzero_gateway_napi.node
             staging_name: tensorzero_gateway_napi.node
             continue_on_error: true
-            rust_toolchain_file: modules/inference/tensorzero/crates/rust-toolchain.toml
+            rust_toolchain_file: backend/engines/rust/tensorzero/crates/rust-toolchain.toml
 
           - runner: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             arch: x64
             os_label: linux
             crate: openfang-napi
-            workspace_dir: modules/agent-engine/openfang
+            workspace_dir: backend/engines/rust/openfang
             cargo_pkg: openfang-napi
-            output_node: modules/agent-engine/openfang/target/release/libopenfang_napi.so
+            output_node: backend/engines/rust/openfang/target/release/libopenfang_napi.so
             staging_name: openfang_napi.node
             continue_on_error: true
             rust_toolchain_file: ''
@@ -292,9 +292,9 @@ jobs:
             arch: x64
             os_label: windows
             crate: recoder-governance-napi
-            workspace_dir: modules/governance/recoder-governance
+            workspace_dir: backend/engines/rust/recoder-governance
             cargo_pkg: recoder-governance-napi
-            output_node: modules/governance/recoder-governance/target/release/recoder_governance_napi.dll
+            output_node: backend/engines/rust/recoder-governance/target/release/recoder_governance_napi.dll
             staging_name: recoder-governance-napi.node
             continue_on_error: false
             rust_toolchain_file: ''
@@ -316,21 +316,21 @@ jobs:
             arch: x64
             os_label: windows
             crate: tensorzero-gateway-napi
-            workspace_dir: modules/inference/tensorzero/crates
+            workspace_dir: backend/engines/rust/tensorzero/crates
             cargo_pkg: tensorzero-gateway-napi
-            output_node: modules/inference/tensorzero/crates/target/release/tensorzero_gateway_napi.dll
+            output_node: backend/engines/rust/tensorzero/crates/target/release/tensorzero_gateway_napi.dll
             staging_name: tensorzero_gateway_napi.node
             continue_on_error: true
-            rust_toolchain_file: modules/inference/tensorzero/crates/rust-toolchain.toml
+            rust_toolchain_file: backend/engines/rust/tensorzero/crates/rust-toolchain.toml
 
           - runner: windows-latest
             target: x86_64-pc-windows-msvc
             arch: x64
             os_label: windows
             crate: openfang-napi
-            workspace_dir: modules/agent-engine/openfang
+            workspace_dir: backend/engines/rust/openfang
             cargo_pkg: openfang-napi
-            output_node: modules/agent-engine/openfang/target/release/openfang_napi.dll
+            output_node: backend/engines/rust/openfang/target/release/openfang_napi.dll
             staging_name: openfang_napi.node
             continue_on_error: true
             rust_toolchain_file: ''

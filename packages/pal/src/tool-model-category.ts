@@ -1,5 +1,5 @@
 /**
- * Tool → model-category map ported from modules/communication/pal-mcp-server.
+ * Tool → model-category map ported from backend/engines/py/pal-mcp-server.
  *
  * Sources:
  * - tools/models.py:11 (ToolModelCategory enum)

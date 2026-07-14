@@ -1,5 +1,5 @@
 /**
- * Planner step pacing ported from modules/communication/pal-mcp-server tools/planner.py.
+ * Planner step pacing ported from backend/engines/py/pal-mcp-server tools/planner.py.
  *
  * The planner is self-contained (requires_model() = False) and never
  * escalates to an expert model; its value is deterministic pacing:

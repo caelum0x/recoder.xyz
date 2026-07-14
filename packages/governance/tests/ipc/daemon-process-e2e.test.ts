@@ -39,7 +39,7 @@ import { makeAgent, makeTask } from '../fixtures';
  * on this darwin box it builds, so it does not silently skip.
  */
 
-const CRATE_DIR = path.resolve(__dirname, '../../../../modules/governance/recoder-governance');
+const CRATE_DIR = path.resolve(__dirname, '../../../../backend/engines/rust/recoder-governance');
 const DAEMON_BIN = path.join(CRATE_DIR, 'target/release/recoder-governance-daemon');
 
 /** Poll until the daemon's socket file exists (it binds asynchronously). */

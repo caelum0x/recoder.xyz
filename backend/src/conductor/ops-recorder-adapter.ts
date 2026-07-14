@@ -1,10 +1,10 @@
 /**
  * ops-recorder adapter — the degrade-safe loopback seam between the
  * backend's inline `/work-signals` ingest and the richer Python
- * ops-recorder work-signals service (`modules/signals/ops-recorder/work-signals`).
+ * ops-recorder work-signals service (`backend/engines/py/ops-recorder/work-signals`).
  *
  * INTEGRATION-PLAN §d.4 / WIRE-UP #10:
- *   modules/signals/ops-recorder is the DETECTOR authority — it polls GitHub/Linear, detects
+ *   backend/engines/py/ops-recorder is the DETECTOR authority — it polls GitHub/Linear, detects
  *   stuck work, normalises it into `WorkSignal` objects, and generates AI handoff
  *   prompts. The backend `/work-signals` ingress is the lightweight
  *   in-process TS sink that the Python service (or any caller) POSTs a stuck item
@@ -123,7 +123,7 @@ export function isOpsRecorderShape(body: unknown): body is OpsRecorderIngestShap
  * fields, or they are coerced from the source/source_url as stable identifiers.
  *
  * Returns a partial record with `detail` (constructed from the ops-recorder
- * fields) and `reportedBy` (`modules/signals/ops-recorder`). The caller must supply the
+ * fields) and `reportedBy` (`backend/engines/py/ops-recorder`). The caller must supply the
  * mandatory WorkSignalInput fields (workspaceId, spaceId, taskId).
  */
 export function opsRecorderShapeToDetail(shape: OpsRecorderIngestShape): {
@@ -141,7 +141,7 @@ export function opsRecorderShapeToDetail(shape: OpsRecorderIngestShape): {
   if (shape.why_it_matters) parts.push(`why:${shape.why_it_matters}`);
   if (shape.recommended_next_action) parts.push(`action:${shape.recommended_next_action}`);
 
-  return { detail: parts.join(' | '), reportedBy: 'modules/signals/ops-recorder' };
+  return { detail: parts.join(' | '), reportedBy: 'backend/engines/py/ops-recorder' };
 }
 
 // ---------------------------------------------------------------------------

@@ -49,7 +49,7 @@ import {
  *
  * This is the ONE place the running backend constructs the interop `McpHost`
  * facade, seeds it with the canonical in-proc server catalog, and registers the
- * REAL external Python `modules/communication/pal-mcp-server` over supervised stdio MCP. Every tool
+ * REAL external Python `backend/engines/py/pal-mcp-server` over supervised stdio MCP. Every tool
  * call routed through {@link InteropHostBundle.call} traverses interop's
  * authorize → risk → execute → audit gate before any process is touched.
  *
@@ -134,7 +134,7 @@ function createInteropExecutor(
 export type InProcToolHandler = (input: McpToolCallInput) => Promise<McpToolResult> | McpToolResult;
 
 export interface InteropHostBundleOptions {
-  /** Absolute path to the cloned `modules/communication/pal-mcp-server`. Defaults to repo `modules/communication/pal-mcp-server`. */
+  /** Absolute path to the cloned `backend/engines/py/pal-mcp-server`. Defaults to repo `backend/engines/py/pal-mcp-server`. */
   readonly palRootDir?: string;
   /** Durable audit sink (e.g. agent-events outbox). Optional → in-memory only. */
   readonly auditSink?: McpAuditSinkPort;
@@ -188,7 +188,7 @@ export class InteropHostBundle {
       external,
     );
     this.palRootDir =
-      options.palRootDir ?? resolve(process.cwd(), '..', 'py', 'pal-mcp-server');
+      options.palRootDir ?? resolve(process.cwd(), 'engines', 'py', 'pal-mcp-server');
 
     // Seed the canonical in-proc catalog (registration only).
     for (const server of IN_PROC_SERVERS) {

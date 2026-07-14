@@ -1,7 +1,7 @@
 /**
  * @module gateway/tensorzero-client
  *
- * BYOK LLM Gateway skin over `modules/inference/tensorzero` (RECODER-ENGINES E15).
+ * BYOK LLM Gateway skin over `backend/engines/rust/tensorzero` (RECODER-ENGINES E15).
  *
  * This is the thin `LlmGatewayPort` the rest of the backend calls for model +
  * embedding work: `complete(req)` and `embed(req)`. It speaks the OpenAI-

@@ -237,7 +237,7 @@ export function createAgentMcpRouter(options: AgentMcpRouterOptions = {}): Route
 
   /**
    * Truthful status of the supervised EXTERNAL MCP servers (currently the real
-   * Python `modules/communication/pal-mcp-server`). Surfaces on-disk availability, the resolved
+   * Python `backend/engines/py/pal-mcp-server`). Surfaces on-disk availability, the resolved
    * launch config, and live supervisor health — degrade-safe: an absent python
    * venv yields `available:false` with a reason, never a faked "ready".
    */

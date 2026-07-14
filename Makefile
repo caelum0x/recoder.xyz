@@ -55,17 +55,17 @@ go-ziti: ## Build ziti zero-trust mesh (HEAVY)
 
 # ---- Rust (each its own Cargo workspace; HEAVY, disk-hungry -> CI) ----
 rust-openfang: ## Build OpenFang kernel (HEAVY)
-	cd crates/openfang && cargo build --release
+	cd backend/engines/rust/openfang && cargo build --release
 
 rust-claw: ## Build claw-code-parity permission engine (HEAVY)
 	cd crates/claw-code-parity/rust && cargo build --release
 
 # ---- Python (uv per project) ----
 py-pal: ## Sync pal-mcp-server
-	cd py/pal-mcp-server && uv sync
+	cd backend/engines/py/pal-mcp-server && uv sync
 
 py-ops: ## Sync ops-recorder
-	cd py/ops-recorder && uv sync
+	cd backend/engines/py/ops-recorder && uv sync
 
 # ---- Aggregates ----
 verify: backend site ## Fast green gate (TS only, laptop-safe)

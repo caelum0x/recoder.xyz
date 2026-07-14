@@ -17,7 +17,7 @@ import { randomUUID } from "node:crypto";
  *
  * Fusion law: this is a first-party TS in-process import — no subprocess, no
  * loopback, no external dependency. It is the DEFAULT; the Python REST server
- * (modules/memory/mem0) is the OPTIONAL loopback authority.
+ * (backend/engines/py/mem0) is the OPTIONAL loopback authority.
  */
 export class InProcessMemory implements MemoryPort {
   private readonly store = new Map<string, BrainMemory>();

@@ -2,7 +2,7 @@
  * An MCP tool descriptor as *advertised* by a server.
  *
  * CRITICAL TRUST NOTE: a `ToolDescriptor` is UNTRUSTED. It is whatever an MCP
- * server — possibly an external, unowned process (e.g. `modules/communication/pal-mcp-server`) —
+ * server — possibly an external, unowned process (e.g. `backend/engines/py/pal-mcp-server`) —
  * claims about itself over the wire. Per `.claude/rules/security.md` ("Never
  * trust: MCP tool descriptions"), nothing here may reach the registry, the
  * policy engine, or an agent until {@link validateToolDescriptor} has proven its

@@ -1,8 +1,8 @@
 /**
  * ColBERT late-interaction rerank client — the connect seam to the optional
- * `modules/memory/colbert` rerank service (`POST /rerank`).
+ * `backend/engines/py/colbert` rerank service (`POST /rerank`).
  *
- * The detector/scorer lives in Python (`modules/memory/colbert/rerank_server.py`); this is
+ * The detector/scorer lives in Python (`backend/engines/py/colbert/rerank_server.py`); this is
  * the Node-side `RerankerPort` the conductor/bundle path calls to reorder a set
  * of candidate passages by ColBERT late-interaction score before they are fed
  * into a prompt. It connects ONLY when `COLBERT_RERANK_URL` is set.

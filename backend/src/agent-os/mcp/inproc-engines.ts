@@ -245,7 +245,7 @@ export function buildInProcEngineRouter(
   // Planning (PAL, E11): an in-proc pal.plan that decides runtime/substrate/
   // tool-grants/risk/approval for a TaskSpec via @recoder/pal's pure decision
   // logic. Deny-biased on uncertainty (least privilege + approvalRequired), never
-  // fabricating a permissive grant. Complements the external modules/communication/pal-mcp-server.
+  // fabricating a permissive grant. Complements the external backend/engines/py/pal-mcp-server.
   registerPalPlanMcpTools(router);
   // Notify (E-notify, Phase 5): an agent pings a human channel (Slack/webhook)
   // when a delivery needs review — the human-in-the-loop close. Backed by

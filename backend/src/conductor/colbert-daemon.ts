@@ -1,10 +1,10 @@
 /**
- * ColBERT rerank sidecar spawn seam — supervise `modules/memory/colbert/rerank_server.py`
+ * ColBERT rerank sidecar spawn seam — supervise `backend/engines/py/colbert/rerank_server.py`
  * (the late-interaction rerank HTTP endpoint) as an app-owned loopback Flask
  * subprocess, mirroring the proven `openfang-daemon.ts` pattern (resolve →
  * spawn → wait-for-health → auto-restart with capped backoff → degrade-safe).
  *
- * FUSION MODE (RECODER-DEEP-FUSION-PLAN.md §py/): `modules/memory/colbert` was an
+ * FUSION MODE (RECODER-DEEP-FUSION-PLAN.md §py/): `backend/engines/py/colbert` was an
  * HTTP-URL seam — something external had to start it and export
  * `COLBERT_RERANK_URL`. This module makes backend the owner: it spawns
  * and supervises the Python process itself and exports the URL the existing
@@ -31,9 +31,9 @@
  * Resolution order (first match wins):
  *   1. `COLBERT_RERANK_URL` env already set → externally managed service; we
  *      do NOT spawn a second one — just report and trust the existing seam.
- *   2. Spawn: python interpreter (`COLBERT_PYTHON` env → `modules/memory/colbert/.venv`
+ *   2. Spawn: python interpreter (`COLBERT_PYTHON` env → `backend/engines/py/colbert/.venv`
  *      → `py/.venv` → first `python3` on PATH) + the repo entrypoint
- *      `<repo>/modules/memory/colbert/rerank_server.py`, bound to `COLBERT_RERANK_LISTEN`
+ *      `<repo>/backend/engines/py/colbert/rerank_server.py`, bound to `COLBERT_RERANK_LISTEN`
  *      (default 127.0.0.1:8893 — the py server's own default port).
  *   3. Neither → resolve `undefined`; the conductor stays on the no-rerank path.
  */
@@ -76,7 +76,7 @@ const BACKOFF_CAP_MS = 30_000;
 
 /**
  * Walk up from this module to the repo root (the dir holding
- * `modules/memory/colbert/rerank_server.py`). Returns undefined if not found within a
+ * `backend/engines/py/colbert/rerank_server.py`). Returns undefined if not found within a
  * bounded number of parents (never loops).
  */
 function findRepoRoot(): string | undefined {
@@ -87,7 +87,7 @@ function findRepoRoot(): string | undefined {
     return undefined;
   }
   for (let i = 0; i < 12; i++) {
-    if (existsSync(join(dir, 'py', 'colbert', 'rerank_server.py'))) {
+    if (existsSync(join(dir, 'backend', 'engines', 'py', 'colbert', 'rerank_server.py'))) {
       return dir;
     }
     const parent = dirname(dir);
@@ -112,10 +112,10 @@ export function resolveColbertPython(env: NodeJS.ProcessEnv = process.env): stri
   if (root) {
     // Prefer a project venv (where torch/colbert would actually be installed).
     candidates.push(
-      join(root, 'py', 'colbert', '.venv', 'bin', 'python3'),
-      join(root, 'py', 'colbert', '.venv', 'bin', 'python'),
-      join(root, 'py', '.venv', 'bin', 'python3'),
-      join(root, 'py', '.venv', 'bin', 'python'),
+      join(root, 'backend', 'engines', 'py', 'colbert', '.venv', 'bin', 'python3'),
+      join(root, 'backend', 'engines', 'py', 'colbert', '.venv', 'bin', 'python'),
+      join(root, 'backend', 'engines', 'py', '.venv', 'bin', 'python3'),
+      join(root, 'backend', 'engines', 'py', '.venv', 'bin', 'python'),
     );
   }
   for (const dir of (env.PATH ?? '').split(delimiter)) {
@@ -128,7 +128,7 @@ export function resolveColbertPython(env: NodeJS.ProcessEnv = process.env): stri
 export function resolveColbertEntrypoint(): string | undefined {
   const root = findRepoRoot();
   if (!root) return undefined;
-  const entry = join(root, 'py', 'colbert', 'rerank_server.py');
+  const entry = join(root, 'backend', 'engines', 'py', 'colbert', 'rerank_server.py');
   return existsSync(entry) ? entry : undefined;
 }
 
@@ -232,7 +232,7 @@ async function startColbertDaemon(): Promise<ColbertDaemonHandle | undefined> {
   const entrypoint = resolveColbertEntrypoint();
   if (!entrypoint) {
     logger.info(
-      'modules/memory/colbert/rerank_server.py not found — staying on the no-rerank path (degrade-safe).',
+      'backend/engines/py/colbert/rerank_server.py not found — staying on the no-rerank path (degrade-safe).',
     );
     return undefined;
   }
@@ -251,7 +251,7 @@ async function spawnColbert(
   const url = `http://${listenAddr}`;
   try {
     const child = spawn(pythonBin, [entrypoint], {
-      // rerank_server.py reads RERANK_HOST + PORT; cwd is modules/memory/colbert so the
+      // rerank_server.py reads RERANK_HOST + PORT; cwd is backend/engines/py/colbert so the
       // vendored `colbert` package resolves without installation.
       env: {
         ...process.env,
@@ -336,7 +336,7 @@ async function spawnColbert(
       logger.warn(
         { pythonBin, entrypoint },
         'colbert rerank sidecar booted WITHOUT torch/colbert deps (rerank_available:false) — ' +
-          'shutting it down and staying on no-rerank path. Install modules/memory/colbert deps ' +
+          'shutting it down and staying on no-rerank path. Install backend/engines/py/colbert deps ' +
           '(torch + the vendored colbert package) to enable late-interaction rerank.',
       );
       suppressRestart = true;

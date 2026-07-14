@@ -3,11 +3,11 @@ import { join } from "node:path";
 import type { ExternalMcpServerConfig } from "./external-server-config";
 
 /**
- * Registers the REAL cloned Python `modules/communication/pal-mcp-server` (PAL MCP Server v9.8.2) as
+ * Registers the REAL cloned Python `backend/engines/py/pal-mcp-server` (PAL MCP Server v9.8.2) as
  * a supervised external stdio MCP server.
  *
  * This is NOT a REST wrapper and NOT a transpile. The Python server speaks stdio
- * JSON-RPC MCP (see `modules/communication/pal-mcp-server/server.py`: `stdio_server()` + the `TOOLS`
+ * JSON-RPC MCP (see `backend/engines/py/pal-mcp-server/server.py`: `stdio_server()` + the `TOOLS`
  * registry). We host its process behind `StdioMcpClient` with the same
  * authorize→risk→policy→audit gate every server gets. Its self-advertised tool
  * catalog is still untrusted and runs through the catalog validator; only the
@@ -49,7 +49,7 @@ export const PAL_TOOL_NAMES = [
 export const PAL_SERVER_ID = "pal-mcp-server";
 
 export interface PalServerOptions {
-  /** Absolute path to the cloned `modules/communication/pal-mcp-server` directory. */
+  /** Absolute path to the cloned `backend/engines/py/pal-mcp-server` directory. */
   readonly rootDir: string;
   /** Override the python executable (defaults to the repo venv python). */
   readonly pythonPath?: string;
@@ -78,7 +78,7 @@ export function buildPalServerConfig(
   return {
     serverId: PAL_SERVER_ID,
     kind: "custom",
-    displayName: "PAL MCP Server (modules/communication/pal-mcp-server)",
+    displayName: "PAL MCP Server (backend/engines/py/pal-mcp-server)",
     command: pythonPath,
     args: ["server.py"],
     cwd: options.rootDir,
