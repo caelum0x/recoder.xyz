@@ -29,7 +29,7 @@ services:
     image: tensorzero/gateway-e2e:${TENSORZERO_COMMIT_TAG}
     build:
       context: ../../../..
-      dockerfile: modules/inference/tensorzero-core/tests/e2e/Dockerfile.gateway.e2e
+      dockerfile: crates/tensorzero-core/tests/e2e/Dockerfile.gateway.e2e
       target: gateway
     environment:
       TENSORZERO_CLICKHOUSE_URL: http://chuser:chpassword@clickhouse:8123/tensorzero_e2e_tests
@@ -96,7 +96,7 @@ services:
     image: tensorzero/clickhouse-tests:${TENSORZERO_COMMIT_TAG}
     build:
       context: ../../../..
-      dockerfile: modules/inference/tensorzero-core/tests/e2e/Dockerfile.clickhouse
+      dockerfile: crates/tensorzero-core/tests/e2e/Dockerfile.clickhouse
     environment:
       # Test environment variables
       TENSORZERO_CI: 1

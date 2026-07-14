@@ -1,6 +1,6 @@
 # BROWSING module
 
-**Domain owner.** Uses the OSS engine(s) **in place** (never copied): modules/browsing/browser-use + @recoder/agent-browser
+**Domain owner.** Uses the OSS engine(s) **in place** (never copied): backend/engines/py/browser-use + @recoder/agent-browser
 
 **Interface:** `open · snapshot · extract · verify · navigate · health`
 

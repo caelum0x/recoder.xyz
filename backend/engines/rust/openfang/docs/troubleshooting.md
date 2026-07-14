@@ -551,7 +551,7 @@ Yes. Each agent can use a different provider via its manifest `[model]` section.
 
 ```bash
 # From source
-cd openfang && git pull && cargo install --path modules/agent-engine/openfang-cli
+cd openfang && git pull && cargo install --path crates/openfang-cli
 
 # Docker
 docker pull ghcr.io/RightNow-AI/openfang:latest
@@ -634,8 +634,8 @@ RUST_LOG=openfang_runtime=debug,openfang_channels=info openfang start
 Yes. Each crate is independently usable:
 ```toml
 [dependencies]
-openfang-runtime = { path = "modules/agent-engine/openfang-runtime" }
-openfang-memory = { path = "modules/agent-engine/openfang-memory" }
+openfang-runtime = { path = "crates/openfang-runtime" }
+openfang-memory = { path = "crates/openfang-memory" }
 ```
 
 The `openfang-kernel` crate assembles everything, but you can use individual crates for custom integrations.

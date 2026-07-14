@@ -47,7 +47,7 @@ jobs:
 
       - name: Build and push `live-tests` container
         run: |
-          docker buildx build --build-arg BUILDKIT_CONTEXT_KEEP_GIT_DIR=1 -f modules/inference/tensorzero-core/tests/e2e/Dockerfile.live . -t tensorzero/live-tests:sha-$GITHUB_SHA --push
+          docker buildx build --build-arg BUILDKIT_CONTEXT_KEEP_GIT_DIR=1 -f crates/tensorzero-core/tests/e2e/Dockerfile.live . -t tensorzero/live-tests:sha-$GITHUB_SHA --push
 
       - name: Wait for image to be available on Docker Hub
         run: |

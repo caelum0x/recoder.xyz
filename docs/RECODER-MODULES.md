@@ -11,17 +11,16 @@
 ## The three layers (do not confuse them)
 
 ```
-  apps/          SURFACES / products. agent-gateway · agent-worker · desktop · wave · social.
+  apps/          SURFACES / products. desktop (the Wave-fork shell + cockpit) · social.
     │            They consume the backend over its edges. No capability logic lives here.
     ▼ consume
   MODULES        The capabilities. Each is a DIRECTORY, used in place:
     │              backend  → the HOST module (conductor + agent-os; composes the rest)
-    │              packages/*      → shared first-party contracts (agent-os, a2a-sdk, pal, …)
-    │              ts/*            → recodergit (github) · dmux (terminal-mux) · extracted-from-openclaw (social)
-    │              py/*            → mem0 · colbert (memory) · browser-use · ops-recorder · pal-mcp
-    │              crates/*        → openfang (agent-engine) · tensorzero (inference) · recoder-governance
-    │              go/*            → beads (memory/issue-graph) · multica (squads/teammates) · ziti + recoder-xds (networking)
-    │              modules/terminal/tmux          → the session substrate
+    │              packages/*                   → shared first-party contracts (agent-os, a2a-sdk, pal, …)
+    │              apps/desktop/engines/*       → recodergit (github) · dmux (terminal-mux) · openclaw (social) · tmux (the session substrate)
+    │              backend/engines/py/*         → mem0 · colbert (memory) · browser-use · ops-recorder · pal-mcp
+    │              backend/engines/rust/*       → openfang (agent-engine) · tensorzero (inference) · recoder-governance
+    │              apps/desktop/server/engines/* → beads (memory/issue-graph) · multica (squads/teammates) · ziti + recoder-xds (networking)
     ▼ drive/consume in place (import dist · read the running server · boot the .node · spawn the sidecar)
   Each module is edited IN ITS OWN DIR where fusion needs it (clean exports, killed side-effects).
 ```
@@ -54,9 +53,9 @@ behind one composer per domain, then deepening each engine in its own dir.
 
 ---
 
-## 1. MEMORY module — `modules/memory/`
-**Domain:** everything the agents remember. **Absorbs:** `modules/memory/mem0` (semantic vectors) + `modules/memory/beads`
-(issue-graph shared memory, the dolt store) + `modules/memory/colbert` (rerank) + agent-os memory candidates.
+## 1. MEMORY module — `backend/src/modules/memory/` (composer target)
+**Domain:** everything the agents remember. **Absorbs:** `backend/engines/py/mem0` (semantic vectors) + `apps/desktop/server/engines/beads`
+(issue-graph shared memory, the dolt store) + `backend/engines/py/colbert` (rerank) + agent-os memory candidates.
 
 **Interface**
 ```ts
@@ -75,10 +74,10 @@ interface MemoryModule {
 logic is duplicated in enrichPrompt.
 **Ground-truth corrections:**
 - The live semantic path is the **owned `@recoder/mem0` TS package** (OSS Memory over the platform
-  Qdrant, `MEM0_COLLECTION=recoder_mem0`), NOT the Python `modules/memory/mem0` lib. `modules/memory/mem0`'s FastAPI server is
+  Qdrant, `MEM0_COLLECTION=recoder_mem0`), NOT the Python `backend/engines/py/mem0` lib. `backend/engines/py/mem0`'s FastAPI server is
   only an optional `MEM0_BASE_URL` target that **nothing spawns/supervises** — two parallel mem0 impls
   = drift risk to resolve (one owned store contract, or a decisive drop of the Python server).
-- `modules/memory/colbert`: only the on-the-fly `rerank_server.py` (supervised loopback sidecar via
+- `backend/engines/py/colbert`: only the on-the-fly `rerank_server.py` (supervised loopback sidecar via
   `conductor/colbert-daemon.ts`) is wired. `server.py` (real ANN-index search) + the indexing/training
   pipeline are **unused**, and torch/colbert deps are typically absent → rerank degrades to a no-op
   (identity order). A real retriever needs a built index (or a decision to only ever rerank).
@@ -91,8 +90,8 @@ owned-sidecar bootstrap; (d) point all callers at the module.
 
 ---
 
-## 2. SOCIAL module — `modules/social/`
-**Domain:** the agents' presence on human channels. **Absorbs:** `modules/social/openclaw`
+## 2. SOCIAL module — `backend/src/modules/social/` (composer target)
+**Domain:** the agents' presence on human channels. **Absorbs:** `apps/desktop/engines/openclaw`
 (gateway-core, social-gateways channel drivers, agents, skills-reference) + the `apps/social` runtime.
 
 **Interface**
@@ -107,7 +106,7 @@ interface SocialModule {
 }
 ```
 **Today:** `@recoder/connectors` package (the real pipeline: registry, hostile-by-default gate, dispatch,
-pi-runner) at `modules/social/openclaw` + `apps/social` (composition) + `backend/src/connectors/`
+pi-runner) at `apps/desktop/engines/openclaw` + `apps/social` (composition) + `backend/src/connectors/`
 (ingress + gateway). SEVEN per-channel `ConnectorPort` adapters are live and dispatch-tested
 (telegram/slack/signal/imessage/whatsapp/line/feishu); the **discord** adapter is exported but **not
 truly extracted** (still OpenClaw bot-core-coupled, ~172 type errors from un-ported clusters). The pieces
@@ -122,8 +121,8 @@ one channel (telegram) live end-to-end; (d) cockpit social panel.
 
 ---
 
-## 3. GITHUB module — `modules/github/`
-**Domain:** the agents' complete GitHub capability. **Absorbs:** `modules/github/recodergit` (recodergit-engine
+## 3. GITHUB module — `backend/src/modules/github/` (composer target)
+**Domain:** the agents' complete GitHub capability. **Absorbs:** `apps/desktop/engines/recodergit` (recodergit-engine
 code-graph + github ops, pr-swarm-review, claude-plugin) + the `gh` CLI operations.
 
 **Interface**
@@ -138,13 +137,13 @@ interface GitHubModule {
   health(): GitHubHealth   // {recodergitLib: up, gh: authed|not}
 }
 ```
-**Grounded correction:** functionally `modules/github/recodergit` (the `@recoder/recodergit-engine`) is a
+**Grounded correction:** functionally `apps/desktop/engines/recodergit` (the `@recoder/recodergit-engine`) is a
 **code-knowledge-graph / code-intelligence** engine — it indexes a repo into a graph (symbols, imports,
 call chains, impact/blast-radius, hybrid BM25+semantic search) via Tree-sitter + LadybugDB. It is NOT
 GitHub-API git plumbing (the analyzer never calls an LLM). The canonical map deliberately files it under
 GITHUB as the agents' **repo-comprehension** capability, paired with `gh` ops. Note also: the wrapper pkg
-`@recoder/recodergit` (`packages/recodergit`) is **distinct** from the engine (`modules/github/recodergit/recodergit`)
-— the wrapper depends on `@recoder/agent-os`, not the engine — and `modules/github/recodergit` is NOT a root
+`@recoder/recodergit` (`packages/recodergit`) is **distinct** from the engine (`apps/desktop/engines/recodergit/recodergit`)
+— the wrapper depends on `@recoder/agent-os`, not the engine — and `apps/desktop/engines/recodergit` is NOT a root
 workspace member (consumed by dist path + spawn).
 **Today:** `recodergit-service.ts` (in-process lib + supervised `recodergit mcp --http` — done) +
 `github-engine.ts` (gh CLI) + `github-engine/pr-review.ts` + the `recoder.github` + `recoder.repo` MCP
@@ -158,9 +157,9 @@ image). **License gate:** recodergit-engine is PolyForm-Noncommercial — resolv
 
 ---
 
-## 4. TERMINAL module — `modules/terminal/`
+## 4. TERMINAL module — `backend/src/modules/terminal/` (composer target)
 **Domain:** multiplexed, restart-survivable terminal sessions — the substrate agents run on.
-**Absorbs:** `modules/terminal/tmux` (owned binary, sessions) + `ts/dmux` (multiplexing: panes, layout/grid, attention,
+**Absorbs:** `apps/desktop/engines/tmux` (owned binary, sessions) + `apps/desktop/engines/dmux` (multiplexing: panes, layout/grid, attention,
 streaming, workers).
 
 **Interface**
@@ -187,7 +186,7 @@ control-mode default-on feeding dmux's pane model; (c) wave shell on the same tm
 
 ---
 
-## 5. COMMUNICATION module — `modules/communication/`
+## 5. COMMUNICATION module — `backend/src/modules/communication/` (composer target)
 **Domain:** how agents decide, route, reach consensus, and talk to each other. **Absorbs:** `packages/pal`
 (planning/decision/consensus/model-routing, ported from pal-mcp) + the A2A stack (agent-to-agent
 messaging, task handoff).
@@ -207,7 +206,7 @@ interface CommunicationModule {
 **Today:** `packages/pal` (decision logic ported — done; `agent-os/mcp/pal-plan-engine.ts` registers
 `recoder.pal-plan` in-proc behind the interop gate) + A2A scattered across `a2a/*` + the conductor's
 runtime dispatch. Only the `pal.plan` slice is ported to `@recoder/pal`; the vendored Python
-`modules/communication/pal-mcp-server` (multi-model orchestration, conversation threading, `clink` subagent bridge,
+`backend/engines/py/pal-mcp-server` (multi-model orchestration, conversation threading, `clink` subagent bridge,
 codereview/consensus/planner workflows) is **NOT run/supervised** by backend and its heavy
 orchestration is stranded. pal decisions aren't yet the conductor's actual planner on the launch path.
 **Deep target:** a `CommunicationModule` that IS the conductor's decision layer (every workspace launch
@@ -217,8 +216,8 @@ escalation available to agents as a "consult" capability.
 
 ---
 
-## 6. INFERENCE module — `modules/inference/`
-**Domain:** every LLM call. **Absorbs:** `modules/inference/tensorzero` (embedded gateway) + the model registry + BYOK.
+## 6. INFERENCE module — `backend/src/modules/inference/` (composer target)
+**Domain:** every LLM call. **Absorbs:** `backend/engines/rust/tensorzero` (embedded gateway) + the model registry + BYOK.
 
 **Interface**
 ```ts
@@ -242,8 +241,8 @@ keys as TZ credentials; streaming; feedback wired to delivery outcomes.
 
 ---
 
-## 7. AGENT-ENGINE module — `modules/agent-engine/`
-**Domain:** autonomous agents + the openfang kernel. **Absorbs:** `modules/agent-engine/openfang` (upstream RightNow-AI
+## 7. AGENT-ENGINE module — `backend/src/modules/agent-engine/` (composer target)
+**Domain:** autonomous agents + the openfang kernel. **Absorbs:** `backend/engines/rust/openfang` (upstream RightNow-AI
 OpenFang, MIT — a full Rust "Agent OS": kernel of agents, Hands/background workers, triggers, workflows,
 event bus, KV memory + a wasmtime runtime, sqlite, ~40 channel adapters). Two surfaces: an HTTP sidecar
 binary (`openfang start`, 127.0.0.1:4200, bearer `OPENFANG_API_KEY`) and a NAPI addon
@@ -261,8 +260,8 @@ interface AgentEngineModule {
 ```
 **Today:** `conductor/openfang-native.ts` (degrade-safe `.node` loader, ~51 methods, native-first
 in-process) + `openfang-runtime.ts` (driver — done) + `openfang-daemon.ts`/`oss-dispatch.ts` +
-`/api/agents/openfang/*` + cockpit blocks + wsh. The crate is **gitignored** (upstream clone; only
-`Cargo.toml/lock` + `modules/agent-engine/openfang-napi/` un-ignored) and **not built by default** (ENOSPC-avoidance),
+`/api/agents/openfang/*` + cockpit blocks + wsh. The crate is vendored in-tree (upstream clone,
+`backend/engines/rust/openfang/`, no longer gitignored) and **not built by default** (ENOSPC-avoidance),
 so it degrades to undefined/loopback when the `.node` is absent. The runtime driver isn't dispatchable
 yet (closed `ConductorRuntimeId` union at `openfang-runtime.ts:35`).
 **Deep target:** openfang as a first-class conductor runtime; its Hands as supervised autonomous
@@ -272,10 +271,10 @@ background capabilities; its event bus bridged to RunEvents.
 
 ---
 
-## 8. GOVERNANCE module — `modules/governance/`
-**Domain:** the moat — policy decisions + tamper-evident audit. **Engine dir:** `modules/governance/recoder-governance`
+## 8. GOVERNANCE module — `backend/src/modules/governance/` (composer target)
+**Domain:** the moat — policy decisions + tamper-evident audit. **Engine dir:** `backend/engines/rust/recoder-governance`
 — **first-party (MIT), Recoder-OWNED** Rust governance kernel (a 9-crate workspace: types/audit/permission/
-approval/routing/kernel/ipc/daemon/napi), deliberately OUTSIDE the gitignored openfang/claw clones. The
+approval/routing/kernel/ipc/daemon/napi), deliberately kept OUTSIDE the vendored upstream clones. The
 napi addon exposes `NapiGovernanceKernel` (`decide`/`enforce_tool`/`route`/`record_audit`/`verify_audit`/
 `audit_tip`/`audit_len`) + `NapiApprovalManager`, backed by a SHA-256 Merkle hash-chain byte-interoperable
 with `packages/governance/src/audit/merkle-verifier.ts` (golden vector pinned in `tests/ts_interop.rs`).
@@ -290,10 +289,10 @@ through. **Build:** module wraps the native kernel; extend the seal to all mutat
 workspace lifecycle. (Richer policy crates — permission/approval/routing, persistence, checkpoints,
 replay — exist as slices; only audit+kernel are exercised via napi today.)
 
-## 9. BROWSING module — `modules/browsing/`
-**Domain:** web automation for agents. **Engine dirs:** `modules/browsing/browser-use` (async LLM browser-agent — Rust
+## 9. BROWSING module — `backend/src/modules/browsing/` (composer target)
+**Domain:** web automation for agents. **Engine dirs:** `backend/engines/py/browser-use` (async LLM browser-agent — Rust
 core, CDP, watchdogs) + `@recoder/agent-browser` (in-proc puppeteer) + `@recoder/browser-tools`.
-**Today (ground-truth correction):** `modules/browsing/browser-use` is **NOT run as a sidecar**. The live path is TS-first:
+**Today (ground-truth correction):** `backend/engines/py/browser-use` is **NOT run as a sidecar**. The live path is TS-first:
 `agent-os/mcp/browser-use-engine.ts` composes the owned `@recoder/agent-browser` over a degrade-safe driver
 — puppeteer (dynamic import) OR an HTTP `browser-use` service only when `BROWSER_USE_URL` is set — registering
 `browser.navigate/extract/screenshot` behind the interop gate (with neither present, tools return
@@ -303,9 +302,9 @@ running as the owned-venv sidecar and puppeteer as the light fallback; session/p
 domain-allowlist wired to governance, artifact capture; the conductor's post-run browser-check calls it.
 **Build:** module unifies the two drivers; browser-use owned-venv bootstrap (uv + playwright install).
 
-## 10. SIGNALS module — `modules/signals/`
-**Domain:** work-signals + activity observability. **Engine dir:** `modules/signals/ops-recorder` (Recoder-authored
-FastAPI service, real code in `modules/signals/ops-recorder/work-signals/`; detects STUCK GitHub/Linear work → normalized
+## 10. SIGNALS module — `backend/src/modules/signals/` (composer target)
+**Domain:** work-signals + activity observability. **Engine dir:** `backend/engines/py/ops-recorder` (Recoder-authored
+FastAPI service, real code in `backend/engines/py/ops-recorder/work-signals/`; detects STUCK GitHub/Linear work → normalized
 `WorkSignal` → auto-generated handoff prompt; supervised loopback sidecar :8073, `X-API-Key` auth).
 **Today:** `conductor/ops-recorder-daemon.ts` supervises `uvicorn main:app` with an auth preflight (refuses
 to spawn keyless) + `conductor/ops-recorder-adapter.ts` (`forwardToOpsRecorder`) + work-signals ingress.
@@ -313,21 +312,21 @@ Backend only uses ingest+query; the service's own GH/Linear detectors/sync are b
 local JSON store. **Deep target:** a `SignalsModule` owning the signal ingress→conductor path
 (stuck/blocked/needs-you signals drive the board) with durable shared storage and the detection loop running
 against real GH/Linear tokens, default-on. **Build:** module wraps the sidecar; API key minted at boot;
-signals feed the board module. **Housekeeping:** `modules/signals/ops-recorder` is missing a LICENSE (Recoder-authored,
-needs one).
+signals feed the board module. **Housekeeping:** `backend/engines/py/ops-recorder` LICENSE added
+(MIT, Recoder-authored — owner decision 6).
 
-## 11. NETWORKING module — `modules/networking/` (cloud tier — build now, mesh at cloud launch)
-**Domain:** zero-trust mesh + service control plane. **Engine dirs:** `modules/networking/ziti` (OpenZiti — zero-trust
-networking, cryptographic identity per connection, dark services) + `modules/networking/recoder-xds` (real Envoy xDS
+## 11. NETWORKING module — `backend/src/modules/networking/` (composer target) (cloud tier — build now, mesh at cloud launch)
+**Domain:** zero-trust mesh + service control plane. **Engine dirs:** `apps/desktop/server/engines/ziti` (OpenZiti — zero-trust
+networking, cryptographic identity per connection, dark services) + `apps/desktop/server/engines/recoder-xds` (real Envoy xDS
 control plane — dynamic LDS/CDS/RDS over ADS, the live equivalent of `backend/src/network`'s static
 bootstrap). **Today:** degrade-safe `ziti-client.ts`; `backend/src/network` generates the static
 Envoy bootstrap. **Deep target:** a `NetworkingModule` exposing mesh identity + peer status + LIVE xDS
 push as diagnostics now, activated at cloud/teams launch. **Build:** owned-binary builds out-of-band;
 health/diagnostics surface; mesh deferred to cloud.
 
-## 12. SQUADS module — `modules/squads/` (agents as teammates)
+## 12. SQUADS module — `backend/src/modules/squads/` (composer target) (agents as teammates)
 **Domain:** managed agents as first-class teammates — assignment, squads, autopilots, the team board.
-**Engine dir:** `modules/squads/multica` ("Multiplexed Information and Computing Agent" — assign issues to an agent
+**Engine dir:** `apps/desktop/server/engines/multica` ("Multiplexed Information and Computing Agent" — assign issues to an agent
 like a colleague; agents claim work, report blockers, update status; **Squads** = a group under a leader
 agent that delegates; **Autopilots** = cron/webhook-triggered recurring agent work; WebSocket progress
 streaming). This is the human+agent TEAMWORK layer — a direct sibling of Recoder's own conductor/board,
@@ -354,7 +353,7 @@ Consolidation-first (each is "gather scattered code behind the interface", then 
 6. **AGENT-ENGINE** — ConductorRuntimeId widening → openfang runtime dispatch.
 7. **SOCIAL** — inbound→conductor end-to-end + one live channel.
 
-Each module ships as: create `modules/<domain>/` + the interface + move scattered code behind it +
+Each module ships as: create `backend/src/modules/<domain>/` + the interface + move scattered code behind it +
 one integration test proving a caller uses the module end-to-end + degrade-safe health. Then deepen.
 
 ---
@@ -362,7 +361,7 @@ one integration test proving a caller uses the module end-to-end + degrade-safe 
 ## Owner decisions (2026-07-14 — "you choose all", architect's calls)
 
 1. **mem0 canonical store** → the owned `@recoder/mem0` (TS + platform Qdrant) is the ONE semantic
-   memory path. `modules/memory/mem0`'s FastAPI server stays an optional, unspawned `MEM0_BASE_URL` target — not
+   memory path. `backend/engines/py/mem0`'s FastAPI server stays an optional, unspawned `MEM0_BASE_URL` target — not
    supervised, not deleted (no-pruning rule). The MEMORY module's `recall` uses `@recoder/mem0`.
 2. **colbert** → best-effort **rerank-only**. No ANN index build. When torch is absent the reranker is a
    no-op identity pass (already the behavior); recall still fuses+dedupes without it.

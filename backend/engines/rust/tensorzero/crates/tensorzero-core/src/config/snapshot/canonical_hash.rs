@@ -116,7 +116,7 @@
 //! - **Prefer purely-additive changes.** New `Option<T>` fields with
 //!   `skip_serializing_if = "Option::is_none"` and a `None` default
 //!   keep every existing canonical hash valid.
-//! - **Run the fixture suite.** `modules/inference/tensorzero-core/src/config/snapshot/fixtures_tests.rs`
+//! - **Run the fixture suite.** `crates/tensorzero-core/src/config/snapshot/fixtures_tests.rs`
 //!   locks the canonical hash bytes against committed TOML fixtures
 //!   (kitchen sink, multi-variant, etc.). A schema change that drifts
 //!   the bytes will fail those tests; review the diff, decide if the

@@ -26,7 +26,7 @@ env:
   TENSORZERO_GATEWAY_TAG: sha-${{ github.sha }}
   # Two compose files merge: the standard live setup plus the override
   # that swaps the gateway onto the DB-only-boot path.
-  COMPOSE_FILES: "-f modules/inference/tensorzero-core/tests/e2e/docker-compose.live.yml -f modules/inference/tensorzero-core/tests/e2e/docker-compose.db-only-boot.yml"
+  COMPOSE_FILES: "-f crates/tensorzero-core/tests/e2e/docker-compose.live.yml -f crates/tensorzero-core/tests/e2e/docker-compose.db-only-boot.yml"
 
 jobs:
   db-only-boot-e2e:

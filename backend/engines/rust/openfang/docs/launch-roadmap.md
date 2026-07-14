@@ -17,34 +17,34 @@ These are showstoppers. The app literally crashes or looks broken without them.
 
 **What to do:**
 
-1. **Add token estimation & context guard** (`modules/agent-engine/openfang-runtime/src/compactor.rs`)
+1. **Add token estimation & context guard** (`crates/openfang-runtime/src/compactor.rs`)
    - Add `estimate_token_count(messages, system_prompt, tools)` — chars/4 heuristic
    - Add `needs_compaction_by_tokens(estimated, context_window)` — triggers at 70% capacity
    - Add `token_threshold_ratio: f64` (default 0.7) and `context_window_tokens: usize` (default 200_000) to `CompactionConfig`
    - Lower message threshold from 80 to 30
 
-2. **Add in-loop token guard** (`modules/agent-engine/openfang-runtime/src/agent_loop.rs`)
+2. **Add in-loop token guard** (`crates/openfang-runtime/src/agent_loop.rs`)
    - Before each LLM call: estimate tokens vs context window
    - Over 70%: emergency-trim old messages (keep last 10), log warning
    - Over 90%: aggressive trim to last 4 messages + inject summary
    - Lower `MAX_HISTORY_MESSAGES` from 40 to 20
    - Lower `MAX_TOOL_RESULT_CHARS` from 50,000 to 15,000
 
-3. **Filter tools by profile in kernel** (`modules/agent-engine/openfang-kernel/src/kernel.rs`)
+3. **Filter tools by profile in kernel** (`crates/openfang-kernel/src/kernel.rs`)
    - In `available_tools()`: use manifest's `tool_profile` to filter
    - Call `tool_profile.tools()` for allowed tool names, filter `builtin_tool_definitions()`
    - Only send ALL tools if profile is `Full` AND agent has `ToolAll` capability
    - This alone cuts default chat from 41 tools to ~8 tools (saves ~15-20K tokens)
 
-4. **Raise default token quota** (`modules/agent-engine/openfang-types/src/agent.rs`)
+4. **Raise default token quota** (`crates/openfang-types/src/agent.rs`)
    - Change `max_llm_tokens_per_hour` from 100_000 to 1_000_000
    - 100K is too low — a single system prompt is 30-40K tokens
 
-5. **Token-based compaction trigger** (`modules/agent-engine/openfang-kernel/src/kernel.rs`)
+5. **Token-based compaction trigger** (`crates/openfang-kernel/src/kernel.rs`)
    - In `send_message_streaming()`: replace message-count-only check with token-aware check
    - After compaction, verify token count actually decreased
 
-6. **Compact system prompt injections** (`modules/agent-engine/openfang-kernel/src/kernel.rs`)
+6. **Compact system prompt injections** (`crates/openfang-kernel/src/kernel.rs`)
    - Cap canonical context to 500 chars
    - Cap memory context to 3 items / 200 chars each
    - Cap skill knowledge to 2000 chars total
@@ -64,13 +64,13 @@ These are showstoppers. The app literally crashes or looks broken without them.
 **What to do:**
 
 1. Generate all required icon sizes from source PNG (`openfang-logo-transparent.png`, 2000x2000)
-2. Place into `modules/agent-engine/openfang-desktop/icons/`:
+2. Place into `crates/openfang-desktop/icons/`:
    - `icon.png` (1024x1024)
    - `icon.ico` (multi-size: 256, 128, 64, 48, 32, 16)
    - `32x32.png`
    - `128x128.png`
    - `128x128@2x.png` (256x256)
-3. Replace web UI logo at `modules/agent-engine/openfang-api/static/logo.png`
+3. Replace web UI logo at `crates/openfang-api/static/logo.png`
 4. Update favicon if one exists
 
 **Assets available:**
@@ -117,7 +117,7 @@ These close the gaps that would make users pick OpenClaw over OpenFang.
 3. Store `_imageUrls` on the tool card
 4. UI already renders `tool._imageUrls` — just need to populate it
 
-**Files:** `modules/agent-engine/openfang-api/static/js/pages/chat.js`, `modules/agent-engine/openfang-runtime/src/tool_runner.rs`
+**Files:** `crates/openfang-api/static/js/pages/chat.js`, `crates/openfang-runtime/src/tool_runner.rs`
 
 **Done when:**
 - Browser screenshots appear as inline images in tool cards
@@ -158,7 +158,7 @@ These close the gaps that would make users pick OpenClaw over OpenFang.
 3. Polish UI: skill cards with descriptions, install buttons, installed badge
 4. Add FangHub registry URL if not configured
 
-**Files:** `modules/agent-engine/openfang-api/static/js/pages/skills.js`, `modules/agent-engine/openfang-api/src/routes.rs`
+**Files:** `crates/openfang-api/static/js/pages/skills.js`, `crates/openfang-api/src/routes.rs`
 
 **Done when:**
 - Users can browse, search, and install skills from the web UI
@@ -288,7 +288,7 @@ These are features where OpenFang can leapfrog OpenClaw.
    - `openfang_errors_total` counter (by type)
 2. Optional: OTLP export for tracing spans
 
-**Files:** `modules/agent-engine/openfang-api/src/routes.rs`, new `metrics.rs` module
+**Files:** `crates/openfang-api/src/routes.rs`, new `metrics.rs` module
 
 **Done when:**
 - `/api/metrics` returns valid Prometheus text format
@@ -331,7 +331,7 @@ These are features where OpenFang can leapfrog OpenClaw.
 2. UI: session switcher tabs in chat header
 3. API: `/api/agents/{id}/sessions` list, `/api/agents/{id}/sessions/{label}` CRUD
 
-**Files:** `modules/agent-engine/openfang-kernel/src/kernel.rs`, `routes.rs`, `ws.rs`, `index_body.html`
+**Files:** `crates/openfang-kernel/src/kernel.rs`, `routes.rs`, `ws.rs`, `index_body.html`
 
 ---
 
@@ -347,7 +347,7 @@ These are features where OpenFang can leapfrog OpenClaw.
 3. Log what was reloaded
 4. UI notification: "Config reloaded"
 
-**Files:** `modules/agent-engine/openfang-api/src/server.rs`, `modules/agent-engine/openfang-types/src/config.rs`
+**Files:** `crates/openfang-api/src/server.rs`, `crates/openfang-types/src/config.rs`
 
 ---
 

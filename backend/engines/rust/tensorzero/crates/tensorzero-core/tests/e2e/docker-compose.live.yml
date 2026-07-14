@@ -163,7 +163,7 @@ services:
     image: tensorzero/live-tests:${TENSORZERO_COMMIT_TAG}
     build:
       context: ../../../..
-      dockerfile: modules/inference/tensorzero-core/tests/e2e/Dockerfile.live
+      dockerfile: crates/tensorzero-core/tests/e2e/Dockerfile.live
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}

@@ -1,6 +1,6 @@
 # SOCIAL module
 
-**Domain owner.** Uses the OSS engine(s) **in place** (never copied): modules/social/openclaw (connectors)
+**Domain owner.** Uses the OSS engine(s) **in place** (never copied): apps/desktop/engines/openclaw (connectors)
 
 **Interface:** `channels · connect · onInbound · send · dispatchToConductor · health`
 

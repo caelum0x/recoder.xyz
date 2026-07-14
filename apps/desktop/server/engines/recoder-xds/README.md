@@ -49,7 +49,7 @@ internal/server/        ADS gRPC server over a go-control-plane SnapshotCache
 ## Run
 
 ```bash
-cd modules/networking/recoder-xds
+cd apps/desktop/server/engines/recoder-xds
 go build ./...
 
 # Env-derived defaults (matches the static generator's defaultNetworkConfig):

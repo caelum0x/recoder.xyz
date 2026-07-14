@@ -8,7 +8,7 @@
 //!
 //! These tests run in their own `db-only-boot` nextest profile against
 //! a dedicated docker-compose stack
-//! (`modules/inference/tensorzero-core/tests/e2e/docker-compose.db-only-boot.yml`)
+//! (`crates/tensorzero-core/tests/e2e/docker-compose.db-only-boot.yml`)
 //! that omits the `gateway-migrate-config` step and drops the on-disk
 //! config/template bind mounts. They do not run in the regular live
 //! suite, which uses the TOML-config gateway.

@@ -1,6 +1,6 @@
 # INFERENCE module
 
-**Domain owner.** Uses the OSS engine(s) **in place** (never copied): modules/inference/tensorzero
+**Domain owner.** Uses the OSS engine(s) **in place** (never copied): backend/engines/rust/tensorzero
 
 **Interface:** `infer · stream · feedback · models · health`
 

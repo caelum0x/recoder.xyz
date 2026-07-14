@@ -29,7 +29,7 @@ was unavailable.
 
 ### xDS control plane (`recoder-xds`)
 
-`modules/networking/recoder-xds` is a real Envoy [xDS](https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol)
+`apps/desktop/server/engines/recoder-xds` is a real Envoy [xDS](https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol)
 control plane (built on the official `go-control-plane`). It serves **dynamic**
 LDS/CDS/RDS over ADS gRPC so a running Envoy receives live listener/cluster/route
 updates **without a restart**, mirroring the `NetworkConfig` that
@@ -49,7 +49,7 @@ updates **without a restart**, mirroring the `NetworkConfig` that
 
 ### Governance daemon (`recoder-governance`)
 
-`modules/governance/recoder-governance/recoder-governance-daemon` is the owned **Rust
+`backend/engines/rust/recoder-governance/recoder-governance-daemon` is the owned **Rust
 governance daemon**: it boots a deny-biased `GovernanceKernel` and serves the typed
 IPC over a Unix-domain socket at `$GOVERNANCE_SOCKET`.
 
@@ -307,8 +307,8 @@ python3 -c "import yaml; yaml.safe_load(open('deploy/envoy/envoy.selfhost.yaml')
 python3 -c "import yaml; yaml.safe_load(open('deploy/envoy/envoy.xds.yaml'))"
 
 # Build/run the daemons directly (proves the binaries are real, not stubs):
-( cd modules/networking/recoder-xds && CGO_ENABLED=0 go build ./cmd/recoder-xds )
-( cd modules/governance/recoder-governance && cargo build --release -p recoder-governance-daemon )
+( cd apps/desktop/server/engines/recoder-xds && CGO_ENABLED=0 go build ./cmd/recoder-xds )
+( cd backend/engines/rust/recoder-governance && cargo build --release -p recoder-governance-daemon )
 
 # Packer template (if packer is installed):
 packer validate deploy/packer/recoder.pkr.hcl

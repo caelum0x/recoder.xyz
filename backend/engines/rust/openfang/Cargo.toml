@@ -14,16 +14,16 @@
 [workspace]
 resolver = "2"
 members = [
-    "modules/agent-engine/openfang-types",
-    "modules/agent-engine/openfang-memory",
-    "modules/agent-engine/openfang-runtime",
-    "modules/agent-engine/openfang-wire",
-    "modules/agent-engine/openfang-channels",
-    "modules/agent-engine/openfang-skills",
-    "modules/agent-engine/openfang-hands",
-    "modules/agent-engine/openfang-extensions",
-    "modules/agent-engine/openfang-kernel",
-    "modules/agent-engine/openfang-napi",
+    "crates/openfang-types",
+    "crates/openfang-memory",
+    "crates/openfang-runtime",
+    "crates/openfang-wire",
+    "crates/openfang-channels",
+    "crates/openfang-skills",
+    "crates/openfang-hands",
+    "crates/openfang-extensions",
+    "crates/openfang-kernel",
+    "crates/openfang-napi",
 ]
 
 [workspace.package]

@@ -131,7 +131,7 @@ jobs:
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
-          projectPath: modules/agent-engine/openfang-desktop
+          projectPath: crates/openfang-desktop
           args: ${{ matrix.platform.args }}
 
   # ── CLI Binary (7 platforms) ──────────────────────────────────────────────

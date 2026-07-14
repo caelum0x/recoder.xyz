@@ -111,7 +111,7 @@ env:
   TENSORZERO_INTERNAL_TEST_OBSERVABILITY_BACKEND: postgres
   # Two compose files are merged: the standard live setup plus the override
   # that swaps the gateway onto the config-in-database boot path.
-  COMPOSE_FILES: "-f modules/inference/tensorzero-core/tests/e2e/docker-compose.live.yml -f modules/inference/tensorzero-core/tests/e2e/docker-compose.config-in-db.yml"
+  COMPOSE_FILES: "-f crates/tensorzero-core/tests/e2e/docker-compose.live.yml -f crates/tensorzero-core/tests/e2e/docker-compose.config-in-db.yml"
 
 jobs:
   live-tests-config-in-database:

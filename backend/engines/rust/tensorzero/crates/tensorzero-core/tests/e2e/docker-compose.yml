@@ -6,7 +6,7 @@ services:
     image: tensorzero/mock-provider-api:${TENSORZERO_MOCK_PROVIDER_API_TAG:-latest}
     build:
       context: ../../../../
-      dockerfile: modules/inference/tensorzero-core/tests/mock-provider-api/Dockerfile
+      dockerfile: crates/tensorzero-core/tests/mock-provider-api/Dockerfile
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /app/gcp_jwt_key.json
       RUST_LOG: debug

@@ -118,7 +118,7 @@ mod imp {
     ///    evaluators can compare the two directly.
     ///
     /// The `tensorzero-ts-types` bundles are generated at build time from the
-    /// `ts-rs`-emitted `.ts` files under `modules/inference/tensorzero-node/lib/bindings/`,
+    /// `ts-rs`-emitted `.ts` files under `crates/tensorzero-node/lib/bindings/`,
     /// so the declarations stay in sync with the Rust types automatically.
     fn evaluator_ambient_declarations() -> String {
         let stdlib = build_code_execution_ambient_declarations(&[]);

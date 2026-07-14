@@ -281,7 +281,7 @@ This permits the WebView to load content from the localhost API server while blo
 ### Development
 
 ```bash
-cd modules/agent-engine/openfang-desktop
+cd crates/openfang-desktop
 cargo tauri dev
 ```
 
@@ -290,7 +290,7 @@ This launches the app with hot-reload support. The console window is visible in 
 ### Production Build
 
 ```bash
-cd modules/agent-engine/openfang-desktop
+cd crates/openfang-desktop
 cargo tauri build
 ```
 
@@ -379,7 +379,7 @@ The codebase includes conditional compilation guards for mobile platform support
 ## File Structure
 
 ```
-modules/agent-engine/openfang-desktop/
+crates/openfang-desktop/
   build.rs                 # tauri_build::build()
   Cargo.toml               # Crate dependencies and metadata
   tauri.conf.json           # Tauri app configuration

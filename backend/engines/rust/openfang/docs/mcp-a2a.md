@@ -36,10 +36,10 @@ The Model Context Protocol (MCP) is a JSON-RPC 2.0 based protocol that standardi
 OpenFang implements MCP protocol version `2024-11-05`.
 
 **Source files:**
-- Client: `modules/agent-engine/openfang-runtime/src/mcp.rs`
-- Server handler: `modules/agent-engine/openfang-runtime/src/mcp_server.rs`
-- CLI server: `modules/agent-engine/openfang-cli/src/mcp.rs`
-- Config types: `modules/agent-engine/openfang-types/src/config.rs` (`McpServerConfigEntry`, `McpTransportEntry`)
+- Client: `crates/openfang-runtime/src/mcp.rs`
+- Server handler: `crates/openfang-runtime/src/mcp_server.rs`
+- CLI server: `crates/openfang-cli/src/mcp.rs`
+- Config types: `crates/openfang-types/src/config.rs` (`McpServerConfigEntry`, `McpTransportEntry`)
 
 ---
 
@@ -462,9 +462,9 @@ OpenFang implements A2A in both directions:
 - **As a client**: Discovers external A2A agents at boot time, sends tasks to them, and polls for results.
 
 **Source files:**
-- Protocol types and logic: `modules/agent-engine/openfang-runtime/src/a2a.rs`
-- API routes: `modules/agent-engine/openfang-api/src/routes.rs`
-- Config types: `modules/agent-engine/openfang-types/src/config.rs` (`A2aConfig`, `ExternalAgent`)
+- Protocol types and logic: `crates/openfang-runtime/src/a2a.rs`
+- API routes: `crates/openfang-api/src/routes.rs`
+- Config types: `crates/openfang-types/src/config.rs` (`A2aConfig`, `ExternalAgent`)
 
 ---
 

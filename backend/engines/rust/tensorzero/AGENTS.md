@@ -31,7 +31,7 @@
 - Use `_` instead of `-` in API routes.
 - Use `#[derive(ts_rs::TS)]` for ts-rs exports.
 - For any `Option` types visible from the frontend, include `#[ts(export, optional_fields)]` and `#[serde(skip_serializing_if = "Option::is_none")]` so `None` values are not returned over the wire. In very rare cases we may decide do return `null`s, but in general we want to omit them.
-- Some tests make HTTP requests to the gateway; to start the gateway, you can run `cargo run-e2e`. (This gateway has dependencies on some docker containers, and it's appropriate to ask the user to run `docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.yml up`.)
+- Some tests make HTTP requests to the gateway; to start the gateway, you can run `cargo run-e2e`. (This gateway has dependencies on some docker containers, and it's appropriate to ask the user to run `docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.yml up`.)
 - We use RFC 3339 as the standard format for datetime.
 
 ## The responsibility between API handlers and database interfaces
@@ -62,8 +62,8 @@ We use `uv` to manage Python dependencies.
 
 We use `ts-rs` and `n-api` for TypeScript-Rust interoperability.
 
-- To generate TypeScript type definitions from Rust types, run `pnpm build-bindings`. Then, rebuild `tensorzero-node` with `pnpm -r build`. The generated type definitions will live in `modules/inference/tensorzero-node/lib/bindings/`.
-- To generate implementations for `n-api` functions to be called in TypeScript, and package types in `modules/inference/tensorzero-node` for UI, run `pnpm --filter=@tensorzero/tensorzero-node run build`.
+- To generate TypeScript type definitions from Rust types, run `pnpm build-bindings`. Then, rebuild `tensorzero-node` with `pnpm -r build`. The generated type definitions will live in `crates/tensorzero-node/lib/bindings/`.
+- To generate implementations for `n-api` functions to be called in TypeScript, and package types in `crates/tensorzero-node` for UI, run `pnpm --filter=@tensorzero/tensorzero-node run build`.
 - Remember to run `pnpm -r typecheck` to make sure TypeScript and Rust implementations agree on types. Prefer to maintain all types in Rust.
 
 # CI/CD

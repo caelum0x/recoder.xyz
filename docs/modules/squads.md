@@ -1,6 +1,6 @@
 # SQUADS module
 
-**Domain owner.** Uses the OSS engine(s) **in place** (never copied): modules/squads/multica (ported into conductor)
+**Domain owner.** Uses the OSS engine(s) **in place** (never copied): apps/desktop/server/engines/multica (ported into conductor)
 
 **Interface:** `createSquad · assign · autopilot · board · health`
 

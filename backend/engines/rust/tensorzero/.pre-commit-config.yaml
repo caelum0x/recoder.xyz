@@ -16,14 +16,14 @@ repos:
         exclude: |
           (?x)^(
               examples/production-deployment-k8s-helm/templates/.*\.yaml
-              |modules/inference/tensorzero-core/tests/e2e/docker-compose\.db-only-boot\.yml
+              |crates/tensorzero-core/tests/e2e/docker-compose\.db-only-boot\.yml
           )$
       - id: detect-private-key
         exclude: |
           (?x)^(
-              modules/inference/tensorzero-core/src/providers/gcp_vertex_gemini/mod\.rs|
+              crates/tensorzero-core/src/providers/gcp_vertex_gemini/mod\.rs|
               ci/dummy-gcp-credentials\.json|
-              modules/inference/tensorzero-core/tests/e2e/self-signed-certs/.*
+              crates/tensorzero-core/tests/e2e/self-signed-certs/.*
           )$
       - id: end-of-file-fixer
         exclude: (\.minijinja$|target-check/)

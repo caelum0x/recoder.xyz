@@ -1,6 +1,6 @@
 # NETWORKING module
 
-**Domain owner.** Uses the OSS engine(s) **in place** (never copied): modules/networking/ziti + modules/networking/recoder-xds (cloud-deferred)
+**Domain owner.** Uses the OSS engine(s) **in place** (never copied): apps/desktop/server/engines/ziti + apps/desktop/server/engines/recoder-xds (cloud-deferred)
 
 **Interface:** `meshStatus · peers · xdsHealth · health`
 

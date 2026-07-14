@@ -77,7 +77,7 @@ jobs:
           tool: cargo-nextest
 
       - name: Launch ClickHouse container for optimization tests
-        run: docker compose -f modules/inference/tensorzero-optimizers/tests/docker-compose.yml up --wait
+        run: docker compose -f crates/tensorzero-optimizers/tests/docker-compose.yml up --wait
 
       - name: Run daily optimization tests
         working-directory: crates
@@ -92,7 +92,7 @@ jobs:
       - name: Print ClickHouse container logs
         if: always()
         continue-on-error: true
-        run: docker compose -f modules/inference/tensorzero-optimizers/tests/docker-compose.yml logs -t
+        run: docker compose -f crates/tensorzero-optimizers/tests/docker-compose.yml logs -t
 
       - name: Log test completion
         if: always()
