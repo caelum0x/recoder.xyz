@@ -1,7 +1,7 @@
 /**
  * claim-coordinator — idempotent task claim with a recovery window.
  *
- * Ports multica's claim semantics (`modules/squads/multica/server/internal/service/task.go`,
+ * Ports multica's claim semantics (`apps/desktop/server/engines/multica/server/internal/service/task.go`,
  * `claimResponseRecoveryWindow = 90s`). We do NOT transpile Go — we port the
  * algorithm:
  *

@@ -1,6 +1,6 @@
 /**
  * xds-contract.ts — the cross-language contract between this package and the
- * owned Go xDS control plane (`modules/networking/recoder-xds`).
+ * owned Go xDS control plane (`apps/desktop/server/engines/recoder-xds`).
  *
  * `envoy-config.ts` emits a fully STATIC Envoy bootstrap (every listener,
  * cluster and route inlined) for a one-shot `envoy -c` boot. That cannot push
@@ -16,8 +16,8 @@
  * the Go `recoder-xds` constants by the contract tests on both sides.
  *
  * The names here MUST stay byte-identical to:
- *   - modules/networking/recoder-xds/internal/server/server.go    (NodeID)
- *   - modules/networking/recoder-xds/internal/snapshot/builder.go (ListenerName / RouteConfigName / VirtualHostName)
+ *   - apps/desktop/server/engines/recoder-xds/internal/server/server.go    (NodeID)
+ *   - apps/desktop/server/engines/recoder-xds/internal/snapshot/builder.go (ListenerName / RouteConfigName / VirtualHostName)
  * Changing one without the other silently breaks the data plane <-> control
  * plane handshake, so the contract tests fail fast on any drift.
  */

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the Conductor's pinned substrate binaries: the vendored tmux (modules/terminal/tmux/tmux)
-# and the reproducible bd / beads binary (modules/memory/beads/bin/bd).
+# and the reproducible bd / beads binary (apps/desktop/server/engines/beads/bin/bd).
 #
 # WHY THIS EXISTS
 # ---------------
@@ -38,7 +38,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 TMUX_BIN="$REPO_ROOT/modules/terminal/tmux/tmux"
-BD_BIN_OUT="${RECODER_BD_OUT:-$REPO_ROOT/modules/memory/beads/bin/bd}"
+BD_BIN_OUT="${RECODER_BD_OUT:-$REPO_ROOT/apps/desktop/server/engines/beads/bin/bd}"
 
 FORCE="${SUBSTRATE_FORCE:-0}"
 STRICT="${SUBSTRATE_STRICT:-0}"
@@ -97,8 +97,8 @@ build_bd() {
     info "bd build skipped (SUBSTRATE_SKIP_BD=1)"
     return 0
   fi
-  if [ ! -f "$REPO_ROOT/modules/memory/beads/cmd/bd/main.go" ]; then
-    warn "vendored beads source missing at modules/memory/beads — cannot build pinned bd"
+  if [ ! -f "$REPO_ROOT/apps/desktop/server/engines/beads/cmd/bd/main.go" ]; then
+    warn "vendored beads source missing at apps/desktop/server/engines/beads — cannot build pinned bd"
     return 1
   fi
   if [ "$FORCE" != "1" ] && is_good "$BD_BIN_OUT"; then
@@ -110,12 +110,12 @@ build_bd() {
     return 1
   fi
 
-  info "building pinned bd from modules/memory/beads"
+  info "building pinned bd from apps/desktop/server/engines/beads"
   if RECODER_BD_OUT="$BD_BIN_OUT" bash "$SCRIPT_DIR/build-bd.sh"; then
     ok "pinned bd built: $BD_BIN_OUT"
     return 0
   fi
-  warn "bd build failed (check Go toolchain version vs modules/memory/beads/go.mod, and a C compiler for cgo); runtime will fall back to system bd"
+  warn "bd build failed (check Go toolchain version vs apps/desktop/server/engines/beads/go.mod, and a C compiler for cgo); runtime will fall back to system bd"
   return 1
 }
 

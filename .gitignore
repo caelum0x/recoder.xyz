@@ -660,8 +660,6 @@ check-errors.sh
 /agent-browser/
 /stagehand/
 /E2B/
-/ziti/
-/beads/
 /mem0/
 /context7/
 /vllm/
@@ -672,7 +670,6 @@ check-errors.sh
 /openfang/
 /RecoderGit/
 /ClawWork/
-/multica/
 
 # Ephemeral workflow worktrees
 .claude/worktrees/
@@ -701,9 +698,6 @@ crates/claw-code-parity/rust/*
 !crates/claw-code-parity/rust/crates/
 crates/claw-code-parity/rust/crates/*
 !crates/claw-code-parity/rust/crates/claw-code-parity-napi/
-go/beads/
-go/ziti/
-go/multica/
 py/pal-mcp-server/
 ts/oh-my-codex/
 ts/open-agents/
@@ -756,3 +750,6 @@ crates/**/target/
 modules/**/.env
 modules/**/.env.*
 !modules/**/.env.example
+apps/desktop/server/engines/**/.env
+apps/desktop/server/engines/**/.env.*
+!apps/desktop/server/engines/**/.env.example

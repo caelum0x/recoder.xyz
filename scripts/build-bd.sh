@@ -1,33 +1,33 @@
 #!/usr/bin/env bash
-# Build the `bd` (beads) issue-tracker binary reproducibly from modules/memory/beads.
+# Build the `bd` (beads) issue-tracker binary reproducibly from apps/desktop/server/engines/beads.
 #
 # The Conductor uses beads (`bd`) for the related-task graph it folds into a
 # BrainContext bundle (backend/src/conductor/bundle.ts). Today the only
 # working `bd` is a developer-local `go install`; this script makes the binary
-# reproducible from the vendored modules/memory/beads source so any host (laptop, CI, the
+# reproducible from the vendored apps/desktop/server/engines/beads source so any host (laptop, CI, the
 # runtime image) can produce an identical, version-stamped binary.
 #
-# Canonical build per modules/memory/beads/.goreleaser.yml and modules/memory/beads/.buildflags:
+# Canonical build per apps/desktop/server/engines/beads/.goreleaser.yml and apps/desktop/server/engines/beads/.buildflags:
 #   - main package:  ./cmd/bd
 #   - CGO_ENABLED=1  (embedded Dolt engine requires cgo; .buildflags defaults it)
 #   - -tags gms_pure_go  (go-mysql-server stdlib regex, no ICU — see docs/ICU-POLICY.md)
 #   - ldflags inject main.Version / main.Build / main.Commit / main.Branch
 #
-# We do NOT modify the modules/memory/beads source (it is a pinned upstream clone). We only
+# We do NOT modify the apps/desktop/server/engines/beads source (it is a pinned upstream clone). We only
 # source its own .buildflags and invoke `go build`.
 #
-# Produces: modules/memory/beads/bin/bd  (override with RECODER_BD_OUT=/path/to/bd)
-# Requires: a Go toolchain matching modules/memory/beads/go.mod, plus a C compiler (cgo).
+# Produces: apps/desktop/server/engines/beads/bin/bd  (override with RECODER_BD_OUT=/path/to/bd)
+# Requires: a Go toolchain matching apps/desktop/server/engines/beads/go.mod, plus a C compiler (cgo).
 #
 # Usage:
-#   ./scripts/build-bd.sh                      # build to modules/memory/beads/bin/bd
+#   ./scripts/build-bd.sh                      # build to apps/desktop/server/engines/beads/bin/bd
 #   RECODER_BD_OUT=/usr/local/bin/bd ./scripts/build-bd.sh
 #   CGO_ENABLED=0 ./scripts/build-bd.sh        # server-only (no embedded Dolt)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-BEADS_SRC="$REPO_ROOT/modules/memory/beads"
+BEADS_SRC="$REPO_ROOT/apps/desktop/server/engines/beads"
 
 OUT="${RECODER_BD_OUT:-$BEADS_SRC/bin/bd}"
 
@@ -38,7 +38,7 @@ fi
 
 if ! command -v go >/dev/null 2>&1; then
   echo "✗ go toolchain not found on PATH" >&2
-  echo "  Install Go matching modules/memory/beads/go.mod (see 'go' directive in that file)." >&2
+  echo "  Install Go matching apps/desktop/server/engines/beads/go.mod (see 'go' directive in that file)." >&2
   exit 1
 fi
 

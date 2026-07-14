@@ -16,7 +16,7 @@ import {
 import { generateEnvoyConfig, defaultNetworkConfig } from '../src/envoy-config';
 
 /**
- * The Go xDS control plane (modules/networking/recoder-xds) writes its canonical name contract
+ * The Go xDS control plane (apps/desktop/server/engines/recoder-xds) writes its canonical name contract
  * to internal/contract/contract.json (guarded there by a Go golden test). This
  * suite reads those exact bytes and asserts the TypeScript constants in
  * xds-contract.ts agree — so a name change on either side fails CI on both.
@@ -35,7 +35,7 @@ interface GoContract {
 const here = dirname(fileURLToPath(import.meta.url));
 const goContractPath = resolve(
   here,
-  '../../../modules/networking/recoder-xds/internal/contract/contract.json',
+  '../../../apps/desktop/server/engines/recoder-xds/internal/contract/contract.json',
 );
 const goContract = JSON.parse(readFileSync(goContractPath, 'utf8')) as GoContract;
 
