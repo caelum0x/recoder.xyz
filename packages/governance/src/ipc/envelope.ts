@@ -4,7 +4,7 @@
  *
  * This is the SINGLE pinned shape both sides serialize. The Rust daemon is the
  * SOURCE OF TRUTH for this wire (see
- * `modules/governance/recoder-governance/recoder-governance-ipc/src/{envelope,method,dispatch}.rs`).
+ * `backend/engines/rust/recoder-governance/recoder-governance-ipc/src/{envelope,method,dispatch}.rs`).
  * This file mirrors the daemon's `serde` structs EXACTLY so the TS client speaks
  * the daemon's real wire natively — no protocol-translation shim:
  *

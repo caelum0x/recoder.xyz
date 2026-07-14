@@ -39,8 +39,8 @@ const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const NAPI_CRATES = [
   {
     name: 'recoder-governance-napi',
-    crateDir: 'crates/recoder-governance/recoder-governance-napi',
-    outputNode: 'crates/recoder-governance/target/release/recoder-governance-napi.node',
+    crateDir: 'backend/engines/rust/recoder-governance/recoder-governance-napi',
+    outputNode: 'backend/engines/rust/recoder-governance/target/release/recoder-governance-napi.node',
   },
   {
     name: 'lance-npm-bindings',

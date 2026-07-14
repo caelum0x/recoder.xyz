@@ -1,5 +1,5 @@
 /**
- * Confidence ladder + expert-escalation gate ported from modules/communication/pal-mcp-server.
+ * Confidence ladder + expert-escalation gate ported from backend/engines/py/pal-mcp-server.
  *
  * Sources:
  * - tools/workflow/schema_builders.py:68 (confidence enum)

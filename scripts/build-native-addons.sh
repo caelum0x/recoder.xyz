@@ -44,21 +44,21 @@ build_one() {
 target="${1:-all}"
 
 build_governance() {
-  build_one "modules/governance/recoder-governance" "recoder-governance-napi" \
+  build_one "backend/engines/rust/recoder-governance" "recoder-governance-napi" \
     "librecoder_governance_napi" \
-    "$REPO/modules/governance/recoder-governance/target/release/recoder-governance-napi.node"
+    "$REPO/backend/engines/rust/recoder-governance/target/release/recoder-governance-napi.node"
 }
 build_tensorzero() {
   # SQLX_OFFLINE: tensorzero-auth sqlx macros need the committed .sqlx cache
   # (and the ancestor-.env walk must stay dotenvy-parseable — see memory).
-  SQLX_OFFLINE=1 build_one "modules/inference/tensorzero/crates" "tensorzero-gateway-napi" \
+  SQLX_OFFLINE=1 build_one "backend/engines/rust/tensorzero/crates" "tensorzero-gateway-napi" \
     "libtensorzero_gateway_napi" \
-    "$REPO/modules/inference/tensorzero/crates/target/release/tensorzero_gateway_napi.node"
+    "$REPO/backend/engines/rust/tensorzero/crates/target/release/tensorzero_gateway_napi.node"
 }
 build_openfang() {
-  build_one "modules/agent-engine/openfang" "openfang-napi" \
+  build_one "backend/engines/rust/openfang" "openfang-napi" \
     "libopenfang_napi" \
-    "$REPO/modules/agent-engine/openfang/target/release/openfang_napi.node"
+    "$REPO/backend/engines/rust/openfang/target/release/openfang_napi.node"
 }
 
 rc=0

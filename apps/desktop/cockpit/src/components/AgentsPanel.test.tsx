@@ -125,7 +125,7 @@ describe('AgentsPanel', () => {
           body: {
             success: false,
             error:
-              'openfang daemon is not running. Build modules/agent-engine/openfang or set OPENFANG_BIN to enable the autonomous agent engine.',
+              'openfang daemon is not running. Build backend/engines/rust/openfang or set OPENFANG_BIN to enable the autonomous agent engine.',
           },
         });
       }

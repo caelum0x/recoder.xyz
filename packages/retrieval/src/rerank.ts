@@ -1,7 +1,7 @@
 /**
  * rerank — the late-interaction reranking seam. `createColbertReranker` POSTs the
  * query + candidate passages to a ColBERT `/rerank` HTTP service (env
- * `COLBERT_RERANK_URL`, see `modules/memory/colbert/rerank_server.py`) and reorders candidates
+ * `COLBERT_RERANK_URL`, see `backend/engines/py/colbert/rerank_server.py`) and reorders candidates
  * by the returned scores. When no URL is configured, or on ANY failure (network,
  * timeout, non-2xx, malformed body), it degrades to identity order — the reranker
  * never throws and never blocks search.

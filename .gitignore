@@ -660,14 +660,11 @@ check-errors.sh
 /agent-browser/
 /stagehand/
 /E2B/
-/mem0/
 /context7/
 /vllm/
 /ollama/
 /polar/
-/pal-mcp-server/
 /pi/
-/openfang/
 /RecoderGit/
 /ClawWork/
 
@@ -684,12 +681,6 @@ packages/a2a-js/dist/
 # --- Owned component sources, organized by language (2026-06-24) ---
 # Gitignored: large + Mac disk-constrained. Fused/owned code lands in tracked
 # packages/ subsystems; we edit these in place as ours.
-crates/openfang/*
-!crates/openfang/Cargo.toml
-!crates/openfang/Cargo.lock
-!crates/openfang/crates/
-crates/openfang/crates/*
-!crates/openfang/crates/openfang-napi/
 crates/claw-code-parity/*
 !crates/claw-code-parity/rust/
 crates/claw-code-parity/rust/*
@@ -698,41 +689,9 @@ crates/claw-code-parity/rust/*
 !crates/claw-code-parity/rust/crates/
 crates/claw-code-parity/rust/crates/*
 !crates/claw-code-parity/rust/crates/claw-code-parity-napi/
-py/pal-mcp-server/
 ts/oh-my-codex/
 ts/open-agents/
 ts/polar/
-
-# --- py/ops-recorder: SOURCE is owned + committable (2026-06-29) ---
-# Re-include source (*.py, requirements/pyproject, README, .sql migrations,
-# .env.example) while keeping venv/__pycache__/.env/secrets/data ignored.
-# Unlike the other owned-component dirs above, this one's work-signals code
-# (api/ingest + detectors/normalizers/storage) must land in the repo.
-!py/ops-recorder/
-!py/ops-recorder/**/
-!py/ops-recorder/**/*.py
-!py/ops-recorder/**/requirements*.txt
-!py/ops-recorder/**/pyproject.toml
-!py/ops-recorder/**/*.cfg
-!py/ops-recorder/**/*.toml
-!py/ops-recorder/**/*.md
-!py/ops-recorder/**/*.sql
-!py/ops-recorder/**/.env.example
-# Re-ignore the noise (negations above could otherwise pull these back in).
-py/ops-recorder/**/__pycache__/
-py/ops-recorder/**/*.py[cod]
-py/ops-recorder/**/.pytest_cache/
-py/ops-recorder/**/.venv/
-py/ops-recorder/**/venv/
-py/ops-recorder/**/env/
-py/ops-recorder/**/.env
-py/ops-recorder/**/.env.*
-!py/ops-recorder/**/.env.example
-py/ops-recorder/**/.DS_Store
-py/ops-recorder/**/*.egg-info/
-py/ops-recorder/**/data/
-py/ops-recorder/**/*.key
-py/ops-recorder/**/*.pem
 
 # RecoderGit per-repo index (runtime dir; build artifacts are covered by the
 # engine's own .gitignore at apps/desktop/engines/recodergit/)
@@ -745,9 +704,9 @@ crates/**/target/
 .dmux/
 
 # moved-engine env files (never commit)
-modules/**/.env
-modules/**/.env.*
-!modules/**/.env.example
+backend/engines/**/.env
+backend/engines/**/.env.*
+!backend/engines/**/.env.example
 apps/desktop/server/engines/**/.env
 apps/desktop/server/engines/**/.env.*
 !apps/desktop/server/engines/**/.env.example

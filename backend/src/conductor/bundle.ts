@@ -207,7 +207,7 @@ export async function enrichPrompt(input: EnrichPromptInput): Promise<EnrichedPr
       const recall = await mem0Search(input.prompt, { userId: input.userId }, 5);
       if (recall.available && recall.results.length) {
         // ColBERT late-interaction rerank of the recalled memories against the
-        // prompt — a genuine call to the optional modules/memory/colbert service when
+        // prompt — a genuine call to the optional backend/engines/py/colbert service when
         // COLBERT_RERANK_URL is set. Degrade-safe: unset/down → mem0's order.
         const texts = recall.results.map((r) => r.memory);
         const reranked = await colbertRerank(input.prompt, texts);

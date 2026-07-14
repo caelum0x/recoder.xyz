@@ -1,5 +1,5 @@
 /**
- * Consensus validation rules ported from modules/communication/pal-mcp-server tools/consensus.py.
+ * Consensus validation rules ported from backend/engines/py/pal-mcp-server tools/consensus.py.
  *
  * - Step 1 must supply the models list.
  * - Stance is 'for' | 'against' | 'neutral' (default 'neutral').

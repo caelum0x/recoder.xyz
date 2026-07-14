@@ -67,7 +67,7 @@ export interface NapiApprovalManagerInstance {
  *   1. `RECODER_NATIVE_DIR` env var — explicit override for CI / custom layouts.
  *   2. `process.resourcesPath` — Electron packaged app: addons land under
  *      Resources/native/ via extraResources in the electron-builder config.
- *   3. Monorepo dev path (`modules/governance/recoder-governance/target/release/...`),
+ *   3. Monorepo dev path (`backend/engines/rust/recoder-governance/target/release/...`),
  *      derived at runtime so the file is not tied to a hardcoded developer home.
  *   4. Co-located `.node` next to the compiled JS (production deploy layout).
  *
@@ -117,7 +117,9 @@ function buildCandidatePaths(): string[] {
       candidates.push(
         nodePath.join(
           workspaceRoot,
-          'crates',
+          'backend',
+          'engines',
+          'rust',
           'recoder-governance',
           'target',
           'release',
@@ -147,7 +149,9 @@ function buildCandidatePaths(): string[] {
       candidates.push(
         nodePath.join(
           workspaceRoot,
-          'crates',
+          'backend',
+          'engines',
+          'rust',
           'recoder-governance',
           'target',
           'release',

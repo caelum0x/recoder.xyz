@@ -13,11 +13,11 @@ import {
 import { ExternalMcpProcessManager } from "../src/mcp/external/process-manager";
 
 test("buildPalServerConfig produces a well-formed external server config", () => {
-  const config = buildPalServerConfig({ rootDir: "/opt/modules/communication/pal-mcp-server" });
+  const config = buildPalServerConfig({ rootDir: "/opt/backend/engines/py/pal-mcp-server" });
   assert.equal(config.serverId, PAL_SERVER_ID);
-  assert.equal(config.cwd, "/opt/modules/communication/pal-mcp-server");
+  assert.equal(config.cwd, "/opt/backend/engines/py/pal-mcp-server");
   assert.deepEqual(config.args, ["server.py"]);
-  assert.equal(config.command, defaultPalPythonPath("/opt/modules/communication/pal-mcp-server"));
+  assert.equal(config.command, defaultPalPythonPath("/opt/backend/engines/py/pal-mcp-server"));
   // All 18 real PAL tools are present in the trusted allowlist.
   assert.equal(config.toolNames.length, 18);
   assert.deepEqual([...config.toolNames].sort(), [...PAL_TOOL_NAMES].sort());

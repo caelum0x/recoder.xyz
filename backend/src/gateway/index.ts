@@ -1,7 +1,7 @@
 /**
  * @module gateway
  *
- * Public surface of the BYOK LLM Gateway skin over `modules/inference/tensorzero`
+ * Public surface of the BYOK LLM Gateway skin over `backend/engines/rust/tensorzero`
  * (RECODER-ENGINES E15). All model + embedding calls route through the
  * `LlmGatewayPort`; when no gateway endpoint is configured the client degrades
  * safely so callers fall back to a direct BYOK provider / pi-ai.

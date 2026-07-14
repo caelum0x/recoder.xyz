@@ -1291,7 +1291,7 @@ export function createConductorRouter(): Router {
   });
 
   // --- Work signals: thin in-process ingest for stuck/blocked/needs-handoff ---
-  // INTEGRATION-PLAN §d.4: modules/signals/ops-recorder stays the richer DETECTOR; this is the
+  // INTEGRATION-PLAN §d.4: backend/engines/py/ops-recorder stays the richer DETECTOR; this is the
   // lightweight TS INGEST it posts to. A signal is recorded to canonical agent-os
   // state (as a `handoff` RunEvent on the task's run) and triggers a coordination
   // pickup handoff so a stuck workspace can be re-dispatched. Degrade-safe end to

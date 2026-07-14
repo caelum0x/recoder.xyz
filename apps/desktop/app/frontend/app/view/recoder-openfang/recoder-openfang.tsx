@@ -9,7 +9,7 @@ const STATUS_MESSAGES: Record<EngineStatus, string> = {
     loading: "",
     ok: "",
     "engine-down":
-        "OpenFang engine not built — run `cargo build -p openfang-napi` in modules/agent-engine/openfang to compile the engine into the backend.",
+        "OpenFang engine not built — run `cargo build -p openfang-napi` in backend/engines/rust/openfang to compile the engine into the backend.",
     down: "Not connected — start the Recoder backend to reach OpenFang.",
 };
 

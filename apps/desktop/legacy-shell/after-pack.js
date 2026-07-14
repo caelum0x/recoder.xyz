@@ -264,7 +264,7 @@ exports.default = async function afterPack(context) {
     console.warn(
       `[after-pack] WARNING: NAPI governance addon NOT found at ${governanceNapiNode}. ` +
         'The packaged app will degrade to the TS fallback path for governance decisions. ' +
-        'Build crates/recoder-governance/recoder-governance-napi with `cargo build --release` ' +
+        'Build backend/engines/rust/recoder-governance/recoder-governance-napi with `cargo build --release` ' +
         'before packaging to include the native addon.',
     );
   }

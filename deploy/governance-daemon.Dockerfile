@@ -1,6 +1,6 @@
 # Recoder governance daemon image (self-host).
 #
-# The owned Rust governance daemon (crates/recoder-governance/recoder-governance-daemon)
+# The owned Rust governance daemon (backend/engines/rust/recoder-governance/recoder-governance-daemon)
 # boots a deny-biased GovernanceKernel and serves the typed IPC over a Unix-domain
 # socket at $GOVERNANCE_SOCKET. The backend's @recoder/governance facade delegates
 # to that socket when GOVERNANCE_SOCKET is set, and falls back to its pure-TS
@@ -13,11 +13,11 @@
 #     + recoder-xds. Adding a full Rust toolchain (rustup + cargo + the std build)
 #     to that stage would bloat the build cache and slow every backend rebuild.
 #   - The governance crate is a self-contained cargo workspace under
-#     crates/recoder-governance/ with a tiny dependency surface (tokio minimal +
+#     backend/engines/rust/recoder-governance/ with a tiny dependency surface (tokio minimal +
 #     sha2/serde) — it builds fast and small (~1.4MB binary) in isolation here.
 #
 # Build context is the REPO ROOT (see docker-compose.selfhost.yml) so this can copy
-# crates/recoder-governance/.
+# backend/engines/rust/recoder-governance/.
 #
 # CRITICAL — peer-cred / uid: the daemon pins its IPC accept loop to its OWN uid
 # (geteuid). For the backend container to connect over the shared socket volume,
@@ -31,8 +31,8 @@ FROM rust:1-bookworm AS build
 WORKDIR /src
 # Copy only the governance cargo workspace (keeps the layer cache tight; this
 # workspace has its own Cargo.toml/Cargo.lock and no path deps outside itself).
-COPY crates/recoder-governance/ ./crates/recoder-governance/
-WORKDIR /src/crates/recoder-governance
+COPY backend/engines/rust/recoder-governance/ ./backend/engines/rust/recoder-governance/
+WORKDIR /src/backend/engines/rust/recoder-governance
 # Build just the daemon binary in release. The workspace's tiny dep surface keeps
 # this fast. A real, optimized binary — no stubs.
 RUN cargo build --release -p recoder-governance-daemon \

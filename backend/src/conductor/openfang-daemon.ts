@@ -1,6 +1,6 @@
 /**
  * OpenFang daemon spawn seam — supervise the embedded autonomous agent engine
- * (`modules/agent-engine/openfang`) as a loopback HTTP subprocess, keeping Recoder as the
+ * (`backend/engines/rust/openfang`) as a loopback HTTP subprocess, keeping Recoder as the
  * owner of task/approval/memory state while openfang emits RunEvents.
  *
  * A2A BOUNDARY RULE (AGENTS.md + monorepo.md): openfang is a REPLACEABLE
@@ -28,15 +28,15 @@
  *     gate (`oss-dispatch.ts` → `OpenFangAdapter`) — never raw subprocess IO.
  *
  * NATIVE ADDON (preferred path):
- *   When `modules/agent-engine/openfang/modules/agent-engine/openfang-napi/target/(release|debug)/openfang_napi.node`
+ *   When `backend/engines/rust/openfang/crates/openfang-napi/target/(release|debug)/openfang_napi.node`
  *   exists, `oss-dispatch.ts` loads it via `openfang-native.ts` and runs the engine
  *   in-process (no subprocess, no loopback HTTP).  This daemon module is only needed
  *   when the native addon is absent (build deferred, wrong arch, etc.).
  *
  * Resolution order for the binary (first existing wins):
  *   1. `OPENFANG_BIN` env (absolute path to a prebuilt binary).
- *   2. `<repo>/modules/agent-engine/openfang/target/release/openfang`.
- *   3. `<repo>/modules/agent-engine/openfang/target/debug/openfang`.
+ *   2. `<repo>/backend/engines/rust/openfang/target/release/openfang`.
+ *   3. `<repo>/backend/engines/rust/openfang/target/debug/openfang`.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -92,7 +92,7 @@ function findRepoRoot(): string | undefined {
     return undefined;
   }
   for (let i = 0; i < 12; i++) {
-    if (fsExists(pathJoin(dir, 'modules', 'agent-engine', 'openfang', 'Cargo.toml'))) {
+    if (fsExists(pathJoin(dir, 'backend', 'engines', 'rust', 'openfang', 'Cargo.toml'))) {
       return dir;
     }
     const parent = pathDirname(dir);
@@ -116,7 +116,7 @@ export function resolveOpenfangBin(env: NodeJS.ProcessEnv = process.env): string
   if (!root) return undefined;
 
   const { join } = require('node:path') as typeof import('node:path');
-  const base = join(root, 'modules', 'agent-engine', 'openfang', 'target');
+  const base = join(root, 'backend', 'engines', 'rust', 'openfang', 'target');
   const candidates = [
     join(base, 'release', DAEMON_BIN_NAME),
     join(base, 'debug', DAEMON_BIN_NAME),
@@ -192,7 +192,7 @@ async function startOpenfangDaemon(): Promise<OpenfangDaemonHandle | undefined> 
   if (!binPath) {
     logger.info(
       'openfang binary not built — staying on pure-TS OSS dispatch path (degrade-safe). ' +
-        `Set ${OPENFANG_BIN_ENV} or build modules/agent-engine/openfang to enable the autonomous agent engine.`,
+        `Set ${OPENFANG_BIN_ENV} or build backend/engines/rust/openfang to enable the autonomous agent engine.`,
     );
     return undefined;
   }
@@ -352,7 +352,7 @@ export function createOpenfangAgentRouter() {
         status: 'unavailable',
         reason:
           'openfang daemon is not running and the native addon is not built. ' +
-          'Build modules/agent-engine/openfang or set OPENFANG_BIN to enable the autonomous agent engine, ' +
+          'Build backend/engines/rust/openfang or set OPENFANG_BIN to enable the autonomous agent engine, ' +
           'or build openfang-napi for the in-process path.',
       });
       return;
@@ -407,7 +407,7 @@ export function createOpenfangAgentRouter() {
         ok: false,
         reason:
           'openfang engine not booted in-process (native addon absent or no config). ' +
-          'Build with: cd modules/agent-engine/openfang && cargo build -p openfang-napi --release',
+          'Build with: cd backend/engines/rust/openfang && cargo build -p openfang-napi --release',
       });
       return;
     }
@@ -432,7 +432,7 @@ export function createOpenfangAgentRouter() {
       ok: false,
       reason:
         'openfang native addon not built — no in-process Hands available. ' +
-        'Build with: cd modules/agent-engine/openfang && cargo build -p openfang-napi --release',
+        'Build with: cd backend/engines/rust/openfang && cargo build -p openfang-napi --release',
     });
   });
   router.get('/hands/active', (_req: Req, res: Res) => withEngine(res, (e) => e.listActiveHands()));

@@ -20,7 +20,7 @@
  * WHAT THIS ASSERTS (all on the REAL product path + the REAL Rust kernel):
  *
  *   Rust kernel active:
- *     Spawn the prebuilt daemon (modules/governance/recoder-governance/target/release/
+ *     Spawn the prebuilt daemon (backend/engines/rust/recoder-governance/target/release/
  *     recoder-governance-daemon) via the conductor's own seam
  *     (ensureGovernanceDaemon) with GOVERNANCE_DAEMON_FORCE=1 +
  *     GOVERNANCE_ALLOW_INSECURE=1 (local dev). Every verdict below MUST have
@@ -91,7 +91,7 @@ async function main(): Promise<void> {
     console.error(
       '  FAIL: the Rust governance daemon did not come up. Build it first:\n' +
         '    cargo build --release -p recoder-governance-daemon \\\n' +
-        '      --manifest-path modules/governance/recoder-governance/Cargo.toml\n' +
+        '      --manifest-path backend/engines/rust/recoder-governance/Cargo.toml\n' +
         '  and run with GOVERNANCE_ALLOW_INSECURE=1 (local) or INTERNAL_SERVICE_KEY set.',
     );
     process.exit(2);
