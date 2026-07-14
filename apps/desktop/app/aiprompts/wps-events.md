@@ -2,7 +2,7 @@
 
 ## Overview
 
-WPS (Wave PubSub) is Wave Terminal's publish-subscribe event system that enables different parts of the application to communicate asynchronously. The system uses a broker pattern to route events from publishers to subscribers based on event types and scopes.
+WPS (Wave PubSub) is Recoder Terminal's publish-subscribe event system that enables different parts of the application to communicate asynchronously. The system uses a broker pattern to route events from publishers to subscribers based on event types and scopes.
 
 ## Key Files
 
@@ -293,4 +293,4 @@ To debug event flow:
 ## Related Documentation
 
 - [Configuration System](config-system.md) - Uses WPS events for config updates
-- [Wave AI Architecture](waveai-architecture.md) - AI-related events
+- [Recoder AI Architecture](waveai-architecture.md) - AI-related events

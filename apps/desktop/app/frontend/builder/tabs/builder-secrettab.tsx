@@ -149,7 +149,7 @@ const SetSecretDialog = memo(({ secretName, onSetAndMap }: SetSecretDialogProps)
                         disabled={isSubmitting}
                     />
                     <div className="text-xs text-secondary">
-                        Secrets are stored securely in Wave's secret store
+                        Secrets are stored securely in Recoder's secret store
                     </div>
                 </div>
             </div>

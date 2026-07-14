@@ -5,12 +5,12 @@ import { docOgRenderer } from "./src/renderer/image-renderers";
 const baseUrl = process.env.EMBEDDED ? "/docsite/" : "/";
 
 const config: Config = {
-    title: "Wave Terminal Documentation",
+    title: "Recoder Terminal Documentation",
     tagline: "Level Up Your Terminal With Graphical Widgets",
     favicon: "img/logo/wave-logo_appicon.svg",
 
     // Set the production url of your site here
-    url: "https://docs.waveterm.dev/",
+    url: "https://docs.recoder.xyz/",
     // Set the /<baseUrl>/ pathname under which your site is served
     // For GitHub pages deployment, it is often '/<projectName>/'
     baseUrl,
@@ -40,7 +40,7 @@ const config: Config = {
                 path: "docs",
                 routeBasePath: "/",
                 exclude: ["features/**"],
-                editUrl: !process.env.EMBEDDED ? "https://github.com/wavetermdev/waveterm/edit/main/docs/" : undefined,
+                editUrl: undefined,
                 rehypePlugins: [rehypeHighlight],
             } as import("@docusaurus/plugin-content-docs").Options,
         ],
@@ -84,7 +84,7 @@ const config: Config = {
             logo: {
                 src: "img/logo/wave-light.png",
                 srcDark: "img/logo/wave-dark.png",
-                href: "https://www.waveterm.dev/",
+                href: "https://recoder.xyz/",
             },
             hideOnScroll: true,
             items: [
@@ -98,20 +98,8 @@ const config: Config = {
                     ? [
                           {
                               position: "left",
-                              href: "https://docs.waveterm.dev/storybook",
+                              href: "/storybook",
                               label: "Storybook",
-                          },
-                          {
-                              href: "https://discord.gg/zUeP2aAjaP",
-                              position: "right",
-                              className: "header-link-custom custom-icon-discord",
-                              "aria-label": "Discord invite",
-                          },
-                          {
-                              href: "https://github.com/wavetermdev/waveterm",
-                              position: "right",
-                              className: "header-link-custom custom-icon-github",
-                              "aria-label": "GitHub repository",
                           },
                       ]
                     : [],
@@ -121,7 +109,7 @@ const config: Config = {
             {
                 name: "keywords",
                 content:
-                    "terminal, developer, development, command, line, wave, linux, macos, windows, connection, ssh, cli, waveterm, documentation, docs, ai, graphical, widgets, remote, open, source, open-source, go, golang, react, typescript, javascript",
+                    "terminal, developer, development, command, line, recoder, linux, macos, windows, connection, ssh, cli, recoder terminal, documentation, docs, ai, graphical, widgets, remote, open, source, open-source, go, golang, react, typescript, javascript",
             },
             {
                 name: "og:type",
@@ -129,19 +117,19 @@ const config: Config = {
             },
             {
                 name: "og:site_name",
-                content: "Wave Terminal Documentation",
+                content: "Recoder Terminal Documentation",
             },
             {
                 name: "application-name",
-                content: "Wave Terminal Documentation",
+                content: "Recoder Terminal Documentation",
             },
             {
                 name: "apple-mobile-web-app-title",
-                content: "Wave Terminal Documentation",
+                content: "Recoder Terminal Documentation",
             },
         ],
         footer: {
-            copyright: `Copyright © ${new Date().getFullYear()} Command Line Inc. Built with Docusaurus.`,
+            copyright: `Copyright © ${new Date().getFullYear()} Recoder. Derived from Wave Terminal docs (© Command Line Inc). Built with Docusaurus.`,
         },
         algolia: {
             appId: "B6A8512SN4",
@@ -183,7 +171,7 @@ const config: Config = {
             tagName: "script",
             attributes: {
                 defer: "true",
-                "data-domain": "docs.waveterm.dev",
+                "data-domain": "docs.recoder.xyz",
                 src: "https://plausible.io/js/script.file-downloads.outbound-links.tagged-events.js",
             },
         },

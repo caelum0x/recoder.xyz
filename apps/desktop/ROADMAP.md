@@ -1,14 +1,12 @@
-# Wave Terminal Roadmap
+# Recoder Terminal Roadmap
 
-This roadmap outlines major upcoming features and improvements for Wave Terminal. As with any roadmap, priorities and timelines may shift as development progresses.
-
-Want input on the roadmap? Join the discussion on [Discord](https://discord.gg/XfvZ334gwU).
+This roadmap outlines major upcoming features and improvements for Recoder Terminal. As with any roadmap, priorities and timelines may shift as development progresses.
 
 Legend: ✅ Done | 🔧 In Progress | 🔷 Planned | 🤞 Stretch Goal
 
 ## Current AI Capabilities
 
-Wave Terminal's AI assistant is already powerful and continues to evolve. Here's what works today:
+Recoder Terminal's AI assistant is already powerful and continues to evolve. Here's what works today:
 
 ### AI Provider Support
 
@@ -64,10 +62,10 @@ Wave Terminal's AI assistant is already powerful and continues to evolve. Here's
 
 - 🔷 Remote file operations - Read and write files on SSH connections
 - 🔷 Custom AI-powered widgets (Tsunami framework)
-- 🔷 AI Can spawn Wave Blocks
-- 🔷 Drag&Drop from Preview Widgets to Wave AI
+- 🔷 AI Can spawn Recoder Terminal Blocks
+- 🔷 Drag&Drop from Preview Widgets to Recoder AI
 
-### Wave AI Widget Builder
+### Recoder AI Widget Builder
 
 - 🔷 Visual builder for creating custom AI-powered widgets
 - 🔷 Template library for common AI workflows
