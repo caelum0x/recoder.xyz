@@ -10,11 +10,14 @@
  *
  * MIGRATION NOTE: existing panel components (PolicyPanel, MemoryCandidatesPanel,
  * GovernancePanel, SubstratesPanel, ConnectorsPanel, BrainStatsPanel, EventLog,
- * DmuxPanel, SessionsPanel, WorkspaceCenter, Board) are registered here exactly
- * as-is — their implementations are NOT changed. The registry is purely additive.
+ * WorkspaceCenter, Board) are registered here exactly as-is — their
+ * implementations are NOT changed. The registry is purely additive.
+ * RETIRED (wave-desktop fusion §5): the 'sessions' (SessionsPanel) and 'dmux'
+ * (DmuxPanel) terminal-era surfaces — the wave terminal now owns interactive
+ * terminals; the cockpit keeps the HTTP output/chat views only.
  *
  * HEALTH KEYS: the conductor /health/full route returns a ConductorHealth object
- * with top-level keys like `substrate`, `runtimes`, `dmux`, `resources`. These
+ * with top-level keys like `substrate`, `runtimes`, `resources`. These
  * are the valid `healthKey` values. Panels without a direct health key are left
  * as null — the useHealth hook treats null as always-available so it never
  * blocks a panel from loading.
@@ -77,30 +80,8 @@ export const PANEL_REGISTRY: readonly PanelEntry[] = [
       return m.Board as unknown as PanelComponent;
     },
   },
-  {
-    id: 'sessions',
-    title: 'Runs',
-    capability: 'tmux-sessions',
-    healthKey: 'substrate',
-    primary: true,
-    load: async () => {
-      const m = await import('../components/SessionsPanel');
-      return m.SessionsPanel as unknown as PanelComponent;
-    },
-  },
 
   // ── More / advanced views ─────────────────────────────────────────────────
-  {
-    id: 'dmux',
-    title: 'dmux',
-    capability: 'dmux-operator-console',
-    healthKey: 'dmux',
-    primary: false,
-    load: async () => {
-      const m = await import('../components/DmuxPanel');
-      return m.DmuxPanel as unknown as PanelComponent;
-    },
-  },
   {
     id: 'substrates',
     title: 'Agents',

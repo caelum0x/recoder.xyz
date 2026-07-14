@@ -5,7 +5,8 @@ import { createBlock } from "@/app/store/global";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
-import { RecoderViewModel } from "./recoder-model";
+import { RecoderViewModel, type RecoderWorkspace } from "./recoder-model";
+import { openWorkspaceTerminal } from "./recoder-open-terminal";
 
 const AGENT_LABELS: Record<string, string> = {
     "claude-code": "Claude Code",
@@ -36,6 +37,12 @@ function openSession(workspaceId: string) {
 
 function openReview() {
     openBlock({ meta: { view: "recoder-diff" } });
+}
+
+// Attach the workspace's live tmux session as a real wave term block, using the
+// conductor-pinned tmux (from setup health) so we hit the same tmux server.
+function openTerminal(ws: RecoderWorkspace, tmuxBin: string) {
+    openWorkspaceTerminal({ sessionName: ws.sessionName, cwd: ws.worktreePath }, tmuxBin || undefined);
 }
 
 function openLaunch() {
@@ -156,6 +163,14 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         >
                             Session
                         </button>
+                        {ws.sessionName && (
+                            <button
+                                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
+                                onClick={() => openTerminal(ws, setup.tmuxBin)}
+                            >
+                                Terminal
+                            </button>
+                        )}
                         <button
                             className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
                             onClick={() => openReview()}

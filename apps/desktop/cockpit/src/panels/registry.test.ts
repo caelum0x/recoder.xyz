@@ -19,11 +19,12 @@ import {
   getPanelById,
 } from './registry';
 
-/** The full set of panel ids the registry must expose (matches CockpitView). */
+/**
+ * The full set of panel ids the registry must expose (matches CockpitView).
+ * RETIRED (wave-desktop fusion §5): 'sessions' and 'dmux' — asserted absent below.
+ */
 const EXPECTED_IDS = [
   'board',
-  'sessions',
-  'dmux',
   'substrates',
   'governance',
   'policy',
@@ -33,11 +34,22 @@ const EXPECTED_IDS = [
   'connectors',
 ] as const;
 
+/** Terminal-era surfaces the registry must NOT expose any more (fusion §5). */
+const RETIRED_IDS = ['sessions', 'dmux'] as const;
+
 describe('PANEL_REGISTRY structure', () => {
   it('registers all expected panel ids', () => {
     const registeredIds = PANEL_REGISTRY.map((p) => p.id);
     for (const id of EXPECTED_IDS) {
       expect(registeredIds).toContain(id);
+    }
+  });
+
+  it('does NOT register the retired terminal-era surfaces (sessions/dmux)', () => {
+    const registeredIds = PANEL_REGISTRY.map((p) => p.id);
+    for (const id of RETIRED_IDS) {
+      expect(registeredIds).not.toContain(id);
+      expect(getPanelById(id)).toBeUndefined();
     }
   });
 
@@ -77,16 +89,17 @@ describe('PANEL_REGISTRY structure', () => {
 });
 
 describe('PRIMARY_PANEL_IDS and MORE_PANEL_IDS', () => {
-  it('board and sessions are primary', () => {
+  it('board is primary (sessions was retired with the embedded terminals)', () => {
     expect(PRIMARY_PANEL_IDS).toContain('board');
-    expect(PRIMARY_PANEL_IDS).toContain('sessions');
+    expect(PRIMARY_PANEL_IDS).not.toContain('sessions');
   });
 
   it('advanced panels are in the More group', () => {
-    const moreExpected = ['dmux', 'substrates', 'governance', 'policy', 'brain', 'memory', 'events', 'connectors'];
+    const moreExpected = ['substrates', 'governance', 'policy', 'brain', 'memory', 'events', 'connectors'];
     for (const id of moreExpected) {
       expect(MORE_PANEL_IDS).toContain(id);
     }
+    expect(MORE_PANEL_IDS).not.toContain('dmux');
   });
 
   it('primary and more groups are disjoint', () => {

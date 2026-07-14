@@ -4,11 +4,12 @@
  * Both cockpit surfaces that show agent progress observe the SAME conductor
  * session through this module:
  *   - WorkspaceCenter (the center-pane conversation)
- *   - ConversationView (the friendly skin of the detail panel's surface toggle)
+ *   - ConversationView (the friendly chat skin of the detail panel's Chat tab)
  *
- * The full terminal (RecoderTerminal) attaches a PTY to the same tmux session;
- * the friendly views read that session's events here. There is never a second
- * source of truth — only two skins over `mergeEvents(listEvents, openStream)`.
+ * The full terminal lives in the wave host (opened via "Open in terminal") and
+ * attaches to the same tmux session; the friendly views read that session's
+ * events here. There is never a second source of truth — only two skins over
+ * `mergeEvents(listEvents, openStream)`.
  */
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { RunEvent as ConductorRunEvent } from '@recoder/conductor-ui';

@@ -43,6 +43,46 @@ describe('readConfig backendUrl', () => {
     setWindow({ __RECODER_COCKPIT__: { backendUrl: 'https://api.recoder.xyz///' } });
     expect(readConfig().backendUrl).toBe('https://api.recoder.xyz');
   });
+
+  it('defaults to the page origin when served from the backend at /cockpit (any port)', () => {
+    setWindow({
+      location: { protocol: 'http:', pathname: '/cockpit/', origin: 'http://127.0.0.1:4567' },
+    });
+    expect(readConfig().backendUrl).toBe('http://127.0.0.1:4567');
+  });
+
+  it('same-origin fallback covers deep SPA routes under /cockpit', () => {
+    setWindow({
+      location: {
+        protocol: 'http:',
+        pathname: '/cockpit/board/deep',
+        origin: 'http://localhost:9999',
+      },
+    });
+    expect(readConfig().backendUrl).toBe('http://localhost:9999');
+  });
+
+  it('keeps the localhost:3100 default on non-/cockpit http pages', () => {
+    setWindow({
+      location: { protocol: 'http:', pathname: '/', origin: 'http://localhost:5173' },
+    });
+    expect(readConfig().backendUrl).toBe('http://localhost:3100');
+  });
+
+  it('keeps the localhost:3100 default on file:// (Electron loadFile) pages', () => {
+    setWindow({
+      location: { protocol: 'file:', pathname: '/cockpit/dist/index.html', origin: 'null' },
+    });
+    expect(readConfig().backendUrl).toBe('http://localhost:3100');
+  });
+
+  it('injected backendUrl always wins over the same-origin fallback', () => {
+    setWindow({
+      __RECODER_COCKPIT__: { backendUrl: 'http://127.0.0.1:3100' },
+      location: { protocol: 'http:', pathname: '/cockpit/', origin: 'http://127.0.0.1:4567' },
+    });
+    expect(readConfig().backendUrl).toBe('http://127.0.0.1:3100');
+  });
 });
 
 describe('token resolution priority', () => {

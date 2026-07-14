@@ -19,6 +19,8 @@ import {
     incrementTermCommandsWsl,
     setWasActive,
 } from "./emain-activity";
+import { isBackendFrameOrigin } from "./cockpit-origin";
+import { getBackendAuth } from "./emain-backend";
 import { createBuilderWindow, getAllBuilderWindows, getBuilderWindowByWebContentsId } from "./emain-builder";
 import { callWithOriginalXdgCurrentDesktopAsync, unamePlatform } from "./emain-platform";
 import { getWaveTabViewByWebContentsId } from "./emain-tabview";
@@ -193,6 +195,22 @@ function saveImageFileWithNativeDialog(
 }
 
 export function initIpcHandlers() {
+    // Cockpit runtime config: hands {backendUrl, token} to the cockpit page a
+    // webview loaded FROM the backend origin. The senderFrame check is the
+    // authoritative gate (the preload's loopback check is only an optimization)
+    // — any other origin gets null. null also means "backend not READY yet";
+    // the cockpit then truthfully shows its signed-out/unreachable state.
+    electron.ipcMain.handle("recoder:cockpit-config", (event) => {
+        const auth = getBackendAuth();
+        if (auth == null) {
+            return null;
+        }
+        const frameUrl = event.senderFrame?.url ?? "";
+        if (!isBackendFrameOrigin(frameUrl, auth.backendUrl)) {
+            return null;
+        }
+        return { backendUrl: auth.backendUrl, token: auth.apiKey };
+    });
     electron.ipcMain.on("open-external", (event, url) => {
         if (url && typeof url === "string") {
             fireAndForget(() =>

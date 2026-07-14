@@ -3,8 +3,11 @@
  *
  * Conductor-style layout: a green "PR #NN · Ready to merge" header with a Merge
  * button (shown only when the backend state truly allows merging), the
- * "Changes / Diff / Terminal" tabs over a per-file change list (path + "+N" +
- * status icon), the full reviewable diff, and the live Terminal panel.
+ * "Changes / Diff / Run / Chat" tabs over a per-file change list (path + "+N" +
+ * status icon), the full reviewable diff, and the calm chat surface. The REAL
+ * terminal is no longer embedded here (wave-desktop fusion §5): the
+ * "Open in terminal" action asks the wave host to open the workspace's tmux
+ * session as a terminal block instead.
  *
  * Wires the live RunEvent log (GET /events, ~2s), the reviewable diff
  * (GET /diff, on demand), and the state-gated review actions:
@@ -15,30 +18,23 @@
  * Every action button is enabled only when the backend state machine allows it
  * (workspace-state helpers). Errors from the backend are shown, never hidden.
  */
-import { useEffect, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { DiffView } from './DiffView';
 import { FileTree } from './FileTree';
 import { RunPanel } from './RunPanel';
-import { SessionTerminal } from './SessionTerminal';
-import { RecoderTerminal } from './RecoderTerminal';
 import { ConversationView } from './ConversationView';
+import { OpenInTerminalButton } from './OpenInTerminalButton';
 import {
   deliveryGateFromError,
   deliveryGateReason,
 } from '../lib/conductor-health-state';
 import type { DeliveryGateDetail } from '../types';
-
-/** True when running inside the Recoder desktop shell (preload PTY bridge present). */
-function hasDesktopTerminal(): boolean {
-  const w = window as unknown as { recoderDesktop?: { spawnTerminal?: unknown } };
-  return Boolean(w.recoderDesktop && typeof w.recoderDesktop.spawnTerminal === 'function');
-}
 import { diffFileList, type DiffFile } from '../lib/diff-files';
 import { workspaceGoal } from '../lib/workspace-goal';
 import { workspaceCodename } from '../lib/workspace-codename';
-import type { ConductorSession, WorkspaceDiff } from '../types';
+import type { WorkspaceDiff } from '../types';
 import {
   canArchive,
   canMerge,
@@ -215,40 +211,12 @@ function PlanProvenance({ plan }: { plan: PalPlanMeta | null }) {
   );
 }
 
-type Tab = 'files' | 'output' | 'diff' | 'run' | 'terminal';
-
-/**
- * Within the Terminal tab, the SAME conductor session is shown either as a
- * friendly, chat-like conversation ('chat') or the full real xterm terminal
- * ('terminal'). One engine, two skins — never a second source of truth. Defaults
- * to 'chat' for approachability (the "not scary" vision principle); power users
- * flip to the full terminal. Persisted per-workspace in this UI state.
- */
-type SurfaceMode = 'chat' | 'terminal';
+type Tab = 'files' | 'output' | 'diff' | 'run' | 'chat';
 
 function describeError(err: unknown): string {
   if (err instanceof BackendUnreachableError) return `Backend unreachable: ${err.message}`;
   if (err instanceof ApiError) return `Backend error (${err.status}): ${err.message}`;
   return err instanceof Error ? err.message : String(err);
-}
-
-/**
- * Project the workspace onto the ConductorSession shape the SessionTerminal
- * drives. The conductor names workspace tmux sessions `recoder-<workspaceId>`
- * and exposes the live name via workspace.sessionName; the terminal attaches to
- * that real tmux session (local pty) or polls /sessions/:id/output (HTTP).
- */
-function workspaceSession(workspace: Workspace): ConductorSession | null {
-  if (!workspace.sessionName) return null;
-  return {
-    sessionId: workspace.workspaceId,
-    tmuxName: workspace.sessionName,
-    worktreePath: workspace.worktreePath || '',
-    branch: workspace.branch,
-    repoPath: workspace.worktreePath || '',
-    command: '',
-    createdAt: workspace.createdAt,
-  };
 }
 
 /** Extract the PR number from a GitHub PR url like `…/pull/42`, if present. */
@@ -299,22 +267,6 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
   const [tab, setTab] = useState<Tab>('output');
   const [actionOutcome, setActionOutcome] = useState<ActionOutcome>({ kind: 'idle' });
   const [busy, setBusy] = useState<string | null>(null);
-  // When the embedded PTY reports it has no real TTY (node-pty missing in this
-  // build), fall back to the truthful HTTP /sessions surface instead of a dead
-  // terminal. Gated per-workspace so switching workspaces re-evaluates.
-  const [ptyUnavailable, setPtyUnavailable] = useState(false);
-  // The Terminal-tab surface skin: friendly conversation vs the full real
-  // terminal. Defaults to 'chat' so terminal-averse operators land on the calm
-  // surface; persisted per-workspace (reset below when the workspace changes).
-  const [surfaceMode, setSurfaceMode] = useState<SurfaceMode>('chat');
-
-  // Re-evaluate per workspace: a fresh workspace may have a live tmux session
-  // even if a prior one's PTY was unavailable, and each workspace starts on the
-  // approachable chat skin rather than inheriting a prior terminal flip.
-  useEffect(() => {
-    setPtyUnavailable(false);
-    setSurfaceMode('chat');
-  }, [workspace.workspaceId]);
 
   const live = isLive(workspace.state);
   // The file list (Changes tab) and the full patch (Diff tab) share the same
@@ -341,14 +293,6 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
   const palPlan = palPlanFromMetadata(workspace.metadata);
   const pr = prNumber(prMeta?.url);
   const readyToMerge = canMerge(workspace.state);
-  const session = workspaceSession(workspace);
-  // Resolve the real tmux binary the conductor reports (GET /health → tmuxBin),
-  // so the right-pane Terminal's local-pty `tmux attach` uses the same pinned /
-  // absolute binary the Sessions view does — not a bare `tmux` that may miss a
-  // pinned build. Optional + degrade-safe: when health is unavailable or omits
-  // it, SessionTerminal falls back to `tmux`.
-  const health = usePoll(() => api.health(), 15_000);
-  const tmuxBin = health.data?.tmuxBin;
 
   async function runAction(
     name: string,
@@ -496,13 +440,16 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
           Run
         </button>
         <button
-          class={tab === 'terminal' ? 'tab tab-active' : 'tab'}
-          onClick={() => setTab('terminal')}
-          disabled={!session}
-          title={session ? 'Live terminal for this workspace tmux session' : 'No tmux session attached to this workspace yet'}
+          class={tab === 'chat' ? 'tab tab-active' : 'tab'}
+          onClick={() => setTab('chat')}
+          title="A calm chat view over this workspace's live session"
         >
-          Terminal
+          Chat
         </button>
+        {/* The REAL terminal lives in the wave host now (fusion §5): this asks
+            the shell to open the workspace tmux session as a terminal block.
+            Disabled with a truthful hint outside the desktop app. */}
+        <OpenInTerminalButton workspace={workspace} />
       </div>
 
       <div class="detail-body">
@@ -524,63 +471,13 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
         ) : tab === 'diff' ? (
           <DiffView diff={diff.data} error={diff.error} loading={diff.loading} />
         ) : tab === 'run' ? (
-          <RunPanel workspace={workspace} tmuxBin={tmuxBin} />
-        ) : session ? (
-          <div class="detail-terminal">
-            {/* Surface affordance: the friendly conversation is the calm DEFAULT;
-                the full real terminal is revealed ON DEMAND behind a single
-                gentle "Show terminal" / "Hide terminal" toggle (collapsed by
-                default — the "not scary" vision principle). One engine, two skins
-                over the SAME tmux session / RunEvents — never a second source of
-                truth. Flipping it mounts/unmounts the real xterm so its PTY is
-                spawned only when shown and killed when hidden. */}
-            <div class="detail-terminal-head">
-              <span class="detail-terminal-skin" aria-hidden="true">
-                {surfaceMode === 'chat' ? 'Chat' : 'Terminal'}
-              </span>
-              <span class="detail-terminal-branch" title={`${workspace.workspaceId} · ${workspace.branch}`}>{workspaceCodename(workspace.workspaceId)}</span>
-              <span class="detail-terminal-spacer" />
-              <button
-                type="button"
-                class="detail-terminal-toggle"
-                onClick={() => setSurfaceMode((m) => (m === 'chat' ? 'terminal' : 'chat'))}
-                aria-pressed={surfaceMode === 'terminal'}
-                title={
-                  surfaceMode === 'chat'
-                    ? 'Reveal the full real terminal for this workspace'
-                    : 'Collapse back to the friendly conversation'
-                }
-              >
-                {surfaceMode === 'chat' ? 'Show terminal' : 'Hide terminal'}
-              </button>
-            </div>
-            {surfaceMode === 'chat' ? (
-              // Friendly skin: the SAME conductor session shown as a calm, chat-
-              // like conversation. Reads the same RunEvent stream the terminal
-              // observes — never a second source of truth, never a fake TTY.
-              <ConversationView workspace={workspace} />
-            ) : hasDesktopTerminal() && !ptyUnavailable ? (
-              // Real embedded terminal: attach a PTY (Electron main) to THIS
-              // workspace's tmux session via the same pinned tmux binary the
-              // conductor drives — the native CLI experience, in Recoder. Mounted
-              // ONLY in terminal mode so its cleanup (PTY kill) runs when the
-              // operator flips back to Chat — never hidden with a live PTY. If the
-              // main process reports no real PTY, onPtyUnavailable flips us to the
-              // HTTP /sessions surface so we never show a dead terminal.
-              <RecoderTerminal
-                command={tmuxBin || 'tmux'}
-                args={['attach', '-t', session.tmuxName]}
-                cwd={session.worktreePath || undefined}
-                env={tmuxBin ? { CONDUCTOR_TMUX_BIN: tmuxBin } : undefined}
-                sessionLabel={workspaceCodename(workspace.workspaceId)}
-                onPtyUnavailable={() => setPtyUnavailable(true)}
-              />
-            ) : (
-              <SessionTerminal session={session} tmuxBin={tmuxBin} />
-            )}
-          </div>
+          <RunPanel workspace={workspace} />
         ) : (
-          <div class="log-empty">No tmux session attached to this workspace.</div>
+          // Chat: the calm conversation skin over this workspace's real RunEvent
+          // stream (one engine, no second source of truth). The full terminal is
+          // no longer embedded — the "Open in terminal" action above hands the
+          // session to the wave host instead.
+          <ConversationView workspace={workspace} />
         )}
       </div>
     </aside>

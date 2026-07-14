@@ -88,6 +88,7 @@ afterEach(() => {
   }
   vi.restoreAllMocks();
   delete (globalThis as Record<string, unknown>).window;
+  delete (globalThis as Record<string, unknown>).__RECODER_COCKPIT__;
   delete (globalThis as Record<string, unknown>).fetch;
 });
 
@@ -199,5 +200,89 @@ describe('WorkspaceCenter is a real conversation', () => {
     // No input to invite a message the backend would 400.
     expect(c.querySelector('.ws-cmdbar-input')).toBeNull();
     expect(c.querySelector('.ws-cmdbar-disabled-note')?.textContent).toMatch(/closed/i);
+  });
+});
+
+/**
+ * "Open in terminal" handoff (wave-desktop fusion §5): the center pane no
+ * longer embeds a terminal. Inside the desktop app the header action asks the
+ * wave host (window.__RECODER_COCKPIT__.openWorkspaceTerminal) to open the
+ * workspace's tmux session as a terminal block; in a plain browser it is
+ * disabled with a truthful hint — never a dead terminal, never a fake success.
+ */
+describe('WorkspaceCenter open-in-terminal handoff', () => {
+  function findOpenButton(c: HTMLDivElement): HTMLButtonElement {
+    const btn = Array.from(c.querySelectorAll('button')).find(
+      (b) => (b.textContent ?? '').trim() === 'Open in terminal',
+    ) as HTMLButtonElement;
+    if (!btn) throw new Error('Open in terminal button not found');
+    return btn;
+  }
+
+  beforeEach(() => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async () =>
+      makeResponse({ status: 200, ok: true, body: { success: true, data: [] } }),
+    );
+  });
+
+  it('never renders an embedded terminal — the thread is the only center surface', async () => {
+    const c = mountCenter(workspace({ sessionName: 'recoder-ws-chat' }));
+    await flush(20);
+    expect(c.querySelector('.ws-center-terminal')).toBeNull();
+    expect(c.querySelector('.rterm')).toBeNull();
+    expect(c.querySelector('.ws-conversation')).toBeTruthy();
+  });
+
+  it('is disabled with the truthful desktop hint when the bridge is absent (plain browser)', async () => {
+    const c = mountCenter(workspace({ sessionName: 'recoder-ws-chat' }));
+    await flush(20);
+    const btn = findOpenButton(c);
+    expect(btn.disabled).toBe(true);
+    expect(btn.title).toContain('Recoder desktop app');
+  });
+
+  it('hands the tmux session + worktree cwd to the wave host bridge on click', async () => {
+    const openCalls: Array<{ sessionName?: string; cwd?: string }> = [];
+    // In the page window === globalThis; under vitest they differ, so install
+    // the injected config on both (config.ts reads window.*, wave-bridge reads
+    // globalThis.*).
+    const config = {
+      backendUrl: BACKEND_URL,
+      token: 't',
+      openWorkspaceTerminal: (req: { sessionName?: string; cwd?: string }) => {
+        openCalls.push({ sessionName: req.sessionName, cwd: req.cwd });
+      },
+    };
+    (globalThis as Record<string, unknown>).window = { __RECODER_COCKPIT__: config };
+    (globalThis as Record<string, unknown>).__RECODER_COCKPIT__ = config;
+    const c = mountCenter(
+      workspace({ sessionName: 'recoder-ws-chat', worktreePath: '/tmp/wt/ws-chat' }),
+    );
+    await flush(20);
+
+    const btn = findOpenButton(c);
+    expect(btn.disabled).toBe(false);
+    await act(async () => {
+      btn.click();
+    });
+    await flush(10);
+
+    expect(openCalls).toEqual([{ sessionName: 'recoder-ws-chat', cwd: '/tmp/wt/ws-chat' }]);
+    expect(c.querySelector('.open-in-terminal-error')).toBeNull();
+  });
+
+  it('is disabled when the workspace has no tmux session yet', async () => {
+    const config = {
+      backendUrl: BACKEND_URL,
+      token: 't',
+      openWorkspaceTerminal: () => undefined,
+    };
+    (globalThis as Record<string, unknown>).window = { __RECODER_COCKPIT__: config };
+    (globalThis as Record<string, unknown>).__RECODER_COCKPIT__ = config;
+    const c = mountCenter(workspace());
+    await flush(20);
+    const btn = findOpenButton(c);
+    expect(btn.disabled).toBe(true);
+    expect(btn.title).toContain('No agent session');
   });
 });

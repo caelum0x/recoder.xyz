@@ -30,9 +30,8 @@ import {
   capabilityUnlockLabel,
   agentsIndicator,
 } from './lib/plan-state';
-// Board-view and sessions-view components remain eagerly imported — they are
-// always needed at startup (board is the default view) or receive shell-level
-// props (sessions needs tmuxBin from the health poll).
+// Board-view components remain eagerly imported — they are always needed at
+// startup (board is the default view).
 import { Board } from './components/Board';
 import { HealthStrip } from './components/HealthStrip';
 import { PermissionCoach } from './components/PermissionCoach';
@@ -40,14 +39,12 @@ import { NewWorkspaceForm } from './components/NewWorkspaceForm';
 import { WorkspaceDetail } from './components/WorkspaceDetail';
 import { WorkspaceSidebar } from './components/WorkspaceSidebar';
 import { WorkspaceCenter } from './components/WorkspaceCenter';
-import { SessionsPanel } from './components/SessionsPanel';
 import { SignIn } from './components/SignIn';
 // Panel components eagerly imported for registration into the panel cache.
 // These allow PanelLoader to render instantly (no async import step) for all
 // panels that are already bundled at startup. When a panel is split into its
 // own async chunk, remove its import here and the load() in the registry will
 // take over transparently — no other code needs to change.
-import { DmuxPanel } from './components/DmuxPanel';
 import { ConnectorsPanel } from './components/ConnectorsPanel';
 import { PolicyPanel } from './components/PolicyPanel';
 import { MemoryCandidatesPanel } from './components/MemoryCandidatesPanel';
@@ -88,7 +85,6 @@ function viewLabel(id: string): string {
  * registry's load() will populate the cache on first activation.
  */
 const panelCache = new Map<string, PanelComponent>([
-  ['dmux', DmuxPanel as unknown as PanelComponent],
   ['connectors', ConnectorsPanel as unknown as PanelComponent],
   ['policy', PolicyPanel as unknown as PanelComponent],
   ['memory', MemoryCandidatesPanel as unknown as PanelComponent],
@@ -182,8 +178,8 @@ export function App() {
   // non-nagging hint near the create control — never a hard block (the server
   // still enforces the real entitlement). Defaults to gated when plan is absent.
   const remoteSubstrateGated = isCapabilityGated(config.identity?.plan, 'remote_substrate');
-  // Open on the deep-linked view when a launcher/menu requested one (e.g. the
-  // desktop "Open dmux Console" item), otherwise default to the board.
+  // Open on the deep-linked view when a launcher/menu requested one, otherwise
+  // default to the board.
   const [view, setView] = useState<CockpitView>(() => readInitialView() || 'board');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -206,7 +202,6 @@ export function App() {
 
   const board = usePoll(() => api.listWorkspaces(), WORKSPACE_POLL_MS);
   const health = usePoll(() => api.health(), HEALTH_POLL_MS);
-  const tmuxBin = health.data?.tmuxBin;
   const workspaces = board.data || [];
   // Which running agents are blocked on operator input (needs_input), so the
   // Board can badge "needs you" the same way the recoder-herd terminal does.
@@ -237,11 +232,10 @@ export function App() {
   );
 
   // Let the desktop shell switch the cockpit view live (without a reload) when a
-  // menu/launcher action fires — e.g. "Open dmux Console" dispatches this event
-  // with detail.view = 'dmux'. This is how the dmux surface is reachable from a
-  // single menu click even when the cockpit is already open.
-  // The guard now uses ALL_VIEW_IDS from the registry so new panels are
-  // automatically navigable without touching this handler.
+  // menu/launcher action fires.
+  // The guard uses ALL_VIEW_IDS from the registry so new panels are
+  // automatically navigable without touching this handler — and retired ids
+  // (sessions/dmux) are ignored instead of rendering a dead surface.
   useEffect(() => {
     function onNavigate(e: Event) {
       const detail = (e as CustomEvent<{ view?: string }>).detail;
@@ -545,13 +539,6 @@ export function App() {
               onChanged={() => board.refresh()}
             />
           )}
-        </main>
-      ) : view === 'sessions' ? (
-        /* sessions is rendered inline because it receives the shell-level
-           tmuxBin hint from the health poll. All other panels are lazy-loaded
-           via PanelLoader which reads their component from the registry. */
-        <main class="main">
-          <SessionsPanel tmuxBin={tmuxBin} />
         </main>
       ) : (
         /* All remaining panels are lazy-loaded on first activation. The registry

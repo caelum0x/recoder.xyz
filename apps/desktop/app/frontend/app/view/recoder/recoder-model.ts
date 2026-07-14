@@ -11,7 +11,7 @@ import { RecoderConductorView } from "./recoder";
 // client package the cockpit shares) instead of a hand-rolled local mirror. The
 // shell renders a lenient subset — the backend may be older/newer, so state stays
 // a plain string here and everything beyond the picked fields remains optional.
-type RecoderWorkspace = Pick<Workspace, "workspaceId" | "branch" | "runtimeId"> & {
+type RecoderWorkspace = Pick<Workspace, "workspaceId" | "branch" | "runtimeId" | "worktreePath"> & {
     state: string;
     substrate?: string;
     sessionName?: string;
@@ -25,6 +25,10 @@ type RecoderSetup = {
     agents: { runtimeId: string; available: boolean }[];
     git: boolean;
     loaded: boolean;
+    // The conductor-pinned tmux binary (CONDUCTOR_TMUX_BIN / engines tmux) from
+    // substrate health; "" when unknown. Used so "Open terminal" attaches with
+    // the SAME tmux server the conductor's sessions live on.
+    tmuxBin: string;
 };
 
 class RecoderViewModel implements ViewModel {
@@ -45,7 +49,7 @@ class RecoderViewModel implements ViewModel {
         this.workspacesAtom = atom([]) as PrimitiveAtom<RecoderWorkspace[]>;
         this.loadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
-        this.setupAtom = atom({ agents: [], git: false, loaded: false }) as PrimitiveAtom<RecoderSetup>;
+        this.setupAtom = atom({ agents: [], git: false, loaded: false, tmuxBin: "" }) as PrimitiveAtom<RecoderSetup>;
     }
 
     // Degrade-safe: a failed/absent health probe leaves setup unloaded (the panel
@@ -61,9 +65,10 @@ class RecoderViewModel implements ViewModel {
                       available: Boolean(r.available),
                   }))
                 : [];
-            globalStore.set(this.setupAtom, { agents, git: Boolean(h?.substrate?.git), loaded: true });
+            const tmuxBin = typeof h?.substrate?.tmuxBin == "string" ? h.substrate.tmuxBin : "";
+            globalStore.set(this.setupAtom, { agents, git: Boolean(h?.substrate?.git), loaded: true, tmuxBin });
         } catch {
-            globalStore.set(this.setupAtom, { agents: [], git: false, loaded: false });
+            globalStore.set(this.setupAtom, { agents: [], git: false, loaded: false, tmuxBin: "" });
         }
     }
 

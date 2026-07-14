@@ -26,6 +26,7 @@ import {
     setWasActive,
     setWasInFg,
 } from "./emain-activity";
+import { planBackendPort, startBackendSupervisor, stopBackend } from "./emain-backend";
 import { initIpcHandlers } from "./emain-ipc";
 import { log } from "./emain-log";
 import { initMenuEventSubscriptions, makeAndSetAppMenu, makeDockTaskbar } from "./emain-menu";
@@ -292,6 +293,7 @@ electronApp.on("before-quit", (e) => {
     }
     setGlobalIsQuitting(true);
     updater?.stop();
+    void stopBackend();
     if (unamePlatform == "win32") {
         // win32 doesn't have a SIGINT, so we just let electron die, which
         // ends up killing wavesrv via closing it's stdin.
@@ -391,12 +393,22 @@ async function appMain() {
         fireAndForget(createNewWaveWindow);
     });
     try {
+        // Pick the embedded backend port BEFORE spawning the Go server so
+        // WAVETERM_WAVEAI_ENDPOINT can be set in its env (fast — bind probe only).
+        await planBackendPort();
+    } catch (e) {
+        console.log("error planning embedded backend port", e);
+    }
+    try {
         await runWaveSrv(handleWSEvent);
     } catch (e) {
         console.log(e.toString());
     }
     const ready = await getWaveSrvReady();
     console.log("wavesrv ready signal received", ready, Date.now() - startTs, "ms");
+    // Go server is up — boot the embedded Node backend NON-BLOCKING. Its death
+    // degrades via supervisor status; it never quits the app.
+    fireAndForget(startBackendSupervisor);
     await electronApp.whenReady();
     configureAuthKeyRequestInjection(electron.session.defaultSession);
     initIpcHandlers();

@@ -12239,6 +12239,7 @@ import { createTensorzeroRouter } from './routes/tensorzero.routes.js';
 import { createGatewayRouter } from './gateway/index.js';
 import { createMulticaRouter } from './routes/multica.routes.js';
 import { createRetrievalRouter } from './routes/retrieval.routes.js';
+import { createCockpitStaticRouter, resolveCockpitDistDir } from './routes/cockpit-static.routes.js';
 import { createAgentSkillProfilesRouter } from './routes/agent-skill-profiles.routes.js';
 import { createMem0Router } from './routes/mem0.routes.js';
 import { createContext7Router } from './routes/context7.routes.js';
@@ -14164,6 +14165,22 @@ app.get('/published/:slug/*', (req, res) => {
 });
 
 startupInfo('routes.publish', 'registered');
+
+// ── Cockpit SPA at /cockpit ─────────────────────────────────────────────────
+// Static shell for the desktop cockpit (apps/desktop/cockpit) so Wave can open
+// it in a <webview> at http://127.0.0.1:<port>/cockpit/. Unauthenticated by
+// design: the bundle contains no secrets; every API it calls stays behind its
+// own auth (a plain browser tab truthfully shows the signed-out state). Dist
+// dir comes from COCKPIT_DIST_DIR (desktop supervisor) or dev fallbacks.
+app.use('/cockpit', createCockpitStaticRouter());
+{
+  const cockpitDistDir = resolveCockpitDistDir();
+  startupInfo(
+    'routes.cockpit',
+    cockpitDistDir ? 'registered' : 'registered (no build found - serving 503 until COCKPIT_DIST_DIR or apps/desktop/cockpit/dist exists)',
+    cockpitDistDir ? { distDir: cockpitDistDir } : undefined,
+  );
+}
 
 // ==================== Custom Domain Routes ====================
 

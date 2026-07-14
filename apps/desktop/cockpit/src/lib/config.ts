@@ -24,12 +24,19 @@ import type { CockpitAuthResult, CockpitConfig, CockpitIdentity } from '../types
 
 declare global {
   interface Window {
-    __RECODER_COCKPIT__?: CockpitConfig;
+    /**
+     * Injected by a shell. Partial because the shape differs by host: the
+     * Electron cockpit window injects the full CockpitConfig, while the wave
+     * <webview> preload exposes only { backendUrl, token } (plus the
+     * openWorkspaceTerminal action typed structurally in lib/wave-bridge.ts)
+     * — and just the action when the backend is not READY yet.
+     */
+    __RECODER_COCKPIT__?: Partial<CockpitConfig>;
     /**
      * Runtime overrides injected by the main process. `token`/`backendUrl` are
      * set after a fresh login; `identity` is the freshly-captured display
      * identity (if any); `view` is an optional initial-view deep link set by a
-     * menu/launcher action (e.g. "Open dmux Console").
+     * menu/launcher action.
      */
     __RECODER_COCKPIT_RUNTIME__?: {
       backendUrl?: string;
@@ -41,11 +48,13 @@ declare global {
   }
 }
 
-/** The discoverable cockpit surfaces a deep link / launcher can target. */
+/**
+ * The discoverable cockpit surfaces a deep link / launcher can target.
+ * RETIRED (wave-desktop fusion §5): 'sessions' and 'dmux' — the wave terminal
+ * owns interactive terminal surfaces now; the cockpit no longer registers them.
+ */
 export type CockpitView =
   | 'board'
-  | 'sessions'
-  | 'dmux'
   | 'connectors'
   | 'policy'
   | 'memory'
@@ -56,8 +65,6 @@ export type CockpitView =
 
 const COCKPIT_VIEWS: readonly CockpitView[] = [
   'board',
-  'sessions',
-  'dmux',
   'connectors',
   'policy',
   'memory',
@@ -85,6 +92,21 @@ export function readInitialView(): CockpitView | null {
 }
 
 const DEFAULT_BACKEND_URL = 'http://localhost:3100';
+
+/**
+ * Fallback backendUrl when the shell injected nothing. When the cockpit is
+ * SERVED BY the backend itself (http(s)://…/cockpit/… — the wave-webview
+ * path), the page origin IS the backend, so same-origin is the truthful
+ * default and works on any port. Everywhere else (Electron file:// load,
+ * standalone dev) keep the historical localhost:3100 default.
+ */
+function defaultBackendUrl(): string {
+  if (typeof window === 'undefined' || !window.location) return DEFAULT_BACKEND_URL;
+  const { protocol, pathname, origin } = window.location;
+  const isHttp = protocol === 'http:' || protocol === 'https:';
+  if (isHttp && typeof pathname === 'string' && pathname.startsWith('/cockpit')) return origin;
+  return DEFAULT_BACKEND_URL;
+}
 
 /** Token set at runtime by a successful login() (kept in-memory for this session). */
 let runtimeToken: string | undefined;
@@ -124,7 +146,7 @@ function resolveIdentity(): CockpitIdentity | undefined {
 
 export function readConfig(): CockpitConfig {
   const injected = typeof window !== 'undefined' ? window.__RECODER_COCKPIT__ : undefined;
-  const backendUrl = (injected?.backendUrl || DEFAULT_BACKEND_URL).replace(/\/+$/, '');
+  const backendUrl = (injected?.backendUrl || defaultBackendUrl()).replace(/\/+$/, '');
   return {
     backendUrl,
     token: resolveToken(),
