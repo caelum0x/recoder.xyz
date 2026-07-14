@@ -1,7 +1,7 @@
 /**
  * Conductor attention classifier — classifies a pane's captured text as
  * `needs-you` / `working` / `idle` using dmux's PURE pane-attention heuristics
- * (Wave G1 backend fusion of ts/dmux dist/utils/paneAttentionHeuristics.js).
+ * (Wave G1 backend fusion of apps/desktop/engines/dmux dist/utils/paneAttentionHeuristics.js).
  *
  * What is absorbed from dmux:
  *   - `hasAgentWorkingIndicators(content, agent?)` — the battle-tested "the agent
@@ -58,7 +58,7 @@ export interface DmuxAttentionModule {
 export type DmuxAttentionModuleLoader = () => Promise<DmuxAttentionModule | null>;
 
 /** dmux's pure heuristics submodule, exposed as a clean subpath export (added to
- * ts/dmux/package.json for the Recoder fusion) — side-effect-free, unlike root ".". */
+ * apps/desktop/engines/dmux/package.json for the Recoder fusion) — side-effect-free, unlike root ".". */
 const DMUX_ATTENTION_SPECIFIER = '@recoder/dmux/utils/paneAttentionHeuristics';
 
 /** Native dynamic import shielded from tsc's CJS `import()`→`require()` rewrite. */

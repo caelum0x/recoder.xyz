@@ -12,7 +12,7 @@
  *   2. Assemble a hermetic env: a per-install random API_KEY_HASH_SALT and
  *      INTERNAL_SERVICE_KEY (persisted to userData, NOT committed), STRICT_AUTH=false,
  *      a private DATA_DIR under userData, and the resolved vendored tmux binary
- *      (repo c/tmux/tmux in dev; bundled extraResources path when packaged).
+ *      (repo apps/desktop/engines/tmux/tmux in dev; bundled extraResources path when packaged).
  *   3. Mint a local platform sk_ key by running the real dev-mint-conductor-key
  *      script (which calls createApiKey) with the SAME salt + DATA_DIR the server
  *      will use, so the persisted hash is valid for the spawned server.
@@ -144,7 +144,7 @@ async function pickFreePortWithRetry(deps = {}) {
 
 /**
  * Resolve the vendored tmux binary path the backend should drive.
- * Dev: <repoRoot>/c/tmux/tmux. Packaged: <resourcesPath>/backend/c/tmux/tmux
+ * Dev: <repoRoot>/apps/desktop/engines/tmux/tmux. Packaged: <resourcesPath>/backend/engines/tmux/tmux
  * (bundled via extraResources). Returns the first existing candidate, or the
  * dev candidate as a best-effort default so the env is always set (the backend
  * surfaces a truthful "tmux missing" via /health if the path is wrong).
@@ -159,12 +159,12 @@ function resolveTmuxBin(opts) {
   }
   const candidates = [];
   if (opts.isPackaged && opts.resourcesPath) {
-    candidates.push(nodePath.join(opts.resourcesPath, 'backend', 'c', 'tmux', 'tmux'));
-    candidates.push(nodePath.join(opts.resourcesPath, 'c', 'tmux', 'tmux'));
+    candidates.push(nodePath.join(opts.resourcesPath, 'backend', 'engines', 'tmux', 'tmux'));
+    candidates.push(nodePath.join(opts.resourcesPath, 'engines', 'tmux', 'tmux'));
   }
   // Repo-root vendored binary (dev, and a packaged fallback if extraResources
   // layout differs).
-  const repoCandidate = nodePath.join(opts.repoRoot, 'c', 'tmux', 'tmux');
+  const repoCandidate = nodePath.join(opts.repoRoot, 'apps', 'desktop', 'engines', 'tmux', 'tmux');
   candidates.push(repoCandidate);
   for (const candidate of candidates) {
     if (existsSync(candidate)) {

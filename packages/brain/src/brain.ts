@@ -5,7 +5,7 @@
  * vector-store retrieval are fused into the same read.
  *
  * Repo intelligence now flows through {@link RepoIntelPort}, the seam where the
- * real modules/github/recodergit knowledge-graph engine is merged in (see brain.md). Recall,
+ * real apps/desktop/engines/recodergit knowledge-graph engine is merged in (see brain.md). Recall,
  * docs, the task graph, and desktop activity flow through their ports. The core
  * depends only on the ports, never the concrete engines.
  *

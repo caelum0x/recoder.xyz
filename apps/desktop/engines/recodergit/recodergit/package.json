@@ -8,7 +8,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/caelum0x/recoder.xyz.git",
-    "directory": "modules/github/recodergit/recodergit"
+    "directory": "apps/desktop/engines/recodergit/recodergit"
   },
   "bugs": {
     "url": "https://github.com/caelum0x/recoder.xyz/issues"

@@ -16,8 +16,8 @@
     // app to pnpm-workspace.yaml (runtime resolution already works through the
     // root node_modules symlink for @recoder/connectors).
     "paths": {
-      "@recoder/connectors": ["../../modules/social/openclaw/dist/index"],
-      "@recoder/connectors/*": ["../../modules/social/openclaw/dist/*"]
+      "@recoder/connectors": ["../desktop/engines/openclaw/dist/index"],
+      "@recoder/connectors/*": ["../desktop/engines/openclaw/dist/*"]
     }
   },
   "include": ["src/**/*.ts"]

@@ -47,9 +47,9 @@ const TRUTHY = new Set(['1', 'true', 'yes', 'on']);
 
 // Vendored engine entrypoints, relative to backend/ (this file lives at
 // backend/src/agent-os/recodergit-service.ts -> ../../.. = repo root).
-const VENDORED_BIN_RELATIVE = '../modules/github/recodergit/recodergit/dist/cli/index.js';
-const VENDORED_CORE_RELATIVE = '../modules/github/recodergit/recodergit/dist/core/run-analyze.js';
-const VENDORED_LOCAL_BACKEND_RELATIVE = '../modules/github/recodergit/recodergit/dist/mcp/local/local-backend.js';
+const VENDORED_BIN_RELATIVE = '../apps/desktop/engines/recodergit/recodergit/dist/cli/index.js';
+const VENDORED_CORE_RELATIVE = '../apps/desktop/engines/recodergit/recodergit/dist/core/run-analyze.js';
+const VENDORED_LOCAL_BACKEND_RELATIVE = '../apps/desktop/engines/recodergit/recodergit/dist/mcp/local/local-backend.js';
 
 export type IndexStatus = 'indexed' | 'stale' | 'not_indexed' | 'unavailable';
 

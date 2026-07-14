@@ -17,8 +17,8 @@ backend: ## Typecheck the control-plane service
 	cd docker-backend && npx tsc --noEmit
 
 # ---- Substrate binaries (vendored C/TS, pinned in the runtime image) ----
-build-tmux: ## Build the vendored tmux binary from c/tmux (needs cc + libevent + ncurses)
-	@if command -v autoconf >/dev/null 2>&1 && [ -f c/tmux/configure ]; then \
+build-tmux: ## Build the vendored tmux binary from apps/desktop/engines/tmux (needs cc + libevent + ncurses)
+	@if command -v autoconf >/dev/null 2>&1 && [ -f apps/desktop/engines/tmux/configure ]; then \
 		echo "→ autotools available, using configure build"; \
 		./scripts/build-tmux.sh; \
 	else \
@@ -26,8 +26,8 @@ build-tmux: ## Build the vendored tmux binary from c/tmux (needs cc + libevent +
 		bash scripts/build-tmux-manual.sh; \
 	fi
 
-build-dmux: ## Build the vendored dmux operator console from ts/dmux
-	cd ts/dmux && pnpm install --frozen-lockfile && pnpm run build
+build-dmux: ## Build the vendored dmux operator console from apps/desktop/engines/dmux
+	cd apps/desktop/engines/dmux && pnpm install --frozen-lockfile && pnpm run build
 
 substrate: build-tmux build-dmux ## Build both substrate binaries (tmux + dmux)
 

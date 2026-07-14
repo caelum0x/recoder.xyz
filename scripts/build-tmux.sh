@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Build the vendored tmux binary from modules/terminal/tmux and pin it.
+# Build the vendored tmux binary from apps/desktop/engines/tmux and pin it.
 #
 # Per docs/RECODER-PRODUCT-ARCHITECTURE.md §8c (LOCKED): tmux is a vendored C
 # binary, pinned in the runtime image and driven via its CLI by the Conductor
 # substrate. We own it by vendoring + building + pinning, never reimplementing.
 #
-# Produces: modules/terminal/tmux/tmux (the compiled binary).
+# Produces: apps/desktop/engines/tmux/tmux (the compiled binary).
 # Requires: a C compiler (cc), autotools (autoconf/libtool), and libevent +
 #   ncurses development headers (macOS ships ncurses; brew install libevent).
 #
@@ -16,7 +16,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-TMUX_SRC="$REPO_ROOT/modules/terminal/tmux"
+TMUX_SRC="$REPO_ROOT/apps/desktop/engines/tmux"
 
 if [ ! -f "$TMUX_SRC/tmux.c" ]; then
   echo "✗ vendored tmux source not found at $TMUX_SRC" >&2

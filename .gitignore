@@ -42,7 +42,7 @@ out/
 .env.deploy
 .env.a2a.workers
 a2a-js/
-openclaw/
+/openclaw/
 **/.env
 **/.env.local
 **/.env.production
@@ -734,10 +734,8 @@ py/ops-recorder/**/data/
 py/ops-recorder/**/*.key
 py/ops-recorder/**/*.pem
 
-# RecoderGit build artifacts + per-repo index (regenerable; built via npm in ts/recodergit)
-ts/recodergit/**/node_modules/
-ts/recodergit/**/dist/
-ts/recodergit/**/web/
+# RecoderGit per-repo index (runtime dir; build artifacts are covered by the
+# engine's own .gitignore at apps/desktop/engines/recodergit/)
 .recodergit/
 packages/*/.claude/skills/recodergit/
 .history/
@@ -753,3 +751,6 @@ modules/**/.env.*
 apps/desktop/server/engines/**/.env
 apps/desktop/server/engines/**/.env.*
 !apps/desktop/server/engines/**/.env.example
+apps/desktop/engines/**/.env
+apps/desktop/engines/**/.env.*
+!apps/desktop/engines/**/.env.example

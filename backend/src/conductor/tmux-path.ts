@@ -8,8 +8,8 @@
  *
  * Resolution order:
  *   1. CONDUCTOR_TMUX_BIN env override (absolute path to a pinned binary).
- *   2. The vendored binary built from modules/terminal/tmux (at RECODER_TMUX_BUILD_PATH or
- *      <repo>/modules/terminal/tmux/tmux relative to this module).
+ *   2. The vendored binary built from apps/desktop/engines/tmux (at RECODER_TMUX_BUILD_PATH or
+ *      <repo>/apps/desktop/engines/tmux/tmux relative to this module).
  *   3. The system `tmux` on PATH (last resort — never assumed present).
  *
  * Exported as a resolved string so callers pass it straight to execFile.
@@ -22,11 +22,11 @@ function resolveVendoredTmux(): string | undefined {
   if (envPath && existsSync(envPath)) {
     return envPath;
   }
-  // Walk up from this module to find the repo root (the dir containing modules/terminal/tmux/tmux.c).
+  // Walk up from this module to find the repo root (the dir containing apps/desktop/engines/tmux/tmux.c).
   let dir = __dirname;
   for (let i = 0; i < 10; i++) {
-    if (existsSync(path.join(dir, 'c', 'tmux', 'tmux.c'))) {
-      const built = path.join(dir, 'c', 'tmux', 'tmux');
+    if (existsSync(path.join(dir, 'apps', 'desktop', 'engines', 'tmux', 'tmux.c'))) {
+      const built = path.join(dir, 'apps', 'desktop', 'engines', 'tmux', 'tmux');
       if (existsSync(built)) return built;
       break;
     }

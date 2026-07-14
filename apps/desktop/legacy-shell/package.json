@@ -112,8 +112,8 @@
         ]
       },
       {
-        "from": "../../modules/terminal/tmux/tmux",
-        "to": "backend/modules/terminal/tmux/tmux"
+        "from": "../engines/tmux/tmux",
+        "to": "backend/engines/tmux/tmux"
       },
       {
         "from": "../../modules/governance/recoder-governance/target/release/recoder-governance-napi.node",

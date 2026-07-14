@@ -14,7 +14,7 @@ import {
 } from '../src/utils/tmuxSessionStart.js';
 import { tmuxBinFile } from '../src/utils/tmuxBin.js';
 
-// dmux drives the same pinned tmux binary as the Conductor (vendored modules/terminal/tmux build,
+// dmux drives the same pinned tmux binary as the Conductor (vendored apps/desktop/engines/tmux build,
 // env override, or system PATH). Assert against the resolver so the test verifies the
 // resolved binary is used rather than a hardcoded 'tmux'.
 const TMUX = tmuxBinFile();

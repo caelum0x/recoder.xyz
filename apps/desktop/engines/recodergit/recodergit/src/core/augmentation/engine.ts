@@ -45,7 +45,7 @@ async function findRepoForCwd(cwd: string): Promise<{
 
       // Check if cwd is inside repo OR repo is inside cwd
       // Must match at a path separator boundary to avoid false positives
-      // (e.g. /projecmodules/github/recodergitv2 should NOT match /projecmodules/github/recodergit)
+      // (e.g. /projects/recodergitv2 should NOT match /projects/recodergit)
       let matched = false;
       if (normalizedCwd === normalizedRepo) {
         matched = true;

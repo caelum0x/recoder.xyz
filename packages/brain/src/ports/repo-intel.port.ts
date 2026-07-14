@@ -3,7 +3,7 @@ import type { ContextPack, CreateContextPackInput } from "@recoder/recodergit";
 /**
  * Repo-intelligence seam — the assembly core.
  *
- * The real RecoderGit engine (modules/github/recodergit: tree-sitter parse -> scope resolution ->
+ * The real RecoderGit engine (apps/desktop/engines/recodergit: tree-sitter parse -> scope resolution ->
  * knowledge graph -> lbug storage -> embeddings -> hybrid search) is merged in
  * behind this port. The engine behind it gets real while this contract stays
  * stable, so the Brain's core never depends on the concrete indexer.

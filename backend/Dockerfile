@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libevent-dev libncurses-dev ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
 # Only the inputs the substrate build needs (keeps the layer cache tight).
-COPY c/ ./c/
+COPY apps/desktop/engines/tmux/ ./apps/desktop/engines/tmux/
 COPY apps/desktop/server/engines/beads/ ./apps/desktop/server/engines/beads/
 COPY apps/desktop/server/engines/recoder-xds/ ./apps/desktop/server/engines/recoder-xds/
 COPY scripts/build-substrate-binaries.sh scripts/build-tmux.sh \
@@ -29,7 +29,7 @@ COPY scripts/build-substrate-binaries.sh scripts/build-tmux.sh \
 # stage tolerate an absent binary.
 RUN bash scripts/build-substrate-binaries.sh || true \
     && mkdir -p /out \
-    && { [ -x c/tmux/tmux ]      && cp c/tmux/tmux      /out/tmux || echo "substrate: tmux not built"; } \
+    && { [ -x apps/desktop/engines/tmux/tmux ] && cp apps/desktop/engines/tmux/tmux /out/tmux || echo "substrate: tmux not built"; } \
     && { [ -x apps/desktop/server/engines/beads/bin/bd ]  && cp apps/desktop/server/engines/beads/bin/bd  /out/bd   || echo "substrate: bd not built";   } \
     && touch /out/.keep
 
