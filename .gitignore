@@ -453,6 +453,17 @@ public
 !apps/desktop/build/
 !apps/desktop/build/**
 
+# apps/desktop/pkg/secretstore = Go SOURCE hit by the broad `*secret*` rule (the
+# known secret-glob landmine — hides source, breaks fresh-checkout builds).
+!apps/desktop/pkg/secretstore/
+!apps/desktop/pkg/secretstore/**
+
+# Cockpit + tsunami frontend static assets, hit by the bare `public` rule.
+!apps/desktop/cockpit/public/
+!apps/desktop/cockpit/public/**
+!apps/desktop/tsunami/frontend/public/
+!apps/desktop/tsunami/frontend/public/**
+
 # Vuepress build output
 .vuepress/dist
 
