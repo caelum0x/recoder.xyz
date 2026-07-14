@@ -18,7 +18,7 @@ import (
 )
 
 func generateTypesFile(tsTypesMap map[reflect.Type]string) error {
-	fileName := "frontend/types/gotypes.d.ts"
+	fileName := "../app/frontend/types/gotypes.d.ts"
 	fmt.Fprintf(os.Stderr, "generating types file to %s\n", fileName)
 	tsgen.GenerateWaveObjTypes(tsTypesMap)
 	tsgen.GenerateWaveEventTypes(tsTypesMap)
@@ -64,7 +64,7 @@ func generateTypesFile(tsTypesMap map[reflect.Type]string) error {
 }
 
 func generateWaveEventFile(tsTypesMap map[reflect.Type]string) error {
-	fileName := "frontend/types/waveevent.d.ts"
+	fileName := "../app/frontend/types/waveevent.d.ts"
 	fmt.Fprintf(os.Stderr, "generating waveevent file to %s\n", fileName)
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "// Copyright 2026, Command Line Inc.\n")
@@ -82,7 +82,7 @@ func generateWaveEventFile(tsTypesMap map[reflect.Type]string) error {
 }
 
 func generateServicesFile(tsTypesMap map[reflect.Type]string) error {
-	fileName := "frontend/app/store/services.ts"
+	fileName := "../app/frontend/app/store/services.ts"
 	var buf bytes.Buffer
 	fmt.Fprintf(os.Stderr, "generating services file to %s\n", fileName)
 	fmt.Fprintf(&buf, "// Copyright 2026, Command Line Inc.\n")
@@ -127,7 +127,7 @@ func generateServicesFile(tsTypesMap map[reflect.Type]string) error {
 }
 
 func generateWshClientApiFile(tsTypeMap map[reflect.Type]string) error {
-	fileName := "frontend/app/store/wshclientapi.ts"
+	fileName := "../app/frontend/app/store/wshclientapi.ts"
 	var buf bytes.Buffer
 	declMap := wshrpc.GenerateWshCommandDeclMap()
 	fmt.Fprintf(os.Stderr, "generating wshclientapi file to %s\n", fileName)

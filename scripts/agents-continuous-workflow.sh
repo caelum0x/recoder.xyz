@@ -199,7 +199,7 @@ while :; do
       set -euo pipefail
       paths=(
       '$REPO_ROOT/app'
-      '$REPO_ROOT/apps/desktop'
+      '$REPO_ROOT/apps/desktop/app'
       '$REPO_ROOT/apps/frontend'
       '$REPO_ROOT/apps/mobile'
       '$REPO_ROOT/apps/studio.giselles.ai'
@@ -240,7 +240,7 @@ while :; do
     run_optional_pnpm_lane "A5" "apps/studio.giselles.ai test" "$REPO_ROOT/apps/studio.giselles.ai" "test"
     record_lane_result $? "A5-studio"
 
-    run_optional_pnpm_lane "A6" "apps/desktop validate:release" "$REPO_ROOT/apps/desktop" "validate:release"
+    run_optional_pnpm_lane "A6" "apps/desktop validate:release" "$REPO_ROOT/apps/desktop/app" "validate:release"
     record_lane_result $? "A6-desktop"
 
     run_optional_pnpm_lane "A7" "openclaw check" "$REPO_ROOT/openclaw" "check"
