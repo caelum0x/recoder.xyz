@@ -29,7 +29,7 @@ import {
   createIdentity,
   provisionRunnerIdentity,
   deleteIdentity,
-} from '../../../../engines/ziti-client.js';
+} from '../../ziti-client.js';
 import type { Logger } from '../../../../shared/logger.js';
 import { EngineClientBase, type EngineCall } from '../../ports/engine-client.port.js';
 import {

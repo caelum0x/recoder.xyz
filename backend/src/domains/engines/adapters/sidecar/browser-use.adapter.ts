@@ -17,7 +17,7 @@
  */
 import { createBrowserEngine, createDefaultBrowserDriver } from '@recoder/agent-browser';
 import type { BrowserDriver, BrowserEngine, BrowserEnv, BrowserFetch } from '@recoder/agent-browser';
-import { registerBrowserUseMcpTools } from '../../../../agent-os/mcp/browser-use-engine.js';
+import { registerBrowserUseMcpTools } from '../../browser-use-engine.js';
 import type { McpToolRouter } from '@recoder/agent-mcp';
 import { join } from 'node:path';
 import type { Logger } from '../../../../shared/logger.js';

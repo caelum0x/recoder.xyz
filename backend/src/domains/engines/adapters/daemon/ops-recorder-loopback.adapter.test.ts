@@ -7,7 +7,7 @@ import { OpsRecorderLoopbackAdapter } from './ops-recorder-loopback.adapter.js';
 import { FakeSupervisor, silentLog, stubFetch } from './test-support.js';
 import { up } from '../../types.js';
 import type { DaemonAdapterConfig } from './daemon-adapter-base.js';
-import type { OpsRecorderIngestShape } from '../../../../conductor/ops-recorder-adapter.js';
+import type { OpsRecorderIngestShape } from '../../ops-recorder-adapter.js';
 
 const authed: DaemonAdapterConfig = {
   enabled: true,

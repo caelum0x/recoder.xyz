@@ -18,7 +18,7 @@
  * never fabricates a completion.
  */
 import type { Logger } from '../../../shared/logger.js';
-import type { LlmGatewayPort } from '../../../gateway/tensorzero-client.js';
+import type { LlmGatewayPort } from '../llm-gateway-client.js';
 import type { InferenceConfig } from '../config.js';
 import type { InferenceGatewayPort, StreamSink } from '../ports/inference-gateway.port.js';
 import type {

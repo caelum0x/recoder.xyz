@@ -21,7 +21,7 @@ import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
 import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
 import type { Logger } from '../../shared/logger.js';
-import type { LlmGatewayPort } from '../../gateway/tensorzero-client.js';
+import type { LlmGatewayPort } from './llm-gateway-client.js';
 import { sliceInferenceConfig, type InferenceConfig } from './config.js';
 import type { InferenceGatewayPort } from './ports/inference-gateway.port.js';
 import type {

@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ZitiRestAdapter } from './ziti-rest.adapter.js';
-import { __resetZitiForTest } from '../../../../engines/ziti-client.js';
+import { __resetZitiForTest } from '../../ziti-client.js';
 import { silentLog } from './test-support.js';
 import type { DaemonAdapterConfig } from './daemon-adapter-base.js';
 

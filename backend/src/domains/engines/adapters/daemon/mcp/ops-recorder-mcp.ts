@@ -13,7 +13,7 @@
  */
 import type { McpToolRegistration } from '../../../../../shared/module-base.js';
 import type { OpsRecorderRequest } from '../ops-recorder-loopback.adapter.js';
-import type { OpsRecorderIngestShape } from '../../../../../conductor/ops-recorder-adapter.js';
+import type { OpsRecorderIngestShape } from '../../../ops-recorder-adapter.js';
 import { asRecord, readBool, readString, runOp, type Invoker } from './daemon-mcp-shared.js';
 
 export const OPS_RECORDER_MCP_SERVER_ID = 'ops-recorder';

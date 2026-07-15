@@ -35,7 +35,7 @@ import type { CandidateService } from './lifecycle/candidate-service.js';
 import type { MemoryLifecycle } from './lifecycle/memory-lifecycle.js';
 import type { HarvestService } from './lifecycle/harvest.js';
 import type { RelateService } from './lifecycle/relate.js';
-import type { FetchLike } from '../../agent-os/mcp/vector-store.js';
+import type { FetchLike } from './vector-store.js';
 import type { ColbertFetch } from './adapters/colbert-sidecar.client.js';
 
 /** Dependencies injected by bootstrap (after persistence + identity + governance). */

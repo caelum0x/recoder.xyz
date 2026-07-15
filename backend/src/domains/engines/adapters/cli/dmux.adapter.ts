@@ -22,7 +22,7 @@ import {
   launchDmuxConsole,
   resolveDmuxBin,
   type DmuxAvailability,
-} from '../../../../conductor/dmux-adapter.js';
+} from '../../dmux-adapter.js';
 import type { Logger } from '../../../../shared/logger.js';
 import type { EnginesConfig } from '../../config.js';
 import { isEngineEnabled } from '../../config.js';

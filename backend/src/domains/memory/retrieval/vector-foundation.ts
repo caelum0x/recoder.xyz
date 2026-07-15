@@ -16,7 +16,7 @@ import type { MemoryConfig } from '../config.js';
 import { createEmbeddingAdapter } from '../adapters/embedding.adapter.js';
 import { createQdrantAdapter } from '../adapters/qdrant.adapter.js';
 import { createColbertAdapter } from '../adapters/colbert.adapter.js';
-import type { FetchLike } from '../../../agent-os/mcp/vector-store.js';
+import type { FetchLike } from '../vector-store.js';
 import type { ColbertFetch } from '../adapters/colbert-sidecar.client.js';
 
 export interface VectorFoundation {

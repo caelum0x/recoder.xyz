@@ -29,11 +29,11 @@
 import {
   resolveOpsRecorderPython,
   resolveOpsRecorderEntrypoint,
-} from '../../../../conductor/ops-recorder-daemon.js';
+} from '../../ops-recorder-daemon.js';
 import {
   isOpsRecorderShape,
   type OpsRecorderIngestShape,
-} from '../../../../conductor/ops-recorder-adapter.js';
+} from '../../ops-recorder-adapter.js';
 import type { Logger } from '../../../../shared/logger.js';
 import { fail, ok, type EngineId, type InvokeResult } from '../../types.js';
 import type { EngineCall } from '../../ports/engine-client.port.js';

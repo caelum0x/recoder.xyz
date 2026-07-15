@@ -8,7 +8,7 @@
  * DEGRADE CONTRACT: no provider configured → `embed → null` (callers fall back
  * to keyword search). Nothing throws or fabricates vectors.
  */
-import { createEmbeddingPort, type FetchLike, type VectorEnv } from '../../../agent-os/mcp/vector-store.js';
+import { createEmbeddingPort, type FetchLike, type VectorEnv } from '../vector-store.js';
 import type { EmbeddingPort } from '../ports/embedding.port.js';
 import type { MemoryConfig } from '../config.js';
 

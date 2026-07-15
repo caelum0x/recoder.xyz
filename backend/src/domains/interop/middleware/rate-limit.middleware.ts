@@ -14,7 +14,7 @@
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import { ErrorCode, createError, sendError } from '../../../shared/errors.js';
 import type { Logger } from '../../../shared/logger.js';
-import { A2ARateLimiter, type RateLimitConfig } from '../../../a2a/rate-limiter.service.js';
+import { A2ARateLimiter, type RateLimitConfig } from '../rate-limiter.service.js';
 
 /** HTTP methods that mutate state (fail-CLOSED when the limiter faults). */
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
