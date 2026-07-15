@@ -31,7 +31,7 @@ import { createTsKernelAdapter } from './ts-kernel.adapter.js';
 import { createNapiKernelAdapter } from './napi-kernel.adapter.js';
 import { createDaemonKernelAdapter } from './daemon-kernel.adapter.js';
 
-class KernelLadder implements GovernanceKernelPort {
+export class KernelLadder implements GovernanceKernelPort {
   /** Rungs in strict priority order (highest first); always ends with the TS floor. */
   constructor(private readonly rungs: readonly GovernanceKernelPort[]) {}
 
