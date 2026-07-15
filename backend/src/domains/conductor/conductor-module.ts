@@ -32,6 +32,7 @@ import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { Principal } from '../identity/types.js';
 import { sliceConductorConfig, type ConductorConfig } from './config.js';
 import type { GateVerdict, TerminalStreamPort } from './ports/index.js';
+import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type { WorkspaceRepositoryPort } from './ports/workspace-repository.port.js';
 import type {
@@ -84,6 +85,8 @@ export class ConductorComposer implements ConductorModule {
   private readonly terminalService: TerminalStreamService;
   private readonly engine: WorkspaceEngine;
   private readonly engineDeps: WorkspaceEngineDeps;
+  /** OPTIONAL pre-dispatch quota gate (set by bootstrap; absent ⇒ degrade OPEN). */
+  private entitlementGate?: EntitlementGate;
   private started = false;
 
   constructor(deps: ConductorModuleDeps) {
@@ -142,6 +145,11 @@ export class ConductorComposer implements ConductorModule {
     this.engine = new WorkspaceEngine(this.engineDeps);
   }
 
+  /** Inject the optional billing entitlement gate (pre-dispatch quota check). */
+  setEntitlementGate(gate: EntitlementGate): void {
+    this.entitlementGate = gate;
+  }
+
   async listWorkspaces(): Promise<Workspace[]> {
     return this.engine.listWorkspaces();
   }
@@ -161,6 +169,27 @@ export class ConductorComposer implements ConductorModule {
       metadata: { projectId: input.projectId, runtimeId: input.runtimeId, substrate: input.substrate },
     });
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+
+    // Pre-dispatch billing quota gate (OPTIONAL). When wired, a run counts against
+    // the subject's `agent_run` quota BEFORE the substrate launches; over-quota is
+    // refused truthfully. Absent ⇒ degrade OPEN (no quota gate). A gate EXCEPTION
+    // (not a deny) degrades open too — a metering hiccup must not block launches
+    // the policy gate already allowed. The gate itself is fail-safe on `allowed`.
+    if (this.entitlementGate) {
+      try {
+        const decision = await this.entitlementGate.check(principal, { quota: 'agent_run' });
+        if (!decision.allowed) {
+          const reason =
+            decision.message ?? `run quota denied (${decision.reason ?? 'quota_exceeded'})`;
+          return { ok: false, verdict, reason };
+        }
+      } catch (err) {
+        this.log.warn(
+          { err, projectId: input.projectId },
+          'conductor entitlement quota check errored — degrading open',
+        );
+      }
+    }
 
     try {
       const workspace = await this.engine.createWorkspace({

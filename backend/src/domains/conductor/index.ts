@@ -27,6 +27,7 @@ import type { AuthMiddleware } from '../identity/middleware/authenticate.middlew
 import type { Principal } from '../identity/types.js';
 import type { ConductorConfigOverrides } from './config.js';
 import type { GovernanceGatePort, TerminalStreamPort } from './ports/index.js';
+import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type { WorkspaceRepositoryPort } from './ports/workspace-repository.port.js';
 import type {
@@ -83,6 +84,14 @@ export interface ConductorModule {
   steerWorkspace(input: SteerInput, principal: Principal): Promise<ConductorWriteResult<void>>;
   /** Reconcile persisted workspaces against the live substrate (never kills live work). */
   reconcile(principal: Principal): Promise<ConductorWriteResult<ReconcileReport>>;
+  /**
+   * Inject the OPTIONAL billing entitlement gate consulted as a pre-dispatch quota
+   * check before launching a run (`workspace.create`). Set post-construction by
+   * bootstrap (`conductor.setEntitlementGate(billing.gate())`). Absent ⇒ the
+   * conductor degrades OPEN (no quota gate); present ⇒ over-quota launches are
+   * refused truthfully (never a fabricated success).
+   */
+  setEntitlementGate(gate: EntitlementGate): void;
   /** Truthful per-substrate availability (`GET /substrates`). */
   substrates(): readonly SubstrateAvailabilityView[];
   /** Reconcile findings for operator/policy review. */
