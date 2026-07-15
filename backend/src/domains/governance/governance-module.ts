@@ -1,0 +1,185 @@
+/**
+ * `GovernanceComposer` — the composer that fuses the moat into one module. It:
+ *  - takes the assembled kernel ladder (napi→daemon→ts, fail-closed) built by the
+ *    async factory in `index.ts`,
+ *  - builds the durable repositories (audit / approval / work-lock / secret) over
+ *    the Phase-1 persistence `QueryExecutor` injected via the container,
+ *  - composes the audit chain, the WRITE gate (`decide→risk→audit`), and the
+ *    secrets / work-lock / approval services,
+ *  - exposes `GovernanceGate` + `SecretsPort` + `WorkLockService` + `ApprovalService`
+ *    (registered under DI/capability tokens by bootstrap),
+ *  - registers the approvals+locks and secrets routers (under `/api/agent-os`),
+ *  - reports truthful health + the read-only MCP introspection tools.
+ *
+ * No `process.env` reads (config is injected); no top-level singletons. Every
+ * stateful path is degrade-safe: without a DB the repos no-op truthfully and the
+ * gate keeps deny-biasing; without a vault key secrets refuse rather than leak.
+ */
+import { Router } from 'express';
+import type { Logger } from '../../shared/logger.js';
+import type { ComponentHealth } from '../../shared/health-types.js';
+import type { McpToolRegistration } from '../../shared/module-base.js';
+import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
+import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
+import type { GovernanceConfig } from './config.js';
+import type { GovernanceKernelPort } from './ports/kernel.port.js';
+import type { GovernanceGate } from './ports/gate.port.js';
+import type { SecretsPort } from './ports/secrets.port.js';
+import { createVaultAdapter, type VaultAdapter } from './adapters/vault.adapter.js';
+import { createAuditRepository } from './repositories/audit.repository.js';
+import {
+  createApprovalRepository,
+  createWorkLockRepository,
+} from './repositories/approval-worklock.repository.js';
+import { createSecretRepository } from './repositories/secret.repository.js';
+import { AuditChainService } from './services/audit-chain.service.js';
+import { GovernanceGateService } from './services/governance-gate.service.js';
+import { createSecretsService, type SecretsService } from './services/secrets.service.js';
+import { createWorkLockService, type WorkLockService } from './services/work-lock.service.js';
+import { createApprovalService, type ApprovalService } from './services/approval.service.js';
+import { buildGovernanceApprovalsRouter } from './routes/governance-approvals.routes.js';
+import { buildGovernanceSecretsRouter } from './routes/governance-secrets.routes.js';
+import { buildGovernanceHealth } from './health.js';
+import { buildGovernanceMcpTools } from './mcp/governance-engine.js';
+import type { GovernanceModule, GovernanceModuleDeps } from './index.js';
+
+export class GovernanceComposer implements GovernanceModule {
+  readonly name = 'governance' as const;
+
+  private readonly log: Logger;
+  private readonly cfg: GovernanceConfig;
+  private readonly kernelPort: GovernanceKernelPort;
+  private readonly executor: QueryExecutor;
+  private readonly middleware: AuthMiddleware;
+  private readonly vault: VaultAdapter;
+  private readonly auditChain: AuditChainService;
+  private readonly gateService: GovernanceGateService;
+  private readonly secretsService: SecretsService;
+  private readonly workLockService: WorkLockService;
+  private readonly approvalService: ApprovalService;
+  private started = false;
+
+  constructor(deps: GovernanceModuleDeps, cfg: GovernanceConfig, kernel: GovernanceKernelPort) {
+    this.log = deps.logger;
+    this.cfg = cfg;
+    this.kernelPort = kernel;
+    this.executor = deps.executor;
+    this.middleware = deps.middleware;
+
+    // Envelope-encryption seam. A null/invalid master key yields a permanently
+    // `down` vault whose seal/open throw — secrets fail-safe, never plaintext.
+    this.vault = createVaultAdapter({ vaultMasterKey: cfg.vaultMasterKey });
+
+    // Durable repositories over the single persistence executor.
+    const auditRepo = createAuditRepository(this.executor);
+    const approvalRepo = createApprovalRepository(this.executor);
+    const workLockRepo = createWorkLockRepository(this.executor);
+    const secretRepo = createSecretRepository(this.executor);
+
+    // The tamper-evident chain writer/verifier (cross-checks the kernel tip).
+    this.auditChain = new AuditChainService(auditRepo, kernel, this.log);
+
+    // THE write seam: decide → risk → audit. Fail-closed on any kernel fault.
+    this.gateService = new GovernanceGateService({
+      kernel,
+      audit: this.auditChain,
+      approvals: approvalRepo,
+      logger: this.log,
+    });
+
+    // Secrets seal mutations into the SAME durable chain via the gate.
+    this.secretsService = createSecretsService({
+      repo: secretRepo,
+      vault: this.vault,
+      gate: this.gateService,
+      logger: this.log,
+    });
+
+    this.workLockService = createWorkLockService({ repo: workLockRepo, logger: this.log });
+
+    // Approvals seal lifecycle events into the durable chain (best-effort).
+    this.approvalService = createApprovalService({
+      repo: approvalRepo,
+      logger: this.log,
+      audit: this.gateService,
+    });
+  }
+
+  gate(): GovernanceGate {
+    return this.gateService;
+  }
+
+  secrets(): SecretsPort {
+    return this.secretsService;
+  }
+
+  workLocks(): WorkLockService {
+    return this.workLockService;
+  }
+
+  approvals(): ApprovalService {
+    return this.approvalService;
+  }
+
+  audit(): AuditChainService {
+    return this.auditChain;
+  }
+
+  kernel(): GovernanceKernelPort {
+    return this.kernelPort;
+  }
+
+  /** The `/api/agent-os` router: approvals + work-locks + secrets edges. */
+  routes(): Router {
+    const router = Router();
+    router.use(
+      buildGovernanceApprovalsRouter({
+        approvals: this.approvalService,
+        workLocks: this.workLockService,
+        middleware: this.middleware,
+      }),
+    );
+    router.use(
+      buildGovernanceSecretsRouter({
+        secrets: this.secretsService,
+        mw: this.middleware,
+        logger: this.log,
+      }),
+    );
+    return router;
+  }
+
+  mcp(): readonly McpToolRegistration[] {
+    return buildGovernanceMcpTools(this);
+  }
+
+  async health(): Promise<ComponentHealth> {
+    return buildGovernanceHealth({
+      kernel: this.kernelPort,
+      executor: this.executor,
+      vault: this.vault,
+      auditEnabled: this.cfg.auditEnabled,
+    });
+  }
+
+  /** Boot: log the truthful kernel/vault posture. Idempotent, never throws. */
+  async start(): Promise<void> {
+    if (this.started) return;
+    this.started = true;
+    const ks = this.kernelPort.status();
+    this.log.info(
+      {
+        kernel: ks.engine,
+        kernelDegraded: ks.degraded,
+        vaultAvailable: this.vault.available,
+        auditEnabled: this.cfg.auditEnabled,
+      },
+      'governance module started',
+    );
+  }
+
+  /** Shutdown: the daemon rung is process-global; the facades are GC-owned. No-op. */
+  async stop(): Promise<void> {
+    // Idempotent, degrade-safe: nothing owned here to drain.
+  }
+}

@@ -9,6 +9,14 @@ import type { Logger } from 'pino';
 import type { AppConfig } from './app-config.js';
 import type { DomainModule } from './module-base.js';
 import type { DomainKey } from './domain-registry.js';
+// Capability contract types (type-only — erased at runtime, no import cycle). A
+// capability token lets a later domain resolve ONE cross-domain seam (the gate,
+// secrets, the interop chain) without resolving the whole owning module.
+import type { GovernanceGate } from '../domains/governance/ports/gate.port.js';
+import type { SecretsPort } from '../domains/governance/ports/secrets.port.js';
+import type { InteropChain } from '../domains/governance/ports/interop.port.js';
+import type { WorkLockService } from '../domains/governance/services/work-lock.service.js';
+import type { ApprovalService } from '../domains/governance/services/approval.service.js';
 
 /** A DI key that remembers the type it resolves to. */
 export interface Token<T> {
@@ -27,6 +35,25 @@ export function createToken<T>(description: string): Token<T> {
 export const TOKENS = {
   AppConfig: createToken<AppConfig>('AppConfig'),
   Logger: createToken<Logger>('Logger'),
+} as const;
+
+/**
+ * Cross-domain CAPABILITY tokens (beyond the per-module {@link DOMAIN_TOKENS}).
+ * A domain registers a single seam here so a later domain resolves just that
+ * capability without reaching into the owning module. Phase 3 registers the
+ * governance gate/secrets/locks/approvals + the interop chain.
+ */
+export const CAPABILITY_TOKENS = {
+  /** THE write seam: `GovernanceGate.decide → risk → audit` (governance-owned). */
+  governanceGate: createToken<GovernanceGate>('capability:governance-gate'),
+  /** The envelope-encrypted secret store (governance-owned). */
+  secrets: createToken<SecretsPort>('capability:secrets'),
+  /** Path/work-lock acquire/release/check (governance-owned). */
+  workLock: createToken<WorkLockService>('capability:work-lock'),
+  /** The control-plane approval-gate lifecycle (governance-owned). */
+  approval: createToken<ApprovalService>('capability:approval'),
+  /** THE edge seam: `authorize→risk→policy→audit` (interop-owned, over the gate). */
+  interopChain: createToken<InteropChain>('capability:interop-chain'),
 } as const;
 
 /**
