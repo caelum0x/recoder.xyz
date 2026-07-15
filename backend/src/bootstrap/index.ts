@@ -20,7 +20,7 @@ import expressWs from 'express-ws';
 import type { AppConfig } from '../shared/app-config.js';
 import type { Logger } from '../shared/logger.js';
 import { childLogger, rootLogger } from '../shared/logger.js';
-import { TOKENS, createToken, DOMAIN_TOKENS } from '../shared/di-tokens.js';
+import { TOKENS, createToken, DOMAIN_TOKENS, CAPABILITY_TOKENS } from '../shared/di-tokens.js';
 import { errorEnvelope, notFound } from '../shared/errors.js';
 import { DOMAIN_REGISTRY } from '../shared/domain-registry.js';
 
@@ -38,6 +38,8 @@ import { PgApiKeyStore } from '../domains/identity/repositories/api-key.reposito
 import { createApiKeyService } from '../domains/identity/api-key.service.js';
 import { buildApiKeysRouter } from '../domains/identity/routes/api-keys.routes.js';
 import { createOrgsRbacFeature } from '../domains/identity/orgs-rbac.feature.js';
+import { createGovernanceModule } from '../domains/governance/index.js';
+import { createInteropModule } from '../domains/interop/index.js';
 
 /** Bootstrap-owned DI tokens (beyond the shared foundation tokens). */
 export const BOOT_TOKENS = {
@@ -213,6 +215,56 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   container.registerValue(DOMAIN_TOKENS.identity, identity);
   healthRegistry.register(identity);
 
+  // --- Phase 3: Governance — THE moat / write seam. Composes the kernel ladder
+  //     (napi→daemon→ts, fail-closed synthetic-deny floor), the tamper-evident
+  //     Merkle audit chain, envelope-encrypted secrets, path work-locks, and the
+  //     approval gate over the Phase-1 persistence executor. Degrade-safe: without
+  //     Postgres the durable repos no-op truthfully and the ladder deny-biases on
+  //     the pure-TS rung; without GOVERNANCE_VAULT_MASTER_KEY secrets refuse to
+  //     store plaintext. The kernel ladder is probed async at assembly. ---
+  const bootEnv = options.env ?? process.env;
+  const governance = await createGovernanceModule({
+    config,
+    logger: childLogger('governance'),
+    executor: persistence.executor(),
+    middleware: identity.middleware(),
+    overrides: {
+      // The vault master key is not yet an AppConfig slice; bootstrap is the only
+      // sanctioned env read. Absent → secrets report `down` (never a faked write).
+      vaultMasterKey: bootEnv.GOVERNANCE_VAULT_MASTER_KEY ?? null,
+      // napi in-proc kernel is on by default; explicitly disable via env for CI.
+      napiEnabled: bootEnv.GOVERNANCE_NAPI_ENABLED !== 'false',
+    },
+  });
+  container.registerValue(DOMAIN_TOKENS.governance, governance);
+  // Cross-domain capability seams later phases resolve without the whole module.
+  container.registerValue(CAPABILITY_TOKENS.governanceGate, governance.gate());
+  container.registerValue(CAPABILITY_TOKENS.secrets, governance.secrets());
+  container.registerValue(CAPABILITY_TOKENS.workLock, governance.workLocks());
+  container.registerValue(CAPABILITY_TOKENS.approval, governance.approvals());
+  healthRegistry.register(governance);
+
+  // --- Phase 3: Interop — the A2A wire + the ONE edge chain
+  //     (`authorize→risk→policy→audit`) over the governance gate (conflict #1: one
+  //     chain impl, calling governance's gate — no duplicate gate composition) and
+  //     the SINGLE set of edge middleware (interop guard, rate-limit, /internal/*
+  //     key gate, ext-authz ingress — conflict #10). Fail-closed: no gate → every
+  //     edge denies; no ingress verifier → hostile ingress is rejected. ---
+  const interop = createInteropModule({
+    config,
+    logger: childLogger('interop'),
+    gate: governance.gate(),
+    localCard: {
+      id: config.runtime.instanceId,
+      name: config.runtime.serviceName,
+      capabilities: [],
+      version: '1',
+    },
+  });
+  container.registerValue(DOMAIN_TOKENS.interop, interop);
+  container.registerValue(CAPABILITY_TOKENS.interopChain, interop.chain());
+  healthRegistry.register(interop);
+
   // 3. App.
   const { app, server } = buildApp(config, log);
 
@@ -245,6 +297,14 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // resolve/link the unified identity read model here.
   app.use('/internal/identity', identity.internalRoutes());
 
+  // Governance edges: approvals + work-locks + secrets under /api/agent-os. The
+  // routers guard mutations with the composed identity middleware; the edge
+  // domain (Phase 4) folds these behind the canonical interop chain later.
+  app.use(DOMAIN_REGISTRY.governance.mountBase, governance.routes());
+  // Interop edges: A2A health + local agent-card + the ext-authz-guarded JSON-RPC
+  // ingress under /api/a2a.
+  app.use(DOMAIN_REGISTRY.interop.mountBase, interop.routes());
+
   // Terminal 404 + error envelope (domain routers mount before these in later phases).
   app.use(notFound());
   app.use(errorEnvelope({ error: (obj, msg) => log.error(obj, msg) }));
@@ -255,6 +315,8 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   await engineSupervisor.start();
   await persistence.start();
   await identity.start();
+  await governance.start();
+  await interop.start();
   await listen(server, config);
   const url = `http://${config.server.host}:${config.server.port}`;
   log.info({ url, healthSources: healthRegistry.count }, 'recoder-backend listening');
@@ -262,6 +324,8 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // 6. Lifecycle wiring.
   lifecycle
     .onStop('http-server', () => closeServer(server))
+    .onStop('interop', () => interop.stop())
+    .onStop('governance', () => governance.stop())
     .onStop('identity', () => identity.stop())
     .onStop('persistence', () => persistence.stop())
     .onStop('engine-supervisor', () => engineSupervisor.stop());
