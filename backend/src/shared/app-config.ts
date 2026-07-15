@@ -76,6 +76,44 @@ export interface LoggingConfig {
   readonly pretty: boolean;
 }
 
+/** Resource-governor admission caps for conductor launches. */
+export interface ConductorCapsConfig {
+  readonly maxConcurrentWorkspaces: number;
+  readonly maxConcurrentPerUser: number;
+  readonly maxTmuxSessions: number;
+  readonly minFreeDiskGb: number;
+  readonly maxWorktreeDiskGb: number;
+}
+
+/**
+ * Conductor (the terminal product) slice: the pinned tmux binary, the worktree
+ * root, the real-time control-mode flag, and the admission caps. These were the
+ * scattered `CONDUCTOR_*` / `RECODER_TMUX_*` env reads; bootstrap folds them here
+ * so no conductor domain code reads `process.env`.
+ */
+export interface ConductorSliceConfig {
+  /** Absolute path to the pinned tmux binary; `null` -> substrate self-resolves. */
+  readonly tmuxBin: string | null;
+  /** Root dir isolated git worktrees are created under. */
+  readonly worktreeRoot: string;
+  /** Opt-in real-time tmux control-mode (`-CC`) `%output` stream. */
+  readonly tmuxControlMode: boolean;
+  /** Resource-governor admission caps. */
+  readonly caps: ConductorCapsConfig;
+}
+
+/**
+ * Agent-OS (state-of-record + CloudEvents outbox) slice: the optional NATS
+ * transport url + the domain feature flags. `null` NATS -> the outbox is a
+ * log-only sink and records stay `pending` (truthful degrade).
+ */
+export interface AgentOsSliceConfig {
+  readonly natsUrl: string | null;
+  readonly brainEnabled: boolean;
+  readonly codeGraphEnabled: boolean;
+  readonly squadsEnabled: boolean;
+}
+
 /**
  * The whole configuration, deeply readonly. Constructed once at boot by
  * `bootstrap/config.ts::loadConfig` and injected into every module.
@@ -88,6 +126,8 @@ export interface AppConfig {
   readonly internal: InternalConfig;
   readonly cors: CorsConfig;
   readonly logging: LoggingConfig;
+  readonly conductor: ConductorSliceConfig;
+  readonly agentOs: AgentOsSliceConfig;
 }
 
 // --- Slice accessors: the only sanctioned way a module reaches its config. ---
@@ -99,3 +139,5 @@ export const authConfig = (app: AppConfig): AuthConfig => app.auth;
 export const internalConfig = (app: AppConfig): InternalConfig => app.internal;
 export const corsConfig = (app: AppConfig): CorsConfig => app.cors;
 export const loggingConfig = (app: AppConfig): LoggingConfig => app.logging;
+export const conductorSliceConfig = (app: AppConfig): ConductorSliceConfig => app.conductor;
+export const agentOsSliceConfig = (app: AppConfig): AgentOsSliceConfig => app.agentOs;

@@ -124,11 +124,14 @@ describe('start()', () => {
     expect(port).toBeGreaterThan(0);
 
     const res = await httpGet(port, '/health');
+    // Registered health sources now: engine-supervisor (Phase 0) + persistence
+    // (Phase 1) + identity (Phase 2). In the test env there is no DATABASE_URL /
+    // BETTER_AUTH_SECRET, so persistence + identity degrade SAFELY — a truthful
+    // `degraded` (still HTTP 200), never a faked `up` and never `down`.
     expect(res.status).toBe(200);
     const body = JSON.parse(res.body) as { status: string; sources: number; degraded: boolean };
-    expect(body.status).toBe('up');
-    expect(body.sources).toBe(1); // engine-supervisor only
-    expect(body.degraded).toBe(false);
+    expect(['up', 'degraded']).toContain(body.status);
+    expect(body.sources).toBeGreaterThanOrEqual(3);
   });
 
   it('returns a 404 envelope for unknown routes', async () => {

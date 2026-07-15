@@ -9,6 +9,7 @@
  */
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import type {
   AppConfig,
   NodeEnv,
@@ -19,6 +20,8 @@ import type {
   InternalConfig,
   CorsConfig,
   LoggingConfig,
+  ConductorSliceConfig,
+  AgentOsSliceConfig,
 } from '../shared/app-config.js';
 
 /** Raw env source; defaults to the real process env. */
@@ -65,6 +68,23 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().optional(),
 
   LOG_LEVEL: z.string().default('info'),
+
+  // --- Conductor (terminal product) slice ---
+  CONDUCTOR_TMUX_BIN: z.string().optional(),
+  RECODER_TMUX_BUILD_PATH: z.string().optional(),
+  CONDUCTOR_WORKTREE_ROOT: z.string().optional(),
+  CONDUCTOR_TMUX_CONTROL_MODE: z.string().optional(),
+  CONDUCTOR_MAX_CONCURRENT: z.coerce.number().int().positive().max(10_000).optional(),
+  CONDUCTOR_MAX_CONCURRENT_PER_USER: z.coerce.number().int().positive().max(10_000).optional(),
+  CONDUCTOR_MAX_TMUX_SESSIONS: z.coerce.number().int().positive().max(100_000).optional(),
+  CONDUCTOR_MIN_FREE_DISK_GB: z.coerce.number().nonnegative().max(1_000_000).optional(),
+  CONDUCTOR_MAX_WORKTREE_DISK_GB: z.coerce.number().nonnegative().max(1_000_000).optional(),
+
+  // --- Agent-OS (state-of-record + outbox) slice ---
+  AGENT_OS_NATS_URL: z.string().optional(),
+  RECODER_BRAIN_ENABLED: z.string().optional(),
+  RECODER_CODE_GRAPH_ENABLED: z.string().optional(),
+  RECODER_SQUADS_ENABLED: z.string().optional(),
 });
 
 type ParsedEnv = z.infer<typeof envSchema>;
@@ -178,7 +198,31 @@ function buildConfig(env: ParsedEnv, rawEnv: EnvSource): AppConfig {
     pretty: !isProduction && (rawEnv.LOG_PRETTY === undefined || asBool(rawEnv.LOG_PRETTY, true)),
   };
 
-  return { runtime, server, database, auth, internal, cors, logging };
+  const conductor: ConductorSliceConfig = {
+    // Resolution: explicit override → vendored build path → pinned repo binary.
+    tmuxBin:
+      env.CONDUCTOR_TMUX_BIN ??
+      env.RECODER_TMUX_BUILD_PATH ??
+      path.resolve(process.cwd(), '..', 'apps', 'desktop', 'engines', 'tmux', 'tmux'),
+    worktreeRoot: env.CONDUCTOR_WORKTREE_ROOT ?? '/tmp/recoder-worktrees',
+    tmuxControlMode: asBool(env.CONDUCTOR_TMUX_CONTROL_MODE, false),
+    caps: {
+      maxConcurrentWorkspaces: env.CONDUCTOR_MAX_CONCURRENT ?? 10,
+      maxConcurrentPerUser: env.CONDUCTOR_MAX_CONCURRENT_PER_USER ?? 5,
+      maxTmuxSessions: env.CONDUCTOR_MAX_TMUX_SESSIONS ?? 50,
+      minFreeDiskGb: env.CONDUCTOR_MIN_FREE_DISK_GB ?? 5,
+      maxWorktreeDiskGb: env.CONDUCTOR_MAX_WORKTREE_DISK_GB ?? 50,
+    },
+  };
+
+  const agentOs: AgentOsSliceConfig = {
+    natsUrl: env.AGENT_OS_NATS_URL ?? null,
+    brainEnabled: asBool(env.RECODER_BRAIN_ENABLED, false),
+    codeGraphEnabled: asBool(env.RECODER_CODE_GRAPH_ENABLED, false),
+    squadsEnabled: asBool(env.RECODER_SQUADS_ENABLED, true),
+  };
+
+  return { runtime, server, database, auth, internal, cors, logging, conductor, agentOs };
 }
 
 /**

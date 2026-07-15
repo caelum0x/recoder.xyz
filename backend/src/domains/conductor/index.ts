@@ -27,6 +27,7 @@ import type { AuthMiddleware } from '../identity/middleware/authenticate.middlew
 import type { Principal } from '../identity/types.js';
 import type { ConductorConfigOverrides } from './config.js';
 import type { GovernanceGatePort, TerminalStreamPort } from './ports/index.js';
+import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type { WorkspaceRepositoryPort } from './ports/workspace-repository.port.js';
 import type {
   ReconcileFindingView,
@@ -49,6 +50,13 @@ export interface ConductorModuleDeps {
   readonly overrides?: ConductorConfigOverrides;
   /** Concrete substrates to register (tmux/daytona/in-process/ssh) — empty ⇒ fail truthfully. */
   readonly substrates?: readonly ConductorSubstrate[];
+  /**
+   * The DURABLE run-event sink the run-tailer emits into — the agent-os RunEvent
+   * bus, adapted to the narrow `append(event)` shape at the composition root. When
+   * provided, every tailed `RunEvent` is ALSO ingested into the state-of-record
+   * (agent-os); when omitted, only the conductor-local durable+live sink is used.
+   */
+  readonly runEventSink?: RunEventSinkPort;
   /** Optional durable workspace repository (agent-os-backed) overriding the default. */
   readonly repository?: WorkspaceRepositoryPort;
   /** Optional collision-prevention write-lock (conductor-locks over coordination). */
