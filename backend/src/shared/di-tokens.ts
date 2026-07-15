@@ -17,6 +17,7 @@ import type { SecretsPort } from '../domains/governance/ports/secrets.port.js';
 import type { InteropChain } from '../domains/governance/ports/interop.port.js';
 import type { WorkLockService } from '../domains/governance/services/work-lock.service.js';
 import type { ApprovalService } from '../domains/governance/services/approval.service.js';
+import type { EntitlementGate } from '../domains/billing/ports/entitlement.port.js';
 
 /** A DI key that remembers the type it resolves to. */
 export interface Token<T> {
@@ -54,6 +55,14 @@ export const CAPABILITY_TOKENS = {
   approval: createToken<ApprovalService>('capability:approval'),
   /** THE edge seam: `authorize→risk→policy→audit` (interop-owned, over the gate). */
   interopChain: createToken<InteropChain>('capability:interop-chain'),
+  /**
+   * THE cross-domain entitlement seam (billing-owned): `resolvePlan`/`check`/
+   * `checkQuota`. Registered so conductor (pre-dispatch quota), inference (token
+   * metering), and engines (usage) can resolve it without importing billing. The
+   * consuming modules do not yet accept it at construction; this token makes it
+   * available for that wiring once they expose a setter/optional dep.
+   */
+  entitlementGate: createToken<EntitlementGate>('capability:entitlement-gate'),
 } as const;
 
 /**

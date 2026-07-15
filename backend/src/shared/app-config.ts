@@ -11,6 +11,18 @@
  * own slice + a `slice<Domain>Config(app)` accessor; they never redefine these.
  */
 
+// Type-only imports of the not-yet-in-AppConfig override shapes each capability
+// domain accepts. They are erased at runtime (no cycle); AppConfig simply carries
+// the operator-set values so bootstrap reads `process.env` ONCE (in config.ts) and
+// every domain stays env-free (ARCHITECTURE §10.8).
+import type { EnginesConfigOverrides } from '../domains/engines/config.js';
+import type { InferenceConfigOverrides } from '../domains/inference/config.js';
+import type { BillingConfigOverrides } from '../domains/billing/config.js';
+import type { CloudConfigOverrides } from '../domains/cloud/config.js';
+import type { MemoryConfigOverrides } from '../domains/memory/config.js';
+import type { SocialConfigOverrides } from '../domains/social/config.js';
+import type { InteropWireConfigOverrides } from '../domains/interop-wire/config.js';
+
 export type NodeEnv = 'development' | 'production' | 'test';
 
 /** Process/runtime identity. */
@@ -128,6 +140,18 @@ export interface AppConfig {
   readonly logging: LoggingConfig;
   readonly conductor: ConductorSliceConfig;
   readonly agentOs: AgentOsSliceConfig;
+  // --- Capability-domain override slices (Phase 6–10 serial integration). Each
+  //     carries the operator-set, not-yet-first-class values the domain's
+  //     `slice<Domain>Config(app, overrides)` folds in. Every field is optional +
+  //     degrade-safe: an unset slice ⇒ the domain resolves its own truthful
+  //     defaults. These keep every env read inside `bootstrap/config.ts`. ---
+  readonly engines: EnginesConfigOverrides;
+  readonly inference: InferenceConfigOverrides;
+  readonly billing: BillingConfigOverrides;
+  readonly cloud: CloudConfigOverrides;
+  readonly memory: MemoryConfigOverrides;
+  readonly social: SocialConfigOverrides;
+  readonly interopWire: InteropWireConfigOverrides;
 }
 
 // --- Slice accessors: the only sanctioned way a module reaches its config. ---
@@ -141,3 +165,10 @@ export const corsConfig = (app: AppConfig): CorsConfig => app.cors;
 export const loggingConfig = (app: AppConfig): LoggingConfig => app.logging;
 export const conductorSliceConfig = (app: AppConfig): ConductorSliceConfig => app.conductor;
 export const agentOsSliceConfig = (app: AppConfig): AgentOsSliceConfig => app.agentOs;
+export const enginesOverrides = (app: AppConfig): EnginesConfigOverrides => app.engines;
+export const inferenceOverrides = (app: AppConfig): InferenceConfigOverrides => app.inference;
+export const billingOverrides = (app: AppConfig): BillingConfigOverrides => app.billing;
+export const cloudOverrides = (app: AppConfig): CloudConfigOverrides => app.cloud;
+export const memoryOverrides = (app: AppConfig): MemoryConfigOverrides => app.memory;
+export const socialOverrides = (app: AppConfig): SocialConfigOverrides => app.social;
+export const interopWireOverrides = (app: AppConfig): InteropWireConfigOverrides => app.interopWire;
