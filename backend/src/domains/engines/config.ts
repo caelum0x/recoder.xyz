@@ -84,6 +84,30 @@ export const enginesConfigSchema = z.object({
   }),
 
   /**
+   * Per-daemon-engine MINIMAL child env overlay (bootstrap-injected, no secrets
+   * leaked from the full env): colbert `PATH` (ninja for torch ext build) +
+   * `HOME`, ops-recorder `OPS_RECORDER_AUTH_DISABLED`, multica
+   * `MULTICA_API_KEY`/`MULTICA_WORKSPACE_ID`. Keyed by engine id; default `{}`.
+   */
+  daemonEnv: z.record(z.string(), z.record(z.string(), z.string())).default({}),
+
+  /**
+   * Per-sidecar-engine MINIMAL child env overlay (bootstrap-injected): mem0
+   * `HISTORY_DB_PATH` + `AUTH_DISABLED`, browser-use `PORT`, plus `PATH`/`HOME`
+   * so the venv python resolves its toolchain. Keyed by engine id; default `{}`.
+   */
+  sidecarEnv: z.record(z.string(), z.record(z.string(), z.string())).default({}),
+
+  /** BYOK provider env for the stdio pal server; empty ⇒ pal multi-model degrades. */
+  palEnv: z.record(z.string(), z.string()).default({}),
+
+  /**
+   * Fire the supervised daemon/sidecar spawn loop on `start()` (default true).
+   * When false, engines only lazy-boot on first `invoke()` (no boot spawn).
+   */
+  spawnOnBoot: z.boolean().default(true),
+
+  /**
    * Per-engine feature flags. A disabled engine is never bound and reports
    * `down` with reason "disabled". Default: every engine enabled (the loader
    * still degrades when its binding is absent).
@@ -104,6 +128,10 @@ export interface EnginesConfigOverrides {
   readonly daemonBins?: Partial<EnginesConfig['daemonBins']>;
   readonly externalUrls?: Partial<EnginesConfig['externalUrls']>;
   readonly sidecarPython?: Partial<EnginesConfig['sidecarPython']>;
+  readonly daemonEnv?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  readonly sidecarEnv?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  readonly palEnv?: Readonly<Record<string, string>>;
+  readonly spawnOnBoot?: boolean;
   readonly enabled?: Readonly<Record<string, boolean>>;
   readonly napiFirst?: boolean;
 }
@@ -147,6 +175,10 @@ export function sliceEnginesConfig(
     daemonBins: { ...NULL_DAEMON_BINS, ...overrides.daemonBins },
     externalUrls: { ...NULL_URLS, ...overrides.externalUrls },
     sidecarPython: { ...NULL_SIDECAR_PY, ...overrides.sidecarPython },
+    daemonEnv: overrides.daemonEnv ?? {},
+    sidecarEnv: overrides.sidecarEnv ?? {},
+    palEnv: overrides.palEnv ?? {},
+    spawnOnBoot: overrides.spawnOnBoot ?? true,
     enabled: overrides.enabled ?? {},
     napiFirst: overrides.napiFirst ?? true,
   });
@@ -155,4 +187,14 @@ export function sliceEnginesConfig(
 /** Whether an engine is enabled (default true when unspecified). */
 export function isEngineEnabled(config: EnginesConfig, engineId: string): boolean {
   return config.enabled[engineId] ?? true;
+}
+
+/** The MINIMAL child env overlay for a supervised daemon engine (default `{}`). */
+export function daemonEnvFor(config: EnginesConfig, engineId: string): Record<string, string> {
+  return { ...(config.daemonEnv[engineId] ?? {}) };
+}
+
+/** The MINIMAL child env overlay for a supervised sidecar engine (default `{}`). */
+export function sidecarEnvFor(config: EnginesConfig, engineId: string): Record<string, string> {
+  return { ...(config.sidecarEnv[engineId] ?? {}) };
 }

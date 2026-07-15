@@ -19,10 +19,12 @@ import { createBrowserEngine, createDefaultBrowserDriver } from '@recoder/agent-
 import type { BrowserDriver, BrowserEngine, BrowserEnv, BrowserFetch } from '@recoder/agent-browser';
 import { registerBrowserUseMcpTools } from '../../../../agent-os/mcp/browser-use-engine.js';
 import type { McpToolRouter } from '@recoder/agent-mcp';
+import { join } from 'node:path';
 import type { Logger } from '../../../../shared/logger.js';
 import type { EnginesConfig } from '../../config.js';
-import { isEngineEnabled } from '../../config.js';
+import { isEngineEnabled, sidecarEnvFor } from '../../config.js';
 import { DEFAULT_LOOPBACK } from '../../constants.js';
+import { resolveEnginesPyRoot, resolveVenvPython } from './sidecar-paths.js';
 import { EngineClientBase } from '../../ports/engine-client.port.js';
 import type { EngineCall } from '../../ports/engine-client.port.js';
 import type { SidecarSpec, SidecarSupervisorPort } from '../../ports/sidecar-supervisor.port.js';
@@ -136,17 +138,35 @@ export class BrowserUseAdapter extends EngineClientBase<unknown, unknown> {
     }
   }
 
+  /**
+   * Build the browser-use sidecar spec, or null when no sidecar is possible.
+   * External URL → skip-spawn (the HTTP driver reaches the operator instance);
+   * else resolve the venv python by convention and run `service_entry.py` in the
+   * `engines/py/browser-use` dir with `PORT` in the minimal env (`/health`).
+   */
   private spec(): SidecarSpec | null {
     const external = this.deps.config.externalUrls['browser-use'];
-    const python = this.deps.config.sidecarPython['browser-use'];
+    const pyRoot = resolveEnginesPyRoot(this.deps.config.repoRoot);
+    const engineDir = pyRoot ? join(pyRoot, 'browser-use') : null;
+    const python = external
+      ? null
+      : this.deps.config.sidecarPython['browser-use'] ?? (engineDir ? resolveVenvPython(engineDir) : null);
     if (!external && !python) return null;
+    const entrypoint = engineDir ? join(engineDir, 'service_entry.py') : null;
+    const port = DEFAULT_LOOPBACK['browser-use'].split(':')[1] ?? '8897';
+    const env: Record<string, string> = {
+      PORT: port,
+      ...(external ? { BROWSER_USE_URL: external } : {}),
+      ...sidecarEnvFor(this.deps.config, 'browser-use'),
+    };
     return {
       engineId: 'browser-use',
       transport: 'loopback-http',
       pythonPath: python,
-      entrypoint: null, // bootstrap injects the concrete entrypoint via overrides
+      entrypoint,
+      ...(engineDir ? { cwd: engineDir } : {}),
       listenAddr: DEFAULT_LOOPBACK['browser-use'],
-      ...(external ? { env: { BROWSER_USE_URL: external } } : {}),
+      env,
     };
   }
 }

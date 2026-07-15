@@ -26,7 +26,7 @@ import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
 import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
 import type { Logger } from '../../shared/logger.js';
-import { sliceEnginesConfig, isEngineEnabled, type EnginesConfig } from './config.js';
+import { sliceEnginesConfig, isEngineEnabled, daemonEnvFor, type EnginesConfig } from './config.js';
 import { ENGINE_IDS, ENGINE_TRANSPORTS, DEFAULT_LOOPBACK, isRestartable, isEngineId } from './constants.js';
 import { down, type EngineDescriptor, type EngineHealth, type EngineId } from './types.js';
 import type { EngineClientPort } from './ports/engine-client.port.js';
@@ -200,7 +200,12 @@ export class EnginesComposer implements EnginesModule {
     );
     map.set(
       'pal-mcp',
-      new PalMcpAdapter({ supervisor: this.sidecarSupervisor, config: this.cfg, log: this.log }),
+      new PalMcpAdapter({
+        supervisor: this.sidecarSupervisor,
+        config: this.cfg,
+        log: this.log,
+        ...(Object.keys(this.cfg.palEnv).length > 0 ? { palEnv: this.cfg.palEnv } : {}),
+      }),
     );
 
     // --- cli (one-shot subprocess) ---
@@ -215,16 +220,37 @@ export class EnginesComposer implements EnginesModule {
   /** Project the narrowed daemon-adapter config for one daemon engine (no env reads). */
   private daemonCfg(id: 'colbert' | 'ops-recorder' | 'multica' | 'ziti'): DaemonAdapterConfig {
     const listenAddr = DEFAULT_LOOPBACK[id];
+    // The MINIMAL child env overlay (colbert PATH/ninja, ops-recorder auth flag,
+    // multica keys) — bootstrap-injected, secret-minimal, NEVER `process.env`.
+    const childEnv = daemonEnvFor(this.cfg, id);
     return {
       enabled: isEngineEnabled(this.cfg, id),
       externalUrl: this.cfg.externalUrls[id] ?? null,
       binOverride: this.cfg.daemonBins[id] ?? null,
       ...(listenAddr ? { listenAddr } : {}),
+      ...(Object.keys(childEnv).length > 0 ? { childEnv } : {}),
     };
   }
 
   client(id: EngineId): EngineClientPort | null {
     return this.adapters.get(id) ?? null;
+  }
+
+  /**
+   * The LIVE loopback base URL a supervised engine publishes once it has come up
+   * (`http://127.0.0.1:PORT`), or the operator's external URL, or `null` when the
+   * engine is not (yet) reachable. Consumers that speak raw HTTP fold this in;
+   * consumers on the typed seam prefer `client(id)`. NB: with fire-and-forget
+   * spawn-on-boot, this is `null` until the engine's first health passes, so
+   * consumers should read it lazily (re-probe), not cache a one-shot snapshot.
+   */
+  endpoint(id: EngineId): string | null {
+    const daemon = this.daemonSupervisor.handle(id);
+    if (daemon?.baseUrl) return daemon.baseUrl;
+    const sidecar = this.sidecarSupervisor.handle(id);
+    if (sidecar?.baseUrl) return sidecar.baseUrl;
+    const external = (this.cfg.externalUrls as Record<string, string | null>)[id];
+    return external ?? null;
   }
 
   tensorzero(): EngineClientPort | null {
@@ -347,13 +373,23 @@ export class EnginesComposer implements EnginesModule {
     });
   }
 
-  /** Boot: register the napi engine tools into the host + log posture. Idempotent. */
+  /**
+   * Boot: register the napi engine tools into the host, SPAWN every supervised
+   * daemon/sidecar (fire-and-forget), and log posture. Idempotent.
+   *
+   * The napi (`.node`) engines are already in-process (loaded in the ctor) and
+   * the CLI engines are one-shot, so only the daemon/sidecar transports need a
+   * boot spawn. It is dispatched fire-and-forget (`void Promise.allSettled`) so
+   * the 30s-per-engine `waitForHealthy` NEVER blocks boot — health surfaces
+   * truthfully via `listHealth()` as each engine comes up (or stays `down`).
+   */
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
     // Seed the `engines` server + bind the napi engine tools behind the gate.
     this.hostBundle.registerServer(enginesMcpServer);
     this.napiRegistration = registerNapiEngineTools(this.hostBundle, this.napiClients);
+    if (this.cfg.spawnOnBoot) this.spawnSupervisedOnBoot();
     const engines = await this.listHealth();
     this.log.info(
       {
@@ -362,9 +398,40 @@ export class EnginesComposer implements EnginesModule {
         up: engines.filter((engine) => engine.status === 'up').length,
         napiServers: this.napiRegistration.servers,
         hostReady: this.hostReady,
+        spawnOnBoot: this.cfg.spawnOnBoot,
       },
       'engines module started',
     );
+  }
+
+  /**
+   * Fire `adapter.start()` for every supervised (daemon/sidecar) engine in
+   * parallel WITHOUT awaiting — each `start()` is idempotent + degrade-safe (an
+   * absent binary/venv resolves to a no-op `down`, never throws, never blocks
+   * past `waitMs`). Under the test runner the supervisors short-circuit before
+   * any real spawn, so this is inert in tests.
+   */
+  private spawnSupervisedOnBoot(): void {
+    const supervised = [...this.adapters.values()].filter(
+      (adapter) => adapter.transport === 'daemon' || adapter.transport === 'sidecar',
+    );
+    void Promise.allSettled(
+      supervised.map(async (adapter) => {
+        try {
+          await adapter.start();
+        } catch (err) {
+          this.log.warn(
+            { engineId: adapter.id, err: err instanceof Error ? err.message : String(err) },
+            'engine spawn-on-boot degraded (truthful down)',
+          );
+        }
+      }),
+    ).then(() => {
+      this.log.info(
+        { attempted: supervised.map((adapter) => adapter.id) },
+        'engines: supervised spawn-on-boot dispatched (health surfaces as each comes up)',
+      );
+    });
   }
 
   /** Shutdown: stop supervised daemons/sidecars. Idempotent, degrade-safe. */

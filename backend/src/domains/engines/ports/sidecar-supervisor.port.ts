@@ -31,6 +31,11 @@ export interface SidecarSpec {
   readonly args?: readonly string[];
   /** Loopback listen address for the `loopback-http` transport. */
   readonly listenAddr?: string;
+  /**
+   * `/health` path to probe for the `loopback-http` transport (default
+   * `/health`). Some sidecars mount it elsewhere (mem0 → `/api/health`).
+   */
+  readonly healthPath?: string;
   /** MINIMAL child env overlay (required keys + listen addr); NOT the full env. */
   readonly env?: Readonly<Record<string, string>>;
   /** Env var names that MUST be present in `env` for the sidecar to be usable. */
