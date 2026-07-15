@@ -1,49 +1,127 @@
-from flask import Flask, render_template, request
-from functools import lru_cache
+"""ColBERT ANN index search HTTP service (index-backed, degrade-safe).
+
+Serves a prebuilt ColBERT index via ``Searcher`` over a small HTTP surface.
+Unlike ``rerank_server.py`` (which scores caller-supplied passages on the fly),
+this endpoint searches a prebuilt index and requires both a built index and the
+heavy ``torch`` / ``colbert`` stack.
+
+Design constraints:
+
+- **No import-time heavy side-effects.** The ``Searcher`` is NOT constructed at
+  module import time. Building it eagerly would crash the whole sidecar on a
+  bare interpreter (no torch) or when ``INDEX_NAME`` / ``INDEX_ROOT`` are unset.
+  Instead it is loaded lazily on first ``/api/search`` and cached, so the
+  service BOOTS and answers ``/health`` truthfully even when search is not yet
+  possible.
+
+- **Honest degrade.** When torch/colbert are missing or the index is not
+  configured, ``/api/search`` returns a ``503`` with a truthful reason rather
+  than a stack trace, and ``/health`` reports ``search_available: false``.
+
+Environment:
+    INDEX_NAME    Name of the prebuilt ColBERT index.
+    INDEX_ROOT    Directory containing the index.
+    PORT          Port to bind when run as a script.
+    COLBERT_HOST  Interface to bind. Defaults to "127.0.0.1" (loopback).
+
+Boot:
+    INDEX_NAME=<name> INDEX_ROOT=<dir> PORT=8894 python server.py
+"""
+
 import math
 import os
-from dotenv import load_dotenv
+from functools import lru_cache
 
-from colbert.infra import Run, RunConfig, ColBERTConfig
-from colbert import Searcher
+from dotenv import load_dotenv
+from flask import Flask, request, jsonify
 
 load_dotenv()
 
-INDEX_NAME = os.getenv("INDEX_NAME")
-INDEX_ROOT = os.getenv("INDEX_ROOT")
 app = Flask(__name__)
+counter = {"api": 0}
 
-searcher = Searcher(index=INDEX_NAME, index_root=INDEX_ROOT)
-counter = {"api" : 0}
+
+@lru_cache(maxsize=1)
+def _probe_capability():
+    """Lazily check whether index search is possible, cached once.
+
+    Returns ``(available, reason)``. Verifies the heavy imports AND that the
+    index location is configured. Never constructs the Searcher (that is
+    deferred to ``_get_searcher``), so ``/health`` stays cheap.
+    """
+    index_name = os.getenv("INDEX_NAME")
+    index_root = os.getenv("INDEX_ROOT")
+    if not index_name or not index_root:
+        return False, "index not configured (set INDEX_NAME and INDEX_ROOT)"
+    try:
+        import torch  # noqa: F401
+        from colbert import Searcher  # noqa: F401
+        from colbert.infra import Run, RunConfig, ColBERTConfig  # noqa: F401
+
+        return True, None
+    except Exception as exc:  # pragma: no cover - only without deps
+        return False, str(exc)
+
+
+@lru_cache(maxsize=1)
+def _get_searcher():
+    """Construct and cache the ColBERT Searcher on first use.
+
+    Only reached after ``_probe_capability`` confirmed imports + configuration,
+    so the heavy imports here are guaranteed to succeed.
+    """
+    from colbert import Searcher
+
+    return Searcher(index=os.getenv("INDEX_NAME"), index_root=os.getenv("INDEX_ROOT"))
+
 
 @lru_cache(maxsize=1000000)
 def api_search_query(query, k):
-    print(f"Query={query}")
-    if k == None: k = 10
+    if k is None:
+        k = 10
     k = min(int(k), 100)
+    searcher = _get_searcher()
     pids, ranks, scores = searcher.search(query, k=100)
     pids, ranks, scores = pids[:k], ranks[:k], scores[:k]
-    passages = [searcher.collection[pid] for pid in pids]
     probs = [math.exp(score) for score in scores]
     probs = [prob / sum(probs) for prob in probs]
     topk = []
     for pid, rank, score, prob in zip(pids, ranks, scores, probs):
-        text = searcher.collection[pid]            
-        d = {'text': text, 'pid': pid, 'rank': rank, 'score': score, 'prob': prob}
+        text = searcher.collection[pid]
+        d = {"text": text, "pid": pid, "rank": rank, "score": score, "prob": prob}
         topk.append(d)
-    topk = list(sorted(topk, key=lambda p: (-1 * p['score'], p['pid'])))
-    return {"query" : query, "topk": topk}
+    topk = list(sorted(topk, key=lambda p: (-1 * p["score"], p["pid"])))
+    return {"query": query, "topk": topk}
+
 
 @app.route("/api/search", methods=["GET"])
 def api_search():
-    if request.method == "GET":
-        counter["api"] += 1
-        print("API request count:", counter["api"])
-        return api_search_query(request.args.get("query"), request.args.get("k"))
-    else:
-        return ('', 405)
+    available, reason = _probe_capability()
+    if not available:
+        # Honest degrade: search cannot run (no torch/index). Non-2xx lets the
+        # caller fall back instead of surfacing a stack trace.
+        return jsonify({"error": "search unavailable: %s" % reason}), 503
+
+    counter["api"] += 1
+    try:
+        return jsonify(api_search_query(request.args.get("query"), request.args.get("k")))
+    except Exception as exc:  # pragma: no cover - runtime model/index failure
+        return jsonify({"error": "search failed: %s" % exc}), 500
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    available, reason = _probe_capability()
+    return jsonify(
+        {
+            "search_available": available,
+            "index_name": os.getenv("INDEX_NAME"),
+            "index_root": os.getenv("INDEX_ROOT"),
+            "reason": reason,
+        }
+    )
+
 
 if __name__ == "__main__":
     host = os.environ.get("COLBERT_HOST", "127.0.0.1")
-    app.run(host, int(os.getenv("PORT")))
-
+    app.run(host, int(os.getenv("PORT", "8894")))
