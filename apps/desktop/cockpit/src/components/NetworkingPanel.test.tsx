@@ -173,21 +173,11 @@ describe('NetworkingPanel', () => {
     expect(c.querySelector('.networking-identities-section')).toBeNull();
   });
 
-  it('registry entry exists with id "networking"', async () => {
+  it('is NOT registered in the nav (engine dashboards stripped — engines stay invisible)', async () => {
     const { PANEL_REGISTRY } = await import('../panels/registry');
-    const entry = PANEL_REGISTRY.find((p) => p.id === 'networking');
-    expect(entry).toBeDefined();
-    expect(entry?.title).toBe('Networking');
-    expect(entry?.capability).toBe('ziti-zero-trust-mesh');
-    expect(entry?.primary).toBe(false);
-    expect(entry?.healthKey).toBeNull();
-  });
-
-  it('panel loads via dynamic import from registry', async () => {
-    const { PANEL_REGISTRY } = await import('../panels/registry');
-    const entry = PANEL_REGISTRY.find((p) => p.id === 'networking');
-    expect(entry).toBeDefined();
-    const Component = await entry!.load();
-    expect(typeof Component).toBe('function');
+    expect(PANEL_REGISTRY.find((p) => p.id === 'networking')).toBeUndefined();
+    // The component file is preserved (reversible) and still directly importable.
+    const m = await import('./NetworkingPanel');
+    expect(typeof m.NetworkingPanel).toBe('function');
   });
 });

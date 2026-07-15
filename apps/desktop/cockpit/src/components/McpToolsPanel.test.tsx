@@ -184,20 +184,11 @@ describe('McpToolsPanel', () => {
     expect(c.querySelectorAll('.mcp-server-row').length).toBe(0);
   });
 
-  it('registry entry exists with id "mcp"', async () => {
+  it('is NOT registered in the nav (engine dashboards stripped — engines stay invisible)', async () => {
     const { PANEL_REGISTRY } = await import('../panels/registry');
-    const entry = PANEL_REGISTRY.find((p) => p.id === 'mcp');
-    expect(entry).toBeDefined();
-    expect(entry?.title).toBe('MCP Tools');
-    expect(entry?.capability).toBe('mcp-server-registry');
-    expect(entry?.primary).toBe(false);
-  });
-
-  it('panel loads via dynamic import from registry', async () => {
-    const { PANEL_REGISTRY } = await import('../panels/registry');
-    const entry = PANEL_REGISTRY.find((p) => p.id === 'mcp');
-    expect(entry).toBeDefined();
-    const Component = await entry!.load();
-    expect(typeof Component).toBe('function');
+    expect(PANEL_REGISTRY.find((p) => p.id === 'mcp')).toBeUndefined();
+    // The component file is preserved (reversible) and still directly importable.
+    const m = await import('./McpToolsPanel');
+    expect(typeof m.McpToolsPanel).toBe('function');
   });
 });

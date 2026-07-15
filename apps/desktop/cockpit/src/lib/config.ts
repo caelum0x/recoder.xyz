@@ -50,29 +50,17 @@ declare global {
 
 /**
  * The discoverable cockpit surfaces a deep link / launcher can target.
- * RETIRED (wave-desktop fusion §5): 'sessions' and 'dmux' — the wave terminal
- * owns interactive terminal surfaces now; the cockpit no longer registers them.
+ *
+ * The cockpit is a TERMINAL, not an infra dashboard: the only human-facing
+ * surface is the workspace `board` (parallel agent runs). The engine dashboards
+ * (governance, policy, memory, substrates, events, connectors, brain, …) were
+ * removed from the nav — the engines run INVISIBLY behind the run flow, not as
+ * deep-linkable views. Approvals surface INLINE in the workspace detail.
+ * RETIRED (wave-desktop fusion §5): 'sessions' and 'dmux' terminal-era surfaces.
  */
-export type CockpitView =
-  | 'board'
-  | 'connectors'
-  | 'policy'
-  | 'memory'
-  | 'substrates'
-  | 'events'
-  | 'governance'
-  | 'brain';
+export type CockpitView = 'board';
 
-const COCKPIT_VIEWS: readonly CockpitView[] = [
-  'board',
-  'connectors',
-  'policy',
-  'memory',
-  'substrates',
-  'events',
-  'governance',
-  'brain',
-];
+const COCKPIT_VIEWS: readonly CockpitView[] = ['board'];
 
 /** Custom DOM event the shell dispatches to navigate the live cockpit. */
 export const COCKPIT_NAVIGATE_EVENT = 'recoder-cockpit:navigate';

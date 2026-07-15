@@ -223,21 +223,11 @@ describe('SquadsPanel', () => {
     expect(c.querySelector('.squads-card')).toBeNull();
   });
 
-  it('registry entry exists with id "squads"', async () => {
+  it('is NOT registered in the nav (engine dashboards stripped — engines stay invisible)', async () => {
     const { PANEL_REGISTRY } = await import('../panels/registry');
-    const entry = PANEL_REGISTRY.find((p) => p.id === 'squads');
-    expect(entry).toBeDefined();
-    expect(entry?.title).toBe('Squads');
-    expect(entry?.capability).toBe('multica-managed-agents');
-    expect(entry?.primary).toBe(false);
-    expect(entry?.healthKey).toBeNull();
-  });
-
-  it('panel loads via dynamic import from registry', async () => {
-    const { PANEL_REGISTRY } = await import('../panels/registry');
-    const entry = PANEL_REGISTRY.find((p) => p.id === 'squads');
-    expect(entry).toBeDefined();
-    const Component = await entry!.load();
-    expect(typeof Component).toBe('function');
+    expect(PANEL_REGISTRY.find((p) => p.id === 'squads')).toBeUndefined();
+    // The component file is preserved (reversible) and still directly importable.
+    const m = await import('./SquadsPanel');
+    expect(typeof m.SquadsPanel).toBe('function');
   });
 });

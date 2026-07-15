@@ -10,7 +10,6 @@
  * registry for metadata/health purposes but rendered inline here.
  */
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import type { ComponentType } from 'preact';
 import { api, BackendUnreachableError, UnauthorizedError } from './lib/api';
 import { usePoll } from './lib/usePoll';
 import { useWorkspaceWaits } from './lib/useWorkspaceWaits';
@@ -30,8 +29,9 @@ import {
   capabilityUnlockLabel,
   agentsIndicator,
 } from './lib/plan-state';
-// Board-view components remain eagerly imported — they are always needed at
-// startup (board is the default view).
+// The Board (parallel workspace runs) is the cockpit's only nav surface — the
+// engine dashboards were stripped so the engines stay invisible behind the run
+// flow. All Board-view components are eagerly imported (always needed at startup).
 import { Board } from './components/Board';
 import { HealthStrip } from './components/HealthStrip';
 import { PermissionCoach } from './components/PermissionCoach';
@@ -40,26 +40,8 @@ import { WorkspaceDetail } from './components/WorkspaceDetail';
 import { WorkspaceSidebar } from './components/WorkspaceSidebar';
 import { WorkspaceCenter } from './components/WorkspaceCenter';
 import { SignIn } from './components/SignIn';
-// Panel components eagerly imported for registration into the panel cache.
-// These allow PanelLoader to render instantly (no async import step) for all
-// panels that are already bundled at startup. When a panel is split into its
-// own async chunk, remove its import here and the load() in the registry will
-// take over transparently — no other code needs to change.
-import { ConnectorsPanel } from './components/ConnectorsPanel';
-import { PolicyPanel } from './components/PolicyPanel';
-import { MemoryCandidatesPanel } from './components/MemoryCandidatesPanel';
-import { SubstratesPanel } from './components/SubstratesPanel';
-import { LiveEventsView } from './components/LiveEventsView';
-import { GovernancePanel } from './components/GovernancePanel';
-import { BrainStatsPanel } from './components/BrainStatsPanel';
-// Registry drives the nav and lazy-loads all non-board panels.
-import {
-  PANEL_REGISTRY,
-  PRIMARY_PANEL_IDS,
-  MORE_PANEL_IDS,
-  getPanelById,
-  type PanelComponent,
-} from './panels/registry';
+// Registry drives the nav. It now registers only the Board.
+import { PANEL_REGISTRY, PRIMARY_PANEL_IDS, getPanelById } from './panels/registry';
 
 const WORKSPACE_POLL_MS = 2000;
 const HEALTH_POLL_MS = 15_000;
@@ -73,103 +55,13 @@ function viewLabel(id: string): string {
   return getPanelById(id)?.title ?? id;
 }
 
-/**
- * Cache of panel components keyed by panel id.
- *
- * This lives outside the component so a given component is resolved at most
- * once per cockpit session, regardless of how many times the user switches views.
- *
- * Pre-seeded with every panel component that is eagerly bundled with App.tsx
- * so that PanelLoader renders them instantly (no async import step). When a
- * panel is split into its own async chunk, remove its entry here and the
- * registry's load() will populate the cache on first activation.
- */
-const panelCache = new Map<string, PanelComponent>([
-  ['connectors', ConnectorsPanel as unknown as PanelComponent],
-  ['policy', PolicyPanel as unknown as PanelComponent],
-  ['memory', MemoryCandidatesPanel as unknown as PanelComponent],
-  ['substrates', SubstratesPanel as unknown as PanelComponent],
-  ['events', LiveEventsView as unknown as PanelComponent],
-  ['governance', GovernancePanel as unknown as PanelComponent],
-  ['brain', BrainStatsPanel as unknown as PanelComponent],
-]);
-
-/**
- * PanelLoader — renders a panel by id using the registry's load() function.
- *
- * On first render it triggers the dynamic import, stores the resolved component
- * in the module-level cache, and renders a loading fallback until ready. On
- * subsequent renders the cached component is used immediately (no re-import).
- * This is a simple dynamic-import-with-state pattern that matches what the
- * codebase already uses — no Preact lazy() or Suspense required.
- */
-function PanelLoader({ panelId }: { panelId: string }) {
-  const [Component, setComponent] = useState<PanelComponent | null>(
-    () => panelCache.get(panelId) ?? null,
-  );
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (panelCache.has(panelId)) {
-      setComponent(panelCache.get(panelId) as PanelComponent);
-      return;
-    }
-    const entry = getPanelById(panelId);
-    if (!entry) {
-      setLoadError(`Unknown panel: ${panelId}`);
-      return;
-    }
-    let cancelled = false;
-    entry
-      .load()
-      .then((C: PanelComponent) => {
-        if (cancelled) return;
-        panelCache.set(panelId, C);
-        setComponent(C);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setLoadError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [panelId]);
-
-  if (loadError) {
-    return (
-      <div class="banner banner-error">
-        <strong>Panel failed to load:</strong> {loadError}
-      </div>
-    );
-  }
-  if (!Component) {
-    return <div class="board-loading">Loading…</div>;
-  }
-  // Cast to satisfy Preact's JSX — the registry contract guarantees it renders
-  // without required props (all existing panels take no external props).
-  const C = Component as ComponentType<object>;
-  return <C />;
-}
-
-// Derive PRIMARY_VIEWS and MORE_VIEWS from the registry so the nav is
-// automatically up-to-date whenever entries are added. These are typed as
-// readonly string[] (not CockpitView[]) because new panels may be added before
-// a CockpitView union update — the nav still works.
+// The nav is derived from the registry, which now registers only the Board.
+// The engine dashboards were stripped — the engines run invisibly behind the
+// run flow, so there is no "More" menu and no non-board panel to lazy-load.
 const PRIMARY_VIEWS: readonly string[] = PRIMARY_PANEL_IDS;
-// The cockpit is a TERMINAL, not an infra dashboard: the human runs coding
-// agents and reviews their work. The polyglot capabilities (memory, retrieval,
-// browser, governance, networking, search from c/go/py/ts/crates) are BACKEND
-// power the AGENTS use — not human nav tabs. So the "More" menu is curated down
-// to the two genuinely human-facing surfaces: reviewing the delivery
-// gate/audit (Approvals) and seeing what tools the agents wield (MCP Tools).
-// The rest stay in the registry as the capability catalog (reachable by deep
-// link) but are kept out of the everyday nav. (registry-derived MORE_PANEL_IDS
-// remains the full catalog; this is the nav-visible subset.)
-const NAV_MORE_ALLOWLIST: ReadonlySet<string> = new Set(['governance', 'mcp']);
-const MORE_VIEWS: readonly string[] = MORE_PANEL_IDS.filter((id) => NAV_MORE_ALLOWLIST.has(id));
 
-// Build the set of all registered view ids for the navigate-event guard.
+// The set of all registered view ids for the navigate-event guard (deep links /
+// launcher navigate events targeting a stripped view are ignored).
 const ALL_VIEW_IDS: ReadonlySet<string> = new Set(PANEL_REGISTRY.map((p) => p.id));
 
 export function App() {
@@ -183,7 +75,6 @@ export function App() {
   const [view, setView] = useState<CockpitView>(() => readInitialView() || 'board');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   // True once we have observed a working authenticated session this run. Used to
@@ -194,10 +85,9 @@ export function App() {
   const [refreshAttempted, setRefreshAttempted] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // When the user picks an advanced view, jump to it and close the More menu.
+  // Switch the active view (only the Board today; kept for deep-link parity).
   function goTo(target: CockpitView) {
     setView(target);
-    setMoreOpen(false);
   }
 
   const board = usePoll(() => api.listWorkspaces(), WORKSPACE_POLL_MS);
@@ -242,7 +132,6 @@ export function App() {
       const target = detail?.view;
       if (typeof target === 'string' && ALL_VIEW_IDS.has(target)) {
         setView(target as CockpitView);
-        setMoreOpen(false);
       }
     }
     if (typeof window === 'undefined') return;
@@ -327,7 +216,8 @@ export function App() {
           <img class="brand-mark" src="./logo.png" alt="Recoder" width={28} height={28} />
         </div>
         <nav class="view-tabs">
-          {/* Primary tabs driven by the panel registry. */}
+          {/* Primary tabs driven by the panel registry — the Board is the only
+              human nav surface; the engines run invisibly behind the run flow. */}
           {PRIMARY_VIEWS.map((v) => (
             <button
               key={v}
@@ -337,40 +227,6 @@ export function App() {
               {viewLabel(v)}
             </button>
           ))}
-          {/* Everything technical lives behind one calm "More" menu so the nav
-              stays plain. The view ids never change — only where they live. */}
-          <div class="view-more">
-            <button
-              class={
-                MORE_VIEWS.includes(view)
-                  ? 'view-tab view-tab-active view-more-trigger'
-                  : 'view-tab view-more-trigger'
-              }
-              aria-haspopup="menu"
-              aria-expanded={moreOpen}
-              onClick={() => setMoreOpen((open) => !open)}
-            >
-              More ▾
-            </button>
-            {moreOpen && (
-              <>
-                {/* Click-away backdrop closes the menu without stealing focus. */}
-                <div class="view-more-backdrop" onClick={() => setMoreOpen(false)} />
-                <div class="view-more-menu" role="menu">
-                  {MORE_VIEWS.map((v) => (
-                    <button
-                      key={v}
-                      role="menuitem"
-                      class={view === v ? 'view-more-item view-more-item-active' : 'view-more-item'}
-                      onClick={() => goTo(v as CockpitView)}
-                    >
-                      {viewLabel(v)}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
         </nav>
         <div class="topbar-actions">
           {view === 'board' && (
@@ -475,7 +331,7 @@ export function App() {
         </div>
       )}
 
-      {view === 'board' ? (
+      {(
         <main class="main main-3pane">
           {/* LEFT: workspaces grouped by repo, truthful state + diff stat. */}
           <WorkspaceSidebar
@@ -539,12 +395,6 @@ export function App() {
               onChanged={() => board.refresh()}
             />
           )}
-        </main>
-      ) : (
-        /* All remaining panels are lazy-loaded on first activation. The registry
-           drives which component is rendered — no ternary chain needed. */
-        <main class="main">
-          <PanelLoader panelId={view} />
         </main>
       )}
 

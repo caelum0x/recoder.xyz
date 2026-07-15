@@ -68,7 +68,12 @@ export interface PanelEntry {
  * tooling query it like any other panel.
  */
 export const PANEL_REGISTRY: readonly PanelEntry[] = [
-  // ── Primary views ─────────────────────────────────────────────────────────
+  // The cockpit is a TERMINAL, not an infra dashboard: the only human nav
+  // surface is the workspace Board (parallel agent runs). The polyglot engines
+  // (memory, retrieval, governance, gateway, MCP, networking, squads, brain,
+  // openfang…) are BACKEND power the AGENTS use — they run INVISIBLY behind the
+  // run flow and are deliberately NOT surfaced as nav tabs. Their component
+  // files still exist (reversible); they are simply not registered here.
   {
     id: 'board',
     title: 'Board',
@@ -78,151 +83,6 @@ export const PANEL_REGISTRY: readonly PanelEntry[] = [
     load: async () => {
       const m = await import('../components/Board');
       return m.Board as unknown as PanelComponent;
-    },
-  },
-
-  // ── More / advanced views ─────────────────────────────────────────────────
-  {
-    id: 'substrates',
-    title: 'Agents',
-    capability: 'conductor-substrates',
-    healthKey: 'substrate',
-    primary: false,
-    load: async () => {
-      const m = await import('../components/SubstratesPanel');
-      return m.SubstratesPanel as unknown as PanelComponent;
-    },
-  },
-  {
-    id: 'governance',
-    title: 'Approvals',
-    capability: 'delivery-gate-governance',
-    healthKey: null,
-    primary: false,
-    load: async () => {
-      const m = await import('../components/GovernancePanel');
-      return m.GovernancePanel as unknown as PanelComponent;
-    },
-  },
-  {
-    id: 'policy',
-    title: 'Rules',
-    capability: 'agent-policy-engine',
-    healthKey: null,
-    primary: false,
-    load: async () => {
-      const m = await import('../components/PolicyPanel');
-      return m.PolicyPanel as unknown as PanelComponent;
-    },
-  },
-  {
-    id: 'brain',
-    title: 'Brain',
-    capability: 'shared-brain-reuse',
-    healthKey: null,
-    primary: false,
-    load: async () => {
-      const m = await import('../components/BrainStatsPanel');
-      return m.BrainStatsPanel as unknown as PanelComponent;
-    },
-  },
-  {
-    id: 'memory',
-    title: 'Memory',
-    capability: 'memory-candidate-lifecycle',
-    healthKey: null,
-    primary: false,
-    load: async () => {
-      const m = await import('../components/MemoryCandidatesPanel');
-      return m.MemoryCandidatesPanel as unknown as PanelComponent;
-    },
-  },
-  {
-    id: 'events',
-    title: 'Activity',
-    capability: 'live-run-events',
-    healthKey: null,
-    primary: false,
-    load: async () => {
-      const m = await import('../components/LiveEventsView');
-      return m.LiveEventsView as unknown as PanelComponent;
-    },
-  },
-  {
-    id: 'connectors',
-    title: 'Chat',
-    capability: 'chat-channel-connectors',
-    healthKey: null,
-    primary: false,
-    load: async () => {
-      const m = await import('../components/ConnectorsPanel');
-      return m.ConnectorsPanel as unknown as PanelComponent;
-    },
-  },
-  {
-    id: 'mcp',
-    title: 'MCP Tools',
-    capability: 'mcp-server-registry',
-    healthKey: null,
-    primary: false,
-    load: async () => {
-      const m = await import('../components/McpToolsPanel');
-      return m.McpToolsPanel as unknown as PanelComponent;
-    },
-  },
-  {
-    id: 'gateway',
-    title: 'Gateway',
-    capability: 'tensorzero-llm-gateway',
-    healthKey: null,
-    primary: false,
-    load: async () => {
-      const m = await import('../components/GatewayPanel');
-      return m.GatewayPanel as unknown as PanelComponent;
-    },
-  },
-  {
-    id: 'agents',
-    title: 'Openfang',
-    capability: 'openfang-agent-engine',
-    healthKey: null,
-    primary: false,
-    load: async () => {
-      const m = await import('../components/AgentsPanel');
-      return m.AgentsPanel as unknown as PanelComponent;
-    },
-  },
-  {
-    id: 'networking',
-    title: 'Networking',
-    capability: 'ziti-zero-trust-mesh',
-    healthKey: null,
-    primary: false,
-    load: async () => {
-      const m = await import('../components/NetworkingPanel');
-      return m.NetworkingPanel as unknown as PanelComponent;
-    },
-  },
-  {
-    id: 'squads',
-    title: 'Squads',
-    capability: 'multica-managed-agents',
-    healthKey: null,
-    primary: false,
-    load: async () => {
-      const m = await import('../components/SquadsPanel');
-      return m.SquadsPanel as unknown as PanelComponent;
-    },
-  },
-  {
-    id: 'retrieval',
-    title: 'Retrieval',
-    capability: 'colbert-lance-rag-search',
-    healthKey: null,
-    primary: false,
-    load: async () => {
-      const m = await import('../components/RetrievalPanel');
-      return m.RetrievalPanel as unknown as PanelComponent;
     },
   },
 ];
