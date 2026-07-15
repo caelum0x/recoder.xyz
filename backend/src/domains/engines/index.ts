@@ -30,6 +30,7 @@ import type { GovernanceKernelPort } from '../governance/ports/kernel.port.js';
 import type { EnginesConfigOverrides } from './config.js';
 import type { EngineClientPort } from './ports/engine-client.port.js';
 import type { EngineRegistryPort, McpHostPort } from './ports/index.js';
+import type { ModuleToolsRegistration } from './mcp/host-registrar.js';
 import type { EngineId, EngineHealth } from './types.js';
 
 /** Dependencies injected by bootstrap (after persistence + identity + governance). */
@@ -63,6 +64,15 @@ export interface EnginesModule {
   registry(): EngineRegistryPort;
   /** The interop-gated MCP host agent-os + conductor register their tools into. */
   host(): McpHostPort;
+  /**
+   * Bridge: map a domain's flat `mcp()` tools onto the host's serverId+toolNames
+   * model + bind a delegating handler per tool (gated execute). Bootstrap calls
+   * this per domain that exposes `mcp()`. Degrade-safe when the host is unready.
+   */
+  registerModuleTools(
+    serverId: string,
+    tools: readonly McpToolRegistration[],
+  ): ModuleToolsRegistration;
   /** Truthful live health for every declared engine. */
   listHealth(): Promise<readonly EngineHealth[]>;
   /** The read-only `/engines` router (list + per-engine health). */
