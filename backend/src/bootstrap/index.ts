@@ -50,6 +50,7 @@ import { createMemoryModule } from '../domains/memory/index.js';
 import { createCloudModule } from '../domains/cloud/index.js';
 import { createInteropWireModule } from '../domains/interop-wire/index.js';
 import { createSocialModule } from '../domains/social/index.js';
+import { createObservabilityModule } from '../domains/observability/index.js';
 
 /** Bootstrap-owned DI tokens (beyond the shared foundation tokens). */
 export const BOOT_TOKENS = {
@@ -80,38 +81,6 @@ export interface StartOptions {
   readonly env?: EnvSource;
   /** Install SIGTERM/SIGINT handlers (default true; tests pass false). */
   readonly installSignalHandlers?: boolean;
-}
-
-/**
- * The truthful `/health` + `/health/full` router, mounted through the edge as a
- * public {@link RouteProvider} (so health flows through the edge app + its 404 /
- * error tail like every other surface — the edge owns the http app).
- */
-function buildHealthRouter(registry: HealthRegistry, config: AppConfig): Router {
-  const router = express.Router();
-
-  router.get('/health', (_req, res) => {
-    void registry.report().then((report) => {
-      const httpStatus = report.status === 'down' ? 503 : 200;
-      res.status(httpStatus).json({
-        status: report.status,
-        degraded: report.degraded,
-        service: config.runtime.serviceName,
-        instanceId: config.runtime.instanceId,
-        sources: report.sources.length,
-        checkedAt: report.checkedAt,
-      });
-    });
-  });
-
-  router.get('/health/full', (_req, res) => {
-    void registry.report().then((report) => {
-      const httpStatus = report.status === 'down' ? 503 : 200;
-      res.status(httpStatus).json({ ...report, service: config.runtime.serviceName });
-    });
-  });
-
-  return router;
 }
 
 /**
@@ -458,6 +427,43 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   container.registerValue(DOMAIN_TOKENS.social, social);
   healthRegistry.register(social);
 
+  // --- Phase 11: Observability & Ops — THE capstone (conflict #7 owner of health
+  //     aggregation across ALL prior domains). Built LAST among the domains (after
+  //     every HealthSource is registered) so its aggregator fuses the WHOLE
+  //     healthRegistry: `registry.report()` walks every domain's already-truthful
+  //     `health()` (bounded per-source, a hang ⇒ `unknown`), and the aggregator only
+  //     ROLLS UP — it never rewrites a domain's self-reported state (any `down` with
+  //     ≥1 `up` ⇒ `degraded`, ALL `down` ⇒ `down`, never masked green). It also
+  //     registers ITSELF as a HealthSource (its own 4-engine logging/metrics/tracing/
+  //     signals breakdown), so `/health/full` aggregates every source truthfully.
+  //     Degrade-safe: no OTLP ⇒ tracing no-ops (degraded); no ops-recorder sidecar ⇒
+  //     signals `down` with NO fabricated data; no metrics token in prod ⇒ `/metrics`
+  //     fails safe. Owns `/health` + `/health/full` + `/api/agent-os/health` (replaces
+  //     the boot-time buildHealthRouter), `/metrics`, and the `/api/agent-os/
+  //     observability` control edges; its telemetry tap is threaded into the ONE edge
+  //     global chain below. Env-sourced ops values arrive via overrides (no env read
+  //     in domain code). ---
+  const observability = createObservabilityModule({
+    config,
+    logger: childLogger('observability'),
+    executor: persistence.executor(),
+    middleware: identity.middleware(),
+    gate: governance.gate(),
+    // The bootstrap HealthRegistry IS the HealthSourceRegistry (structural): every
+    // domain above already registered its truthful HealthSource, so the aggregator
+    // fuses all of them with zero per-domain change (conflict #7 seam).
+    registry: healthRegistry,
+    overrides: {
+      otlpEndpoint: bootEnv.OTEL_EXPORTER_OTLP_ENDPOINT ?? null,
+      opsRecorderUrl: bootEnv.OPS_RECORDER_URL ?? null,
+      opsRecorderToken: bootEnv.OPS_RECORDER_TOKEN ?? null,
+    },
+  });
+  container.registerValue(DOMAIN_TOKENS.observability, observability);
+  // Register observability's OWN engine health as the 15th source — its aggregate
+  // includes itself (logging/metrics/tracing/signals), never a blind spot.
+  healthRegistry.register(observability);
+
   // --- Phase 4: Edge & API Server — the STATELESS HTTP/WS surface. Built AFTER
   //     persistence/identity/governance/interop so it can consume their frozen
   //     seams (the identity SessionVerifier for the ONE auth link, the interop
@@ -473,8 +479,20 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   //     canonical chain (identity verifier + interop chain) is still bound here and
   //     drives the WS upgrade auth + any convention-guarded Phase-5+ providers. ---
   const providers: readonly RouteProvider[] = [
-    // Health first — the truthful aggregate, reachable through the edge app.
-    routerProvider('health', '', buildHealthRouter(healthRegistry, config)),
+    // Health — the Phase-11 observability aggregate (conflict #7), reachable through
+    // the edge app. Owns GET /health (shallow liveness, down→503), /health/full
+    // (per-domain verbatim + 4-engine + SLO rollup), and /api/agent-os/health.
+    routerProvider('observability-health', '', observability.healthRoutes()),
+    // Prometheus scrape at /metrics (INTERNAL_SERVICE_KEY-gated; fails safe in prod
+    // when no token is configured — never an open, secret-leaking scrape).
+    routerProvider('observability-metrics', '', observability.metricsRoutes()),
+    // Observability control edges: /api/agent-os/observability/{slo,alerts,signals,
+    // audit,logs} (self-gated by identity.middleware()).
+    routerProvider(
+      'observability',
+      DOMAIN_REGISTRY.observability.mountBase,
+      observability.routes(),
+    ),
     // Persistence internal edges.
     routerProvider('persistence', DOMAIN_REGISTRY.persistence.mountBase, persistence.routes()),
     // Better Auth host at /api/auth/* (public: login/signup can't require a session).
@@ -528,6 +546,12 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       verifier: identity.verifier(),
       interopChain: interop.chain(),
       providers,
+      // Phase-11 telemetry tap threaded into the ONE global chain: every request is
+      // correlated (x-correlation-id + W3C traceparent), traced, and RED-metered
+      // (http_requests_total / http_request_duration_seconds) before any per-mount
+      // guard — so /metrics reflects real traffic. Degrade-safe: a telemetry fault
+      // never blocks the response path.
+      globalMiddleware: [observability.telemetry()],
       // The conductor `/terminal` control-mode stream registers with the edge's
       // single `server.on('upgrade')` dispatcher (conflict #6 — the edge owns it).
       // `/sync` is intentionally DROPPED (collaboration cut): only `/terminal`
@@ -558,6 +582,9 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   await memory.start();
   await cloud.start();
   // interop-wire + social have no start hook (health/accessor-only composers).
+  // Observability starts LAST among domains (its alert-eval loop reads the fused
+  // health of everything already started); the tap is already in the edge chain.
+  await observability.start();
   await edge.listen();
   const url = `http://${config.server.host}:${config.server.port}`;
   log.info({ url, healthSources: healthRegistry.count }, 'recoder-backend listening');
@@ -565,6 +592,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // 6. Lifecycle wiring. The edge drains its server + closes live WS sockets first.
   lifecycle
     .onStop('edge', () => edge.stop())
+    .onStop('observability', () => observability.stop())
     .onStop('cloud', () => cloud.stop())
     .onStop('memory', () => memory.stop())
     .onStop('billing', () => billing.stop())

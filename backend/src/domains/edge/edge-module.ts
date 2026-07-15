@@ -64,12 +64,22 @@ export class EdgeComposer implements EdgeModule {
     assertInternalKeyStrength(this.cfg.internalServiceKey, this.cfg.isProduction);
 
     // 2. The ONE chain — over the identity verifier + interop chain (not re-built).
-    this.chain = createChain({
+    const baseChain = createChain({
       config: this.cfg,
       logger: deps.logger,
       verifier: deps.verifier,
       interopChain: deps.interopChain,
     });
+    // Append any injected global middleware (Phase-11 observability telemetry) to
+    // the END of the canonical global chain, so it runs after request-context →
+    // cors → body → rate-limit but BEFORE any per-mount guard/router — wrapping
+    // every downstream mount with correlation + RED metrics. The chain impl itself
+    // is never re-implemented; only its global links are threaded through here.
+    const extra = deps.globalMiddleware ?? [];
+    this.chain =
+      extra.length === 0
+        ? baseChain
+        : { ...baseChain, buildGlobalChain: () => [...baseChain.buildGlobalChain(), ...extra] };
 
     // 3. Route table from the collected providers.
     this.table = buildRouteTable(deps.providers, options.routeTable ?? {});
