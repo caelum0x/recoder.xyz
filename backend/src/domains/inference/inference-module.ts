@@ -54,6 +54,7 @@ import { createOpenAiCompatRouter } from './routes/openai-compat.routes.js';
 import { buildInferenceMcpTools } from './mcp/inference-engine.js';
 import { buildInferenceHealth } from './health.js';
 import type { InferenceModule, InferenceModuleDeps } from './index.js';
+import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 
 /** A permanently-unavailable vault → the BYOK cache disables (no plaintext cache). */
 function unavailableVault(): KeyVaultPort {
@@ -139,6 +140,11 @@ export class InferenceComposer implements InferenceModule {
 
   routing(): InferenceRoutingService {
     return this.routingService;
+  }
+
+  /** Inject the optional billing entitlement gate (BYOK-aware token quota). */
+  setEntitlementGate(gate: EntitlementGate): void {
+    this.routingService.setEntitlementGate(gate);
   }
 
   catalog(): ModelCatalogRepository {

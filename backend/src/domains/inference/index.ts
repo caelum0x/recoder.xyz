@@ -31,6 +31,7 @@ import type {
   UsageLedgerRepository,
 } from './ports/index.js';
 import type { InferenceRoutingService } from './services/inference-routing.service.js';
+import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { NapiTierPort } from './adapters/tensorzero-transport.adapter.js';
 import type { StreamFetchLike } from './adapters/gateway-stream.js';
 import type { GeneratedTzConfig } from './adapters/tz-config-generator.js';
@@ -73,6 +74,14 @@ export interface InferenceModule {
   gateway(): InferenceGatewayPort;
   /** The routing service (gateway + cost accounting + ledger). */
   routing(): InferenceRoutingService;
+  /**
+   * Inject the OPTIONAL billing entitlement gate consulted as a BYOK-aware
+   * pre-dispatch token-quota check before each completion. Set post-construction by
+   * bootstrap (`inference.setEntitlementGate(billing.gate())`). Absent ⇒ the ladder
+   * degrades OPEN (no token quota); present ⇒ over-quota completions return a
+   * truthful non-routed result (BYOK subjects bypass token metering inside the gate).
+   */
+  setEntitlementGate(gate: EntitlementGate): void;
   /** The routable model catalog. */
   catalog(): ModelCatalogRepository;
   /** The token/cost usage ledger. */

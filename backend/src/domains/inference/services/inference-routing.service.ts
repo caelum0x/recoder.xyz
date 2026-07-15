@@ -27,6 +27,7 @@ import type {
   TokenUsage,
 } from '../types.js';
 import { computeCostMicroUsd, resolveUsage } from '../adapters/token-accounting.js';
+import type { EntitlementGate, BillingSubject } from '../ports/entitlement-gate.port.js';
 
 export interface InferenceRoutingDeps {
   readonly logger: Logger;
@@ -45,6 +46,8 @@ export class InferenceRoutingService {
   private readonly ledger: UsageLedgerRepository;
   private readonly outcomes: DeliveryOutcomeRepository;
   private readonly now: () => number;
+  /** OPTIONAL BYOK-aware token-quota gate (set by the composer; absent ⇒ open). */
+  private entitlementGate?: EntitlementGate;
 
   constructor(deps: InferenceRoutingDeps) {
     this.log = deps.logger;
@@ -55,8 +58,39 @@ export class InferenceRoutingService {
     this.now = deps.now ?? (() => Date.now());
   }
 
+  /** Inject the optional billing entitlement gate (pre-dispatch token quota). */
+  setEntitlementGate(gate: EntitlementGate): void {
+    this.entitlementGate = gate;
+  }
+
+  /**
+   * BYOK-aware pre-dispatch token-quota check. Returns a truthful deny reason when
+   * the subject is over its `token` quota, else `null` (proceed). Degrades OPEN
+   * (returns `null`) when no gate is wired, when the request has no attributable
+   * `userId`, or when the gate throws (a metering hiccup must not block delivery —
+   * the gate is itself fail-safe on `allowed`). A BYOK subject bypasses the token
+   * quota inside the gate (`byokBypass`), so this stays correct for BYOK callers.
+   */
+  private async entitlementDeny(req: InferenceRequest): Promise<string | null> {
+    const gate = this.entitlementGate;
+    if (!gate || !req.userId) return null;
+    try {
+      const subject: BillingSubject = { subjectId: req.userId, kind: 'user' };
+      const decision = await gate.checkQuota(subject, 'token');
+      if (decision.allowed) return null;
+      return decision.message ?? `token quota denied (${decision.reason ?? 'quota_exceeded'})`;
+    } catch (err) {
+      this.log.warn({ err: message(err) }, 'inference entitlement quota check errored — degrading open');
+      return null;
+    }
+  }
+
   /** Route a buffered completion + account it. */
   async complete(req: InferenceRequest): Promise<InferenceResult> {
+    const denyReason = await this.entitlementDeny(req);
+    if (denyReason) {
+      return { routed: false, tier: 'none', model: req.model, content: null, reason: denyReason };
+    }
     const startedAt = this.now();
     const result = await this.gateway.complete(req);
     await this.account({
@@ -76,6 +110,18 @@ export class InferenceRoutingService {
 
   /** Route a streamed completion (real SSE when available) + account it. */
   async completeStream(req: InferenceRequest, onDelta: StreamSink): Promise<InferenceStreamResult> {
+    const denyReason = await this.entitlementDeny(req);
+    if (denyReason) {
+      return {
+        routed: false,
+        tier: 'none',
+        model: req.model,
+        content: null,
+        reason: denyReason,
+        streamed: false,
+        tokenGranular: false,
+      };
+    }
     const startedAt = this.now();
     const result = await this.gateway.completeStream(req, onDelta);
     await this.account({
