@@ -27,7 +27,6 @@ import type { GuardPolicy } from '../domains/edge/types.js';
 import { loadConfig, type EnvSource } from './config.js';
 import { createContainer, Container } from './container.js';
 import { createHealthRegistry, HealthRegistry } from './health-registry.js';
-import { createEngineSupervisor, EngineSupervisor } from './engine-supervisor.js';
 import { createLifecycle, Lifecycle } from './lifecycle.js';
 import { createPersistenceModule } from '../domains/persistence/index.js';
 import { createIdentityModule } from '../domains/identity/index.js';
@@ -43,12 +42,21 @@ import { createInteropModule } from '../domains/interop/index.js';
 import { createAgentOsModule } from '../domains/agent-os/index.js';
 import { createConductorModule } from '../domains/conductor/index.js';
 import type { RunEventSinkPort } from '../domains/conductor/ports/run-event-sink.port.js';
+import { createEnginesModule } from '../domains/engines/index.js';
+import type { InteropWireModule } from '../domains/interop-wire/index.js';
+import { createInferenceModule } from '../domains/inference/index.js';
+import { createBillingModule } from '../domains/billing/index.js';
+import { createMemoryModule } from '../domains/memory/index.js';
+import { createCloudModule } from '../domains/cloud/index.js';
+import { createInteropWireModule } from '../domains/interop-wire/index.js';
+import { createSocialModule } from '../domains/social/index.js';
 
 /** Bootstrap-owned DI tokens (beyond the shared foundation tokens). */
 export const BOOT_TOKENS = {
   HealthRegistry: createToken<HealthRegistry>('HealthRegistry'),
-  EngineSupervisor: createToken<EngineSupervisor>('EngineSupervisor'),
   Lifecycle: createToken<Lifecycle>('Lifecycle'),
+  /** The interop-wire sub-slice (no distinct DomainKey — see the wiring note). */
+  InteropWire: createToken<InteropWireModule>('InteropWire'),
 } as const;
 
 /** The handle `start()` returns to the entrypoint. */
@@ -145,17 +153,16 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   container.registerValue(TOKENS.Logger, rootLogger);
 
   const healthRegistry = createHealthRegistry();
-  const engineSupervisor = createEngineSupervisor({ logger: childLogger('engine-supervisor') });
   const lifecycle = createLifecycle({
     logger: childLogger('lifecycle'),
     shutdownTimeoutMs: config.server.shutdownDrainMs + 5_000,
   });
   container.registerValue(BOOT_TOKENS.HealthRegistry, healthRegistry);
-  container.registerValue(BOOT_TOKENS.EngineSupervisor, engineSupervisor);
   container.registerValue(BOOT_TOKENS.Lifecycle, lifecycle);
 
-  // The engine supervisor reports its own (Phase-0 truthful) health.
-  healthRegistry.register({ name: 'engine-supervisor', health: () => engineSupervisor.health() });
+  // NOTE: the Phase-0 `engine-supervisor` skeleton is RETIRED — the engines module
+  // (built after governance below) now owns truthful per-engine health, so no faked
+  // `engine-supervisor:up` source is registered.
 
   // --- Phase 1: Persistence — the data authority beneath every stateful
   //     domain. Registered into the container + health registry; its routes
@@ -246,6 +253,41 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   container.registerValue(CAPABILITY_TOKENS.approval, governance.approvals());
   healthRegistry.register(governance);
 
+  // --- Phase 6a: Engines — the multi-language engine seam + the ONE interop-gated
+  //     MCP host. Built AFTER governance so the napi `governance` engine re-exposes
+  //     the assembled kernel ladder (no second kernel). `host()` is the SINGLE
+  //     InteropHostBundle agent-os/conductor/capability domains register tools into
+  //     (retires the Phase-0 engine-supervisor skeleton). Degrade-safe: without a
+  //     built `.node`/daemon/venv each engine reports truthful `down`, never a faked
+  //     `up`. Config folded from the `engines` AppConfig override slice — no env read. ---
+  const engines = await createEnginesModule({
+    config,
+    logger: childLogger('engines'),
+    executor: persistence.executor(),
+    middleware: identity.middleware(),
+    kernel: governance.kernel(),
+    overrides: config.engines,
+  });
+  container.registerValue(DOMAIN_TOKENS.engines, engines);
+  healthRegistry.register(engines);
+
+  // --- Phase 6b: Inference — the BYOK LLM gateway (TensorZero ladder). Built AFTER
+  //     engines so its napi tier binds over the engines' SINGLE shared tensorzero
+  //     `.node` (CONFLICT #8-safe: `napiEngine: engines.tensorzero()` — it never
+  //     loads a second addon). Degrade-safe: no gateway endpoint + no napi tier ⇒
+  //     truthful `down`. Config folded from the `inference` override slice. ---
+  const tensorzeroEngine = engines.tensorzero();
+  const inference = await createInferenceModule({
+    config,
+    logger: childLogger('inference'),
+    executor: persistence.executor(),
+    middleware: identity.middleware(),
+    overrides: config.inference,
+    ...(tensorzeroEngine ? { napiEngine: tensorzeroEngine } : {}),
+  });
+  container.registerValue(DOMAIN_TOKENS.inference, inference);
+  healthRegistry.register(inference);
+
   // --- Phase 3: Interop — the A2A wire + the ONE edge chain
   //     (`authorize→risk→policy→audit`) over the governance gate (conflict #1: one
   //     chain impl, calling governance's gate — no duplicate gate composition) and
@@ -325,6 +367,97 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   container.registerValue(DOMAIN_TOKENS.conductor, conductor);
   healthRegistry.register(conductor);
 
+  // --- Phase 9: Billing — THE EntitlementGate (plans/metering/quotas/webhooks).
+  //     Built AFTER identity (it gates on the credential seam). Its `gate()` is the
+  //     cross-domain entitlement seam registered as a capability token so conductor
+  //     (pre-dispatch quota), inference (token metering), and engines (usage) can
+  //     resolve it. The `/api/billing` router carries the raw-body webhook ingress;
+  //     the edge's global JSON parser captures `req.rawBody` (see chain.ts) so the
+  //     provider signature verifies. Degrade-safe: no provider key ⇒ adapters `down`
+  //     and the gate deny-biases while free-tier entitlements still serve. Config
+  //     folded from the `billing` override slice — no env read. ---
+  const billing = createBillingModule({
+    config,
+    logger: childLogger('billing'),
+    executor: persistence.executor(),
+    middleware: identity.middleware(),
+    overrides: config.billing,
+  });
+  container.registerValue(DOMAIN_TOKENS.billing, billing);
+  container.registerValue(CAPABILITY_TOKENS.entitlementGate, billing.gate());
+  healthRegistry.register(billing);
+
+  // --- Phase 6c: Memory & Retrieval — recall fusion + the GOVERNED candidate →
+  //     durable-item promotion + RAG retrieval. Built AFTER agent-os + governance:
+  //     it reaches `memory_items`/`memory_candidates` through the agent-os repository
+  //     slice (conflict #3 — it never owns those tables) and every durable promotion
+  //     passes the governance write seam (`gate.decide`). Degrade-safe: absent Qdrant/
+  //     embedder/colbert/mem0 ⇒ truthful empty recall. Config folded from `memory`. ---
+  const memory = createMemoryModule({
+    config,
+    logger: childLogger('memory'),
+    executor: persistence.executor(),
+    middleware: identity.middleware(),
+    gate: governance.gate(),
+    candidateStore: agentOs.repository(),
+    overrides: config.memory,
+  });
+  container.registerValue(DOMAIN_TOKENS.memory, memory);
+  healthRegistry.register(memory);
+
+  // --- Phase 10: Cloud — off-box substrate (sandboxes/previews/tenancy/mesh). Built
+  //     AFTER billing. All cross-domain seams are OPTIONAL + degrade-safe and are
+  //     intentionally left unwired here (see the integration report): `billingQuota`
+  //     (billing→cloud-quota bridge — shapes differ: EntitlementGate vs
+  //     TenantBillingQuotaPort), `runEvents` (CloudRunEvent→agent-os RunEvent bridge),
+  //     and `localRuntime` (no docker/podman runtime on the box). Absent ⇒ tenant
+  //     quota stands alone, sandbox events drop, local provider `down` — all truthful,
+  //     never faked. Config folded from the `cloud` override slice — no env read. ---
+  const cloud = createCloudModule({
+    config,
+    logger: childLogger('cloud'),
+    executor: persistence.executor(),
+    middleware: identity.middleware(),
+    overrides: config.cloud,
+  });
+  container.registerValue(DOMAIN_TOKENS.cloud, cloud);
+  healthRegistry.register(cloud);
+
+  // --- Phase 7a: Interop-wire — the A2A WIRE slice (envelope build/seal/validate,
+  //     agent-card, signed-ingress gate, registry/task projection). This composer is
+  //     a health + accessor surface only (no routes()/mcp()/lifecycle yet — the wire
+  //     routes + dispatch land in later 7a groups), so it is registered into the
+  //     container + health registry; there is nothing to mount or start. Config folded
+  //     from the `interopWire` override slice. Degrade-safe: no HMAC secret in prod ⇒
+  //     unsigned ingress rejected; no executor path ⇒ in-memory projection. ---
+  const interopWire = createInteropWireModule({
+    config,
+    logger: childLogger('interop-wire'),
+    executor: persistence.executor(),
+    overrides: config.interopWire,
+  });
+  // interop-wire is a SUB-SLICE of the interop domain (no distinct DomainKey), so it
+  // registers under its own bootstrap token — NEVER `DOMAIN_TOKENS.interop` (that
+  // slot belongs to the interop module above; clobbering it would drop the edge chain).
+  container.registerValue(BOOT_TOKENS.InteropWire, interopWire);
+  healthRegistry.register(interopWire);
+
+  // --- Phase 7b: Social — the human-channel trust boundary (mention gate + webhook
+  //     ingress verification) + the Recoder-owned connectors/bindings/inbound repo.
+  //     Like interop-wire this composer is a health + accessor surface only (routes/
+  //     dispatch/zrok land in later 7b groups), so it is registered into the container
+  //     + health registry with nothing to mount or start. Hostile-by-default: an empty
+  //     allowlist admits nothing; a missing webhook secret refuses. Config folded from
+  //     the `social` override slice — no env read. ---
+  const social = createSocialModule({
+    config,
+    logger: childLogger('social'),
+    executor: persistence.executor(),
+    overrides: config.social,
+  });
+  container.registerValue(DOMAIN_TOKENS.social, social);
+  healthRegistry.register(social);
+
   // --- Phase 4: Edge & API Server — the STATELESS HTTP/WS surface. Built AFTER
   //     persistence/identity/governance/interop so it can consume their frozen
   //     seams (the identity SessionVerifier for the ONE auth link, the interop
@@ -372,6 +505,20 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     routerProvider('agent-os', DOMAIN_REGISTRY['agent-os'].mountBase, agentOs.routes()),
     // Conductor terminal-product edges: workspaces + substrates + reconcile (gated).
     routerProvider('conductor', DOMAIN_REGISTRY.conductor.mountBase, conductor.routes()),
+    // Engines read-only edges: declared-engine list + per-engine live health.
+    routerProvider('engines', DOMAIN_REGISTRY.engines.mountBase, engines.routes()),
+    // Inference LLM-gateway edges: control + OpenAI-compatible surface (self-gated).
+    routerProvider('inference', DOMAIN_REGISTRY.inference.mountBase, inference.routes()),
+    // Billing edges: plan/checkout/portal/cancel + RAW-BODY provider webhooks. The
+    // global JSON parser stashes `req.rawBody` (chain.ts) so webhook signatures verify.
+    routerProvider('billing', DOMAIN_REGISTRY.billing.mountBase, billing.routes()),
+    // Memory + retrieval edges (mount under /api/agent-os alongside agent-os).
+    routerProvider('memory', DOMAIN_REGISTRY.memory.mountBase, memory.routes()),
+    // Cloud edges: tenancy/sandboxes/preview/mesh (self-gated; degrade-safe).
+    routerProvider('cloud', DOMAIN_REGISTRY.cloud.mountBase, cloud.routes()),
+    // NOTE: interop-wire + social expose NO routes() in their current composer
+    // (Phase-7a/7b partial slices — wire/dispatch routes land in later groups), so
+    // there is nothing to mount for them here; they contribute health only.
   ];
 
   const edge = createEdgeModule(
@@ -399,13 +546,18 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   //    the schema is ready before the server accepts traffic; a DB-less boot
   //    still starts (in-memory KV fallback), never blocking. The edge binds the
   //    socket (it owns the http server + WS upgrade dispatcher).
-  await engineSupervisor.start();
   await persistence.start();
   await identity.start();
   await governance.start();
+  await engines.start();
+  await inference.start();
   await interop.start();
   await agentOs.start();
   await conductor.start();
+  await billing.start();
+  await memory.start();
+  await cloud.start();
+  // interop-wire + social have no start hook (health/accessor-only composers).
   await edge.listen();
   const url = `http://${config.server.host}:${config.server.port}`;
   log.info({ url, healthSources: healthRegistry.count }, 'recoder-backend listening');
@@ -413,13 +565,17 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // 6. Lifecycle wiring. The edge drains its server + closes live WS sockets first.
   lifecycle
     .onStop('edge', () => edge.stop())
+    .onStop('cloud', () => cloud.stop())
+    .onStop('memory', () => memory.stop())
+    .onStop('billing', () => billing.stop())
     .onStop('conductor', () => conductor.stop())
     .onStop('agent-os', () => agentOs.stop())
     .onStop('interop', () => interop.stop())
+    .onStop('inference', () => inference.stop())
+    .onStop('engines', () => engines.stop())
     .onStop('governance', () => governance.stop())
     .onStop('identity', () => identity.stop())
-    .onStop('persistence', () => persistence.stop())
-    .onStop('engine-supervisor', () => engineSupervisor.stop());
+    .onStop('persistence', () => persistence.stop());
   if (options.installSignalHandlers !== false) {
     lifecycle.installSignalHandlers();
   }

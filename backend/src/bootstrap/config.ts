@@ -23,6 +23,13 @@ import type {
   ConductorSliceConfig,
   AgentOsSliceConfig,
 } from '../shared/app-config.js';
+import type { EnginesConfigOverrides } from '../domains/engines/config.js';
+import type { InferenceConfigOverrides } from '../domains/inference/config.js';
+import type { BillingConfigOverrides } from '../domains/billing/config.js';
+import type { CloudConfigOverrides } from '../domains/cloud/config.js';
+import type { MemoryConfigOverrides } from '../domains/memory/config.js';
+import type { SocialConfigOverrides } from '../domains/social/config.js';
+import type { InteropWireConfigOverrides } from '../domains/interop-wire/config.js';
 
 /** Raw env source; defaults to the real process env. */
 export type EnvSource = Record<string, string | undefined>;
@@ -85,6 +92,59 @@ const envSchema = z.object({
   RECODER_BRAIN_ENABLED: z.string().optional(),
   RECODER_CODE_GRAPH_ENABLED: z.string().optional(),
   RECODER_SQUADS_ENABLED: z.string().optional(),
+
+  // --- Engines (multi-language engine seam) slice ---
+  ENGINES_REPO_ROOT: z.string().optional(),
+  PAL_ROOT_DIR: z.string().optional(),
+  OPENFANG_NATIVE_ADDON: z.string().optional(),
+  TENSORZERO_NATIVE_ADDON: z.string().optional(),
+  GOVERNANCE_NATIVE_ADDON: z.string().optional(),
+  TENSORZERO_URL: z.string().optional(),
+  MEM0_BASE_URL: z.string().optional(),
+  BROWSER_USE_URL: z.string().optional(),
+  COLBERT_URL: z.string().optional(),
+
+  // --- Inference (LLM gateway) slice ---
+  TENSORZERO_GATEWAY_API_KEY: z.string().optional(),
+  INFERENCE_DEFAULT_MODEL: z.string().optional(),
+
+  // --- Billing (Merchant-of-Record) slice ---
+  BILLING_PROVIDER: z.enum(['polar', 'creem', 'paddle', 'dodo']).optional(),
+  POLAR_ACCESS_TOKEN: z.string().optional(),
+  POLAR_WEBHOOK_SECRET: z.string().optional(),
+  POLAR_ORG_ID: z.string().optional(),
+  CREEM_API_KEY: z.string().optional(),
+  CREEM_WEBHOOK_SECRET: z.string().optional(),
+  PADDLE_API_KEY: z.string().optional(),
+  PADDLE_WEBHOOK_SECRET: z.string().optional(),
+  DODO_API_KEY: z.string().optional(),
+  DODO_WEBHOOK_SECRET: z.string().optional(),
+
+  // --- Cloud (off-box substrate) slice ---
+  DAYTONA_API_KEY: z.string().optional(),
+  E2B_API_KEY: z.string().optional(),
+  PREVIEW_SIGNING_SECRET: z.string().optional(),
+  PREVIEW_BASE_DOMAIN: z.string().optional(),
+  ZITI_ENDPOINT: z.string().optional(),
+  XDS_ENDPOINT: z.string().optional(),
+
+  // --- Memory & retrieval slice ---
+  QDRANT_URL: z.string().optional(),
+  QDRANT_API_KEY: z.string().optional(),
+  COLBERT_RERANK_URL: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+
+  // --- Social (human-channel presence) slice ---
+  SOCIAL_INGRESS_SECRET: z.string().optional(),
+  SOCIAL_REQUIRE_MENTION: z.string().optional(),
+  SOCIAL_ALLOWLIST: z.string().optional(),
+  ZROK_ENABLED: z.string().optional(),
+  ZROK_SHARE_NAME: z.string().optional(),
+
+  // --- Interop-wire (A2A wire) slice ---
+  A2A_HMAC_SECRET: z.string().optional(),
+  A2A_SIGNING_KEY_ID: z.string().optional(),
+  A2A_REQUIRE_SIGNED_INGRESS: z.string().optional(),
 });
 
 type ParsedEnv = z.infer<typeof envSchema>;
@@ -145,6 +205,121 @@ function guardInternalKey(key: string | undefined, isProduction: boolean, errors
   if (PLACEHOLDER_KEYS.has(key.trim().toLowerCase())) {
     errors.push('INTERNAL_SERVICE_KEY is a placeholder/dev default; set a real secret in production.');
   }
+}
+
+/** Trim to a value or `undefined` (an unset override the domain slicer defaults). */
+function opt(v: string | undefined): string | undefined {
+  const t = v?.trim();
+  return t ? t : undefined;
+}
+
+/** Split a comma-separated allowlist env value into a trimmed string array. */
+function csv(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+/** Build the engines override slice from env (all optional, degrade-safe). */
+function buildEnginesOverrides(env: ParsedEnv): EnginesConfigOverrides {
+  return {
+    repoRoot: opt(env.ENGINES_REPO_ROOT) ?? null,
+    palRootDir: opt(env.PAL_ROOT_DIR) ?? null,
+    napiPaths: {
+      openfang: opt(env.OPENFANG_NATIVE_ADDON) ?? null,
+      tensorzero: opt(env.TENSORZERO_NATIVE_ADDON) ?? null,
+      governance: opt(env.GOVERNANCE_NATIVE_ADDON) ?? null,
+    },
+    externalUrls: {
+      'tensorzero-loopback': opt(env.TENSORZERO_URL) ?? null,
+      mem0: opt(env.MEM0_BASE_URL) ?? null,
+      'browser-use': opt(env.BROWSER_USE_URL) ?? null,
+      colbert: opt(env.COLBERT_URL) ?? null,
+    },
+  };
+}
+
+/** Build the inference override slice from env. */
+function buildInferenceOverrides(env: ParsedEnv): InferenceConfigOverrides {
+  return {
+    gatewayEndpoint: opt(env.TENSORZERO_URL) ?? null,
+    gatewayApiKey: opt(env.TENSORZERO_GATEWAY_API_KEY) ?? null,
+    ...(opt(env.INFERENCE_DEFAULT_MODEL) ? { defaultModel: opt(env.INFERENCE_DEFAULT_MODEL) } : {}),
+  };
+}
+
+/** Build the billing override slice from env (per-provider creds + webhook secrets). */
+function buildBillingOverrides(env: ParsedEnv): BillingConfigOverrides {
+  return {
+    ...(env.BILLING_PROVIDER ? { provider: env.BILLING_PROVIDER } : {}),
+    polar: {
+      apiKey: opt(env.POLAR_ACCESS_TOKEN) ?? null,
+      webhookSecret: opt(env.POLAR_WEBHOOK_SECRET) ?? null,
+      organizationId: opt(env.POLAR_ORG_ID) ?? null,
+    },
+    creem: {
+      apiKey: opt(env.CREEM_API_KEY) ?? null,
+      webhookSecret: opt(env.CREEM_WEBHOOK_SECRET) ?? null,
+    },
+    paddle: {
+      apiKey: opt(env.PADDLE_API_KEY) ?? null,
+      webhookSecret: opt(env.PADDLE_WEBHOOK_SECRET) ?? null,
+    },
+    dodo: {
+      apiKey: opt(env.DODO_API_KEY) ?? null,
+      webhookSecret: opt(env.DODO_WEBHOOK_SECRET) ?? null,
+    },
+  };
+}
+
+/** Build the cloud override slice from env. */
+function buildCloudOverrides(env: ParsedEnv): CloudConfigOverrides {
+  return {
+    daytona: { apiKey: opt(env.DAYTONA_API_KEY) ?? null },
+    e2b: { apiKey: opt(env.E2B_API_KEY) ?? null },
+    previewSigningSecret: opt(env.PREVIEW_SIGNING_SECRET) ?? null,
+    previewBaseDomain: opt(env.PREVIEW_BASE_DOMAIN) ?? null,
+    zitiEndpoint: opt(env.ZITI_ENDPOINT) ?? null,
+    xdsEndpoint: opt(env.XDS_ENDPOINT) ?? null,
+  };
+}
+
+/** Build the memory override slice from env. */
+function buildMemoryOverrides(env: ParsedEnv): MemoryConfigOverrides {
+  return {
+    qdrantUrl: opt(env.QDRANT_URL) ?? null,
+    qdrantApiKey: opt(env.QDRANT_API_KEY) ?? null,
+    colbertRerankUrl: opt(env.COLBERT_RERANK_URL) ?? null,
+    mem0SidecarUrl: opt(env.MEM0_BASE_URL) ?? null,
+    embedTensorzeroUrl: opt(env.TENSORZERO_URL) ?? null,
+    embedOpenaiApiKey: opt(env.OPENAI_API_KEY) ?? null,
+  };
+}
+
+/** Build the social override slice from env. */
+function buildSocialOverrides(env: ParsedEnv): SocialConfigOverrides {
+  return {
+    ingressSecret: opt(env.SOCIAL_INGRESS_SECRET) ?? null,
+    requireMention: asBool(env.SOCIAL_REQUIRE_MENTION, true),
+    allowlist: csv(env.SOCIAL_ALLOWLIST),
+    zrok: {
+      enabled: asBool(env.ZROK_ENABLED, false),
+      shareName: opt(env.ZROK_SHARE_NAME) ?? null,
+    },
+  };
+}
+
+/** Build the interop-wire override slice from env. */
+function buildInteropWireOverrides(env: ParsedEnv): InteropWireConfigOverrides {
+  return {
+    hmacSecret: opt(env.A2A_HMAC_SECRET) ?? null,
+    ...(opt(env.A2A_SIGNING_KEY_ID) ? { signingKeyId: opt(env.A2A_SIGNING_KEY_ID) } : {}),
+    ...(env.A2A_REQUIRE_SIGNED_INGRESS !== undefined
+      ? { requireSignedIngress: asBool(env.A2A_REQUIRE_SIGNED_INGRESS, false) }
+      : {}),
+  };
 }
 
 function buildConfig(env: ParsedEnv, rawEnv: EnvSource): AppConfig {
@@ -222,7 +397,24 @@ function buildConfig(env: ParsedEnv, rawEnv: EnvSource): AppConfig {
     squadsEnabled: asBool(env.RECODER_SQUADS_ENABLED, true),
   };
 
-  return { runtime, server, database, auth, internal, cors, logging, conductor, agentOs };
+  return {
+    runtime,
+    server,
+    database,
+    auth,
+    internal,
+    cors,
+    logging,
+    conductor,
+    agentOs,
+    engines: buildEnginesOverrides(env),
+    inference: buildInferenceOverrides(env),
+    billing: buildBillingOverrides(env),
+    cloud: buildCloudOverrides(env),
+    memory: buildMemoryOverrides(env),
+    social: buildSocialOverrides(env),
+    interopWire: buildInteropWireOverrides(env),
+  };
 }
 
 /**

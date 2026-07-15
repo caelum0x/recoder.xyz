@@ -49,7 +49,19 @@ export interface EdgeChain {
 export function createChain(deps: ChainDeps): EdgeChain {
   const context = requestContext({ logger: deps.logger });
   const cors = corsMiddleware(deps.config.cors);
-  const body = express.json({ limit: deps.config.bodyLimit });
+  // The global JSON parser also STASHES the exact received bytes on `req.rawBody`.
+  // The billing webhook ingress (`/api/billing/webhooks/:provider`) verifies a
+  // provider signature over the raw bytes; since this global parser runs before
+  // every mount it would otherwise consume the stream and make signature
+  // verification impossible. Capturing `rawBody` here (negligible overhead, read
+  // only by the webhook route's `rawBodyOf`) preserves that trust boundary without
+  // path-excluding the parser. See `billing/routes/billing-webhooks.routes.ts`.
+  const body = express.json({
+    limit: deps.config.bodyLimit,
+    verify: (req, _res, buf) => {
+      (req as { rawBody?: Buffer }).rawBody = buf;
+    },
+  });
   const rateLimiters = httpRateLimiters(deps.config.rateLimit, deps.logger);
 
   const authenticate = authenticateRequest({ verifier: deps.verifier, logger: deps.logger });

@@ -32,6 +32,14 @@ function appConfig(overrides?: Partial<AppConfig>): AppConfig {
       },
     },
     agentOs: { natsUrl: null, brainEnabled: false, codeGraphEnabled: false, squadsEnabled: true },
+    // Capability-domain override slices (all fields optional → empty is valid).
+    engines: {},
+    inference: {},
+    billing: {},
+    cloud: {},
+    memory: {},
+    social: {},
+    interopWire: {},
     ...overrides,
   };
   return base;
