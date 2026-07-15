@@ -39,6 +39,13 @@ export interface DatabaseConfig {
   readonly url: string | null;
   readonly ssl: boolean;
   readonly maxPoolSize: number;
+  readonly minPoolSize: number;
+  /** Per-statement timeout (ms); 0 disables. */
+  readonly statementTimeoutMs: number;
+  /** Whether seed data may be applied (dev/test only). */
+  readonly allowSeed: boolean;
+  /** Override dir for SQL migrations; null = the canonical backend/migrations. */
+  readonly migrationsDir: string | null;
 }
 
 /** Better Auth / identity origin config (presence-only for secrets). */
