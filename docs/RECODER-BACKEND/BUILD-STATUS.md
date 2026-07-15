@@ -55,7 +55,22 @@ engine is now runnable from its own dir with truthful health from REAL capabilit
 embedded backend (its social domain covers it). The desktop IS the product: wave shell +
 cockpit + the ONE backend (15 domains + all engines) + the desktop's own engines, one boot.
 
-## Remaining follow-up seams (documented, NOT hidden — do these next)
+## ✅ CLEAN (2026-07-15): engines used + legacy absorbed + one project
+
+- **Engines spawned on boot + consumed** (`e0427af50`): the engine-supervisor spawns the
+  deepened engines at boot — colbert/mem0/ops-recorder/browser-use as live processes,
+  openfang/tensorzero/governance in-proc napi — and a consumer reaches a live one (proven:
+  `engines.client('colbert').invoke(rerank)` → real ranking against the live :8893 process).
+  Degrade-safe truthful for multica (needs PG15)/pal(.pal_venv path)/ziti(creds).
+- **Legacy flat dirs ABSORBED + removed** (`914453ba0`): all 8 (a2a/agent-os/conductor/
+  connectors/gateway/engines/network/routes) gone; 20 imports resolved; **tsc 268 → 0**.
+  `src/` = `bootstrap/ domains/ http/ shared/ + logger.ts + server.ts` — the target shape.
+- **One project** (`75732ebf8`): `apps/` = desktop only.
+
+**Final: 15 domains, ~540 domain files, 0 tsc errors, boots with 15 truthful health sources,
+engines spawn + consumed, one unified desktop app.**
+
+## Remaining minor follow-ups (documented, NOT hidden)
 0. **Packaged-mode engine bundling.** `electron-builder extraResources` bundles tmux/backend/
    napi/cockpit but NOT the recodergit/dmux dists → packaged app degrades those truthfully.
    And multica full readiness needs PG15+ (prod PG17 fine; local PG14 caveat).
