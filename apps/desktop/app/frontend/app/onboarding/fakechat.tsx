@@ -13,9 +13,9 @@ interface ChatConfig {
 
 const chatConfigs: ChatConfig[] = [
     {
-        userPrompt: "Check out ~/waveterm and summarize the project — what it does and how it's organized.",
+        userPrompt: "Check out ~/recoder and summarize the project — what it does and how it's organized.",
         toolName: "read_dir",
-        toolDescription: 'reading directory "~/waveterm"',
+        toolDescription: 'reading directory "~/recoder"',
         markdownResponse: `Here's a quick, file-structure–driven overview of this repo (Recoder):
 
 ## What it is
