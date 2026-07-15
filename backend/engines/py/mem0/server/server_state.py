@@ -73,6 +73,22 @@ def _merge_config(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, An
     return merged
 
 
+def set_default_config(default_config: Dict[str, Any]) -> None:
+    """Record the effective configuration WITHOUT building a Memory instance.
+
+    Building `Memory` opens the history DB and connects to the vector store, so
+    doing it at import time makes the whole process refuse to start when those
+    backends are unreachable. Callers stage the config here and let the instance
+    be built lazily on first use (or eagerly via `initialize_state` at startup),
+    keeping module import side-effect free."""
+    global _current_config
+    with _state_lock:
+        _current_config = deepcopy(default_config)
+        overrides = _load_overrides()
+        if overrides:
+            _current_config = _merge_config(_current_config, overrides)
+
+
 def initialize_state(default_config: Dict[str, Any]) -> None:
     global _current_config, _memory_instance
     with _state_lock:
@@ -81,6 +97,11 @@ def initialize_state(default_config: Dict[str, Any]) -> None:
         if overrides:
             _current_config = _merge_config(_current_config, overrides)
         _memory_instance = Memory.from_config(_current_config)
+
+
+def is_initialized() -> bool:
+    with _state_lock:
+        return _memory_instance is not None
 
 
 def update_config(updates: Dict[str, Any]) -> Dict[str, Any]:
@@ -101,7 +122,15 @@ def get_current_config() -> Dict[str, Any]:
 
 
 def get_memory_instance() -> Memory:
+    """Return the shared Memory instance, building it lazily on first use.
+
+    Lazy construction lets the API process boot and serve liveness/docs even
+    when the vector store or history DB is temporarily unreachable; the backing
+    error only surfaces on the first request that actually needs memory."""
+    global _memory_instance
     with _state_lock:
         if _memory_instance is None:
-            raise RuntimeError("Mem0 runtime has not been initialized.")
+            if not _current_config:
+                raise RuntimeError("Mem0 runtime has not been configured.")
+            _memory_instance = Memory.from_config(_current_config)
         return _memory_instance
