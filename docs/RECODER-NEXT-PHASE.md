@@ -1,5 +1,13 @@
 # Recoder — Next Phase Plan: The Backend Spine
 
+> **⚠️ SUPERSEDED (2026-07-15).** This 4-item plan (auth/social/engines) was expanded
+> by the owner into the full-scope comprehensive backend. The canonical plan is now
+> **[RECODER-BACKEND/](./RECODER-BACKEND/)** — `ARCHITECTURE.md` (design), `FILE-TREE.md`
+> (498-file plan), `BUILD-ORDER.md` (12 phases), `BUILD-STATUS.md` (live progress).
+> This file is kept for the locked Phase-A auth decisions (backend-owned Better Auth,
+> unified identity, full-website scope), which carried into the new plan. Read
+> BUILD-STATUS first.
+
 > **Where we are.** The shell fusion is done: Wave is now `apps/desktop` (Electron+React `app/`,
 > Go `server/`, Preact `cockpit/`), engines live under `backend/engines/{py,rust}` +
 > `apps/desktop/{server/engines,engines}`, and the desktop embeds and supervises the ONE
