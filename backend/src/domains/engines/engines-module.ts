@@ -65,6 +65,7 @@ import {
 } from './adapters/cli/index.js';
 import { InteropHostBundle } from './mcp/mcp-host.js';
 import { buildEnginesMcpTools, enginesMcpServer } from './mcp/engines-engine.js';
+import { registerModuleToolsOnHost, type ModuleToolsRegistration } from './mcp/host-registrar.js';
 import { buildEnginesHealth } from './health.js';
 import type { EnginesModule, EnginesModuleDeps } from './index.js';
 
@@ -236,6 +237,25 @@ export class EnginesComposer implements EnginesModule {
 
   host(): McpHostPort {
     return this.hostBundle;
+  }
+
+  /**
+   * Bridge: register a capability domain's flat `mcp()` tools into the gated host
+   * under `serverId`. Bootstrap calls this once per domain that exposes `mcp()`
+   * (agent-os / billing / memory / conductor / observability / …) so those tools
+   * become agent-callable behind interop's `authorize → risk → execute → audit`
+   * gate. Degrade-safe: an unready host yields a truthful no-op + warn.
+   */
+  registerModuleTools(
+    serverId: string,
+    tools: readonly McpToolRegistration[],
+  ): ModuleToolsRegistration {
+    return registerModuleToolsOnHost(
+      this.hostReady ? this.hostBundle : null,
+      serverId,
+      tools,
+      this.log,
+    );
   }
 
   /** Truthful live health for every declared engine (an unbound engine is `down`). */
