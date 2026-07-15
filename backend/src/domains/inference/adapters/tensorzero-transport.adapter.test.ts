@@ -11,7 +11,7 @@ import type {
   GatewayCompletionResult,
   GatewayEmbeddingResult,
   GatewayHealth,
-} from '../../../gateway/tensorzero-client.js';
+} from '../llm-gateway-client.js';
 import { TensorzeroTransportAdapter, type NapiTierPort } from './tensorzero-transport.adapter.js';
 import { inferenceConfigSchema, type InferenceConfig } from '../config.js';
 import type { StreamFetchLike, StreamResponse } from './gateway-stream.js';

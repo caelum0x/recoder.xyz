@@ -12,8 +12,8 @@ import type { Logger } from '../../../../shared/logger.js';
 import type {
   OpenfangEngineInstance,
   OpenfangNativeAddon,
-} from '../../../../conductor/openfang-native.js';
-import type { OpenfangRunEventSink } from '../../../../conductor/openfang-runtime.js';
+} from '../../openfang-native.js';
+import type { OpenfangRunEventSink } from '../../openfang-runtime.js';
 import type { NapiLoaderPort, NapiModule } from '../../ports/napi-loader.port.js';
 import { OpenfangNapiAdapter } from './openfang-napi.adapter.js';
 

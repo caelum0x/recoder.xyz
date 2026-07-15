@@ -14,8 +14,8 @@ import {
   recallMemories,
   rememberCandidate,
   type MemoryEntry,
-} from '../../../conductor/beads-memory.js';
-import { beadsAvailability } from '../../../conductor/beads-sync.js';
+} from './beads-memory.js';
+import { beadsAvailability } from '../../engines/beads-bin.js';
 import type { BeadsMemoryEntry, BeadsMemoryPort, BeadsRememberInput } from '../ports/beads-memory.port.js';
 
 function toEntry(e: MemoryEntry): BeadsMemoryEntry {

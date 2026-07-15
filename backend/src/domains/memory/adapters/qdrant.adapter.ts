@@ -7,7 +7,7 @@
  * DEGRADE CONTRACT: no `QDRANT_URL` → `configured === false` and every method is
  * a truthful no-op (`ensureCollection`/`upsert` → false, `search` → []).
  */
-import { createVectorStore, type FetchLike, type VectorEnv } from '../../../agent-os/mcp/vector-store.js';
+import { createVectorStore, type FetchLike, type VectorEnv } from '../vector-store.js';
 import type { VectorStorePort } from '../ports/vector-store.port.js';
 import type { MemoryConfig } from '../config.js';
 

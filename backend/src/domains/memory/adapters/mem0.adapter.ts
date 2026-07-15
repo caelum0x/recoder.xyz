@@ -10,7 +10,7 @@
  * (the `engines/py/mem0` FastAPI server). Either way the port stays fully
  * degrade-safe — no provider anywhere → `search → []`, `health → available:false`.
  */
-import { mem0Add, mem0Health, mem0Search } from '../../../engines/mem0-client.js';
+import { mem0Add, mem0Health, mem0Search } from '../../engines/mem0-client.js';
 import type { Mem0Availability, Mem0Message, Mem0Port, Mem0Result, Mem0Scope } from '../ports/mem0.port.js';
 import type { Mem0SidecarClient } from './mem0-sidecar.client.js';
 

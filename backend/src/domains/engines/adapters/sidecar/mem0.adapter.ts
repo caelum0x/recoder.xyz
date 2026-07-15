@@ -28,7 +28,7 @@ import {
   type Mem0Message,
   type Mem0Scope,
   type Mem0MemoryRecord,
-} from '../../../../engines/mem0-client.js';
+} from '../../mem0-client.js';
 import { join } from 'node:path';
 import type { Logger } from '../../../../shared/logger.js';
 import type { EnginesConfig } from '../../config.js';

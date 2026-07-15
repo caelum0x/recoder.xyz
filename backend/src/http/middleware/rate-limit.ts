@@ -14,7 +14,7 @@
  */
 import type { RequestHandler } from 'express';
 import type { Logger } from '../../shared/logger.js';
-import { A2ARateLimiter, type RateLimitConfig } from '../../a2a/rate-limiter.service.js';
+import { A2ARateLimiter, type RateLimitConfig } from '../../domains/interop/rate-limiter.service.js';
 import { createRateLimitMiddleware } from '../../domains/interop/middleware/rate-limit.middleware.js';
 import type { EdgeConfig, RateTierConfig } from '../../domains/edge/config.js';
 import type { RateTier } from '../../domains/edge/types.js';

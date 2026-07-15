@@ -18,8 +18,8 @@ import type { Logger } from '../../../shared/logger.js';
 import {
   createTensorzeroGatewayClient,
   type LlmGatewayPort,
-} from '../../../gateway/tensorzero-client.js';
-import { getEmbeddedGateway } from '../../../engines/tensorzero-client.js';
+} from '../llm-gateway-client.js';
+import { getEmbeddedGateway } from '../tensorzero-embedded-client.js';
 import type { InferenceConfig } from '../config.js';
 import type { InferenceRequest, InferenceResult, TokenUsage } from '../types.js';
 import { tokenUsage } from '../types.js';

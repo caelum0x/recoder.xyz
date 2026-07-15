@@ -15,8 +15,8 @@
  * DEGRADE-SAFE LAW: `bd` not resolvable ⇒ `health()` is a truthful `down` and
  * every `invoke` returns `{ ok:false, reason }`. Never fabricates issue data.
  */
-import { registerBeadsMcpTools } from '../../../../agent-os/mcp/beads-engine.js';
-import { resolveBeadsBin } from '../../../../conductor/beads-bin.js';
+import { registerBeadsMcpTools } from '../../beads-engine.js';
+import { resolveBeadsBin } from '../../beads-bin.js';
 import type { McpToolRouter } from '@recoder/agent-mcp';
 import type { Logger } from '../../../../shared/logger.js';
 import type { EnginesConfig } from '../../config.js';

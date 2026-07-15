@@ -24,7 +24,7 @@
 import {
   resolveColbertPython,
   resolveColbertEntrypoint,
-} from '../../../../conductor/colbert-daemon.js';
+} from '../../colbert-daemon.js';
 import type { Logger } from '../../../../shared/logger.js';
 import { fail, ok, type EngineId, type InvokeResult } from '../../types.js';
 import type { EngineCall } from '../../ports/engine-client.port.js';

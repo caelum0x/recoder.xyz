@@ -15,7 +15,7 @@
  * `down` and every `invoke` returns `{ ok:false, reason }`. Never fabricates
  * session output.
  */
-import { TMUX_BIN, TMUX_IS_VENDORED } from '../../../../conductor/tmux-path.js';
+import { TMUX_BIN, TMUX_IS_VENDORED } from '../../tmux-path.js';
 import type { Logger } from '../../../../shared/logger.js';
 import type { EnginesConfig } from '../../config.js';
 import { isEngineEnabled } from '../../config.js';

@@ -245,7 +245,7 @@ export class TensorzeroNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
     if (this.options.generateConfig === false) return null;
     // REUSE the existing config generator (env → registry → TOML → temp path).
     try {
-      const { generateTensorzeroConfig } = await import('../../../../engines/tensorzero-config.js');
+      const { generateTensorzeroConfig } = await import('../../../inference/tensorzero-config.js');
       return generateTensorzeroConfig().path ?? null;
     } catch (err) {
       this.log.warn({ err: msg(err) }, 'tensorzero config generation failed — booting default config');

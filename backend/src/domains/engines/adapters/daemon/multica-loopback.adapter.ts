@@ -22,7 +22,7 @@
  * `binPath:null` → supervisor degrades to `down`. The API key + workspace id are
  * taken ONLY from the composer-injected minimal env (never `process.env`).
  */
-import { resolveMulticaBin, type MulticaSquad } from '../../../../engines/multica-client.js';
+import { resolveMulticaBin, type MulticaSquad } from '../../multica-client.js';
 import type { Logger } from '../../../../shared/logger.js';
 import { fail, ok, type EngineId, type InvokeResult } from '../../types.js';
 import type { EngineCall } from '../../ports/engine-client.port.js';

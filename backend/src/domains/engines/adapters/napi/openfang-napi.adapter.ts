@@ -24,13 +24,13 @@ import type { Logger } from '../../../../shared/logger.js';
 import type {
   OpenfangNativeAddon,
   OpenfangEngineInstance,
-} from '../../../../conductor/openfang-native.js';
+} from '../../openfang-native.js';
 import {
   launchOpenfangRun,
   type OpenfangLaunchInput,
   type OpenfangLaunchResult,
   type OpenfangRunEventSink,
-} from '../../../../conductor/openfang-runtime.js';
+} from '../../openfang-runtime.js';
 import { EngineClientBase, type EngineCall } from '../../ports/engine-client.port.js';
 import type { NapiLoaderPort, NapiLoadSpec, NapiModule } from '../../ports/napi-loader.port.js';
 import { type EngineHealth, type InvokeResult, down, fail, ok, up } from '../../types.js';

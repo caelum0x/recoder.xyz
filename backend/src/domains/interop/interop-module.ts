@@ -19,7 +19,7 @@ import { Router, type RequestHandler } from 'express';
 import type { Logger } from '../../shared/logger.js';
 import type { ComponentHealth } from '../../shared/health-types.js';
 import { sendSuccess, asyncHandler } from '../../shared/errors.js';
-import type { RateLimitConfig } from '../../a2a/rate-limiter.service.js';
+import type { RateLimitConfig } from './rate-limiter.service.js';
 import type { InteropConfig } from './config.js';
 import { sliceInteropConfig } from './config.js';
 import type { InteropChain } from './ports/interop-chain.port.js';

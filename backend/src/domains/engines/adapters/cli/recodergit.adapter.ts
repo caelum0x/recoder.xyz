@@ -22,7 +22,7 @@ import {
   createRecoderGitService,
   type RecoderGitService,
   type RecoderGitServiceDeps,
-} from '../../../../agent-os/recodergit-service.js';
+} from '../../recodergit-service.js';
 import type { Logger } from '../../../../shared/logger.js';
 import type { EnginesConfig } from '../../config.js';
 import { isEngineEnabled } from '../../config.js';
