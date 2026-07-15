@@ -26,4 +26,8 @@ export type {
   SubstrateHandle,
   SubstrateAvailability,
   SubstrateCapabilities,
+  // The reviewable work-diff `ConductorSubstrate.diff()` returns — re-exported here
+  // so an adapter names the WHOLE contract (including this return type) from ONE
+  // import instead of reaching into `@recoder/substrate` separately.
+  SubstrateDiff,
 } from '@recoder/substrate';

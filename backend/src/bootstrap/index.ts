@@ -42,22 +42,26 @@ import { createInteropModule } from '../domains/interop/index.js';
 import { createAgentOsModule } from '../domains/agent-os/index.js';
 import { createConductorModule } from '../domains/conductor/index.js';
 import type { RunEventSinkPort } from '../domains/conductor/ports/run-event-sink.port.js';
+import { createTmuxSubstrate } from '../domains/conductor/adapters/tmux-substrate.adapter.js';
 import { createEnginesModule } from '../domains/engines/index.js';
-import type { InteropWireModule } from '../domains/interop-wire/index.js';
 import { createInferenceModule } from '../domains/inference/index.js';
 import { createBillingModule } from '../domains/billing/index.js';
 import { createMemoryModule } from '../domains/memory/index.js';
 import { createCloudModule } from '../domains/cloud/index.js';
-import { createInteropWireModule } from '../domains/interop-wire/index.js';
-import { createSocialModule } from '../domains/social/index.js';
+import {
+  createInteropWireComposer,
+  type InteropWireComposite,
+} from '../domains/interop-wire/interop-wire-module.js';
+import { createSocialComposer } from '../domains/social/social-module.js';
 import { createObservabilityModule } from '../domains/observability/index.js';
+import type { McpToolRegistration } from '../shared/module-base.js';
 
 /** Bootstrap-owned DI tokens (beyond the shared foundation tokens). */
 export const BOOT_TOKENS = {
   HealthRegistry: createToken<HealthRegistry>('HealthRegistry'),
   Lifecycle: createToken<Lifecycle>('Lifecycle'),
   /** The interop-wire sub-slice (no distinct DomainKey — see the wiring note). */
-  InteropWire: createToken<InteropWireModule>('InteropWire'),
+  InteropWire: createToken<InteropWireComposite>('InteropWire'),
 } as const;
 
 /** The handle `start()` returns to the entrypoint. */
@@ -308,16 +312,25 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   //     (`ingest(event, source)`) and the conductor `RunEventSinkPort`
   //     (`append(event)`) are structurally different; this thin adapter bridges
   //     them at the composition root, so NEITHER domain's public port changes.
-  //     Substrates are empty (degrade-safe): @recoder/substrate ships no tmux
-  //     factory and the legacy impl is not package-`ConductorSubstrate`-compatible,
-  //     so launches fail truthfully while the module + its `/api/conductor` edges
-  //     and the `/terminal` WS still boot. The pinned tmux bin + caps flow through
-  //     the conductor override for the moment a compatible substrate is wired. ---
+  //     THE LOCAL SUBSTRATE: the `tmux_worktree` ConductorSubstrate (real tmux over
+  //     isolated git worktrees) is built here from the INJECTED conductor config
+  //     slice (`tmuxBin` + `worktreeRoot`) — the adapter reads NO `process.env` — and
+  //     registered as the sole substrate. Degrade-safe + truthful: if git/tmux are
+  //     absent on the box, `available()` reports `down` with the missing binary and
+  //     `launch()` refuses rather than fabricate a session, while the module + its
+  //     `/api/conductor` edges and the `/terminal` WS still boot. ---
   const conductorRunSink: RunEventSinkPort = {
     async append(event) {
       await agentOs.runEventBus().ingest(event, 'conductor');
     },
   };
+  const tmuxSub = createTmuxSubstrate({
+    config: {
+      tmuxBin: config.conductor.tmuxBin,
+      worktreeRoot: config.conductor.worktreeRoot,
+    },
+    logger: childLogger('conductor-tmux'),
+  });
   const conductor = createConductorModule({
     config,
     logger: childLogger('conductor'),
@@ -325,7 +338,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     middleware: identity.middleware(),
     gate: governance.gate(),
     runEventSink: conductorRunSink,
-    substrates: [],
+    substrates: [tmuxSub],
     overrides: {
       tmuxBin: config.conductor.tmuxBin,
       worktreeRoot: config.conductor.worktreeRoot,
@@ -355,6 +368,13 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   container.registerValue(DOMAIN_TOKENS.billing, billing);
   container.registerValue(CAPABILITY_TOKENS.entitlementGate, billing.gate());
   healthRegistry.register(billing);
+
+  // Inject the billing EntitlementGate as the OPTIONAL pre-dispatch quota seam into
+  // the domains that meter against it (both were built before billing and degrade
+  // OPEN until injected): conductor consults it before launching a run
+  // (`workspace.create` quota), inference before each completion (token quota).
+  conductor.setEntitlementGate(billing.gate());
+  inference.setEntitlementGate(billing.gate());
 
   // --- Phase 6c: Memory & Retrieval — recall fusion + the GOVERNED candidate →
   //     durable-item promotion + RAG retrieval. Built AFTER agent-os + governance:
@@ -393,17 +413,22 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   healthRegistry.register(cloud);
 
   // --- Phase 7a: Interop-wire — the A2A WIRE slice (envelope build/seal/validate,
-  //     agent-card, signed-ingress gate, registry/task projection). This composer is
-  //     a health + accessor surface only (no routes()/mcp()/lifecycle yet — the wire
-  //     routes + dispatch land in later 7a groups), so it is registered into the
-  //     container + health registry; there is nothing to mount or start. Config folded
-  //     from the `interopWire` override slice. Degrade-safe: no HMAC secret in prod ⇒
-  //     unsigned ingress rejected; no executor path ⇒ in-memory projection. ---
-  const interopWire = createInteropWireModule({
+  //     agent-card, signed-ingress gate, registry/task projection) PLUS the dispatch/
+  //     registry/bridge services + the six runtime connectors. The COMPOSER layers
+  //     those over the frozen core and exposes `routes()` (`/api/interop`),
+  //     `wireRoutes()` (`/api/a2a`), `mcp()`, and `start()/stop()`, so it is now
+  //     mounted + registered + lifecycled (no longer accessor-only). Middleware is the
+  //     composed identity auth; the OPTIONAL conductor `localRun` + remote-peer
+  //     `remoteSender` seams are left unwired (no clean adapter available on this box),
+  //     so runtime + remote dispatch legs fail truthfully rather than fabricate a run.
+  //     Config folded from the `interopWire` override slice. Degrade-safe: no HMAC
+  //     secret in prod ⇒ unsigned ingress rejected; no executor path ⇒ in-memory. ---
+  const interopWire = createInteropWireComposer({
     config,
     logger: childLogger('interop-wire'),
     executor: persistence.executor(),
     overrides: config.interopWire,
+    middleware: identity.middleware(),
   });
   // interop-wire is a SUB-SLICE of the interop domain (no distinct DomainKey), so it
   // registers under its own bootstrap token — NEVER `DOMAIN_TOKENS.interop` (that
@@ -412,17 +437,23 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   healthRegistry.register(interopWire);
 
   // --- Phase 7b: Social — the human-channel trust boundary (mention gate + webhook
-  //     ingress verification) + the Recoder-owned connectors/bindings/inbound repo.
-  //     Like interop-wire this composer is a health + accessor surface only (routes/
-  //     dispatch/zrok land in later 7b groups), so it is registered into the container
-  //     + health registry with nothing to mount or start. Hostile-by-default: an empty
-  //     allowlist admits nothing; a missing webhook secret refuses. Config folded from
-  //     the `social` override slice — no env read. ---
-  const social = createSocialModule({
+  //     ingress verification) + the Recoder-owned connectors/bindings/inbound repo,
+  //     now COMPOSED with the channel-adapter registry, connector secrets, the inbound
+  //     pipeline, and the zrok tunnel. The composer exposes `routes()` (`/api/social`),
+  //     `mcp()`, and `start()/stop()`, so it is mounted + registered + lifecycled.
+  //     Middleware is the composed identity auth; the OPTIONAL conductor dispatch +
+  //     inference reply + secret-vault seams are left unwired (no clean adapter on this
+  //     box) so dispatch fails truthfully rather than fabricate a run/reply. The webhook
+  //     ingress reads the exact raw bytes via the edge chain's global `req.rawBody`
+  //     capture (chain.ts `verify`), the SAME trust boundary billing's webhooks use —
+  //     so no separate raw-body mount is required. Hostile-by-default: an empty allowlist
+  //     admits nothing; a missing webhook secret refuses. Config folded from `social`. ---
+  const social = createSocialComposer({
     config,
     logger: childLogger('social'),
     executor: persistence.executor(),
     overrides: config.social,
+    middleware: identity.middleware(),
   });
   container.registerValue(DOMAIN_TOKENS.social, social);
   healthRegistry.register(social);
@@ -463,6 +494,42 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // Register observability's OWN engine health as the 15th source — its aggregate
   // includes itself (logging/metrics/tracing/signals), never a blind spot.
   healthRegistry.register(observability);
+
+  // --- MCP tool registration: bridge every domain's flat `mcp()` tools onto the ONE
+  //     interop-gated host the engines module owns (`registerModuleTools` builds the
+  //     server descriptor + binds a delegating, GATED in-proc handler per tool —
+  //     `authorize → risk → execute → audit`; binding never bypasses the gate). The
+  //     engines module itself is NOT registered here (it self-registers its napi
+  //     engine tools at `start()`); a domain whose `mcp()` returns [] is a truthful
+  //     skip (host-registrar returns `skipped`). Degrade-safe: an unready host is a
+  //     no-op + warn, never a fabricated registration. ---
+  const mcpDomains: readonly {
+    readonly name: string;
+    readonly tools: () => readonly McpToolRegistration[];
+  }[] = [
+    { name: 'agent-os', tools: () => agentOs.mcp() },
+    { name: 'billing', tools: () => billing.mcp() },
+    { name: 'cloud', tools: () => cloud.mcp() },
+    { name: 'conductor', tools: () => conductor.mcp() },
+    { name: 'governance', tools: () => governance.mcp() },
+    { name: 'identity', tools: () => identity.mcp() },
+    { name: 'inference', tools: () => inference.mcp() },
+    { name: 'interop-wire', tools: () => interopWire.mcp() },
+    { name: 'memory', tools: () => memory.mcp() },
+    { name: 'observability', tools: () => observability.mcp() },
+    { name: 'persistence', tools: () => persistence.mcp() },
+    { name: 'social', tools: () => social.mcp() },
+  ];
+  const mcpRegistered: string[] = [];
+  for (const domain of mcpDomains) {
+    const tools = domain.tools();
+    if (tools.length === 0) continue;
+    const registration = engines.registerModuleTools(domain.name, tools);
+    if (!registration.skipped) {
+      mcpRegistered.push(`${domain.name}(${registration.registered.length})`);
+    }
+  }
+  log.info({ mcpRegistered }, 'registered domain MCP tools into the interop-gated host');
 
   // --- Phase 4: Edge & API Server — the STATELESS HTTP/WS surface. Built AFTER
   //     persistence/identity/governance/interop so it can consume their frozen
@@ -534,9 +601,14 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     routerProvider('memory', DOMAIN_REGISTRY.memory.mountBase, memory.routes()),
     // Cloud edges: tenancy/sandboxes/preview/mesh (self-gated; degrade-safe).
     routerProvider('cloud', DOMAIN_REGISTRY.cloud.mountBase, cloud.routes()),
-    // NOTE: interop-wire + social expose NO routes() in their current composer
-    // (Phase-7a/7b partial slices — wire/dispatch routes land in later groups), so
-    // there is nothing to mount for them here; they contribute health only.
+    // Social edges: connectors/bindings read models + the hostile-by-default webhook
+    // ingress (`POST /api/social/webhooks/:channel`, RAW-body HMAC over req.rawBody).
+    routerProvider('social', '/api/social', social.routes()),
+    // Interop-wire edges: A2A registry (agents) + task lifecycle/scratchpad (self-gated).
+    routerProvider('interop-wire', '/api/interop', interopWire.routes()),
+    // Interop-wire A2A WIRE: agent-card + JSON-RPC + signed ingress (mounts alongside
+    // the interop module at /api/a2a; both self-guard, no second auth layer).
+    routerProvider('interop-wire-a2a', '/api/a2a', interopWire.wireRoutes()),
   ];
 
   const edge = createEdgeModule(
@@ -581,7 +653,9 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   await billing.start();
   await memory.start();
   await cloud.start();
-  // interop-wire + social have no start hook (health/accessor-only composers).
+  // Interop-wire + social composers register runtime connectors / log channel posture.
+  await interopWire.start();
+  await social.start();
   // Observability starts LAST among domains (its alert-eval loop reads the fused
   // health of everything already started); the tap is already in the edge chain.
   await observability.start();
@@ -593,6 +667,8 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   lifecycle
     .onStop('edge', () => edge.stop())
     .onStop('observability', () => observability.stop())
+    .onStop('social', () => social.stop())
+    .onStop('interop-wire', () => interopWire.stop())
     .onStop('cloud', () => cloud.stop())
     .onStop('memory', () => memory.stop())
     .onStop('billing', () => billing.stop())
