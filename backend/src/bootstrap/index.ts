@@ -40,6 +40,9 @@ import { buildApiKeysRouter } from '../domains/identity/routes/api-keys.routes.j
 import { createOrgsRbacFeature } from '../domains/identity/orgs-rbac.feature.js';
 import { createGovernanceModule } from '../domains/governance/index.js';
 import { createInteropModule } from '../domains/interop/index.js';
+import { createAgentOsModule } from '../domains/agent-os/index.js';
+import { createConductorModule } from '../domains/conductor/index.js';
+import type { RunEventSinkPort } from '../domains/conductor/ports/run-event-sink.port.js';
 
 /** Bootstrap-owned DI tokens (beyond the shared foundation tokens). */
 export const BOOT_TOKENS = {
@@ -264,6 +267,64 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   container.registerValue(CAPABILITY_TOKENS.interopChain, interop.chain());
   healthRegistry.register(interop);
 
+  // --- Phase 5a: Agent-OS — THE state-of-record. Hosts the task/run/approval/
+  //     artifact/event aggregates, the RunEvent ingest bus (conductor + runtimes
+  //     emit here), and the at-least-once CloudEvents outbox. Built AFTER
+  //     governance so every write passes the gate; consumes the persistence
+  //     executor (health-only — no pg repository adapter injected yet, so the
+  //     state-of-record degrades truthfully to in-memory without a DB), the
+  //     identity auth middleware, and the NATS/feature-flag slice via overrides.
+  //     Degrade-safe: no DB → in-memory repo; no NATS → log-only outbox sink. ---
+  const agentOs = await createAgentOsModule({
+    config,
+    logger: childLogger('agent-os'),
+    executor: persistence.executor(),
+    middleware: identity.middleware(),
+    gate: governance.gate(),
+    overrides: {
+      natsUrl: config.agentOs.natsUrl,
+      brainEnabled: config.agentOs.brainEnabled,
+      codeGraphEnabled: config.agentOs.codeGraphEnabled,
+      squadsEnabled: config.agentOs.squadsEnabled,
+    },
+  });
+  container.registerValue(DOMAIN_TOKENS['agent-os'], agentOs);
+  healthRegistry.register(agentOs);
+
+  // --- Phase 5b: Conductor — THE terminal product (worktree+tmux execution).
+  //     Built AFTER agent-os so it emits every tailed RunEvent into the
+  //     state-of-record. THE RUN-EVENT SEAM: the agent-os `RunEventBusPort`
+  //     (`ingest(event, source)`) and the conductor `RunEventSinkPort`
+  //     (`append(event)`) are structurally different; this thin adapter bridges
+  //     them at the composition root, so NEITHER domain's public port changes.
+  //     Substrates are empty (degrade-safe): @recoder/substrate ships no tmux
+  //     factory and the legacy impl is not package-`ConductorSubstrate`-compatible,
+  //     so launches fail truthfully while the module + its `/api/conductor` edges
+  //     and the `/terminal` WS still boot. The pinned tmux bin + caps flow through
+  //     the conductor override for the moment a compatible substrate is wired. ---
+  const conductorRunSink: RunEventSinkPort = {
+    async append(event) {
+      await agentOs.runEventBus().ingest(event, 'conductor');
+    },
+  };
+  const conductor = createConductorModule({
+    config,
+    logger: childLogger('conductor'),
+    executor: persistence.executor(),
+    middleware: identity.middleware(),
+    gate: governance.gate(),
+    runEventSink: conductorRunSink,
+    substrates: [],
+    overrides: {
+      tmuxBin: config.conductor.tmuxBin,
+      worktreeRoot: config.conductor.worktreeRoot,
+      tmuxControlMode: config.conductor.tmuxControlMode,
+      caps: config.conductor.caps,
+    },
+  });
+  container.registerValue(DOMAIN_TOKENS.conductor, conductor);
+  healthRegistry.register(conductor);
+
   // --- Phase 4: Edge & API Server — the STATELESS HTTP/WS surface. Built AFTER
   //     persistence/identity/governance/interop so it can consume their frozen
   //     seams (the identity SessionVerifier for the ONE auth link, the interop
@@ -307,6 +368,10 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     routerProvider('governance', DOMAIN_REGISTRY.governance.mountBase, governance.routes()),
     // Interop edges: A2A health + agent-card + ext-authz-guarded JSON-RPC ingress.
     routerProvider('interop', DOMAIN_REGISTRY.interop.mountBase, interop.routes()),
+    // Agent-OS state-of-record edges: read models + INTERNAL_SERVICE_KEY ingest.
+    routerProvider('agent-os', DOMAIN_REGISTRY['agent-os'].mountBase, agentOs.routes()),
+    // Conductor terminal-product edges: workspaces + substrates + reconcile (gated).
+    routerProvider('conductor', DOMAIN_REGISTRY.conductor.mountBase, conductor.routes()),
   ];
 
   const edge = createEdgeModule(
@@ -316,9 +381,11 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       verifier: identity.verifier(),
       interopChain: interop.chain(),
       providers,
-      // No WS backends yet — the terminal `/terminal` + `/sync` backends register in
-      // Phase 5. An empty upgrade registry is a valid, truthful state.
-      wsBackends: [],
+      // The conductor `/terminal` control-mode stream registers with the edge's
+      // single `server.on('upgrade')` dispatcher (conflict #6 — the edge owns it).
+      // `/sync` is intentionally DROPPED (collaboration cut): only `/terminal`
+      // (authScope 'session') is registered here.
+      wsBackends: conductor.terminal().terminalBackends().filter((b) => b.path === '/terminal'),
     },
     // Every mount keeps its own guard; the edge adds only the GLOBAL chain.
     { routeTable: { defaultGuard: () => PUBLIC_MOUNT } },
@@ -337,6 +404,8 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   await identity.start();
   await governance.start();
   await interop.start();
+  await agentOs.start();
+  await conductor.start();
   await edge.listen();
   const url = `http://${config.server.host}:${config.server.port}`;
   log.info({ url, healthSources: healthRegistry.count }, 'recoder-backend listening');
@@ -344,6 +413,8 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // 6. Lifecycle wiring. The edge drains its server + closes live WS sockets first.
   lifecycle
     .onStop('edge', () => edge.stop())
+    .onStop('conductor', () => conductor.stop())
+    .onStop('agent-os', () => agentOs.stop())
     .onStop('interop', () => interop.stop())
     .onStop('governance', () => governance.stop())
     .onStop('identity', () => identity.stop())

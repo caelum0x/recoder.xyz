@@ -19,6 +19,19 @@ function appConfig(overrides?: Partial<AppConfig>): AppConfig {
     internal: { serviceKeyPresent: true, serviceKey: 'k'.repeat(40) },
     cors: { origins: ['.recoder.xyz'], allowCredentials: true },
     logging: { level: 'info', pretty: false },
+    conductor: {
+      tmuxBin: null,
+      worktreeRoot: '/tmp/recoder-worktrees',
+      tmuxControlMode: false,
+      caps: {
+        maxConcurrentWorkspaces: 10,
+        maxConcurrentPerUser: 5,
+        maxTmuxSessions: 50,
+        minFreeDiskGb: 5,
+        maxWorktreeDiskGb: 50,
+      },
+    },
+    agentOs: { natsUrl: null, brainEnabled: false, codeGraphEnabled: false, squadsEnabled: true },
     ...overrides,
   };
   return base;

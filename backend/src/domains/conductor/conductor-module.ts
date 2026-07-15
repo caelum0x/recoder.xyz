@@ -32,6 +32,7 @@ import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { Principal } from '../identity/types.js';
 import { sliceConductorConfig, type ConductorConfig } from './config.js';
 import type { GateVerdict, TerminalStreamPort } from './ports/index.js';
+import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type { WorkspaceRepositoryPort } from './ports/workspace-repository.port.js';
 import type {
   ReconcileFindingView,
@@ -112,12 +113,17 @@ export class ConductorComposer implements ConductorModule {
       },
     });
 
-    // Durable + live run-event sink; the tailer emits through it.
-    const sink = createRunEventSink({
+    // Durable + live run-event sink; the tailer emits through it. When an external
+    // state-of-record sink is injected (the agent-os RunEvent bus, adapted at the
+    // composition root), fan out to it FIRST so the control plane sees every event,
+    // then to the conductor-local durable+live sink. A failing external ingest is
+    // isolated (logged, swallowed) so the live terminal stream never stalls.
+    const localSink = createRunEventSink({
       repository: this.repository,
       publish: (event) => this.terminalService.publishSync(event),
       logger: this.log,
     });
+    const sink = composeRunEventSink(localSink, deps.runEventSink, this.log);
     this.tailer = createRunTailer({ sink, logger: this.log });
 
     // The engine deps assembled behind the ports.
@@ -264,4 +270,29 @@ export class ConductorComposer implements ConductorModule {
   async stop(): Promise<void> {
     // Idempotent, degrade-safe: live sessions are substrate-owned and survive.
   }
+}
+
+/**
+ * Fan a `RunEvent` out to the injected external state-of-record sink (agent-os)
+ * AND the conductor-local durable+live sink. The external ingest runs first but is
+ * isolated: a rejection is logged and swallowed so the local durable append + live
+ * `/sync` publish always run (a state-plane hiccup never stalls the terminal). When
+ * no external sink is injected, the local sink is returned unchanged.
+ */
+function composeRunEventSink(
+  local: RunEventSinkPort,
+  external: RunEventSinkPort | undefined,
+  logger: Logger,
+): RunEventSinkPort {
+  if (!external) return local;
+  return {
+    async append(event): Promise<void> {
+      try {
+        await external.append(event);
+      } catch (err) {
+        logger.error({ err, eventId: event.eventId }, 'conductor run-event state-of-record ingest failed');
+      }
+      await local.append(event);
+    },
+  };
 }
