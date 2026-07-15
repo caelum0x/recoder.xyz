@@ -1,25 +1,30 @@
-//! `tensorzero-gateway-napi` — Native Node.js addon for TensorZero gateway
-//! config-validate and version helpers.
+//! `tensorzero-gateway-napi` — Native Node.js addon that runs the TensorZero
+//! gateway engine IN-PROCESS (the Cursor↔VSCode fusion model): no HTTP hop, no
+//! subprocess. The full routing/variant/fallback engine is compiled into this
+//! `.node` and called directly from Node.
 //!
 //! ## What is exposed
 //!
-//! This crate intentionally exposes only the small, cleanly-callable surface of
-//! `tensorzero-core` that can be reached without starting the full async HTTP
-//! gateway service:
-//!
-//! - [`gateway_version`] — returns the crate version string (sync, zero-cost).
+//! Free helpers (no gateway boot required):
+//! - [`gateway_version`] — the TensorZero crate version string (sync, zero-cost).
 //! - [`validate_config_path`] — async: loads and validates a TensorZero config
 //!   from a file-system glob path without verifying provider credentials. Returns
 //!   `Ok(())` on success or a human-readable error string on failure.
 //!
-//! ## Why not expose inference / full gateway
+//! The embedded gateway ([`EmbeddedGateway`], the real in-process fusion):
+//! - `boot` — builds `ClientBuilderMode::EmbeddedGateway` (the same mode the
+//!   TensorZero Python client uses); no Axum HTTP server is started.
+//! - `inference` — one full inference (routing + variants + fallbacks), async.
+//! - `feedback` — record metric/comment feedback for a prior inference/episode.
 //!
-//! `tensorzero-core`'s inference path is fundamentally async-service-heavy: it
-//! requires ClickHouse, Postgres, object-store connections, and a running Axum
-//! router. Wrapping that in an NAPI binding would essentially embed the entire
-//! gateway server inside Node, which is neither safe nor practical from a single
-//! `.node` file. The loopback/subprocess path in `tensorzero-client.ts` remains
-//! the correct path for full inference routing.
+//! ## What is NOT exposed (and why, truthfully)
+//!
+//! Embeddings are intentionally absent: `tensorzero-core`'s `http_embeddings`
+//! returns `"HTTP embeddings is not supported in embedded gateway mode"` — the
+//! embeddings path only exists in `HTTPGateway` mode, so there is no in-process
+//! surface to wrap. Callers needing embeddings must use the HTTP gateway. Full
+//! HTTP-specific responses (raw request/response capture) likewise stay on the
+//! loopback path.
 //!
 //! ## Degrade-safe contract
 //!
@@ -86,8 +91,9 @@ pub fn gateway_version() -> String {
 /// ```
 #[napi]
 pub async fn validate_config_path(config_path: String) -> Result<(), napi::Error> {
-    let glob = ConfigFileGlob::new(config_path)
-        .map_err(|e| napi::Error::from_reason(format!("tensorzero-gateway-napi: invalid config path: {e}")))?;
+    let glob = ConfigFileGlob::new(config_path).map_err(|e| {
+        napi::Error::from_reason(format!("tensorzero-gateway-napi: invalid config path: {e}"))
+    })?;
 
     // `load_from_path_optional_verify_credentials` with `validate_credentials = false`
     // loads and parses the TOML without connecting to providers — exactly the
@@ -95,7 +101,11 @@ pub async fn validate_config_path(config_path: String) -> Result<(), napi::Error
     Config::load_from_path_optional_verify_credentials(&glob, false)
         .await
         .map(|_| ())
-        .map_err(|e| napi::Error::from_reason(format!("tensorzero-gateway-napi: config validation failed: {e}")))
+        .map_err(|e| {
+            napi::Error::from_reason(format!(
+                "tensorzero-gateway-napi: config validation failed: {e}"
+            ))
+        })
 }
 
 // ---------------------------------------------------------------------------
