@@ -13,16 +13,16 @@
  * phases add `create<Domain>Module(deps)` registrations between steps 2 and 3
  * (before the route table is built) without changing this file's shape.
  */
-import http from 'node:http';
-import express from 'express';
-import expressWs from 'express-ws';
+import type http from 'node:http';
+import express, { type Router } from 'express';
 
 import type { AppConfig } from '../shared/app-config.js';
-import type { Logger } from '../shared/logger.js';
 import { childLogger, rootLogger } from '../shared/logger.js';
 import { TOKENS, createToken, DOMAIN_TOKENS, CAPABILITY_TOKENS } from '../shared/di-tokens.js';
-import { errorEnvelope, notFound } from '../shared/errors.js';
 import { DOMAIN_REGISTRY } from '../shared/domain-registry.js';
+import { createEdgeModule, type EdgeModule } from '../domains/edge/index.js';
+import type { RouteProvider } from '../domains/edge/ports/route-provider.port.js';
+import type { GuardPolicy } from '../domains/edge/types.js';
 
 import { loadConfig, type EnvSource } from './config.js';
 import { createContainer, Container } from './container.js';
@@ -54,6 +54,8 @@ export interface BootHandle {
   readonly container: Container;
   readonly healthRegistry: HealthRegistry;
   readonly lifecycle: Lifecycle;
+  /** The Phase-4 edge module: the http app + server + WS upgrade owner. */
+  readonly edge: EdgeModule;
   readonly app: express.Application;
   readonly server: http.Server;
   /** The concrete URL the server is listening on. */
@@ -69,25 +71,15 @@ export interface StartOptions {
   readonly installSignalHandlers?: boolean;
 }
 
-/** Build the express + express-ws app with the minimal spine middleware. */
-function buildApp(config: AppConfig, log: Logger): { app: express.Application; server: http.Server } {
-  const baseApp = express();
-  // HTTP server FIRST so express-ws can own the upgrade handler (v4/v5 cast dance).
-  const server = http.createServer(baseApp);
-  const { app } = expressWs(baseApp as unknown as express.Express, server) as unknown as {
-    app: express.Application;
-  };
+/**
+ * The truthful `/health` + `/health/full` router, mounted through the edge as a
+ * public {@link RouteProvider} (so health flows through the edge app + its 404 /
+ * error tail like every other surface — the edge owns the http app).
+ */
+function buildHealthRouter(registry: HealthRegistry, config: AppConfig): Router {
+  const router = express.Router();
 
-  app.set('trust proxy', config.server.trustProxy);
-  app.disable('x-powered-by');
-  app.use(express.json({ limit: config.server.bodyLimit }));
-
-  return { app, server };
-}
-
-/** Mount the truthful `/health` + `/health/full` routes over the registry. */
-function mountHealth(app: express.Application, registry: HealthRegistry, config: AppConfig): void {
-  app.get('/health', (_req, res) => {
+  router.get('/health', (_req, res) => {
     void registry.report().then((report) => {
       const httpStatus = report.status === 'down' ? 503 : 200;
       res.status(httpStatus).json({
@@ -101,30 +93,37 @@ function mountHealth(app: express.Application, registry: HealthRegistry, config:
     });
   });
 
-  app.get('/health/full', (_req, res) => {
+  router.get('/health/full', (_req, res) => {
     void registry.report().then((report) => {
       const httpStatus = report.status === 'down' ? 503 : 200;
       res.status(httpStatus).json({ ...report, service: config.runtime.serviceName });
     });
   });
+
+  return router;
 }
 
-/** Listen and resolve once the socket is bound. */
-function listen(server: http.Server, config: AppConfig): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const onError = (err: Error): void => {
-      server.off('listening', onListening);
-      reject(err);
-    };
-    const onListening = (): void => {
-      server.off('error', onError);
-      resolve();
-    };
-    server.once('error', onError);
-    server.once('listening', onListening);
-    server.listen(config.server.port, config.server.host);
-  });
+/**
+ * Wrap an already-composed express router as an edge {@link RouteProvider}. The
+ * domain routers built above self-guard (each takes `identity.middleware()` /
+ * validates the internal key internally); the edge mounts them once, behind the
+ * shared GLOBAL chain (request-context → cors → body → rate-limit) but with a
+ * `public` per-mount guard — so the edge adds NO second auth/interop layer over a
+ * router that already guards itself (conflict-free: exactly one mount, one auth).
+ */
+function routerProvider(key: string, basePath: string, router: Router): RouteProvider {
+  return {
+    key,
+    basePath,
+    routes: () => router,
+    // Always mountable — the router degrades its own behavior truthfully (a DB-less
+    // boot still serves, returning SERVICE_UNAVAILABLE per-route, never a faked 200).
+    health: () => ({ status: 'up' as const }),
+  };
 }
+
+/** Every edge mount keeps its router's own guards — the edge adds no second layer. */
+const PUBLIC_MOUNT: GuardPolicy = { auth: 'public', interop: false };
 
 /** Boot the empty host and return a handle. */
 export async function start(options: StartOptions = {}): Promise<BootHandle> {
@@ -265,65 +264,86 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   container.registerValue(CAPABILITY_TOKENS.interopChain, interop.chain());
   healthRegistry.register(interop);
 
-  // 3. App.
-  const { app, server } = buildApp(config, log);
+  // --- Phase 4: Edge & API Server — the STATELESS HTTP/WS surface. Built AFTER
+  //     persistence/identity/governance/interop so it can consume their frozen
+  //     seams (the identity SessionVerifier for the ONE auth link, the interop
+  //     InteropChain for the ONE interop-gate — no duplicate composition) and mount
+  //     every domain router as a RouteProvider through the single route table. The
+  //     edge OWNS the express app + http server + the sole WS `upgrade` dispatcher.
+  //
+  //     Each domain router already self-guards (it takes `identity.middleware()` or
+  //     validates the internal key internally), so the route table mounts them with
+  //     a `public` per-mount guard: the edge wraps them in the shared GLOBAL chain
+  //     (request-context → cors → body → rate-limit) but adds NO second auth/interop
+  //     layer — exactly one mount, one auth per surface (conflicts #1/#6/#10). The
+  //     canonical chain (identity verifier + interop chain) is still bound here and
+  //     drives the WS upgrade auth + any convention-guarded Phase-5+ providers. ---
+  const providers: readonly RouteProvider[] = [
+    // Health first — the truthful aggregate, reachable through the edge app.
+    routerProvider('health', '', buildHealthRouter(healthRegistry, config)),
+    // Persistence internal edges.
+    routerProvider('persistence', DOMAIN_REGISTRY.persistence.mountBase, persistence.routes()),
+    // Better Auth host at /api/auth/* (public: login/signup can't require a session).
+    routerProvider('identity-auth', '/api/auth', identity.authRoutes()),
+    // /api/identity/* health + read edges.
+    routerProvider('identity', DOMAIN_REGISTRY.identity.mountBase, identity.routes()),
+    // sk_ platform API key edges (self-gated by identity.middleware()).
+    routerProvider(
+      'identity-apikeys',
+      DOMAIN_REGISTRY.identity.mountBase,
+      buildApiKeysRouter({ service: apiKeyService, mw: identity.middleware(), logger: apiKeyLog }),
+    ),
+    // CLI device-flow edges (poll/exchange are public; approve self-gates).
+    routerProvider(
+      'identity-device',
+      '/api/identity/device',
+      buildDeviceRouter({ service: deviceFlow, middleware: identity.middleware() }),
+    ),
+    // Orgs + RBAC edges (self-gated by identity.middleware() + RBAC evaluator).
+    routerProvider('identity-orgs', DOMAIN_REGISTRY.identity.mountBase, orgsRbac.buildRouter(identity.middleware())),
+    // Internal identity resolution edges (INTERNAL_SERVICE_KEY-gated internally).
+    routerProvider('identity-internal', '/internal/identity', identity.internalRoutes()),
+    // Governance edges: approvals + work-locks + secrets (mutations self-gated).
+    routerProvider('governance', DOMAIN_REGISTRY.governance.mountBase, governance.routes()),
+    // Interop edges: A2A health + agent-card + ext-authz-guarded JSON-RPC ingress.
+    routerProvider('interop', DOMAIN_REGISTRY.interop.mountBase, interop.routes()),
+  ];
 
-  // 4. Health.
-  mountHealth(app, healthRegistry, config);
-
-  // Mount the persistence internal edges (edge domain owns the auth chain later).
-  app.use(DOMAIN_REGISTRY.persistence.mountBase, persistence.routes());
-
-  // Mount the identity edges: Better Auth host at /api/auth/* + /api/identity/*.
-  // The edge domain (Phase 4) will fold these behind the canonical chain; for now
-  // they mount directly so auth is reachable the moment identity is built.
-  app.use('/api/auth', identity.authRoutes());
-  app.use(DOMAIN_REGISTRY.identity.mountBase, identity.routes());
-  // sk_ platform API key edges: GET/POST /keys + DELETE /keys/:id (session-gated).
-  // Mounted under /api/identity; the raw key is returned exactly once at mint.
-  app.use(
-    DOMAIN_REGISTRY.identity.mountBase,
-    buildApiKeysRouter({ service: apiKeyService, mw: identity.middleware(), logger: apiKeyLog }),
+  const edge = createEdgeModule(
+    {
+      config,
+      logger: childLogger('edge'),
+      verifier: identity.verifier(),
+      interopChain: interop.chain(),
+      providers,
+      // No WS backends yet — the terminal `/terminal` + `/sync` backends register in
+      // Phase 5. An empty upgrade registry is a valid, truthful state.
+      wsBackends: [],
+    },
+    // Every mount keeps its own guard; the edge adds only the GLOBAL chain.
+    { routeTable: { defaultGuard: () => PUBLIC_MOUNT } },
   );
-  // CLI device-flow edges: POST /code (start), /token (poll/exchange), /approve
-  // (session-gated). Mounted under /api/identity/device; the approve route reuses
-  // the identity auth middleware so only a signed-in user can authorize a code.
-  app.use('/api/identity/device', buildDeviceRouter({ service: deviceFlow, middleware: identity.middleware() }));
-  // Orgs + RBAC edges: GET/POST /orgs, members, and role management (session-gated
-  // via the composed auth middleware; writes flow through the RBAC evaluator).
-  app.use(DOMAIN_REGISTRY.identity.mountBase, orgsRbac.buildRouter(identity.middleware()));
-  // Internal identity resolution edges (INTERNAL_SERVICE_KEY-gated): the website
-  // proxy + other services resolve credentials → Principal, validate sk_ keys, and
-  // resolve/link the unified identity read model here.
-  app.use('/internal/identity', identity.internalRoutes());
+  container.registerValue(DOMAIN_TOKENS.edge, edge);
+  healthRegistry.register(edge);
 
-  // Governance edges: approvals + work-locks + secrets under /api/agent-os. The
-  // routers guard mutations with the composed identity middleware; the edge
-  // domain (Phase 4) folds these behind the canonical interop chain later.
-  app.use(DOMAIN_REGISTRY.governance.mountBase, governance.routes());
-  // Interop edges: A2A health + local agent-card + the ext-authz-guarded JSON-RPC
-  // ingress under /api/a2a.
-  app.use(DOMAIN_REGISTRY.interop.mountBase, interop.routes());
-
-  // Terminal 404 + error envelope (domain routers mount before these in later phases).
-  app.use(notFound());
-  app.use(errorEnvelope({ error: (obj, msg) => log.error(obj, msg) }));
+  const { app, server } = edge;
 
   // 5. Listen. Persistence boots first (degrade-safe migrate + KV hydrate) so
   //    the schema is ready before the server accepts traffic; a DB-less boot
-  //    still starts (in-memory KV fallback), never blocking.
+  //    still starts (in-memory KV fallback), never blocking. The edge binds the
+  //    socket (it owns the http server + WS upgrade dispatcher).
   await engineSupervisor.start();
   await persistence.start();
   await identity.start();
   await governance.start();
   await interop.start();
-  await listen(server, config);
+  await edge.listen();
   const url = `http://${config.server.host}:${config.server.port}`;
   log.info({ url, healthSources: healthRegistry.count }, 'recoder-backend listening');
 
-  // 6. Lifecycle wiring.
+  // 6. Lifecycle wiring. The edge drains its server + closes live WS sockets first.
   lifecycle
-    .onStop('http-server', () => closeServer(server))
+    .onStop('edge', () => edge.stop())
     .onStop('interop', () => interop.stop())
     .onStop('governance', () => governance.stop())
     .onStop('identity', () => identity.stop())
@@ -337,16 +357,5 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     await lifecycle.shutdown('handle.stop');
   };
 
-  return { config, container, healthRegistry, lifecycle, app, server, url, stop };
-}
-
-/** Stop accepting connections and close the server. */
-function closeServer(server: http.Server): Promise<void> {
-  return new Promise<void>((resolve) => {
-    if (!server.listening) {
-      resolve();
-      return;
-    }
-    server.close(() => resolve());
-  });
+  return { config, container, healthRegistry, lifecycle, edge, app, server, url, stop };
 }
