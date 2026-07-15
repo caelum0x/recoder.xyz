@@ -42,7 +42,10 @@ import { createInteropModule } from '../domains/interop/index.js';
 import { createAgentOsModule } from '../domains/agent-os/index.js';
 import { createConductorModule } from '../domains/conductor/index.js';
 import type { RunEventSinkPort } from '../domains/conductor/ports/run-event-sink.port.js';
-import { createTmuxSubstrate } from '../domains/conductor/adapters/tmux-substrate.adapter.js';
+import { createCliRuntimeSubstrate } from '../domains/conductor/adapters/cli-runtime.adapter.js';
+import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/openfang-runtime.adapter.js';
+import { createBrainMemoryAdapter } from '../domains/conductor/adapters/brain-memory.adapter.js';
+import { createConductorCodeIntel } from '../domains/conductor/adapters/code-intel.adapter.js';
 import { createEnginesModule } from '../domains/engines/index.js';
 import { createInferenceModule } from '../domains/inference/index.js';
 import { createBillingModule } from '../domains/billing/index.js';
@@ -306,6 +309,26 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   container.registerValue(DOMAIN_TOKENS['agent-os'], agentOs);
   healthRegistry.register(agentOs);
 
+  // --- Phase 6c: Memory & Retrieval — recall fusion + the GOVERNED candidate →
+  //     durable-item promotion + RAG retrieval. Built BEFORE the conductor so the
+  //     conductor run flow can recall on launch + harvest on completion through the
+  //     memory module's PUBLIC seams (`recall()` / `harvest()` / `retrieval()`). It
+  //     reaches `memory_items`/`memory_candidates` through the agent-os repository
+  //     slice (conflict #3 — it never owns those tables) and every durable promotion
+  //     passes the governance write seam (`gate.decide`). Degrade-safe: absent Qdrant/
+  //     embedder/colbert/mem0 ⇒ truthful empty recall. Config folded from `memory`. ---
+  const memory = createMemoryModule({
+    config,
+    logger: childLogger('memory'),
+    executor: persistence.executor(),
+    middleware: identity.middleware(),
+    gate: governance.gate(),
+    candidateStore: agentOs.repository(),
+    overrides: config.memory,
+  });
+  container.registerValue(DOMAIN_TOKENS.memory, memory);
+  healthRegistry.register(memory);
+
   // --- Phase 5b: Conductor — THE terminal product (worktree+tmux execution).
   //     Built AFTER agent-os so it emits every tailed RunEvent into the
   //     state-of-record. THE RUN-EVENT SEAM: the agent-os `RunEventBusPort`
@@ -324,12 +347,44 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       await agentOs.runEventBus().ingest(event, 'conductor');
     },
   };
-  const tmuxSub = createTmuxSubstrate({
-    config: {
-      tmuxBin: config.conductor.tmuxBin,
-      worktreeRoot: config.conductor.worktreeRoot,
-    },
-    logger: childLogger('conductor-tmux'),
+  const conductorSubstrateConfig = {
+    tmuxBin: config.conductor.tmuxBin,
+    worktreeRoot: config.conductor.worktreeRoot,
+  };
+  // TWO execution-path substrates share the SAME engine capability seams (the
+  // difference is only WHERE the agent runs):
+  //  - PATH (a) CLI: the `tmux_worktree` substrate (external coding-agent CLI in an
+  //    isolated tmux+git-worktree). It wraps the proven tmux mechanics and adds the
+  //    optional last-mile inference-metering env hook (unwired here ⇒ BYOK, no
+  //    metering — a truthful skip; the composer-level path (e) can inject env too).
+  //  - PATH (b) openfang: the `in_process` substrate (native openfang `.node` agent
+  //    turn against the worktree). Its kernel routes inference through the SAME
+  //    shared tensorzero `.node`, so metering/BYOK apply without a loopback URL.
+  // Both degrade-safe + truthful: git/tmux absent ⇒ CLI `available:false`; the
+  // openfang addon absent/boot-failed ⇒ in_process `available:false` + `launch()`
+  // refuses (never a fabricated session). The module + `/api/conductor` still boot.
+  const cliSub = createCliRuntimeSubstrate({
+    config: conductorSubstrateConfig,
+    logger: childLogger('conductor-cli'),
+  });
+  const openfangSub = createOpenfangRuntimeSubstrate({
+    config: conductorSubstrateConfig,
+    logger: childLogger('conductor-openfang'),
+  });
+  // The memory-backed brain: recall on launch (mem0 ∪ beads ∪ candidates → rerank)
+  // + harvest on completion. Built over the memory module's PUBLIC seams only.
+  const conductorBrain = createBrainMemoryAdapter({
+    recall: memory.recall(),
+    harvest: memory.harvest(),
+    retrieval: memory.retrieval(),
+    logger: childLogger('conductor-brain'),
+  });
+  // Code-intel seam: recodergit repo index + beads issue-graph tracking, over the
+  // engines domain's FROZEN typed clients (null ⇒ truthful logged skip).
+  const conductorCodeIntel = createConductorCodeIntel({
+    recodergit: engines.client('recodergit'),
+    beads: engines.client('beads'),
+    logger: childLogger('conductor-code-intel'),
   });
   const conductor = createConductorModule({
     config,
@@ -338,7 +393,9 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     middleware: identity.middleware(),
     gate: governance.gate(),
     runEventSink: conductorRunSink,
-    substrates: [tmuxSub],
+    substrates: [cliSub, openfangSub],
+    brain: conductorBrain,
+    codeIntel: conductorCodeIntel,
     overrides: {
       tmuxBin: config.conductor.tmuxBin,
       worktreeRoot: config.conductor.worktreeRoot,
@@ -375,24 +432,6 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // (`workspace.create` quota), inference before each completion (token quota).
   conductor.setEntitlementGate(billing.gate());
   inference.setEntitlementGate(billing.gate());
-
-  // --- Phase 6c: Memory & Retrieval — recall fusion + the GOVERNED candidate →
-  //     durable-item promotion + RAG retrieval. Built AFTER agent-os + governance:
-  //     it reaches `memory_items`/`memory_candidates` through the agent-os repository
-  //     slice (conflict #3 — it never owns those tables) and every durable promotion
-  //     passes the governance write seam (`gate.decide`). Degrade-safe: absent Qdrant/
-  //     embedder/colbert/mem0 ⇒ truthful empty recall. Config folded from `memory`. ---
-  const memory = createMemoryModule({
-    config,
-    logger: childLogger('memory'),
-    executor: persistence.executor(),
-    middleware: identity.middleware(),
-    gate: governance.gate(),
-    candidateStore: agentOs.repository(),
-    overrides: config.memory,
-  });
-  container.registerValue(DOMAIN_TOKENS.memory, memory);
-  healthRegistry.register(memory);
 
   // --- Phase 10: Cloud — off-box substrate (sandboxes/previews/tenancy/mesh). Built
   //     AFTER billing. All cross-domain seams are OPTIONAL + degrade-safe and are

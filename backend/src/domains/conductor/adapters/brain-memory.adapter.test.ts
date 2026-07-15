@@ -1,0 +1,157 @@
+/**
+ * brain-memory.adapter — proves the conductor↔memory seam law.
+ *
+ * Contract under test:
+ *  - enrichPrompt folds recalled memories (+ optional repo passages) into the
+ *    prompt with TRUTHFUL provenance, and hands back the RAW prompt untouched
+ *    when nothing is recalled / no userId is known.
+ *  - a faulted recall/retrieval engine NEVER throws across the boundary — the
+ *    launch degrades to the identity result.
+ *  - harvestOnCompletion delegates to the harvest service and degrades to a
+ *    truthful `{ harvested: false }` (never rethrows into the terminal path).
+ */
+import { describe, it, expect, vi } from 'vitest';
+import { createBrainMemoryAdapter } from './brain-memory.adapter.js';
+import type { RecallService } from '../../memory/recall/recall-fusion.js';
+import type { RetrievalPort } from '../../memory/ports/retrieval.port.js';
+import type { HarvestService } from '../../memory/lifecycle/harvest.js';
+import type { FusionResult } from '../../memory/types.js';
+
+const logger = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
+} as unknown as Parameters<typeof createBrainMemoryAdapter>[0]['logger'];
+
+const fusion = (memories: FusionResult['memories']): FusionResult => ({
+  memories,
+  sources: [],
+  reranker: 'identity',
+});
+
+const recallOf = (result: FusionResult): RecallService => ({
+  recall: vi.fn().mockResolvedValue(result),
+});
+
+const harvestStub = (result: Awaited<ReturnType<HarvestService['harvest']>>): HarvestService => ({
+  harvest: vi.fn().mockResolvedValue(result),
+});
+
+describe('brain-memory adapter — enrichPrompt', () => {
+  it('folds recalled memories into the prompt with truthful provenance', async () => {
+    const recall = recallOf(
+      fusion([
+        {
+          id: 'm1',
+          title: 'DB URL rule',
+          body: 'never localhost in prod',
+          provenance: { source: 'items', ref: 'mem_1', score: 0.9 },
+        },
+      ]),
+    );
+    const brain = createBrainMemoryAdapter({ recall, harvest: harvestStub({ harvested: false, reason: 'x' }), logger });
+
+    const out = await brain.enrichPrompt({ prompt: 'fix the config', userId: 'u1', taskId: 't1' });
+
+    expect(out.prompt).toContain('## Recalled context');
+    expect(out.prompt).toContain('[items] DB URL rule: never localhost in prod');
+    expect(out.prompt).toContain('fix the config');
+    expect(out.sources).toEqual([{ source: 'items', ref: 'mem_1' }]);
+  });
+
+  it('returns the raw prompt unchanged when recall is empty (never fabricates)', async () => {
+    const recall = recallOf(fusion([]));
+    const brain = createBrainMemoryAdapter({ recall, harvest: harvestStub({ harvested: false, reason: 'x' }), logger });
+
+    const out = await brain.enrichPrompt({ prompt: 'do the thing', userId: 'u1' });
+
+    expect(out.prompt).toBe('do the thing');
+    expect(out.sources).toEqual([]);
+  });
+
+  it('skips recall entirely without a userId (no cross-tenant guess)', async () => {
+    const recall = recallOf(fusion([]));
+    const brain = createBrainMemoryAdapter({ recall, harvest: harvestStub({ harvested: false, reason: 'x' }), logger });
+
+    const out = await brain.enrichPrompt({ prompt: 'anon prompt' });
+
+    expect(out.prompt).toBe('anon prompt');
+    expect(recall.recall).not.toHaveBeenCalled();
+  });
+
+  it('degrades to the identity result when recall throws (never crosses the boundary)', async () => {
+    const recall: RecallService = { recall: vi.fn().mockRejectedValue(new Error('mem0 down')) };
+    const brain = createBrainMemoryAdapter({ recall, harvest: harvestStub({ harvested: false, reason: 'x' }), logger });
+
+    const out = await brain.enrichPrompt({ prompt: 'resilient prompt', userId: 'u1' });
+
+    expect(out.prompt).toBe('resilient prompt');
+    expect(out.sources).toEqual([]);
+  });
+
+  it('folds repo passages when retrieval is configured', async () => {
+    const recall = recallOf(fusion([]));
+    const retrieval: RetrievalPort = {
+      configured: () => true,
+      ingest: vi.fn(),
+      search: vi.fn().mockResolvedValue({
+        status: 'ok',
+        query: 'q',
+        reranker: 'identity',
+        passages: [{ id: 'p1', text: 'server boots on :3001', score: 0.5, docId: 'doc9', source: 'server.ts' }],
+      }),
+    };
+    const brain = createBrainMemoryAdapter({
+      recall,
+      retrieval,
+      harvest: harvestStub({ harvested: false, reason: 'x' }),
+      logger,
+    });
+
+    const out = await brain.enrichPrompt({ prompt: 'where does it boot', userId: 'u1', repoPath: '/repo' });
+
+    expect(out.prompt).toContain('## Repository context');
+    expect(out.prompt).toContain('server.ts: server boots on :3001');
+    expect(out.sources).toEqual([{ source: 'retrieval', ref: 'doc9' }]);
+  });
+});
+
+describe('brain-memory adapter — harvestOnCompletion', () => {
+  it('delegates to the harvest service with evidence + defaults', async () => {
+    const harvest = harvestStub({ harvested: true, candidate: { candidateId: 'c1' } as never });
+    const brain = createBrainMemoryAdapter({ recall: recallOf(fusion([])), harvest, logger });
+
+    const res = await brain.harvestOnCompletion({
+      userId: 'u1',
+      taskId: 't1',
+      artifactId: 'a1',
+      runId: 'r1',
+      outcome: 'completed',
+    });
+
+    expect(res.harvested).toBe(true);
+    expect(harvest.harvest).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u1', taskId: 't1', artifactId: 'a1', scope: 'task-type', proposedBy: 'conductor' }),
+    );
+  });
+
+  it('skips truthfully with no userId (never files a tenant-less wisp)', async () => {
+    const harvest = harvestStub({ harvested: true, candidate: {} as never });
+    const brain = createBrainMemoryAdapter({ recall: recallOf(fusion([])), harvest, logger });
+
+    const res = await brain.harvestOnCompletion({ userId: '', taskId: 't1', artifactId: 'a1', outcome: 'failed' });
+
+    expect(res).toEqual({ harvested: false, reason: 'harvest skipped: no userId on the run' });
+    expect(harvest.harvest).not.toHaveBeenCalled();
+  });
+
+  it('degrades to a truthful skip when harvest throws (terminal path never sees it)', async () => {
+    const harvest: HarvestService = { harvest: vi.fn().mockRejectedValue(new Error('store down')) };
+    const brain = createBrainMemoryAdapter({ recall: recallOf(fusion([])), harvest, logger });
+
+    const res = await brain.harvestOnCompletion({ userId: 'u1', taskId: 't1', artifactId: 'a1', outcome: 'completed' });
+
+    expect(res.harvested).toBe(false);
+  });
+});

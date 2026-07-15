@@ -1,0 +1,138 @@
+/**
+ * Completion-hook seam (hooks h + i) — on a TERMINAL RunEvent the run flow
+ * harvests an evidence-backed memory candidate (brain) and closes/notes the bd
+ * issue (code-intel), while the durable+live append always runs first and a
+ * capability fault never rethrows into the terminal-event path.
+ */
+import { describe, it, expect, vi } from 'vitest';
+import type { RunEvent, Workspace } from '@recoder/agent-os';
+import { createCompletionHookSink } from './completion-hook.adapter.js';
+import { makeLogger } from '../__fixtures__/harness.js';
+
+function ws(over: Partial<Workspace> = {}): Workspace {
+  return {
+    workspaceId: 'ws_1',
+    spaceId: 'space_1',
+    projectId: 'project_1',
+    taskId: 'task_1',
+    runtimeId: 'claude_code',
+    substrate: 'tmux_worktree',
+    branch: 'recoder/ws_1',
+    baseRef: 'HEAD',
+    state: 'running',
+    createdBy: 'user_alice',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    metadata: {},
+    ...over,
+  } as Workspace;
+}
+
+function event(type: RunEvent['type'], over: Partial<RunEvent> = {}): RunEvent {
+  return {
+    eventId: `evt_${type}`,
+    type,
+    taskId: 'task_1',
+    runId: 'run_ws_1',
+    createdAt: new Date().toISOString(),
+    data: { workspaceId: 'ws_1' },
+    ...over,
+  };
+}
+
+const flush = () => new Promise((r) => setTimeout(r, 0));
+
+describe('conductor completion hook', () => {
+  it('returns the inner sink unchanged when neither capability is wired', () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const sink = createCompletionHookSink({
+      inner,
+      getWorkspace: async () => null,
+      logger: makeLogger(),
+    });
+    expect(sink).toBe(inner);
+  });
+
+  it('harvests memory + closes the bd issue on a completed event (evidence anchored to the workspace)', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const harvestOnCompletion = vi.fn(async () => ({ harvested: true as const }));
+    const completeWork = vi.fn(async () => {});
+    const sink = createCompletionHookSink({
+      inner,
+      brain: { enrichPrompt: vi.fn(), harvestOnCompletion },
+      codeIntel: { indexRepo: vi.fn(async () => {}), trackWork: vi.fn(async () => {}), completeWork },
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('completed'));
+    await flush();
+
+    // Durable+live append always ran first.
+    expect(inner.append).toHaveBeenCalledTimes(1);
+    // Harvest fired with the workspace's tenant + task/artifact evidence.
+    expect(harvestOnCompletion).toHaveBeenCalledTimes(1);
+    const harvestArg = harvestOnCompletion.mock.calls[0]![0];
+    expect(harvestArg.userId).toBe('user_alice');
+    expect(harvestArg.taskId).toBe('task_1');
+    expect(harvestArg.outcome).toBe('completed');
+    // bd issue closed on success.
+    expect(completeWork).toHaveBeenCalledWith('task_1', 'completed');
+  });
+
+  it('fires the hooks on a failed event too (issue kept open by the adapter)', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const harvestOnCompletion = vi.fn(async () => ({ harvested: true as const }));
+    const completeWork = vi.fn(async () => {});
+    const sink = createCompletionHookSink({
+      inner,
+      brain: { enrichPrompt: vi.fn(), harvestOnCompletion },
+      codeIntel: { indexRepo: vi.fn(async () => {}), trackWork: vi.fn(async () => {}), completeWork },
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('failed'));
+    await flush();
+
+    expect(harvestOnCompletion.mock.calls[0]![0].outcome).toBe('failed');
+    expect(completeWork).toHaveBeenCalledWith('task_1', 'failed');
+  });
+
+  it('does NOT fire on non-terminal events (log/started)', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const harvestOnCompletion = vi.fn(async () => ({ harvested: true as const }));
+    const sink = createCompletionHookSink({
+      inner,
+      brain: { enrichPrompt: vi.fn(), harvestOnCompletion },
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('log', { eventId: 'evt_log' }));
+    await sink.append(event('started', { eventId: 'evt_started' }));
+    await flush();
+
+    expect(inner.append).toHaveBeenCalledTimes(2);
+    expect(harvestOnCompletion).not.toHaveBeenCalled();
+  });
+
+  it('degrade-safe: a harvest throw never rejects append (terminal event unaffected)', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const sink = createCompletionHookSink({
+      inner,
+      brain: {
+        enrichPrompt: vi.fn(),
+        harvestOnCompletion: vi.fn(async () => {
+          throw new Error('memory down');
+        }),
+      },
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await expect(sink.append(event('completed'))).resolves.toBeUndefined();
+    await flush();
+    expect(inner.append).toHaveBeenCalledTimes(1);
+  });
+});

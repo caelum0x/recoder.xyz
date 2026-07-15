@@ -261,6 +261,10 @@ export interface ComposeOptions {
   executor?: QueryExecutor;
   repository?: ConductorModuleDeps['repository'];
   executorAvailable?: boolean;
+  /** OPTIONAL memory-backed brain (recall on launch + harvest on completion). */
+  brain?: ConductorModuleDeps['brain'];
+  /** OPTIONAL code-intel seam (recodergit index + beads track/close). */
+  codeIntel?: ConductorModuleDeps['codeIntel'];
 }
 
 /** Compose a conductor module over the in-memory harness. Returns the module + its gate. */
@@ -277,6 +281,8 @@ export function composeConductor(options: ComposeOptions = {}): {
     gate,
     ...(options.substrates ? { substrates: options.substrates } : {}),
     ...(options.repository ? { repository: options.repository } : {}),
+    ...(options.brain ? { brain: options.brain } : {}),
+    ...(options.codeIntel ? { codeIntel: options.codeIntel } : {}),
   });
   return { module, gate };
 }
