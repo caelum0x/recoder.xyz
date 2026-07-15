@@ -37,7 +37,28 @@ degraded is honest about a missing DB/substrate/provider). Deep-OSS engines exer
 `backend/engines/` surfaces; billing is MoR (Polar/Creem/Paddle/Dodo, no Stripe); auth is
 backend-owned + unified; a2a intact at 227. Desktop fully rebranded in parallel.
 
+## ✅ Engines deepened IN their dirs + one-project convergence (2026-07-15)
+
+The owner mandate — depth lives in the engine dir, not thin adapters — is honored. Every
+engine is now runnable from its own dir with truthful health from REAL capability:
+- **Rust** (`c2a3e4a7f`): governance napi surface deepened + rebuilt (fixed a real bug —
+  approvals were invisible to `decide()`); openfang/tensorzero already complete.
+- **Py** (`bdf314b57`, `28ed48cf4`): mem0 (import-side-effect fixed, serves 21 routes),
+  ops-recorder (full ingest roundtrip + GH/Linear detectors), pal-mcp (18 real tools via live
+  MCP handshake), colbert (LIVE ColBERT MaxSim rerank), browser-use (LIVE Chrome via CDP).
+- **Desktop Go** (`02db91cbc`): beads (bd 1.0.5), multica (server booted, auth-gated),
+  ziti (OpenZiti CLI), recoder-xds (xDS gRPC :18000 serving) — all built + verified.
+- **Desktop TS/C**: dmux/recodergit/openclaw dists rebuilt + runnable, tmux `next-3.7` verified;
+  desktop dev-boot is fully fused (wave shell + cockpit + embedded backend + all engines).
+
+**One project (`75732ebf8`):** `apps/` = **desktop only**. `apps/social` folded into the one
+embedded backend (its social domain covers it). The desktop IS the product: wave shell +
+cockpit + the ONE backend (15 domains + all engines) + the desktop's own engines, one boot.
+
 ## Remaining follow-up seams (documented, NOT hidden — do these next)
+0. **Packaged-mode engine bundling.** `electron-builder extraResources` bundles tmux/backend/
+   napi/cockpit but NOT the recodergit/dmux dists → packaged app degrades those truthfully.
+   And multica full readiness needs PG15+ (prod PG17 fine; local PG14 caveat).
 1. **MCP tool registration bridge.** Domain `mcp()` returns flat `McpToolRegistration[]`; the
    engines `InteropHostBundle` host uses a `serverId + toolNames` catalog model. No clean bridge
    yet — agent-os/conductor/domain tools are NOT registered into the host (engines' own napi
