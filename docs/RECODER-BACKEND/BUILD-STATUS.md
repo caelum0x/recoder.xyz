@@ -21,15 +21,39 @@ Building the 498-file, 14-domain, multi-language backend phase by phase from
 | 5a | Agent-OS control plane | 46→28 | ✅ 19 tests (composed @recoder/agent-os fresh) | `95ff34a1` |
 | 5b | Conductor & Terminal | 45→36 | ✅ 30 tests (composed @recoder/substrate fresh) | `8f42873e` |
 | — | Serial integration (5a+5b → bootstrap) | — | ✅ 8 health sources, boots | `bfa55b0f6` |
-| 6 | Engines + Inference (DEEP OSS) | 70 | 🔄 building (∥ P9) | — |
-| 7 | Interop-wire + Social | 70 | ⏳ (batch 2) | — |
-| 8 | Memory & Retrieval | 34 | ⏳ (batch 2) | — |
-| 9 | Billing & Metering | 28 | 🔄 building (∥ P6) | — |
-| 10 | Cloud & Sandboxes | 27 | ⏳ (batch 2) | — |
-| 11 | Observability & Ops | 23 | ⏳ (fuses all health) | — |
+| 6 | Engines + Inference (DEEP OSS) | 70→102 | ✅ 135 tests, real SSE | `4e8a45b26` |
+| 7 | Interop-wire + Social | 70→68 | ✅ 38 tests, a2a intact | `8212ab985` |
+| 8 | Memory & Retrieval | 34→44 | ✅ 31 tests | `0b7d845fc` |
+| 9 | Billing & Metering (MoR, no Stripe) | 28→31 | ✅ 43 tests | `d9c9683ab` |
+| 10 | Cloud & Sandboxes | 27→31 | ✅ 33 tests | `112c49ac2` |
+| — | Serial integration (7 domains → bootstrap) | — | ✅ 14 sources boot | `7a01c7f4f` |
+| 11 | Observability & Ops (capstone) | 23→32 | ✅ 42 tests, 15 sources, /metrics | `11693c360` |
 
-**Committed so far: ~235 source files (7 domains wired: persistence, identity, governance,
-interop, edge, agent-os, conductor). Target: ~498.**
+## ✅ COMPLETE — all 12 phases done (2026-07-15)
+
+**~540 committed source files** (486 domain + 25 migrations + 29 shared/bootstrap/http),
+**15 domain dirs**, boots with **15 truthful health sources** (nothing faked — every down/
+degraded is honest about a missing DB/substrate/provider). Deep-OSS engines exercise the real
+`backend/engines/` surfaces; billing is MoR (Polar/Creem/Paddle/Dodo, no Stripe); auth is
+backend-owned + unified; a2a intact at 227. Desktop fully rebranded in parallel.
+
+## Remaining follow-up seams (documented, NOT hidden — do these next)
+1. **MCP tool registration bridge.** Domain `mcp()` returns flat `McpToolRegistration[]`; the
+   engines `InteropHostBundle` host uses a `serverId + toolNames` catalog model. No clean bridge
+   yet — agent-os/conductor/domain tools are NOT registered into the host (engines' own napi
+   tools self-register at start). Build the adapter.
+2. **Billing EntitlementGate injection.** `billing.gate()` is registered as
+   `CAPABILITY_TOKENS.entitlementGate`, but conductor/inference/engines have no setter to consume
+   it (pre-dispatch quota / token metering / usage). Add the seam + inject.
+3. **Social + interop-wire route surfaces.** Their composers shipped health-only (no `routes()`/
+   `mcp()`/lifecycle) — wired as health slices. Add the `/api/social` + `/api/a2a` route surfaces.
+4. **Legacy flat-dir absorption.** `src/agent-os` (68), `src/conductor` (126), `src/a2a` (227),
+   `src/connectors`, `src/gateway`, `src/engines`, `src/network`, `src/routes` still on disk —
+   the new domains COMPOSED fresh (didn't move them). They're still imported by each other +
+   cause the ~228 pre-existing tsc errors. Absorb/remove once nothing references them.
+5. **Conductor real substrate.** The tmux substrate isn't package-`ConductorSubstrate`-compatible
+   + reads process.env — bridge it so conductor can actually launch (currently truthful `down`).
+6. WS telemetry tap (upgrade-router), OTLP tracing endpoint — minor.
 
 ## Deviation to reconcile
 Phase 5a/5b **composed the `@recoder/agent-os` + `@recoder/substrate` packages fresh** rather
