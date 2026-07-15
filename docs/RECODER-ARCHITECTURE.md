@@ -9,16 +9,27 @@
 This doc is the canonical picture of the layers and the laws between them. It is deliberately
 truthful about current depth — where a layer is shallow, it says so.
 
-> **Doc hierarchy (2026-07-15):** this file = the SYSTEM-level layer view (apps + backend +
-> engines). The **backend** is now being rebuilt comprehensively — its canonical design +
-> file plan + live build status live under **[RECODER-BACKEND/](./RECODER-BACKEND/)**
-> (start at `BUILD-STATUS.md`). `RECODER-MODULES.md` + `docs/modules/*` = the engine specs
-> the backend's engines domain consumes. `RECODER-NEXT-PHASE.md` is superseded.
+> **Doc hierarchy (2026-07-15):** this file = the SYSTEM-level layer view. The **backend is now
+> BUILT** — the canonical design + file plan + live status live under
+> **[RECODER-BACKEND/](./RECODER-BACKEND/)** (start at `BUILD-STATUS.md`).
+> `RECODER-MODULES.md` + `docs/modules/*` = the per-engine specs. `RECODER-NEXT-PHASE.md` is
+> superseded.
 
-> **Next epoch:** [RECODER-NEXT-PHASE.md](./RECODER-NEXT-PHASE.md) plans the backend-spine work —
-> auth+data consolidation, folding `apps/social` into the embedded backend, and closing the
-> engine-connectivity gaps. Note (2026-07-15): `backend/src/server.ts` does not boot today (imports
-> ~47 modules deleted in the owner-driven `a2203e127` src-cleanup); prune those imports first.
+> **Current reality (2026-07-15) — the layer stack below is largely REALIZED, not aspirational:**
+> - **One project:** `apps/` = **desktop only** (wave shell + cockpit + the embedded backend;
+>   `apps/social` folded into the backend's social domain; wave + mobile folded/removed).
+> - **Backend BUILT + BOOTS:** the old v1 `server.ts` monolith was replaced by a 15-domain
+>   composed backend (`backend/src/{shared,bootstrap,http,domains}` — the legacy flat dirs
+>   `a2a/agent-os/conductor/…` were absorbed + removed; **0 tsc errors**). Boots with 15
+>   truthful health sources. Domains: persistence · identity · governance · interop · edge ·
+>   agent-os · conductor · engines · inference · billing · memory · cloud · interop-wire ·
+>   social · observability.
+> - **Engines deepened IN their dirs + USED:** the supervisor spawns the OSS engines on boot
+>   (mem0/colbert/browser-use/ops-recorder live sidecars; openfang/tensorzero/governance in-proc
+>   napi; beads/multica/recoder-xds go binaries) and the domain services consume them. The
+>   conductor run flow uses memory recall/harvest, tensorzero inference, governance, recodergit +
+>   beads to power the workspace-for-agents product (external CLI + native openfang runtimes).
+> - Billing is merchant-of-record (Polar/Creem/Paddle/Dodo — no Stripe).
 
 ---
 
@@ -27,8 +38,8 @@ truthful about current depth — where a layer is shallow, it says so.
 ```
 ┌───────────────────────────────────────────────────────────────────────────────────────┐
 │ APPS (surfaces / products — no capability logic)                                        │
-│   apps/desktop (the Wave-fork shell + cockpit; embeds the backend — the product)        │
-│   apps/social (connectors runtime)                                                      │
+│   apps/desktop = THE product (wave shell + cockpit + embedded backend + desktop engines) │
+│   (apps/social folded into the backend social domain; wave + mobile folded/removed)      │
 └───────────────────────────────────────────────────────────────────────────────────────┘
         ▲ consume ONLY over edges (HTTP/WS/MCP/A2A) — never reach into a module directly
 ┌───────────────────────────────────────────────────────────────────────────────────────┐
@@ -39,11 +50,11 @@ truthful about current depth — where a layer is shallow, it says so.
 └───────────────────────────────────────────────────────────────────────────────────────┘
         ▲ expose  │  every write passes the governance gate first
 ┌───────────────────────────────────────────────────────────────────────────────────────┐
-│ MODULES (12 domain composers — target: backend/src/modules/<domain>/)                   │
-│   memory · social · github · terminal · communication · inference                       │
-│   agent-engine · governance · browsing · signals · networking · squads                  │
-│   Each fuses its engine dirs behind ONE governed, health-truthful interface.            │
-│   (No composer is started today — all 12 capabilities are scattered across src/.)       │
+│ DOMAINS (15 composed modules — BUILT + wired: backend/src/domains/<domain>/)             │
+│   persistence · identity · governance · interop · edge · agent-os · conductor            │
+│   engines · inference · billing · memory · cloud · interop-wire · social · observability │
+│   Each fuses its engine dirs behind ONE governed, health-truthful composer.              │
+│   (All 15 started + booting; the engine-supervisor spawns the OSS engines on boot.)      │
 └───────────────────────────────────────────────────────────────────────────────────────┘
         ▲ fuse  │  in-process import (default) · subprocess (native/restart) · http (true edge)
 ┌───────────────────────────────────────────────────────────────────────────────────────┐
