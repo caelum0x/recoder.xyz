@@ -7,7 +7,7 @@
  * (`EdgeDeps`), the public module surface (`EdgeModule`), and truthful edge
  * health (`EdgeHealth`). None of them owns domain state.
  */
-import type { Application } from 'express';
+import type { Application, RequestHandler } from 'express';
 import type { Server } from 'node:http';
 import type { AppConfig } from '../../shared/app-config.js';
 import type { Logger } from '../../shared/logger.js';
@@ -108,6 +108,14 @@ export interface EdgeDeps {
   readonly providers: readonly RouteProvider[];
   /** WS stream backends registered with the upgrade router. */
   readonly wsBackends?: readonly WsBackend[];
+  /**
+   * Optional global middleware APPENDED to the canonical global chain (after
+   * request-context → cors → body → rate-limit, before any per-mount guard). This
+   * is the seam Phase-11 observability injects its telemetry tap through so every
+   * downstream mount is correlated + metered. The edge NEVER re-implements the tap;
+   * it only threads it into the single global chain (conflict-free ordering).
+   */
+  readonly globalMiddleware?: readonly RequestHandler[];
   /** Optional pre-sliced edge config; derived from `config` when omitted. */
   readonly edgeConfig?: EdgeConfig;
 }
