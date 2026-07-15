@@ -70,6 +70,15 @@ cockpit + the ONE backend (15 domains + all engines) + the desktop's own engines
 **Final: 15 domains, ~540 domain files, 0 tsc errors, boots with 15 truthful health sources,
 engines spawn + consumed, one unified desktop app.**
 
+### The product flow USES the engines (`ee2868f0f`) — proven on a real workspace
+The conductor run flow (the workspace-for-agents product core) now consumes the engines in
+service code (NOT via agent MCP tools): on create → recodergit index + beads track; on launch →
+memory recall (mem0∪beads∪colbert) enrich + governance decide; run via external CLI (Claude
+Code/Codex → tmux worktree) OR native openfang runtime, inference through tensorzero; every write →
+governance decide+recordAudit; on complete → memory harvest + beads close. Proven by driving a REAL
+`conductor.createWorkspace` against a temp git repo: recall invoked, governance decided (fail-closed
+on no-DB audit — truthful), recodergit attempted, `bd` ran. 57/57 conductor tests.
+
 ## Remaining minor follow-ups (documented, NOT hidden)
 0. **Packaged-mode engine bundling.** `electron-builder extraResources` bundles tmux/backend/
    napi/cockpit but NOT the recodergit/dmux dists → packaged app degrades those truthfully.
