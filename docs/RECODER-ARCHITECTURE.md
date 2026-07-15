@@ -11,7 +11,9 @@ truthful about current depth — where a layer is shallow, it says so.
 
 > **Doc hierarchy (2026-07-15):** this file = the SYSTEM-level layer view. The **backend is now
 > BUILT** — the canonical design + file plan + live status live under
-> **[RECODER-BACKEND/](./RECODER-BACKEND/)** (start at `BUILD-STATUS.md`).
+> **[RECODER-BACKEND/](./RECODER-BACKEND/)** (start at `BUILD-STATUS.md`). The **product + frontend
+> design** (clean conductor.build UX, zero-config onboarding, engines-invisible) is
+> **[RECODER-PRODUCT-DESIGN.md](./RECODER-PRODUCT-DESIGN.md)**.
 > `RECODER-MODULES.md` + `docs/modules/*` = the per-engine specs. `RECODER-NEXT-PHASE.md` is
 > superseded.
 
