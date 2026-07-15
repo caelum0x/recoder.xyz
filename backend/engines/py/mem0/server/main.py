@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import time
+from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
 import telemetry
@@ -32,6 +33,8 @@ from server_state import (
     get_current_config,
     get_memory_instance,
     initialize_state,
+    is_initialized,
+    set_default_config,
     set_session_factory,
     update_config,
 )
@@ -139,7 +142,27 @@ DEFAULT_CONFIG = {
 
 
 set_session_factory(SessionLocal)
-initialize_state(DEFAULT_CONFIG)
+# Stage the config without touching the vector store / history DB. The Memory
+# instance is built lazily (first request) or eagerly at startup by the lifespan
+# below — never at import — so the process can boot even if a backend is down.
+set_default_config(DEFAULT_CONFIG)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Best-effort eager warm-up. Failures here (e.g. an unreachable vector
+    store) are logged but do NOT crash the process: liveness and docs stay up
+    and the memory instance is retried on first use."""
+    try:
+        initialize_state(DEFAULT_CONFIG)
+        logging.info("Mem0 runtime initialized at startup.")
+    except Exception:
+        logging.warning(
+            "Mem0 runtime could not be initialized at startup; it will be retried "
+            "on first request. Verify the vector store and history DB are reachable.",
+            exc_info=True,
+        )
+    yield
 
 
 app = FastAPI(
@@ -152,6 +175,7 @@ app = FastAPI(
     ),
     version="1.0.0",
     redirect_slashes=False,
+    lifespan=lifespan,
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -313,6 +337,15 @@ async def log_requests(request: Request, call_next):
                 round((time.perf_counter() - start) * 1000, 2),
                 getattr(request.state, "auth_type", "none"),
             )
+
+
+@app.get("/api/health", summary="Liveness and readiness probe", tags=["meta"])
+def health():
+    """Unauthenticated liveness probe. `memory_initialized` reflects whether the
+    memory runtime (vector store + history DB) has been built successfully; the
+    process is live and serving regardless, so the backend can distinguish
+    'process up' from 'memory backend ready'."""
+    return {"status": "ok", "memory_initialized": is_initialized()}
 
 
 @app.get("/configure", summary="Get current Mem0 configuration")
