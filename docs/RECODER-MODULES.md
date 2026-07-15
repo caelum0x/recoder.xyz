@@ -1,5 +1,11 @@
 # Recoder — Architecture: Apps · Modules · Engines (VSCode→Cursor)
 
+> **Status (2026-07-15) — the mandate below is now REALIZED.** The engines are deepened IN their
+> own dirs and USED by the built 15-domain backend (`backend/src/domains/*`): the supervisor spawns
+> the OSS engines on boot and the conductor run flow consumes them (memory recall/harvest, tensorzero
+> inference, governance, recodergit + beads). See
+> [RECODER-BACKEND/BUILD-STATUS.md](./RECODER-BACKEND/BUILD-STATUS.md) for live status.
+
 > **Owner mandate (2026-07-14):** stop shipping thin wrapper layers. Each OSS directory IS a
 > first-class **module** of Recoder, used deeply and directly FROM ITS OWN DIR (never copied into
 > `packages/`). Recoder is composed of modules the way Cursor is VSCode + its own layers.
