@@ -202,21 +202,11 @@ describe('RetrievalPanel', () => {
     expect(input?.disabled).toBe(false);
   });
 
-  it('registry entry exists with id "retrieval"', async () => {
+  it('is NOT registered in the nav (engine dashboards stripped — engines stay invisible)', async () => {
     const { PANEL_REGISTRY } = await import('../panels/registry');
-    const entry = PANEL_REGISTRY.find((p) => p.id === 'retrieval');
-    expect(entry).toBeDefined();
-    expect(entry?.title).toBe('Retrieval');
-    expect(entry?.capability).toBe('colbert-lance-rag-search');
-    expect(entry?.primary).toBe(false);
-    expect(entry?.healthKey).toBeNull();
-  });
-
-  it('panel loads via dynamic import from registry', async () => {
-    const { PANEL_REGISTRY } = await import('../panels/registry');
-    const entry = PANEL_REGISTRY.find((p) => p.id === 'retrieval');
-    expect(entry).toBeDefined();
-    const Component = await entry!.load();
-    expect(typeof Component).toBe('function');
+    expect(PANEL_REGISTRY.find((p) => p.id === 'retrieval')).toBeUndefined();
+    // The component file is preserved (reversible) and still directly importable.
+    const m = await import('./RetrievalPanel');
+    expect(typeof m.RetrievalPanel).toBe('function');
   });
 });

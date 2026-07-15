@@ -175,21 +175,11 @@ describe('AgentsPanel', () => {
     expect(c.textContent).toContain('OpenFang daemon not running');
   });
 
-  it('registry entry exists with id "agents"', async () => {
+  it('is NOT registered in the nav (engine dashboards stripped — engines stay invisible)', async () => {
     const { PANEL_REGISTRY } = await import('../panels/registry');
-    const entry = PANEL_REGISTRY.find((p) => p.id === 'agents');
-    expect(entry).toBeDefined();
-    expect(entry?.title).toBe('Openfang');
-    expect(entry?.capability).toBe('openfang-agent-engine');
-    expect(entry?.primary).toBe(false);
-    expect(entry?.healthKey).toBeNull();
-  });
-
-  it('panel loads via dynamic import from registry', async () => {
-    const { PANEL_REGISTRY } = await import('../panels/registry');
-    const entry = PANEL_REGISTRY.find((p) => p.id === 'agents');
-    expect(entry).toBeDefined();
-    const Component = await entry!.load();
-    expect(typeof Component).toBe('function');
+    expect(PANEL_REGISTRY.find((p) => p.id === 'agents')).toBeUndefined();
+    // The component file is preserved (reversible) and still directly importable.
+    const m = await import('./AgentsPanel');
+    expect(typeof m.AgentsPanel).toBe('function');
   });
 });

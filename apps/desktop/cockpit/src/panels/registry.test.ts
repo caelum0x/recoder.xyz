@@ -21,10 +21,19 @@ import {
 
 /**
  * The full set of panel ids the registry must expose (matches CockpitView).
- * RETIRED (wave-desktop fusion §5): 'sessions' and 'dmux' — asserted absent below.
+ * The cockpit is a TERMINAL: only the Board is a human nav surface — the engine
+ * dashboards were stripped so the engines stay invisible behind the run flow.
  */
-const EXPECTED_IDS = [
-  'board',
+const EXPECTED_IDS = ['board'] as const;
+
+/**
+ * Surfaces the registry must NOT expose: the retired terminal-era surfaces
+ * (sessions/dmux, fusion §5) AND the engine dashboards stripped from the nav —
+ * their component files still exist, but they are no longer registered.
+ */
+const RETIRED_IDS = [
+  'sessions',
+  'dmux',
   'substrates',
   'governance',
   'policy',
@@ -32,10 +41,13 @@ const EXPECTED_IDS = [
   'memory',
   'events',
   'connectors',
+  'mcp',
+  'gateway',
+  'agents',
+  'networking',
+  'squads',
+  'retrieval',
 ] as const;
-
-/** Terminal-era surfaces the registry must NOT expose any more (fusion §5). */
-const RETIRED_IDS = ['sessions', 'dmux'] as const;
 
 describe('PANEL_REGISTRY structure', () => {
   it('registers all expected panel ids', () => {
@@ -45,7 +57,7 @@ describe('PANEL_REGISTRY structure', () => {
     }
   });
 
-  it('does NOT register the retired terminal-era surfaces (sessions/dmux)', () => {
+  it('does NOT register the retired surfaces (terminal-era + stripped engine dashboards)', () => {
     const registeredIds = PANEL_REGISTRY.map((p) => p.id);
     for (const id of RETIRED_IDS) {
       expect(registeredIds).not.toContain(id);
@@ -89,17 +101,13 @@ describe('PANEL_REGISTRY structure', () => {
 });
 
 describe('PRIMARY_PANEL_IDS and MORE_PANEL_IDS', () => {
-  it('board is primary (sessions was retired with the embedded terminals)', () => {
+  it('board is primary (the only human nav surface)', () => {
     expect(PRIMARY_PANEL_IDS).toContain('board');
     expect(PRIMARY_PANEL_IDS).not.toContain('sessions');
   });
 
-  it('advanced panels are in the More group', () => {
-    const moreExpected = ['substrates', 'governance', 'policy', 'brain', 'memory', 'events', 'connectors'];
-    for (const id of moreExpected) {
-      expect(MORE_PANEL_IDS).toContain(id);
-    }
-    expect(MORE_PANEL_IDS).not.toContain('dmux');
+  it('there is no More group — the engine dashboards were stripped', () => {
+    expect(MORE_PANEL_IDS.length).toBe(0);
   });
 
   it('primary and more groups are disjoint', () => {
@@ -119,10 +127,10 @@ describe('PRIMARY_PANEL_IDS and MORE_PANEL_IDS', () => {
 
 describe('getPanelById', () => {
   it('returns the entry for a known id', () => {
-    const entry = getPanelById('policy');
+    const entry = getPanelById('board');
     expect(entry).toBeDefined();
-    expect(entry?.id).toBe('policy');
-    expect(entry?.title).toBe('Rules');
+    expect(entry?.id).toBe('board');
+    expect(entry?.title).toBe('Board');
   });
 
   it('returns undefined for an unknown id', () => {

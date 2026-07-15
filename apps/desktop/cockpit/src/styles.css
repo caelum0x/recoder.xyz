@@ -190,6 +190,10 @@ body {
   background: var(--bg-elev);
 }
 
+/* Single quiet overall dot — the whole health surface. Tucked into the chrome,
+   no engine grid, no text: the tone says up / degraded / checking. */
+.health-one { display: inline-flex; align-items: center; padding: 7px 16px; }
+
 /* Collapsed summary — one quiet clickable row: "Runtimes 2/3 · Substrates …". */
 .health-summary {
   display: flex; align-items: center; gap: 18px;

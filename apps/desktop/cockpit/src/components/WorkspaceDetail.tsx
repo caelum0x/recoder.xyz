@@ -108,8 +108,8 @@ function InlineGateVerdict({
       </dl>
       <p class="detail-gate-reason">{reason}</p>
       <p class="detail-gate-hint">
-        This action was NOT performed. Create an approving Approval record (at the required tier)
-        and try again — or view the Approvals panel for full governance detail.
+        This action was NOT performed. An approving Approval record (at the required tier) must
+        exist before the conductor will deliver — create one and try again.
       </p>
     </div>
   );

@@ -167,21 +167,11 @@ describe('GatewayPanel', () => {
     expect(c.querySelector('.gateway-status-block')).toBeNull();
   });
 
-  it('registry entry exists with id "gateway"', async () => {
+  it('is NOT registered in the nav (engine dashboards stripped — engines stay invisible)', async () => {
     const { PANEL_REGISTRY } = await import('../panels/registry');
-    const entry = PANEL_REGISTRY.find((p) => p.id === 'gateway');
-    expect(entry).toBeDefined();
-    expect(entry?.title).toBe('Gateway');
-    expect(entry?.capability).toBe('tensorzero-llm-gateway');
-    expect(entry?.primary).toBe(false);
-    expect(entry?.healthKey).toBeNull();
-  });
-
-  it('panel loads via dynamic import from registry', async () => {
-    const { PANEL_REGISTRY } = await import('../panels/registry');
-    const entry = PANEL_REGISTRY.find((p) => p.id === 'gateway');
-    expect(entry).toBeDefined();
-    const Component = await entry!.load();
-    expect(typeof Component).toBe('function');
+    expect(PANEL_REGISTRY.find((p) => p.id === 'gateway')).toBeUndefined();
+    // The component file is preserved (reversible) and still directly importable.
+    const m = await import('./GatewayPanel');
+    expect(typeof m.GatewayPanel).toBe('function');
   });
 });
