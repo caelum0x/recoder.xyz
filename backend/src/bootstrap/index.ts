@@ -30,6 +30,14 @@ import { createHealthRegistry, HealthRegistry } from './health-registry.js';
 import { createEngineSupervisor, EngineSupervisor } from './engine-supervisor.js';
 import { createLifecycle, Lifecycle } from './lifecycle.js';
 import { createPersistenceModule } from '../domains/persistence/index.js';
+import { createIdentityModule } from '../domains/identity/index.js';
+import { createDeviceFlow } from '../domains/identity/device-flow.service.js';
+import { buildDeviceRouter } from '../domains/identity/routes/device.routes.js';
+import { sliceIdentityConfig } from '../domains/identity/config.js';
+import { PgApiKeyStore } from '../domains/identity/repositories/api-key.repository.js';
+import { createApiKeyService } from '../domains/identity/api-key.service.js';
+import { buildApiKeysRouter } from '../domains/identity/routes/api-keys.routes.js';
+import { createOrgsRbacFeature } from '../domains/identity/orgs-rbac.feature.js';
 
 /** Bootstrap-owned DI tokens (beyond the shared foundation tokens). */
 export const BOOT_TOKENS = {
@@ -152,6 +160,59 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   container.registerValue(DOMAIN_TOKENS.persistence, persistence);
   healthRegistry.register(persistence);
 
+  // --- Phase 2: Identity & Auth — the credential seam. Hosts Better Auth
+  //     in-process, resolves any credential → Principal via SessionVerifier, and
+  //     exposes the auth middleware every later domain guards requests with.
+  //     Degrade-safe: missing BETTER_AUTH_SECRET/AUTH_DATABASE_URL → truthful
+  //     `down` + SERVICE_UNAVAILABLE, never a faked 200. ---
+  // CLI device flow (RFC 8628): built before identity so its DeviceTokenValidator
+  // feeds the credential seam (an approved device_code resolves to a device
+  // principal). Backed by the persistence executor. `exchange` mints a real sk_
+  // key once the api-key feature injects its issuer; until then it degrades to a
+  // truthful SERVICE_UNAVAILABLE rather than a faked token.
+  const deviceFlow = createDeviceFlow({
+    config,
+    logger: childLogger('identity-device'),
+    executor: persistence.executor(),
+  });
+
+  // DB-backed sk_ platform API keys (replaces the legacy in-memory
+  // validatePlatformApiKey). Hashed at rest with API_KEY_HASH_SALT and injected
+  // as the credential seam's ApiKeyValidator, so an `Authorization: Bearer sk_…`
+  // or `x-api-key` resolves to an `apikey` Principal. Truthful degrade: without
+  // the pool, mint/list/revoke return SERVICE_UNAVAILABLE (never a faked key).
+  const identityCfg = sliceIdentityConfig(config);
+  const apiKeyLog = childLogger('identity-apikeys');
+  const apiKeyStore = new PgApiKeyStore(persistence.executor(), apiKeyLog);
+  const apiKeyService = createApiKeyService({
+    store: apiKeyStore,
+    logger: apiKeyLog,
+    hashSalt: (options.env ?? process.env).API_KEY_HASH_SALT ?? null,
+    isAvailable: () => persistence.executor().isAvailable(),
+    prefixLength: identityCfg.apiKeyPrefixLength,
+    defaultTtlDays: identityCfg.apiKeyDefaultTtlDays,
+  });
+
+  // Orgs + team + membership lifecycle and the RBAC PermissionEvaluator. Built
+  // before identity so the evaluator feeds `requirePermission`; the orgs router is
+  // mounted after identity (it needs the composed auth middleware). Degrade-safe:
+  // all stores bind to the persistence executor and no-op truthfully without a DB.
+  const orgsRbac = createOrgsRbacFeature({
+    executor: persistence.executor(),
+    logger: childLogger('identity-orgs'),
+  });
+
+  const identity = createIdentityModule({
+    config,
+    logger: childLogger('identity'),
+    executor: persistence.executor(),
+    deviceTokenValidator: deviceFlow,
+    apiKeyValidator: apiKeyService,
+    evaluator: orgsRbac.evaluator,
+  });
+  container.registerValue(DOMAIN_TOKENS.identity, identity);
+  healthRegistry.register(identity);
+
   // 3. App.
   const { app, server } = buildApp(config, log);
 
@@ -160,6 +221,29 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
 
   // Mount the persistence internal edges (edge domain owns the auth chain later).
   app.use(DOMAIN_REGISTRY.persistence.mountBase, persistence.routes());
+
+  // Mount the identity edges: Better Auth host at /api/auth/* + /api/identity/*.
+  // The edge domain (Phase 4) will fold these behind the canonical chain; for now
+  // they mount directly so auth is reachable the moment identity is built.
+  app.use('/api/auth', identity.authRoutes());
+  app.use(DOMAIN_REGISTRY.identity.mountBase, identity.routes());
+  // sk_ platform API key edges: GET/POST /keys + DELETE /keys/:id (session-gated).
+  // Mounted under /api/identity; the raw key is returned exactly once at mint.
+  app.use(
+    DOMAIN_REGISTRY.identity.mountBase,
+    buildApiKeysRouter({ service: apiKeyService, mw: identity.middleware(), logger: apiKeyLog }),
+  );
+  // CLI device-flow edges: POST /code (start), /token (poll/exchange), /approve
+  // (session-gated). Mounted under /api/identity/device; the approve route reuses
+  // the identity auth middleware so only a signed-in user can authorize a code.
+  app.use('/api/identity/device', buildDeviceRouter({ service: deviceFlow, middleware: identity.middleware() }));
+  // Orgs + RBAC edges: GET/POST /orgs, members, and role management (session-gated
+  // via the composed auth middleware; writes flow through the RBAC evaluator).
+  app.use(DOMAIN_REGISTRY.identity.mountBase, orgsRbac.buildRouter(identity.middleware()));
+  // Internal identity resolution edges (INTERNAL_SERVICE_KEY-gated): the website
+  // proxy + other services resolve credentials → Principal, validate sk_ keys, and
+  // resolve/link the unified identity read model here.
+  app.use('/internal/identity', identity.internalRoutes());
 
   // Terminal 404 + error envelope (domain routers mount before these in later phases).
   app.use(notFound());
@@ -170,6 +254,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   //    still starts (in-memory KV fallback), never blocking.
   await engineSupervisor.start();
   await persistence.start();
+  await identity.start();
   await listen(server, config);
   const url = `http://${config.server.host}:${config.server.port}`;
   log.info({ url, healthSources: healthRegistry.count }, 'recoder-backend listening');
@@ -177,6 +262,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // 6. Lifecycle wiring.
   lifecycle
     .onStop('http-server', () => closeServer(server))
+    .onStop('identity', () => identity.stop())
     .onStop('persistence', () => persistence.stop())
     .onStop('engine-supervisor', () => engineSupervisor.stop());
   if (options.installSignalHandlers !== false) {
