@@ -40,6 +40,31 @@ use recoder_governance_kernel::{
 use recoder_governance_types::{AuditInput, AuditOutcome};
 use std::sync::{Arc, Mutex};
 
+// ---- free probes (no kernel instance required) ------------------------------
+
+/// Classify a tool's inherent risk level from its name — the deny-biased
+/// classifier the approval stage uses (`shell_exec` → critical, `file_write` /
+/// `file_delete` → high, `web_fetch` / `browser_navigate` → medium, else low).
+///
+/// Returns the wire string: `"low" | "medium" | "high" | "critical"`. Pure and
+/// side-effect-free, so the TS facade can call it before booting a kernel.
+#[napi]
+pub fn classify_risk(tool: String) -> String {
+    recoder_governance_approval::classify_risk(&tool).to_string()
+}
+
+/// Native addon version + crate id, so the TS facade can confirm the loaded
+/// `.node` matches the expected build. A pure read — no side effects.
+#[napi]
+pub fn native_version() -> String {
+    serde_json::json!({
+        "addon": env!("CARGO_PKG_VERSION"),
+        "crate": "recoder-governance-napi",
+        "build_profile": if cfg!(debug_assertions) { "debug" } else { "release" },
+    })
+    .to_string()
+}
+
 // ---- helpers ----------------------------------------------------------------
 
 /// Convert a napi Error-compatible string into a napi::Error.
@@ -144,13 +169,10 @@ impl NapiGovernanceKernel {
             parse_json(&context_json, "context")?
         };
 
-        let req = GovernanceRequest::new(&actor, &task, parse_action(&action), &target)
-            .with_context(ctx);
+        let req =
+            GovernanceRequest::new(&actor, &task, parse_action(&action), &target).with_context(ctx);
 
-        let kernel = self
-            .inner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let kernel = self.inner.lock().unwrap_or_else(|e| e.into_inner());
 
         // `decide` is sync and infallible at the kernel level (faults become
         // deny verdicts internally); we only propagate the JSON serialization
@@ -169,10 +191,7 @@ impl NapiGovernanceKernel {
     /// A JSON string of `EnforcementResult`.
     #[napi]
     pub fn enforce_tool(&self, tool: String, input: String) -> Result<String> {
-        let kernel = self
-            .inner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let kernel = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let result = kernel.enforce_tool(&tool, &input);
         to_json(&result)
     }
@@ -200,13 +219,10 @@ impl NapiGovernanceKernel {
             parse_json(&context_json, "context")?
         };
 
-        let req = GovernanceRequest::new(&actor, &task, parse_action(&action), &target)
-            .with_context(ctx);
+        let req =
+            GovernanceRequest::new(&actor, &task, parse_action(&action), &target).with_context(ctx);
 
-        let kernel = self
-            .inner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let kernel = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let decision = kernel.route(&req);
         // Convert to the serializable VerdictRoute mirror (RouteDecision itself
         // does not derive Serialize to keep the routing crate serde-free).
@@ -245,10 +261,7 @@ impl NapiGovernanceKernel {
             outcome: parse_outcome(&outcome),
         };
 
-        let kernel = self
-            .inner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let kernel = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let tip = kernel.record_audit(entry);
         Ok(tip)
     }
@@ -256,33 +269,137 @@ impl NapiGovernanceKernel {
     /// Verify the audit chain. Returns `true` if the chain is intact.
     #[napi]
     pub fn verify_audit(&self) -> Result<bool> {
-        let kernel = self
-            .inner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let kernel = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         Ok(kernel.verify_audit().is_ok())
     }
 
     /// Current audit-chain tip hash.
     #[napi]
     pub fn audit_tip(&self) -> Result<String> {
-        let kernel = self
-            .inner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let kernel = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         Ok(kernel.audit_tip())
     }
 
     /// Number of recorded audit entries.
     #[napi]
     pub fn audit_len(&self) -> Result<u32> {
-        let kernel = self
-            .inner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let kernel = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         // Cast: audit_len() returns usize; a u32 is enough for any realistic chain.
         Ok(kernel.audit_len() as u32)
     }
+
+    // ---- policy (hot-swap + live probes) ------------------------------------
+
+    /// Hot-swap the kernel's policy bundle from a JSON `GovernanceKernelConfig`.
+    ///
+    /// Fail-closed: an invalid config is rejected (napi error) and the *old*
+    /// policy stays live — a bad reload never opens a hole. On success the new
+    /// forbidden/secret paths, routing thresholds and approval policy take effect
+    /// for subsequent `decide()` calls atomically.
+    #[napi]
+    pub fn reload_policies(&self, config_json: String) -> Result<()> {
+        let config: GovernanceKernelConfig = parse_json(&config_json, "GovernanceKernelConfig")?;
+        let kernel = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        kernel
+            .reload_policies(config)
+            .map_err(|e| js_err(format!("governance-napi: reload_policies rejected: {e}")))
+    }
+
+    /// True if `target` is a forbidden path under the *live* policy — the same
+    /// check the decision pipeline's forbidden-path stage applies. A read-only
+    /// probe (no audit entry, no decision) so the facade can pre-gate a write.
+    #[napi]
+    pub fn is_forbidden_path(&self, target: String) -> Result<bool> {
+        let kernel = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        Ok(kernel.is_forbidden_path(&target))
+    }
+
+    /// True if `target` is a secret path under the *live* policy. Same read-only
+    /// contract as [`is_forbidden_path`](Self::is_forbidden_path).
+    #[napi]
+    pub fn is_secret_path(&self, target: String) -> Result<bool> {
+        let kernel = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        Ok(kernel.is_secret_path(&target))
+    }
+
+    // ---- approvals on the SHARED kernel -------------------------------------
+    // These operate on THIS kernel's own ApprovalManager, so an approval submitted
+    // here is visible to the same kernel that runs `decide()` — unlike the
+    // standalone `NapiApprovalManager`, which owns an independent kernel and is
+    // kept only for callers that want an isolated approval gate.
+
+    /// Submit an approval request against the shared kernel's approval manager.
+    ///
+    /// `request_json` matches `ApprovalRequest`. Returns
+    /// `{ "outcome": "approved" | "denied" | "pending", "request_id": "..." }`.
+    #[napi]
+    pub fn submit_approval(&self, request_json: String) -> Result<String> {
+        use recoder_governance_approval::SubmitOutcome;
+        use recoder_governance_types::{ApprovalDecision, ApprovalRequest};
+
+        let req: ApprovalRequest = parse_json(&request_json, "ApprovalRequest")?;
+        let kernel = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let now_ms = now_ms();
+        let outcome = kernel.approvals().submit(req.clone(), now_ms);
+        let (outcome_str, request_id) = match outcome {
+            SubmitOutcome::Immediate(ApprovalDecision::Approved) => {
+                ("approved".to_string(), req.id.clone())
+            }
+            SubmitOutcome::Immediate(_) => ("denied".to_string(), req.id.clone()),
+            SubmitOutcome::Pending { request_id, .. } => ("pending".to_string(), request_id),
+        };
+        to_json(&serde_json::json!({
+            "outcome": outcome_str,
+            "request_id": request_id,
+        }))
+    }
+
+    /// Resolve a pending approval on the shared kernel. `decision` is
+    /// `"approved"` | `"denied"`. Returns the `ApprovalResponse` JSON, or an error
+    /// if no such pending request exists.
+    #[napi]
+    pub fn resolve_approval(
+        &self,
+        request_id: String,
+        decision: String,
+        decided_by: String,
+    ) -> Result<String> {
+        use recoder_governance_types::ApprovalDecision;
+
+        let decision = match decision.as_str() {
+            "approved" => ApprovalDecision::Approved,
+            _ => ApprovalDecision::Denied,
+        };
+        let kernel = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let response = kernel
+            .approvals()
+            .resolve(&request_id, decision, Some(decided_by), now_ms())
+            .map_err(|e| js_err(format!("governance-napi: resolve_approval: {e}")))?;
+        to_json(&response)
+    }
+
+    /// JSON array of the shared kernel's currently pending `ApprovalRequest`s.
+    #[napi]
+    pub fn list_pending_approvals(&self) -> Result<String> {
+        let kernel = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        to_json(&kernel.approvals().list_pending())
+    }
+
+    /// Count of pending approvals on the shared kernel.
+    #[napi]
+    pub fn pending_approval_count(&self) -> Result<u32> {
+        let kernel = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        Ok(kernel.approvals().pending_count() as u32)
+    }
+}
+
+/// Milliseconds since the Unix epoch (monotonic-safe default of `0` on the
+/// impossible pre-epoch clock — never panics).
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64
 }
 
 // ---- NapiApprovalManager ----------------------------------------------------
@@ -305,8 +422,11 @@ impl NapiApprovalManager {
     #[napi(constructor)]
     pub fn new() -> Result<Self> {
         let config = GovernanceKernelConfig::default();
-        let kernel = GovernanceKernel::new(config)
-            .map_err(|e| js_err(format!("governance-napi: approval manager init failed: {e}")))?;
+        let kernel = GovernanceKernel::new(config).map_err(|e| {
+            js_err(format!(
+                "governance-napi: approval manager init failed: {e}"
+            ))
+        })?;
         Ok(Self {
             kernel: Arc::new(Mutex::new(kernel)),
         })
@@ -327,31 +447,21 @@ impl NapiApprovalManager {
     /// JSON string: `{ "outcome": "approved" | "denied" | "pending", "request_id": "..." }`
     #[napi]
     pub fn request_approval(&self, request_json: String) -> Result<String> {
-        use recoder_governance_types::{ApprovalDecision, ApprovalRequest};
         use recoder_governance_approval::SubmitOutcome;
+        use recoder_governance_types::{ApprovalDecision, ApprovalRequest};
 
         let req: ApprovalRequest = parse_json(&request_json, "ApprovalRequest")?;
 
-        let kernel = self
-            .kernel
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let kernel = self.kernel.lock().unwrap_or_else(|e| e.into_inner());
 
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as i64;
-
-        let outcome = kernel.approvals().submit(req.clone(), now_ms);
+        let outcome = kernel.approvals().submit(req.clone(), now_ms());
 
         let (outcome_str, request_id) = match outcome {
             SubmitOutcome::Immediate(ApprovalDecision::Approved) => {
                 ("approved".to_string(), req.id.clone())
             }
             SubmitOutcome::Immediate(_) => ("denied".to_string(), req.id.clone()),
-            SubmitOutcome::Pending { request_id, .. } => {
-                ("pending".to_string(), request_id)
-            }
+            SubmitOutcome::Pending { request_id, .. } => ("pending".to_string(), request_id),
         };
 
         to_json(&serde_json::json!({
@@ -383,19 +493,11 @@ impl NapiApprovalManager {
             _ => ApprovalDecision::Denied,
         };
 
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as i64;
-
-        let kernel = self
-            .kernel
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let kernel = self.kernel.lock().unwrap_or_else(|e| e.into_inner());
 
         let response = kernel
             .approvals()
-            .resolve(&request_id, decision, Some(decided_by), now_ms)
+            .resolve(&request_id, decision, Some(decided_by), now_ms())
             .map_err(|e| js_err(format!("governance-napi: resolve_approval: {e}")))?;
 
         to_json(&response)

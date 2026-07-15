@@ -150,6 +150,30 @@ impl GovernanceKernel {
     pub fn audit_len(&self) -> usize {
         self.audit.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
+
+    /// True if `target` matches a forbidden path in the *live* policy (the one a
+    /// `decide()` would apply right now). A read-only probe over the same config
+    /// the forbidden-path pipeline stage consults, so callers (e.g. the in-proc
+    /// napi facade) can pre-check a path without running a full decision.
+    #[must_use]
+    pub fn is_forbidden_path(&self, target: &str) -> bool {
+        self.state
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .config
+            .is_forbidden_path(target)
+    }
+
+    /// True if `target` matches a secret path in the *live* policy. Same
+    /// read-only contract as [`is_forbidden_path`](Self::is_forbidden_path).
+    #[must_use]
+    pub fn is_secret_path(&self, target: &str) -> bool {
+        self.state
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .config
+            .is_secret_path(target)
+    }
 }
 
 impl GovernanceHandle for GovernanceKernel {
