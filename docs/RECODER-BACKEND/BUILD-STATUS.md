@@ -12,21 +12,33 @@ Building the 498-file, 14-domain, multi-language backend phase by phase from
 
 | Phase | Domain | Budget | Status | Commit |
 |---|---|---|---|---|
-| 0 | Foundation (spine) | 16 | ✅ done, boots | `b159389b5` |
-| 1 | Persistence | 34 | ✅ done, 33/33 tests | `054c053c5` |
-| — | Cut v1 cruft (sandbox/code/collaboration/database) | — | ✅ done | (post-054c) |
-| 2 | Identity & Auth | 36 | 🔄 building (fanned out) | — |
-| 3 | Governance & Interop | 33 | 🔄 building (concurrent w/ P2) | — |
-| 4 | Edge & API | 26 | ⏳ next | — |
-| 5 | Agent-OS + Conductor | 91 | ⏳ (split agent-os ∥ conductor) | — |
-| 6 | Engines + Inference | 70 | ⏳ | — |
-| 7 | Interop-wire + Social | 70 | ⏳ | — |
-| 8 | Memory & Retrieval | 34 | ⏳ | — |
-| 9 | Billing & Metering | 28 | ⏳ | — |
-| 10 | Cloud & Sandboxes | 27 | ⏳ | — |
+| 0 | Foundation (spine) | 16 | ✅ boots | `b159389b5` |
+| 1 | Persistence | 34 | ✅ 33/33 tests | `054c053c5` |
+| — | Cut v1 cruft (sandbox/code/collaboration/database) | — | ✅ done | post-054c |
+| 2 | Identity & Auth | 36→37 | ✅ 72/72 tests | `e58468c5e` |
+| 3 | Governance & Interop | 33→47+12 | ✅ 74 tests | `91a20030` / `f617d383` |
+| 4 | Edge & API | 26 | ✅ 15/15 tests | `75a0d888` |
+| 5a | Agent-OS control plane | 46→28 | ✅ 19 tests (composed @recoder/agent-os fresh) | `95ff34a1` |
+| 5b | Conductor & Terminal | 45→36 | ✅ 30 tests (composed @recoder/substrate fresh) | `8f42873e` |
+| — | Serial integration (5a+5b → bootstrap) | — | ✅ 8 health sources, boots | `bfa55b0f6` |
+| 6 | Engines + Inference (DEEP OSS) | 70 | 🔄 building (∥ P9) | — |
+| 7 | Interop-wire + Social | 70 | ⏳ (batch 2) | — |
+| 8 | Memory & Retrieval | 34 | ⏳ (batch 2) | — |
+| 9 | Billing & Metering | 28 | 🔄 building (∥ P6) | — |
+| 10 | Cloud & Sandboxes | 27 | ⏳ (batch 2) | — |
 | 11 | Observability & Ops | 23 | ⏳ (fuses all health) | — |
 
-**Committed so far: 49 files (P0+P1). Target: ~498.**
+**Committed so far: ~235 source files (7 domains wired: persistence, identity, governance,
+interop, edge, agent-os, conductor). Target: ~498.**
+
+## Deviation to reconcile
+Phase 5a/5b **composed the `@recoder/agent-os` + `@recoder/substrate` packages fresh** rather
+than moving the legacy `src/agent-os` (68) + `src/conductor` (126) dirs. Those legacy dirs are
+STILL PRESENT and still imported by `src/a2a` + `src/connectors` (move in P7). So: (a) domain
+file counts came in UNDER budget (the depth is in the packages), (b) `src/agent-os`/`src/conductor`
+absorption is deferred to the P7 a2a/connectors move. Conductor substrates are empty (the legacy
+tmux substrate isn't package-`ConductorSubstrate`-compatible + reads process.env) — a bridge is
+needed before conductor can launch; until then it degrades truthfully (`conductor=down`).
 
 ## Concurrency plan (use MULTIPLE workflows)
 
