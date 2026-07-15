@@ -50,6 +50,10 @@ const envSchema = z.object({
   DATABASE_URL: z.string().optional(),
   DATABASE_SSL: z.string().optional(),
   DATABASE_MAX_POOL: z.coerce.number().int().min(1).max(1000).default(10),
+  DATABASE_MIN_POOL: z.coerce.number().int().min(0).max(1000).default(0),
+  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(0).default(0),
+  DATABASE_ALLOW_SEED: z.string().optional(),
+  DATABASE_MIGRATIONS_DIR: z.string().optional(),
 
   BETTER_AUTH_SECRET: z.string().optional(),
   AUTH_DATABASE_URL: z.string().optional(),
@@ -146,6 +150,10 @@ function buildConfig(env: ParsedEnv, rawEnv: EnvSource): AppConfig {
     url: env.DATABASE_URL ?? null,
     ssl: asBool(env.DATABASE_SSL, isProduction),
     maxPoolSize: env.DATABASE_MAX_POOL,
+    minPoolSize: Number(env.DATABASE_MIN_POOL ?? 0),
+    statementTimeoutMs: Number(env.DATABASE_STATEMENT_TIMEOUT_MS ?? 0),
+    allowSeed: asBool(env.DATABASE_ALLOW_SEED, !isProduction),
+    migrationsDir: env.DATABASE_MIGRATIONS_DIR ?? null,
   };
 
   const auth: AuthConfig = {
