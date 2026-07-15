@@ -2,7 +2,6 @@ packages:
   - backend
   - apps/mobile
   # openclaw social layer for agents (Wave G1) — composes @recoder/connectors
-  - apps/social
   # The Recoder desktop app (Wave-fork shell, moved from apps/wave), divided into
   # app/ (Electron+React, the pnpm member) and server/ (Go, not an npm package).
   # tsunami/frontend is its build-time sub-app (was an npm sub-workspace);
