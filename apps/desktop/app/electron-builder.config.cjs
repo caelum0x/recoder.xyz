@@ -129,6 +129,7 @@ const config = {
     linux: {
         artifactName: "${name}-${platform}-${arch}-${version}.${ext}",
         category: "TerminalEmulator",
+        icon: "build/icon.png",
         executableName: pkg.name,
         target: ["zip", "deb", "rpm", "snap", "AppImage", "pacman"],
         synopsis: pkg.description,
@@ -148,6 +149,7 @@ const config = {
     },
     win: {
         target: ["nsis", "msi", "zip"],
+        icon: "build/icon.ico",
         signtoolOptions: windowsShouldSign && {
             signingHashAlgorithms: ["sha256"],
             publisherName: "Command Line Inc",

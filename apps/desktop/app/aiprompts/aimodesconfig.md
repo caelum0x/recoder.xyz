@@ -60,10 +60,10 @@ Keys follow pattern: `provider@modename` (e.g., `waveai@quick`, `openai@gpt4`)
 
 **Defined in:** `pkg/aiusechat/uctypes/uctypes.go:27-35`
 
-1. **wave** - Recoder AI Cloud service
+1. **wave** - hosted cloud AI service (provider id `wave`, kept for config compatibility)
    - Auto-sets: `waveai:cloud = true`, endpoint from env or default
-   - Default endpoint: `https://cfapi.waveterm.dev/api/waveai`
-   - Used for Wave's hosted AI modes
+   - Default endpoint: `https://cfapi.waveterm.dev/api/waveai` (upstream Wave Cloud service — truthful upstream reference, not a Recoder-hosted endpoint)
+   - Used for the hosted cloud AI modes (upstream Wave Cloud)
 
 2. **openai** - OpenAI API
    - Auto-sets: endpoint `https://api.openai.com/v1`
