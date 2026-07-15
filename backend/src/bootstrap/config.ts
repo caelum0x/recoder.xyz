@@ -101,8 +101,12 @@ const envSchema = z.object({
   GOVERNANCE_NATIVE_ADDON: z.string().optional(),
   TENSORZERO_URL: z.string().optional(),
   MEM0_BASE_URL: z.string().optional(),
+  MEM0_HISTORY_DB_PATH: z.string().optional(),
   BROWSER_USE_URL: z.string().optional(),
   COLBERT_URL: z.string().optional(),
+  OPS_RECORDER_AUTH_DISABLED: z.string().optional(),
+  MULTICA_API_KEY: z.string().optional(),
+  MULTICA_WORKSPACE_ID: z.string().optional(),
 
   // --- Inference (LLM gateway) slice ---
   TENSORZERO_GATEWAY_API_KEY: z.string().optional(),
@@ -222,8 +226,24 @@ function csv(raw: string | undefined): string[] {
     .filter((s) => s.length > 0);
 }
 
-/** Build the engines override slice from env (all optional, degrade-safe). */
-function buildEnginesOverrides(env: ParsedEnv): EnginesConfigOverrides {
+/**
+ * Build the engines override slice from env (all optional, degrade-safe).
+ *
+ * This is the ONLY place the per-engine child env is assembled. It is
+ * secret-minimal: `PATH`/`HOME` (so a venv python resolves its toolchain — e.g.
+ * colbert's ninja for the torch C-extension build), the loopback auth-disabled
+ * flags, mem0's history db path, and multica's keys — NEVER the full env. The
+ * supervisors enforce the same law when they spawn.
+ */
+function buildEnginesOverrides(env: ParsedEnv, rawEnv: EnvSource): EnginesConfigOverrides {
+  // Toolchain env every venv/binary child needs (not secrets): PATH + HOME.
+  const toolchainEnv: Record<string, string> = {
+    ...(rawEnv.PATH ? { PATH: rawEnv.PATH } : {}),
+    ...(rawEnv.HOME ? { HOME: rawEnv.HOME } : {}),
+  };
+  const historyDbPath =
+    opt(env.MEM0_HISTORY_DB_PATH) ?? path.resolve(process.cwd(), 'data', 'mem0-history.db');
+  const opsAuthDisabled = asBool(env.OPS_RECORDER_AUTH_DISABLED, true) ? 'true' : 'false';
   return {
     repoRoot: opt(env.ENGINES_REPO_ROOT) ?? null,
     palRootDir: opt(env.PAL_ROOT_DIR) ?? null,
@@ -237,6 +257,31 @@ function buildEnginesOverrides(env: ParsedEnv): EnginesConfigOverrides {
       mem0: opt(env.MEM0_BASE_URL) ?? null,
       'browser-use': opt(env.BROWSER_USE_URL) ?? null,
       colbert: opt(env.COLBERT_URL) ?? null,
+    },
+    daemonEnv: {
+      // colbert: PATH so ninja/gcc resolve for the torch ext build (else degraded).
+      colbert: { ...toolchainEnv },
+      // ops-recorder: loopback auth off by default so keyless boot is usable.
+      'ops-recorder': { OPS_RECORDER_AUTH_DISABLED: opsAuthDisabled, ...toolchainEnv },
+      // multica (Go): forward the API key + workspace id only when configured.
+      multica: {
+        ...toolchainEnv,
+        ...(opt(env.MULTICA_API_KEY) ? { MULTICA_API_KEY: opt(env.MULTICA_API_KEY) as string } : {}),
+        ...(opt(env.MULTICA_WORKSPACE_ID)
+          ? { MULTICA_WORKSPACE_ID: opt(env.MULTICA_WORKSPACE_ID) as string }
+          : {}),
+      },
+    },
+    sidecarEnv: {
+      // mem0: sqlite history path + loopback auth off + toolchain env.
+      mem0: { HISTORY_DB_PATH: historyDbPath, AUTH_DISABLED: 'true', ...toolchainEnv },
+      // browser-use: just the toolchain env (PORT is set by the adapter).
+      'browser-use': { ...toolchainEnv },
+    },
+    // pal stdio server (BYOK): forward an available provider key + toolchain env.
+    palEnv: {
+      ...toolchainEnv,
+      ...(opt(env.OPENAI_API_KEY) ? { OPENAI_API_KEY: opt(env.OPENAI_API_KEY) as string } : {}),
     },
   };
 }
@@ -407,7 +452,7 @@ function buildConfig(env: ParsedEnv, rawEnv: EnvSource): AppConfig {
     logging,
     conductor,
     agentOs,
-    engines: buildEnginesOverrides(env),
+    engines: buildEnginesOverrides(env, rawEnv),
     inference: buildInferenceOverrides(env),
     billing: buildBillingOverrides(env),
     cloud: buildCloudOverrides(env),

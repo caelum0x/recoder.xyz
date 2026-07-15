@@ -29,10 +29,12 @@ import {
   type Mem0Scope,
   type Mem0MemoryRecord,
 } from '../../../../engines/mem0-client.js';
+import { join } from 'node:path';
 import type { Logger } from '../../../../shared/logger.js';
 import type { EnginesConfig } from '../../config.js';
-import { isEngineEnabled } from '../../config.js';
+import { isEngineEnabled, sidecarEnvFor } from '../../config.js';
 import { DEFAULT_LOOPBACK } from '../../constants.js';
+import { resolveEnginesPyRoot, resolveVenvPython } from './sidecar-paths.js';
 import { EngineClientBase } from '../../ports/engine-client.port.js';
 import type { EngineCall } from '../../ports/engine-client.port.js';
 import type { SidecarSpec, SidecarSupervisorPort } from '../../ports/sidecar-supervisor.port.js';
@@ -273,19 +275,42 @@ export class Mem0Adapter extends EngineClientBase<unknown, unknown> {
     }
   }
 
-  /** Build the mem0 sidecar spec from config, or null when no sidecar is possible. */
+  /**
+   * Build the mem0 sidecar spec, or null when no sidecar is possible.
+   *
+   * When `externalUrls.mem0` is set we do NOT spawn (pythonPath null → the
+   * adapter reaches the operator instance over REST). Otherwise we resolve the
+   * venv python by convention (`engines/py/mem0/.venv`) and run the FastAPI app
+   * in MODULE mode (`python -m uvicorn main:app`, cwd `engines/py/mem0/server`)
+   * because `main.py`'s dev runner forces `reload=True`. Health is `/api/health`.
+   */
   private spec(): SidecarSpec | null {
-    const python = this.deps.config.sidecarPython.mem0;
     const external = this.deps.config.externalUrls.mem0;
-    // Only a real venv OR an external URL makes a sidecar meaningful.
+    const pyRoot = resolveEnginesPyRoot(this.deps.config.repoRoot);
+    const engineDir = pyRoot ? join(pyRoot, 'mem0') : null;
+    const serverDir = engineDir ? join(engineDir, 'server') : undefined;
+    // External URL → skip-spawn (REST path); else resolve the local venv python.
+    const python = external
+      ? null
+      : this.deps.config.sidecarPython.mem0 ?? (engineDir ? resolveVenvPython(engineDir) : null);
+    // A real venv OR an external URL makes a sidecar meaningful.
     if (!python && !external) return null;
+    const port = DEFAULT_LOOPBACK.mem0.split(':')[1] ?? '8896';
+    const env: Record<string, string> = {
+      AUTH_DISABLED: 'true',
+      ...(external ? { MEM0_BASE_URL: external } : {}),
+      ...sidecarEnvFor(this.deps.config, 'mem0'),
+    };
     return {
       engineId: 'mem0',
       transport: 'loopback-http',
       pythonPath: python,
-      entrypoint: null, // bootstrap injects the concrete server.py path via overrides
+      entrypoint: null, // module mode — the args + cwd carry the target
+      args: ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', port],
+      ...(serverDir ? { cwd: serverDir } : {}),
       listenAddr: DEFAULT_LOOPBACK.mem0,
-      ...(external ? { env: { MEM0_BASE_URL: external } } : {}),
+      healthPath: '/api/health',
+      env,
     };
   }
 }

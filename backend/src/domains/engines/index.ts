@@ -56,6 +56,14 @@ export interface EnginesModule {
   /** A typed engine client by id (null when the engine is not declared). */
   client(id: EngineId): EngineClientPort | null;
   /**
+   * The LIVE loopback base URL a supervised daemon/sidecar publishes once healthy
+   * (`http://127.0.0.1:PORT`), the operator's external URL, or `null` when not
+   * (yet) reachable. For raw-HTTP consumers; prefer `client(id)` for the typed
+   * seam. Read lazily — with fire-and-forget boot spawn it is `null` until the
+   * engine's first health passes.
+   */
+  endpoint(id: EngineId): string | null;
+  /**
    * The tensorzero embedded-gateway client — the ONE the inference module's napi
    * tier binds over (CONFLICT #8-safe: shared `.node` load). Null if undeclared.
    */

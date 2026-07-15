@@ -63,7 +63,11 @@ export class SidecarSupervisor implements SidecarSupervisorPort {
     if (!spec.pythonPath || !existsSync(spec.pythonPath)) {
       return { ok: false, reason: 'uv venv python interpreter absent — sidecar unavailable', checkedKeys };
     }
-    if (!spec.entrypoint || !existsSync(spec.entrypoint)) {
+    // Module mode (`python -m uvicorn main:app`, cwd-anchored): there is no
+    // entrypoint SCRIPT — the module args + cwd carry the target. Otherwise the
+    // entrypoint file must exist on disk.
+    const moduleMode = !spec.entrypoint && (spec.args?.length ?? 0) > 0;
+    if (!moduleMode && (!spec.entrypoint || !existsSync(spec.entrypoint))) {
       return { ok: false, reason: 'sidecar entrypoint script absent', checkedKeys };
     }
     const missing = checkedKeys.filter((key) => !(spec.env && spec.env[key]?.trim()));
@@ -120,7 +124,7 @@ export class SidecarSupervisor implements SidecarSupervisorPort {
 
     const handle = this.handles.get(spec.engineId);
     if (!handle?.baseUrl) return down(engineId, 'sidecar', 'sidecar not started');
-    const probe = await probeHttpHealth(handle.baseUrl, PROBE_TIMEOUT_MS);
+    const probe = await probeHttpHealth(handle.baseUrl, PROBE_TIMEOUT_MS, spec.healthPath ?? '/health');
     if (probe.status === 'up') {
       return up(engineId, 'sidecar', { bindingPath: handle.baseUrl, probeMs: probe.probeMs });
     }
@@ -182,10 +186,13 @@ export class SidecarSupervisor implements SidecarSupervisorPort {
     }
     const baseUrl = `http://${listenAddr}`;
     const cwd = spec.cwd ?? (spec.entrypoint ? dirname(spec.entrypoint) : undefined);
+    // Script mode: `python <entrypoint> ...args`. Module mode (no entrypoint):
+    // `python ...args` (e.g. `-m uvicorn main:app --port …`, cwd-anchored).
+    const argv = spec.entrypoint ? [spec.entrypoint, ...(spec.args ?? [])] : [...(spec.args ?? [])];
 
     let child: ChildProcess;
     try {
-      child = spawn(spec.pythonPath as string, [spec.entrypoint as string, ...(spec.args ?? [])], {
+      child = spawn(spec.pythonPath as string, argv, {
         // MINIMAL env: required keys + listen addr only. NEVER `...process.env`.
         env: { ...(spec.env ?? {}) },
         ...(cwd ? { cwd } : {}),
@@ -206,7 +213,13 @@ export class SidecarSupervisor implements SidecarSupervisorPort {
     child.once('exit', (code, signal) => this.onExit(spec, code, signal));
     if (typeof child.unref === 'function') child.unref();
 
-    const probe = await waitForHealthy(baseUrl, spec.waitMs ?? DAEMON_WAIT_MS, HEALTH_POLL_MS, PROBE_TIMEOUT_MS);
+    const probe = await waitForHealthy(
+      baseUrl,
+      spec.waitMs ?? DAEMON_WAIT_MS,
+      HEALTH_POLL_MS,
+      PROBE_TIMEOUT_MS,
+      spec.healthPath ?? '/health',
+    );
     if (probe.status === 'down' || child.exitCode !== null) {
       this.log.warn(
         { engineId: spec.engineId, listenAddr, exitCode: child.exitCode, reason: probe.reason },
