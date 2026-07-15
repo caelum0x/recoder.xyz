@@ -1,0 +1,249 @@
+/**
+ * recall/recall-fusion tests (TDD) — the union → rerank → dedupe → provenance
+ * pipeline and its truth invariants under partial-source degradation.
+ */
+import { describe, it, expect } from 'vitest';
+import type { MemoryCandidate, MemoryItem } from '@recoder/agent-os';
+import { createRecallService, type RecallServiceDeps } from './recall-fusion.js';
+import type { Mem0Port } from '../ports/mem0.port.js';
+import type { BeadsMemoryPort } from '../ports/beads-memory.port.js';
+import type { MemoryRepository } from '../ports/memory-repository.port.js';
+import type { PassageReranker } from './rank.js';
+import type { MemoryConfig } from '../config.js';
+
+const silentLogger = { info() {}, warn() {}, error() {}, debug() {}, child() { return silentLogger; } } as unknown as RecallServiceDeps['logger'];
+
+const baseConfig = { dedupeThreshold: 0.9, recallLimit: 8 } as unknown as MemoryConfig;
+
+/** A mem0 port that returns fixed results and reports itself available. */
+function fakeMem0(results: { id: string; memory: string; score?: number }[], available = true): Mem0Port {
+  return {
+    async search() {
+      return results;
+    },
+    async add() {
+      return { ok: true };
+    },
+    async health() {
+      return available ? { available: true, mode: 'oss' } : { available: false, mode: 'none', reason: 'no provider' };
+    },
+  };
+}
+
+/** A beads port with a fixed availability + recall set. */
+function fakeBeads(entries: { id: string; title: string; body: string }[], available = true): BeadsMemoryPort {
+  return {
+    available: () => available,
+    remember: () => undefined,
+    recall: () => entries.map((e) => ({ ...e, status: 'open', labels: ['memory'] })),
+    promote: () => false,
+    note: () => false,
+  };
+}
+
+function candidate(id: string, title: string, body: string, scope = 'repo'): MemoryCandidate {
+  return {
+    candidateId: id,
+    scope: scope as MemoryCandidate['scope'],
+    title,
+    body,
+    status: 'candidate_created',
+    evidence: { taskId: 't1', artifactId: 'a1' },
+    proposedBy: 'agent:1',
+    proposedAt: '2026-07-15T00:00:00Z',
+  };
+}
+
+function item(id: string, title: string, body: string, scope = 'repo'): MemoryItem {
+  return {
+    memoryId: id,
+    scope: scope as MemoryItem['scope'],
+    title,
+    body,
+    status: 'active',
+    evidence: { taskId: 't1', artifactId: 'a1' },
+    createdAt: '2026-07-15T00:00:00Z',
+    acceptedBy: 'human:1',
+  };
+}
+
+/** A repository stub exposing only the recall-read methods. */
+function fakeRepo(over: { candidates?: MemoryCandidate[]; items?: MemoryItem[] } = {}): MemoryRepository {
+  return {
+    async listItems() {
+      return over.items ?? [];
+    },
+    async getItem() {
+      return null;
+    },
+    async upsertItem(_u, i) {
+      return i;
+    },
+    async listCandidates() {
+      return over.candidates ?? [];
+    },
+    async getCandidate() {
+      return null;
+    },
+    async upsertCandidate(_u, c) {
+      return c;
+    },
+    async addRelation() {
+      throw new Error('not used');
+    },
+    async listRelations() {
+      return [];
+    },
+    async deleteRelation() {
+      return false;
+    },
+  };
+}
+
+/** Identity reranker (sidecar down). */
+const identityReranker: PassageReranker = {
+  async rerankPassages(_q, passages) {
+    return { available: false, order: passages.map((_p, i) => i) };
+  },
+};
+
+/** A reranker that reverses order (proves rerank drives ordering, not score). */
+function reversingReranker(): PassageReranker {
+  return {
+    async rerankPassages(_q, passages) {
+      return { available: true, order: passages.map((_p, i) => passages.length - 1 - i) };
+    },
+  };
+}
+
+function deps(over: Partial<RecallServiceDeps>): RecallServiceDeps {
+  return {
+    mem0: fakeMem0([]),
+    beads: fakeBeads([], false),
+    repository: fakeRepo(),
+    reranker: identityReranker,
+    config: baseConfig,
+    logger: silentLogger,
+    ...over,
+  };
+}
+
+describe('createRecallService.recall', () => {
+  it('fuses mem0 ∪ beads ∪ candidates ∪ items with truthful provenance', async () => {
+    const svc = createRecallService(
+      deps({
+        mem0: fakeMem0([{ id: 'm1', memory: 'prefers pm2 deploy', score: 0.8 }]),
+        beads: fakeBeads([{ id: 'bd-1', title: 'nginx', body: 'nginx config lives in conf.d' }]),
+        repository: fakeRepo({
+          candidates: [candidate('c1', 'qdrant', 'qdrant runs on the box')],
+          items: [item('i1', 'postgres', 'postgres 17 is the database')],
+        }),
+      }),
+    );
+
+    const result = await svc.recall({ query: 'deploy pm2 nginx qdrant postgres', userId: 'u1' });
+
+    const bySource = new Map(result.memories.map((m) => [m.provenance.source, m]));
+    expect(bySource.get('mem0')?.provenance.ref).toBe('m1');
+    expect(bySource.get('beads')?.provenance.ref).toBe('bd-1');
+    expect(bySource.get('candidates')?.provenance.ref).toBe('c1');
+    expect(bySource.get('items')?.provenance.ref).toBe('i1');
+    // Every source reported available.
+    expect(result.sources.every((s) => s.available)).toBe(true);
+    expect(result.reranker).toBe('identity');
+  });
+
+  it('reports a down source truthfully and contributes ZERO memories from it', async () => {
+    const svc = createRecallService(
+      deps({
+        mem0: fakeMem0([], false), // unconfigured
+        beads: fakeBeads([], false), // bd missing
+        repository: fakeRepo({ items: [item('i1', 'db', 'postgres is the database')] }),
+      }),
+    );
+
+    const result = await svc.recall({ query: 'database postgres', userId: 'u1' });
+
+    const mem0 = result.sources.find((s) => s.source === 'mem0');
+    const beads = result.sources.find((s) => s.source === 'beads');
+    expect(mem0?.available).toBe(false);
+    expect(mem0?.reason).toBeTruthy();
+    expect(beads?.available).toBe(false);
+    // Only the item survived; nothing fabricated for the down sources.
+    expect(result.memories).toHaveLength(1);
+    expect(result.memories[0]?.provenance.source).toBe('items');
+  });
+
+  it('honors ColBERT rerank order over source score', async () => {
+    const svc = createRecallService(
+      deps({
+        mem0: fakeMem0([
+          { id: 'm1', memory: 'alpha fact about deploys', score: 0.95 },
+          { id: 'm2', memory: 'zeta fact about deploys', score: 0.1 },
+        ]),
+        reranker: reversingReranker(),
+      }),
+    );
+
+    const result = await svc.recall({ query: 'deploys', userId: 'u1' });
+    expect(result.reranker).toBe('colbert');
+    // score-desc would put m1 first; the reversing reranker flips it.
+    expect(result.memories[0]?.provenance.ref).toBe('m2');
+    expect(result.memories[1]?.provenance.ref).toBe('m1');
+  });
+
+  it('dedupes the same fact arriving from two sources', async () => {
+    const svc = createRecallService(
+      deps({
+        mem0: fakeMem0([{ id: 'm1', memory: 'the database is postgres 17 on hetzner', score: 0.9 }]),
+        repository: fakeRepo({ items: [item('i1', 'db', 'the database is postgres 17 on hetzner')] }),
+        config: { dedupeThreshold: 0.8, recallLimit: 8 } as unknown as MemoryConfig,
+      }),
+    );
+
+    const result = await svc.recall({ query: 'database postgres hetzner', userId: 'u1' });
+    expect(result.memories).toHaveLength(1);
+  });
+
+  it('applies the recall limit after fusion', async () => {
+    const svc = createRecallService(
+      deps({
+        mem0: fakeMem0([
+          { id: 'm1', memory: 'fact one about the topic', score: 0.9 },
+          { id: 'm2', memory: 'different fact two topic', score: 0.8 },
+          { id: 'm3', memory: 'another distinct fact topic', score: 0.7 },
+        ]),
+      }),
+    );
+
+    const result = await svc.recall({ query: 'topic', userId: 'u1', limit: 2 });
+    expect(result.memories).toHaveLength(2);
+  });
+
+  it('fails fast on an empty query (no source calls, identity reranker)', async () => {
+    const svc = createRecallService(deps({ mem0: fakeMem0([{ id: 'm1', memory: 'x' }]) }));
+    const result = await svc.recall({ query: '   ', userId: 'u1' });
+    expect(result.memories).toHaveLength(0);
+    expect(result.sources.every((s) => !s.available)).toBe(true);
+  });
+
+  it('degrades that source only when a gather throws', async () => {
+    const throwingRepo = fakeRepo();
+    (throwingRepo as { listCandidates: () => Promise<never> }).listCandidates = async () => {
+      throw new Error('pool down');
+    };
+    const svc = createRecallService(
+      deps({
+        mem0: fakeMem0([{ id: 'm1', memory: 'a usable memory about x', score: 0.7 }]),
+        repository: throwingRepo,
+      }),
+    );
+
+    const result = await svc.recall({ query: 'usable memory x', userId: 'u1' });
+    const candidates = result.sources.find((s) => s.source === 'candidates');
+    expect(candidates?.available).toBe(false);
+    expect(candidates?.reason).toContain('pool down');
+    // mem0 still contributed.
+    expect(result.memories.some((m) => m.provenance.source === 'mem0')).toBe(true);
+  });
+});

@@ -1,0 +1,135 @@
+/**
+ * lifecycle service tests — candidate evidence enforcement, harvest skip/degrade,
+ * and relation kind/self-edge validation.
+ */
+import { describe, it, expect } from 'vitest';
+import type { MemoryCandidate } from '@recoder/agent-os';
+import type { MemoryRepository } from '../ports/memory-repository.port.js';
+import type { BeadsMemoryPort } from '../ports/beads-memory.port.js';
+import type { MemoryRelation } from '../types.js';
+import { createCandidateService } from './candidate-service.js';
+import { createHarvestService } from './harvest.js';
+import { createRelateService } from './relate.js';
+
+const silentLogger = { info() {}, warn() {}, error() {}, debug() {}, child() { return silentLogger; } } as never;
+
+const beadsDown: BeadsMemoryPort = {
+  available: () => false,
+  remember: () => undefined,
+  recall: () => [],
+  promote: () => false,
+  note: () => false,
+};
+
+function repoWithCapture(): { repo: MemoryRepository; stored: MemoryCandidate[]; relations: MemoryRelation[] } {
+  const stored: MemoryCandidate[] = [];
+  const relations: MemoryRelation[] = [];
+  const repo: MemoryRepository = {
+    async listItems() {
+      return [];
+    },
+    async getItem() {
+      return null;
+    },
+    async upsertItem(_u, i) {
+      return i;
+    },
+    async listCandidates() {
+      return stored;
+    },
+    async getCandidate() {
+      return null;
+    },
+    async upsertCandidate(_u, c) {
+      stored.push(c);
+      return c;
+    },
+    async addRelation(input) {
+      const relation: MemoryRelation = {
+        relationId: `rel_${relations.length + 1}`,
+        userId: input.userId,
+        fromMemoryId: input.fromMemoryId,
+        toMemoryId: input.toMemoryId,
+        kind: input.kind,
+        createdAt: '2026-07-15T00:00:00Z',
+      };
+      relations.push(relation);
+      return relation;
+    },
+    async listRelations() {
+      return relations;
+    },
+    async deleteRelation() {
+      return true;
+    },
+  };
+  return { repo, stored, relations };
+}
+
+describe('candidate-service.propose', () => {
+  it('stores an evidenced candidate with status candidate_created', async () => {
+    const { repo, stored } = repoWithCapture();
+    const svc = createCandidateService({ repository: repo, beads: beadsDown, logger: silentLogger, now: () => 't', newId: () => 'mc_1' });
+    const candidate = await svc.propose({
+      userId: 'u1',
+      scope: 'repo',
+      title: 'fact',
+      body: 'body',
+      proposedBy: 'agent:1',
+      evidence: { taskId: 't1', artifactId: 'a1' },
+    });
+    expect(candidate.candidateId).toBe('mc_1');
+    expect(candidate.status).toBe('candidate_created');
+    expect(stored).toHaveLength(1);
+  });
+
+  it('rejects an unevidenced proposal (noise guard)', async () => {
+    const { repo } = repoWithCapture();
+    const svc = createCandidateService({ repository: repo, beads: beadsDown, logger: silentLogger });
+    await expect(
+      svc.propose({ userId: 'u1', scope: 'repo', title: 't', body: 'b', proposedBy: 'a', evidence: { taskId: '', artifactId: '' } }),
+    ).rejects.toThrow(/evidence/i);
+  });
+});
+
+describe('harvest-service.harvest', () => {
+  it('skips truthfully when evidence is missing (does not throw)', async () => {
+    const { repo } = repoWithCapture();
+    const candidates = createCandidateService({ repository: repo, beads: beadsDown, logger: silentLogger });
+    const svc = createHarvestService({ candidates, logger: silentLogger });
+    const result = await svc.harvest({ userId: 'u1', scope: 'repo', title: 't', body: 'b', proposedBy: 'a', taskId: '', artifactId: '' });
+    expect(result.harvested).toBe(false);
+    if (!result.harvested) expect(result.reason).toMatch(/evidence/i);
+  });
+
+  it('harvests an evidenced fact into a candidate', async () => {
+    const { repo, stored } = repoWithCapture();
+    const candidates = createCandidateService({ repository: repo, beads: beadsDown, logger: silentLogger, newId: () => 'mc_h' });
+    const svc = createHarvestService({ candidates, logger: silentLogger });
+    const result = await svc.harvest({ userId: 'u1', scope: 'repo', title: 'learned', body: 'a gotcha', proposedBy: 'agent', taskId: 't1', artifactId: 'a1' });
+    expect(result.harvested).toBe(true);
+    expect(stored).toHaveLength(1);
+  });
+});
+
+describe('relate-service.relate', () => {
+  it('records a valid edge', async () => {
+    const { repo, relations } = repoWithCapture();
+    const svc = createRelateService({ repository: repo });
+    const edge = await svc.relate({ userId: 'u1', fromMemoryId: 'a', toMemoryId: 'b', kind: 'supersedes' });
+    expect(edge.kind).toBe('supersedes');
+    expect(relations).toHaveLength(1);
+  });
+
+  it('rejects an unknown kind', async () => {
+    const { repo } = repoWithCapture();
+    const svc = createRelateService({ repository: repo });
+    await expect(svc.relate({ userId: 'u1', fromMemoryId: 'a', toMemoryId: 'b', kind: 'bogus' })).rejects.toThrow(/kind/i);
+  });
+
+  it('rejects a self-edge', async () => {
+    const { repo } = repoWithCapture();
+    const svc = createRelateService({ repository: repo });
+    await expect(svc.relate({ userId: 'u1', fromMemoryId: 'a', toMemoryId: 'a', kind: 'relates-to' })).rejects.toThrow(/itself/i);
+  });
+});
