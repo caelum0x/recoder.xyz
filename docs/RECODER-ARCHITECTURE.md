@@ -9,6 +9,12 @@
 This doc is the canonical picture of the layers and the laws between them. It is deliberately
 truthful about current depth — where a layer is shallow, it says so.
 
+> **Doc hierarchy (2026-07-15):** this file = the SYSTEM-level layer view (apps + backend +
+> engines). The **backend** is now being rebuilt comprehensively — its canonical design +
+> file plan + live build status live under **[RECODER-BACKEND/](./RECODER-BACKEND/)**
+> (start at `BUILD-STATUS.md`). `RECODER-MODULES.md` + `docs/modules/*` = the engine specs
+> the backend's engines domain consumes. `RECODER-NEXT-PHASE.md` is superseded.
+
 > **Next epoch:** [RECODER-NEXT-PHASE.md](./RECODER-NEXT-PHASE.md) plans the backend-spine work —
 > auth+data consolidation, folding `apps/social` into the embedded backend, and closing the
 > engine-connectivity gaps. Note (2026-07-15): `backend/src/server.ts` does not boot today (imports
