@@ -106,3 +106,21 @@ import { EnginesComposer } from './engines-module.js';
 export async function createEnginesModule(deps: EnginesModuleDeps): Promise<EnginesModule> {
   return new EnginesComposer(deps);
 }
+
+/**
+ * In-process openfang run seam (path b). Re-exported from the barrel so consumer
+ * domains (the conductor `in_process` substrate) reach the LIVE engine through the
+ * ONE public engines interface — never by importing an engine internal directly.
+ * Both are fully degrade-safe: `getOpenfangEngine` returns `undefined` when the
+ * addon is absent / the kernel fails to boot, and `launchOpenfangRun` returns a
+ * truthful `{ available:false }` in that case — neither throws across the seam.
+ */
+export { launchOpenfangRun } from './openfang-runtime.js';
+export type {
+  OpenfangLaunchInput,
+  OpenfangLaunchDeps,
+  OpenfangLaunchResult,
+  OpenfangRunEventSink,
+} from './openfang-runtime.js';
+export { getOpenfangEngine } from './openfang-native.js';
+export type { OpenfangEngineInstance } from './openfang-native.js';

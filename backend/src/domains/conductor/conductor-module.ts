@@ -39,8 +39,16 @@ import type {
   ReconcileFindingView,
   SteerInput,
   SubstrateAvailabilityView,
+  SubstrateKind,
 } from './types.js';
 import type { ConductorModule, ConductorModuleDeps } from './index.js';
+import type { CodeIntelPort } from './ports/code-intel.port.js';
+import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
+import {
+  selectSubstrateForRuntime,
+  isOpenfangRuntime,
+} from './adapters/runtime-substrate-selector.js';
+import { createCompletionHookSink } from './adapters/completion-hook.adapter.js';
 import { toLoggerPort } from './adapters/logger.adapter.js';
 import { createConductorRegistry, type ConductorRegistry } from './adapters/substrate-registry.adapter.js';
 import { createWorkspaceRepository } from './adapters/workspace-repository.adapter.js';
@@ -85,6 +93,10 @@ export class ConductorComposer implements ConductorModule {
   private readonly terminalService: TerminalStreamService;
   private readonly engine: WorkspaceEngine;
   private readonly engineDeps: WorkspaceEngineDeps;
+  /** OPTIONAL memory-backed brain (recall on launch + harvest on completion). */
+  private readonly brain?: ConductorBrainMemory;
+  /** OPTIONAL code-intel seam (recodergit index + beads issue-graph track/close). */
+  private readonly codeIntel?: CodeIntelPort;
   /** OPTIONAL pre-dispatch quota gate (set by bootstrap; absent ⇒ degrade OPEN). */
   private entitlementGate?: EntitlementGate;
   private started = false;
@@ -94,6 +106,8 @@ export class ConductorComposer implements ConductorModule {
     this.cfg = sliceConductorConfig(deps.config, deps.overrides ?? {});
     this.gate = deps.gate;
     this.middleware = deps.middleware;
+    this.brain = deps.brain;
+    this.codeIntel = deps.codeIntel;
 
     const loggerPort = toLoggerPort(this.log);
 
@@ -126,7 +140,18 @@ export class ConductorComposer implements ConductorModule {
       publish: (event) => this.terminalService.publishSync(event),
       logger: this.log,
     });
-    const sink = composeRunEventSink(localSink, deps.runEventSink, this.log);
+    const fannedSink = composeRunEventSink(localSink, deps.runEventSink, this.log);
+    // Terminal-event hook (h + i): on a `completed`/`failed` RunEvent the run flow
+    // HARVESTS an evidence-backed memory candidate (brain) and CLOSES/NOTES the bd
+    // issue (code-intel). Both are fire-and-forget + degrade-safe — a memory/beads
+    // fault NEVER rethrows into the terminal-event path or stalls the live stream.
+    const sink = createCompletionHookSink({
+      inner: fannedSink,
+      ...(this.brain ? { brain: this.brain } : {}),
+      ...(this.codeIntel ? { codeIntel: this.codeIntel } : {}),
+      getWorkspace: (id) => this.repository.getWorkspace(id),
+      logger: this.log,
+    });
     this.tailer = createRunTailer({ sink, logger: this.log });
 
     // The engine deps assembled behind the ports.
@@ -148,6 +173,58 @@ export class ConductorComposer implements ConductorModule {
   /** Inject the optional billing entitlement gate (pre-dispatch quota check). */
   setEntitlementGate(gate: EntitlementGate): void {
     this.entitlementGate = gate;
+  }
+
+  /**
+   * Path (b) prompt enrichment: recall memory (mem0 ∪ beads ∪ candidates → rerank)
+   * and fold it into the prompt the native openfang turn runs as its `command`.
+   * Degrade-safe: no brain / empty prompt / recall fault ⇒ the raw prompt (or
+   * `undefined` when there is no prompt, so the substrate refuses truthfully).
+   */
+  private async enrichOpenfangCommand(
+    input: CreateConductorWorkspaceInput,
+    principal: Principal,
+  ): Promise<string | undefined> {
+    const raw = (input.prompt ?? '').trim();
+    if (!raw) return undefined;
+    if (!this.brain) return input.prompt;
+    try {
+      const enriched = await this.brain.enrichPrompt({
+        prompt: input.prompt ?? '',
+        userId: principal.userId,
+        ...(input.taskId ? { taskId: input.taskId } : {}),
+        ...(input.repoPath ? { repoPath: input.repoPath } : {}),
+        ...(input.library ? { library: input.library } : {}),
+      });
+      return enriched.prompt;
+    } catch (err) {
+      this.log.warn(
+        { err, runtimeId: input.runtimeId },
+        'conductor openfang prompt enrich faulted — running raw prompt',
+      );
+      return input.prompt;
+    }
+  }
+
+  /**
+   * Fire-and-forget code-intel on workspace create: recodergit repo index + beads
+   * issue-graph claim. Never awaited (a slow/absent engine must not block launch);
+   * both calls are `void` + self-logging + degrade-safe inside the adapter.
+   */
+  private startCodeIntel(input: CreateConductorWorkspaceInput, workspace: Workspace): void {
+    if (!this.codeIntel) return;
+    const codeIntel = this.codeIntel;
+    const repoId = repoIdFromRepoRef(input.projectId || input.repoPath);
+    void codeIntel
+      .indexRepo(input.repoPath, repoId)
+      .catch((err) => this.log.warn({ err, repoId }, 'conductor recodergit index hook faulted'));
+    if (input.taskId) {
+      void codeIntel
+        .trackWork(input.taskId, workspace.workspaceId)
+        .catch((err) =>
+          this.log.warn({ err, taskId: input.taskId }, 'conductor beads track hook faulted'),
+        );
+    }
   }
 
   async listWorkspaces(): Promise<Workspace[]> {
@@ -192,13 +269,48 @@ export class ConductorComposer implements ConductorModule {
     }
 
     try {
+      // Execution-path selection (the ONE seam that splits path a/b). openfang →
+      // the native in-process substrate; every CLI runtime → tmux+worktree (or the
+      // caller's explicitly requested, registered substrate). Both paths converge on
+      // engine.createWorkspace + the SAME capability seams below.
+      const registered = this.registry.registry.list();
+      const openfang = isOpenfangRuntime(input.runtimeId);
+      const substrate: SubstrateKind = openfang
+        ? selectSubstrateForRuntime(input.runtimeId, { registered })
+        : (input.substrate ?? 'tmux_worktree');
+
+      // Path (b): the in-process substrate runs `command` as the agent turn, so the
+      // integrator enriches the prompt HERE (memory recall) and passes it as command
+      // — this bypasses the CLI-only resolveRuntimeCommand. Path (a): leave command
+      // undefined so WorkspaceEngine enriches (engineDeps.brain) + resolves the CLI.
+      let command = input.command;
+      if (openfang && !command) {
+        command = await this.enrichOpenfangCommand(input, principal);
+      }
+
       const workspace = await this.engine.createWorkspace({
         ...input,
+        substrate,
+        ...(command !== undefined ? { command } : {}),
+        // Tag the run with its task id so the in-process substrate + tailer can
+        // anchor RunEvents (path b reads RECODER_TASK_ID from env).
+        ...(input.taskId
+          ? { env: { ...(input.env ?? {}), RECODER_TASK_ID: input.taskId } }
+          : {}),
         createdBy: principal.userId,
       });
+
+      // Code-intel on create (a + b), fire-and-forget + degrade-safe: recodergit
+      // INDEXES the repo (live code-knowledge-graph) and beads TRACKS the workspace
+      // as an issue-graph node. A slow/absent engine never blocks the launch.
+      this.startCodeIntel(input, workspace);
+
       await recordConductorAudit(
         this.gate,
-        conductorAuditEntry(action, principal, verdict, { workspaceId: workspace.workspaceId }),
+        conductorAuditEntry(action, principal, verdict, {
+          workspaceId: workspace.workspaceId,
+          substrate,
+        }),
       );
       return { ok: true, verdict, value: workspace };
     } catch (err) {
@@ -299,6 +411,15 @@ export class ConductorComposer implements ConductorModule {
   async stop(): Promise<void> {
     // Idempotent, degrade-safe: live sessions are substrate-owned and survive.
   }
+}
+
+/**
+ * Derive a deterministic, path-safe repo id for the recodergit index from a repo
+ * full-name or absolute path (lowercase; every non `[a-z0-9_-]` run → `__`). Kept
+ * local so the conductor never imports an engines-domain internal.
+ */
+function repoIdFromRepoRef(ref: string): string {
+  return ref.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '__');
 }
 
 /**
