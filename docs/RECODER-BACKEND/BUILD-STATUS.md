@@ -80,25 +80,20 @@ governance decide+recordAudit; on complete → memory harvest + beads close. Pro
 on no-DB audit — truthful), recodergit attempted, `bd` ran. 57/57 conductor tests.
 
 ## Remaining minor follow-ups (documented, NOT hidden)
-0. **Packaged-mode engine bundling.** `electron-builder extraResources` bundles tmux/backend/
-   napi/cockpit but NOT the recodergit/dmux dists → packaged app degrades those truthfully.
-   And multica full readiness needs PG15+ (prod PG17 fine; local PG14 caveat).
-1. **MCP tool registration bridge.** Domain `mcp()` returns flat `McpToolRegistration[]`; the
-   engines `InteropHostBundle` host uses a `serverId + toolNames` catalog model. No clean bridge
-   yet — agent-os/conductor/domain tools are NOT registered into the host (engines' own napi
-   tools self-register at start). Build the adapter.
-2. **Billing EntitlementGate injection.** `billing.gate()` is registered as
-   `CAPABILITY_TOKENS.entitlementGate`, but conductor/inference/engines have no setter to consume
-   it (pre-dispatch quota / token metering / usage). Add the seam + inject.
-3. **Social + interop-wire route surfaces.** Their composers shipped health-only (no `routes()`/
-   `mcp()`/lifecycle) — wired as health slices. Add the `/api/social` + `/api/a2a` route surfaces.
-4. **Legacy flat-dir absorption.** `src/agent-os` (68), `src/conductor` (126), `src/a2a` (227),
-   `src/connectors`, `src/gateway`, `src/engines`, `src/network`, `src/routes` still on disk —
-   the new domains COMPOSED fresh (didn't move them). They're still imported by each other +
-   cause the ~228 pre-existing tsc errors. Absorb/remove once nothing references them.
-5. **Conductor real substrate.** The tmux substrate isn't package-`ConductorSubstrate`-compatible
-   + reads process.env — bridge it so conductor can actually launch (currently truthful `down`).
-6. WS telemetry tap (upgrade-router), OTLP tracing endpoint — minor.
+
+> **2026-07-16 sweep (`f3d219e5a` + F1/F2 commits):** items 0–5 of the original list are DONE —
+> packaged recodergit/dmux bundling; the domain-tools MCP bridge (`registerDomainTools`,
+> collision-safe) wired in bootstrap; EntitlementGate injected into conductor + inference with
+> truthful 429s; `/api/social` (connectors + channels truth) + `/api/a2a` (health/agent-card/rpc/
+> ingress) surfaces live; legacy flat dirs absorbed (`914453ba0`); the tmux substrate is
+> package-compatible and launching (F2 run-screen plane on top of it). Also fixed en route:
+> fresh-DB migration splitStatements landmine; dev-mint-conductor-key rewritten over the identity
+> domain's DB-backed sk_ store.
+
+1. **multica full readiness needs PG15+** (prod PG17 fine; local PG14 caveat).
+2. **WS telemetry tap** (upgrade-router) + **OTLP tracing endpoint** — minor.
+3. **Root `/.well-known/agent.json` alias** for the a2a agent-card (RFC 8615 wants origin root;
+   needs a bootstrap-owned root mount).
 
 ## Deviation to reconcile
 Phase 5a/5b **composed the `@recoder/agent-os` + `@recoder/substrate` packages fresh** rather

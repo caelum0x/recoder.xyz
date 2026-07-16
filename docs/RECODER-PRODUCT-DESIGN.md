@@ -117,12 +117,14 @@ token-free gh/git identity); cockpit first-run SignIn gate + agent preselect + "
 chip + keyed-envelope client; electron main `emain-device-auth` (RFC 8628 vs `/api/auth/cli/*`,
 safeStorage session, identity-only bridge over origin-gated IPC). **← next: F2.**
 
-**Phase F2 — Workspace detail polish.** ⚙️ **backend plane DONE** (`6f4d1197c`): the run screen's
-full API — `GET workspaces/:id/{events,diff,tree,dev-command}` + governed
-`POST {message,pr,merge,archive,preview-url}` (chat = continueRun in the same worktree; merge = gh
-or REAL local-git fallback; all writes behind the governance gate). Ported from the proven v1
-conductor onto the domain seams. *Remaining:* live WS stream alignment (`/sync` vs client
-`/stream` path), UI polish pass, repo list auto-populated from the detected GitHub account.
+**Phase F2 — Workspace detail polish.** ✅ **DONE** (`6f4d1197c` + `d6ab4095d` + `f3d219e5a`).
+The run screen's full API — `GET workspaces/:id/{events,diff,tree,dev-command,output,status}` +
+governed `POST {message,pr,merge,archive,preview-url}` (chat = continueRun in the same worktree;
+merge = gh or REAL local-git fallback; every write behind the governance gate) — ported from the
+proven v1 conductor onto the domain seams. Live streaming: WS `/workspaces/:id/stream` (full
+RunEvents, `?access_token=` upgrade auth for browser WS) + output/status poll fallback. Repo list
+auto-populated from the detected GitHub account (`gh repo list` → New Workspace folder hint).
+**← next: F3.**
 
 **Phase F3 — Multi-agent parallelism UX.** Run several agents/workspaces at once (conductor's
 sweet spot: 3–5), compare, review each on its own schedule.
