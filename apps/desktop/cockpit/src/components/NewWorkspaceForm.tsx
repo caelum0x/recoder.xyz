@@ -8,7 +8,7 @@
  * after it's running; we only send a prompt when one was typed. On success the
  * board refreshes.
  */
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { readConfig } from '../lib/config';
@@ -54,6 +54,15 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
   const availableRuntimes = allRuntimes.filter((r) => r.available);
   const allSubstrates = substrates.data || [];
   const availableSubstrates = allSubstrates.filter((s) => s.available);
+
+  // Zero-config: preselect the agent the user has installed (the first available
+  // CLI, in the backend's preference order) so a fresh form is ready to submit
+  // with no dropdown interaction. Only fills an untouched field — a deliberate
+  // choice (or a cleared select) is never overridden.
+  useEffect(() => {
+    if (runtimeId || availableRuntimes.length === 0) return;
+    setRuntimeId(availableRuntimes[0].runtimeId);
+  }, [runtimes.data]);
 
   async function pickFolder() {
     setPickError(null);

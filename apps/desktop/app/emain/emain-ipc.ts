@@ -21,6 +21,7 @@ import {
 } from "./emain-activity";
 import { isBackendFrameOrigin } from "./cockpit-origin";
 import { getBackendAuth } from "./emain-backend";
+import { getDeviceAuthManager } from "./emain-device-auth";
 import { createBuilderWindow, getAllBuilderWindows, getBuilderWindowByWebContentsId } from "./emain-builder";
 import { callWithOriginalXdgCurrentDesktopAsync, unamePlatform } from "./emain-platform";
 import { getWaveTabViewByWebContentsId } from "./emain-tabview";
@@ -209,7 +210,44 @@ export function initIpcHandlers() {
         if (!isBackendFrameOrigin(frameUrl, auth.backendUrl)) {
             return null;
         }
-        return { backendUrl: auth.backendUrl, token: auth.apiKey };
+        // identity: the stored recoder.xyz device session's display identity, so
+        // a signed-in user lands straight on the board (no first-run gate).
+        const identity = getDeviceAuthManager().getIdentity();
+        return { backendUrl: auth.backendUrl, token: auth.apiKey, identity: identity ?? undefined };
+    });
+    // Device-flow auth bridge (cockpit SignIn). Origin-gated exactly like
+    // cockpit-config: only the page served FROM the embedded backend may drive
+    // sign-in. The prompt (user_code + verification URI) streams back to the
+    // SAME webContents that asked; results carry identity, never the token.
+    const cockpitFrameAllowed = (event: Electron.IpcMainInvokeEvent): boolean => {
+        const auth = getBackendAuth();
+        if (auth == null) {
+            return false;
+        }
+        return isBackendFrameOrigin(event.senderFrame?.url ?? "", auth.backendUrl);
+    };
+    electron.ipcMain.handle("recoder:device-login", async (event) => {
+        if (!cockpitFrameAllowed(event)) {
+            return { ok: false, reason: "unavailable" };
+        }
+        const sender = event.sender;
+        return getDeviceAuthManager().deviceLogin((prompt) => {
+            if (!sender.isDestroyed()) {
+                sender.send("recoder:device-login-prompt", prompt);
+            }
+        });
+    });
+    electron.ipcMain.handle("recoder:auth-refresh", async (event) => {
+        if (!cockpitFrameAllowed(event)) {
+            return { ok: false, reason: "unavailable" };
+        }
+        return getDeviceAuthManager().refresh();
+    });
+    electron.ipcMain.handle("recoder:auth-signout", async (event) => {
+        if (!cockpitFrameAllowed(event)) {
+            return { ok: false, reason: "unavailable" };
+        }
+        return getDeviceAuthManager().signOut();
     });
     electron.ipcMain.on("open-external", (event, url) => {
         if (url && typeof url === "string") {

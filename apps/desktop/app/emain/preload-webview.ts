@@ -31,6 +31,19 @@ try {
                 if (cfg != null && typeof cfg.backendUrl == "string") {
                     bridge.backendUrl = cfg.backendUrl;
                     bridge.token = cfg.token;
+                    if (cfg.identity != null) {
+                        bridge.identity = cfg.identity;
+                    }
+                    // Device-flow auth bridge (main process drives recoder.xyz; the
+                    // cockpit only displays the prompt + result — never a token).
+                    bridge.deviceLogin = () => ipcRenderer.invoke("recoder:device-login");
+                    bridge.refreshToken = () => ipcRenderer.invoke("recoder:auth-refresh");
+                    bridge.signOut = () => ipcRenderer.invoke("recoder:auth-signout");
+                    bridge.onDeviceLoginPrompt = (callback: (prompt: unknown) => void) => {
+                        const listener = (_event: unknown, prompt: unknown) => callback(prompt);
+                        ipcRenderer.on("recoder:device-login-prompt", listener);
+                        return () => ipcRenderer.removeListener("recoder:device-login-prompt", listener);
+                    };
                 }
             } catch (e) {
                 console.log("recoder:cockpit-config unavailable", e);

@@ -104,6 +104,22 @@ export interface RuntimeAvailability {
   path?: string;
 }
 
+/**
+ * GET /github/status — GitHub connection + detected identity (token-free).
+ * `source` says what made the connection true: a forwarded token env, or the
+ * user's own `gh` CLI login. `account` is the zero-config detected identity
+ * (gh login / git config name+email) — display only, never a token.
+ */
+export interface GithubStatus {
+  connected: boolean;
+  source: 'GH_TOKEN' | 'GITHUB_TOKEN' | 'gh_cli' | null;
+  account?: {
+    login?: string;
+    name?: string;
+    email?: string;
+  };
+}
+
 /** GET /substrates — { id, available, reason? } per registered substrate. */
 export interface SubstrateAvailability {
   id: WorkspaceSubstrate;

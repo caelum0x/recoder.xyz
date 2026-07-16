@@ -37,6 +37,12 @@ interface SignInProps {
    * a cold "you are not signed in".
    */
   expired?: boolean;
+  /**
+   * True on the zero-config first run: the desktop shell has no captured
+   * recoder.xyz session yet and the backend has NOT rejected anything. Shows the
+   * welcoming onboarding framing instead of a rejection message.
+   */
+  firstRun?: boolean;
   /** Called after a successful login so the parent can retry its fetches. */
   onAuthenticated: () => void;
 }
@@ -98,7 +104,7 @@ export function describeSignInFailure(reason?: string): { title: string; hint: s
   };
 }
 
-export function SignIn({ backendUrl, reason, expired, onAuthenticated }: SignInProps) {
+export function SignIn({ backendUrl, reason, expired, firstRun, onAuthenticated }: SignInProps) {
   const canDeviceLogin = hasDesktopDeviceLogin();
   const canWebLogin = hasDesktopLogin();
   const canLogin = canDeviceLogin || canWebLogin;
@@ -138,7 +144,10 @@ export function SignIn({ backendUrl, reason, expired, onAuthenticated }: SignInP
       const result = canDeviceLogin
         ? await runDesktopDeviceLogin()
         : await runDesktopLogin();
-      if (result.ok && result.token) {
+      // A token is OPTIONAL on success: the shell may capture the recoder.xyz
+      // session main-process-side (identity only) while the cockpit keeps its
+      // existing backend credential. `ok` is never fabricated by the bridges.
+      if (result.ok) {
         onAuthenticated();
         return;
       }
@@ -160,6 +169,8 @@ export function SignIn({ backendUrl, reason, expired, onAuthenticated }: SignInP
         <p class="signin-sub">
           {expired ? (
             <>Your Recoder session has expired. Sign in again to reconnect to <code>{backendUrl}</code>.</>
+          ) : firstRun ? (
+            <>Sign in once — Recoder detects your coding agents and GitHub identity automatically.</>
           ) : (
             <>The conductor backend at <code>{backendUrl}</code> rejected the request because you are not signed in.</>
           )}

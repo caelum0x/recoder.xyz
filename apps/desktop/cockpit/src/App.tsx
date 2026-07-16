@@ -17,6 +17,7 @@ import {
   readConfig,
   configWasInjected,
   readInitialView,
+  hasDesktopDeviceLogin,
   hasDesktopSignOut,
   runDesktopSignOut,
   runDesktopRefresh,
@@ -84,6 +85,9 @@ export function App() {
   // the first time we hit a 401, before surfacing the SignIn panel.
   const [refreshAttempted, setRefreshAttempted] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // A sign-in completed this run. Clears the first-run gate even when the auth
+  // result carried no display identity (the session is real either way).
+  const [signedInThisRun, setSignedInThisRun] = useState(false);
 
   // Switch the active view (only the Board today; kept for deep-link parity).
   function goTo(target: CockpitView) {
@@ -176,12 +180,22 @@ export function App() {
     };
   }, [unauthenticated, refreshAttempted, refreshing]);
 
-  // The SignIn panel shows only after a refresh attempt has resolved (so a
-  // recoverable session refreshes silently with no UI flash).
-  const showSignIn = unauthenticated && refreshAttempted && !refreshing;
+  // FIRST-RUN GATE (zero-config onboarding): inside the desktop shell, signing
+  // in to recoder.xyz is the ONE thing we ask of the user — so when the shell
+  // has no captured session (no identity injected, none from a prior login this
+  // run), the SignIn panel shows PROACTIVELY over the board, not only after a
+  // backend 401. Outside the shell (no device-login bridge) there is no gate —
+  // the cockpit keeps its truthful reactive behavior.
+  const needsFirstRunSignIn = hasDesktopDeviceLogin() && !config.identity && !signedInThisRun;
+
+  // The SignIn panel shows on the first-run gate, or after an unauthenticated
+  // poll once the silent refresh attempt has resolved (so a recoverable session
+  // refreshes with no UI flash).
+  const showSignIn = needsFirstRunSignIn || (unauthenticated && refreshAttempted && !refreshing);
 
   function onAuthenticated() {
     // Re-resolve config picks up the fresh token; force every poll to refetch.
+    setSignedInThisRun(true);
     setRefreshAttempted(false);
     board.refresh();
     health.refresh();
@@ -194,6 +208,7 @@ export function App() {
       // the cockpit to a signed-out state (the next poll 401s into SignIn).
       await runDesktopSignOut();
       setWasAuthed(false);
+      setSignedInThisRun(false);
       setRefreshAttempted(true); // don't auto-refresh right after an explicit sign-out
       board.refresh();
       health.refresh();
@@ -271,11 +286,15 @@ export function App() {
               class={`plan-hint github-chip${githubConnected ? ' github-chip-on' : ''}`}
               title={
                 githubConnected
-                  ? `GitHub connected — agents can use \`gh\` (via ${github.data.source}).`
-                  : 'GitHub not connected — set GH_TOKEN or GITHUB_TOKEN so agents can use `gh`.'
+                  ? `GitHub connected — agents can use \`gh\` (via ${
+                      github.data.source === 'gh_cli' ? 'your gh login' : github.data.source
+                    }).`
+                  : 'GitHub not connected — sign in with `gh auth login` or set GH_TOKEN so agents can use `gh`.'
               }
             >
-              GitHub · {githubConnected ? 'connected' : 'not connected'}
+              {/* Zero-config identity: when the backend detected the account
+                  (gh login / git config), name it — "GitHub · caelum0x". */}
+              GitHub · {githubConnected ? github.data.account?.login || 'connected' : 'not connected'}
             </span>
           )}
           {hasDesktopSignOut() && !unauthenticated && wasAuthed && (
@@ -313,8 +332,9 @@ export function App() {
       {showSignIn && (
         <SignIn
           backendUrl={config.backendUrl}
-          reason={board.error?.message}
-          expired={wasAuthed}
+          reason={unauthenticated ? board.error?.message : undefined}
+          expired={wasAuthed && unauthenticated}
+          firstRun={needsFirstRunSignIn && !unauthenticated}
           onAuthenticated={onAuthenticated}
         />
       )}
