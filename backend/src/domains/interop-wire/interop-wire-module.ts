@@ -66,6 +66,12 @@ export interface InteropWireComposite {
   routes(): Router;
   /** The `/api/a2a` wire router (agent-card + rpc + ingress). */
   wireRoutes(): Router;
+  /**
+   * The origin-root `/.well-known` router: `GET /agent.json` serves the SAME
+   * local agent card as `/api/a2a/agent-card`, at the location RFC 8615 peers
+   * probe. Bare card JSON on the wire (the discovery contract), no envelope.
+   */
+  wellKnownRoutes(): Router;
   /** The read-only MCP tools registered into the interop-gated host. */
   mcp(): readonly McpToolRegistration[];
   health(): ComponentHealth;
@@ -123,6 +129,16 @@ export function createInteropWireComposer(deps: InteropWireComposerDeps): Intero
         jsonRpc: core.jsonRpc(),
         health: () => core.health(),
       });
+    },
+
+    wellKnownRoutes(): Router {
+      const router = makeRouter();
+      router.get('/agent.json', (_req, res) => {
+        // Discovery contract: peers expect the bare card at the origin root —
+        // no success envelope (unlike the /api/a2a/agent-card operator view).
+        res.json(core.agentCard().getLocalAgentCard());
+      });
+      return router;
     },
 
     mcp(): readonly McpToolRegistration[] {
