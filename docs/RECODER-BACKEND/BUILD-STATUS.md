@@ -12,22 +12,22 @@ Building the 498-file, 14-domain, multi-language backend phase by phase from
 
 | Phase | Domain | Budget | Status | Commit |
 |---|---|---|---|---|
-| 0 | Foundation (spine) | 16 | ✅ boots | `b159389b5` |
-| 1 | Persistence | 34 | ✅ 33/33 tests | `054c053c5` |
+| 0 | Foundation (spine) | 16 | ✅ boots | `a06833cb5` |
+| 1 | Persistence | 34 | ✅ 33/33 tests | `91bab10d2` |
 | — | Cut v1 cruft (sandbox/code/collaboration/database) | — | ✅ done | post-054c |
-| 2 | Identity & Auth | 36→37 | ✅ 72/72 tests | `e58468c5e` |
-| 3 | Governance & Interop | 33→47+12 | ✅ 74 tests | `91a20030` / `f617d383` |
-| 4 | Edge & API | 26 | ✅ 15/15 tests | `75a0d888` |
-| 5a | Agent-OS control plane | 46→28 | ✅ 19 tests (composed @recoder/agent-os fresh) | `95ff34a1` |
-| 5b | Conductor & Terminal | 45→36 | ✅ 30 tests (composed @recoder/substrate fresh) | `8f42873e` |
-| — | Serial integration (5a+5b → bootstrap) | — | ✅ 8 health sources, boots | `bfa55b0f6` |
-| 6 | Engines + Inference (DEEP OSS) | 70→102 | ✅ 135 tests, real SSE | `4e8a45b26` |
-| 7 | Interop-wire + Social | 70→68 | ✅ 38 tests, a2a intact | `8212ab985` |
-| 8 | Memory & Retrieval | 34→44 | ✅ 31 tests | `0b7d845fc` |
-| 9 | Billing & Metering (MoR, no Stripe) | 28→31 | ✅ 43 tests | `d9c9683ab` |
-| 10 | Cloud & Sandboxes | 27→31 | ✅ 33 tests | `112c49ac2` |
-| — | Serial integration (7 domains → bootstrap) | — | ✅ 14 sources boot | `7a01c7f4f` |
-| 11 | Observability & Ops (capstone) | 23→32 | ✅ 42 tests, 15 sources, /metrics | `11693c360` |
+| 2 | Identity & Auth | 36→37 | ✅ 72/72 tests | `9a11d3866` |
+| 3 | Governance & Interop | 33→47+12 | ✅ 74 tests | `726b3541` / `292e21a7` |
+| 4 | Edge & API | 26 | ✅ 15/15 tests | `2e0d88d3` |
+| 5a | Agent-OS control plane | 46→28 | ✅ 19 tests (composed @recoder/agent-os fresh) | `42b2cab8` |
+| 5b | Conductor & Terminal | 45→36 | ✅ 30 tests (composed @recoder/substrate fresh) | `094f7fbe` |
+| — | Serial integration (5a+5b → bootstrap) | — | ✅ 8 health sources, boots | `30f5cd9de` |
+| 6 | Engines + Inference (DEEP OSS) | 70→102 | ✅ 135 tests, real SSE | `0a858074e` |
+| 7 | Interop-wire + Social | 70→68 | ✅ 38 tests, a2a intact | `561cd1108` |
+| 8 | Memory & Retrieval | 34→44 | ✅ 31 tests | `fe2f985d4` |
+| 9 | Billing & Metering (MoR, no Stripe) | 28→31 | ✅ 43 tests | `54480cf12` |
+| 10 | Cloud & Sandboxes | 27→31 | ✅ 33 tests | `e6f15c16b` |
+| — | Serial integration (7 domains → bootstrap) | — | ✅ 14 sources boot | `959628999` |
+| 11 | Observability & Ops (capstone) | 23→32 | ✅ 42 tests, 15 sources, /metrics | `83d640d60` |
 
 ## ✅ COMPLETE — all 12 phases done (2026-07-15)
 
@@ -41,36 +41,36 @@ backend-owned + unified; a2a intact at 227. Desktop fully rebranded in parallel.
 
 The owner mandate — depth lives in the engine dir, not thin adapters — is honored. Every
 engine is now runnable from its own dir with truthful health from REAL capability:
-- **Rust** (`c2a3e4a7f`): governance napi surface deepened + rebuilt (fixed a real bug —
+- **Rust** (`fa08c07c4`): governance napi surface deepened + rebuilt (fixed a real bug —
   approvals were invisible to `decide()`); openfang/tensorzero already complete.
-- **Py** (`bdf314b57`, `28ed48cf4`): mem0 (import-side-effect fixed, serves 21 routes),
+- **Py** (`9918a222f`, `06a422c95`): mem0 (import-side-effect fixed, serves 21 routes),
   ops-recorder (full ingest roundtrip + GH/Linear detectors), pal-mcp (18 real tools via live
   MCP handshake), colbert (LIVE ColBERT MaxSim rerank), browser-use (LIVE Chrome via CDP).
-- **Desktop Go** (`02db91cbc`): beads (bd 1.0.5), multica (server booted, auth-gated),
+- **Desktop Go** (`dc41a6254`): beads (bd 1.0.5), multica (server booted, auth-gated),
   ziti (OpenZiti CLI), recoder-xds (xDS gRPC :18000 serving) — all built + verified.
 - **Desktop TS/C**: dmux/recodergit/openclaw dists rebuilt + runnable, tmux `next-3.7` verified;
   desktop dev-boot is fully fused (wave shell + cockpit + embedded backend + all engines).
 
-**One project (`75732ebf8`):** `apps/` = **desktop only**. `apps/social` folded into the one
+**One project (`1b15f4847`):** `apps/` = **desktop only**. `apps/social` folded into the one
 embedded backend (its social domain covers it). The desktop IS the product: wave shell +
 cockpit + the ONE backend (15 domains + all engines) + the desktop's own engines, one boot.
 
 ## ✅ CLEAN (2026-07-15): engines used + legacy absorbed + one project
 
-- **Engines spawned on boot + consumed** (`e0427af50`): the engine-supervisor spawns the
+- **Engines spawned on boot + consumed** (`53577f022`): the engine-supervisor spawns the
   deepened engines at boot — colbert/mem0/ops-recorder/browser-use as live processes,
   openfang/tensorzero/governance in-proc napi — and a consumer reaches a live one (proven:
   `engines.client('colbert').invoke(rerank)` → real ranking against the live :8893 process).
   Degrade-safe truthful for multica (needs PG15)/pal(.pal_venv path)/ziti(creds).
-- **Legacy flat dirs ABSORBED + removed** (`914453ba0`): all 8 (a2a/agent-os/conductor/
+- **Legacy flat dirs ABSORBED + removed** (`38b644198`): all 8 (a2a/agent-os/conductor/
   connectors/gateway/engines/network/routes) gone; 20 imports resolved; **tsc 268 → 0**.
   `src/` = `bootstrap/ domains/ http/ shared/ + logger.ts + server.ts` — the target shape.
-- **One project** (`75732ebf8`): `apps/` = desktop only.
+- **One project** (`1b15f4847`): `apps/` = desktop only.
 
 **Final: 15 domains, ~540 domain files, 0 tsc errors, boots with 15 truthful health sources,
 engines spawn + consumed, one unified desktop app.**
 
-### The product flow USES the engines (`ee2868f0f`) — proven on a real workspace
+### The product flow USES the engines (`08d4e8837`) — proven on a real workspace
 The conductor run flow (the workspace-for-agents product core) now consumes the engines in
 service code (NOT via agent MCP tools): on create → recodergit index + beads track; on launch →
 memory recall (mem0∪beads∪colbert) enrich + governance decide; run via external CLI (Claude
@@ -81,11 +81,11 @@ on no-DB audit — truthful), recodergit attempted, `bd` ran. 57/57 conductor te
 
 ## Remaining minor follow-ups (documented, NOT hidden)
 
-> **2026-07-16 sweep (`f3d219e5a` + F1/F2 commits):** items 0–5 of the original list are DONE —
+> **2026-07-16 sweep (`37f49d167` + F1/F2 commits):** items 0–5 of the original list are DONE —
 > packaged recodergit/dmux bundling; the domain-tools MCP bridge (`registerDomainTools`,
 > collision-safe) wired in bootstrap; EntitlementGate injected into conductor + inference with
 > truthful 429s; `/api/social` (connectors + channels truth) + `/api/a2a` (health/agent-card/rpc/
-> ingress) surfaces live; legacy flat dirs absorbed (`914453ba0`); the tmux substrate is
+> ingress) surfaces live; legacy flat dirs absorbed (`38b644198`); the tmux substrate is
 > package-compatible and launching (F2 run-screen plane on top of it). Also fixed en route:
 > fresh-DB migration splitStatements landmine; dev-mint-conductor-key rewritten over the identity
 > domain's DB-backed sk_ store.

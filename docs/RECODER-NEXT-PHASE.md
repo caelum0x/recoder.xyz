@@ -8,7 +8,7 @@
 > unified identity, full-website scope), which carried into the new plan. Read
 > BUILD-STATUS first.
 >
-> **Phase-A progress (2026-07-16, session `5e1b6f5dd`+`90e61787e`):** Phase 0 (server boots) long
+> **Phase-A progress (2026-07-16, session `5e153f27d`+`cb5b54aba`):** Phase 0 (server boots) long
 > done; the BACKEND half of Phase A is fully realized (in-process Better Auth, one config in
 > packages/auth consumed only by the backend, /internal/identity/* seams, zero APP_API_URL
 > delegation — verified by code scout). WEBSITE half started: the full site is RECONCILED back
