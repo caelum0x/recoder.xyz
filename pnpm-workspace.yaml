@@ -1,6 +1,5 @@
 packages:
   - backend
-  - apps/mobile
   # openclaw social layer for agents (Wave G1) — composes @recoder/connectors
   # The Recoder desktop app (Wave-fork shell, moved from apps/wave), divided into
   # app/ (Electron+React, the pnpm member) and server/ (Go, not an npm package).
@@ -111,5 +110,3 @@ exclude:
   - '**/.nx/**'
   - packages-local-backup
   - infra
-  # keep the parked legacy npm shell out of the pnpm workspace
-  - apps/desktop/legacy-shell
