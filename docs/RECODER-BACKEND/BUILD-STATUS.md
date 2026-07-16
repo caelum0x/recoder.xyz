@@ -90,10 +90,11 @@ on no-DB audit — truthful), recodergit attempted, `bd` ran. 57/57 conductor te
 > fresh-DB migration splitStatements landmine; dev-mint-conductor-key rewritten over the identity
 > domain's DB-backed sk_ store.
 
-1. **multica full readiness needs PG15+** (prod PG17 fine; local PG14 caveat).
+1. **multica full readiness needs PG15+** (prod PG17 fine; local PG14 caveat — environmental,
+   not code).
 2. **WS telemetry tap** (upgrade-router) + **OTLP tracing endpoint** — minor.
-3. **Root `/.well-known/agent.json` alias** for the a2a agent-card (RFC 8615 wants origin root;
-   needs a bootstrap-owned root mount).
+
+(The root `/.well-known/agent.json` alias landed — bare card at origin root.)
 
 ## Deviation to reconcile
 Phase 5a/5b **composed the `@recoder/agent-os` + `@recoder/substrate` packages fresh** rather
