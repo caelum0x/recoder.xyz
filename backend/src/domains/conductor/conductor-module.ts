@@ -31,7 +31,7 @@ import type { ComponentHealth } from '../../shared/health-types.js';
 import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { Principal } from '../identity/types.js';
 import { sliceConductorConfig, type ConductorConfig } from './config.js';
-import type { GateVerdict, TerminalStreamPort } from './ports/index.js';
+import type { GateVerdict, TerminalStreamPort, GithubStatusPort, GithubStatusView } from './ports/index.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type { WorkspaceRepositoryPort } from './ports/workspace-repository.port.js';
@@ -97,6 +97,8 @@ export class ConductorComposer implements ConductorModule {
   private readonly brain?: ConductorBrainMemory;
   /** OPTIONAL code-intel seam (recodergit index + beads issue-graph track/close). */
   private readonly codeIntel?: CodeIntelPort;
+  /** OPTIONAL GitHub identity seam (`GET /github/status`); absent ⇒ truthful not-connected. */
+  private readonly github?: GithubStatusPort;
   /** OPTIONAL pre-dispatch quota gate (set by bootstrap; absent ⇒ degrade OPEN). */
   private entitlementGate?: EntitlementGate;
   private started = false;
@@ -108,6 +110,7 @@ export class ConductorComposer implements ConductorModule {
     this.middleware = deps.middleware;
     this.brain = deps.brain;
     this.codeIntel = deps.codeIntel;
+    this.github = deps.githubStatus;
 
     const loggerPort = toLoggerPort(this.log);
 
@@ -369,6 +372,11 @@ export class ConductorComposer implements ConductorModule {
 
   substrates(): readonly SubstrateAvailabilityView[] {
     return this.registry.availability();
+  }
+
+  async githubStatus(): Promise<GithubStatusView> {
+    if (!this.github) return { connected: false, source: null };
+    return this.github.status();
   }
 
   async listReconcileFindings(workspaceId?: string): Promise<readonly ReconcileFindingView[]> {

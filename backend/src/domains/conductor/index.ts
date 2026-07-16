@@ -26,7 +26,7 @@ import type { QueryExecutor } from '../persistence/ports/query-executor.port.js'
 import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
 import type { Principal } from '../identity/types.js';
 import type { ConductorConfigOverrides } from './config.js';
-import type { GovernanceGatePort, TerminalStreamPort } from './ports/index.js';
+import type { GovernanceGatePort, TerminalStreamPort, GithubStatusPort, GithubStatusView } from './ports/index.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
@@ -83,6 +83,12 @@ export interface ConductorModuleDeps {
    * launch, never fabricated). See `adapters/code-intel.adapter.ts`.
    */
   readonly codeIntel?: CodeIntelPort;
+  /**
+   * Optional GitHub identity seam (`GET /github/status`): forwarded token env +
+   * `gh` login + git identity, detected for zero-config onboarding. Absent ⇒ the
+   * edge reports a truthful `connected: false` (never a fabricated link).
+   */
+  readonly githubStatus?: GithubStatusPort;
 }
 
 /** The public surface bootstrap registers and the edge/interop consume. */
@@ -111,6 +117,8 @@ export interface ConductorModule {
   setEntitlementGate(gate: EntitlementGate): void;
   /** Truthful per-substrate availability (`GET /substrates`). */
   substrates(): readonly SubstrateAvailabilityView[];
+  /** GitHub connection + detected identity (`GET /github/status`) — token-free. */
+  githubStatus(): Promise<GithubStatusView>;
   /** Reconcile findings for operator/policy review. */
   listReconcileFindings(workspaceId?: string): Promise<readonly ReconcileFindingView[]>;
   /** The terminal WS surface (edge registers `terminalBackends()`). */

@@ -46,6 +46,7 @@ import { createCliRuntimeSubstrate } from '../domains/conductor/adapters/cli-run
 import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/openfang-runtime.adapter.js';
 import { createBrainMemoryAdapter } from '../domains/conductor/adapters/brain-memory.adapter.js';
 import { createConductorCodeIntel } from '../domains/conductor/adapters/code-intel.adapter.js';
+import { createGithubStatusAdapter } from '../domains/conductor/adapters/github-status.adapter.js';
 import { createEnginesModule } from '../domains/engines/index.js';
 import { createInferenceModule } from '../domains/inference/index.js';
 import { createBillingModule } from '../domains/billing/index.js';
@@ -386,6 +387,12 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     beads: engines.client('beads'),
     logger: childLogger('conductor-code-intel'),
   });
+  // GitHub identity seam (zero-config onboarding): forwarded token env + `gh`
+  // login + git identity. Env injected here — the adapter reads no globals.
+  const conductorGithub = createGithubStatusAdapter({
+    env: bootEnv,
+    logger: childLogger('conductor-github'),
+  });
   const conductor = createConductorModule({
     config,
     logger: childLogger('conductor'),
@@ -396,6 +403,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     substrates: [cliSub, openfangSub],
     brain: conductorBrain,
     codeIntel: conductorCodeIntel,
+    githubStatus: conductorGithub,
     overrides: {
       tmuxBin: config.conductor.tmuxBin,
       worktreeRoot: config.conductor.worktreeRoot,

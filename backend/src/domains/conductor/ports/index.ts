@@ -64,6 +64,12 @@ export type {
   WorkspaceSyncEvent,
 } from './terminal-stream.port.js';
 export type {
+  GithubStatusPort,
+  GithubStatusView,
+  GithubStatusSource,
+  GithubAccountView,
+} from './github-status.port.js';
+export type {
   GovernanceGatePort,
   GovernanceAction,
   GateDecisionContext,

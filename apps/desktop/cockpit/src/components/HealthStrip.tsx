@@ -35,14 +35,15 @@ const TONE_LABEL: Record<Overall, string> = {
 export function HealthStrip() {
   const runtimes = usePoll(() => api.runtimes(), POLL_MS);
   const substrates = usePoll(() => api.substrates(), POLL_MS);
-  const connectors = usePoll(() => api.connectors(), POLL_MS);
 
-  // Any real backend error degrades the overall dot — never rounded away.
-  const anyError = Boolean(runtimes.error || substrates.error || connectors.error);
+  // The dot reflects ONLY what the product needs to run agents: installed CLIs
+  // + execution substrates. Chat-channel connectors are an optional engine
+  // surface, not part of the run flow — their absence must not degrade the dot.
+  // Any real backend error still degrades it — never rounded away.
+  const anyError = Boolean(runtimes.error || substrates.error);
   const anyLoading =
     (!runtimes.data && !runtimes.error) ||
-    (!substrates.data && !substrates.error) ||
-    (!connectors.data && !connectors.error);
+    (!substrates.data && !substrates.error);
 
   const runtimesReady = (runtimes.data ?? []).some((r) => r.available);
 

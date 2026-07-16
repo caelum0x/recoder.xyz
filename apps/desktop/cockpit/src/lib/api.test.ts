@@ -336,3 +336,68 @@ describe('api agent-os envelope unwrap', () => {
     expect(err.message).toBe('evidence.taskId is required');
   });
 });
+
+describe('keyed envelope unwrap (new backend contract)', () => {
+  it('unwraps { workspaces: [...] } to a bare array', async () => {
+    const ws = [{ workspaceId: 'w1' }, { workspaceId: 'w2' }];
+    mockFetch(() =>
+      makeResponse({ status: 200, ok: true, body: { success: true, data: { workspaces: ws } } }),
+    );
+    expect(await api.listWorkspaces()).toEqual(ws);
+  });
+
+  it('still accepts a legacy bare-array workspaces payload', async () => {
+    const ws = [{ workspaceId: 'w1' }];
+    mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: ws } }));
+    expect(await api.listWorkspaces()).toEqual(ws);
+  });
+
+  it('unwraps { runtimes: [...] } and { substrates: [...] }', async () => {
+    const runtimes = [{ runtimeId: 'claude_code', bin: 'claude', available: true }];
+    const substrates = [{ id: 'tmux_worktree', available: true }];
+    mockFetch((url) =>
+      makeResponse({
+        status: 200,
+        ok: true,
+        body: {
+          success: true,
+          data: url.includes('/runtimes') ? { runtimes } : { substrates },
+        },
+      }),
+    );
+    expect(await api.runtimes()).toEqual(runtimes);
+    expect(await api.substrates()).toEqual(substrates);
+  });
+
+  it('unwraps { workspace } on get and create', async () => {
+    const workspace = { workspaceId: 'w9' };
+    mockFetch(() =>
+      makeResponse({
+        status: 200,
+        ok: true,
+        body: { success: true, data: { workspace, verdict: { effect: 'allow' } } },
+      }),
+    );
+    expect(await api.getWorkspace('w9')).toEqual(workspace);
+    expect(
+      await api.createWorkspace({
+        spaceId: 's',
+        projectId: 'p',
+        taskId: 't',
+        repoPath: '/tmp/r',
+        runtimeId: 'claude_code',
+        createdBy: 'test',
+      }),
+    ).toEqual(workspace);
+  });
+
+  it('passes the github status object through, account included', async () => {
+    const status = {
+      connected: true,
+      source: 'gh_cli',
+      account: { login: 'caelum0x', name: 'Caelum', email: 'c@example.com' },
+    };
+    mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: status } }));
+    expect(await api.githubStatus()).toEqual(status);
+  });
+});

@@ -7,6 +7,9 @@
  *   POST   /api/conductor/workspaces              create + launch (GATED)
  *   POST   /api/conductor/workspaces/:id/steer    send-keys to a live agent (GATED)
  *   GET    /api/conductor/substrates              truthful per-substrate availability
+ *   GET    /api/conductor/runtimes                installed agent CLIs (PATH-probed)
+ *   GET    /api/conductor/github/status           GitHub connection + identity (token-free)
+ *   GET    /api/conductor/health                  conductor readiness summary
  *   GET    /api/conductor/reconcile/findings      reconcile findings (operator review)
  *   POST   /api/conductor/reconcile               run a reconcile pass (GATED)
  *
@@ -19,6 +22,7 @@
  *  - Bodies validated fail-fast with the uniform `sendError` envelope.
  */
 import { Router } from 'express';
+import { runtimeAvailability } from '@recoder/substrate';
 import { ErrorCode, createError, sendError, sendSuccess, asyncHandler } from '../../../shared/errors.js';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { WorkspaceSubstrate } from '@recoder/agent-os';
@@ -65,6 +69,42 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     middleware.authenticate,
     asyncHandler(async (_req, res) => {
       sendSuccess(res, { substrates: module.substrates() });
+    }),
+  );
+
+  // Installed agent CLIs (claude/codex/…) — a fresh PATH probe per request so the
+  // cockpit's "N agents ready" is truthful, never a cached assumption.
+  router.get(
+    '/runtimes',
+    middleware.authenticate,
+    asyncHandler(async (_req, res) => {
+      sendSuccess(res, { runtimes: await runtimeAvailability() });
+    }),
+  );
+
+  // GitHub connection + detected identity for zero-config onboarding. TOKEN-FREE
+  // by contract: only { connected, source, account? } — never a token value.
+  router.get(
+    '/github/status',
+    middleware.authenticate,
+    asyncHandler(async (_req, res) => {
+      sendSuccess(res, await module.githubStatus());
+    }),
+  );
+
+  // Conductor readiness summary the cockpit polls: can work be launched here.
+  router.get(
+    '/health',
+    middleware.authenticate,
+    asyncHandler(async (_req, res) => {
+      const substrates = module.substrates();
+      const tmux = substrates.find((s) => s.id === 'tmux_worktree');
+      const available = substrates.some((s) => s.available);
+      sendSuccess(res, {
+        available,
+        tmux: tmux?.available === true,
+        ...(available ? {} : { reason: tmux?.reason ?? 'no substrate available' }),
+      });
     }),
   );
 

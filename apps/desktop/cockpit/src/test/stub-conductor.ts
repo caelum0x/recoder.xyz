@@ -163,11 +163,19 @@ function handle(state: StubState, req: IncomingMessage, res: ServerResponse): vo
   if (method === 'GET' && path === '/api/conductor/health') {
     return sendJson(res, 200, { success: true, data: { available: true, git: true, tmux: true, tmuxBin: '/usr/bin/tmux' } });
   }
+  // Keyed payloads below mirror the REAL backend envelope (data: { runtimes },
+  // data: { workspaces }, …) so the integration tests prove the live contract.
   if (method === 'GET' && path === '/api/conductor/runtimes') {
-    return sendJson(res, 200, { success: true, data: RUNTIMES });
+    return sendJson(res, 200, { success: true, data: { runtimes: RUNTIMES } });
   }
   if (method === 'GET' && path === '/api/conductor/substrates') {
-    return sendJson(res, 200, { success: true, data: SUBSTRATES });
+    return sendJson(res, 200, { success: true, data: { substrates: SUBSTRATES } });
+  }
+  if (method === 'GET' && path === '/api/conductor/github/status') {
+    return sendJson(res, 200, {
+      success: true,
+      data: { connected: true, source: 'gh_cli', account: { login: 'stub-login' } },
+    });
   }
   if (method === 'GET' && path === '/api/connectors/') {
     return sendJson(res, 200, { success: true, data: CONNECTORS });
@@ -189,7 +197,7 @@ function handle(state: StubState, req: IncomingMessage, res: ServerResponse): vo
 
   // --- board ---
   if (method === 'GET' && path === '/api/conductor/workspaces') {
-    return sendJson(res, 200, { success: true, data: [...state.workspaces.values()] });
+    return sendJson(res, 200, { success: true, data: { workspaces: [...state.workspaces.values()] } });
   }
   if (method === 'POST' && path === '/api/conductor/workspaces') {
     void readBody(req).then((body) => {
@@ -198,7 +206,7 @@ function handle(state: StubState, req: IncomingMessage, res: ServerResponse): vo
       state.events.set(ws.workspaceId, [
         makeEvent(ws.taskId, { type: 'started', state: 'created', message: 'workspace created' }),
       ]);
-      sendJson(res, 200, { success: true, data: ws });
+      sendJson(res, 200, { success: true, data: { workspace: ws, verdict: { effect: 'allow' } } });
     });
     return;
   }
@@ -214,7 +222,7 @@ function handle(state: StubState, req: IncomingMessage, res: ServerResponse): vo
     }
 
     if (method === 'GET' && !sub) {
-      return sendJson(res, 200, { success: true, data: ws });
+      return sendJson(res, 200, { success: true, data: { workspace: ws } });
     }
     if (method === 'GET' && sub === 'events') {
       return sendJson(res, 200, { success: true, data: state.events.get(id) || [] });

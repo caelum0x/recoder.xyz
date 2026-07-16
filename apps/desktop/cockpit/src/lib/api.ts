@@ -54,6 +54,7 @@ import type {
   GatewayInferenceBody,
   GatewayInferenceResult,
   GatewayStatus,
+  GithubStatus,
   GovernanceAuditTrail,
   McpHostSummary,
   McpServer,
@@ -212,6 +213,26 @@ function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   return requestAt<T>('/api/conductor', method, path, body);
 }
 
+/**
+ * Unwrap a keyed success payload. The backend envelope nests collections and
+ * records under a name (`data: { workspaces: [...] }`, `data: { workspace }`),
+ * while older responses returned the value bare — accept both so the cockpit
+ * never breaks on either side of the contract.
+ */
+function pick<T>(data: unknown, key: string): T {
+  if (data !== null && typeof data === 'object' && !Array.isArray(data) && key in (data as Record<string, unknown>)) {
+    return (data as Record<string, T>)[key];
+  }
+  return data as T;
+}
+
+/** Unwrap a keyed list payload; anything non-array resolves to an empty list. */
+function pickList<T>(data: unknown, key: string): T[] {
+  if (Array.isArray(data)) return data as T[];
+  const inner = pick<unknown>(data, key);
+  return Array.isArray(inner) ? (inner as T[]) : [];
+}
+
 /** Agent OS control-plane request: every call hits `${backendUrl}/api/agent-os/...`. */
 function agentOsRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
   return requestAt<T>('/api/agent-os', method, path, body);
@@ -295,20 +316,21 @@ export const api = {
    * only `{ connected, source }` is returned — never the token value. Drives the
    * calm "GitHub" chip near the account block.
    */
-  githubStatus: () =>
-    request<{ connected: boolean; source: 'GH_TOKEN' | 'GITHUB_TOKEN' | null }>(
-      'GET',
-      '/github/status',
-    ),
+  githubStatus: () => request<GithubStatus>('GET', '/github/status'),
   /**
    * Tamper-evident governance audit trail: sealed Merkle-chain entries
    * (newest-first) + a genuine full-chain verification result.
    */
   governanceAudit: (limit = 100) =>
     request<GovernanceAuditTrail>('GET', `/governance/audit?limit=${limit}`),
-  listWorkspaces: () => request<Workspace[]>('GET', '/workspaces'),
-  getWorkspace: (id: string) => request<Workspace>('GET', `/workspaces/${encodeURIComponent(id)}`),
-  createWorkspace: (body: CreateWorkspaceBody) => request<Workspace>('POST', '/workspaces', body),
+  listWorkspaces: () =>
+    request<unknown>('GET', '/workspaces').then((d) => pickList<Workspace>(d, 'workspaces')),
+  getWorkspace: (id: string) =>
+    request<unknown>('GET', `/workspaces/${encodeURIComponent(id)}`).then((d) =>
+      pick<Workspace>(d, 'workspace'),
+    ),
+  createWorkspace: (body: CreateWorkspaceBody) =>
+    request<unknown>('POST', '/workspaces', body).then((d) => pick<Workspace>(d, 'workspace')),
   listEvents: (id: string) =>
     request<RunEvent[]>('GET', `/workspaces/${encodeURIComponent(id)}/events`),
   /**
@@ -357,8 +379,12 @@ export const api = {
     request<MergeResult>('POST', `/workspaces/${encodeURIComponent(id)}/merge`, body),
   archive: (id: string) => request<Workspace>('POST', `/workspaces/${encodeURIComponent(id)}/archive`),
   reconcile: () => request<unknown>('POST', '/reconcile'),
-  runtimes: () => request<RuntimeAvailability[]>('GET', '/runtimes'),
-  substrates: () => request<SubstrateAvailability[]>('GET', '/substrates'),
+  runtimes: () =>
+    request<unknown>('GET', '/runtimes').then((d) => pickList<RuntimeAvailability>(d, 'runtimes')),
+  substrates: () =>
+    request<unknown>('GET', '/substrates').then((d) =>
+      pickList<SubstrateAvailability>(d, 'substrates'),
+    ),
 
   // --- Interactive tmux sessions ---
   listSessions: () => request<ConductorSession[]>('GET', '/sessions'),
