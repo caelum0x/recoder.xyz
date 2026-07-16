@@ -713,3 +713,8 @@ apps/desktop/server/engines/**/.env.*
 apps/desktop/engines/**/.env
 apps/desktop/engines/**/.env.*
 !apps/desktop/engines/**/.env.example
+
+# Built engine binaries too large for GitHub (>100MB hard limit) — build in place,
+# never commit (they were filter-repo-stripped from history on 2026-07-16).
+/apps/desktop/server/engines/ziti/bin/ziti
+/apps/desktop/server/engines/beads/bin/bd
