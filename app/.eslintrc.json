@@ -1,0 +1,14 @@
+{
+  "root": true,
+  "ignorePatterns": [
+    ".next/**",
+    "node_modules/**",
+    "dist/**",
+    "build/**",
+    "coverage/**"
+  ],
+  "rules": {
+    "@next/next/no-img-element": "warn",
+    "react/no-unescaped-entities": "off"
+  }
+}

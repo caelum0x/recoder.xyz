@@ -1,0 +1,60 @@
+{
+  "common": {
+    "signIn": "Iniciar Sesión",
+    "signUp": "Registrarse",
+    "signOut": "Cerrar Sesión",
+    "dashboard": "Panel",
+    "settings": "Configuración",
+    "gettingStarted": "Comenzar",
+    "faq": "FAQ",
+    "docs": "Documentación",
+    "launchWebIDE": "Abrir Web IDE",
+    "learnMore": "Más Información"
+  },
+  "home": {
+    "title": "Plataforma de Código AI GRATIS",
+    "subtitle": "Web IDE + CLI con 40+ Modelos",
+    "description": "La única plataforma con sincronización Web IDE + Terminal CLI. Beta 100% GRATIS con BYOK.",
+    "freeBeta": "BETA 100% GRATIS",
+    "byok": "Trae Tu Propia Clave",
+    "models": "40+ Modelos AI",
+    "cta": "Empieza a Codificar Gratis",
+    "installCli": "Instalar CLI",
+    "features": {
+      "webIde": "Web IDE",
+      "webIdeDesc": "Codifica en tu navegador con asistencia AI",
+      "cli": "Terminal CLI",
+      "cliDesc": "Codifica localmente con el mismo poder AI",
+      "sync": "Sincronización Perfecta",
+      "syncDesc": "Empieza en el navegador, continúa en terminal"
+    }
+  },
+  "dashboard": {
+    "welcome": "Bienvenido de nuevo",
+    "yourPlatforms": "Tus Plataformas",
+    "recentProjects": "Proyectos Recientes",
+    "quickActions": "Acciones Rápidas",
+    "usage": "Uso",
+    "apiKeys": "Claves API"
+  },
+  "auth": {
+    "email": "Correo Electrónico",
+    "password": "Contraseña",
+    "confirmPassword": "Confirmar Contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "noAccount": "¿No tienes cuenta?",
+    "hasAccount": "¿Ya tienes cuenta?",
+    "continueWithGoogle": "Continuar con Google",
+    "continueWithGithub": "Continuar con GitHub"
+  },
+  "footer": {
+    "product": "Producto",
+    "company": "Empresa",
+    "legal": "Legal",
+    "privacy": "Política de Privacidad",
+    "terms": "Términos de Servicio",
+    "about": "Acerca de",
+    "blog": "Blog",
+    "contact": "Contacto"
+  }
+}
