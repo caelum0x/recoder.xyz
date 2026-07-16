@@ -104,14 +104,18 @@ The frontend consumes ONLY the workspace/run/auth edges. It never renders an eng
 
 ## 5. Build plan (frontend, phased)
 
-**Phase F0 — Slim to the workspace UX.** Strip the panel registry/nav to `board` + the workspace
-detail drill-in; remove the 13 engine/infra tabs from the nav (keep component files on disk).
-Logo-only navbar, single health dot. Approvals shown inline in the workspace detail. *Subtraction,
-not addition.* Verify cockpit build + tests. **← start here.**
+**Phase F0 — Slim to the workspace UX.** ✅ **DONE** (`5ab2b24ab`). Strip the panel registry/nav
+to `board` + the workspace detail drill-in; remove the 13 engine/infra tabs from the nav (keep
+component files on disk). Logo-only navbar, single health dot. Approvals shown inline in the
+workspace detail. *Subtraction, not addition.* Verify cockpit build + tests.
 
-**Phase F1 — Zero-config onboarding.** Desktop first-run: open recoder.xyz sign-in (device flow) →
-capture session; auto-detect installed agent CLIs (probe PATH + their auth) and GitHub identity
-(`gh`/git) → preselect; land on the board. No wizard.
+**Phase F1 — Zero-config onboarding.** ✅ **DONE** (`edbc91a30`). Desktop first-run: open
+recoder.xyz sign-in (device flow) → capture session; auto-detect installed agent CLIs (probe PATH +
+their auth) and GitHub identity (`gh`/git) → preselect; land on the board. No wizard.
+*Shipped as:* backend `GET /api/conductor/{runtimes,github/status,health}` (PATH-probed CLIs +
+token-free gh/git identity); cockpit first-run SignIn gate + agent preselect + "GitHub · <login>"
+chip + keyed-envelope client; electron main `emain-device-auth` (RFC 8628 vs `/api/auth/cli/*`,
+safeStorage session, identity-only bridge over origin-gated IPC). **← next: F2.**
 
 **Phase F2 — Workspace detail polish.** The run screen: terminal + diff + conversation + inline
 approval + review/merge, clean and fast. Repo list auto-populated from the detected GitHub account.
