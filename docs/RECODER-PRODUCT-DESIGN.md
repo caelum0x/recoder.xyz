@@ -117,8 +117,12 @@ token-free gh/git identity); cockpit first-run SignIn gate + agent preselect + "
 chip + keyed-envelope client; electron main `emain-device-auth` (RFC 8628 vs `/api/auth/cli/*`,
 safeStorage session, identity-only bridge over origin-gated IPC). **← next: F2.**
 
-**Phase F2 — Workspace detail polish.** The run screen: terminal + diff + conversation + inline
-approval + review/merge, clean and fast. Repo list auto-populated from the detected GitHub account.
+**Phase F2 — Workspace detail polish.** ⚙️ **backend plane DONE** (`6f4d1197c`): the run screen's
+full API — `GET workspaces/:id/{events,diff,tree,dev-command}` + governed
+`POST {message,pr,merge,archive,preview-url}` (chat = continueRun in the same worktree; merge = gh
+or REAL local-git fallback; all writes behind the governance gate). Ported from the proven v1
+conductor onto the domain seams. *Remaining:* live WS stream alignment (`/sync` vs client
+`/stream` path), UI polish pass, repo list auto-populated from the detected GitHub account.
 
 **Phase F3 — Multi-agent parallelism UX.** Run several agents/workspaces at once (conductor's
 sweet spot: 3–5), compare, review each on its own schedule.
