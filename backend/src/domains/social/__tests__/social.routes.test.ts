@@ -2,6 +2,8 @@
  * Social HTTP edges — route-level trust-boundary + shape tests over the composed
  * `/api/social` router (`buildSocialRoutes`). Proves the surface bootstrap mounts:
  *
+ *   - GET  /                     → 200 truthful per-channel connectors health (no fabrication)
+ *   - GET  /channels             → 200 configured channels w/ enabled/disabled + reason
  *   - GET  /connectors           → 200 success envelope (per-connector status read)
  *   - GET  /health               → 200 success envelope (live channel health)
  *   - POST /webhooks/:channel     → 401 on a bad HMAC signature (hostile-by-default)
@@ -22,6 +24,22 @@ import type { ConnectorSecretsPort } from '../ports/connector-secrets.port.js';
 import type { ChannelAdapterRegistry } from '../adapters/channel-adapter-registry.js';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { Principal } from '../../identity/types.js';
+import type { SocialConfig, ChannelConfig } from '../config.js';
+import { CHANNEL_IDS, type ChannelId } from '../types.js';
+
+/** A hostile-by-default SocialConfig fixture (all channels off unless overridden). */
+function testConfig(overrides: Partial<Record<ChannelId, ChannelConfig>> = {}): SocialConfig {
+  const channels = {} as Record<ChannelId, ChannelConfig>;
+  for (const id of CHANNEL_IDS) channels[id] = overrides[id] ?? { enabled: false, secretRef: null };
+  return {
+    isProduction: false,
+    channels,
+    requireMention: true,
+    allowlist: [],
+    ingressSecret: null,
+    zrok: { enabled: false, shareName: null },
+  };
+}
 
 /** Dependency-free HTTP client (the vitest setup mocks `global.fetch`). */
 function request(
@@ -80,6 +98,7 @@ const onVerifiedWebhook = vi.fn(async () => undefined);
 
 function startServer(): Promise<{ base: string; close: () => Promise<void> }> {
   const router = buildSocialRoutes({
+    config: testConfig({ line: { enabled: true, secretRef: 'vault:line' } }),
     repository: fakeRepository,
     secrets: fakeSecrets,
     channels: fakeChannels,
@@ -112,6 +131,44 @@ describe('social routes — /api/social edge', () => {
   });
   afterAll(async () => {
     await srv.close();
+  });
+
+  it('GET / → 200 truthful per-channel connectors health (unconfigured ⇒ down w/ reason)', async () => {
+    const res = await request(srv.base, '/api/social/');
+    expect(res.status).toBe(200);
+    const json = res.json() as {
+      success: boolean;
+      data: { connectors: Array<{ channel: string; status: string; reason?: string }>; degraded: boolean };
+    };
+    expect(json.success).toBe(true);
+    expect(json.data.connectors).toHaveLength(CHANNEL_IDS.length);
+    // Disabled channels are truthfully down with a reason — never fabricated up.
+    const telegram = json.data.connectors.find((c) => c.channel === 'telegram');
+    expect(telegram?.status).toBe('down');
+    expect(telegram?.reason).toContain('not configured');
+    // The one enabled channel (line) has no live probe (registry returns none) ⇒ down.
+    const line = json.data.connectors.find((c) => c.channel === 'line');
+    expect(line?.status).toBe('down');
+    expect(line?.reason).toBeTruthy();
+    expect(json.data.degraded).toBe(true);
+  });
+
+  it('GET /channels → 200 configured channels with truthful enabled/disabled + reason', async () => {
+    const res = await request(srv.base, '/api/social/channels');
+    expect(res.status).toBe(200);
+    const json = res.json() as {
+      success: boolean;
+      data: { channels: Array<{ channel: string; enabled: boolean; hasSecretRef: boolean; reason?: string }> };
+    };
+    expect(json.success).toBe(true);
+    expect(json.data.channels).toHaveLength(CHANNEL_IDS.length);
+    const line = json.data.channels.find((c) => c.channel === 'line');
+    expect(line?.enabled).toBe(true);
+    expect(line?.hasSecretRef).toBe(true);
+    expect(line?.reason).toBeUndefined();
+    const slack = json.data.channels.find((c) => c.channel === 'slack');
+    expect(slack?.enabled).toBe(false);
+    expect(slack?.reason).toContain('not configured');
   });
 
   it('GET /connectors → 200 success envelope with the connector read model', async () => {

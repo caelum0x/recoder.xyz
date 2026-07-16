@@ -176,6 +176,11 @@ export async function handleChatCompletion(deps: InferenceOpenAiCompatDeps, req:
 
   const result = await deps.routing.complete(request);
   if (!result.routed) {
+    // Pre-dispatch entitlement refusal: a truthful 429 (OpenAI `insufficient_quota`),
+    // never a 5xx gateway error over an over-quota subject.
+    if (result.denied === 'quota') {
+      return sendOpenAiError(res, 429, result.reason ?? 'token quota exceeded', 'insufficient_quota');
+    }
     const status = result.tier === 'none' && result.reason?.includes('unconfigured') ? 503 : 502;
     return sendOpenAiError(res, status, result.reason ?? 'gateway unavailable', 'gateway_error');
   }
@@ -226,6 +231,9 @@ async function handleStream(
 
   if (!headersSent) {
     // No deltas were emitted — the call did not route. Return a truthful error.
+    if (result.denied === 'quota') {
+      return sendOpenAiError(res, 429, result.reason ?? 'token quota exceeded', 'insufficient_quota');
+    }
     const status = result.tier === 'none' && result.reason?.includes('unconfigured') ? 503 : 502;
     return sendOpenAiError(res, status, result.reason ?? 'gateway unavailable', 'gateway_error');
   }

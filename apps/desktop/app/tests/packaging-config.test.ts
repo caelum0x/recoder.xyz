@@ -61,6 +61,35 @@ describe("packaging config", () => {
         }
     });
 
+    it("bundles the recodergit + dmux engine dists where the backend resolvers expect them", () => {
+        const entries: Array<{ from: string; to: string }> = config.extraResources;
+        const byTo = new Map(entries.map((e) => [e.to, e.from]));
+        // recodergit-service.ts resolves __dirname(backend/dist/domains/engines)
+        // + '../../../apps/desktop/engines/recodergit/recodergit/dist/...', and
+        // dmux-adapter.ts walks ancestors for apps/desktop/engines/dmux — both
+        // land on <resources>/backend/apps/desktop/engines/... when packaged.
+        const expected: Array<[string, string]> = [
+            ["backend/apps/desktop/engines/recodergit/recodergit/dist", "../engines/recodergit/recodergit/dist"],
+            [
+                "backend/apps/desktop/engines/recodergit/recodergit/package.json",
+                "../engines/recodergit/recodergit/package.json",
+            ],
+            ["backend/apps/desktop/engines/dmux/dist", "../engines/dmux/dist"],
+            ["backend/apps/desktop/engines/dmux/dmux", "../engines/dmux/dmux"],
+            ["backend/apps/desktop/engines/dmux/package.json", "../engines/dmux/package.json"],
+        ];
+        for (const [to, from] of expected) {
+            expect(byTo.get(to), `extraResources entry missing for ${to}`).toBe(from);
+            expect(fs.existsSync(path.resolve(AppRoot, byTo.get(to)!)), `missing engine dist source: ${from}`).toBe(
+                true
+            );
+        }
+        // The dmux launcher is a node-shebang script; it must stay executable in
+        // the checkout so the copied resource keeps its exec bit.
+        const dmuxLauncher = path.resolve(AppRoot, "../engines/dmux/dmux");
+        expect(fs.statSync(dmuxLauncher).mode & 0o111, "dmux launcher must be executable").toBeTruthy();
+    });
+
     it("checked-in extraResources sources exist (build artifacts excluded)", () => {
         // Only assert paths that live in the repo checkout; dist/node_modules
         // and the rust .node addons are build outputs verified at package time.

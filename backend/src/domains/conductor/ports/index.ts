@@ -68,6 +68,7 @@ export type {
   GithubStatusView,
   GithubStatusSource,
   GithubAccountView,
+  GithubRepoView,
 } from './github-status.port.js';
 export type {
   GovernanceGatePort,

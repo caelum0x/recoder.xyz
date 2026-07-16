@@ -1,6 +1,8 @@
 /**
  * Social HTTP edges — the `/api/social` control-plane surface:
  *
+ *   GET    /                              truthful connectors health per channel (read)
+ *   GET    /channels                      configured channels w/ enabled/disabled + reason (read)
  *   GET    /connectors                    list registered connectors (read)
  *   GET    /bindings                      list this owner's chat bindings (read)
  *   POST   /bindings                      bind/allow a chat_ref (mutating)
@@ -29,11 +31,15 @@ import type { ChannelAdapterRegistry } from '../adapters/channel-adapter-registr
 import { processWebhookDelivery, isWebhookChannel } from '../adapters/webhook-ingress.adapter.js';
 import { bindChannelSchema, sendMessageSchema } from '../schema.js';
 import { isChannelId, type ChannelId } from '../types.js';
+import type { SocialConfig } from '../config.js';
+import { buildChannelsView, buildConnectorsView } from './channel-status.js';
 
 /** The verified-webhook handler the composer supplies (normalize → pipeline). */
 export type VerifiedWebhookHandler = (channel: ChannelId, parsed: unknown) => Promise<void>;
 
 export interface SocialRouterDeps {
+  /** The resolved social config slice (per-channel enable + secret refs). */
+  readonly config: SocialConfig;
   readonly repository: SocialRepository;
   readonly secrets: ConnectorSecretsPort;
   readonly channels: ChannelAdapterRegistry;
@@ -59,6 +65,22 @@ export function buildSocialRoutes(deps: SocialRouterDeps): Router {
   const { repository, secrets, channels, middleware } = deps;
 
   // --- reads -----------------------------------------------------------------
+
+  router.get(
+    '/',
+    middleware.authenticate,
+    asyncHandler(async (_req, res) => {
+      sendSuccess(res, await buildConnectorsView(deps.config, channels));
+    }),
+  );
+
+  router.get(
+    '/channels',
+    middleware.authenticate,
+    asyncHandler(async (_req, res) => {
+      sendSuccess(res, { channels: buildChannelsView(deps.config) });
+    }),
+  );
 
   router.get(
     '/connectors',

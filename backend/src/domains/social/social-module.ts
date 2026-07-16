@@ -158,6 +158,7 @@ export function createSocialComposer(deps: SocialComposerDeps): SocialComposite 
 
     routes(): Router {
       return buildSocialRoutes({
+        config: cfg,
         repository: core.repository(),
         secrets,
         channels,

@@ -96,4 +96,12 @@ describe('splitStatements', () => {
     const sql = '-- header\ncreate table a (id int);\ncreate index i on a (id);\n-- trailing';
     expect(splitStatements(sql)).toEqual(['create table a (id int)', 'create index i on a (id)']);
   });
+
+  it('a semicolon INSIDE a comment line never cuts the surrounding statement', () => {
+    // Regression: comments were stripped AFTER the ';' split, so "-- ext; note"
+    // produced a bogus statement and every fresh-DB migration failed.
+    const sql =
+      '-- enable the ext; used by the ledger below\ncreate table a (id int);\ncreate index i on a (id);';
+    expect(splitStatements(sql)).toEqual(['create table a (id int)', 'create index i on a (id)']);
+  });
 });

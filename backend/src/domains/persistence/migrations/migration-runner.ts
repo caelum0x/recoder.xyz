@@ -167,14 +167,16 @@ function sha256(content: string): string {
  * dollar-quoted bodies), so a simple split is correct here.
  */
 export function splitStatements(sql: string): string[] {
+  // Strip full-line `--` comments BEFORE splitting on ';' — a comment that
+  // itself contains a semicolon (e.g. "-- enable ext; used by ledger") would
+  // otherwise cut the surrounding statement in two, failing every FRESH-database
+  // migration with a bogus syntax error (the degrade-safe boot then hides it and
+  // the DB silently stays schemaless).
   return sql
+    .split('\n')
+    .filter((line) => !/^\s*--/.test(line))
+    .join('\n')
     .split(';')
-    .map((chunk) =>
-      chunk
-        .split('\n')
-        .filter((line) => !/^\s*--/.test(line))
-        .join('\n')
-        .trim(),
-    )
+    .map((chunk) => chunk.trim())
     .filter((statement) => statement.length > 0);
 }

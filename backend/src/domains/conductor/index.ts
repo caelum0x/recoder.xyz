@@ -26,7 +26,7 @@ import type { QueryExecutor } from '../persistence/ports/query-executor.port.js'
 import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
 import type { Principal } from '../identity/types.js';
 import type { ConductorConfigOverrides } from './config.js';
-import type { GovernanceGatePort, TerminalStreamPort, GithubStatusPort, GithubStatusView } from './ports/index.js';
+import type { GovernanceGatePort, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView } from './ports/index.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
@@ -175,6 +175,12 @@ export interface ConductorModule {
   substrates(): readonly SubstrateAvailabilityView[];
   /** GitHub connection + detected identity (`GET /github/status`) — token-free. */
   githubStatus(): Promise<GithubStatusView>;
+  /**
+   * The detected account's local-clonable repos (`GET /github/repos`) via the
+   * authenticated `gh` CLI. Degrade-safe: no seam / no gh / signed-out ⇒ a
+   * truthful EMPTY list, never an error.
+   */
+  githubRepos(): Promise<readonly GithubRepoView[]>;
   /** Reconcile findings for operator/policy review. */
   listReconcileFindings(workspaceId?: string): Promise<readonly ReconcileFindingView[]>;
   /** The terminal WS surface (edge registers `terminalBackends()`). */

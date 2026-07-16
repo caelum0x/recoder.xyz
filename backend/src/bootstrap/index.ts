@@ -571,7 +571,16 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   for (const domain of mcpDomains) {
     const tools = domain.tools();
     if (tools.length === 0) continue;
-    const registration = engines.registerModuleTools(domain.name, tools);
+    // Collision-safe bridge: a duplicate serverId is skipped whole-source (first
+    // wins, never clobbered) and duplicate tool names within a source are skipped
+    // + reported — the older registerModuleTools silently overwrote on collision.
+    const registration = engines.registerDomainTools(domain.name, tools);
+    if (registration.collisions.length > 0) {
+      log.warn(
+        { serverId: domain.name, collisions: registration.collisions },
+        'duplicate MCP tool names skipped during host registration (first wins)',
+      );
+    }
     if (!registration.skipped) {
       mcpRegistered.push(`${domain.name}(${registration.registered.length})`);
     }

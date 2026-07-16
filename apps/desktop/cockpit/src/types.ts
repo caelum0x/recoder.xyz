@@ -120,6 +120,17 @@ export interface GithubStatus {
   };
 }
 
+/**
+ * GET /github/repos — one repo from the detected GitHub account
+ * (`gh repo list` on the backend). The list is empty when gh is absent or
+ * signed out — never an error, never fabricated.
+ */
+export interface GithubRepo {
+  name: string;
+  nameWithOwner: string;
+  url: string;
+}
+
 /** GET /substrates — { id, available, reason? } per registered substrate. */
 export interface SubstrateAvailability {
   id: WorkspaceSubstrate;
