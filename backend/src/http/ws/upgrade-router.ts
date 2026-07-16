@@ -149,10 +149,22 @@ export function createUpgradeRouter(deps: UpgradeRouterDeps): UpgradeRouter {
     }
 
     // 3. Auth on upgrade — resolve via the Phase-2 verifier (single credential seam).
+    // Browser WebSocket cannot set headers, so an RFC 6750-style `?access_token=`
+    // query is honored WHEN no Authorization header is present (header wins). The
+    // token never reaches backend logs — only the pathname is logged.
     const requestId = header(req, 'x-request-id') ?? randomUUID();
     let principal;
     try {
-      principal = await deps.verifier.verify(credentialFromRequest(req as unknown as Request));
+      const credential = credentialFromRequest(req as unknown as Request);
+      const queryToken = url.searchParams.get('access_token');
+      if (!credential.authorizationHeader && queryToken) {
+        principal = await deps.verifier.verify({
+          ...credential,
+          authorizationHeader: `Bearer ${queryToken}`,
+        });
+      } else {
+        principal = await deps.verifier.verify(credential);
+      }
     } catch (err) {
       deps.logger.error(
         { err: err instanceof Error ? err.message : String(err), path: pathname, requestId },

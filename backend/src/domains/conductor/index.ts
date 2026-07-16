@@ -119,6 +119,16 @@ export interface ConductorModule {
   steerWorkspace(input: SteerInput, principal: Principal): Promise<ConductorWriteResult<void>>;
   /** RunEvents for a workspace's run — the conversation + lifecycle log. */
   listWorkspaceEvents(workspaceId: string): Promise<RunEvent[]>;
+  /** Captured pane text (the stream client's poll fallback). */
+  workspaceOutput(workspaceId: string, lines?: number): Promise<{ output: string }>;
+  /** Live agent status: alive + exit code + recent output + persisted state. */
+  workspaceStatus(workspaceId: string): Promise<{
+    alive: boolean;
+    exitCode: number | null;
+    recentOutput: string | null;
+    state: Workspace['state'];
+    reason?: string;
+  }>;
   /** Reviewable diff of the worktree against its base ref (running → awaiting_review). */
   workspaceDiff(workspaceId: string): Promise<WorkspaceDiffView>;
   /** Full worktree file list (tracked + untracked), changed subset marked. */

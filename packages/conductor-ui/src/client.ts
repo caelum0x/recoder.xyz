@@ -245,7 +245,10 @@ export class ConductorClient {
 
   #streamUrl(id: string): string {
     const httpUrl = `${this.#baseUrl}${this.#basePath}/workspaces/${encodeURIComponent(id)}/stream`;
-    return httpUrl.replace(/^http/i, 'ws');
+    // Browser WebSocket cannot send headers — the backend honors an RFC
+    // 6750-style access_token query on upgrade (header wins when both present).
+    const token = this.#apiKey ? `?access_token=${encodeURIComponent(this.#apiKey)}` : '';
+    return `${httpUrl.replace(/^http/i, 'ws')}${token}`;
   }
 
   async #request<T>(method: string, path: string, body?: unknown): Promise<T> {

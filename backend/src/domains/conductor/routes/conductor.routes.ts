@@ -124,6 +124,36 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     }),
   );
 
+  // Captured pane text — the stream client's poll fallback (`?lines=`).
+  router.get(
+    '/workspaces/:id/output',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      try {
+        const lines = Number.parseInt(String(req.query.lines ?? ''), 10);
+        sendSuccess(
+          res,
+          await module.workspaceOutput(req.params.id, Number.isFinite(lines) ? lines : undefined),
+        );
+      } catch (err) {
+        sendError(res, toReadError(err, 'output failed'));
+      }
+    }),
+  );
+
+  // Live agent status: alive + exit code + recent output + persisted state.
+  router.get(
+    '/workspaces/:id/status',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      try {
+        sendSuccess(res, await module.workspaceStatus(req.params.id));
+      } catch (err) {
+        sendError(res, toReadError(err, 'status failed'));
+      }
+    }),
+  );
+
   // --- workspace detail: governed writes ---------------------------------------
 
   router.post(
