@@ -49,6 +49,10 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
   // for the folder field only. Fetch failures degrade to [] (hint invisible).
   const [githubRepos, setGithubRepos] = useState<GithubRepo[]>([]);
   const [repoHint, setRepoHint] = useState('');
+  // Multi-agent parallelism (product F3): extra agents to launch the SAME task
+  // with, each in its OWN isolated worktree — the conductor sweet spot. Empty by
+  // default; nothing extra launches unless deliberately ticked.
+  const [alsoRun, setAlsoRun] = useState<string[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,34 +109,58 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
       return;
     }
 
-    const body: CreateWorkspaceBody = {
-      spaceId: spaceId.trim() || 'default',
-      projectId: projectId.trim() || 'default',
-      taskId: genTaskId(),
-      repoPath: repoPath.trim(),
-      runtimeId,
-      createdBy: createdBy.trim() || 'cockpit',
+    // The primary agent plus any deliberately-ticked parallel agents — one
+    // workspace (own worktree, own taskId) per agent, same folder + task.
+    const agents = [runtimeId, ...alsoRun.filter((id) => id !== runtimeId)];
+
+    const bodyFor = (agent: string): CreateWorkspaceBody => {
+      const body: CreateWorkspaceBody = {
+        spaceId: spaceId.trim() || 'default',
+        projectId: projectId.trim() || 'default',
+        taskId: genTaskId(),
+        repoPath: repoPath.trim(),
+        runtimeId: agent,
+        createdBy: createdBy.trim() || 'cockpit',
+      };
+      // Only send a prompt when the operator actually wrote one.
+      if (prompt.trim()) body.prompt = prompt.trim();
+      if (substrate) body.substrate = substrate;
+      if (model.trim()) body.model = model.trim();
+      if (interactive) body.interactive = true;
+      if (baseRef.trim()) body.baseRef = baseRef.trim();
+      return body;
     };
-    // Only send a prompt when the operator actually wrote one.
-    if (prompt.trim()) body.prompt = prompt.trim();
-    if (substrate) body.substrate = substrate;
-    if (model.trim()) body.model = model.trim();
-    if (interactive) body.interactive = true;
-    if (baseRef.trim()) body.baseRef = baseRef.trim();
 
     setSubmitting(true);
     try {
-      await api.createWorkspace(body);
+      // Sequential launches, truthful partial results: every workspace that
+      // started stays started; the first failure names its agent and stops.
+      let started = 0;
+      try {
+        for (const agent of agents) {
+          await api.createWorkspace(bodyFor(agent));
+          started += 1;
+        }
+      } catch (err) {
+        if (started > 0) onCreated();
+        const failed = agents[started];
+        const detail =
+          err instanceof BackendUnreachableError
+            ? `Can't reach the backend: ${err.message}`
+            : err instanceof ApiError
+              ? `(${err.status}) ${err.message}`
+              : err instanceof Error
+                ? err.message
+                : 'launch failed';
+        setError(
+          started > 0
+            ? `Started ${started} of ${agents.length} — ${failed}: ${detail}`
+            : `Couldn't start the workspace — ${failed}: ${detail}`,
+        );
+        return;
+      }
       onCreated();
       onClose();
-    } catch (err) {
-      if (err instanceof BackendUnreachableError) {
-        setError(`Can't reach the backend: ${err.message}`);
-      } else if (err instanceof ApiError) {
-        setError(`Couldn't start the workspace (${err.status}): ${err.message}`);
-      } else {
-        setError(err instanceof Error ? err.message : "couldn't start the workspace");
-      }
     } finally {
       setSubmitting(false);
     }
@@ -238,6 +266,36 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
             />
           </label>
         </div>
+
+        {/* Multi-agent parallelism (product F3): launch the SAME task with other
+            installed agents, each in its own isolated worktree — compare on the
+            board, review each on its own schedule. Only OTHER available CLIs are
+            offered; nothing is preticked. Hidden when there is no other agent. */}
+        {availableRuntimes.filter((r) => r.runtimeId !== runtimeId).length > 0 && (
+          <div class="field">
+            <span>Also run in parallel (optional)</span>
+            <div class="field-check-row">
+              {availableRuntimes
+                .filter((r) => r.runtimeId !== runtimeId)
+                .map((r) => (
+                  <label key={r.runtimeId} class="field-check" title={`Also run this task with ${r.runtimeId} in its own worktree`}>
+                    <input
+                      type="checkbox"
+                      checked={alsoRun.includes(r.runtimeId)}
+                      onChange={(e) =>
+                        setAlsoRun((prev) =>
+                          (e.target as HTMLInputElement).checked
+                            ? [...prev, r.runtimeId]
+                            : prev.filter((id) => id !== r.runtimeId),
+                        )
+                      }
+                    />
+                    <span>{r.runtimeId}</span>
+                  </label>
+                ))}
+            </div>
+          </div>
+        )}
 
         <label class="field-check" title="Run the agent's real interactive TUI (Claude Code / Codex / …) in the terminal, instead of a one-shot headless run">
           <input

@@ -63,6 +63,8 @@ interface StubState {
 const RUNTIMES: RuntimeAvailability[] = [
   { runtimeId: 'claude', bin: 'claude', available: true, path: '/usr/local/bin/claude' },
   { runtimeId: 'codex', bin: 'codex', available: false },
+  // A second AVAILABLE runtime so multi-agent parallel launch (product F3) is testable.
+  { runtimeId: 'opencode', bin: 'opencode', available: true, path: '/usr/local/bin/opencode' },
 ];
 
 const SUBSTRATES: SubstrateAvailability[] = [
