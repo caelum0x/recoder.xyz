@@ -126,12 +126,16 @@ RunEvents, `?access_token=` upgrade auth for browser WS) + output/status poll fa
 auto-populated from the detected GitHub account (`gh repo list` → New Workspace folder hint).
 **← next: F3.**
 
-**Phase F3 — Multi-agent parallelism UX.** Run several agents/workspaces at once (conductor's
-sweet spot: 3–5), compare, review each on its own schedule.
+**Phase F3 — Multi-agent parallelism UX.** ✅ **DONE** (`4e2c8d8c7`). "Also run in parallel" in the
+New Workspace form: one workspace per ticked agent — same folder + task, own worktree/taskId each,
+truthful partial results — compare on the board, review each on its own schedule.
 
-**Phase F4 — Invisible-engine feedback (subtle).** Optional, tasteful signals that the agent is
-*smarter* — e.g. "recalled context from a past run" as a quiet inline note, never an engine name.
-Only if it stays clean.
+**Phase F4 — Invisible-engine feedback (subtle).** ✅ **DONE** (`4e2c8d8c7`). One quiet count-only
+run-header note ("recalled N things from past runs") from the backend's truthful
+`metadata.knowledgeSources` provenance — never an engine name; nothing shown when nothing recalled.
+
+**All five frontend phases (F0–F4) are done.** Remaining product polish rides on real usage
+feedback; the backend follow-ups live in [RECODER-BACKEND/BUILD-STATUS.md](./RECODER-BACKEND/BUILD-STATUS.md).
 
 Verification each phase: `cd apps/desktop/cockpit && pnpm build && pnpm exec vitest run`; the wave
 shell hosts it; consumes the backend workspace/auth edges only.
