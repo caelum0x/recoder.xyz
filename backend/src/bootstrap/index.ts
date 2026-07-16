@@ -665,6 +665,9 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // Interop-wire A2A WIRE: agent-card + JSON-RPC + signed ingress (mounts alongside
     // the interop module at /api/a2a; both self-guard, no second auth layer).
     routerProvider('interop-wire-a2a', '/api/a2a', interopWire.wireRoutes()),
+    // RFC 8615: peers probe the ORIGIN ROOT for /.well-known/agent.json — the
+    // same local card /api/a2a/agent-card serves, at the standard location.
+    routerProvider('interop-wire-wellknown', '/.well-known', interopWire.wellKnownRoutes()),
   ];
 
   const edge = createEdgeModule(
