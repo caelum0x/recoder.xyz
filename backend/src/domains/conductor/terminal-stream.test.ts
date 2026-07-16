@@ -81,11 +81,47 @@ describe('SyncHub', () => {
 });
 
 describe('TerminalStreamService', () => {
-  it('serves the /terminal and /sync backends, both session-scoped', () => {
+  it('serves the /terminal, /sync, and workspace-stream backends, all session-scoped', () => {
     const service = new TerminalStreamService({ logger: makeLogger() });
     const backends = service.terminalBackends();
-    expect(backends.map((b) => b.path).sort()).toEqual(['/sync', '/terminal']);
+    expect(backends.map((b) => b.path).sort()).toEqual([
+      '/api/conductor/workspaces',
+      '/sync',
+      '/terminal',
+    ]);
     for (const backend of backends) expect(backend.authScope).toBe('session');
+  });
+
+  it('streams FULL RunEvents to a /workspaces/:id/stream subscriber', () => {
+    const service = new TerminalStreamService({ logger: makeLogger() });
+    const stream = service
+      .terminalBackends()
+      .find((b) => b.path === '/api/conductor/workspaces')!;
+    const socket = new FakeSocket();
+    stream.onConnection(socket as never, {
+      ...ctx('ws_1'),
+      path: '/api/conductor/workspaces/ws_1/stream',
+    });
+
+    const event = { eventId: 'e1', type: 'log', taskId: 't1', message: 'tick', createdAt: 'now' };
+    service.publishRunEvent('ws_1', event);
+    service.publishRunEvent('ws_other', { ...event, eventId: 'e2' });
+
+    expect(socket.sent).toHaveLength(1);
+    expect(JSON.parse(socket.sent[0])).toEqual(event);
+  });
+
+  it('closes a stream upgrade whose path is not /workspaces/:id/stream', () => {
+    const service = new TerminalStreamService({ logger: makeLogger() });
+    const stream = service
+      .terminalBackends()
+      .find((b) => b.path === '/api/conductor/workspaces')!;
+    const socket = new FakeSocket();
+    stream.onConnection(socket as never, {
+      ...ctx('ws_1'),
+      path: '/api/conductor/workspaces/ws_1/diff',
+    });
+    expect(socket.closed?.code).toBe(1008);
   });
 
   it('closes a /sync socket that omitted workspaceId (truthful, not a silent no-op)', () => {

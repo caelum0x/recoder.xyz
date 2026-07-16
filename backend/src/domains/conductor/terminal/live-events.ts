@@ -45,9 +45,14 @@ export class SyncHub {
 
   /** Fan an event out to every OPEN socket subscribed to its workspace. */
   publish(event: WorkspaceSyncEvent): void {
-    const set = this.subscribers.get(event.workspaceId);
+    this.publishRaw(event.workspaceId, event);
+  }
+
+  /** Fan an arbitrary JSON payload out to a workspace's subscribers. */
+  publishRaw(workspaceId: string, payload: unknown): void {
+    const set = this.subscribers.get(workspaceId);
     if (!set || set.size === 0) return;
-    const frame = JSON.stringify(event);
+    const frame = JSON.stringify(payload);
     for (const socket of set) {
       if (socket.readyState === socket.OPEN) socket.send(frame);
     }
@@ -66,6 +71,35 @@ export function readWorkspaceId(ctx: WsConnectionCtx): string | undefined {
   const raw = ctx.query.workspaceId;
   const value = Array.isArray(raw) ? raw[0] : raw;
   return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
+ * Build the run-screen live-stream WsBackend the shared `@recoder/conductor-ui`
+ * client connects to: `/api/conductor/workspaces/:id/stream`. Registered under
+ * the `/api/conductor/workspaces` PREFIX (the upgrade router dispatches by
+ * longest prefix); only the exact `/:id/stream` suffix is accepted — any other
+ * subpath upgrade is closed truthfully. Frames are FULL RunEvents (bare JSON),
+ * exactly what the client's `parseRunEvent` consumes — unlike `/sync`, which
+ * carries the narrowed WorkspaceSyncEvent shape.
+ */
+export function createWorkspaceStreamBackend(runHub: SyncHub): WsBackend {
+  return {
+    path: '/api/conductor/workspaces',
+    authScope: 'session',
+    onConnection(socket: WebSocket, ctx: WsConnectionCtx): void {
+      const match = /^\/api\/conductor\/workspaces\/([^/]+)\/stream$/.exec(ctx.path);
+      const workspaceId = match ? decodeURIComponent(match[1]) : undefined;
+      if (!workspaceId) {
+        ctx.logger.warn({ path: ctx.path, requestId: ctx.requestId }, 'stream upgrade path not a workspace stream');
+        socket.close(WS_POLICY_VIOLATION, 'expected /workspaces/:id/stream');
+        return;
+      }
+      const unsubscribe = runHub.subscribe(workspaceId, socket);
+      ctx.logger.info({ workspaceId, requestId: ctx.requestId }, 'workspace stream client attached');
+      socket.on('close', unsubscribe);
+      socket.on('error', unsubscribe);
+    },
+  };
 }
 
 /** Build the `/sync` WsBackend over the shared hub. */

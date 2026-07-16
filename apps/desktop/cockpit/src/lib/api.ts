@@ -286,20 +286,26 @@ function retrievalRequest<T>(method: string, path: string, body?: unknown): Prom
  * config.ts) is always honored — there is no stale captured token.
  */
 function conductorClient(): ConductorClient {
-  const { backendUrl } = readConfig();
+  const { backendUrl, token } = readConfig();
   const baseFetch: typeof fetch =
     typeof fetch !== 'undefined'
       ? fetch
       : ((globalThis as { fetch?: typeof fetch }).fetch as typeof fetch);
   const authedFetch: typeof fetch = (input, init) => {
-    const { token } = readConfig();
+    const { token: live } = readConfig();
     const headers = new Headers(init?.headers ?? {});
-    if (token && !headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${token}`);
+    if (live && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${live}`);
     }
     return baseFetch(input, { ...init, headers });
   };
-  return new ConductorClient({ baseUrl: backendUrl, fetch: authedFetch });
+  return new ConductorClient({
+    baseUrl: backendUrl,
+    fetch: authedFetch,
+    // The WS stream cannot send headers — the client appends the token as an
+    // RFC 6750 access_token query, which the backend honors on upgrade.
+    ...(token ? { apiKey: token } : {}),
+  });
 }
 
 export const api = {

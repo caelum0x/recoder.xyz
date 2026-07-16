@@ -671,11 +671,16 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       // guard — so /metrics reflects real traffic. Degrade-safe: a telemetry fault
       // never blocks the response path.
       globalMiddleware: [observability.telemetry()],
-      // The conductor `/terminal` control-mode stream registers with the edge's
-      // single `server.on('upgrade')` dispatcher (conflict #6 — the edge owns it).
-      // `/sync` is intentionally DROPPED (collaboration cut): only `/terminal`
-      // (authScope 'session') is registered here.
-      wsBackends: conductor.terminal().terminalBackends().filter((b) => b.path === '/terminal'),
+      // The conductor WS surfaces register with the edge's single
+      // `server.on('upgrade')` dispatcher (conflict #6 — the edge owns it):
+      // `/terminal` (control-mode output + steer) and the run-screen live stream
+      // `/api/conductor/workspaces/:id/stream` (full RunEvents — what the shared
+      // conductor-ui client connects to). The bare `/sync` backend is intentionally
+      // DROPPED (collaboration cut).
+      wsBackends: conductor
+        .terminal()
+        .terminalBackends()
+        .filter((b) => b.path === '/terminal' || b.path === '/api/conductor/workspaces'),
     },
     // Every mount keeps its own guard; the edge adds only the GLOBAL chain.
     { routeTable: { defaultGuard: () => PUBLIC_MOUNT } },

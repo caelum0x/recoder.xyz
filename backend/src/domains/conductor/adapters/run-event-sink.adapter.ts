@@ -21,12 +21,18 @@ export interface RunEventSinkDeps {
   readonly repository: WorkspaceRepositoryPort;
   /** The live `/sync` publisher (from the terminal surface). */
   readonly publish: (event: WorkspaceSyncEvent) => void;
+  /**
+   * OPTIONAL full-RunEvent publisher for `/workspaces/:id/stream` (the
+   * conductor-ui client consumes bare RunEvents there). Absent ⇒ only the
+   * narrowed `/sync` fan-out runs.
+   */
+  readonly publishRun?: (workspaceId: string, event: RunEvent) => void;
   readonly logger: Logger;
 }
 
 /** Build the durable+live RunEvent sink. */
 export function createRunEventSink(deps: RunEventSinkDeps): RunEventSinkPort {
-  const { repository, publish, logger } = deps;
+  const { repository, publish, publishRun, logger } = deps;
   return {
     async append(event: RunEvent): Promise<void> {
       try {
@@ -40,6 +46,12 @@ export function createRunEventSink(deps: RunEventSinkDeps): RunEventSinkPort {
         publish(toSyncEvent(workspaceId, event));
       } catch (err) {
         logger.error({ err, eventId: event.eventId }, 'conductor run-event live publish failed');
+      }
+      if (!publishRun) return;
+      try {
+        publishRun(workspaceId, event);
+      } catch (err) {
+        logger.error({ err, eventId: event.eventId }, 'conductor run-event stream publish failed');
       }
     },
   };

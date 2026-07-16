@@ -166,6 +166,7 @@ export class ConductorComposer implements ConductorModule {
     const localSink = createRunEventSink({
       repository: this.repository,
       publish: (event) => this.terminalService.publishSync(event),
+      publishRun: (workspaceId, event) => this.terminalService.publishRunEvent(workspaceId, event),
       logger: this.log,
     });
     const fannedSink = composeRunEventSink(localSink, deps.runEventSink, this.log);
@@ -420,6 +421,57 @@ export class ConductorComposer implements ConductorModule {
 
   async listWorkspaceEvents(workspaceId: string): Promise<RunEvent[]> {
     return this.engine.listWorkspaceEvents(workspaceId);
+  }
+
+  async workspaceOutput(workspaceId: string, lines?: number): Promise<{ output: string }> {
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
+    const substrate = this.registry.getFull(workspace.substrate);
+    const captured = await substrate.capture(
+      { ref: workspaceId, sessionName: workspace.sessionName, worktreePath: workspace.worktreePath },
+      lines,
+    );
+    // A gone handle captures null — an empty output is the truthful read.
+    return { output: captured ?? '' };
+  }
+
+  async workspaceStatus(workspaceId: string): Promise<{
+    alive: boolean;
+    exitCode: number | null;
+    recentOutput: string | null;
+    state: Workspace['state'];
+    reason?: string;
+  }> {
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
+    if (!workspace.sessionName && !workspace.worktreePath) {
+      return {
+        alive: false,
+        exitCode: null,
+        recentOutput: null,
+        state: workspace.state,
+        reason: 'no live substrate handle (never launched or already torn down)',
+      };
+    }
+    const substrate = this.registry.getFull(workspace.substrate);
+    const handle = {
+      ref: workspaceId,
+      sessionName: workspace.sessionName,
+      worktreePath: workspace.worktreePath,
+    };
+    const [alive, exitCode, recentOutput] = await Promise.all([
+      substrate.alive(handle),
+      substrate.exitCode ? substrate.exitCode(handle) : Promise.resolve(undefined),
+      substrate.capture(handle, 50),
+    ]);
+    return {
+      alive,
+      // `undefined` (still running / unknown) is not JSON-representable — the
+      // wire contract carries null for "no exit code yet"; NEVER a fabricated 0.
+      exitCode: exitCode ?? null,
+      recentOutput,
+      state: workspace.state,
+    };
   }
 
   async workspaceDiff(workspaceId: string): Promise<WorkspaceDiffView> {

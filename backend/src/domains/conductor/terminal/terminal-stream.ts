@@ -20,7 +20,12 @@ import type { WsBackend, WsConnectionCtx } from '../../edge/ports/ws-backend.por
 import type { Logger } from '../../../shared/logger.js';
 import type { TerminalStreamPort, WorkspaceSyncEvent } from '../ports/index.js';
 import type { SteerInput } from '../types.js';
-import { SyncHub, createSyncBackend, readWorkspaceId } from './live-events.js';
+import {
+  SyncHub,
+  createSyncBackend,
+  createWorkspaceStreamBackend,
+  readWorkspaceId,
+} from './live-events.js';
 
 /** WS close code for a client that omitted the required `workspaceId`. */
 const WS_POLICY_VIOLATION = 1008;
@@ -37,6 +42,8 @@ export interface TerminalStreamDeps {
 
 export class TerminalStreamService implements TerminalStreamPort {
   private readonly hub = new SyncHub();
+  /** Full-RunEvent fan-out for `/workspaces/:id/stream` (the conductor-ui client). */
+  private readonly streamHub = new SyncHub();
   private readonly logger: Logger;
   private readonly steerFn: TerminalStreamDeps['steer'];
 
@@ -46,16 +53,25 @@ export class TerminalStreamService implements TerminalStreamPort {
   }
 
   terminalBackends(): readonly WsBackend[] {
-    return [this.buildTerminalBackend(), createSyncBackend(this.hub)];
+    return [
+      this.buildTerminalBackend(),
+      createSyncBackend(this.hub),
+      createWorkspaceStreamBackend(this.streamHub),
+    ];
   }
 
   publishSync(event: WorkspaceSyncEvent): void {
     this.hub.publish(event);
   }
 
-  /** Live subscriber count across both paths (truthful terminal health). */
+  /** Publish a FULL RunEvent to the workspace's `/stream` subscribers. */
+  publishRunEvent(workspaceId: string, event: unknown): void {
+    this.streamHub.publishRaw(workspaceId, event);
+  }
+
+  /** Live subscriber count across all paths (truthful terminal health). */
   liveConnections(): number {
-    return this.hub.subscriberCount();
+    return this.hub.subscriberCount() + this.streamHub.subscriberCount();
   }
 
   /** The `/terminal` control-mode backend: live output + inbound steer keys. */
