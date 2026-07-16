@@ -8,7 +8,7 @@
 > unified identity, full-website scope), which carried into the new plan. Read
 > BUILD-STATUS first.
 >
-> **Phase-A progress (2026-07-16, session `5e153f27d`+`cb5b54aba`):** Phase 0 (server boots) long
+> **Phase-A progress (2026-07-16, session `71c380f29`+`811fe38a7`):** Phase 0 (server boots) long
 > done; the BACKEND half of Phase A is fully realized (in-process Better Auth, one config in
 > packages/auth consumed only by the backend, /internal/identity/* seams, zero APP_API_URL
 > delegation — verified by code scout). WEBSITE half started: the full site is RECONCILED back
@@ -55,7 +55,7 @@ from "scattered but present" into "the single thing desktop and website both sta
 
 | Area | Truth today | Key drift / gap |
 |---|---|---|
-| **Backend** | ONE Node/Express app `backend/` (`recoder-backend`, entry `backend/src/server.ts`). No Python backend (the `db.py`/SQLAlchemy memory is stale; only `backend/engines/py/mem0` has a `db.py`). | `server.ts` imports ~47 modules the owner deliberately deleted in `a2203e127` — **it does not boot today**. Prune those imports (do NOT restore the files). |
+| **Backend** | ONE Node/Express app `backend/` (`recoder-backend`, entry `backend/src/server.ts`). No Python backend (the `db.py`/SQLAlchemy memory is stale; only `backend/engines/py/mem0` has a `db.py`). | `server.ts` imports ~47 modules the owner deliberately deleted in `98b5ff910` — **it does not boot today**. Prune those imports (do NOT restore the files). |
 | **Auth** | Source of truth = the Next.js app on `recoder_main` via Better Auth `/api/auth/[...all]`. Backend **delegates** — verifies sessions over HTTP to `APP_API_URL/api/auth/verify-token` (`server.ts:592-656`). | **Two** Better Auth configs (`packages/auth/src/index.ts` `createAuth` on `authDatabase` vs `app/lib/auth-config.ts` `betterAuth` on the main Prisma client) hand-synced. **Two** identity schemas in one DB (`user`/`session` vs legacy `users`/`sessions`; drift bridge in `packages/auth/src/session.ts:43-113`). `sk_` platform keys live in a **filesystem JSON store**, not a DB. |
 | **Desktop auth** | Same `backend` binary, embedded. Local access via a minted `sk_` key (`conductor/mint-conductor-key.ts`) + Wave `X-AuthKey`; cloud identity via device-flow to `recoder.xyz`. | Cloud session verification couples the embedded backend to `recoder.xyz` being reachable. |
 | **Social** | The embedded backend **already hosts connectors** (`startConnectors()` at `server.ts:14445`, `/api/connectors` + `/api/connectors/webhook/:channel`). 8 channels via `@recoder/connectors` (at `apps/desktop/engines/openclaw`). | `apps/social` is a **redundant standalone deploy** (a strict subset — no conductor dispatch, no webhook, no interop gate). Its `channels.ts` duplicates `backend/src/connectors/channel-adapters.ts`. Discord WS source unwired; LINE/Slack webhooks need a public URL. |
@@ -66,7 +66,7 @@ from "scattered but present" into "the single thing desktop and website both sta
 ## Phase 0 — Unblock the backend (prerequisite, small)
 
 **Nothing below matters until `backend/src/server.ts` boots.** It imports ~47 deleted modules
-(owner-driven deletion `a2203e127`). Fix = **prune** the dead imports + the code paths that used
+(owner-driven deletion `98b5ff910`). Fix = **prune** the dead imports + the code paths that used
 them, trimming `server.ts` to the kept surface (9 folders + a2a). This is a scoping decision only
 the owner can anchor — which capabilities stay vs go. See
 [[project_backend_server_unbootable]] memory. Verification: `tsx src/server.ts` reaches health-200

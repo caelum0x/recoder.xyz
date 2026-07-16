@@ -104,12 +104,12 @@ The frontend consumes ONLY the workspace/run/auth edges. It never renders an eng
 
 ## 5. Build plan (frontend, phased)
 
-**Phase F0 — Slim to the workspace UX.** ✅ **DONE** (`8dfb7d0da`). Strip the panel registry/nav
+**Phase F0 — Slim to the workspace UX.** ✅ **DONE** (`ff9c16785`). Strip the panel registry/nav
 to `board` + the workspace detail drill-in; remove the 13 engine/infra tabs from the nav (keep
 component files on disk). Logo-only navbar, single health dot. Approvals shown inline in the
 workspace detail. *Subtraction, not addition.* Verify cockpit build + tests.
 
-**Phase F1 — Zero-config onboarding.** ✅ **DONE** (`cf3dd6cb4`). Desktop first-run: open
+**Phase F1 — Zero-config onboarding.** ✅ **DONE** (`492c07c27`). Desktop first-run: open
 recoder.xyz sign-in (device flow) → capture session; auto-detect installed agent CLIs (probe PATH +
 their auth) and GitHub identity (`gh`/git) → preselect; land on the board. No wizard.
 *Shipped as:* backend `GET /api/conductor/{runtimes,github/status,health}` (PATH-probed CLIs +
@@ -117,7 +117,7 @@ token-free gh/git identity); cockpit first-run SignIn gate + agent preselect + "
 chip + keyed-envelope client; electron main `emain-device-auth` (RFC 8628 vs `/api/auth/cli/*`,
 safeStorage session, identity-only bridge over origin-gated IPC). **← next: F2.**
 
-**Phase F2 — Workspace detail polish.** ✅ **DONE** (`4997ea121` + `05430775e` + `37f49d167`).
+**Phase F2 — Workspace detail polish.** ✅ **DONE** (`6bcca0579` + `689239ee8` + `cf4c26b42`).
 The run screen's full API — `GET workspaces/:id/{events,diff,tree,dev-command,output,status}` +
 governed `POST {message,pr,merge,archive,preview-url}` (chat = continueRun in the same worktree;
 merge = gh or REAL local-git fallback; every write behind the governance gate) — ported from the
@@ -126,11 +126,11 @@ RunEvents, `?access_token=` upgrade auth for browser WS) + output/status poll fa
 auto-populated from the detected GitHub account (`gh repo list` → New Workspace folder hint).
 **← next: F3.**
 
-**Phase F3 — Multi-agent parallelism UX.** ✅ **DONE** (`c74f35372`). "Also run in parallel" in the
+**Phase F3 — Multi-agent parallelism UX.** ✅ **DONE** (`0cfefd056`). "Also run in parallel" in the
 New Workspace form: one workspace per ticked agent — same folder + task, own worktree/taskId each,
 truthful partial results — compare on the board, review each on its own schedule.
 
-**Phase F4 — Invisible-engine feedback (subtle).** ✅ **DONE** (`c74f35372`). One quiet count-only
+**Phase F4 — Invisible-engine feedback (subtle).** ✅ **DONE** (`0cfefd056`). One quiet count-only
 run-header note ("recalled N things from past runs") from the backend's truthful
 `metadata.knowledgeSources` provenance — never an engine name; nothing shown when nothing recalled.
 
