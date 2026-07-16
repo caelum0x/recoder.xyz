@@ -7,6 +7,18 @@
 > This file is kept for the locked Phase-A auth decisions (backend-owned Better Auth,
 > unified identity, full-website scope), which carried into the new plan. Read
 > BUILD-STATUS first.
+>
+> **Phase-A progress (2026-07-16, session `5e1b6f5dd`+`90e61787e`):** Phase 0 (server boots) long
+> done; the BACKEND half of Phase A is fully realized (in-process Better Auth, one config in
+> packages/auth consumed only by the backend, /internal/identity/* seams, zero APP_API_URL
+> delegation — verified by code scout). WEBSITE half started: the full site is RECONCILED back
+> into main `app/` (642 files from wave5/a2a-docs, main's newer bug-fix files kept, cruft
+> excluded) and `/api/auth/[...all]` now PROXIES the backend (one identity authority for all
+> auth flows + cookie issuance). Remaining Phase-A slices: unify the 57 lib/auth-config
+> server-side session READS onto the backend seam; migrate/link the plural `users` schema
+> (production data — owner call); Next 15.4.11→15.5.x security bump (needs install+build);
+> Dockerfile.production restore decision; stale root ecosystem.config.js still lists removed
+> pm/agency/agents surfaces.
 
 > **Where we are.** The shell fusion is done: Wave is now `apps/desktop` (Electron+React `app/`,
 > Go `server/`, Preact `cockpit/`), engines live under `backend/engines/{py,rust}` +
