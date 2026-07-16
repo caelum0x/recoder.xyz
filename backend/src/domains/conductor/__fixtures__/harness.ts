@@ -11,6 +11,7 @@
  */
 import type {
   ConductorSubstrate,
+  ContinueRunInput,
   SubstrateAvailability,
   SubstrateCapabilities,
   SubstrateDiff,
@@ -252,6 +253,29 @@ export class FakeSubstrate implements ConductorSubstrate {
     if (!run) return;
     run.alive = false;
     if (options?.removeIsolation) run.removed = true;
+  }
+
+  /** In-place relaunch (continue/chat): a fresh run in the SAME worktree. */
+  async continueRun(handle: SubstrateHandle, input: ContinueRunInput): Promise<SubstrateHandle> {
+    const run = this.#runs.get(handle.ref);
+    if (run) {
+      run.alive = true;
+      run.command = input.command ?? run.command;
+      run.output += `$ ${input.command ?? '(prompt-driven)'}\n`;
+    } else {
+      this.#runs.set(handle.ref, {
+        command: input.command ?? '',
+        output: `$ ${input.command ?? ''}\n`,
+        alive: true,
+        exitCode: null,
+        removed: false,
+      });
+    }
+    return {
+      ref: handle.ref,
+      worktreePath: input.worktreePath,
+      sessionName: handle.sessionName ?? handle.ref,
+    };
   }
 }
 

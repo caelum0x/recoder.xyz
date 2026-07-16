@@ -46,4 +46,31 @@ export interface ConductorSubstrate {
   diff(handle: SubstrateHandle, baseRef: string): Promise<SubstrateDiff>;
   /** Stop the agent and (optionally) remove its isolation. */
   teardown(handle: SubstrateHandle, options?: { removeIsolation?: boolean }): Promise<void>;
+  /**
+   * CONTINUE / CHAT: start ANOTHER agent run in the SAME isolation (the prior
+   * run's worktree, with its accumulated changes intact). This is how a user
+   * message keeps directing the agent — each message is a new run over the same
+   * work. Optional: substrates without an in-place relaunch simply omit it and
+   * callers surface a truthful "cannot continue" instead of re-provisioning.
+   */
+  continueRun?(handle: SubstrateHandle, input: ContinueRunInput): Promise<SubstrateHandle>;
+}
+
+/**
+ * Input for {@link ConductorSubstrate.continueRun}: the new instruction + the
+ * existing worktree to run it in. `command` drives shell substrates
+ * (tmux_worktree); `prompt`/`runtimeId` drive in-process substrates directly.
+ */
+export interface ContinueRunInput {
+  workspaceId: string;
+  /** The existing worktree to run in (the prior run's worktree). */
+  worktreePath: string;
+  /** Shell command to run (tmux_worktree). */
+  command?: string;
+  /** Rendered agent prompt (in_process substrates). */
+  prompt?: string;
+  /** Runtime the prompt targets (in_process substrates). */
+  runtimeId?: string;
+  /** Relaunch env (forwarded like launch()). */
+  env?: Record<string, string>;
 }

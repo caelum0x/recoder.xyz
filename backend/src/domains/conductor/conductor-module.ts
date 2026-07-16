@@ -25,7 +25,7 @@ import {
   type ReconcileReport,
   type WorkspaceEngineDeps,
 } from '@recoder/substrate';
-import type { Workspace } from '@recoder/agent-os';
+import type { RunEvent, Workspace, WorkspaceSubstrate } from '@recoder/agent-os';
 import type { Logger } from '../../shared/logger.js';
 import type { ComponentHealth } from '../../shared/health-types.js';
 import type { McpToolRegistration } from '../../shared/module-base.js';
@@ -64,6 +64,31 @@ import {
   guardConductorWrite,
   recordConductorAudit,
 } from './audit/conductor-audit.js';
+import {
+  archiveWorkspace as archiveWorkspaceOp,
+  workspaceDiff as workspaceDiffOp,
+  workspaceTree as workspaceTreeOp,
+  type ReviewOpsDeps,
+  type WorkspaceDiffView,
+  type WorkspaceTreeView,
+} from './review/workspace-review.ops.js';
+import {
+  createWorkspacePr as createWorkspacePrOp,
+  mergeWorkspace as mergeWorkspaceOp,
+  type CreatePrInput,
+  type CreatePrResultView,
+  type MergeInput,
+  type MergeResultView,
+  type PublishOpsDeps,
+} from './review/workspace-publish.ops.js';
+import {
+  continueWorkspace as continueWorkspaceOp,
+  type ContinueOpsDeps,
+  type ContinueWorkspaceInput,
+  type ContinueWorkspaceResult,
+} from './review/workspace-continue.ops.js';
+import { normalizeLocalPreviewUrl } from './review/preview-url-guard.js';
+import { detectDevCommand, type DevCommandView } from './adapters/dev-command.adapter.js';
 
 /** The create request the routes/callers build (createdBy is stamped from the principal). */
 export type CreateConductorWorkspaceInput = Omit<CreateWorkspaceInput, 'createdBy'>;
@@ -377,6 +402,182 @@ export class ConductorComposer implements ConductorModule {
   async githubStatus(): Promise<GithubStatusView> {
     if (!this.github) return { connected: false, source: null };
     return this.github.status();
+  }
+
+  // --- workspace detail (the run screen): reads --------------------------------
+
+  /** The narrow deps slice the ported review/publish/continue ops run over. */
+  private reviewDeps(): ReviewOpsDeps {
+    return {
+      getWorkspace: (id) => this.engine.getWorkspace(id),
+      advanceWorkspace: (id, to, patch, metadata) =>
+        this.engine.advanceWorkspace(id, to, patch, metadata),
+      getSubstrate: (id: WorkspaceSubstrate) => this.registry.getFull(id),
+      logger: this.log,
+      ...(this.engineDeps.lock ? { lock: this.engineDeps.lock } : {}),
+    };
+  }
+
+  async listWorkspaceEvents(workspaceId: string): Promise<RunEvent[]> {
+    return this.engine.listWorkspaceEvents(workspaceId);
+  }
+
+  async workspaceDiff(workspaceId: string): Promise<WorkspaceDiffView> {
+    return workspaceDiffOp(this.reviewDeps(), workspaceId);
+  }
+
+  async workspaceTree(workspaceId: string): Promise<WorkspaceTreeView> {
+    return workspaceTreeOp(this.reviewDeps(), workspaceId);
+  }
+
+  async workspaceDevCommand(workspaceId: string): Promise<DevCommandView | null> {
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    if (!workspace?.worktreePath) return null;
+    return detectDevCommand(workspace.worktreePath);
+  }
+
+  // --- workspace detail: governed writes ---------------------------------------
+
+  async setPreviewUrl(
+    workspaceId: string,
+    url: unknown,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<Workspace>> {
+    const action = 'workspace.preview_url';
+    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
+      target: { environment: 'conductor' },
+      metadata: { workspaceId },
+    });
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    const normalized = normalizeLocalPreviewUrl(url);
+    if (!normalized) {
+      return { ok: false, verdict, reason: 'a http(s) localhost/loopback url is required' };
+    }
+    try {
+      const workspace = await this.engine.getWorkspace(workspaceId);
+      if (!workspace) return { ok: false, verdict, reason: `workspace not found: ${workspaceId}` };
+      // Same-state advance (no illegal transition) — safe to call repeatedly as
+      // the run restarts on a new port.
+      const updated = await this.engine.advanceWorkspace(workspaceId, workspace.state, undefined, {
+        previewUrl: normalized,
+      });
+      await recordConductorAudit(
+        this.gate,
+        conductorAuditEntry(action, principal, verdict, { workspaceId }),
+      );
+      return { ok: true, verdict, value: updated };
+    } catch (err) {
+      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'preview-url update failed' };
+    }
+  }
+
+  async archiveWorkspace(
+    workspaceId: string,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<Workspace>> {
+    const action = 'workspace.archive';
+    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
+      target: { environment: 'conductor' },
+      metadata: { workspaceId },
+    });
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    try {
+      const archived = await archiveWorkspaceOp(this.reviewDeps(), workspaceId);
+      await recordConductorAudit(
+        this.gate,
+        conductorAuditEntry(action, principal, verdict, { workspaceId }),
+      );
+      return { ok: true, verdict, value: archived };
+    } catch (err) {
+      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'archive failed' };
+    }
+  }
+
+  async createWorkspacePr(
+    workspaceId: string,
+    input: CreatePrInput,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<CreatePrResultView>> {
+    const action = 'workspace.pr';
+    // Production rule: opening a PR pushes the branch (customer-visible delivery)
+    // — the governance gate is THE approval seam; a deny never reaches git/gh.
+    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
+      target: { environment: 'conductor' },
+      metadata: { workspaceId, base: input.base },
+    });
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    try {
+      const deps: PublishOpsDeps = this.reviewDeps();
+      const result = await createWorkspacePrOp(deps, workspaceId, input);
+      await recordConductorAudit(
+        this.gate,
+        conductorAuditEntry(action, principal, verdict, { workspaceId, url: result.url }),
+      );
+      return { ok: true, verdict, value: result };
+    } catch (err) {
+      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'pr failed' };
+    }
+  }
+
+  async mergeWorkspace(
+    workspaceId: string,
+    input: MergeInput,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<MergeResultView>> {
+    const action = 'workspace.merge';
+    // A merge is THE customer-visible delivery — gate before any git/gh runs.
+    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
+      target: { environment: 'conductor' },
+      metadata: { workspaceId, strategy: input.strategy },
+    });
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    try {
+      const deps: PublishOpsDeps = this.reviewDeps();
+      const result = await mergeWorkspaceOp(deps, workspaceId, input);
+      await recordConductorAudit(
+        this.gate,
+        conductorAuditEntry(action, principal, verdict, { workspaceId, merged: result.merged }),
+      );
+      return { ok: true, verdict, value: result };
+    } catch (err) {
+      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'merge failed' };
+    }
+  }
+
+  async sendWorkspaceMessage(
+    workspaceId: string,
+    input: ContinueWorkspaceInput,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<ContinueWorkspaceResult>> {
+    const action = 'workspace.message';
+    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
+      target: { environment: 'conductor' },
+      metadata: { workspaceId },
+    });
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    try {
+      const deps: ContinueOpsDeps = {
+        getWorkspace: (id) => this.engine.getWorkspace(id),
+        advanceWorkspace: (id, to, patch, metadata) =>
+          this.engine.advanceWorkspace(id, to, patch, metadata),
+        getSubstrate: (id: WorkspaceSubstrate) => this.registry.getFull(id),
+        repository: this.repository,
+        tailer: this.tailer,
+        logger: this.log,
+        ...(this.brain ? { brain: this.brain } : {}),
+      };
+      const result = await continueWorkspaceOp(deps, workspaceId, {
+        ...input,
+        createdBy: input.createdBy ?? principal.userId,
+      });
+      await recordConductorAudit(
+        this.gate,
+        conductorAuditEntry(action, principal, verdict, { workspaceId, runId: result.runId }),
+      );
+      return { ok: true, verdict, value: result };
+    } catch (err) {
+      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'message failed' };
+    }
   }
 
   async listReconcileFindings(workspaceId?: string): Promise<readonly ReconcileFindingView[]> {

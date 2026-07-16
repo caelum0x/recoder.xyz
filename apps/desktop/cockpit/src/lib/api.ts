@@ -332,7 +332,9 @@ export const api = {
   createWorkspace: (body: CreateWorkspaceBody) =>
     request<unknown>('POST', '/workspaces', body).then((d) => pick<Workspace>(d, 'workspace')),
   listEvents: (id: string) =>
-    request<RunEvent[]>('GET', `/workspaces/${encodeURIComponent(id)}/events`),
+    request<unknown>('GET', `/workspaces/${encodeURIComponent(id)}/events`).then((d) =>
+      pickList<RunEvent>(d, 'events'),
+    ),
   /**
    * Send a chat message to a workspace. The backend (POST /workspaces/:id/message)
    * appends the message to the conversation and starts the next agent run with it
@@ -372,12 +374,21 @@ export const api = {
    * URL the Run tab detected once it appears. Returns the updated workspace.
    */
   setPreviewUrl: (id: string, url: string) =>
-    request<Workspace>('POST', `/workspaces/${encodeURIComponent(id)}/preview-url`, { url }),
+    request<unknown>('POST', `/workspaces/${encodeURIComponent(id)}/preview-url`, { url }).then(
+      (d) => pick<Workspace>(d, 'workspace'),
+    ),
   openPr: (id: string, body: { title: string; body?: string; base?: string; draft?: boolean }) =>
-    request<CreatePrResult>('POST', `/workspaces/${encodeURIComponent(id)}/pr`, body),
+    request<unknown>('POST', `/workspaces/${encodeURIComponent(id)}/pr`, body).then((d) =>
+      pick<CreatePrResult>(d, 'pr'),
+    ),
   merge: (id: string, body: { strategy?: 'squash' | 'merge' | 'rebase'; deleteBranch?: boolean }) =>
-    request<MergeResult>('POST', `/workspaces/${encodeURIComponent(id)}/merge`, body),
-  archive: (id: string) => request<Workspace>('POST', `/workspaces/${encodeURIComponent(id)}/archive`),
+    request<unknown>('POST', `/workspaces/${encodeURIComponent(id)}/merge`, body).then((d) =>
+      pick<MergeResult>(d, 'merge'),
+    ),
+  archive: (id: string) =>
+    request<unknown>('POST', `/workspaces/${encodeURIComponent(id)}/archive`).then((d) =>
+      pick<Workspace>(d, 'workspace'),
+    ),
   reconcile: () => request<unknown>('POST', '/reconcile'),
   runtimes: () =>
     request<unknown>('GET', '/runtimes').then((d) => pickList<RuntimeAvailability>(d, 'runtimes')),

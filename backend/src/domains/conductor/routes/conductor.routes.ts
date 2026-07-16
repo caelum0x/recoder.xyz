@@ -6,6 +6,15 @@
  *   GET    /api/conductor/workspaces/:id          fetch one workspace
  *   POST   /api/conductor/workspaces              create + launch (GATED)
  *   POST   /api/conductor/workspaces/:id/steer    send-keys to a live agent (GATED)
+ *   GET    /api/conductor/workspaces/:id/events   RunEvents (conversation + lifecycle)
+ *   GET    /api/conductor/workspaces/:id/diff     reviewable diff vs base
+ *   GET    /api/conductor/workspaces/:id/tree     worktree file list
+ *   GET    /api/conductor/workspaces/:id/dev-command  detected dev command (or null)
+ *   POST   /api/conductor/workspaces/:id/message  chat → next agent run (GATED)
+ *   POST   /api/conductor/workspaces/:id/pr       push branch + open PR (GATED)
+ *   POST   /api/conductor/workspaces/:id/merge    merge into base, gh or local (GATED)
+ *   POST   /api/conductor/workspaces/:id/archive  teardown + archive (GATED)
+ *   POST   /api/conductor/workspaces/:id/preview-url  persist sniffed preview URL (GATED)
  *   GET    /api/conductor/substrates              truthful per-substrate availability
  *   GET    /api/conductor/runtimes                installed agent CLIs (PATH-probed)
  *   GET    /api/conductor/github/status           GitHub connection + identity (token-free)
@@ -69,6 +78,124 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     middleware.authenticate,
     asyncHandler(async (_req, res) => {
       sendSuccess(res, { substrates: module.substrates() });
+    }),
+  );
+
+  // --- workspace detail (the run screen): reads --------------------------------
+  // "not found" maps to a truthful 404; any other failure surfaces as-is.
+
+  router.get(
+    '/workspaces/:id/events',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      sendSuccess(res, { events: await module.listWorkspaceEvents(req.params.id) });
+    }),
+  );
+
+  router.get(
+    '/workspaces/:id/diff',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      try {
+        sendSuccess(res, await module.workspaceDiff(req.params.id));
+      } catch (err) {
+        sendError(res, toReadError(err, 'diff failed'));
+      }
+    }),
+  );
+
+  router.get(
+    '/workspaces/:id/tree',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      try {
+        sendSuccess(res, await module.workspaceTree(req.params.id));
+      } catch (err) {
+        sendError(res, toReadError(err, 'tree failed'));
+      }
+    }),
+  );
+
+  router.get(
+    '/workspaces/:id/dev-command',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      sendSuccess(res, await module.workspaceDevCommand(req.params.id));
+    }),
+  );
+
+  // --- workspace detail: governed writes ---------------------------------------
+
+  router.post(
+    '/workspaces/:id/message',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const result = await module.sendWorkspaceMessage(
+        req.params.id,
+        {
+          text: requireString(body, 'text'),
+          ...(typeof body.model === 'string' ? { model: body.model } : {}),
+        },
+        req.principal!,
+      );
+      finishWrite(res, result, { statusCode: 201, key: 'message' });
+    }),
+  );
+
+  router.post(
+    '/workspaces/:id/pr',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const result = await module.createWorkspacePr(
+        req.params.id,
+        {
+          title: requireString(body, 'title'),
+          ...(typeof body.body === 'string' ? { body: body.body } : {}),
+          ...(typeof body.base === 'string' ? { base: body.base } : {}),
+          ...(typeof body.draft === 'boolean' ? { draft: body.draft } : {}),
+          ...(typeof body.remote === 'string' ? { remote: body.remote } : {}),
+        },
+        req.principal!,
+      );
+      finishWrite(res, result, { statusCode: 201, key: 'pr' });
+    }),
+  );
+
+  router.post(
+    '/workspaces/:id/merge',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const result = await module.mergeWorkspace(
+        req.params.id,
+        {
+          ...(isMergeStrategy(body.strategy) ? { strategy: body.strategy } : {}),
+          ...(typeof body.deleteBranch === 'boolean' ? { deleteBranch: body.deleteBranch } : {}),
+        },
+        req.principal!,
+      );
+      finishWrite(res, result, { key: 'merge' });
+    }),
+  );
+
+  router.post(
+    '/workspaces/:id/archive',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const result = await module.archiveWorkspace(req.params.id, req.principal!);
+      finishWrite(res, result, { key: 'workspace' });
+    }),
+  );
+
+  router.post(
+    '/workspaces/:id/preview-url',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const result = await module.setPreviewUrl(req.params.id, body.url, req.principal!);
+      finishWrite(res, result, { key: 'workspace' });
     }),
   );
 
@@ -224,4 +351,17 @@ function optionalString(value: unknown): string | undefined {
 
 function isSubstrate(value: unknown): value is WorkspaceSubstrate {
   return typeof value === 'string' && (SUBSTRATES as readonly string[]).includes(value);
+}
+
+const MERGE_STRATEGIES = ['squash', 'merge', 'rebase'] as const;
+
+function isMergeStrategy(value: unknown): value is (typeof MERGE_STRATEGIES)[number] {
+  return typeof value === 'string' && (MERGE_STRATEGIES as readonly string[]).includes(value);
+}
+
+/** Map a read-op failure to the truthful error: "not found" → 404, else 503. */
+function toReadError(err: unknown, fallback: string): ReturnType<typeof createError> {
+  const message = err instanceof Error ? err.message : fallback;
+  if (message.includes('not found')) return createError(ErrorCode.NOT_FOUND, message);
+  return createError(ErrorCode.SERVICE_UNAVAILABLE, message);
 }

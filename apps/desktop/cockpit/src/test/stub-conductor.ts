@@ -225,7 +225,7 @@ function handle(state: StubState, req: IncomingMessage, res: ServerResponse): vo
       return sendJson(res, 200, { success: true, data: { workspace: ws } });
     }
     if (method === 'GET' && sub === 'events') {
-      return sendJson(res, 200, { success: true, data: state.events.get(id) || [] });
+      return sendJson(res, 200, { success: true, data: { events: state.events.get(id) || [] } });
     }
     if (method === 'GET' && sub === 'diff') {
       return sendJson(res, 200, { success: true, data: diffFor(ws) });
@@ -237,7 +237,7 @@ function handle(state: StubState, req: IncomingMessage, res: ServerResponse): vo
       const log = state.events.get(id) || [];
       log.push(makeEvent(ws.taskId, { type: 'state_transition', state: 'archived', message: 'archived by operator' }));
       state.events.set(id, log);
-      return sendJson(res, 200, { success: true, data: archived });
+      return sendJson(res, 200, { success: true, data: { workspace: archived } });
     }
     // pr/merge are not exercised by this test; reply with a truthful 405.
     return sendJson(res, 405, { success: false, error: `${method} ${path} not handled by stub` });
