@@ -226,6 +226,18 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
   const modelId = typeof recordedModel === 'string' && recordedModel ? recordedModel : undefined;
   const modelLabel = modelId || workspace.runtimeId || 'agent';
 
+  // Invisible-engine feedback (product F4): when the run launched with recalled
+  // context from past work, say so with ONE quiet note — count only, never an
+  // engine name. The backend records truthful provenance refs on the workspace
+  // (metadata.knowledgeSources); absent/empty means nothing is shown.
+  const rawSources =
+    workspace.metadata && typeof workspace.metadata === 'object'
+      ? (workspace.metadata as Record<string, unknown>).knowledgeSources
+      : undefined;
+  const recalledCount = Array.isArray(rawSources)
+    ? rawSources.filter((s) => typeof s === 'string' && s).length
+    : 0;
+
   // A pre-drafted starter task (e.g. a seeded onboarding workspace) prefills the
   // composer — but ONLY before any conversation exists, so we never clobber a
   // real thread with a suggestion.
@@ -291,6 +303,14 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
         <span class="ws-center-counts">
           {counts.tools} tool call{counts.tools === 1 ? '' : 's'}, {counts.messages} message{counts.messages === 1 ? '' : 's'}
         </span>
+        {recalledCount > 0 && (
+          <span
+            class="ws-center-meta"
+            title="This run started with context recalled from your past work here."
+          >
+            recalled {recalledCount} thing{recalledCount === 1 ? '' : 's'} from past runs
+          </span>
+        )}
         <span class="ws-center-spacer" />
         {/* The REAL terminal now lives in the wave host: this asks the desktop
             shell to open the workspace's live tmux session as a terminal block
