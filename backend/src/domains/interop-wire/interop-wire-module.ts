@@ -117,7 +117,12 @@ export function createInteropWireComposer(deps: InteropWireComposerDeps): Intero
     },
 
     wireRoutes(): Router {
-      return buildA2ARoutes({ transport: core.transport(), agentCard: core.agentCard(), jsonRpc: core.jsonRpc() });
+      return buildA2ARoutes({
+        transport: core.transport(),
+        agentCard: core.agentCard(),
+        jsonRpc: core.jsonRpc(),
+        health: () => core.health(),
+      });
     },
 
     mcp(): readonly McpToolRegistration[] {

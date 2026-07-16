@@ -54,6 +54,7 @@ import type {
   GatewayInferenceBody,
   GatewayInferenceResult,
   GatewayStatus,
+  GithubRepo,
   GithubStatus,
   GovernanceAuditTrail,
   McpHostSummary,
@@ -323,6 +324,13 @@ export const api = {
    * calm "GitHub" chip near the account block.
    */
   githubStatus: () => request<GithubStatus>('GET', '/github/status'),
+  /**
+   * Repos on the detected GitHub account (`gh repo list` server-side), the
+   * new-workspace folder hint (product F2). The backend degrades an absent or
+   * signed-out gh to an EMPTY keyed list — callers render nothing for [].
+   */
+  githubRepos: () =>
+    request<unknown>('GET', '/github/repos').then((d) => pickList<GithubRepo>(d, 'repos')),
   /**
    * Tamper-evident governance audit trail: sealed Merkle-chain entries
    * (newest-first) + a genuine full-chain verification result.

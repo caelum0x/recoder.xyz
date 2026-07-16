@@ -96,6 +96,21 @@ describe('handleChatCompletion (buffered)', () => {
     });
   });
 
+  it('maps a pre-dispatch quota refusal to a truthful 429 insufficient_quota', async () => {
+    const deps: InferenceOpenAiCompatDeps = {
+      routing: {
+        complete: async () => ({ routed: false, tier: 'none', model: 'm', content: null, reason: 'token quota exhausted', denied: 'quota' }),
+        completeStream: async () => ({ routed: false, tier: 'none', model: 'm', content: null, reason: 'token quota exhausted', denied: 'quota', streamed: false, tokenGranular: false }),
+      },
+      idFactory: IDS,
+      now: NOW,
+    };
+    const res = fakeRes();
+    await handleChatCompletion(deps, reqOf({ model: 'm', messages: [{ role: 'user', content: 'hi' }] }), res);
+    expect(res._status).toBe(429);
+    expect(res._json).toMatchObject({ error: { type: 'insufficient_quota', message: 'token quota exhausted' } });
+  });
+
   it('rejects a missing model with a 400', async () => {
     const deps = { routing: { complete: async () => { throw new Error('unreached'); }, completeStream: async () => { throw new Error('unreached'); } } } as unknown as InferenceOpenAiCompatDeps;
     const res = fakeRes();
@@ -149,5 +164,21 @@ describe('handleChatCompletion (real streaming)', () => {
     expect(res._status).toBe(503); // never a 200 over a failure
     expect(res._writes.length).toBe(0);
     expect(res._json).toMatchObject({ error: { type: 'gateway_error' } });
+  });
+
+  it('maps a pre-stream quota refusal to a truthful 429 (no fabricated stream)', async () => {
+    const deps: InferenceOpenAiCompatDeps = {
+      routing: {
+        complete: async () => ({ routed: false, tier: 'none', model: 'm', content: null, reason: 'token quota exhausted', denied: 'quota' }),
+        completeStream: async () => ({ routed: false, tier: 'none', model: 'm', content: null, reason: 'token quota exhausted', denied: 'quota', streamed: false, tokenGranular: false }),
+      },
+      idFactory: IDS,
+      now: NOW,
+    };
+    const res = fakeRes();
+    await handleChatCompletion(deps, reqOf({ model: 'm', stream: true, messages: [{ role: 'user', content: 'hi' }] }), res);
+    expect(res._status).toBe(429);
+    expect(res._writes.length).toBe(0);
+    expect(res._json).toMatchObject({ error: { type: 'insufficient_quota' } });
   });
 });

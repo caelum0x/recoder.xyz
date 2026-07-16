@@ -31,7 +31,7 @@ import type { ComponentHealth } from '../../shared/health-types.js';
 import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { Principal } from '../identity/types.js';
 import { sliceConductorConfig, type ConductorConfig } from './config.js';
-import type { GateVerdict, TerminalStreamPort, GithubStatusPort, GithubStatusView } from './ports/index.js';
+import type { GateVerdict, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView } from './ports/index.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type { WorkspaceRepositoryPort } from './ports/workspace-repository.port.js';
@@ -403,6 +403,11 @@ export class ConductorComposer implements ConductorModule {
   async githubStatus(): Promise<GithubStatusView> {
     if (!this.github) return { connected: false, source: null };
     return this.github.status();
+  }
+
+  async githubRepos(): Promise<readonly GithubRepoView[]> {
+    if (!this.github) return [];
+    return this.github.repos();
   }
 
   // --- workspace detail (the run screen): reads --------------------------------

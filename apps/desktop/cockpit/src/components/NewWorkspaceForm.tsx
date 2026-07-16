@@ -14,7 +14,7 @@ import { usePoll } from '../lib/usePoll';
 import { readConfig } from '../lib/config';
 import { chooseFolder, hasFolderPicker } from '../lib/desktop';
 import { isCapabilityGated, capabilityUnlockLabel } from '../lib/plan-state';
-import type { CreateWorkspaceBody, WorkspaceSubstrate } from '../types';
+import type { CreateWorkspaceBody, GithubRepo, WorkspaceSubstrate } from '../types';
 
 interface NewWorkspaceFormProps {
   onCreated: () => void;
@@ -45,6 +45,10 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
   const [createdBy, setCreatedBy] = useState(defaults.createdBy || 'cockpit');
   const [baseRef, setBaseRef] = useState('');
   const [pickError, setPickError] = useState<string | null>(null);
+  // Repos detected from the user's GitHub account (gh, server-side) — a hint
+  // for the folder field only. Fetch failures degrade to [] (hint invisible).
+  const [githubRepos, setGithubRepos] = useState<GithubRepo[]>([]);
+  const [repoHint, setRepoHint] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +67,21 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
     if (runtimeId || availableRuntimes.length === 0) return;
     setRuntimeId(availableRuntimes[0].runtimeId);
   }, [runtimes.data]);
+
+  // One-shot: the detected account's repos as a folder hint. Any failure
+  // (backend down, gh absent, signed out) leaves the list empty — no hint.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .githubRepos()
+      .then((repos) => {
+        if (!cancelled) setGithubRepos(repos);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function pickFolder() {
     setPickError(null);
@@ -147,6 +166,27 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
             <span class="field-hint">You can pick a folder in the desktop app. Here, type the full path to your project.</span>
           )}
           {pickError && <span class="form-error">{pickError}</span>}
+          {/* Folder hint (product F2): repos detected on the user's GitHub
+              account. Reference only — we can't truthfully know where a repo
+              is cloned locally, so the folder input stays authoritative. Shown
+              only while the folder is empty; an empty list renders nothing. */}
+          {!repoPath.trim() && githubRepos.length > 0 && (
+            <select
+              aria-label="Your GitHub repos (reference)"
+              value={repoHint}
+              onChange={(e) => setRepoHint((e.target as HTMLSelectElement).value)}
+            >
+              <option value="">your GitHub repos (reference)…</option>
+              {githubRepos.map((r) => (
+                <option key={r.nameWithOwner} value={r.nameWithOwner}>
+                  {r.nameWithOwner}
+                </option>
+              ))}
+            </select>
+          )}
+          {!repoPath.trim() && repoHint && (
+            <span class="field-hint">Type the local path where {repoHint} is cloned.</span>
+          )}
         </label>
 
         <label class="field">

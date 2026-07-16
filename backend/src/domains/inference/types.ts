@@ -62,6 +62,13 @@ export interface InferenceResult {
   readonly inferenceId?: string;
   /** Truthful reason when `routed` is false (never a fake success). */
   readonly reason?: string;
+  /**
+   * Refusal discriminator when `routed` is false because a PRE-DISPATCH gate
+   * refused the call (not a delivery fault): `'quota'` = the billing entitlement
+   * gate denied the `token` quota. Routes map it to a truthful 429 — never a
+   * 5xx gateway error over an over-quota subject.
+   */
+  readonly denied?: 'quota';
 }
 
 /** One streamed delta emitted through the `onDelta` sink. */

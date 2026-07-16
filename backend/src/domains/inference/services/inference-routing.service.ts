@@ -89,7 +89,14 @@ export class InferenceRoutingService {
   async complete(req: InferenceRequest): Promise<InferenceResult> {
     const denyReason = await this.entitlementDeny(req);
     if (denyReason) {
-      return { routed: false, tier: 'none', model: req.model, content: null, reason: denyReason };
+      return {
+        routed: false,
+        tier: 'none',
+        model: req.model,
+        content: null,
+        reason: denyReason,
+        denied: 'quota',
+      };
     }
     const startedAt = this.now();
     const result = await this.gateway.complete(req);
@@ -118,6 +125,7 @@ export class InferenceRoutingService {
         model: req.model,
         content: null,
         reason: denyReason,
+        denied: 'quota',
         streamed: false,
         tokenGranular: false,
       };

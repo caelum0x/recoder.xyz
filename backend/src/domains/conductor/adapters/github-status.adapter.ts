@@ -18,11 +18,15 @@ import { execFileSafe, which } from '@recoder/substrate';
 import type { Logger } from '../../../shared/logger.js';
 import type {
   GithubAccountView,
+  GithubRepoView,
   GithubStatusPort,
   GithubStatusView,
 } from '../ports/github-status.port.js';
 
 const PROBE_TIMEOUT_MS = 3_000;
+/** `gh repo list` talks to the GitHub API — allow it longer than local probes. */
+const REPO_LIST_TIMEOUT_MS = 5_000;
+const REPO_LIST_LIMIT = 50;
 
 /** The exec surface the adapter probes with — injectable for tests. */
 export interface GithubProbeExec {
@@ -52,6 +56,29 @@ export function parseGhLogin(output: string): string | undefined {
   // older gh:   "✓ Logged in to github.com as caelum0x (oauth_token)"
   const match = /Logged in to [^\s]+ (?:account|as) ([^\s(]+)/.exec(output);
   return match?.[1];
+}
+
+/**
+ * Parse `gh repo list --json name,nameWithOwner,url` output into repo views.
+ * Anything unparseable (non-JSON, non-array, malformed entries) yields the
+ * empty list / drops the entry — a truthful nothing, never a fabricated repo.
+ */
+export function parseGhRepoList(output: string): readonly GithubRepoView[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(output);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.flatMap((entry): GithubRepoView[] => {
+    if (entry === null || typeof entry !== 'object') return [];
+    const { name, nameWithOwner, url } = entry as Record<string, unknown>;
+    if (typeof name !== 'string' || !name) return [];
+    if (typeof nameWithOwner !== 'string' || !nameWithOwner) return [];
+    if (typeof url !== 'string' || !url) return [];
+    return [{ name, nameWithOwner, url }];
+  });
 }
 
 export function createGithubStatusAdapter(deps: GithubStatusAdapterDeps): GithubStatusPort {
@@ -116,6 +143,24 @@ export function createGithubStatusAdapter(deps: GithubStatusAdapterDeps): Github
       } catch (err) {
         logger.warn({ err }, 'github status detection failed — reporting not connected');
         return { connected: false, source: null };
+      }
+    },
+
+    async repos(): Promise<readonly GithubRepoView[]> {
+      try {
+        const ghBin = await exec.which('gh');
+        if (!ghBin) return [];
+        const { stdout } = await exec.execFile(
+          ghBin,
+          ['repo', 'list', '--json', 'name,nameWithOwner,url', '--limit', String(REPO_LIST_LIMIT)],
+          { timeoutMs: REPO_LIST_TIMEOUT_MS },
+        );
+        return parseGhRepoList(stdout);
+      } catch (err) {
+        // Signed-out / offline / hung gh all land here — an empty list is the
+        // truthful answer (the account has no listable repos from this machine).
+        logger.warn({ err }, 'gh repo list failed — reporting no repos');
+        return [];
       }
     },
   };

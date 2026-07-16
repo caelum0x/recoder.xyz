@@ -18,6 +18,7 @@
  *   GET    /api/conductor/substrates              truthful per-substrate availability
  *   GET    /api/conductor/runtimes                installed agent CLIs (PATH-probed)
  *   GET    /api/conductor/github/status           GitHub connection + identity (token-free)
+ *   GET    /api/conductor/github/repos            detected account's repos via gh (empty when gh absent)
  *   GET    /api/conductor/health                  conductor readiness summary
  *   GET    /api/conductor/reconcile/findings      reconcile findings (operator review)
  *   POST   /api/conductor/reconcile               run a reconcile pass (GATED)
@@ -246,6 +247,17 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     middleware.authenticate,
     asyncHandler(async (_req, res) => {
       sendSuccess(res, await module.githubStatus());
+    }),
+  );
+
+  // Local-clonable repo list from the detected GitHub account (product F2):
+  // `gh repo list` when the user's gh CLI is authenticated. Degrade-safe: an
+  // absent/signed-out/failed gh is a truthful EMPTY list, never an error.
+  router.get(
+    '/github/repos',
+    middleware.authenticate,
+    asyncHandler(async (_req, res) => {
+      sendSuccess(res, { repos: await module.githubRepos() });
     }),
   );
 

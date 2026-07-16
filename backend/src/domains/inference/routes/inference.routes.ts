@@ -96,6 +96,12 @@ export function buildInferenceRouter(deps: InferenceRoutesDeps): Router {
         ...(req.principal?.userId ? { userId: req.principal.userId } : {}),
       });
       if (!result.routed) {
+        // Pre-dispatch entitlement refusal: a truthful 429 (QUOTA_EXCEEDED),
+        // never a 503 over an over-quota subject.
+        if (result.denied === 'quota') {
+          sendError(res, createError(ErrorCode.QUOTA_EXCEEDED, result.reason ?? 'inference token quota exceeded'));
+          return;
+        }
         sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'no inference tier available'));
         return;
       }

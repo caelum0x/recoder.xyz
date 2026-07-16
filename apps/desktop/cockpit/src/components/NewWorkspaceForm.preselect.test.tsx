@@ -41,7 +41,9 @@ async function flush(ms = 0): Promise<void> {
 async function waitForSelect(timeoutMs = 8000): Promise<HTMLSelectElement> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const el = container.querySelector('select') as HTMLSelectElement | null;
+    // The agent select is the only REQUIRED select — the optional GitHub repo
+    // hint (also a select) renders earlier in the DOM and must not be matched.
+    const el = container.querySelector('select[required]') as HTMLSelectElement | null;
     if (el && el.value) return el;
     await flush(120);
   }

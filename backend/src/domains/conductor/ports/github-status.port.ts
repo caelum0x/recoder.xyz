@@ -35,7 +35,27 @@ export interface GithubStatusView {
   readonly account?: GithubAccountView;
 }
 
+/**
+ * One repo from the detected account (`gh repo list`) — a LOCAL-CLONABLE
+ * candidate the cockpit's new-workspace form hints with (product F2).
+ */
+export interface GithubRepoView {
+  /** Bare repo name, e.g. "recoder.xyz". */
+  readonly name: string;
+  /** Owner-qualified name, e.g. "caelum0x/recoder.xyz". */
+  readonly nameWithOwner: string;
+  /** HTML URL, e.g. "https://github.com/caelum0x/recoder.xyz". */
+  readonly url: string;
+}
+
 export interface GithubStatusPort {
   /** Detect the current GitHub connection + identity. Never throws. */
   status(): Promise<GithubStatusView>;
+  /**
+   * The detected account's repos via the authenticated `gh` CLI
+   * (`GET /api/conductor/github/repos`). Degrade-safe by contract: an absent,
+   * signed-out, timed-out, or unparseable `gh` yields an EMPTY list — never an
+   * error, never a fabricated repo. Never throws.
+   */
+  repos(): Promise<readonly GithubRepoView[]>;
 }

@@ -66,6 +66,10 @@ import {
 import { InteropHostBundle } from './mcp/mcp-host.js';
 import { buildEnginesMcpTools, enginesMcpServer } from './mcp/engines-engine.js';
 import { registerModuleToolsOnHost, type ModuleToolsRegistration } from './mcp/host-registrar.js';
+import {
+  registerDomainToolsOnHost,
+  type DomainToolsRegistration,
+} from './adapters/domain-tools-bridge.adapter.js';
 import { buildEnginesHealth } from './health.js';
 import type { EnginesModule, EnginesModuleDeps } from './index.js';
 
@@ -281,6 +285,34 @@ export class EnginesComposer implements EnginesModule {
       serverId,
       tools,
       this.log,
+    );
+  }
+
+  /**
+   * COLLISION-SAFE bridge (preferred): register one domain's flat `mcp()` tools
+   * into the gated host under `serverId`, first-registration-wins. A serverId
+   * already in the gated registry, or a duplicate tool name in `tools`, is
+   * logged + skipped truthfully; an empty tool list is a no-op. The handlers run
+   * in-process, invoked by the host ONLY after `authorize → risk` succeed —
+   * exactly the same gated route the engine tools traverse.
+   */
+  registerDomainTools(
+    serverId: string,
+    tools: readonly McpToolRegistration[],
+  ): DomainToolsRegistration {
+    const results = registerDomainToolsOnHost(
+      this.hostReady ? this.hostBundle : null,
+      [{ serverId, tools }],
+      this.log,
+    );
+    return (
+      results[0] ?? {
+        serverId,
+        registered: [],
+        skipped: true,
+        reason: 'no registration attempted',
+        collisions: [],
+      }
     );
   }
 

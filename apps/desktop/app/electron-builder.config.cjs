@@ -63,6 +63,35 @@ const config = {
             from: "../engines/tmux/tmux",
             to: "backend/engines/tmux/tmux",
         },
+        // Vendored recodergit + dmux engine dists. Both backend resolvers land on
+        // <resources>/backend/apps/desktop/engines/... in packaged mode:
+        // recodergit-service.ts resolves dist-relative
+        // (__dirname=backend/dist/domains/engines, three ups + ../apps/...), and
+        // dmux-adapter.ts walks ancestors for apps/desktop/engines/dmux. The
+        // package.json files ride along so Node treats the dists as ESM
+        // ("type": "module").
+        {
+            from: "../engines/recodergit/recodergit/dist",
+            to: "backend/apps/desktop/engines/recodergit/recodergit/dist",
+            filter: ["**/*"],
+        },
+        {
+            from: "../engines/recodergit/recodergit/package.json",
+            to: "backend/apps/desktop/engines/recodergit/recodergit/package.json",
+        },
+        {
+            from: "../engines/dmux/dist",
+            to: "backend/apps/desktop/engines/dmux/dist",
+            filter: ["**/*"],
+        },
+        {
+            from: "../engines/dmux/dmux",
+            to: "backend/apps/desktop/engines/dmux/dmux",
+        },
+        {
+            from: "../engines/dmux/package.json",
+            to: "backend/apps/desktop/engines/dmux/package.json",
+        },
         // Native NAPI addons the backend loads in-process.
         {
             from: "../../../backend/engines/rust/recoder-governance/target/release/recoder-governance-napi.node",

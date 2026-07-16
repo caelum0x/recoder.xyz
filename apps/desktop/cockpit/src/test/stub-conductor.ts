@@ -72,6 +72,12 @@ const SUBSTRATES: SubstrateAvailability[] = [
 
 const CONNECTORS: ConnectorsHealth = { active: false, dispatchReady: false, channels: [] };
 
+/** Keyed `{ repos }` payload for GET /github/repos (product F2 folder hint). */
+const GITHUB_REPOS = [
+  { name: 'stub-repo', nameWithOwner: 'stub-login/stub-repo', url: 'https://github.com/stub-login/stub-repo' },
+  { name: 'other-repo', nameWithOwner: 'stub-login/other-repo', url: 'https://github.com/stub-login/other-repo' },
+];
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -176,6 +182,9 @@ function handle(state: StubState, req: IncomingMessage, res: ServerResponse): vo
       success: true,
       data: { connected: true, source: 'gh_cli', account: { login: 'stub-login' } },
     });
+  }
+  if (method === 'GET' && path === '/api/conductor/github/repos') {
+    return sendJson(res, 200, { success: true, data: { repos: GITHUB_REPOS } });
   }
   if (method === 'GET' && path === '/api/connectors/') {
     return sendJson(res, 200, { success: true, data: CONNECTORS });

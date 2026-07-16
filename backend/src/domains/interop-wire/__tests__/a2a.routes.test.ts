@@ -2,6 +2,9 @@
  * A2A wire edges — route-level tests over the composed `/api/a2a` router
  * (`buildA2ARoutes`). Proves the interop surface bootstrap mounts:
  *
+ *   - GET  /health     → 200 truthful wire status when signing is configured;
+ *                        503 in the fail-closed posture (signing required, no
+ *                        secret ⇒ ALL ingress rejected ⇒ `down`, never faked up)
  *   - GET  /agent-card → 200 success envelope carrying the local card + methods
  *   - POST /ingress    → an UNSIGNED envelope is rejected in production posture
  *                        (requireSigned) — HTTP non-200, `data.admitted === false`
@@ -20,6 +23,8 @@ import { createEnvelopeService } from '../wire/a2a-envelope.service.js';
 import { createAgentCardService } from '../wire/agent-card.service.js';
 import { createSignedIngressGate } from '../wire/signed-ingress.gate.js';
 import { createA2AJsonRpcServer } from '../wire/a2a-jsonrpc-server.js';
+import { interopWireHealth } from '../health.js';
+import type { InteropWireConfig } from '../config.js';
 import type { A2ATransport } from '../ports/a2a-transport.port.js';
 import type { A2AEnvelope, AgentCard, EgressEnvelope, IngressResult } from '../types.js';
 
@@ -80,8 +85,26 @@ const transport: A2ATransport = {
   },
 };
 
-function startServer(): Promise<{ base: string; close: () => Promise<void> }> {
-  const router = buildA2ARoutes({ transport, agentCard, jsonRpc });
+/** The real config-driven truthful health, as `createInteropWireModule` wires it. */
+function wireConfig(hmacSecret: string | null): InteropWireConfig {
+  return {
+    isProduction: true,
+    requireSignedIngress: true,
+    hmacSecret,
+    signingKeyId: 'k1',
+    allowInsecureIngress: false,
+    signingMode: 'required',
+    maxFutureSkewMs: 300_000,
+    heartbeatStaleMs: 90_000,
+    localCard: { id: 'test-instance', name: 'recoder-test', capabilities: ['a2a'] },
+  };
+}
+
+function startServer(
+  health: () => ReturnType<typeof interopWireHealth> = () =>
+    interopWireHealth({ config: wireConfig(SECRET), persistenceAvailable: true }),
+): Promise<{ base: string; close: () => Promise<void> }> {
+  const router = buildA2ARoutes({ transport, agentCard, jsonRpc, health });
   const app = express();
   app.use('/api/a2a', express.json());
   app.use('/api/a2a', router);
@@ -108,6 +131,20 @@ describe('a2a wire routes — /api/a2a edge', () => {
 
   const postJson = (path: string, body: unknown) =>
     request(srv.base, path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+  it('GET /health → 200 truthful wire status (up) + advertised methods', async () => {
+    const res = await request(srv.base, '/api/a2a/health');
+    expect(res.status).toBe(200);
+    const json = res.json() as {
+      success: boolean;
+      data: { health: { name: string; status: string; degraded: boolean }; methods: unknown[] };
+    };
+    expect(json.success).toBe(true);
+    expect(json.data.health.name).toBe('interop-wire');
+    expect(json.data.health.status).toBe('up');
+    expect(json.data.health.degraded).toBe(false);
+    expect(Array.isArray(json.data.methods)).toBe(true);
+  });
 
   it('GET /agent-card → 200 with the local capability card + advertised methods', async () => {
     const res = await request(srv.base, '/api/a2a/agent-card');
@@ -136,5 +173,28 @@ describe('a2a wire routes — /api/a2a edge', () => {
     expect(res.status).toBe(200);
     const json = res.json() as { data: { error?: { code: number } } };
     expect(json.data.error).toBeDefined();
+  });
+});
+
+describe('a2a wire routes — fail-closed posture (signing required, no secret)', () => {
+  let srv: { base: string; close: () => Promise<void> };
+  beforeAll(async () => {
+    srv = await startServer(() =>
+      interopWireHealth({ config: wireConfig(null), persistenceAvailable: true }),
+    );
+  });
+  afterAll(async () => {
+    await srv.close();
+  });
+
+  it('GET /health → 503 with truthful `down` (never a faked up)', async () => {
+    const res = await request(srv.base, '/api/a2a/health');
+    expect(res.status).toBe(503);
+    const json = res.json() as {
+      success: boolean;
+      data: { health: { status: string; reason?: string } };
+    };
+    expect(json.data.health.status).toBe('down');
+    expect(json.data.health.reason).toContain('fail-closed');
   });
 });

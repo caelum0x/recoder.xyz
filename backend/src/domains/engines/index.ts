@@ -31,6 +31,7 @@ import type { EnginesConfigOverrides } from './config.js';
 import type { EngineClientPort } from './ports/engine-client.port.js';
 import type { EngineRegistryPort, McpHostPort } from './ports/index.js';
 import type { ModuleToolsRegistration } from './mcp/host-registrar.js';
+import type { DomainToolsRegistration } from './adapters/domain-tools-bridge.adapter.js';
 import type { EngineId, EngineHealth } from './types.js';
 
 /** Dependencies injected by bootstrap (after persistence + identity + governance). */
@@ -81,6 +82,18 @@ export interface EnginesModule {
     serverId: string,
     tools: readonly McpToolRegistration[],
   ): ModuleToolsRegistration;
+  /**
+   * COLLISION-SAFE bridge (preferred over `registerModuleTools`): register one
+   * domain's flat `mcp()` tools into the gated host under `serverId`. First
+   * registration wins — a serverId already in the gated registry, or a duplicate
+   * tool name within the list, is logged + skipped truthfully (never clobbered);
+   * an empty tool list is a no-op. Bootstrap calls this after each domain is
+   * built (`engines.registerDomainTools('conductor', conductor.mcp())`, …).
+   */
+  registerDomainTools(
+    serverId: string,
+    tools: readonly McpToolRegistration[],
+  ): DomainToolsRegistration;
   /** Truthful live health for every declared engine. */
   listHealth(): Promise<readonly EngineHealth[]>;
   /** The read-only `/engines` router (list + per-engine health). */
@@ -124,3 +137,9 @@ export type {
 } from './openfang-runtime.js';
 export { getOpenfangEngine } from './openfang-native.js';
 export type { OpenfangEngineInstance } from './openfang-native.js';
+
+/** The domain-tools bridge types bootstrap consumes when registering `mcp()` tools. */
+export type {
+  DomainToolsSource,
+  DomainToolsRegistration,
+} from './adapters/domain-tools-bridge.adapter.js';
