@@ -34,6 +34,7 @@ import {
 } from '@recoder/substrate';
 import type {
   ConductorSubstrate,
+  ContinueRunInput,
   SubstrateLaunchInput,
   SubstrateHandle,
 } from '../ports/substrate-registry.port.js';
@@ -162,6 +163,16 @@ export function createCliRuntimeSubstrate(
     ...(inner.exitCode ? { exitCode: (handle: SubstrateHandle) => inner.exitCode!(handle) } : {}),
     diff: (handle, baseRef) => inner.diff(handle, baseRef),
     teardown: (handle, options) => inner.teardown(handle, options),
+    // Forward continue/chat only when the inner substrate supports an in-place
+    // relaunch (absence must stay truthful). NOTE: the inference-routing env seam
+    // applies at launch(); a continued run reuses the session-scoped env the tmux
+    // server already carries.
+    ...(inner.continueRun
+      ? {
+          continueRun: (handle: SubstrateHandle, input: ContinueRunInput) =>
+            inner.continueRun!(handle, input),
+        }
+      : {}),
   };
 }
 

@@ -22,6 +22,7 @@ export type {
 // composer surfaces truthfully (GET /substrates). Re-exported for one import.
 export type {
   ConductorSubstrate,
+  ContinueRunInput,
   SubstrateLaunchInput,
   SubstrateHandle,
   SubstrateAvailability,

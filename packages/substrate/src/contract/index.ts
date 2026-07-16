@@ -4,7 +4,7 @@
  * The ConductorSubstrate interface and its data shapes. This is the only thing
  * the engine, registry, routes, run-tailer, review, and reconcile depend on.
  */
-export type { ConductorSubstrate } from './substrate.js';
+export type { ConductorSubstrate, ContinueRunInput } from './substrate.js';
 export type { SubstrateLaunchInput } from './launch-input.js';
 export type { SubstrateHandle } from './handle.js';
 export type { SubstrateDiff } from './diff.js';

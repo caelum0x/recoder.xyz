@@ -30,6 +30,7 @@ import {
 } from '@recoder/substrate';
 import type {
   ConductorSubstrate,
+  ContinueRunInput,
   SubstrateAvailability,
   SubstrateCapabilities,
   SubstrateHandle,
@@ -227,6 +228,49 @@ export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSub
       });
       // ref = workspaceId (drives capture/kill); sessionName = the tmux session name.
       return { ref: input.workspaceId, worktreePath, sessionName: tmuxName };
+    },
+
+    async continueRun(handle: SubstrateHandle, input: ContinueRunInput): Promise<SubstrateHandle> {
+      const worktreePath = input.worktreePath || handle.worktreePath;
+      if (!worktreePath) throw new Error('tmux_worktree continueRun requires an existing worktree');
+      if (!input.command) throw new Error('tmux_worktree continueRun requires a command');
+      const tmuxName = handle.sessionName ?? tmuxNameFor(handle.ref);
+      // Reuse the EXISTING worktree (the prior run's changes are intact); replace
+      // the finished session with a fresh one running the new instruction in place.
+      try {
+        await exec(tmuxBin, ['kill-session', '-t', tmuxName]);
+      } catch {
+        /* prior session already gone */
+      }
+      await ensureRemainOnExit();
+      const env = input.env;
+      if (env) {
+        for (const [key, value] of Object.entries(env)) {
+          try {
+            await exec(tmuxBin, ['set-environment', '-g', key, value]);
+          } catch {
+            /* no server yet / unsupported — the exec env below covers cold start */
+          }
+        }
+      }
+      await exec(
+        tmuxBin,
+        ['new-session', '-d', '-s', tmuxName, '-c', worktreePath, input.command],
+        env ? { env } : {},
+      );
+      try {
+        await exec(tmuxBin, ['set-option', '-t', tmuxName, 'remain-on-exit', 'on']);
+      } catch (err) {
+        logger.warn('tmux per-session remain-on-exit set failed (best effort)', {
+          workspaceId: input.workspaceId,
+          err: message(err),
+        });
+      }
+      logger.info('tmux_worktree workspace continued (new run in same worktree)', {
+        workspaceId: input.workspaceId,
+        worktreePath,
+      });
+      return { ref: handle.ref, worktreePath, sessionName: tmuxName };
     },
 
     async capture(handle: SubstrateHandle, lines = 200): Promise<string | null> {

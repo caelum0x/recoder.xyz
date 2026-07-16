@@ -17,6 +17,7 @@
 // === Contract — the seam everyone codes to ===
 export type {
   ConductorSubstrate,
+  ContinueRunInput,
   SubstrateLaunchInput,
   SubstrateHandle,
   SubstrateDiff,

@@ -36,6 +36,12 @@ export interface ConductorRegistry {
   readonly registry: SubstrateRegistryPort;
   /** Truthful per-substrate availability surfaced by `GET /substrates`. */
   availability(): readonly SubstrateAvailabilityView[];
+  /**
+   * Resolve the FULL contract (capture/diff/teardown/continueRun) for the review/
+   * publish/continue ops — the engine's narrow `registry.get` deliberately omits
+   * those. Throws truthfully when the id has no registered substrate.
+   */
+  getFull(id: SubstrateKind): ConductorSubstrate;
 }
 
 export interface ConductorRegistryDeps {
@@ -53,6 +59,9 @@ export function createConductorRegistry(deps: ConductorRegistryDeps): ConductorR
   const substrates = deps.substrates ?? [];
   const registry = createSubstrateRegistry({ substrates });
   const registered = new Set<SubstrateKind>(registry.list());
+  const fullById = new Map<SubstrateKind, ConductorSubstrate>(
+    substrates.map((s) => [s.id, s]),
+  );
 
   const availability = (): readonly SubstrateAvailabilityView[] =>
     KNOWN_SUBSTRATES.map((id) => {
@@ -60,7 +69,13 @@ export function createConductorRegistry(deps: ConductorRegistryDeps): ConductorR
       return { id, available: false, reason: reasonUnavailable(id, deps.config) };
     });
 
-  return { registry, availability };
+  const getFull = (id: SubstrateKind): ConductorSubstrate => {
+    const substrate = fullById.get(id);
+    if (!substrate) throw new Error(`substrate not registered: ${id}`);
+    return substrate;
+  };
+
+  return { registry, availability, getFull };
 }
 
 /** Truthful reason an unregistered substrate is unavailable (never hidden). */

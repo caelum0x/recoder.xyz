@@ -15,7 +15,7 @@
  * module refuses to construct (writes must be governed).
  */
 import type { Router } from 'express';
-import type { Workspace } from '@recoder/agent-os';
+import type { RunEvent, Workspace } from '@recoder/agent-os';
 import type { ReconcileReport } from '@recoder/substrate';
 import type { ConductorSubstrate, WorkLockPort, AdmissionPort } from '@recoder/substrate';
 import type { AppConfig } from '../../shared/app-config.js';
@@ -38,6 +38,18 @@ import type {
   SubstrateAvailabilityView,
 } from './types.js';
 import type { CreateConductorWorkspaceInput, ConductorWriteResult } from './conductor-module.js';
+import type { WorkspaceDiffView, WorkspaceTreeView } from './review/workspace-review.ops.js';
+import type {
+  CreatePrInput,
+  CreatePrResultView,
+  MergeInput,
+  MergeResultView,
+} from './review/workspace-publish.ops.js';
+import type {
+  ContinueWorkspaceInput,
+  ContinueWorkspaceResult,
+} from './review/workspace-continue.ops.js';
+import type { DevCommandView } from './adapters/dev-command.adapter.js';
 
 /** Dependencies injected by bootstrap (after persistence + identity + governance). */
 export interface ConductorModuleDeps {
@@ -105,6 +117,40 @@ export interface ConductorModule {
   ): Promise<ConductorWriteResult<Workspace>>;
   /** Steer a live agent (send-keys) — GATED (`workspace.steer`). */
   steerWorkspace(input: SteerInput, principal: Principal): Promise<ConductorWriteResult<void>>;
+  /** RunEvents for a workspace's run — the conversation + lifecycle log. */
+  listWorkspaceEvents(workspaceId: string): Promise<RunEvent[]>;
+  /** Reviewable diff of the worktree against its base ref (running → awaiting_review). */
+  workspaceDiff(workspaceId: string): Promise<WorkspaceDiffView>;
+  /** Full worktree file list (tracked + untracked), changed subset marked. */
+  workspaceTree(workspaceId: string): Promise<WorkspaceTreeView>;
+  /** Detected dev-server command for the worktree's project (or null). */
+  workspaceDevCommand(workspaceId: string): Promise<DevCommandView | null>;
+  /** Persist a sniffed loopback preview URL — GATED (`workspace.preview_url`). */
+  setPreviewUrl(
+    workspaceId: string,
+    url: unknown,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<Workspace>>;
+  /** Archive a finished workspace (teardown + archived) — GATED (`workspace.archive`). */
+  archiveWorkspace(workspaceId: string, principal: Principal): Promise<ConductorWriteResult<Workspace>>;
+  /** Push the branch + open a PR — GATED (`workspace.pr`). */
+  createWorkspacePr(
+    workspaceId: string,
+    input: CreatePrInput,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<CreatePrResultView>>;
+  /** Merge the branch into its base (gh or local) — GATED (`workspace.merge`). */
+  mergeWorkspace(
+    workspaceId: string,
+    input: MergeInput,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<MergeResultView>>;
+  /** Chat: start another run in the same worktree — GATED (`workspace.message`). */
+  sendWorkspaceMessage(
+    workspaceId: string,
+    input: ContinueWorkspaceInput,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<ContinueWorkspaceResult>>;
   /** Reconcile persisted workspaces against the live substrate (never kills live work). */
   reconcile(principal: Principal): Promise<ConductorWriteResult<ReconcileReport>>;
   /**
