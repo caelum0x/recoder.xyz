@@ -312,6 +312,8 @@ export interface ComposeOptions {
   codeIntel?: ConductorModuleDeps['codeIntel'];
   /** OPTIONAL live send-keys transport (absent ⇒ steering refuses truthfully). */
   steerTransport?: ConductorModuleDeps['steerTransport'];
+  /** OPTIONAL per-worktree `.mcp.json` injector (absent ⇒ injection is a truthful skip). */
+  mcpInject?: ConductorModuleDeps['mcpInject'];
 }
 
 /** Compose a conductor module over the in-memory harness. Returns the module + its gate. */
@@ -331,6 +333,7 @@ export function composeConductor(options: ComposeOptions = {}): {
     ...(options.brain ? { brain: options.brain } : {}),
     ...(options.codeIntel ? { codeIntel: options.codeIntel } : {}),
     ...(options.steerTransport ? { steerTransport: options.steerTransport } : {}),
+    ...(options.mcpInject ? { mcpInject: options.mcpInject } : {}),
   });
   return { module, gate };
 }

@@ -73,6 +73,14 @@ export const memoryConfigSchema = z.object({
   embedEndpoint: nullableUrl,
   embedModel: z.string().min(1),
 
+  // — Governance write allowlist —
+  /**
+   * The scopes an actor may WRITE memory into (candidate propose / harvest).
+   * EMPTY → every scope is allowed (degrade-safe default that preserves the
+   * open behavior); a NON-EMPTY list denies any write to a scope not present.
+   */
+  writeScopeAllowlist: z.array(z.string()).default([]),
+
   // — Fusion knobs —
   /** Near-duplicate collapse threshold (cosine/jaccard), `[0,1]`. */
   dedupeThreshold: z.number().min(0).max(1),
@@ -100,9 +108,21 @@ export interface MemoryConfigOverrides {
   readonly embedOpenaiBaseUrl?: string | null;
   readonly embedEndpoint?: string | null;
   readonly embedModel?: string;
+  readonly writeScopeAllowlist?: readonly string[];
   readonly dedupeThreshold?: number;
   readonly recallLimit?: number;
   readonly candidateTtlDays?: number;
+}
+
+/** Normalize an allowlist override: trim, drop blanks, de-duplicate. */
+function normStringList(list: readonly string[] | undefined): string[] {
+  if (!list) return [];
+  const seen = new Set<string>();
+  for (const raw of list) {
+    const t = typeof raw === 'string' ? raw.trim() : '';
+    if (t) seen.add(t);
+  }
+  return [...seen];
 }
 
 /** Trim + strip a trailing slash off a URL override, or `null` when blank. */
@@ -162,6 +182,8 @@ export function sliceMemoryConfig(
     embedOpenaiBaseUrl: normUrl(overrides.embedOpenaiBaseUrl),
     embedEndpoint: normUrl(overrides.embedEndpoint),
     embedModel: overrides.embedModel?.trim() || DEFAULT_EMBED_MODEL,
+
+    writeScopeAllowlist: normStringList(overrides.writeScopeAllowlist),
 
     dedupeThreshold: overrides.dedupeThreshold ?? 0.9,
     recallLimit: overrides.recallLimit ?? 8,

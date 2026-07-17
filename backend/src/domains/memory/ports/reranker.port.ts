@@ -19,6 +19,12 @@ export interface RerankResult {
   readonly passages: readonly string[];
   /** Original indices in rerank order; `order[0]` is the best passage's index. */
   readonly order: readonly number[];
+  /**
+   * The REAL ColBERT MaxSim late-interaction scores aligned to `order`/`passages`
+   * (`scores[k]` is the score of `passages[k]`), present only when the sidecar
+   * actually reranked. Absent on any degrade path — a rank is never fabricated.
+   */
+  readonly scores?: readonly number[];
   /** Why the rerank was skipped/failed (only set when `available` is false). */
   readonly reason?: string;
 }

@@ -45,7 +45,7 @@ backend/
     server.ts             # process entrypoint (thin: parse env → bootstrap.start())
     bootstrap/            # composition root: config loader, DI container, lifecycle, health, engine-supervisor
     shared/               # internal cross-domain ports/types (AppConfig, Result/error envelope, ModuleBase, DI tokens)
-    http/                 # express + express-ws wiring, middleware chain, WS /terminal /sync, rate-limit, errors
+    http/                 # express + express-ws wiring, middleware chain, WS /terminal + /workspaces/:id/stream, rate-limit, errors
     domains/              # THE 14 DOMAINS — each a self-contained composer over ports + degrade-safe adapters
       identity/ persistence/ edge/ agent-os/ conductor/ interop/ engines/
       inference/ social/ governance/ memory/ billing/ cloud/ observability/
@@ -101,7 +101,7 @@ MCP registration.
         ┌───────────────▼──────────────────────────────▼───────────────┐
         │  EDGE  (backend/src/http + domains/edge)                      │  L1 untrusted edge
         │  express+express-ws · middleware chain · route-mount table    │
-        │  WS /terminal /sync · OpenAPI · rate-limit · error envelope   │
+        │  WS /terminal + /workspaces/:id/stream · OpenAPI · rate-limit │
         └───────────────┬──────────────────────────────────────────────┘
                         │  every call → InteropChain(authorize→risk→policy→audit)
         ┌───────────────▼──────────────────────────────────────────────┐
@@ -158,8 +158,8 @@ the full file tree, DB schema, edges, and reuse notes.
 3. **Edge & API Server** — [`domains/edge-api-server.md`](./domains/edge-api-server.md) ·
    `backend/src/http/` + `backend/src/domains/edge/` (26 files). The stateless
    untrusted-until-proven edge: express+express-ws bootstrap, the one canonical
-   middleware chain, the declarative route-mount table, WS `/terminal` + `/sync`
-   upgrade dispatch, OpenAPI, rate-limit, CORS, the error envelope. **Exposes
+   middleware chain, the declarative route-mount table, WS `/terminal` +
+   `/api/conductor/workspaces/:id/stream` upgrade dispatch, OpenAPI, rate-limit, CORS, the error envelope. **Exposes
    `RouteProvider` + `WsBackend`** — the seam every domain plugs its edges into.
 
 4. **Agent OS Control Plane** — [`domains/agent-os-control-plane.md`](./domains/agent-os-control-plane.md) ·
@@ -217,8 +217,9 @@ the full file tree, DB schema, edges, and reuse notes.
     `MemoryModule` + `RetrievalPort`.**
 
 12. **Billing, Metering & Plans** — [`domains/billing-metering.md`](./domains/billing-metering.md) ·
-    `backend/src/domains/billing/` (28 files). Money: Polar (MoR) + Stripe behind one
-    `BillingProviderPort`, plans/entitlements, durable Postgres metering + quotas, signed
+    `backend/src/domains/billing/` (28 files). Money: MoR-only providers (Polar, Creem,
+    Paddle, Dodo — never Stripe) behind one `BillingProviderPort`, plans/entitlements,
+    durable Postgres metering + quotas, signed
     webhooks, invoicing, BYOK-vs-platform, and fail-safe health that degrades explicitly
     when keys are missing. **Exposes `EntitlementGate` (resolvePlan/checkEntitlement/checkQuota/isBYOK).**
 
@@ -315,13 +316,15 @@ overlap. They must be resolved before implementation to avoid duplicate ownershi
    detection before writes, TTL); agent-os and conductor consume the port. Drop the
    agent-os `work_locks` table; keep `work_signals` (that is agent-os/observability).
 
-6. **`/terminal` and `/sync` WS mounts claimed by BOTH `edge` and `conductor`.**
-   edge owns `ws/upgrade-router.ts` (the single `server.on('upgrade')`); conductor
-   has `routes/terminal.routes.ts::mountTerminalWs` + `terminal/live-events.ts`.
+6. **`/terminal` and per-workspace `/api/conductor/workspaces/:id/stream` WS mounts
+   claimed by BOTH `edge` and `conductor`.** edge owns `ws/upgrade-router.ts` (the
+   single `server.on('upgrade')`); conductor provides the WS backends via
+   `terminal/terminal-stream.ts` + `terminal/live-events.ts`.
    **Resolution:** edge owns the upgrade dispatch and WS lifecycle; conductor
    provides the `WsBackend`/`TerminalStreamPort` implementations that edge routes to.
-   Conductor must NOT call `server.on('upgrade')` itself. Same for `/sync`
-   (edge fan-out over the agent-os RunEvent bus; conductor publishes onto it).
+   Conductor must NOT call `server.on('upgrade')` itself. Same for the workspace
+   RunEvent stream (edge fan-out over the agent-os RunEvent bus; conductor publishes onto it).
+   *(The old collaboration/doc-`/sync` product surface was cut.)*
 
 7. **`/health` + `/api/agent-os/health` served by `edge`, `agent-os`, AND
    `observability`.** **Resolution:** observability owns the health *aggregation*
@@ -456,7 +459,8 @@ additionally `INTERNAL_SERVICE_KEY`-gated; writes additionally pass
 
 **Conductor** `/api/conductor/*`: `workspaces` (+events, +advance, +steer, +continue,
 +stop, +diff, +tree, +merge, +pr), `reconcile`, `substrates`, `runtimes`, `health`.
-WS `/terminal`, `/sync`.
+WS `/terminal` (control-mode terminal stream) + per-workspace `/api/conductor/workspaces/:id/stream`
+(RunEvent fan-out). *(The old collaboration/doc-`/sync` product surface was cut.)*
 
 **Interop / A2A** `/api/a2a/*`: `rpc`, `message`, `/.well-known/agent.json`, `agents`
 (+`:id/card`), `connectors/:runtime/{start,stop,health,stream(WS),input}`, `tasks`
@@ -474,7 +478,7 @@ WS `/terminal`, `/sync`.
 `POST /internal/social/probe`.
 
 **Billing** `/api/billing/*`: `plan`, `entitlements`, `usage`, `invoices`,
-`checkout`, `portal`, `health`, `webhooks/polar`, `webhooks/stripe` (signature).
+`checkout`, `portal`, `health`, `webhooks/:provider` (provider ∈ polar|creem|paddle|dodo, signature-verified).
 `/internal/billing/meter`.
 
 **Cloud** `/api/agent-os/cloud/*`: `sandboxes` (+`:id`), `deployments`

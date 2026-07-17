@@ -23,6 +23,14 @@ export interface TaskStoreRepo {
   createTask(input: CreateTaskInput): Promise<TaskRow>;
   /** One task by id, scoped to its owner; `null` when absent / not owned. */
   getTask(id: string, userId: string): Promise<TaskRow | null>;
+  /**
+   * List an owner's tasks, most-recently-updated first. Optionally filtered to a
+   * set of states (e.g. the non-terminal "inbox") and capped by `limit`.
+   */
+  listTasks(
+    userId: string,
+    opts?: { readonly states?: readonly A2ATaskState[]; readonly limit?: number },
+  ): Promise<readonly TaskRow[]>;
   /** Transition a task's state; returns the updated row or `null` when absent. */
   setState(id: string, userId: string, state: A2ATaskState): Promise<TaskRow | null>;
   /** All messages for a task, oldest-first. */

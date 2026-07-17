@@ -23,6 +23,7 @@ import type { Logger } from '../../../shared/logger.js';
 import type { MeteringRepository } from '../ports/metering-repo.port.js';
 import type { PlanCatalog } from './plan-catalog.service.js';
 import type { ProviderRegistry } from '../provider-registry.js';
+import type { InvoiceService } from '../invoice.service.js';
 import type {
   BillingProviderName,
   ParsedWebhook,
@@ -30,7 +31,7 @@ import type {
   SubscriptionStatus,
 } from '../types.js';
 
-export type WebhookAction = 'upserted' | 'duplicate' | 'ignored' | 'no_subject';
+export type WebhookAction = 'upserted' | 'invoiced' | 'duplicate' | 'ignored' | 'no_subject';
 
 /** The truthful outcome of processing one webhook (surfaced to the route + audit). */
 export interface WebhookProcessResult {
@@ -59,6 +60,12 @@ export interface WebhookServiceDeps {
   readonly repo: MeteringRepository;
   readonly catalog: PlanCatalog;
   readonly registry: ProviderRegistry;
+  /**
+   * The durable invoice/receipt projection. When wired, a verified
+   * `invoice.paid` event upserts a receipt row (idempotent) instead of being
+   * ignored. Optional: absent ⇒ invoice events fall through as `ignored`.
+   */
+  readonly invoices?: InvoiceService;
   readonly logger?: Logger;
   readonly now?: () => Date;
 }
@@ -68,7 +75,7 @@ function sha256(buf: Buffer): string {
 }
 
 export function createWebhookService(deps: WebhookServiceDeps): WebhookService {
-  const { repo, catalog, registry, logger } = deps;
+  const { repo, catalog, registry, invoices, logger } = deps;
   const clock = deps.now ?? (() => new Date());
 
   function verifyAndParse(
@@ -102,14 +109,26 @@ export function createWebhookService(deps: WebhookServiceDeps): WebhookService {
       return { ...base, handled: true, duplicate: true, action: 'duplicate' };
     }
 
-    // 2. Only reconcile events that carry a subscription snapshot.
+    // 2. Invoice projection: a verified `invoice.paid` event upserts a durable
+    //    receipt row (idempotent on `(provider, providerInvoiceId)`). The
+    //    service self-filters non-invoice events (returns null), so subscription
+    //    events fall straight through to step 3 untouched. Never fabricated.
+    if (invoices) {
+      const invoice = await invoices.recordFromWebhook(parsed);
+      if (invoice) {
+        await markProcessed(parsed);
+        return { ...base, handled: true, duplicate: false, action: 'invoiced' };
+      }
+    }
+
+    // 3. Only reconcile events that carry a subscription snapshot.
     const snap = parsed.subscription;
     if (!snap) {
       await markProcessed(parsed);
       return { ...base, handled: true, duplicate: false, action: 'ignored' };
     }
 
-    // 3. Resolve the owning subject (never guess — a missing subject can't be projected).
+    // 4. Resolve the owning subject (never guess — a missing subject can't be projected).
     const subjectId = parsed.subjectId;
     if (!subjectId) {
       logger?.warn?.({ ...base }, 'webhook has no resolvable subject → cannot project (marked processed)');
@@ -117,7 +136,7 @@ export function createWebhookService(deps: WebhookServiceDeps): WebhookService {
       return { ...base, handled: true, duplicate: false, action: 'no_subject' };
     }
 
-    // 4. Resolve the plan: adapter-mapped tier, else the current projection's plan,
+    // 5. Resolve the plan: adapter-mapped tier, else the current projection's plan,
     //    else the deny-safe `free` floor (a cancel with no product still projects).
     let plan: PlanTier | undefined = snap.plan ? catalog.normalize(snap.plan) : undefined;
     if (!plan) {

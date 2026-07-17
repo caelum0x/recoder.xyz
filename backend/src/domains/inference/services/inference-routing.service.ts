@@ -30,6 +30,7 @@ import type {
 } from '../types.js';
 import { computeCostMicroUsd, resolveUsage } from '../adapters/token-accounting.js';
 import type { EntitlementGate, BillingSubject } from '../ports/entitlement-gate.port.js';
+import type { UsageMeterPort } from '../ports/usage-meter.port.js';
 
 export interface InferenceRoutingDeps {
   readonly logger: Logger;
@@ -50,6 +51,8 @@ export class InferenceRoutingService {
   private readonly now: () => number;
   /** OPTIONAL BYOK-aware token-quota gate (set by the composer; absent ⇒ open). */
   private entitlementGate?: EntitlementGate;
+  /** OPTIONAL usage meter (set by the composer; absent ⇒ no token metering). */
+  private usageMeter?: UsageMeterPort;
 
   constructor(deps: InferenceRoutingDeps) {
     this.log = deps.logger;
@@ -63,6 +66,11 @@ export class InferenceRoutingService {
   /** Inject the optional billing entitlement gate (pre-dispatch token quota). */
   setEntitlementGate(gate: EntitlementGate): void {
     this.entitlementGate = gate;
+  }
+
+  /** Inject the optional billing usage meter (per-completion `token` metering). */
+  setUsageMeter(meter: UsageMeterPort): void {
+    this.usageMeter = meter;
   }
 
   /**
@@ -228,6 +236,10 @@ export class InferenceRoutingService {
         resolveUsage({ messages: params.req.messages, completion: params.content });
       const entry = await this.catalog.get(model);
       const costMicroUsd = computeCostMicroUsd(usage, entry);
+      // Meter tokens (prompt + completion) so the `token` quota decrements. Emitted
+      // BEFORE the ledger await + fire-and-forget so it is decoupled from (and never
+      // blocked by) the ledger write, and a metering fault never fails delivery.
+      this.emitTokenMeter(params, usage, provider);
       await this.ledger.append({
         userId: params.req.userId ?? null,
         model,
@@ -240,6 +252,34 @@ export class InferenceRoutingService {
     } catch (err) {
       this.log.warn({ err: message(err), model }, 'usage ledger accounting failed (ignored)');
     }
+  }
+
+  /**
+   * Emit one `token` usage meter for a routed completion (BYOK subjects are
+   * skipped inside the billing gate/quota, so this stays correct for them). NO-OP
+   * when: no meter wired, no attributable `userId`, or zero total tokens. Idempotent
+   * by `inferenceId` when present (a retry with the same id is a durable no-op).
+   * Fire-and-forget + self-logging — a metering hiccup NEVER blocks delivery.
+   */
+  private emitTokenMeter(
+    params: { readonly req: InferenceRequest; readonly inferenceId: string | undefined },
+    usage: TokenUsage,
+    provider: string | null,
+  ): void {
+    const meter = this.usageMeter;
+    const userId = params.req.userId;
+    if (!meter || !userId || usage.totalTokens <= 0) return;
+    void meter
+      .record({
+        subjectId: userId,
+        kind: 'token',
+        quantity: usage.totalTokens,
+        engine: provider,
+        ...(params.inferenceId ? { idempotencyKey: `token:${params.inferenceId}` } : {}),
+      })
+      .catch((err) =>
+        this.log.warn({ err: message(err), model: params.req.model }, 'inference token meter emit failed (ignored)'),
+      );
   }
 }
 

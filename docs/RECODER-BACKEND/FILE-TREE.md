@@ -66,7 +66,7 @@ backend/
       ws/
         upgrade-router.ts                   # [NEW] single server.on('upgrade') dispatch + auth + origin check
         terminal.socket.ts                  # [NEW] /terminal WS ↔ conductor TerminalStreamPort (substrate pty)
-        sync.socket.ts                      # [NEW] /sync WS ↔ agent-os RunEvent bus (live control-plane + doc sync)
+        stream.socket.ts                    # [NEW] /api/conductor/workspaces/:id/stream WS ↔ agent-os RunEvent fan-out (doc-sync/collaboration cut)
         __tests__/upgrade-router.test.ts    # [NEW] unauth upgrade rejected; bad origin closed; path routing
 ```
 
@@ -181,7 +181,7 @@ domains/edge/
   types.ts                                  # [NEW] EdgeModule, MountSpec, GuardPolicy, EdgeHealth
   ports/
     route-provider.port.ts                  # [NEW] RouteProvider — every domain implements to expose HTTP/MCP edges
-    ws-backend.port.ts                      # [NEW] WsBackend — terminal/sync stream backends implement this
+    ws-backend.port.ts                      # [NEW] WsBackend — /terminal + workspace-stream backends implement this
   __tests__/
     route-table.test.ts                     # [NEW] every mount has a guard; no duplicate/overlapping base paths
     edge-module.test.ts                     # [NEW] boot mounts providers; degraded provider skipped + health down
@@ -298,14 +298,14 @@ conductor/
     tmux-orchestrator.ts                    # [MOVE] tmux session primitives (start/list/capture/send-keys/kill)
     tmux-path.ts                            # [MOVE] pinned tmux binary resolution + version guard
     terminal-stream.ts                      # [MOVE] /terminal control-mode WS handler (attach/stream/steer)
-    live-events.ts                          # [MOVE] /sync workspace RunEvent fan-out
+    live-events.ts                          # [MOVE] /workspaces/:id/stream workspace RunEvent fan-out
   locks/
     conductor-locks.ts                      # [MOVE] work-lock adapter over @recoder/coordination
   audit/
     conductor-audit.ts                      # [MOVE] governance-gate write wrapper + audit-chain query/verify
   routes/
     conductor.routes.ts                     # [MOVE] /api/conductor/* HTTP edges
-    terminal.routes.ts                      # [MOVE] WS /terminal + /sync mount *(via edge upgrade-router — conflict #6)*
+    terminal.routes.ts                      # [MOVE] WS /terminal + /workspaces/:id/stream mount *(via edge upgrade-router — conflict #6)*
   mcp/
     conductor-engine.ts                     # [NEW] registerConductorMcpTools: workspace_* MCP tools
   migrations/
@@ -663,18 +663,21 @@ memory/
 ```
 billing/
   index.ts                                  # [NEW] createBillingModule(deps) + BillingModule interface
-  billing-module.ts                         # [NEW] composer: distribution + Stripe + metering + gate
+  billing-module.ts                         # [NEW] composer: distribution + MoR providers + metering + gate
   config.ts                                 # [NEW] BillingConfig slice (provider keys, webhook secrets, flush interval)
   types.ts                                  # [NEW] BillingSubject, PlanTier, UsageRecord, Invoice, EntitlementView
   health.ts                                 # [NEW] per-provider up|down aggregate; degraded when key missing
   ports/
-    billing-provider.port.ts                # [NEW] BillingProviderPort — the Polar|Stripe seam
+    billing-provider.port.ts                # [NEW] BillingProviderPort — the MoR-provider seam (Polar|Creem|Paddle|Dodo, never Stripe)
     metering.repo.port.ts                   # [NEW] MeteringRepository — usage/quota/subscription/invoice port
     entitlement.port.ts                     # [NEW] EntitlementGate — exposed to ALL other domains
   adapters/
     distribution-billing.adapter.ts         # [MOVE] wraps @recoder/distribution createBillingService
-    polar.adapter.ts                        # [MOVE] Polar provider over polar-client
-    stripe.adapter.ts                       # [NEW] Stripe provider (fetch-based, constructEvent verify)
+    polar.adapter.ts                        # [MOVE] Polar (MoR) provider over polar-client
+    creem.adapter.ts                        # [NEW] Creem (MoR) provider (fetch-based, sig verify)
+    paddle.adapter.ts                       # [NEW] Paddle (MoR) provider (fetch-based, sig verify)
+    dodo.adapter.ts                         # [NEW] Dodo Payments (MoR) provider (fetch-based, sig verify)
+    shared.ts                               # [NEW] shared MoR adapter helpers (fetch, sig verify)
   services/
     plan-catalog.service.ts                 # [NEW] free/pro/team/max/enterprise + plan→capability matrix
     entitlement.service.ts                  # [NEW] feature gates + BYOK-vs-platform decision
@@ -696,7 +699,7 @@ billing/
     quota.service.test.ts                   # [NEW] headroom, consume, reset, unlimited, fail-safe deny
     entitlement.service.test.ts             # [NEW] effective-plan max, feature gate, BYOK bypass
     webhook.service.test.ts                 # [NEW] bad sig reject; duplicate event no-op; upgrade projected
-    stripe.adapter.test.ts                  # [NEW] down when key absent; sig verify golden; checkout shape
+    mor-adapters.test.ts                    # [NEW] each MoR adapter: down when key absent; sig verify golden; checkout shape
     billing.repository.test.ts              # [NEW] :param binding, idempotency UNIQUE, WHERE subject scoping
     health.test.ts                          # [NEW] missing keys → degraded + per-provider down
 ```

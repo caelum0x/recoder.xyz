@@ -149,6 +149,8 @@ export interface DomainRepository {
   getById(id: string, tenantId: string): Promise<DomainRecord | null>;
   updateVerification(id: string, status: DomainVerificationStatus, tls: TlsStatus): Promise<void>;
   listByTenant(tenantId: string): Promise<readonly DomainRecord[]>;
+  /** Delete a tenant-scoped domain; returns `true` when a row was removed. */
+  delete(id: string, tenantId: string): Promise<boolean>;
 }
 
 export interface MeshEndpointUpsert {

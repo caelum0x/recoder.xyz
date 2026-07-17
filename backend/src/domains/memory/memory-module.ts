@@ -29,7 +29,9 @@ import type { RetrievalPort } from './ports/retrieval.port.js';
 import type { MemoryRepository } from './ports/memory-repository.port.js';
 import type { CandidateService } from './lifecycle/candidate-service.js';
 import type { MemoryLifecycle } from './lifecycle/memory-lifecycle.js';
+import type { ForgetService } from './lifecycle/forget.js';
 import type { RelateService } from './lifecycle/relate.js';
+import type { MemoryWriteAllowlist } from './lifecycle/write-allowlist.js';
 import { createMem0Adapter } from './adapters/mem0.adapter.js';
 import { createMem0SidecarClient } from './adapters/mem0-sidecar.client.js';
 import { createBeadsMemoryAdapter } from './adapters/beads-memory.adapter.js';
@@ -40,9 +42,12 @@ import { createRetrievalService } from './retrieval/retrieval-service.js';
 import { createRecallService } from './recall/recall-fusion.js';
 import { createCandidateService } from './lifecycle/candidate-service.js';
 import { createMemoryLifecycle } from './lifecycle/memory-lifecycle.js';
+import { createForgetService } from './lifecycle/forget.js';
 import { createHarvestService, type HarvestService } from './lifecycle/harvest.js';
 import { createRelateService } from './lifecycle/relate.js';
+import { createMemoryWriteAllowlist } from './lifecycle/write-allowlist.js';
 import { buildMemoryRouter } from './routes/memory.routes.js';
+import { buildInternalMemoryRouter } from './routes/internal-memory.routes.js';
 import { buildRetrievalRouter } from './routes/retrieval.routes.js';
 import { buildMemoryMcpTools } from './mcp/memory-engine.js';
 import { buildRetrievalMcpTools } from './mcp/retrieval-engine.js';
@@ -64,8 +69,10 @@ export class MemoryComposer implements MemoryModule {
   private readonly retrievalService: RetrievalPort;
   private readonly candidateService: CandidateService;
   private readonly lifecycleService: MemoryLifecycle;
+  private readonly forgetService: ForgetService;
   private readonly harvestService: HarvestService;
   private readonly relateService: RelateService;
+  private readonly writeAllowlist: MemoryWriteAllowlist;
   private readonly executorAvailable: () => boolean;
   private started = false;
 
@@ -106,12 +113,25 @@ export class MemoryComposer implements MemoryModule {
       logger: this.log,
     });
 
-    // Lifecycle: candidate proposal → governed promotion → harvest, + relations.
-    this.candidateService = createCandidateService({ repository: this.repo, beads: this.beads, logger: this.log });
+    // Governance allowlist on memory writes (empty ⇒ allow-all, degrade-safe).
+    this.writeAllowlist = createMemoryWriteAllowlist({ scopes: cfg.writeScopeAllowlist });
+
+    // Lifecycle: candidate proposal → governed promotion → forget → harvest, + relations.
+    this.candidateService = createCandidateService({
+      repository: this.repo,
+      beads: this.beads,
+      allowlist: this.writeAllowlist,
+      logger: this.log,
+    });
     this.lifecycleService = createMemoryLifecycle({
       repository: this.repo,
       gate: deps.gate,
       beads: this.beads,
+      logger: this.log,
+    });
+    this.forgetService = createForgetService({
+      repository: this.repo,
+      gate: deps.gate,
       logger: this.log,
     });
     this.harvestService = createHarvestService({ candidates: this.candidateService, logger: this.log });
@@ -134,6 +154,10 @@ export class MemoryComposer implements MemoryModule {
     return this.lifecycleService;
   }
 
+  forget(): ForgetService {
+    return this.forgetService;
+  }
+
   harvest(): HarvestService {
     return this.harvestService;
   }
@@ -154,6 +178,7 @@ export class MemoryComposer implements MemoryModule {
         recall: this.recallService,
         candidates: this.candidateService,
         lifecycle: this.lifecycleService,
+        forget: this.forgetService,
         relations: this.relateService,
         middleware: this.middleware,
       }),
@@ -165,6 +190,18 @@ export class MemoryComposer implements MemoryModule {
       }),
     );
     return router;
+  }
+
+  /**
+   * The `/internal/agent-os/memory/*` router (INTERNAL_SERVICE_KEY-gated). Carries
+   * the worker-to-backend harvest ingest edge. Bootstrap mounts this under
+   * `/internal/agent-os/memory` alongside the other domains' internal routers.
+   */
+  internalRoutes(): Router {
+    return buildInternalMemoryRouter({
+      harvest: this.harvestService,
+      middleware: this.middleware,
+    });
   }
 
   mcp(): readonly McpToolRegistration[] {

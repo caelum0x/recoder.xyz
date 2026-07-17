@@ -1,12 +1,21 @@
 # Domain: A2A & Interop Runtimes
 
-Folder prefix: `backend/src/domains/interop/`
-Domain key: `interop`
+Folder prefix: `backend/src/domains/interop/` + `backend/src/domains/interop-wire/`
+Domain key: `interop` (gate) + `interop-wire` (wire + runtimes)
 Owner boundary: **Agent-to-agent wire + runtime adapters.** The A2A envelope
 ingress/egress, agent-cards, orchestration/patterns, the
-`authorize → risk → policy → audit` edge chain, and the `ConductorRuntime`
-adapters (claude / codex / cursor / opencode / pi / windsurf / replit / openfang)
+`authorize → risk → policy → audit` edge chain, and the A2A `ConductorRuntime`
+wire adapters (claude / codex / cursor / opencode / windsurf / replit)
 that dispatch coding agents and emit `RunEvent`s back to the control plane.
+
+> **SHIPPED SPLIT (this doc predates it).** The single `interop` domain below was
+> split into two: **`interop`** now owns only the hostile-by-default gate/chain
+> (`authorize→risk→policy→audit`, rate-limit, middleware); **`interop-wire`** owns
+> the A2A wire (rpc/agents/tasks/dispatch/registry/bridge) and the runtime
+> connectors under `interop-wire/runtimes/`. There is **no `pi` or `openfang`
+> wire adapter and no per-runtime connector *process* control surface** — openfang
+> executes in-process via the **conductor/engines** domain, not as an interop
+> connector. Read the file tree / routes below as the pre-split plan.
 
 ---
 
@@ -25,12 +34,13 @@ It has two faces:
    (HMAC / ed25519), identity-bound, risk-scored, policy-checked, and audited
    *before* any handler runs. Outbound, it seals and signs envelopes and
    publishes agent-cards describing what this instance can do.
-2. **Runtime face (dispatch out).** It owns the `ConductorRuntime` adapter
-   registry. Given a `Task` + `InstructionBundle`, it selects a runtime
-   (claude/codex/opencode/pi/openfang/…), spawns/attaches the connector
-   process, streams stdout→`RunEvent`, tracks heartbeat/SLO, and lands results
+2. **Runtime face (dispatch out).** `interop-wire` owns the A2A `ConductorRuntime`
+   wire-adapter registry. Given a `Task` + `InstructionBundle`, it selects a
+   runtime (claude/codex/cursor/opencode/windsurf/replit) and dispatches over the
+   A2A wire, streams `RunEvent`s, tracks heartbeat/SLO, and lands results
    through governance. Multi-dispatch fans a single task to N runtimes
-   (squad pattern, ported from the Go multica idea into TS).
+   (squad pattern, ported from the Go multica idea into TS). (openfang is NOT a
+   wire runtime — it runs in-process via conductor/engines.)
 
 **Non-goals** (owned elsewhere): task/run/approval *state of record* lives in
 `agent-os`; tmux/worktree substrate + reconciler live in `conductor`; the
@@ -48,7 +58,7 @@ key → that runtime reports `down`, never a faked success).
 ```
 backend/src/domains/interop/
   index.ts                              # factory createInteropModule(deps) + public InteropModule interface
-  interop-module.ts                     # composer: fuses wire + gate + runtimes behind one interface
+  interop-module.ts                     # SHIPPED SPLIT: interop/interop-module.ts (gate only) + interop-wire/interop-wire-module.ts (wire + runtimes)
   types.ts                              # domain-internal types (registry rows, dispatch plan, connector spec)
   config.ts                             # InteropConfig slice (runtime enable flags, timeouts, signing mode)
   health.ts                             # aggregate per-engine up|down (a2a-sdk, each runtime, governance link)
@@ -57,7 +67,7 @@ backend/src/domains/interop/
     interop-chain.port.ts               # EXPOSED: InteropChain (authorize→risk→policy→audit) — consumed by ALL edges/MCP
     a2a-transport.port.ts               # EXPOSED: A2ATransport (ingressEnvelope / egressEnvelope / agentCard)
     runtime-adapter.port.ts             # CONSUMED: re-exports ConductorRuntime contract from @recoder/agent-runtimes (widened id union)
-    connector-runtime.port.ts           # ConnectorRuntime process port (spawn/attach/stream/stop) for CLI coding agents
+    connector-runtime.port.ts           # SHIPPED as interop-wire/runtimes/runtime-connector.ts — A2A wire connector (NOT a per-runtime spawn/stop process surface)
     agent-registry.repo.ts              # Repository PORT for registered agents + heartbeat (persistence provides impl)
     task-store.repo.ts                  # Repository PORT for A2A tasks/messages/scratchpad
 
@@ -74,12 +84,14 @@ backend/src/domains/interop/
 
   runtimes/
     runtime-registry.ts                 # registry + selector for ConductorRuntime adapters; dispatch entrypoint
-    claude-runtime.adapter.ts           # Claude Code adapter (spawn/attach → RunEvent)
-    codex-runtime.adapter.ts            # Codex adapter
-    opencode-runtime.adapter.ts         # opencode adapter (uses @recoder/opencode-sdk)
-    pi-runtime.adapter.ts               # pi adapter (uses pi-* packages)
-    openfang-runtime.adapter.ts         # openfang adapter (in-proc napi) — REQUIRES widened ConductorRuntimeId
-    connector-process.supervisor.ts     # generic CLI connector process supervisor (cursor/windsurf/replit)
+    claude.adapter.ts                   # Claude Code A2A wire adapter → RunEvent   (shipped names, no "-runtime")
+    codex.adapter.ts                    # Codex adapter
+    opencode.adapter.ts                 # opencode adapter (uses @recoder/opencode-sdk)
+    cursor.adapter.ts                   # cursor adapter
+    windsurf.adapter.ts                 # windsurf adapter
+    replit.adapter.ts                   # replit adapter
+    # (NO pi/openfang wire adapter — openfang runs in-process via conductor/engines)
+    runtime-connector.ts                # generic A2A wire connector (shared adapter plumbing)
     run-event.emitter.ts                # normalize adapter output → RunEvent, push to outbox bus
 
   registry/
@@ -99,9 +111,10 @@ backend/src/domains/interop/
     task-store.repository.ts            # concrete TaskStoreRepo (tasks/messages/scratchpad)
 
   routes/
-    interop.routes.ts                   # /api/a2a/* wire ingress + agent-card + registry edges
-    connectors.routes.ts                # /api/a2a/connectors/* coding-agent connector edges (per-runtime)
-    runtimes.routes.ts                  # task-lifecycle, multi-dispatch, heartbeat/slo, scratchpad, context-bridge edges
+    a2a.routes.ts                       # /api/a2a/* wire ingress (rpc/message/agent-card/health)
+    agents.routes.ts                    # /api/a2a/agents* registry edges
+    tasks.routes.ts                     # task-lifecycle, dispatch, heartbeat/slo, scratchpad, context-bridge edges
+    # (NO connectors.routes.ts / per-runtime /connectors/:runtime/{start,stop,stream,input} process surface — that was cut)
 
   mcp/
     interop-engine.ts                   # MCP tools: send_task, task_respond, list_agents, inbox, dispatch
@@ -132,7 +145,7 @@ backend/src/domains/interop/
 | `ports/interop-chain.port.ts` | ts | port | The `authorize→risk→policy→audit` contract every edge/MCP call passes | `InteropChain`, `ChainDecision`, `ChainContext` |
 | `ports/a2a-transport.port.ts` | ts | port | Wire ingress/egress + agent-card contract | `A2ATransport`, `IngressResult`, `EgressEnvelope` |
 | `ports/runtime-adapter.port.ts` | ts | port | Re-export/narrow `ConductorRuntime` from `@recoder/agent-runtimes` (WIDENED id union) | `ConductorRuntime`, `ConductorRuntimeId`, `RuntimeDispatchInput` |
-| `ports/connector-runtime.port.ts` | ts | port | CLI connector process lifecycle | `ConnectorRuntime`, `ConnectorHandle`, `ConnectorStream` |
+| `interop-wire/runtimes/runtime-connector.ts` | ts | service | A2A wire connector plumbing (NOT a CLI connector process lifecycle) | `RuntimeConnector` |
 | `ports/agent-registry.repo.ts` | ts | port | Repository interface for agents + heartbeat | `AgentRegistryRepo` |
 | `ports/task-store.repo.ts` | ts | port | Repository interface for tasks/messages/scratchpad | `TaskStoreRepo` |
 | `wire/a2a-envelope.service.ts` | ts | service | Build/parse/validate envelopes; zod-validate at boundary | `buildEnvelope`, `parseEnvelope`, `validateInbound` |
@@ -143,12 +156,14 @@ backend/src/domains/interop/
 | `gate/governance-gate.adapter.ts` | ts | client | Degrade-safe adapter over `@recoder/governance`; on gate down → deny writes | `governanceGateAdapter`, `GateDownError` |
 | `gate/approval-gate.service.ts` | ts | service | Await agent-os approval record for risky actions | `requireApproval`, `waitForApproval` |
 | `runtimes/runtime-registry.ts` | ts | service | Register adapters; select by capability/policy; dispatch | `RuntimeRegistry`, `selectRuntime`, `dispatch` |
-| `runtimes/claude-runtime.adapter.ts` | ts | client | Claude Code adapter → RunEvent | `claudeRuntimeAdapter` |
-| `runtimes/codex-runtime.adapter.ts` | ts | client | Codex adapter | `codexRuntimeAdapter` |
-| `runtimes/opencode-runtime.adapter.ts` | ts | client | opencode adapter (`@recoder/opencode-sdk`) | `opencodeRuntimeAdapter` |
-| `runtimes/pi-runtime.adapter.ts` | ts | client | pi adapter (`pi-agent-core`/`pi-coding-agent`) | `piRuntimeAdapter` |
-| `runtimes/openfang-runtime.adapter.ts` | ts | client | openfang in-proc napi adapter | `openfangRuntimeAdapter` |
-| `runtimes/connector-process.supervisor.ts` | ts | service | Spawn/attach/stream/stop CLI connectors (cursor/windsurf/replit); auth-preflight | `ConnectorSupervisor`, `spawnConnector` |
+| `runtimes/claude.adapter.ts` | ts | client | Claude Code A2A wire adapter → RunEvent | `claudeRuntimeAdapter` |
+| `runtimes/codex.adapter.ts` | ts | client | Codex adapter | `codexRuntimeAdapter` |
+| `runtimes/opencode.adapter.ts` | ts | client | opencode adapter (`@recoder/opencode-sdk`) | `opencodeRuntimeAdapter` |
+| `runtimes/cursor.adapter.ts` | ts | client | cursor A2A wire adapter | `cursorRuntimeAdapter` |
+| `runtimes/windsurf.adapter.ts` | ts | client | windsurf A2A wire adapter | `windsurfRuntimeAdapter` |
+| `runtimes/replit.adapter.ts` | ts | client | replit A2A wire adapter | `replitRuntimeAdapter` |
+| `runtimes/runtime-connector.ts` | ts | service | generic A2A wire connector plumbing (NOT a per-runtime process spawn/stop surface) | `RuntimeConnector` |
+| — | — | — | *(NO pi/openfang wire adapter — openfang runs in-process via conductor/engines)* | — |
 | `runtimes/run-event.emitter.ts` | ts | service | Normalize adapter output → `RunEvent`; push to outbox | `emitRunEvent`, `toRunEvent` |
 | `registry/agent-registry.service.ts` | ts | service | register/list/deregister; capability matcher | `AgentRegistryService`, `matchCapabilities` |
 | `registry/heartbeat-slo.service.ts` | ts | service | Track heartbeats; compute SLO windows; mark stale `down` | `HeartbeatSlo`, `recordHeartbeat`, `sloSnapshot` |
@@ -158,9 +173,10 @@ backend/src/domains/interop/
 | `bridge/scratchpad.service.ts` | ts | service | Shared per-task scratchpad (append/read, TTL) | `Scratchpad`, `append`, `read` |
 | `repositories/agent-registry.repository.ts` | ts | repository | Concrete `AgentRegistryRepo` over `QueryExecutor` | `createAgentRegistryRepo(qx)` |
 | `repositories/task-store.repository.ts` | ts | repository | Concrete `TaskStoreRepo` | `createTaskStoreRepo(qx)` |
-| `routes/interop.routes.ts` | ts | route | `/api/a2a/*` wire ingress + agent-card + registry | `interopRoutes(module)` |
-| `routes/connectors.routes.ts` | ts | route | `/api/a2a/connectors/*` per-runtime connector control | `connectorRoutes(module)` |
-| `routes/runtimes.routes.ts` | ts | route | task-lifecycle/multi-dispatch/heartbeat/slo/scratchpad/context-bridge | `runtimeRoutes(module)` |
+| `routes/a2a.routes.ts` | ts | route | `/api/a2a/*` wire ingress (rpc/message/agent-card/health) | `a2aRoutes(module)` |
+| `routes/agents.routes.ts` | ts | route | `/api/a2a/agents*` registry edges | `agentsRoutes(module)` |
+| `routes/tasks.routes.ts` | ts | route | task-lifecycle/dispatch/heartbeat/slo/scratchpad/context-bridge | `tasksRoutes(module)` |
+| *(cut)* | — | — | no `connectors.routes.ts` / per-runtime connector *process* control surface | — |
 | `mcp/interop-engine.ts` | ts | client | MCP tools conforming to `@recoder/agent-mcp` ToolRouter | `registerInteropMcpTools(router)` |
 | `migrations/0001_interop_agents.sql` | sql | migration | agents + heartbeats tables | — |
 | `migrations/0002_interop_tasks_scratchpad.sql` | sql | migration | tasks + messages + scratchpad tables | — |
@@ -249,7 +265,7 @@ Mounted by the `edge` domain route table. Every call passes the `InteropChain`
 (`authorize→risk→policy→audit`); `/internal/*` is `INTERNAL_SERVICE_KEY`-gated.
 Responses use `sendSuccess` / `sendError(createError(code,msg))`.
 
-### `routes/interop.routes.ts` — `/api/a2a`
+### `routes/a2a.routes.ts` + `routes/agents.routes.ts` — `/api/a2a`
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | `/api/a2a/rpc` | A2A JSON-RPC ingress (signed-envelope gated) → `handleA2ARpc` |
@@ -260,18 +276,16 @@ Responses use `sendSuccess` / `sendError(createError(code,msg))`.
 | DELETE | `/api/a2a/agents/:id` | Deregister |
 | GET  | `/api/a2a/agents/:id/card` | Resolve remote card (cached) |
 
-### `routes/connectors.routes.ts` — `/api/a2a/connectors`
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/api/a2a/connectors/:runtime/start` | Start a coding-agent connector process |
-| POST | `/api/a2a/connectors/:runtime/stop` | Stop it |
-| GET  | `/api/a2a/connectors/:runtime/health` | Connector runtime up/down |
-| WS   | `/api/a2a/connectors/:runtime/stream` | Stream connector stdout→RunEvent (express-ws) |
-| POST | `/api/a2a/connectors/:runtime/input` | Feed input-required response |
+### connector process routes — **CUT (not shipped)**
 
-`:runtime` ∈ `claude|codex|cursor|opencode|pi|windsurf|replit|openfang`.
+The planned per-runtime connector *process* control surface
+(`/api/a2a/connectors/:runtime/{start,stop,health,stream,input}`) was **not shipped**.
+Coding-agent execution is conductor-owned (tmux/worktree substrate + run-tailer) and
+A2A dispatch happens over the wire runtimes in `interop-wire/runtimes/`
+(claude|codex|cursor|opencode|windsurf|replit — no pi/openfang). openfang runs
+in-process via conductor/engines, not as an interop connector process.
 
-### `routes/runtimes.routes.ts`
+### `routes/tasks.routes.ts`
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | `/api/a2a/tasks` | Create task → dispatch to runtime (task-lifecycle) |

@@ -57,8 +57,15 @@ export function createColbertAdapter(
     async rerank(query: string, candidates: RerankCandidate[]): Promise<RerankCandidate[]> {
       if (candidates.length === 0) return [];
       const result = await client.rerank(query, candidates.map((c) => c.text));
-      // On degrade the client returns identity order — reordering is then a no-op.
-      return result.order.map((i) => candidates[i]);
+      // Reorder by ColBERT order AND carry the REAL MaxSim score onto each
+      // candidate so retrieval passages reflect late-interaction relevance (not
+      // just vector similarity). On degrade the client returns identity order with
+      // NO scores — candidates keep their original vector score (never fabricated).
+      return result.order.map((originalIndex, rank) => {
+        const base = candidates[originalIndex];
+        const maxSim = result.scores?.[rank];
+        return typeof maxSim === 'number' ? { ...base, score: maxSim } : base;
+      });
     },
   };
 

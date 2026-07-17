@@ -144,13 +144,13 @@ and the `InteropChain` edge seam. Every later write and every edge stands on the
 
 **Goal:** shrink `server.ts` to `parse env → bootstrap.start()`; every domain plugs
 in through the `RouteProvider` seam and the one canonical middleware chain; WS
-upgrade dispatch for `/terminal` + `/sync`.
+upgrade dispatch for `/terminal` + `/api/conductor/workspaces/:id/stream`.
 
 **Build:**
 1. `ports/route-provider.port.ts` + `ports/ws-backend.port.ts` + `types.ts` + `config.ts` (freeze the seam the other 13 domains implement).
 2. `http/middleware/error.ts` `[MOVE]` + `validate.ts`, then `request-context.ts` `[MOVE]`, `cors.ts` `[MOVE]`, `rate-limit.ts` `[MOVE]`, `auth.ts` `[MOVE]`, `internal-key.ts` `[MOVE]` (consume governance gate from Phase 3), `interop-gate.ts` (wrap the Phase-3 chain), `chain.ts`.
 3. `http/app.ts` `[MOVE]` + `http/lifecycle.ts`.
-4. `http/ws/upgrade-router.ts` + `terminal.socket.ts` + `sync.socket.ts` — **resolve conflict #6**: edge owns `server.on('upgrade')`; conductor/agent-os provide the WsBackends (wired in later phases).
+4. `http/ws/upgrade-router.ts` + `terminal.socket.ts` + `stream.socket.ts` (per-workspace RunEvent fan-out; the old doc-`/sync`/collaboration surface was cut) — **resolve conflict #6**: edge owns `server.on('upgrade')`; conductor/agent-os provide the WsBackends (wired in later phases).
 5. `route-table.ts` + `edge-module.ts` + `index.ts` + `health.ts`.
 6. `http/openapi.ts` (reads the finished table).
 7. Wire `createEdgeModule(deps)` into `bootstrap/container.ts`; mount the already-built identity/persistence/governance providers.
@@ -328,20 +328,20 @@ Postgres metering, signed webhooks, and fail-safe money health.
 2. Migrations (`0001_billing_core`, `0002_billing_usage`) + `billing.repository.ts` (idempotency UNIQUE).
 3. `plan-catalog.service.ts` + `distribution-billing.adapter.ts` + `entitlement.service.ts` → working `EntitlementGate` before any provider exists.
 4. `quota.service.ts` + `metering.service.ts` (fail-safe deny path first).
-5. Providers: `polar.adapter.ts` `[MOVE]` + `stripe.adapter.ts` (new) + `invoice.service.ts`.
+5. Providers: `polar.adapter.ts` `[MOVE]` + `{creem,paddle,dodo}.adapter.ts` + `shared.ts` (new MoR adapters, never Stripe) + `invoice.service.ts`.
 6. `webhook.service.ts` + `routes/billing-webhooks.routes.ts` (raw body signature verify).
 7. `routes/billing.routes.ts` + `mcp/billing-engine.ts` `[MOVE]`.
 8. Composer + `health.ts`; wire `EntitlementGate` into conductor (pre-dispatch quota+feature gate), inference (token metering), engines (per-engine usage).
 
 **Reuse:** `@recoder/distribution` (plan/quota/entitlement algebra — the core),
 `backend/src/engines/polar-client.ts`, `backend/src/routes/billing-polar.routes.ts`,
-`backend/src/agent-os/mcp/billing-engine.ts`. **New:** Stripe adapter, durable
+`backend/src/agent-os/mcp/billing-engine.ts`. **New:** Creem/Paddle/Dodo MoR adapters (never Stripe), durable
 Postgres metering, webhook reconcile loop, `max` tier. No engine daemons (pure TS + HTTPS).
 
 **Depends on:** Phases 1–4 (+ inference/engines/conductor for the metering hooks).
 
 **Verify:** `quota`, `entitlement` (BYOK bypass), `webhook` (bad sig / duplicate /
-upgrade), `stripe.adapter`, `billing.repository`, `health`; `scripts/verify-byok-e2e.sh`.
+upgrade), `mor-adapters`, `billing.repository`, `health`; `scripts/verify-byok-e2e.sh`.
 
 ---
 

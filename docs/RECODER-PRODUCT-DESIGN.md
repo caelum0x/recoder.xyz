@@ -50,11 +50,13 @@ Install Recoder  →  Open app  →  Sign in / Sign up (recoder.xyz web auth)
 
 - **Auth** is the *only* interaction: the desktop opens the recoder.xyz sign-in (device flow),
   the user signs in on the web, the app captures the session. (Backend-owned Better Auth — see
-  identity domain.) Like conductor.build reusing your existing agent login, Recoder reuses the
-  user's existing Claude/Codex login too — no second key wall.
-- **Agent auto-detect:** on first run the desktop probes for installed agent CLIs (Claude Code,
-  Codex, Cursor, opencode, pi) and their existing auth. It preselects the one you have. No dropdown
-  to configure unless you want to switch.
+  identity domain.) **Shipped agent-login behavior is a PATH-probe, not a login-reuse:** Recoder
+  detects the installed agent CLI on `PATH` and launches it so it uses *its own* existing login;
+  Recoder does not read, import, or proxy the Claude/Codex credential. No second key wall for the
+  agent, because the CLI already holds its own auth.
+- **Agent auto-detect:** on first run the desktop PATH-probes for installed agent CLIs (Claude Code,
+  Codex, Cursor, opencode, pi) — presence only; the CLI carries its own auth. It preselects the one
+  you have. No dropdown to configure unless you want to switch.
 - **GitHub auto-detect:** reads the user's `gh`/git identity (e.g. `caelum0x`) so workspaces,
   branches, and PRs are attributed correctly with zero input.
 - **Result:** "I installed it, signed in, and it already knew I use Claude Code and I'm caelum0x."

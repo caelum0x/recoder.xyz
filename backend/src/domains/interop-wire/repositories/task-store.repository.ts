@@ -121,6 +121,36 @@ export function createTaskStoreRepo(deps: TaskStoreRepoDeps): TaskStoreRepo {
     return rows[0] ? rowToTask(rows[0]) : null;
   }
 
+  async function listTasks(
+    userId: string,
+    opts: { readonly states?: readonly A2ATaskState[]; readonly limit?: number } = {},
+  ): Promise<readonly TaskRow[]> {
+    const limit = opts.limit && opts.limit > 0 ? Math.trunc(opts.limit) : 100;
+    const states = opts.states && opts.states.length > 0 ? opts.states : undefined;
+    if (!durable()) {
+      const rows = [...memTasks.values()].filter(
+        (row) => row.userId === userId && (!states || states.includes(row.state)),
+      );
+      // Newest first is not observable in-mem (no timestamps); preserve insertion,
+      // reversed to approximate most-recent-first, then cap.
+      return rows.reverse().slice(0, limit);
+    }
+    const params: Record<string, unknown> = { user_id: userId, limit };
+    let where = `user_id = :user_id`;
+    if (states) {
+      const placeholders = states.map((_, i) => `:state_${i}`);
+      states.forEach((s, i) => {
+        params[`state_${i}`] = s;
+      });
+      where += ` and state in (${placeholders.join(', ')})`;
+    }
+    const rows = await executor.execute<QueryRow>(
+      `select * from interop_tasks where ${where} order by updated_at desc nulls last limit :limit`,
+      params,
+    );
+    return rows.map(rowToTask);
+  }
+
   async function setState(id: string, userId: string, state: A2ATaskState): Promise<TaskRow | null> {
     const existing = memTasks.get(id);
     if (existing && existing.userId === userId) memTasks.set(id, { ...existing, state });
@@ -229,6 +259,7 @@ export function createTaskStoreRepo(deps: TaskStoreRepoDeps): TaskStoreRepo {
   return {
     createTask,
     getTask,
+    listTasks,
     setState,
     listMessages,
     appendMessage,

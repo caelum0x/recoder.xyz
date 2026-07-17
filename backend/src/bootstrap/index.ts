@@ -14,6 +14,7 @@
  * (before the route table is built) without changing this file's shape.
  */
 import type http from 'node:http';
+import { resolve as resolvePath } from 'node:path';
 import express, { type Router } from 'express';
 
 import type { AppConfig } from '../shared/app-config.js';
@@ -49,6 +50,7 @@ import { createBrainMemoryAdapter } from '../domains/conductor/adapters/brain-me
 import { createConductorCodeIntel } from '../domains/conductor/adapters/code-intel.adapter.js';
 import { createGithubStatusAdapter } from '../domains/conductor/adapters/github-status.adapter.js';
 import { createTmuxSteerTransport } from '../domains/conductor/adapters/steer-transport.adapter.js';
+import { createRecoderMcpInjector } from '../domains/conductor/adapters/mcp-inject.adapter.js';
 import { createEnginesModule } from '../domains/engines/index.js';
 import { createInferenceModule } from '../domains/inference/index.js';
 import { createBillingModule } from '../domains/billing/index.js';
@@ -453,6 +455,26 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     config: conductorSubstrateConfig,
     logger: childLogger('conductor-steer'),
   });
+  // Per-worktree `.mcp.json` injection: on workspace launch the composer writes a
+  // secret-free `.mcp.json` that points the launched agent at THIS backend's
+  // governed MCP host via the vendored stdio bridge (`mcp/recoder-a2a-server.js`).
+  // The bridge path is env-overridable (RECODER_MCP_BRIDGE_PATH) with a repo-root
+  // relative default so it resolves in dev, packaged desktop, and prod; bootstrap
+  // is the sanctioned env read (the adapter reads no globals). The written env is
+  // filtered secret-free — INTERNAL_SERVICE_KEY reaches the bridge only from the
+  // agent's substrate-injected process env, never this file. Degrade-safe: a blank
+  // worktree / write fault is a truthful skip that NEVER fails an otherwise-good
+  // launch. `internalUrl` is the non-secret loopback backend URL.
+  const bridgeServerAbsPath =
+    bootEnv.RECODER_MCP_BRIDGE_PATH ??
+    resolvePath(bootEnv.CONDUCTOR_REPO_ROOT ?? process.cwd(), 'mcp/recoder-a2a-server.js');
+  const conductorMcpInject = createRecoderMcpInjector({
+    config: {
+      args: [bridgeServerAbsPath],
+      internalUrl: `http://127.0.0.1:${config.server.port}`,
+    },
+    logger: childLogger('conductor-mcp-inject'),
+  });
   const conductor = createConductorModule({
     config,
     logger: childLogger('conductor'),
@@ -465,6 +487,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     codeIntel: conductorCodeIntel,
     githubStatus: conductorGithub,
     steerTransport: conductorSteer,
+    mcpInject: conductorMcpInject,
     overrides: {
       tmuxBin: config.conductor.tmuxBin,
       worktreeRoot: config.conductor.worktreeRoot,
@@ -564,6 +587,13 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     resolveByok: billingResolveByok,
     ...(billingDistributionPort ? { billingPort: billingDistributionPort } : {}),
   });
+  // Wire the governance write gate into billing so checkout/cancel MUTATIONS pass
+  // through `decide → policy → durable audit` (governance is composed before billing,
+  // so `governance.gate()` is available). Until this line ran, billing mutations
+  // proceeded UNGATED (degrade-safe: still authenticated + own-subject only, never a
+  // fabricated audit record). `BillingWriteGate` is a `Pick<GovernanceGate,'decide'>`
+  // view, so the concrete gate is structurally assignable with no runtime coupling.
+  billing.setGovernanceGate(governance.gate());
   container.registerValue(DOMAIN_TOKENS.billing, billing);
   container.registerValue(CAPABILITY_TOKENS.entitlementGate, billing.gate());
   healthRegistry.register(billing);
@@ -574,6 +604,15 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // (`workspace.create` quota), inference before each completion (token quota).
   conductor.setEntitlementGate(billing.gate());
   inference.setEntitlementGate(billing.gate());
+
+  // Wire the usage-meter EMITTER next to the gate: the gate only READS headroom
+  // pre-dispatch, so nothing decrements until a completion meters usage. The
+  // conductor meters one `agent_run` per completed/failed run; inference meters
+  // `token` (prompt + completion) per routed completion — both through the SAME
+  // durable ledger. Degrade-safe: the metering service no-ops truthfully without a
+  // DB, and every emit is fire-and-forget so a metering hiccup never blocks delivery.
+  conductor.setUsageMeter(billing.metering());
+  inference.setUsageMeter(billing.metering());
 
   // --- Phase 10: Cloud — off-box substrate (sandboxes/previews/tenancy/mesh). Built
   //     AFTER billing. The Phase-3 governance decide→audit seam guards EVERY cloud
@@ -938,8 +977,14 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // Billing edges: plan/checkout/portal/cancel + RAW-BODY provider webhooks. The
     // global JSON parser stashes `req.rawBody` (chain.ts) so webhook signatures verify.
     routerProvider('billing', DOMAIN_REGISTRY.billing.mountBase, billing.routes()),
+    // Internal billing usage ingest (INTERNAL_SERVICE_KEY-gated internally):
+    // POST /internal/billing/meter — workers report per-run/token/engine usage.
+    routerProvider('billing-internal', '/internal/billing', billing.internalRoutes()),
     // Memory + retrieval edges (mount under /api/agent-os alongside agent-os).
     routerProvider('memory', DOMAIN_REGISTRY.memory.mountBase, memory.routes()),
+    // Internal memory harvest ingest (INTERNAL_SERVICE_KEY-gated internally):
+    // workers POST completion-harvest candidates through this self-gated router.
+    routerProvider('memory-internal', '/internal/agent-os/memory', memory.internalRoutes()),
     // Cloud edges: tenancy/sandboxes/preview/mesh (self-gated; degrade-safe).
     routerProvider('cloud', DOMAIN_REGISTRY.cloud.mountBase, cloud.routes()),
     // Social edges: connectors/bindings read models + the hostile-by-default webhook

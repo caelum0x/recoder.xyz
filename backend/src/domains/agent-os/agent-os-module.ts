@@ -37,8 +37,11 @@ import { RunEventIngestService } from './services/run-event-ingest.service.js';
 import { OutboxDrainService } from './services/outbox-drain.service.js';
 import { SquadService, InMemorySquadStore } from './services/squad.service.js';
 import { SquadAutopilotService } from './services/squad-autopilot.service.js';
+import { WorkflowService, InMemoryWorkflowDefinitionStore } from './services/workflow.service.js';
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
 import { buildSquadBoardRouter } from './routes/squad-board.routes.js';
+import { buildSquadReadRouter } from './routes/squad-read.routes.js';
+import { buildWorkflowRouter } from './routes/workflow.routes.js';
 import { buildAgentOsRouter } from './routes/agent-os.routes.js';
 import { buildInternalAgentOsRouter } from './routes/internal-agent-os.routes.js';
 import { buildAgentOsMcpTools } from './mcp/agent-os-engine.js';
@@ -58,6 +61,7 @@ export class AgentOsComposer implements AgentOsModule {
   private readonly drain: OutboxDrainService;
   private readonly squads: SquadService | null;
   private readonly autopilot: SquadAutopilotService | null;
+  private readonly workflows: WorkflowService;
   private readonly router: Router;
   private readonly internalRouter: Router;
   private started = false;
@@ -125,6 +129,15 @@ export class AgentOsComposer implements AgentOsModule {
           })
         : null;
 
+    // Workflow-definition CRUD + dispatch. CRUD always works over the in-memory
+    // store (a pg store is the follow-up behind the same seam); dispatch runs a
+    // stored definition through the injected `WorkflowDriver` and degrades to a
+    // truthful `not_configured` when no driver is wired.
+    this.workflows = new WorkflowService({
+      store: new InMemoryWorkflowDefinitionStore(),
+      driver: deps.workflowDriver ?? null,
+    });
+
     const inner = buildAgentOsRouter({
       repository: this.repo,
       middleware: deps.middleware,
@@ -140,10 +153,16 @@ export class AgentOsComposer implements AgentOsModule {
       middleware: deps.middleware,
     });
     this.router = Router();
-    // Board first: its literal `/squads/board` path must win over any later table.
+    // Board first: its literal `/squads/board` path must win over the `/squads/
+    // :squadId` param route in the read router mounted next.
     this.router.use(
       buildSquadBoardRouter({ squads: this.squads, autopilot: this.autopilot, middleware: deps.middleware }),
     );
+    // Squads read-only introspection (list / detail / members / activity). Owner
+    // decision: squads are never mutated over HTTP/MCP — reads only.
+    this.router.use(buildSquadReadRouter({ squads: this.squads, middleware: deps.middleware }));
+    // Workflow-definition CRUD + dispatch edge.
+    this.router.use(buildWorkflowRouter({ workflows: this.workflows, middleware: deps.middleware }));
     this.router.use(inner);
     this.router.use('/internal', this.internalRouter);
   }
@@ -173,6 +192,11 @@ export class AgentOsComposer implements AgentOsModule {
   /** The squad autopilot loop (null when squads/autopilot are disabled). */
   squadAutopilot(): SquadAutopilotService | null {
     return this.autopilot;
+  }
+
+  /** Workflow-definition CRUD + dispatch service (always present; dispatch degrades). */
+  workflowService(): WorkflowService {
+    return this.workflows;
   }
 
   /** Late-bind the conductor dispatch seam (bootstrap builds it after agent-os). */

@@ -9,12 +9,18 @@
  * map into a Recoder DomainMap.
  *
  * SAFETY CONTRACT (binding — .claude/rules/production.md):
- * - ADDITIVE and FLAG-GATED. Default behavior is a pure no-op.
- * - Gate: RECODER_CODE_GRAPH_ENABLED (truthy = on, default OFF). When disabled,
- *   every method returns a disabled result and NO engine process is spawned.
- * - FAIL-SAFE. Engine absent / unbuilt / non-zero exit / parse failure degrades
- *   to a truthful 'unavailable' / 'not_indexed' / empty-map result. It NEVER throws
- *   into a request path, and NEVER claims fresh when stale.
+ * - FLAG-GATED with a DEFAULT-ON posture (GAP-AUDIT Wave 5): code-graph indexing
+ *   is ON by default for new workspaces so the brain/agents get an impact graph
+ *   without opt-in. `RECODER_CODE_GRAPH_ENABLED` is a THREE-STATE override:
+ *     unset            → ON  (the default-on decision)
+ *     truthy (1/on/…)  → ON
+ *     falsy  (0/off/…) → OFF (explicit opt-out — every method is a pure no-op)
+ *   The opt-out is preserved so a resource-constrained host can still disable it.
+ * - FAIL-SAFE is what keeps default-on safe: engine absent / unbuilt / non-zero
+ *   exit / parse failure degrades to a truthful 'unavailable' / 'not_indexed' /
+ *   empty-map result. Default-on NEVER spawns a process at construction — the gate
+ *   is read lazily, and an unbuilt engine simply reports 'not built' truthfully.
+ * - It NEVER throws into a request path, and NEVER claims fresh when stale.
  * - All IO (exec, git, clock, bin resolution, state store) is INJECTABLE so tests
  *   need no real clone, index, server, or network.
  *
@@ -43,7 +49,6 @@ const RECODERGIT_BIN_ENV = 'RECODERGIT_BIN';
 const MCP_PORT_ENV = 'RECODER_CODE_GRAPH_MCP_PORT';
 const DEFAULT_MCP_PORT = 7337;
 const MCP_HOST = '127.0.0.1';
-const TRUTHY = new Set(['1', 'true', 'yes', 'on']);
 
 // Vendored engine entrypoints, relative to backend/ (this file lives at
 // backend/src/agent-os/recodergit-service.ts -> ../../.. = repo root).
@@ -215,9 +220,22 @@ export interface RecoderGitServiceDeps {
   serverPort?: () => number;
 }
 
+/** Explicit opt-out tokens; anything else (including unset) is the default-on ON. */
+const FALSY = new Set(['0', 'false', 'no', 'off']);
+
+/**
+ * Read the code-graph gate with a DEFAULT-ON posture (GAP-AUDIT Wave 5). Unset
+ * ⇒ ON (new workspaces index by default); an explicit falsy value is the only
+ * way to force OFF. Exported so the default-on decision is directly testable.
+ */
+export function readCodeGraphFlag(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env[CODE_GRAPH_FLAG_ENV]?.trim().toLowerCase();
+  if (raw === undefined || raw === '') return true; // default-on
+  return !FALSY.has(raw); // only an explicit falsy token forces OFF
+}
+
 function readFlagFromEnv(): boolean {
-  const raw = process.env[CODE_GRAPH_FLAG_ENV]?.trim().toLowerCase();
-  return raw !== undefined && TRUTHY.has(raw);
+  return readCodeGraphFlag();
 }
 
 /**
@@ -594,7 +612,7 @@ export class RecoderGitService {
     this.serverPortFn = deps.serverPort ?? defaultServerPort;
   }
 
-  /** True when the gate env var is truthy. Default OFF. */
+  /** True unless the gate env var is an explicit falsy token. Default ON. */
   isEnabled(): boolean {
     return this.isEnabledFn();
   }

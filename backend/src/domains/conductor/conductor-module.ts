@@ -33,6 +33,7 @@ import type { Principal } from '../identity/types.js';
 import { sliceConductorConfig, type ConductorConfig } from './config.js';
 import type { GateVerdict, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView, SteerTransportPort } from './ports/index.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
+import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type { WorkspaceRepositoryPort } from './ports/workspace-repository.port.js';
 import type {
@@ -61,6 +62,8 @@ import { createSubstrateScan } from './adapters/substrate-scan.adapter.js';
 import { TerminalStreamService } from './terminal/terminal-stream.js';
 import { buildConductorRoutes } from './routes/conductor.routes.js';
 import { buildConductorMcpTools } from './mcp/conductor-engine.js';
+import { buildConductorWriteTools } from './mcp/conductor-write-tools.js';
+import type { McpInjectPort } from './ports/mcp-inject.port.js';
 import { buildConductorHealth } from './health.js';
 import {
   conductorAuditEntry,
@@ -158,8 +161,12 @@ export class ConductorComposer implements ConductorModule {
   private readonly github?: GithubStatusPort;
   /** OPTIONAL live send-keys transport; absent ⇒ steering refuses truthfully. */
   private readonly steerTransport?: SteerTransportPort;
+  /** OPTIONAL per-worktree `.mcp.json` injector (Recoder toolbelt); absent ⇒ truthful skip. */
+  private readonly mcpInject?: McpInjectPort;
   /** OPTIONAL pre-dispatch quota gate (set by bootstrap; absent ⇒ degrade OPEN). */
   private entitlementGate?: EntitlementGate;
+  /** OPTIONAL usage-meter emitter (set by bootstrap; absent ⇒ no per-run metering). */
+  private usageMeter?: UsageMeterPort;
   private started = false;
 
   constructor(deps: ConductorModuleDeps) {
@@ -171,6 +178,7 @@ export class ConductorComposer implements ConductorModule {
     this.codeIntel = deps.codeIntel;
     this.github = deps.githubStatus;
     this.steerTransport = deps.steerTransport;
+    this.mcpInject = deps.mcpInject;
 
     const loggerPort = toLoggerPort(this.log);
 
@@ -213,6 +221,9 @@ export class ConductorComposer implements ConductorModule {
       inner: fannedSink,
       ...(this.brain ? { brain: this.brain } : {}),
       ...(this.codeIntel ? { codeIntel: this.codeIntel } : {}),
+      // Late-bound meter: the sink reads it per terminal event, so bootstrap can
+      // inject the billing meter AFTER this module is constructed (setUsageMeter).
+      getMeter: () => this.usageMeter,
       getWorkspace: (id) => this.repository.getWorkspace(id),
       logger: this.log,
     });
@@ -237,6 +248,11 @@ export class ConductorComposer implements ConductorModule {
   /** Inject the optional billing entitlement gate (pre-dispatch quota check). */
   setEntitlementGate(gate: EntitlementGate): void {
     this.entitlementGate = gate;
+  }
+
+  /** Inject the optional billing usage meter (per-run `agent_run` metering). */
+  setUsageMeter(meter: UsageMeterPort): void {
+    this.usageMeter = meter;
   }
 
   /**
@@ -289,6 +305,28 @@ export class ConductorComposer implements ConductorModule {
           this.log.warn({ err, taskId: input.taskId }, 'conductor beads track hook faulted'),
         );
     }
+  }
+
+  /**
+   * Inject the Recoder toolbelt `.mcp.json` into the launched workspace's worktree
+   * (fire-and-forget). Truthful degrade: no injector wired, or no worktree path on
+   * the record (e.g. a remote/in-process substrate without a local dir), is a
+   * logged skip — never a fabricated write, never a launch failure.
+   */
+  private injectWorktreeMcp(workspace: Workspace): void {
+    if (!this.mcpInject) return;
+    if (!workspace.worktreePath) {
+      this.log.debug(
+        { workspaceId: workspace.workspaceId, substrate: workspace.substrate },
+        'conductor .mcp.json injection skipped (no worktree path)',
+      );
+      return;
+    }
+    void this.mcpInject
+      .inject(workspace.worktreePath)
+      .catch((err) =>
+        this.log.warn({ err, workspaceId: workspace.workspaceId }, 'conductor .mcp.json injection faulted'),
+      );
   }
 
   async listWorkspaces(): Promise<Workspace[]> {
@@ -368,6 +406,12 @@ export class ConductorComposer implements ConductorModule {
       // INDEXES the repo (live code-knowledge-graph) and beads TRACKS the workspace
       // as an issue-graph node. A slow/absent engine never blocks the launch.
       this.startCodeIntel(input, workspace);
+
+      // Point the launched agent at the GOVERNED backend MCP host: write a
+      // secret-free `.mcp.json` into its worktree (merge-safe + idempotent +
+      // git-excluded). Fire-and-forget + degrade-safe — no injector wired, or no
+      // worktree yet, is a truthful skip that NEVER fails an allowed launch.
+      this.injectWorktreeMcp(workspace);
 
       await recordConductorAudit(
         this.gate,
@@ -940,7 +984,10 @@ export class ConductorComposer implements ConductorModule {
   }
 
   mcp(): readonly McpToolRegistration[] {
-    return buildConductorMcpTools(this);
+    // Read-only introspection tools + the governed write tools (steer/stop/advance).
+    // Every write tool delegates to this composer's already-gated method, so the
+    // host-boundary gate and the module's own write seam BOTH apply.
+    return [...buildConductorMcpTools(this), ...buildConductorWriteTools(this)];
   }
 
   async health(): Promise<ComponentHealth> {

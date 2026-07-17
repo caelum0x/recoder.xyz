@@ -105,7 +105,14 @@ const passAuth: RequestHandler = (req, _res, next) => {
   req.principal = testPrincipal;
   next();
 };
-const fakeMiddleware = { authenticate: passAuth, authenticateMutating: passAuth } as unknown as AuthMiddleware;
+const denyInternal: RequestHandler = (_req, res) => {
+  res.status(401).json({ error: { code: 'AUTH_REQUIRED' } });
+};
+const fakeMiddleware = {
+  authenticate: passAuth,
+  authenticateMutating: passAuth,
+  requireInternal: denyInternal,
+} as unknown as AuthMiddleware;
 
 const tenancy = {
   resolve: vi.fn(async () => ok(tenant)),
@@ -130,7 +137,18 @@ const preview = {
 } as unknown as PreviewDeployService;
 
 const mesh = { status: vi.fn(async () => ({ engines: [] })) } as unknown as MeshDiagnosticsService;
-const fleet = { list: vi.fn(async () => []) } as unknown as FleetSupervisorService;
+const fleet = {
+  list: vi.fn(async () => []),
+  heartbeat: vi.fn(async () => null),
+  register: vi.fn(async () => null),
+} as unknown as FleetSupervisorService;
+const domains = {
+  add: vi.fn(async () => ok({ id: 'dom_1' })),
+  list: vi.fn(async () => []),
+  get: vi.fn(async () => ok({ id: 'dom_1' })),
+  verify: vi.fn(async () => ok({ id: 'dom_1' })),
+  remove: vi.fn(async () => ok({ id: 'dom_1', removed: true })),
+} as unknown as import('../services/domains.service.js').DomainsService;
 
 const logger = {
   debug: vi.fn(),
@@ -168,6 +186,7 @@ async function listen(gate: CloudGovernanceGatePort | undefined): Promise<Harnes
       preview,
       mesh,
       fleet,
+      domains,
       mw: fakeMiddleware,
       logger,
       ...(gate ? { gate } : {}),

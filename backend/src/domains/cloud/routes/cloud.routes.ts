@@ -14,6 +14,13 @@
  *   GET    /deployments/:id/health — REAL health probe (persisted)
  *   GET    /mesh                 — read-only mesh snapshot
  *   GET    /fleet                — read-only fleet manifest
+ *   POST   /fleet/heartbeat      — INTERNAL: a fleet node reports a fresh heartbeat
+ *   POST   /fleet/register       — INTERNAL: a fleet node registers into the manifest
+ *   GET    /domains              — list the caller tenant's custom domains
+ *   POST   /domains              — attach a custom domain (mutating; mints DNS challenge)
+ *   GET    /domains/:id          — one custom domain (tenant-scoped)
+ *   POST   /domains/:id/verify   — re-check DNS/TLS ownership (mutating)
+ *   DELETE /domains/:id          — detach a custom domain (mutating)
  *
  * The tenant is derived from the authenticated {@link Principal} (org scope wins),
  * NEVER from the body — a caller only acts on their own tenant. Quota exhaustion
@@ -39,6 +46,7 @@ import type { SandboxProvisionerService } from '../services/sandbox-provisioner.
 import type { PreviewDeployService } from '../services/preview-deploy.service.js';
 import type { MeshDiagnosticsService } from '../services/mesh-diagnostics.service.js';
 import type { FleetSupervisorService } from '../services/fleet-supervisor.service.js';
+import type { DomainsService } from '../services/domains.service.js';
 import type { CloudGovernanceGatePort } from '../ports/governance-gate.port.js';
 import { guardCloudWrite, recordCloudAudit } from '../services/cloud-write-gate.js';
 import { DEPLOY_TARGET_KINDS, type DeployTargetKind } from '../types.js';
@@ -49,6 +57,7 @@ export interface CloudRouterDeps {
   readonly preview: PreviewDeployService;
   readonly mesh: MeshDiagnosticsService;
   readonly fleet: FleetSupervisorService;
+  readonly domains: DomainsService;
   readonly mw: AuthMiddleware;
   readonly logger: Logger;
   /**
@@ -89,6 +98,32 @@ const deployBodySchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
+const domainBodySchema = z.object({
+  hostname: z.string().min(1).max(253),
+});
+
+const fleetCapacitySchema = z.object({
+  slotsTotal: z.number().int().nonnegative(),
+  slotsUsed: z.number().int().nonnegative(),
+  cpuMillis: z.number().int().nonnegative(),
+  memMb: z.number().int().nonnegative(),
+});
+
+const FLEET_NODE_KINDS = ['sandbox', 'preview', 'mesh'] as const;
+const FLEET_NODE_STATUSES = ['up', 'down', 'draining'] as const;
+
+const fleetHeartbeatSchema = z.object({
+  id: z.string().min(1).max(128),
+  kind: z.enum(FLEET_NODE_KINDS),
+  capacity: fleetCapacitySchema,
+  tenantId: z.string().min(1).max(128).nullish(),
+});
+
+const fleetRegisterSchema = fleetHeartbeatSchema.extend({
+  status: z.enum(FLEET_NODE_STATUSES).default('down'),
+  manifest: z.record(z.unknown()).optional(),
+});
+
 function principalOf(req: Request): Principal | null {
   return req.principal && !req.principal.isAnonymous ? req.principal : null;
 }
@@ -102,7 +137,7 @@ function tenantRefOf(principal: Principal): TenantRef & { ownerUserId: string } 
 }
 
 export function buildCloudRouter(deps: CloudRouterDeps): Router {
-  const { tenancy, provisioner, preview, mesh, fleet, mw, logger, gate, activePreviewCount } = deps;
+  const { tenancy, provisioner, preview, mesh, fleet, domains, mw, logger, gate, activePreviewCount } = deps;
   const router = Router();
 
   // --- Tenant ---
@@ -468,6 +503,216 @@ export function buildCloudRouter(deps: CloudRouterDeps): Router {
     asyncHandler(async (_req, res) => {
       const nodes = await fleet.list();
       sendSuccess(res, { nodes });
+    }),
+  );
+
+  // --- Fleet heartbeat ingest (INTERNAL: fleet nodes report in over the
+  // INTERNAL_SERVICE_KEY, never a user session). A node marks itself `up` with a
+  // fresh heartbeat; the supervisor demotes it to `down` when the beat goes
+  // stale. Truthful degrade: a `null` from the supervisor (store down) surfaces
+  // as a `SERVICE_UNAVAILABLE` — the ingest never fakes a persisted node. ---
+  router.post(
+    '/fleet/heartbeat',
+    mw.requireInternal,
+    asyncHandler(async (req, res) => {
+      const parsed = fleetHeartbeatSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, parsed.error.issues[0]?.message ?? 'invalid body'));
+        return;
+      }
+      const b = parsed.data;
+      const node = await fleet.heartbeat(b.id, b.kind, b.capacity, b.tenantId ?? null);
+      if (!node) {
+        sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Fleet store unavailable — heartbeat not recorded.'));
+        return;
+      }
+      sendSuccess(res, node);
+    }),
+  );
+
+  router.post(
+    '/fleet/register',
+    mw.requireInternal,
+    asyncHandler(async (req, res) => {
+      const parsed = fleetRegisterSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, parsed.error.issues[0]?.message ?? 'invalid body'));
+        return;
+      }
+      const b = parsed.data;
+      const node = await fleet.register({
+        id: b.id,
+        kind: b.kind,
+        status: b.status,
+        capacity: b.capacity,
+        tenantId: b.tenantId ?? null,
+        ...(b.manifest ? { manifest: b.manifest } : {}),
+      });
+      if (!node) {
+        sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Fleet store unavailable — node not registered.'));
+        return;
+      }
+      sendSuccess(res, node, { statusCode: 201 });
+    }),
+  );
+
+  // --- Custom domains (CRUD + DNS/TLS verify) ---
+  router.get(
+    '/domains',
+    mw.authenticate,
+    asyncHandler(async (req, res) => {
+      const principal = req.principal;
+      if (!principal || principal.isAnonymous) {
+        sendError(res, createError(ErrorCode.AUTH_REQUIRED));
+        return;
+      }
+      const resolved = await tenancy.resolve(tenantRefOf(principal));
+      if (!resolved.ok) {
+        if (resolved.error.code === ErrorCode.NOT_FOUND) {
+          sendSuccess(res, { domains: [] });
+          return;
+        }
+        sendError(res, resolved.error);
+        return;
+      }
+      const records = await domains.list(resolved.value.id);
+      sendSuccess(res, { domains: records });
+    }),
+  );
+
+  router.get(
+    '/domains/:id',
+    mw.authenticate,
+    asyncHandler(async (req, res) => {
+      const principal = req.principal;
+      if (!principal || principal.isAnonymous) {
+        sendError(res, createError(ErrorCode.AUTH_REQUIRED));
+        return;
+      }
+      const resolved = await tenancy.resolve(tenantRefOf(principal));
+      if (!resolved.ok) {
+        sendError(res, resolved.error);
+        return;
+      }
+      const result = await domains.get(req.params.id, resolved.value.id);
+      if (!result.ok) {
+        sendError(res, result.error);
+        return;
+      }
+      sendSuccess(res, result.value);
+    }),
+  );
+
+  router.post(
+    '/domains',
+    mw.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const principal = principalOf(req);
+      if (!principal) {
+        sendError(res, createError(ErrorCode.AUTH_REQUIRED));
+        return;
+      }
+      const parsed = domainBodySchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, parsed.error.issues[0]?.message ?? 'invalid body'));
+        return;
+      }
+      const guarded = await guardCloudWrite(gate, 'cloud.domain.add', principal, {
+        target: { environment: 'cloud' },
+        metadata: { edge: 'domain.add', hostname: parsed.data.hostname },
+      }, logger);
+      if (!guarded.allowed) {
+        sendError(res, guarded.error);
+        return;
+      }
+      const resolved = await tenancy.ensure(tenantRefOf(principal));
+      if (!resolved.ok) {
+        sendError(res, resolved.error);
+        return;
+      }
+      const result = await domains.add({ tenantId: resolved.value.id, hostname: parsed.data.hostname });
+      if (!result.ok) {
+        sendError(res, result.error);
+        return;
+      }
+      await recordCloudAudit(gate, 'cloud.domain.add', principal, guarded.verdict, {
+        domainId: result.value.id,
+        tenantId: resolved.value.id,
+        hostname: result.value.hostname,
+      }, logger);
+      sendSuccess(res, result.value, { statusCode: 201 });
+    }),
+  );
+
+  router.post(
+    '/domains/:id/verify',
+    mw.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const principal = principalOf(req);
+      if (!principal) {
+        sendError(res, createError(ErrorCode.AUTH_REQUIRED));
+        return;
+      }
+      const guarded = await guardCloudWrite(gate, 'cloud.domain.verify', principal, {
+        target: { environment: 'cloud' },
+        metadata: { edge: 'domain.verify', domainId: req.params.id },
+      }, logger);
+      if (!guarded.allowed) {
+        sendError(res, guarded.error);
+        return;
+      }
+      const resolved = await tenancy.resolve(tenantRefOf(principal));
+      if (!resolved.ok) {
+        sendError(res, resolved.error);
+        return;
+      }
+      const result = await domains.verify(req.params.id, resolved.value.id);
+      if (!result.ok) {
+        sendError(res, result.error);
+        return;
+      }
+      await recordCloudAudit(gate, 'cloud.domain.verify', principal, guarded.verdict, {
+        domainId: result.value.id,
+        tenantId: resolved.value.id,
+        verificationStatus: result.value.verificationStatus,
+        tlsStatus: result.value.tlsStatus,
+      }, logger);
+      sendSuccess(res, result.value);
+    }),
+  );
+
+  router.delete(
+    '/domains/:id',
+    mw.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const principal = principalOf(req);
+      if (!principal) {
+        sendError(res, createError(ErrorCode.AUTH_REQUIRED));
+        return;
+      }
+      const guarded = await guardCloudWrite(gate, 'cloud.domain.remove', principal, {
+        target: { environment: 'cloud' },
+        metadata: { edge: 'domain.remove', domainId: req.params.id },
+      }, logger);
+      if (!guarded.allowed) {
+        sendError(res, guarded.error);
+        return;
+      }
+      const resolved = await tenancy.resolve(tenantRefOf(principal));
+      if (!resolved.ok) {
+        sendError(res, resolved.error);
+        return;
+      }
+      const result = await domains.remove(req.params.id, resolved.value.id);
+      if (!result.ok) {
+        sendError(res, result.error);
+        return;
+      }
+      await recordCloudAudit(gate, 'cloud.domain.remove', principal, guarded.verdict, {
+        domainId: req.params.id,
+        tenantId: resolved.value.id,
+      }, logger);
+      sendSuccess(res, result.value);
     }),
   );
 

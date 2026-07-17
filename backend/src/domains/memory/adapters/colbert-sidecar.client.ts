@@ -46,15 +46,19 @@ function identity(passages: readonly string[], reason?: string): RerankResult {
 }
 
 /**
- * Validate the `{ results: [{index, score}] }` body into a full permutation of
- * `[0, length)`. Returns null on any shape mismatch so the caller degrades to
- * original order rather than trusting a partial reorder.
+ * Validate the `{ results: [{index, score}] }` body (the py sidecar's real MaxSim
+ * output, sorted best-first) into a full permutation of `[0, length)` PLUS the
+ * aligned MaxSim scores. Returns null on any shape mismatch so the caller degrades
+ * to original order rather than trusting a partial reorder. `scores[k]` is the
+ * MaxSim score of the passage now at rank `k` (i.e. of `order[k]`).
  */
-function parseOrder(body: unknown, length: number): number[] | null {
+function parseResults(body: unknown, length: number): { order: number[]; scores?: number[] } | null {
   const results = (body as { results?: unknown })?.results;
   if (!Array.isArray(results) || results.length !== length) return null;
   const seen = new Set<number>();
   const order: number[] = [];
+  const scores: number[] = [];
+  let allScored = true;
   for (const r of results) {
     const idx = (r as { index?: unknown })?.index;
     if (typeof idx !== 'number' || !Number.isInteger(idx) || idx < 0 || idx >= length || seen.has(idx)) {
@@ -62,8 +66,13 @@ function parseOrder(body: unknown, length: number): number[] | null {
     }
     seen.add(idx);
     order.push(idx);
+    // Scores are attached only when EVERY result carries a finite MaxSim score;
+    // a partial/absent score degrades to order-only (never a fabricated score).
+    const score = (r as { score?: unknown })?.score;
+    if (typeof score === 'number' && Number.isFinite(score)) scores.push(score);
+    else allScored = false;
   }
-  return order;
+  return allScored ? { order, scores } : { order };
 }
 
 /**
@@ -90,9 +99,14 @@ export function createColbertSidecarClient(
           signal: timeoutSignal(timeoutMs),
         });
         if (!res.ok) return identity(passages, `colbert rerank HTTP ${res.status}`);
-        const order = parseOrder(await res.json(), passages.length);
-        if (!order) return identity(passages, 'colbert rerank returned a malformed body');
-        return { available: true, passages: order.map((i) => passages[i]), order };
+        const parsed = parseResults(await res.json(), passages.length);
+        if (!parsed) return identity(passages, 'colbert rerank returned a malformed body');
+        return {
+          available: true,
+          passages: parsed.order.map((i) => passages[i]),
+          order: parsed.order,
+          ...(parsed.scores ? { scores: parsed.scores } : {}),
+        };
       } catch (err) {
         return identity(passages, err instanceof Error ? err.message : 'colbert rerank failed');
       }

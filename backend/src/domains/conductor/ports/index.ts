@@ -64,6 +64,12 @@ export type {
   SteerKeysInput,
 } from './steer-transport.port.js';
 
+// --- Per-worktree `.mcp.json` injection (Recoder toolbelt into launched agents) ---
+export type {
+  McpInjectPort,
+  McpInjectResult,
+} from './mcp-inject.port.js';
+
 // --- Exposed surface: terminal WS + the governance write seam ---
 export type {
   TerminalStreamPort,

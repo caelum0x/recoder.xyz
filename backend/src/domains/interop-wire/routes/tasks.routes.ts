@@ -17,18 +17,20 @@ import type { AuthMiddleware } from '../../identity/middleware/authenticate.midd
 import type { TaskLifecycleService } from '../dispatch/task-lifecycle.js';
 import type { ContextBridgeService } from '../bridge/context-bridge.js';
 import type { ScratchpadService } from '../bridge/scratchpad.js';
+import type { HandoffService } from '../dispatch/handoff.js';
 
 export interface TasksRouterDeps {
   readonly tasks: TaskLifecycleService;
   readonly contextBridge: ContextBridgeService;
   readonly scratchpad: ScratchpadService;
+  readonly handoff: HandoffService;
   readonly middleware: AuthMiddleware;
 }
 
 /** Build the `/api/interop/tasks` router. */
 export function buildTasksRoutes(deps: TasksRouterDeps): Router {
   const router = Router();
-  const { tasks, contextBridge, scratchpad, middleware } = deps;
+  const { tasks, contextBridge, scratchpad, handoff, middleware } = deps;
 
   router.get(
     '/:id',
@@ -54,6 +56,29 @@ export function buildTasksRoutes(deps: TasksRouterDeps): Router {
         return;
       }
       sendSuccess(res, { task: result.task });
+    }),
+  );
+
+  router.post(
+    '/:id/handoff',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const result = await handoff.handoff({
+        taskId: req.params.id,
+        userId: req.principal!.userId,
+        target: requireString(body, 'target'),
+        ...(typeof body.note === 'string' ? { note: body.note } : {}),
+        ...(typeof body.prompt === 'string' ? { prompt: body.prompt } : {}),
+      });
+      if (!result.ok) {
+        // Truthful mapping: an unowned/absent task is 404; a dispatch that could
+        // not reach the receiver (no seam wired) is a 503 — never a faked 200.
+        const code = result.code === 'not_found' ? ErrorCode.NOT_FOUND : ErrorCode.SERVICE_UNAVAILABLE;
+        sendError(res, createError(code, result.reason));
+        return;
+      }
+      sendSuccess(res, { handoff: result });
     }),
   );
 

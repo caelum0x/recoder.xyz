@@ -33,6 +33,7 @@ import type { RetrievalPort } from './ports/retrieval.port.js';
 import type { MemoryRepository } from './ports/memory-repository.port.js';
 import type { CandidateService } from './lifecycle/candidate-service.js';
 import type { MemoryLifecycle } from './lifecycle/memory-lifecycle.js';
+import type { ForgetService } from './lifecycle/forget.js';
 import type { HarvestService } from './lifecycle/harvest.js';
 import type { RelateService } from './lifecycle/relate.js';
 import type { FetchLike } from './vector-store.js';
@@ -79,6 +80,8 @@ export interface MemoryModule {
   candidates(): CandidateService;
   /** The GOVERNED candidate → durable-item promotion lifecycle. */
   lifecycle(): MemoryLifecycle;
+  /** The GOVERNED durable-item forget (tombstone) lifecycle. */
+  forget(): ForgetService;
   /** Run-completion harvest (evidence-backed candidate from a finished run). */
   harvest(): HarvestService;
   /** The memory-owned relation graph (`relate(from, to, kind)`). */
@@ -87,6 +90,8 @@ export interface MemoryModule {
   repository(): MemoryRepository;
   /** The `/api/agent-os` router: memory + retrieval edges. */
   routes(): Router;
+  /** The `/internal/agent-os/memory/*` router (INTERNAL_SERVICE_KEY-gated harvest edge). */
+  internalRoutes(): Router;
   /** The gated MCP tools (recall/remember + retrieval search/ingest). */
   mcp(): readonly McpToolRegistration[];
   /** Truthful component health (candidates = the one hard dep). */

@@ -35,7 +35,7 @@
 - A **module = an OSS directory used directly.** backend imports/spawns/reads it in place. We do
   NOT copy an engine into `packages/`. `packages/*` is only for genuinely-shared first-party contracts.
 - A **capability that composes several modules** (e.g. MEMORY = mem0 + beads + colbert) gets a thin
-  cohesive **composer** inside the host module (`backend/src/modules/<domain>/`). The DEPTH lives
+  cohesive **composer** inside the host module (`backend/src/domains/<domain>/`). The DEPTH lives
   in the engine dirs; the composer only fuses + exposes one interface + truthful health. It must MOVE the
   scattered consumer code behind it (not add a 4th copy).
 - **Edit the OSS source in its own dir** when the fusion needs it — that dir is ours (e.g. the dmux
@@ -45,7 +45,7 @@
 ## The rule of a good module composer
 
 When backend composes engine-modules into a domain capability, the composer is real when:
-1. **One domain, one owner** — `backend/src/modules/<domain>/` is the single place that fuses the
+1. **One domain, one owner** — `backend/src/domains/<domain>/` is the single place that fuses the
    engine dirs for that domain (it does not re-implement them).
 2. **Cohesive interface** — full verb set of the domain; callers depend on it, never on a raw dist.
 3. **Consumes engines from their dirs** — mem0/beads/colbert/openfang/tensorzero are read/imported/spawned
@@ -54,12 +54,13 @@ When backend composes engine-modules into a domain capability, the composer is r
 5. **Governed + audited** — writes through the policy gate; state-of-record stays Recoder-owned; the
    scattered old consumer code is MOVED behind it (no 4th copy).
 
-Current state: **capabilities exist but are SCATTERED** across the host module. The work is consolidation
-behind one composer per domain, then deepening each engine in its own dir.
+Current state: **15 domain composers now ship under `backend/src/domains/*`** and boot (tsc clean). The
+remaining work is deepening each engine in its own dir and folding the last scattered `src/conductor`/
+`src/agent-os` consumers behind each composer interface.
 
 ---
 
-## 1. MEMORY module — `backend/src/modules/memory/` (composer target)
+## 1. MEMORY module — `backend/src/domains/memory/` (composer target)
 **Domain:** everything the agents remember. **Absorbs:** `backend/engines/py/mem0` (semantic vectors) + `apps/desktop/server/engines/beads`
 (issue-graph shared memory, the dolt store) + `backend/engines/py/colbert` (rerank) + agent-os memory candidates.
 
@@ -96,7 +97,7 @@ owned-sidecar bootstrap; (d) point all callers at the module.
 
 ---
 
-## 2. SOCIAL module — `backend/src/modules/social/` (composer target)
+## 2. SOCIAL module — `backend/src/domains/social/` (composer target)
 **Domain:** the agents' presence on human channels. **Absorbs:** `apps/desktop/engines/openclaw`
 (gateway-core, social-gateways channel drivers, agents, skills-reference) + the `apps/social` runtime.
 
@@ -127,7 +128,7 @@ one channel (telegram) live end-to-end; (d) cockpit social panel.
 
 ---
 
-## 3. GITHUB module — `backend/src/modules/github/` (composer target)
+## 3. GITHUB module — `backend/src/domains/github/` (composer target)
 **Domain:** the agents' complete GitHub capability. **Absorbs:** `apps/desktop/engines/recodergit` (recodergit-engine
 code-graph + github ops, pr-swarm-review, claude-plugin) + the `gh` CLI operations.
 
@@ -163,7 +164,7 @@ image). **License gate:** recodergit-engine is PolyForm-Noncommercial — resolv
 
 ---
 
-## 4. TERMINAL module — `backend/src/modules/terminal/` (composer target)
+## 4. TERMINAL module — `backend/src/domains/terminal/` (composer target)
 **Domain:** multiplexed, restart-survivable terminal sessions — the substrate agents run on.
 **Absorbs:** `apps/desktop/engines/tmux` (owned binary, sessions) + `apps/desktop/engines/dmux` (multiplexing: panes, layout/grid, attention,
 streaming, workers).
@@ -192,7 +193,7 @@ control-mode default-on feeding dmux's pane model; (c) wave shell on the same tm
 
 ---
 
-## 5. COMMUNICATION module — `backend/src/modules/communication/` (composer target)
+## 5. COMMUNICATION module — `backend/src/domains/communication/` (composer target)
 **Domain:** how agents decide, route, reach consensus, and talk to each other. **Absorbs:** `packages/pal`
 (planning/decision/consensus/model-routing, ported from pal-mcp) + the A2A stack (agent-to-agent
 messaging, task handoff).
@@ -213,8 +214,9 @@ interface CommunicationModule {
 `recoder.pal-plan` in-proc behind the interop gate) + A2A scattered across `a2a/*` + the conductor's
 runtime dispatch. Only the `pal.plan` slice is ported to `@recoder/pal`; the vendored Python
 `backend/engines/py/pal-mcp-server` (multi-model orchestration, conversation threading, `clink` subagent bridge,
-codereview/consensus/planner workflows) is **NOT run/supervised** by backend and its heavy
-orchestration is stranded. pal decisions aren't yet the conductor's actual planner on the launch path.
+codereview/consensus/planner workflows) is now a **supervised sidecar** (`PalMcpAdapter` in the ENGINES
+domain, reached over the supervised seam, health `up` only when the uv venv answers), though its heavy
+orchestration is not yet the conductor's actual planner on the launch path.
 **Deep target:** a `CommunicationModule` that IS the conductor's decision layer (every workspace launch
 calls `plan()` for runtime/risk/approval) and the A2A spine (agent handoff/messaging). pal's consensus +
 escalation available to agents as a "consult" capability.
@@ -222,7 +224,7 @@ escalation available to agents as a "consult" capability.
 
 ---
 
-## 6. INFERENCE module — `backend/src/modules/inference/` (composer target)
+## 6. INFERENCE module — `backend/src/domains/inference/` (composer target)
 **Domain:** every LLM call. **Absorbs:** `backend/engines/rust/tensorzero` (embedded gateway) + the model registry + BYOK.
 
 **Interface**
@@ -247,7 +249,7 @@ keys as TZ credentials; streaming; feedback wired to delivery outcomes.
 
 ---
 
-## 7. AGENT-ENGINE module — `backend/src/modules/agent-engine/` (composer target)
+## 7. AGENT-ENGINE module — `backend/src/domains/agent-engine/` (composer target)
 **Domain:** autonomous agents + the openfang kernel. **Absorbs:** `backend/engines/rust/openfang` (upstream RightNow-AI
 OpenFang, MIT — a full Rust "Agent OS": kernel of agents, Hands/background workers, triggers, workflows,
 event bus, KV memory + a wasmtime runtime, sqlite, ~40 channel adapters). Two surfaces: an HTTP sidecar
@@ -277,7 +279,7 @@ background capabilities; its event bus bridged to RunEvents.
 
 ---
 
-## 8. GOVERNANCE module — `backend/src/modules/governance/` (composer target)
+## 8. GOVERNANCE module — `backend/src/domains/governance/` (composer target)
 **Domain:** the moat — policy decisions + tamper-evident audit. **Engine dir:** `backend/engines/rust/recoder-governance`
 — **first-party (MIT), Recoder-OWNED** Rust governance kernel (a 9-crate workspace: types/audit/permission/
 approval/routing/kernel/ipc/daemon/napi), deliberately kept OUTSIDE the vendored upstream clones. The
@@ -295,20 +297,22 @@ through. **Build:** module wraps the native kernel; extend the seal to all mutat
 workspace lifecycle. (Richer policy crates — permission/approval/routing, persistence, checkpoints,
 replay — exist as slices; only audit+kernel are exercised via napi today.)
 
-## 9. BROWSING module — `backend/src/modules/browsing/` (composer target)
+## 9. BROWSING module — `backend/src/domains/browsing/` (composer target)
 **Domain:** web automation for agents. **Engine dirs:** `backend/engines/py/browser-use` (async LLM browser-agent — Rust
 core, CDP, watchdogs) + `@recoder/agent-browser` (in-proc puppeteer) + `@recoder/browser-tools`.
-**Today (ground-truth correction):** `backend/engines/py/browser-use` is **NOT run as a sidecar**. The live path is TS-first:
-`agent-os/mcp/browser-use-engine.ts` composes the owned `@recoder/agent-browser` over a degrade-safe driver
-— puppeteer (dynamic import) OR an HTTP `browser-use` service only when `BROWSER_USE_URL` is set — registering
-`browser.navigate/extract/screenshot` behind the interop gate (with neither present, tools return
-`not_configured`). The real Python agent is essentially unused. **Deep target:** one `BrowsingModule`
+**Today:** `backend/engines/py/browser-use` is now a **supervised sidecar** (`BrowserUseAdapter` in the
+ENGINES domain, health `up` only when the uv venv answers, reached via `BROWSER_USE_URL`). The live
+functional path is still TS-first: `agent-os/mcp/browser-use-engine.ts` composes the owned
+`@recoder/agent-browser` over a degrade-safe driver — puppeteer (dynamic import) OR the HTTP `browser-use`
+sidecar — registering `browser.navigate/extract/screenshot` behind the interop gate (with neither present,
+tools return `not_configured`). The Python agent's deep loop is only reached over the sidecar seam.
+**Deep target:** one `BrowsingModule`
 (open/snapshot/extract/verify/navigate) with a **supervised** browser-use service (or its MCP server) actually
 running as the owned-venv sidecar and puppeteer as the light fallback; session/profile management,
 domain-allowlist wired to governance, artifact capture; the conductor's post-run browser-check calls it.
 **Build:** module unifies the two drivers; browser-use owned-venv bootstrap (uv + playwright install).
 
-## 10. SIGNALS module — `backend/src/modules/signals/` (composer target)
+## 10. SIGNALS module — `backend/src/domains/signals/` (composer target)
 **Domain:** work-signals + activity observability. **Engine dir:** `backend/engines/py/ops-recorder` (Recoder-authored
 FastAPI service, real code in `backend/engines/py/ops-recorder/work-signals/`; detects STUCK GitHub/Linear work → normalized
 `WorkSignal` → auto-generated handoff prompt; supervised loopback sidecar :8073, `X-API-Key` auth).
@@ -321,7 +325,7 @@ against real GH/Linear tokens, default-on. **Build:** module wraps the sidecar; 
 signals feed the board module. **Housekeeping:** `backend/engines/py/ops-recorder` LICENSE added
 (MIT, Recoder-authored — owner decision 6).
 
-## 11. NETWORKING module — `backend/src/modules/networking/` (composer target) (cloud tier — build now, mesh at cloud launch)
+## 11. NETWORKING module — `backend/src/domains/networking/` (composer target) (cloud tier — build now, mesh at cloud launch)
 **Domain:** zero-trust mesh + service control plane. **Engine dirs:** `apps/desktop/server/engines/ziti` (OpenZiti — zero-trust
 networking, cryptographic identity per connection, dark services) + `apps/desktop/server/engines/recoder-xds` (real Envoy xDS
 control plane — dynamic LDS/CDS/RDS over ADS, the live equivalent of `backend/src/network`'s static
@@ -330,7 +334,7 @@ Envoy bootstrap. **Deep target:** a `NetworkingModule` exposing mesh identity + 
 push as diagnostics now, activated at cloud/teams launch. **Build:** owned-binary builds out-of-band;
 health/diagnostics surface; mesh deferred to cloud.
 
-## 12. SQUADS module — `backend/src/modules/squads/` (composer target) (agents as teammates)
+## 12. SQUADS module — `backend/src/domains/squads/` (composer target) (agents as teammates)
 **Domain:** managed agents as first-class teammates — assignment, squads, autopilots, the team board.
 **Engine dir:** `apps/desktop/server/engines/multica` ("Multiplexed Information and Computing Agent" — assign issues to an agent
 like a colleague; agents claim work, report blockers, update status; **Squads** = a group under a leader
@@ -359,7 +363,7 @@ Consolidation-first (each is "gather scattered code behind the interface", then 
 6. **AGENT-ENGINE** — ConductorRuntimeId widening → openfang runtime dispatch.
 7. **SOCIAL** — inbound→conductor end-to-end + one live channel.
 
-Each module ships as: create `backend/src/modules/<domain>/` + the interface + move scattered code behind it +
+Each module ships as: create `backend/src/domains/<domain>/` + the interface + move scattered code behind it +
 one integration test proving a caller uses the module end-to-end + degrade-safe health. Then deepen.
 
 ---
