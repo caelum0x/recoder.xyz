@@ -14,7 +14,8 @@
  * The sidecar's REST shape (from `api/workSignalsRoutes.py`):
  *   GET  /work-signals            → RawWorkSignal[]
  *   GET  /work-signals/{id}       → RawWorkSignal
- * guarded by a bearer `require_api_key` dependency.
+ * guarded by a `require_api_key` dependency that reads the `X-API-Key` header
+ * (see `work-signals/config.py` — it accepts ONLY that header, never bearer).
  */
 import type { Logger } from '../../../shared/logger.js';
 import type {
@@ -27,7 +28,7 @@ export interface OpsRecorderClientDeps {
   readonly logger: Logger;
   /** Base URL of the in-box sidecar (e.g. `http://127.0.0.1:8091`); null ⇒ down. */
   readonly baseUrl: string | null;
-  /** Bearer token the sidecar's `require_api_key` expects; null ⇒ preflight fails. */
+  /** API key the sidecar's `require_api_key` expects in `X-API-Key`; null ⇒ preflight fails. */
   readonly token: string | null;
   /** Per-request timeout (ms). */
   readonly timeoutMs?: number;
@@ -111,7 +112,7 @@ export class OpsRecorderClient implements WorkSignalsPort {
     try {
       return await fetch(`${this.baseUrl}${path}`, {
         method,
-        headers: this.token ? { authorization: `Bearer ${this.token}` } : {},
+        headers: this.token ? { 'X-API-Key': this.token } : {},
         signal: controller.signal,
       });
     } catch (err) {

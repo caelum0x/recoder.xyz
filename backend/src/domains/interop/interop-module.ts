@@ -18,7 +18,7 @@
 import { Router, type RequestHandler } from 'express';
 import type { Logger } from '../../shared/logger.js';
 import type { ComponentHealth } from '../../shared/health-types.js';
-import { sendSuccess, asyncHandler } from '../../shared/errors.js';
+import { sendSuccess } from '../../shared/errors.js';
 import type { RateLimitConfig } from './rate-limiter.service.js';
 import type { InteropConfig } from './config.js';
 import { sliceInteropConfig } from './config.js';
@@ -132,28 +132,23 @@ export class InteropComposer implements InteropModule {
     return this.jsonRpcServer;
   }
 
-  /** The `/api/a2a` router: health + agent-card + the ext-authz-guarded RPC edge. */
+  /**
+   * The `/api/a2a` admission-side router. The interop-wire domain mounts its wire
+   * router at the SAME base AFTER this one (bootstrap/route-table order), and it
+   * owns the REAL wire paths — `/health`, `/agent-card`, `/rpc`, `/ingress` (its
+   * header says the wire group fills this composer's skeletons, and it did). This
+   * router therefore serves NO wire paths: the old skeleton `GET /agent-card` +
+   * `POST /rpc` (zero registered JSON-RPC methods, placeholder card) would shadow
+   * the filled wire and turn `/api/a2a` into a dead duplicate surface. Interop's
+   * own admission health stays reachable at the non-colliding `/admission/health`
+   * so `/api/a2a/health` truthfully reports the wire (with its methods list).
+   */
   routes(): Router {
     const router = Router();
 
-    router.get('/health', (_req, res) => sendSuccess(res, this.health()));
-
-    // Public capability advertisement — this instance's local agent-card.
-    router.get('/agent-card', (_req, res) =>
-      sendSuccess(res, { card: this.agentCardService.getLocalAgentCard() }),
-    );
-
-    // A2A JSON-RPC edge. Hostile ingress: guarded by the fail-closed ext-authz
-    // gate (denies until a real signed-ingress verifier is wired), then the
-    // JSON-RPC dispatcher returns a spec error for any not-yet-wired method.
-    router.post(
-      '/rpc',
-      this.extAuthzGuard(),
-      asyncHandler(async (req, res) => {
-        const response = await this.jsonRpcServer.handleA2ARpc(req.body);
-        sendSuccess(res, response);
-      }),
-    );
+    // Admission-chain posture (gate / signed-ingress / internal-key) — interop's
+    // own truthful health, at a path the wire router never claims.
+    router.get('/admission/health', (_req, res) => sendSuccess(res, this.health()));
 
     return router;
   }

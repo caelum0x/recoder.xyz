@@ -100,13 +100,17 @@ function looksLikeDomainEnvelope(raw: unknown): raw is A2AEnvelope {
 export function createEnvelopeService(defaults: EnvelopeSigningOptions = {}): EnvelopeService {
   return {
     buildEnvelope<TPayload = unknown>(input: BuildEnvelopeInput<TPayload>): A2AEnvelope<TPayload> {
+      // Omit absent optional keys entirely: the SDK's canonical JSON serializes a
+      // present-but-`undefined` key differently from a missing one, so a sealed
+      // envelope carrying `to: undefined` would fail signature verification after
+      // a JSON wire roundtrip (the key vanishes). Wire-stable by construction.
       return {
         id: input.id ?? newId(),
         from: input.from,
-        to: input.to,
+        ...(input.to !== undefined ? { to: input.to } : {}),
         kind: input.kind,
         payload: input.payload,
-        correlationId: input.correlationId,
+        ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
         createdAt: input.createdAt ?? new Date().toISOString(),
       };
     },

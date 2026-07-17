@@ -73,16 +73,72 @@ describe('GovernanceGateService — decide → risk → audit', () => {
     expect(v.effect).toBe('needs_approval');
   });
 
-  it('attaches an existing approved record id to a needs_approval verdict', async () => {
+  it('CLEARS a needs_approval verdict when a real approved record exists for the task+action', async () => {
+    const approvals = new InMemoryApprovalRepository();
+    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
+
+    const { gate, auditRepo } = buildGate(NEEDS, { approvals });
+    const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));
+
+    expect(v.effect).toBe('allow');
+    expect(v.approvalId).toBe(created.id);
+    expect(v.reason).toContain(`cleared by approval ${created.id}`);
+    // The clearance is sealed into the durable audit chain as evidence.
+    const rows = (auditRepo as InMemoryAuditRepository).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.effect).toBe('allow');
+    expect(rows[0]?.payload.clearedByApprovalId).toBe(created.id);
+  });
+
+  it('does NOT clear when no approval record exists (needs_approval unchanged)', async () => {
+    const approvals = new InMemoryApprovalRepository();
+    const { gate } = buildGate(NEEDS, { approvals });
+    const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));
+    expect(v.effect).toBe('needs_approval');
+    expect(v.approvalId).toBeUndefined();
+  });
+
+  it('does NOT clear on a pending (undecided) approval record', async () => {
+    const approvals = new InMemoryApprovalRepository();
+    await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+
+    const { gate } = buildGate(NEEDS, { approvals });
+    const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));
+    expect(v.effect).toBe('needs_approval');
+  });
+
+  it('does NOT clear on an approved record for a DIFFERENT action', async () => {
+    const approvals = new InMemoryApprovalRepository();
+    const created = await approvals.create({ action: 'branch.push', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
+
+    const { gate } = buildGate(NEEDS, { approvals });
+    const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));
+    expect(v.effect).toBe('needs_approval');
+  });
+
+  it('does NOT clear without a taskId to correlate the approval to', async () => {
     const approvals = new InMemoryApprovalRepository();
     const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
     await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
 
     const { gate } = buildGate(NEEDS, { approvals });
+    const v = await gate.decide('pr.merge', principal(), ctx()); // no taskId
+    expect(v.effect).toBe('needs_approval');
+  });
+
+  it('FAIL-CLOSED: an approval-cleared allow that cannot be sealed downgrades to a synthetic deny', async () => {
+    const approvals = new InMemoryApprovalRepository();
+    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
+
+    const { gate } = buildGate(NEEDS, { approvals, failAudit: true });
     const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));
 
-    expect(v.effect).toBe('needs_approval');
-    expect(v.approvalId).toBe(created.id);
+    expect(v.effect).toBe('deny'); // never an un-recorded allow
+    expect(v.engine).toBe('synthetic');
+    expect(v.degraded).toBe(true);
   });
 
   it('FAIL-CLOSED: an ALLOW that cannot be sealed is downgraded to a synthetic deny', async () => {

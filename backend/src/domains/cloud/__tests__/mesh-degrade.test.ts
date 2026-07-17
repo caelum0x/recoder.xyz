@@ -9,6 +9,7 @@ import { describe, it, expect } from 'vitest';
 import { createMeshDiagnosticsService } from '../services/mesh-diagnostics.service.js';
 import { createZitiMeshAdapter } from '../adapters/ziti-mesh.adapter.js';
 import { createXdsEnvoyAdapter } from '../adapters/xds-envoy.adapter.js';
+import type { FetchLike } from '../adapters/http.js';
 import type { Logger } from '../../../shared/logger.js';
 
 const silentLogger = {
@@ -55,5 +56,69 @@ describe('mesh diagnostics degrade-safety', () => {
     expect(() => new Date(snapshot.checkedAt).toISOString()).not.toThrow();
     expect(snapshot.zitiIdentities).toEqual([]);
     expect(snapshot.xdsClusters).toEqual([]);
+  });
+});
+
+/** A FetchLike that always answers with the given HTTP status. */
+function fetchReturning(status: number): FetchLike {
+  return async () => ({
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => '',
+    json: async () => ({}),
+  });
+}
+
+function adapters(fetchLike: FetchLike) {
+  return {
+    ziti: createZitiMeshAdapter({ endpoint: 'http://127.0.0.1:1', logger: silentLogger, fetchLike }),
+    xds: createXdsEnvoyAdapter({ endpoint: 'http://127.0.0.1:1', logger: silentLogger, fetchLike }),
+  };
+}
+
+describe('mesh engine health is status-truthful (only 2xx is up)', () => {
+  it('reports up on 200', async () => {
+    const { ziti, xds } = adapters(fetchReturning(200));
+    expect((await ziti.status()).status).toBe('up');
+    expect((await xds.status()).status).toBe('up');
+  });
+
+  it('does NOT report up on 404 — a wrong path must not fake success', async () => {
+    const { ziti, xds } = adapters(fetchReturning(404));
+    const zitiStatus = await ziti.status();
+    const xdsStatus = await xds.status();
+    expect(zitiStatus.status).toBe('degraded');
+    expect(zitiStatus.reason).toContain('unexpected 404');
+    expect(zitiStatus.reason).toContain('may not be the ziti engine');
+    expect(xdsStatus.status).toBe('degraded');
+    expect(xdsStatus.reason).toContain('unexpected 404');
+    expect(xdsStatus.reason).toContain('may not be the xds engine');
+  });
+
+  it('does NOT report up on 401', async () => {
+    const { ziti, xds } = adapters(fetchReturning(401));
+    expect((await ziti.status()).status).toBe('degraded');
+    expect((await xds.status()).status).toBe('degraded');
+  });
+
+  it('reports degraded with the status named on 503', async () => {
+    const { ziti, xds } = adapters(fetchReturning(503));
+    const zitiStatus = await ziti.status();
+    const xdsStatus = await xds.status();
+    expect(zitiStatus.status).toBe('degraded');
+    expect(zitiStatus.reason).toContain('503');
+    expect(xdsStatus.status).toBe('degraded');
+    expect(xdsStatus.reason).toContain('503');
+  });
+
+  it('reports unknown (never up) on connect failure', async () => {
+    const failing: FetchLike = async () => {
+      throw new Error('ECONNREFUSED');
+    };
+    const { ziti, xds } = adapters(failing);
+    const zitiStatus = await ziti.status();
+    expect(zitiStatus.status).toBe('unknown');
+    expect(zitiStatus.reason).toContain('ECONNREFUSED');
+    expect((await xds.status()).status).toBe('unknown');
   });
 });

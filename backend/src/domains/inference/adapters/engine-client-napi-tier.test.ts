@@ -1,8 +1,9 @@
 /**
  * `engine-client-napi-tier` — the CONFLICT #8-safe bridge from the engines
  * `EngineClientPort` into the inference napi tier. Verifies: `ensureBooted` binds
- * only on `up` health, `complete` maps a TZ `inference` result, and a
- * `{ ok:false }` invoke declines (returns null) so the ladder falls to loopback.
+ * only on `up` health, `complete` maps a TZ `inference` result, a `{ ok:false }`
+ * invoke declines (returns null) so the ladder falls to loopback, and `feedback`
+ * routes the TZ `feedback` op (snake_case input, real feedback_id, never faked).
  */
 import { describe, it, expect, vi } from 'vitest';
 import type { Logger } from '../../../shared/logger.js';
@@ -66,5 +67,34 @@ describe('createEngineClientNapiTier', () => {
     const tier = createEngineClientNapiTier(fakeClient({ health: 'up', invoke: { ok: false, reason: 'gateway down' } }), log);
     expect(await tier.complete(REQ)).toBeNull();
     expect(tier.available()).toBe(false);
+  });
+
+  it('routes feedback as the TZ feedback op and parses the real feedback_id', async () => {
+    const client = fakeClient({ health: 'up', invoke: { ok: true, value: { feedback_id: 'fb-1' } } });
+    const tier = createEngineClientNapiTier(client, log);
+    const result = await tier.feedback!({ inferenceId: 'inf-1', metricName: 'task_success', value: true });
+    expect(result).toEqual({
+      routed: true,
+      tier: 'napi',
+      inferenceId: 'inf-1',
+      metricName: 'task_success',
+      feedbackId: 'fb-1',
+    });
+    expect(client.invoke).toHaveBeenCalledWith(
+      expect.objectContaining({
+        op: 'feedback',
+        input: { inference_id: 'inf-1', metric_name: 'task_success', value: true },
+      }),
+    );
+  });
+
+  it('never fakes a feedback_id (accepted-without-id stays truthful; failure declines)', async () => {
+    const noId = createEngineClientNapiTier(fakeClient({ health: 'up', invoke: { ok: true, value: {} } }), log);
+    const accepted = await noId.feedback!({ inferenceId: 'inf-1', metricName: 'comment', value: 'nice' });
+    expect(accepted).toEqual({ routed: true, tier: 'napi', inferenceId: 'inf-1', metricName: 'comment' });
+    expect(accepted).not.toHaveProperty('feedbackId');
+
+    const failing = createEngineClientNapiTier(fakeClient({ health: 'up', invoke: { ok: false, reason: 'gateway down' } }), log);
+    expect(await failing.feedback!({ inferenceId: 'inf-1', metricName: 'task_success', value: false })).toBeNull();
   });
 });

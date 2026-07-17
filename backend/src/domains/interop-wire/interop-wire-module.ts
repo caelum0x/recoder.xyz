@@ -35,6 +35,7 @@ import { createScratchpadService, type ScratchpadService } from './bridge/scratc
 import { createContextBridgeService, type ContextBridgeService } from './bridge/context-bridge.js';
 import { registerRuntimeConnectors } from './runtimes/index.js';
 import { buildA2ARoutes } from './routes/a2a.routes.js';
+import { createRpcAdmissionGuard } from './routes/rpc-admission.middleware.js';
 import { buildAgentsRoutes } from './routes/agents.routes.js';
 import { buildTasksRoutes } from './routes/tasks.routes.js';
 import { buildInteropMcpTools } from './mcp/interop-engine.js';
@@ -123,11 +124,21 @@ export function createInteropWireComposer(deps: InteropWireComposerDeps): Intero
     },
 
     wireRoutes(): Router {
+      const cfg = core.config();
       return buildA2ARoutes({
         transport: core.transport(),
         agentCard: core.agentCard(),
         jsonRpc: core.jsonRpc(),
         health: () => core.health(),
+        // The publicly-reachable `/rpc` stays governed by the SAME fail-closed
+        // signed-ingress posture as `/ingress`: production requires a verified
+        // signed envelope wrapping the JSON-RPC call; only the explicit
+        // local-dev insecure posture admits bare JSON-RPC.
+        rpcAdmission: createRpcAdmissionGuard({
+          ingress: core.signedIngress(),
+          posture: { requireSigned: cfg.requireSignedIngress, allowInsecure: cfg.allowInsecureIngress },
+          logger: deps.logger,
+        }),
       });
     },
 

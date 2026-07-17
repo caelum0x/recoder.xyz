@@ -96,27 +96,20 @@ export function createCandidateService(deps: CandidateServiceDeps): CandidateSer
     async propose(input: ProposeCandidateInput): Promise<MemoryCandidate> {
       requireEvidence(input);
 
-      const candidate: MemoryCandidate = {
-        candidateId: newId(),
-        scope: input.scope,
-        title: input.title.trim(),
-        body: input.body.trim(),
-        status: 'candidate_created',
-        evidence: { taskId: input.evidence.taskId, artifactId: input.evidence.artifactId },
-        proposedBy: input.proposedBy,
-        proposedAt: now(),
-        ...(input.expiresAt !== undefined ? { expiresAt: input.expiresAt } : {}),
-      };
+      const title = input.title.trim();
+      const body = input.body.trim();
 
-      const stored = await repository.upsertCandidate(input.userId, candidate);
-
-      // Best-effort mirror into the beads issue-graph shared memory (never fatal).
+      // Best-effort mirror into the beads issue-graph shared memory FIRST so the
+      // bd-issued wisp id can be persisted on the candidate — it is the ONLY id
+      // `bd promote` accepts later (memory-lifecycle.accept). Never fatal: a
+      // bd-down environment stores the candidate without a beadsRef.
+      let beadsRef: string | undefined;
       if (beads.available()) {
         try {
-          beads.remember({
-            title: stored.title,
-            body: stored.body,
-            scope: String(stored.scope),
+          beadsRef = beads.remember({
+            title,
+            body,
+            scope: String(input.scope),
             ...(input.discoveredFrom ? { discoveredFrom: input.discoveredFrom } : {}),
           });
         } catch (err) {
@@ -124,7 +117,20 @@ export function createCandidateService(deps: CandidateServiceDeps): CandidateSer
         }
       }
 
-      return stored;
+      const candidate: MemoryCandidate = {
+        candidateId: newId(),
+        scope: input.scope,
+        title,
+        body,
+        status: 'candidate_created',
+        evidence: { taskId: input.evidence.taskId, artifactId: input.evidence.artifactId },
+        proposedBy: input.proposedBy,
+        proposedAt: now(),
+        ...(input.expiresAt !== undefined ? { expiresAt: input.expiresAt } : {}),
+        ...(beadsRef ? { beadsRef } : {}),
+      };
+
+      return repository.upsertCandidate(input.userId, candidate);
     },
 
     async list(userId: string, scope?: string): Promise<readonly MemoryCandidate[]> {

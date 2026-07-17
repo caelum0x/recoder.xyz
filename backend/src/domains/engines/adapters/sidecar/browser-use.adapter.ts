@@ -1,9 +1,13 @@
 /**
  * `BrowserUseAdapter` — the `EngineClientPort` over the OWNED `@recoder/agent-browser`
  * engine (the "browser agent" pillar). It composes the package's REAL engine over
- * its degrade-safe default driver: the HTTP `browser-use` service when
- * `BROWSER_USE_URL` / `externalUrls['browser-use']` is set, else a lazily
- * dynamic-imported puppeteer. It maps the engine's `navigate` / `extract` /
+ * a LAZILY-RESOLVED driver: the HTTP `browser-use` driver pointed at the
+ * SUPERVISED sidecar's live base URL (`supervisor.handle('browser-use')`) or the
+ * operator's `externalUrls['browser-use']`, else the env-selected default
+ * (`BROWSER_USE_URL` → HTTP, else dynamic-imported puppeteer). Because the
+ * sidecar comes up after boot, the URL is re-resolved on every `invoke` and the
+ * cached engine is rebuilt when it changes — so calls actually reach the owned
+ * Python engine once it is ready. It maps the engine's `navigate` / `extract` /
  * `screenshot` agent-loop steps onto the seam.
  *
  * REUSE: the concrete MCP wiring is the existing `registerBrowserUseMcpTools`
@@ -15,7 +19,11 @@
  * `not_configured`, so `health()` is a truthful `down` and every `invoke` returns
  * `{ ok:false, reason }` — never a fabricated page result, never a thrown seam.
  */
-import { createBrowserEngine, createDefaultBrowserDriver } from '@recoder/agent-browser';
+import {
+  createBrowserEngine,
+  createDefaultBrowserDriver,
+  createHttpBrowserDriver,
+} from '@recoder/agent-browser';
 import type { BrowserDriver, BrowserEngine, BrowserEnv, BrowserFetch } from '@recoder/agent-browser';
 import { registerBrowserUseMcpTools } from '../../browser-use-engine.js';
 import type { McpToolRouter } from '@recoder/agent-mcp';
@@ -48,6 +56,8 @@ export interface BrowserUseAdapterDeps {
 export class BrowserUseAdapter extends EngineClientBase<unknown, unknown> {
   private readonly deps: BrowserUseAdapterDeps;
   private engine: BrowserEngine | null = null;
+  /** The live URL the cached engine was built against (null = default driver). */
+  private engineUrl: string | null = null;
 
   constructor(deps: BrowserUseAdapterDeps) {
     super('browser-use', 'sidecar');
@@ -70,6 +80,7 @@ export class BrowserUseAdapter extends EngineClientBase<unknown, unknown> {
 
   override async stop(): Promise<void> {
     this.engine = null;
+    this.engineUrl = null;
     try {
       await this.deps.supervisor.stop('browser-use');
     } catch {
@@ -124,18 +135,45 @@ export class BrowserUseAdapter extends EngineClientBase<unknown, unknown> {
     );
   }
 
+  /**
+   * Build (or rebuild) the engine over the CURRENT best driver. The supervised
+   * sidecar publishes its base URL only after it has come up (post-boot), so the
+   * live URL is re-resolved on every call and the cached engine is rebuilt when
+   * it changes — never a one-shot snapshot (see engines-module `endpoint()`).
+   */
   private ensureEngine(): BrowserEngine | null {
-    if (this.engine) return this.engine;
+    const liveUrl = this.deps.driver ? null : this.resolveLiveUrl();
+    if (this.engine && this.engineUrl === liveUrl) return this.engine;
     try {
-      const env = this.deps.env ?? (process.env as BrowserEnv);
-      const driver =
-        this.deps.driver ?? createDefaultBrowserDriver({ env, ...(this.deps.fetch ? { fetch: this.deps.fetch } : {}) });
-      this.engine = createBrowserEngine({ driver });
+      this.engine = createBrowserEngine({ driver: this.deps.driver ?? this.buildDriver(liveUrl) });
+      this.engineUrl = liveUrl;
       return this.engine;
     } catch (err) {
       this.deps.log.warn({ err: message(err) }, 'browser-use engine construction failed');
       return null;
     }
+  }
+
+  /**
+   * The live `browser-use` HTTP base: the supervised sidecar's handle first,
+   * then the operator's external URL, else null (default-driver path).
+   */
+  private resolveLiveUrl(): string | null {
+    const handle = this.deps.supervisor.handle('browser-use');
+    if (handle?.transport === 'loopback-http' && handle.baseUrl) return handle.baseUrl;
+    return this.deps.config.externalUrls['browser-use'] ?? null;
+  }
+
+  /** HTTP driver at the live URL when one exists, else the env-selected default. */
+  private buildDriver(liveUrl: string | null): BrowserDriver {
+    if (liveUrl) {
+      return createHttpBrowserDriver({
+        url: liveUrl,
+        ...(this.deps.fetch ? { fetchImpl: this.deps.fetch } : {}),
+      });
+    }
+    const env = this.deps.env ?? (process.env as BrowserEnv);
+    return createDefaultBrowserDriver({ env, ...(this.deps.fetch ? { fetch: this.deps.fetch } : {}) });
   }
 
   /**

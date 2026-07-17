@@ -11,6 +11,8 @@
 import type {
   EmbeddingRequest,
   EmbeddingResult,
+  FeedbackRequest,
+  FeedbackResult,
   InferenceHealth,
   InferenceRequest,
   InferenceResult,
@@ -38,6 +40,14 @@ export interface InferenceGatewayPort {
 
   /** Route one embedding call down the ladder. */
   embed(req: EmbeddingRequest): Promise<EmbeddingResult>;
+
+  /**
+   * Attach a feedback signal to a prior `inference_id` (merge/approve =
+   * positive). Only the napi embedded gateway carries a feedback seam today;
+   * when it is unbound this resolves a truthful `{ routed:false, reason }` —
+   * never throws, never fabricates a `feedbackId`.
+   */
+  feedback(req: FeedbackRequest): Promise<FeedbackResult>;
 
   /** Truthful current health: which tier is bound + reachable (never leaks the key). */
   health(): Promise<InferenceHealth>;

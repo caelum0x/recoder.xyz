@@ -17,7 +17,13 @@
 import type { Logger } from '../../../shared/logger.js';
 import type { EngineClientPort } from '../../engines/ports/engine-client.port.js';
 import type { NapiTierPort } from './tensorzero-transport.adapter.js';
-import type { InferenceRequest, InferenceResult, TokenUsage } from '../types.js';
+import type {
+  FeedbackRequest,
+  FeedbackResult,
+  InferenceRequest,
+  InferenceResult,
+  TokenUsage,
+} from '../types.js';
 import { tokenUsage } from '../types.js';
 import { functionNameFor } from './tz-config-generator.js';
 
@@ -104,6 +110,24 @@ export function createEngineClientNapiTier(client: EngineClientPort, logger: Log
         content,
         ...(usage ? { usage } : {}),
         ...(typeof value.inference_id === 'string' ? { inferenceId: value.inference_id } : {}),
+      };
+    },
+
+    async feedback(req: FeedbackRequest): Promise<FeedbackResult | null> {
+      const result = await client.invoke({
+        op: 'feedback',
+        input: { inference_id: req.inferenceId, metric_name: req.metricName, value: req.value },
+        timeoutMs: 15_000,
+      });
+      if (!result.ok) return null; // decline → the ladder reports a truthful not-routed
+      const value = result.value as { feedback_id?: unknown } | null;
+      return {
+        routed: true,
+        tier: 'napi',
+        inferenceId: req.inferenceId,
+        metricName: req.metricName,
+        // Only a REAL gateway-reported id is surfaced — never fabricated.
+        ...(typeof value?.feedback_id === 'string' ? { feedbackId: value.feedback_id } : {}),
       };
     },
   };
