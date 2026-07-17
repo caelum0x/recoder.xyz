@@ -26,7 +26,7 @@ import type { QueryExecutor } from '../persistence/ports/query-executor.port.js'
 import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
 import type { Principal } from '../identity/types.js';
 import type { ConductorConfigOverrides } from './config.js';
-import type { GovernanceGatePort, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView } from './ports/index.js';
+import type { GovernanceGatePort, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView, SteerTransportPort } from './ports/index.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
@@ -50,6 +50,7 @@ import type {
   ContinueWorkspaceResult,
 } from './review/workspace-continue.ops.js';
 import type { DevCommandView } from './adapters/dev-command.adapter.js';
+import type { ConductorRuntimeView } from './adapters/runtime-listing.adapter.js';
 
 /** Dependencies injected by bootstrap (after persistence + identity + governance). */
 export interface ConductorModuleDeps {
@@ -101,6 +102,14 @@ export interface ConductorModuleDeps {
    * edge reports a truthful `connected: false` (never a fabricated link).
    */
   readonly githubStatus?: GithubStatusPort;
+  /**
+   * Optional live send-keys transport (`steerWorkspace`): delivers the user's
+   * steer text into the workspace's interactive session (tmux-backed at the
+   * composition root, addressed by the workspace's `sessionName`). Absent ⇒
+   * steering is refused truthfully (never faked); a delivery fault surfaces as
+   * `ok:false` with the transport's reason.
+   */
+  readonly steerTransport?: SteerTransportPort;
 }
 
 /** The public surface bootstrap registers and the edge/interop consume. */
@@ -173,6 +182,12 @@ export interface ConductorModule {
   setEntitlementGate(gate: EntitlementGate): void;
   /** Truthful per-substrate availability (`GET /substrates`). */
   substrates(): readonly SubstrateAvailabilityView[];
+  /**
+   * Every selectable runtime (`GET /runtimes`): PATH-probed CLIs + the native
+   * in-process openfang runtime with its live engine availability (truthful
+   * `available:false` + reason when the addon/env is absent — never faked).
+   */
+  runtimes(): Promise<readonly ConductorRuntimeView[]>;
   /** GitHub connection + detected identity (`GET /github/status`) — token-free. */
   githubStatus(): Promise<GithubStatusView>;
   /**

@@ -8054,6 +8054,7 @@ dependencies = [
 name = "tensorzero-gateway-napi"
 version = "2026.6.0"
 dependencies = [
+ "futures",
  "napi",
  "napi-build",
  "napi-derive",

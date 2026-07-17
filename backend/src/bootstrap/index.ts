@@ -47,6 +47,7 @@ import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/op
 import { createBrainMemoryAdapter } from '../domains/conductor/adapters/brain-memory.adapter.js';
 import { createConductorCodeIntel } from '../domains/conductor/adapters/code-intel.adapter.js';
 import { createGithubStatusAdapter } from '../domains/conductor/adapters/github-status.adapter.js';
+import { createTmuxSteerTransport } from '../domains/conductor/adapters/steer-transport.adapter.js';
 import { createEnginesModule } from '../domains/engines/index.js';
 import { createInferenceModule } from '../domains/inference/index.js';
 import { createBillingModule } from '../domains/billing/index.js';
@@ -393,6 +394,13 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     env: bootEnv,
     logger: childLogger('conductor-github'),
   });
+  // Live steer transport: tmux send-keys into the workspace's session (the same
+  // session addressing the tmux_worktree substrate launches with). This un-refuses
+  // `steerWorkspace` for path (a); a gone session still refuses truthfully.
+  const conductorSteer = createTmuxSteerTransport({
+    config: conductorSubstrateConfig,
+    logger: childLogger('conductor-steer'),
+  });
   const conductor = createConductorModule({
     config,
     logger: childLogger('conductor'),
@@ -404,6 +412,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     brain: conductorBrain,
     codeIntel: conductorCodeIntel,
     githubStatus: conductorGithub,
+    steerTransport: conductorSteer,
     overrides: {
       tmuxBin: config.conductor.tmuxBin,
       worktreeRoot: config.conductor.worktreeRoot,
@@ -644,6 +653,8 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     routerProvider('interop', DOMAIN_REGISTRY.interop.mountBase, interop.routes()),
     // Agent-OS state-of-record edges: read models + INTERNAL_SERVICE_KEY ingest.
     routerProvider('agent-os', DOMAIN_REGISTRY['agent-os'].mountBase, agentOs.routes()),
+    // Internal agent-os ingest edges (INTERNAL_SERVICE_KEY-gated internally).
+    routerProvider('agent-os-internal', '/internal/agent-os', agentOs.internalRoutes()),
     // Conductor terminal-product edges: workspaces + substrates + reconcile (gated).
     routerProvider('conductor', DOMAIN_REGISTRY.conductor.mountBase, conductor.routes()),
     // Engines read-only edges: declared-engine list + per-engine live health.

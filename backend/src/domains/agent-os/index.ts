@@ -32,8 +32,14 @@ export interface AgentOsModule {
   repository(): AgentOsRepositoryPort;
   /** THE RunEvent ingest + subscribe bus (conductor/runtimes/engines emit here). */
   runEventBus(): RunEventBusPort;
-  /** The `/api/agent-os/*` + internal ingest router. */
+  /** The `/api/agent-os/*` router (read models + `/internal/*` ingest back-compat). */
   routes(): Router;
+  /**
+   * The `/internal/agent-os/*` router — INTERNAL_SERVICE_KEY-gated worker
+   * ingest edges (events / run steps / runtime-evidence / outbox drain). Mount
+   * at `/internal/agent-os` (api rule alignment; identity mounts the same way).
+   */
+  internalRoutes(): Router;
   /** Read-only MCP introspection tools (summary / tasks / runs). */
   mcp(): readonly McpToolRegistration[];
   /** Truthful component health (repository / outbox / instruction compiler). */

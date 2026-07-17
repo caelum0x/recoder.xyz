@@ -24,7 +24,13 @@ import type { Logger } from '../../../shared/logger.js';
 import type { Principal } from '../../identity/types.js';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { QueryExecutor } from '../../persistence/ports/query-executor.port.js';
-import type { AuditEntryInput, GateVerdict, GovernanceGatePort } from '../ports/index.js';
+import type {
+  AuditEntryInput,
+  GateVerdict,
+  GovernanceGatePort,
+  SteerKeysInput,
+  SteerTransportPort,
+} from '../ports/index.js';
 import type { GovernanceEffect } from '../../governance/types.js';
 import { createConductorModule, type ConductorModule, type ConductorModuleDeps } from '../index.js';
 
@@ -279,6 +285,21 @@ export class FakeSubstrate implements ConductorSubstrate {
   }
 }
 
+/** A recording in-memory send-keys transport; `fail` makes delivery throw truthfully. */
+export class FakeSteerTransport implements SteerTransportPort {
+  readonly sent: SteerKeysInput[] = [];
+  #failReason: string | null = null;
+
+  fail(reason: string): void {
+    this.#failReason = reason;
+  }
+
+  async sendKeys(input: SteerKeysInput): Promise<void> {
+    if (this.#failReason) throw new Error(this.#failReason);
+    this.sent.push(input);
+  }
+}
+
 export interface ComposeOptions {
   substrates?: readonly ConductorSubstrate[];
   gate?: FakeGate;
@@ -289,6 +310,8 @@ export interface ComposeOptions {
   brain?: ConductorModuleDeps['brain'];
   /** OPTIONAL code-intel seam (recodergit index + beads track/close). */
   codeIntel?: ConductorModuleDeps['codeIntel'];
+  /** OPTIONAL live send-keys transport (absent ⇒ steering refuses truthfully). */
+  steerTransport?: ConductorModuleDeps['steerTransport'];
 }
 
 /** Compose a conductor module over the in-memory harness. Returns the module + its gate. */
@@ -307,6 +330,7 @@ export function composeConductor(options: ComposeOptions = {}): {
     ...(options.repository ? { repository: options.repository } : {}),
     ...(options.brain ? { brain: options.brain } : {}),
     ...(options.codeIntel ? { codeIntel: options.codeIntel } : {}),
+    ...(options.steerTransport ? { steerTransport: options.steerTransport } : {}),
   });
   return { module, gate };
 }

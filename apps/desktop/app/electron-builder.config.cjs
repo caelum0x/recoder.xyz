@@ -2,6 +2,7 @@ const { Arch } = require("electron-builder");
 const pkg = require("./package.json");
 const fs = require("fs");
 const path = require("path");
+const { assertExtraResourcesExist } = require("./build/assert-extra-resources.cjs");
 
 const windowsShouldSign = !!process.env.SM_CODE_SIGNING_CERT_SHA1_HASH;
 
@@ -202,6 +203,12 @@ const config = {
     publish: {
         provider: "generic",
         url: "https://dl.recoder.xyz/releases",
+    },
+    // Fail-loud gate: abort packaging (with the full missing list) if any
+    // extraResources source is absent, instead of electron-builder silently
+    // skipping it and shipping a desktop app without its native engines.
+    beforePack: async () => {
+        assertExtraResourcesExist(config.extraResources, __dirname);
     },
     afterPack: (context) => {
         // This is a workaround to restore file permissions to the recoder-server binaries on macOS after packaging the universal binary.

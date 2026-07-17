@@ -2,7 +2,8 @@
  * `tensorzero-transport.adapter.ts` — the concrete `InferenceGatewayPort` as a
  * degrade-safe delivery LADDER over the engines TensorZero client:
  *
- *   napi (embedded in-process gateway, no HTTP hop)
+ *   napi (embedded in-process gateway, no HTTP hop; REAL in-proc chunk
+ *         streaming via the `inferenceStream` napi binding)
  *     → loopback (supervised HTTP gateway; REAL per-token SSE for streaming)
  *       → router (reserved for the engines MCP router tier)
  *         → none (truthful degrade with a reason)
@@ -53,6 +54,15 @@ export interface NapiTierPort {
    * throws (a failed boot leaves the tier unavailable, degrade-safe).
    */
   ensureBooted?(): Promise<void>;
+  /**
+   * OPTIONAL streaming seam (the embedded gateway's napi `inferenceStream`
+   * binding — real per-chunk deltas, in-process, no HTTP hop). Emits deltas
+   * through `onDelta` exactly like the loopback SSE tier (lazy `role` framing,
+   * then per-chunk `content`). Resolves `null` to DECLINE (not bound / addon
+   * lacks the binding / native call failed) so the ladder continues to the
+   * loopback SSE tier; a tier without the seam simply omits the method.
+   */
+  completeStream?(req: InferenceRequest, onDelta: StreamSink): Promise<InferenceStreamResult | null>;
   /**
    * OPTIONAL feedback seam (the embedded gateway's `POST /feedback`
    * equivalent). Resolves `null` to DECLINE (not bound / native call failed);
@@ -117,7 +127,14 @@ export class TensorzeroTransportAdapter implements InferenceGatewayPort {
     const model = req.model || this.cfg.defaultModel;
     const normalized: InferenceRequest = { ...req, model };
 
-    // REAL token-granular streaming: only the loopback HTTP tier can SSE.
+    // napi tier first (real in-process chunk streaming, no HTTP hop) when
+    // preferred + bound + built with the `inferenceStream` binding.
+    if (this.cfg.streamingEnabled && this.cfg.napiFirst) {
+      const viaNapi = await this.safeNapiStream(normalized, onDelta);
+      if (viaNapi?.routed) return viaNapi;
+    }
+
+    // REAL token-granular streaming over HTTP: the loopback SSE tier.
     if (this.cfg.streamingEnabled && this.streamFetch && this.loopback.isConfigured()) {
       const endpoint = this.loopback.endpoint();
       if (endpoint) {
@@ -159,6 +176,12 @@ export class TensorzeroTransportAdapter implements InferenceGatewayPort {
           'real SSE streaming declined — degrading to buffered single-chunk emit',
         );
       }
+    }
+
+    // napi streaming as a fallback rung when it was not tried first.
+    if (this.cfg.streamingEnabled && !this.cfg.napiFirst) {
+      const viaNapi = await this.safeNapiStream(normalized, onDelta);
+      if (viaNapi?.routed) return viaNapi;
     }
 
     // Degrade: buffered completion emitted as ONE delta (truthful: not granular).
@@ -246,6 +269,21 @@ export class TensorzeroTransportAdapter implements InferenceGatewayPort {
                 : (loopReason ?? 'loopback gateway not reachable'),
           }),
     };
+  }
+
+  /**
+   * napi STREAM tier call guarded like `safeNapi`: an unbound tier / absent
+   * seam / native failure resolves `null` (the ladder continues to loopback
+   * SSE, then buffered) — never a thrown error, never a faked stream.
+   */
+  private async safeNapiStream(req: InferenceRequest, onDelta: StreamSink): Promise<InferenceStreamResult | null> {
+    if (!this.napi?.available() || !this.napi.completeStream) return null;
+    try {
+      return await this.napi.completeStream(req, onDelta);
+    } catch (err) {
+      this.log.debug({ err: message(err), model: req.model }, 'napi stream tier threw — degrading to loopback SSE');
+      return null;
+    }
   }
 
   /** napi tier call guarded so a native failure never throws across the seam. */

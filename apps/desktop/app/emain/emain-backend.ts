@@ -18,7 +18,7 @@
  *      belongs to the Go server only (emain-wavesrv.ts).
  */
 
-import { app } from "electron";
+import { app, safeStorage } from "electron";
 import * as path from "node:path";
 import {
     BackendAuth,
@@ -31,6 +31,7 @@ import {
     writeCockpitWidgetConfig,
     writeWaveAIGatewayConfig,
 } from "./emain-backend-core";
+import { readByokSecretsFromStore } from "./emain-backend-runtime-env";
 import { getElectronAppBasePath, getWaveConfigDir } from "./emain-platform";
 
 let supervisor: BackendSupervisor = null;
@@ -91,6 +92,20 @@ export async function startBackendSupervisor(): Promise<void> {
             isPackaged: app.isPackaged,
             resourcesPath: process.resourcesPath,
             preferredPort: plannedPort ?? undefined,
+            // BYOK provider keys for the native openfang/tensorzero runtimes:
+            // read from the SAME encrypted secret store the terminal's secrets
+            // UI writes (<configDir>/secrets.enc, safeStorage ciphertext). A
+            // failure here degrades truthfully to a keyless spawn (core logs it).
+            readByokSecrets: () =>
+                readByokSecretsFromStore({
+                    secretsFilePath: path.join(getWaveConfigDir(), "secrets.enc"),
+                    decrypt: (ciphertextBase64) => {
+                        if (!safeStorage.isEncryptionAvailable()) {
+                            throw new Error("safeStorage encryption is not available");
+                        }
+                        return safeStorage.decryptString(Buffer.from(ciphertextBase64, "base64"));
+                    },
+                }),
             log: (level, message, extra) => {
                 console.log(`[backend-supervisor:${level}] ${message}`, extra ?? "");
             },

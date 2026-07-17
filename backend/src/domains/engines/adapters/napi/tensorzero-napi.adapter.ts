@@ -8,10 +8,16 @@
  * the FULL engine in-process (no HTTP hop, no subprocess). This adapter binds the
  * `.node` through the injected `NapiLoaderPort`, boots the `EmbeddedGateway`
  * once, and exposes its real surface as `invoke(op,input)`:
- *   - `inference`      → POST /inference equivalent (routing + logging)
- *   - `feedback`       → POST /feedback equivalent (metric/comment collection)
- *   - `configValidate` → in-process TZ config validation
- *   - `version`        → the Rust crate version
+ *   - `inference`       → POST /inference equivalent (routing + logging)
+ *   - `inferenceStream` → POST /inference with `stream:true` — real per-chunk
+ *                         deltas via an `onChunk` callback in the input (the
+ *                         native side pushes `{chunk}` events through a
+ *                         ThreadsafeFunction and terminates with `{done}` on
+ *                         the SAME FIFO queue, so every chunk is delivered
+ *                         before the invoke resolves)
+ *   - `feedback`        → POST /feedback equivalent (metric/comment collection)
+ *   - `configValidate`  → in-process TZ config validation
+ *   - `version`         → the Rust crate version
  *
  * REUSE: the config generation (`generateTensorzeroConfig`) is the existing
  * `src/engines/tensorzero-config.ts` (env → registry → TOML → temp path); this
@@ -33,6 +39,13 @@ import { msg, parseJson, str, type NapiArgs } from './napi-util.js';
 interface TzEmbeddedGatewayInstance {
   /** POST /inference equivalent; params/result are JSON strings. Async (never blocks the loop). */
   inference(paramsJson: string): Promise<string>;
+  /**
+   * POST /inference with `stream:true`. Present only in builds that include the
+   * streaming binding. `onEvent` receives `(err, eventJson)` per the napi
+   * callee-handled ThreadsafeFunction convention; events are `{"chunk":...}`
+   * per chunk then one `{"done":<summary>}`. Resolves the summary JSON.
+   */
+  inferenceStream?(paramsJson: string, onEvent: (err: unknown, eventJson: string) => void): Promise<string>;
   /** POST /feedback equivalent; params/result are JSON strings. */
   feedback(paramsJson: string): Promise<string>;
 }
@@ -74,6 +87,8 @@ const NOT_BUILT =
   'tensorzero gateway napi addon (.node) not built — build backend/engines/rust/tensorzero/crates -p tensorzero-gateway-napi';
 const GATEWAY_DOWN =
   'tensorzero embedded gateway unavailable — addon absent, lacks EmbeddedGateway binding, or boot failed';
+const NO_STREAM_BINDING =
+  'tensorzero gateway napi addon lacks the inferenceStream binding — rebuild backend/engines/rust/tensorzero/crates -p tensorzero-gateway-napi';
 
 export interface TensorzeroNapiOptions {
   /** When `false`, the engine is never bound and reports `down` with reason "disabled". */
@@ -152,6 +167,17 @@ export class TensorzeroNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
       }
     }
 
+    if (op === 'inferenceStream') {
+      const gateway = await this.ensureGateway();
+      if (!gateway) return fail(GATEWAY_DOWN, 'ENGINE_DOWN');
+      if (typeof gateway.inferenceStream !== 'function') return fail(NO_STREAM_BINDING, 'ENGINE_DOWN');
+      // `onChunk` is a live callback riding in the input — extracted (never
+      // serialized) so the remaining fields are the POST /inference body.
+      const { onChunk, ...params } = input;
+      const sink = typeof onChunk === 'function' ? (onChunk as (chunk: unknown) => void) : undefined;
+      return this.invokeInferenceStream(gateway, params, sink);
+    }
+
     if (op === 'inference' || op === 'feedback') {
       const gateway = await this.ensureGateway();
       if (!gateway) return fail(GATEWAY_DOWN, 'ENGINE_DOWN');
@@ -196,6 +222,60 @@ export class TensorzeroNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
   }
 
   // --- internals ---
+
+  /**
+   * Drive one native streamed inference. Chunk events are forwarded to
+   * `onChunk` as they arrive; the `{done}` event on the SAME FIFO callback is
+   * the flush barrier (the native promise resolution has no cross-queue
+   * ordering guarantee vs the ThreadsafeFunction queue) — awaiting it
+   * guarantees every chunk was delivered before this resolves. A mid-stream
+   * native failure is a truthful `{ ok:false }`, never a thrown error.
+   */
+  private async invokeInferenceStream(
+    gateway: TzEmbeddedGatewayInstance,
+    params: NapiArgs,
+    onChunk?: (chunk: unknown) => void,
+  ): Promise<InvokeResult<unknown>> {
+    let flushed!: () => void;
+    const flushBarrier = new Promise<void>((resolve) => {
+      flushed = resolve;
+    });
+    try {
+      const summaryJson = await gateway.inferenceStream!(JSON.stringify(params), (_err, eventJson) => {
+        const event = parseJson(eventJson);
+        if (!event || typeof event !== 'object') return;
+        if ('done' in event) {
+          flushed();
+          return;
+        }
+        if ('chunk' in event) {
+          try {
+            onChunk?.((event as { chunk: unknown }).chunk);
+          } catch {
+            // A sink error must never poison the native callback queue.
+          }
+        }
+      });
+      await this.awaitFlushBarrier(flushBarrier);
+      return ok(parseJson(summaryJson));
+    } catch (err) {
+      flushed(); // never leave the barrier pending
+      return fail(`tensorzero inferenceStream threw: ${msg(err)}`, 'ENGINE_THREW');
+    }
+  }
+
+  /** Bounded wait on the `{done}` flush barrier — the seam must never hang. */
+  private async awaitFlushBarrier(flushBarrier: Promise<void>): Promise<void> {
+    let timer: NodeJS.Timeout | undefined;
+    const bound = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, 2_000);
+    });
+    try {
+      await Promise.race([flushBarrier, bound]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
 
   private degraded(reason: string, bindingPath: string, version?: string): EngineHealth {
     return {
