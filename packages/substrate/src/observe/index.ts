@@ -21,3 +21,12 @@ export { computeDelta, MAX_DELTA_CHARS } from './delta.js';
 export { detectInputWait } from './input-wait.js';
 export type { CaptureDeltaResult } from './delta.js';
 export type { RunEventSink } from './event-sink.port.js';
+export {
+  decodeControlModeData,
+  stripAnsi,
+  stripDcsEnvelope,
+  parseControlModeLine,
+  supportsControlMode,
+  MIN_CONTROL_MODE_VERSION,
+} from './control-mode.js';
+export type { ControlModeNotification } from './control-mode.js';

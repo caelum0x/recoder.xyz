@@ -10,6 +10,10 @@
  *   GET    /api/conductor/workspaces/:id/diff     reviewable diff vs base
  *   GET    /api/conductor/workspaces/:id/tree     worktree file list
  *   GET    /api/conductor/workspaces/:id/dev-command  detected dev command (or null)
+ *   GET    /api/conductor/workspaces/:id/view     attention-enriched view (truthful unknown)
+ *   GET    /api/conductor/views                   attention-enriched views of every workspace
+ *   POST   /api/conductor/workspaces/:id/stop     graceful run stop → cancelled (GATED)
+ *   POST   /api/conductor/workspaces/:id/advance  lifecycle step, review→merge flow (GATED)
  *   POST   /api/conductor/workspaces/:id/message  chat → next agent run (GATED)
  *   POST   /api/conductor/workspaces/:id/pr       push branch + open PR (GATED)
  *   POST   /api/conductor/workspaces/:id/merge    merge into base, gh or local (GATED)
@@ -34,7 +38,7 @@
 import { Router } from 'express';
 import { ErrorCode, createError, sendError, sendSuccess, asyncHandler } from '../../../shared/errors.js';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
-import type { WorkspaceSubstrate } from '@recoder/agent-os';
+import type { WorkspaceState, WorkspaceSubstrate } from '@recoder/agent-os';
 import type { ConductorModule } from '../index.js';
 import type { CreateConductorWorkspaceInput, ConductorWriteResult } from '../conductor-module.js';
 
@@ -44,6 +48,26 @@ export interface ConductorRouterDeps {
 }
 
 const SUBSTRATES: readonly WorkspaceSubstrate[] = ['tmux_worktree', 'daytona', 'in_process', 'ssh'];
+
+/** Every canonical workspace state (validation surface for `/advance` bodies). */
+const WORKSPACE_STATES: readonly WorkspaceState[] = [
+  'created',
+  'setting_up',
+  'ready',
+  'running',
+  'awaiting_approval',
+  'awaiting_review',
+  'changes_requested',
+  'merging',
+  'merged',
+  'failed',
+  'cancelled',
+  'archived',
+];
+
+function isWorkspaceState(value: unknown): value is WorkspaceState {
+  return typeof value === 'string' && (WORKSPACE_STATES as readonly string[]).includes(value);
+}
 
 /** Build the `/api/conductor` router. */
 export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
@@ -154,7 +178,59 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     }),
   );
 
+  // Attention-enriched read model: durable state + run events + terminal tail →
+  // truthful `attention` ('unknown' when nothing signals — never a guess).
+  router.get(
+    '/workspaces/:id/view',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      const view = await module.workspaceView(req.params.id);
+      if (!view) {
+        sendError(res, createError(ErrorCode.NOT_FOUND, 'workspace not found'));
+        return;
+      }
+      sendSuccess(res, { workspace: view });
+    }),
+  );
+
+  router.get(
+    '/views',
+    middleware.authenticate,
+    asyncHandler(async (_req, res) => {
+      sendSuccess(res, { workspaces: await module.listWorkspaceViews() });
+    }),
+  );
+
   // --- workspace detail: governed writes ---------------------------------------
+
+  // Graceful stop: substrate session kill (worktree kept for review) + a
+  // truthful `cancelled` transition + audit. A kill fault is a truthful 503
+  // with the state UNCHANGED — never a faked stop.
+  router.post(
+    '/workspaces/:id/stop',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const result = await module.stopWorkspace(req.params.id, req.principal!);
+      finishWrite(res, result, { key: 'workspace' });
+    }),
+  );
+
+  // Advance one lifecycle step (review → merge flow). Pure transitions only —
+  // merge/archive/stop own their evidence-bearing transitions; the agent-os
+  // state machine enforces from→to legality.
+  router.post(
+    '/workspaces/:id/advance',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const to = requireString(body, 'to');
+      if (!isWorkspaceState(to)) {
+        throw createError(ErrorCode.VALIDATION_ERROR, `\`to\` must be one of: ${WORKSPACE_STATES.join(', ')}`);
+      }
+      const result = await module.advanceWorkspaceState(req.params.id, to, req.principal!);
+      finishWrite(res, result, { key: 'workspace' });
+    }),
+  );
 
   router.post(
     '/workspaces/:id/message',

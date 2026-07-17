@@ -19,6 +19,14 @@
  * NEVER from the body — a caller only acts on their own tenant. Quota exhaustion
  * and every provider fault surface as the truthful `SERVICE_UNAVAILABLE` (503)
  * envelope; nothing is faked live.
+ *
+ * GOVERNANCE: every WRITE edge (sandbox provision/destroy, deployment create,
+ * preview-URL mint, tenant auto-provision) passes the injected
+ * {@link CloudGovernanceGatePort} `decide → audit` seam BEFORE mutating —
+ * exactly the conductor/identity write pattern. A blocking verdict returns a
+ * truthful 403; an ERRORING gate fails CLOSED (503, `AUTHZ_SERVICE_ERROR`);
+ * an absent gate (not yet injected by bootstrap) degrades open with a warn log.
+ * Successful writes are sealed into the durable audit chain best-effort.
  */
 import { Router, type Request } from 'express';
 import { z } from 'zod';
@@ -31,6 +39,8 @@ import type { SandboxProvisionerService } from '../services/sandbox-provisioner.
 import type { PreviewDeployService } from '../services/preview-deploy.service.js';
 import type { MeshDiagnosticsService } from '../services/mesh-diagnostics.service.js';
 import type { FleetSupervisorService } from '../services/fleet-supervisor.service.js';
+import type { CloudGovernanceGatePort } from '../ports/governance-gate.port.js';
+import { guardCloudWrite, recordCloudAudit } from '../services/cloud-write-gate.js';
 import { DEPLOY_TARGET_KINDS, type DeployTargetKind } from '../types.js';
 
 export interface CloudRouterDeps {
@@ -41,6 +51,13 @@ export interface CloudRouterDeps {
   readonly fleet: FleetSupervisorService;
   readonly mw: AuthMiddleware;
   readonly logger: Logger;
+  /**
+   * Phase-3 governance gate (capability token, injected by bootstrap). Guards
+   * EVERY write edge via `decide → audit`. Absent ⇒ degrade-open (warn-logged
+   * auth-only writes) until the serial wiring lands; an erroring gate fails
+   * CLOSED — see `services/cloud-write-gate.ts`.
+   */
+  readonly gate?: CloudGovernanceGatePort;
   /**
    * Active (`building|live`) preview count for a tenant, driving the deny-first
    * preview quota gate. Supplied by the composer over the deployment repo;
@@ -85,7 +102,7 @@ function tenantRefOf(principal: Principal): TenantRef & { ownerUserId: string } 
 }
 
 export function buildCloudRouter(deps: CloudRouterDeps): Router {
-  const { tenancy, provisioner, preview, mesh, fleet, mw, logger, activePreviewCount } = deps;
+  const { tenancy, provisioner, preview, mesh, fleet, mw, logger, gate, activePreviewCount } = deps;
   const router = Router();
 
   // --- Tenant ---
@@ -98,10 +115,33 @@ export function buildCloudRouter(deps: CloudRouterDeps): Router {
         sendError(res, createError(ErrorCode.AUTH_REQUIRED));
         return;
       }
-      const resolved = await tenancy.ensure(tenantRefOf(principal));
+      // Tenant auto-provision is a WRITE: gate it only when no tenant exists yet
+      // (a plain resolve stays an ungated read).
+      const existing = await tenancy.resolve(tenantRefOf(principal));
+      if (!existing.ok && existing.error.code !== ErrorCode.NOT_FOUND) {
+        sendError(res, existing.error);
+        return;
+      }
+      const guarded = existing.ok
+        ? undefined
+        : await guardCloudWrite(gate, 'cloud.tenant.provision', principal, {
+            target: { environment: 'cloud' },
+            metadata: { edge: 'tenant.ensure', orgId: principal.orgId ?? null },
+          }, logger);
+      if (guarded && !guarded.allowed) {
+        sendError(res, guarded.error);
+        return;
+      }
+      const resolved = existing.ok ? existing : await tenancy.ensure(tenantRefOf(principal));
       if (!resolved.ok) {
         sendError(res, resolved.error);
         return;
+      }
+      if (guarded?.allowed) {
+        await recordCloudAudit(gate, 'cloud.tenant.provision', principal, guarded.verdict, {
+          tenantId: resolved.value.id,
+          tier: resolved.value.tier,
+        }, logger);
       }
       const tenant = resolved.value;
       const quota = await tenancy.effectiveQuota(tenant);
@@ -148,12 +188,22 @@ export function buildCloudRouter(deps: CloudRouterDeps): Router {
         sendError(res, createError(ErrorCode.VALIDATION_ERROR, parsed.error.issues[0]?.message ?? 'invalid body'));
         return;
       }
+      const body = parsed.data;
+      // Governance BEFORE any mutation (including the subordinate tenant ensure).
+      const guarded = await guardCloudWrite(gate, 'cloud.sandbox.provision', principal, {
+        target: { environment: 'cloud' },
+        ...(body.runId ? { runId: body.runId } : {}),
+        metadata: { edge: 'sandbox.provision', image: body.image ?? null, repo: body.repo ?? null, branch: body.branch ?? null },
+      }, logger);
+      if (!guarded.allowed) {
+        sendError(res, guarded.error);
+        return;
+      }
       const resolved = await tenancy.ensure(tenantRefOf(principal));
       if (!resolved.ok) {
         sendError(res, resolved.error);
         return;
       }
-      const body = parsed.data;
       const result = await provisioner.provision({
         tenant: resolved.value,
         userId: principal.userId,
@@ -170,6 +220,11 @@ export function buildCloudRouter(deps: CloudRouterDeps): Router {
         sendError(res, result.error);
         return;
       }
+      await recordCloudAudit(gate, 'cloud.sandbox.provision', principal, guarded.verdict, {
+        sandboxId: result.value.id,
+        tenantId: resolved.value.id,
+        provider: result.value.provider,
+      }, logger);
       sendSuccess(res, result.value, { statusCode: 201 });
     }),
   );
@@ -206,6 +261,14 @@ export function buildCloudRouter(deps: CloudRouterDeps): Router {
         sendError(res, createError(ErrorCode.AUTH_REQUIRED));
         return;
       }
+      const guarded = await guardCloudWrite(gate, 'cloud.sandbox.destroy', principal, {
+        target: { environment: 'cloud' },
+        metadata: { edge: 'sandbox.destroy', sandboxId: req.params.id },
+      }, logger);
+      if (!guarded.allowed) {
+        sendError(res, guarded.error);
+        return;
+      }
       const resolved = await tenancy.resolve(tenantRefOf(principal));
       if (!resolved.ok) {
         sendError(res, resolved.error);
@@ -216,6 +279,10 @@ export function buildCloudRouter(deps: CloudRouterDeps): Router {
         sendError(res, result.error);
         return;
       }
+      await recordCloudAudit(gate, 'cloud.sandbox.destroy', principal, guarded.verdict, {
+        sandboxId: req.params.id,
+        tenantId: resolved.value.id,
+      }, logger);
       sendSuccess(res, { id: req.params.id, destroyed: true });
     }),
   );
@@ -233,6 +300,21 @@ export function buildCloudRouter(deps: CloudRouterDeps): Router {
       const parsed = deployBodySchema.safeParse(req.body ?? {});
       if (!parsed.success) {
         sendError(res, createError(ErrorCode.VALIDATION_ERROR, parsed.error.issues[0]?.message ?? 'invalid body'));
+        return;
+      }
+      // Governance BEFORE any mutation (including the subordinate tenant ensure).
+      const guarded = await guardCloudWrite(gate, 'cloud.deployment.create', principal, {
+        target: { environment: parsed.data.target },
+        ...(parsed.data.runId ? { runId: parsed.data.runId } : {}),
+        metadata: {
+          edge: 'deployment.create',
+          deployTarget: parsed.data.target,
+          sandboxId: parsed.data.sandboxId ?? null,
+          commitSha: parsed.data.commitSha ?? null,
+        },
+      }, logger);
+      if (!guarded.allowed) {
+        sendError(res, guarded.error);
         return;
       }
       const resolved = await tenancy.ensure(tenantRefOf(principal));
@@ -265,6 +347,11 @@ export function buildCloudRouter(deps: CloudRouterDeps): Router {
         sendError(res, result.error);
         return;
       }
+      await recordCloudAudit(gate, 'cloud.deployment.create', principal, guarded.verdict, {
+        deploymentId: result.value.id,
+        tenantId: tenant.id,
+        deployTarget: body.target,
+      }, logger);
       sendSuccess(res, result.value, { statusCode: 201 });
     }),
   );
@@ -311,6 +398,16 @@ export function buildCloudRouter(deps: CloudRouterDeps): Router {
         sendError(res, createError(ErrorCode.AUTH_REQUIRED));
         return;
       }
+      // Minting a signed preview URL is a WRITE (token ledger row + a live
+      // capability URL) — governance decides BEFORE the mint.
+      const guarded = await guardCloudWrite(gate, 'cloud.preview_url.mint', principal, {
+        target: { environment: 'cloud' },
+        metadata: { edge: 'preview_url.mint', deploymentId: req.params.id },
+      }, logger);
+      if (!guarded.allowed) {
+        sendError(res, guarded.error);
+        return;
+      }
       const resolved = await tenancy.resolve(tenantRefOf(principal));
       if (!resolved.ok) {
         sendError(res, resolved.error);
@@ -321,6 +418,12 @@ export function buildCloudRouter(deps: CloudRouterDeps): Router {
         sendError(res, result.error);
         return;
       }
+      // Seal the MINT (never the signed URL / token value) into the audit chain.
+      await recordCloudAudit(gate, 'cloud.preview_url.mint', principal, guarded.verdict, {
+        deploymentId: req.params.id,
+        tenantId: resolved.value.id,
+        exp: result.value.claims.exp,
+      }, logger);
       sendSuccess(res, result.value);
     }),
   );

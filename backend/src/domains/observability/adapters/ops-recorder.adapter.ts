@@ -28,8 +28,20 @@ export interface OpsRecorderClientDeps {
   readonly logger: Logger;
   /** Base URL of the in-box sidecar (e.g. `http://127.0.0.1:8091`); null ⇒ down. */
   readonly baseUrl: string | null;
+  /**
+   * Lazy LIVE URL source (the engines module's supervised daemon endpoint —
+   * `null` until its first health passes). Consulted per call when no static
+   * `baseUrl` is configured, so the supervised sidecar's published URL reaches
+   * this client without a boot-ordering race. Absent + no `baseUrl` ⇒ down.
+   */
+  readonly urlProvider?: () => string | null;
   /** API key the sidecar's `require_api_key` expects in `X-API-Key`; null ⇒ preflight fails. */
   readonly token: string | null;
+  /**
+   * True when the sidecar runs with auth disabled (loopback-only dev): the
+   * token preflight is skipped and the live probe decides truthfully.
+   */
+  readonly authDisabled?: boolean;
   /** Per-request timeout (ms). */
   readonly timeoutMs?: number;
 }
@@ -38,15 +50,26 @@ const DEFAULT_TIMEOUT_MS = 3_000;
 
 export class OpsRecorderClient implements WorkSignalsPort {
   private readonly logger: Logger;
-  private readonly baseUrl: string | null;
+  private readonly staticBaseUrl: string | null;
+  private readonly urlProvider: (() => string | null) | undefined;
   private readonly token: string | null;
+  private readonly authDisabled: boolean;
   private readonly timeoutMs: number;
 
   constructor(deps: OpsRecorderClientDeps) {
     this.logger = deps.logger;
-    this.baseUrl = deps.baseUrl ? deps.baseUrl.replace(/\/+$/, '') : null;
+    this.staticBaseUrl = deps.baseUrl ? deps.baseUrl.replace(/\/+$/, '') : null;
+    this.urlProvider = deps.urlProvider;
     this.token = deps.token;
+    this.authDisabled = deps.authDisabled ?? false;
     this.timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  }
+
+  /** The effective base URL: static config first, then the LIVE provider. */
+  private get baseUrl(): string | null {
+    if (this.staticBaseUrl) return this.staticBaseUrl;
+    const live = this.urlProvider?.() ?? null;
+    return live ? live.replace(/\/+$/, '') : null;
   }
 
   async fetchSignals(): Promise<readonly RawWorkSignal[]> {
@@ -83,7 +106,7 @@ export class OpsRecorderClient implements WorkSignalsPort {
     if (!this.baseUrl) {
       return { status: 'down', reason: 'ops-recorder sidecar not configured (no URL)' };
     }
-    if (!this.token) {
+    if (!this.token && !this.authDisabled) {
       return { status: 'down', reason: 'ops-recorder auth token absent (preflight would fail)' };
     }
     try {

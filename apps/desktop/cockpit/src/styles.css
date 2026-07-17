@@ -1166,6 +1166,27 @@ body {
 .detail-gate-reason { margin: 0; font-size: 12px; color: var(--text-dim); word-break: break-word; }
 .detail-gate-hint { margin: 0; font-size: 11px; color: #f0c77a; line-height: 1.5; }
 
+/* Inline approve/reject on the awaiting_approval detail — same terminal-plain
+   visual language as .detail-gate-verdict (the operator decides right where
+   the blocked workspace is shown; no dashboard chrome). */
+.approval-actions {
+  background: rgba(210, 153, 34, 0.08); border: 1px solid var(--warn); border-radius: var(--radius-lg);
+  padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; margin: 4px 16px;
+}
+.approval-actions-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.approval-actions-title { font-weight: 600; font-size: 12px; color: var(--text); }
+.approval-actions-note { margin: 0; font-size: 12px; color: var(--text-dim); }
+.approval-actions-error { margin: 0; font-size: 12px; color: var(--bad); word-break: break-word; }
+.approval-row { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+.approval-row-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.approval-row-action { font-family: var(--mono); font-size: 12px; color: var(--text); }
+.approval-row-by { font-size: 11px; color: var(--text-faint); }
+.approval-row-reason { margin: 0; font-size: 12px; color: var(--text-dim); word-break: break-word; }
+.approval-row-actions { display: flex; gap: 8px; }
+.approval-row-error { margin: 0; font-size: 12px; color: var(--bad); word-break: break-word; }
+.approval-decided-note { font-size: 12px; color: var(--text-dim); }
+.approval-row-decided { flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; }
+
 /* Connectors: per-status summary header (truthful counts over the 7 channels). */
 .connector-summary { display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 0 4px; }
 

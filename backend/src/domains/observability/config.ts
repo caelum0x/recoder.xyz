@@ -45,6 +45,11 @@ export const observabilityConfigSchema = z.object({
   opsRecorderUrl: z.string().nullable(),
   /** Auth token the sidecar's `require_api_key` expects; null ⇒ preflight fails. */
   opsRecorderToken: z.string().nullable(),
+  /**
+   * True when the sidecar runs with auth disabled (loopback-only dev): the
+   * token preflight is skipped and the live probe decides truthfully.
+   */
+  opsRecorderAuthDisabled: z.boolean(),
   /** Enable the alert rule-evaluation loop (off in local/test by default). */
   alertingEnabled: z.boolean(),
   /** Alert evaluation cadence (ms); `0` disables the loop. */
@@ -66,6 +71,7 @@ export interface ObservabilityConfigOverrides {
   readonly redactKeys?: readonly string[];
   readonly opsRecorderUrl?: string | null;
   readonly opsRecorderToken?: string | null;
+  readonly opsRecorderAuthDisabled?: boolean;
   readonly alertingEnabled?: boolean;
   readonly alertEvalIntervalMs?: number;
   readonly logRingSize?: number;
@@ -109,6 +115,7 @@ export function sliceObservabilityConfig(
     redactKeys: overrides.redactKeys ?? DEFAULT_REDACT_KEYS,
     opsRecorderUrl,
     opsRecorderToken: overrides.opsRecorderToken ?? null,
+    opsRecorderAuthDisabled: overrides.opsRecorderAuthDisabled ?? false,
     alertingEnabled: overrides.alertingEnabled ?? false,
     alertEvalIntervalMs: overrides.alertEvalIntervalMs ?? (isProduction ? 30_000 : 0),
     logRingSize: overrides.logRingSize ?? 1_000,

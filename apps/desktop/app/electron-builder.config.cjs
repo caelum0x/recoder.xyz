@@ -64,6 +64,16 @@ const config = {
             from: "../engines/tmux/tmux",
             to: "backend/engines/tmux/tmux",
         },
+        // Owned beads `bd` binary (issue-graph memory). Host-arch local build
+        // like tmux/the .node addons — DELIBERATELY NOT in git (>100MB, stripped
+        // from history; see apps/desktop/server/engines/beads/.gitignore). Build:
+        //   cd apps/desktop/server/engines/beads && go build -o bin/bd ./cmd/bd
+        // Backend resolves it at <resources>/backend/engines/beads/bin/bd
+        // (beads-bin.ts: resourcesPath + dist-relative), before any PATH bd.
+        {
+            from: "../server/engines/beads/bin/bd",
+            to: "backend/engines/beads/bin/bd",
+        },
         // Vendored recodergit + dmux engine dists. Both backend resolvers land on
         // <resources>/backend/apps/desktop/engines/... in packaged mode:
         // recodergit-service.ts resolves dist-relative

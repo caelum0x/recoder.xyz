@@ -210,6 +210,33 @@ export interface DeliveryGateDetail {
 }
 
 /**
+ * Governance approval record — the human-decidable gate behind a
+ * `needs_approval` verdict. Mirrors the backend governance domain's
+ * `ApprovalRecord` (backend/src/domains/governance/types.ts), served by
+ * GET/POST /api/agent-os/approvals and decided via
+ * POST /api/agent-os/approvals/:id/decide. An `approved` record for the same
+ * (taskId, action) clears the gate on the next retry of the blocked action.
+ */
+export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired';
+export type ApprovalRiskTier = 'low' | 'medium' | 'high' | 'critical';
+export type ApprovalDecision = 'approved' | 'denied';
+
+export interface ApprovalRecord {
+  id: string;
+  taskId?: string | null;
+  runId?: string | null;
+  action: string;
+  riskTier: ApprovalRiskTier;
+  status: ApprovalStatus;
+  requestedBy: string;
+  decidedBy?: string | null;
+  reason?: string | null;
+  expiresAt?: string | null;
+  decidedAt?: string | null;
+  createdAt: string;
+}
+
+/**
  * GET /governance/audit — one sealed link in the SHA-256 Merkle audit chain
  * (mirrors @recoder/governance AuditEntry).
  */

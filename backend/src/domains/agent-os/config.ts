@@ -47,6 +47,12 @@ export const agentOsConfigSchema = z.object({
   codeGraphEnabled: z.boolean(),
   /** Feature flag: squads (leader-routing + autopilots ported from multica). */
   squadsEnabled: z.boolean(),
+  /** Feature flag: the squad autopilot loop (cron→beads→conductor). Opt-in. */
+  squadAutopilotEnabled: z.boolean(),
+  /** Autopilot tick cadence (ms). */
+  squadAutopilotIntervalMs: z.number().int().positive(),
+  /** Max conductor dispatches per autopilot tick (bounds burst launches). */
+  squadAutopilotMaxPerTick: z.number().int().positive(),
   isProduction: z.boolean(),
 });
 
@@ -64,11 +70,16 @@ export interface AgentOsConfigOverrides {
   readonly brainEnabled?: boolean;
   readonly codeGraphEnabled?: boolean;
   readonly squadsEnabled?: boolean;
+  readonly squadAutopilotEnabled?: boolean;
+  readonly squadAutopilotIntervalMs?: number;
+  readonly squadAutopilotMaxPerTick?: number;
 }
 
 const DEFAULT_NATS_SUBJECT_PREFIX = 'recoder.agent-os';
 const DEFAULT_OUTBOX_DRAIN_INTERVAL_MS = 2_000;
 const DEFAULT_OUTBOX_DRAIN_BATCH_SIZE = 100;
+const DEFAULT_SQUAD_AUTOPILOT_INTERVAL_MS = 30_000;
+const DEFAULT_SQUAD_AUTOPILOT_MAX_PER_TICK = 3;
 
 /**
  * Project the agent-os slice out of the whole config. Derives the values
@@ -103,6 +114,11 @@ export function sliceAgentOsConfig(
     brainEnabled: overrides.brainEnabled ?? false,
     codeGraphEnabled: overrides.codeGraphEnabled ?? false,
     squadsEnabled: overrides.squadsEnabled ?? true,
+    squadAutopilotEnabled: overrides.squadAutopilotEnabled ?? false,
+    squadAutopilotIntervalMs:
+      overrides.squadAutopilotIntervalMs ?? DEFAULT_SQUAD_AUTOPILOT_INTERVAL_MS,
+    squadAutopilotMaxPerTick:
+      overrides.squadAutopilotMaxPerTick ?? DEFAULT_SQUAD_AUTOPILOT_MAX_PER_TICK,
     isProduction: app.runtime.isProduction,
   });
 }

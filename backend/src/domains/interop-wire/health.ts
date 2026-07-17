@@ -34,6 +34,14 @@ export function interopWireHealth(state: InteropWireHealthState): ComponentHealt
           : 'unsigned ingress (dev): no HMAC secret',
     },
     {
+      name: 'ed25519-ingress',
+      status: config.ed25519Mode === 'enforce' ? 'up' : 'degraded',
+      reason:
+        config.ed25519Mode === 'enforce'
+          ? undefined
+          : 'permissive: invalid/unknown-key ed25519 envelopes are logged and allowed',
+    },
+    {
       name: 'task-projection',
       status: persistenceAvailable ? 'up' : 'degraded',
       reason: persistenceAvailable ? undefined : 'persistence executor unavailable — in-memory projection only',

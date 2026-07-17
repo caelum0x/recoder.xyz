@@ -1,7 +1,7 @@
 /**
  * The inference domain's own MCP tools (the in-proc `inference` server):
  * `inference.models`, `inference.health`, `inference.complete`,
- * `inference.feedback`. Every call still passes the interop
+ * `inference.embed`, `inference.feedback`. Every call still passes the interop
  * `authorize→risk→policy→audit` gate at the host boundary, so these handlers
  * stay thin and truthful over the module surface.
  *
@@ -9,13 +9,16 @@
  * `inference.complete` is a governed call: the host risk-gates model invocation
  * (spend), and the routing service records the usage-ledger + delivery-outcome
  * rows. `inference.feedback` attaches a signal to a prior inference_id (audited
- * as a delivery outcome). All results are truthful — an unroutable call returns
- * `{ routed:false }` with a reason, never a fabricated completion/feedback_id.
+ * as a delivery outcome). `inference.embed` routes an embedding call down the
+ * same gateway seam. All results are truthful — an unroutable call returns
+ * `{ routed:false }` with a reason, never a fabricated
+ * completion/embedding/feedback_id.
  */
 import type { McpToolRegistration } from '../../../shared/module-base.js';
 import type { InferenceGatewayPort } from '../ports/inference-gateway.port.js';
 import type { ModelCatalogRepository } from '../ports/model-catalog.port.js';
 import type { InferenceRoutingService } from '../services/inference-routing.service.js';
+import { parseEmbeddingInput } from '../routes/openai-embeddings.routes.js';
 import type { InferenceMessage, InferenceRole } from '../types.js';
 
 /** The `inference` in-proc server id (matches the catalog descriptor). */
@@ -24,7 +27,7 @@ export const INFERENCE_MCP_SERVER_ID = 'inference';
 export interface InferenceMcpDeps {
   readonly gateway: InferenceGatewayPort;
   readonly catalog: ModelCatalogRepository;
-  readonly routing: Pick<InferenceRoutingService, 'complete' | 'feedback'>;
+  readonly routing: Pick<InferenceRoutingService, 'complete' | 'embed' | 'feedback'>;
 }
 
 const VALID_ROLES: ReadonlySet<string> = new Set(['system', 'user', 'assistant', 'tool']);
@@ -34,6 +37,12 @@ interface CompleteInput {
   readonly messages?: unknown;
   readonly temperature?: number;
   readonly maxTokens?: number;
+  readonly requestedBy?: string;
+}
+
+interface EmbedInput {
+  readonly model?: string;
+  readonly input?: unknown;
   readonly requestedBy?: string;
 }
 
@@ -96,6 +105,27 @@ export function buildInferenceMcpTools(deps: InferenceMcpDeps): readonly McpTool
       },
     },
     {
+      name: 'inference.embed',
+      description:
+        'Route an embedding call (string or string[] input) through the delivery ladder. ' +
+        'Returns a truthful { routed, tier, embeddings, usage } — never fabricated vectors.',
+      handler: async (raw: unknown) => {
+        const input = (raw ?? {}) as EmbedInput;
+        const model = input.model?.trim();
+        if (!model) return { error: 'model (string) is required' };
+        const parsed = parseEmbeddingInput(input.input);
+        if (parsed === null) {
+          return { error: 'input (non-empty string or non-empty array of non-empty strings) is required' };
+        }
+        const result = await deps.routing.embed({
+          model,
+          input: parsed,
+          ...(input.requestedBy?.trim() ? { userId: input.requestedBy.trim() } : {}),
+        });
+        return { result };
+      },
+    },
+    {
       name: 'inference.feedback',
       description:
         'Attach a feedback signal (boolean/float metric or comment string) to a prior inference_id ' +
@@ -134,6 +164,12 @@ export const inferenceMcpServer = {
   displayName: 'Inference (BYOK LLM gateway)',
   transport: 'in-proc' as const,
   enabled: true,
-  toolNames: ['inference.models', 'inference.health', 'inference.complete', 'inference.feedback'] as readonly string[],
+  toolNames: [
+    'inference.models',
+    'inference.health',
+    'inference.complete',
+    'inference.embed',
+    'inference.feedback',
+  ] as readonly string[],
   metadata: { external: false },
 };

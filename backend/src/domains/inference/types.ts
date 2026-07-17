@@ -28,6 +28,12 @@ export interface InferenceRequest {
   readonly maxTokens?: number;
   /** The authenticated caller (drives BYOK key selection + usage attribution). */
   readonly userId?: string;
+  /**
+   * Route the direct multi-provider rung (rung 3, BYOK) FIRST — set when the
+   * caller's plan routes direct instead of through the TensorZero tiers. The
+   * ladder still degrades truthfully when the direct rung declines.
+   */
+  readonly preferDirect?: boolean;
 }
 
 /** A typed embedding request. */
@@ -144,6 +150,12 @@ export interface InferenceHealth {
   readonly loopbackConfigured: boolean;
   /** Whether the loopback endpoint answered a bounded health probe. */
   readonly loopbackReachable?: boolean;
+  /**
+   * Whether the rung-3 direct multi-provider router could serve (a key source —
+   * BYOK secrets seam or platform keys — is wired). Present only when the
+   * router rung is composed. Never leaks which providers/keys exist.
+   */
+  readonly routerConfigured?: boolean;
   /** Truthful reason when not fully available (never leaks the key). */
   readonly reason?: string;
 }

@@ -71,6 +71,21 @@ export interface NapiTierPort {
   feedback?(req: FeedbackRequest): Promise<FeedbackResult | null>;
 }
 
+/**
+ * The rung-3 tier: the direct BYOK multi-provider router
+ * (`direct-provider.transport.ts`). Tried LAST — when napi + loopback both
+ * decline — or FIRST when the request carries `preferDirect` (the caller's plan
+ * routes direct). `complete` is ALWAYS truthful: `routed:false` carries the
+ * decline reason (missing key, unsupported provider, provider error) so the
+ * ladder's final `notRouted` reason stays honest.
+ */
+export interface RouterTierPort {
+  /** Whether ANY key source (BYOK secrets seam or platform keys) is wired. */
+  available(): boolean;
+  /** Route a completion direct-to-provider. Never throws; never fakes. */
+  complete(req: InferenceRequest): Promise<InferenceResult>;
+}
+
 export interface TensorzeroTransportDeps {
   readonly logger: Logger;
   readonly config: InferenceConfig;
@@ -80,6 +95,8 @@ export interface TensorzeroTransportDeps {
   readonly streamFetch?: StreamFetchLike;
   /** The napi embedded-gateway tier (absent → the ladder starts at loopback). */
   readonly napi?: NapiTierPort;
+  /** The rung-3 direct BYOK multi-provider tier (absent → the ladder ends at loopback). */
+  readonly router?: RouterTierPort;
 }
 
 export class TensorzeroTransportAdapter implements InferenceGatewayPort {
@@ -88,6 +105,7 @@ export class TensorzeroTransportAdapter implements InferenceGatewayPort {
   private readonly loopback: LlmGatewayPort;
   private readonly streamFetch?: StreamFetchLike;
   private readonly napi?: NapiTierPort;
+  private readonly router?: RouterTierPort;
 
   constructor(deps: TensorzeroTransportDeps) {
     this.log = deps.logger;
@@ -95,11 +113,21 @@ export class TensorzeroTransportAdapter implements InferenceGatewayPort {
     this.loopback = deps.loopback;
     if (deps.streamFetch) this.streamFetch = deps.streamFetch;
     if (deps.napi) this.napi = deps.napi;
+    if (deps.router) this.router = deps.router;
   }
 
   async complete(req: InferenceRequest): Promise<InferenceResult> {
     const model = req.model || this.cfg.defaultModel;
     const normalized: InferenceRequest = { ...req, model };
+    let routerReason: string | undefined;
+
+    // Plan-directed rung 3 FIRST (the caller's plan routes direct/BYOK). A
+    // decline still falls through the TZ tiers — truthful degrade, never a stop.
+    if (normalized.preferDirect && this.router) {
+      const direct = await this.safeRouter(normalized);
+      if (direct?.routed) return direct;
+      routerReason = direct?.reason ?? 'direct provider router declined';
+    }
 
     // napi tier first (in-process, no HTTP hop) when preferred + bound.
     if (this.cfg.napiFirst && this.napi?.available()) {
@@ -117,10 +145,16 @@ export class TensorzeroTransportAdapter implements InferenceGatewayPort {
       if (napiResult?.routed) return napiResult;
     }
 
-    return notRouted(
-      model,
-      loop.reason ?? 'no inference tier available (napi embedded gateway unbound, loopback unconfigured)',
-    );
+    // Rung 3 LAST: the direct BYOK multi-provider router (when not tried first).
+    if (!normalized.preferDirect && this.router) {
+      const direct = await this.safeRouter(normalized);
+      if (direct?.routed) return direct;
+      routerReason = direct?.reason ?? 'direct provider router declined';
+    }
+
+    const base =
+      loop.reason ?? 'no inference tier available (napi embedded gateway unbound, loopback unconfigured)';
+    return notRouted(model, routerReason ? `${base}; direct: ${routerReason}` : base);
   }
 
   async completeStream(req: InferenceRequest, onDelta: StreamSink): Promise<InferenceStreamResult> {
@@ -251,8 +285,10 @@ export class TensorzeroTransportAdapter implements InferenceGatewayPort {
       loopReason = h.reason;
     }
 
-    const tier = napiBound ? 'napi' : loopbackConfigured && loopbackReachable !== false ? 'loopback' : 'none';
-    const available = napiBound || (loopbackConfigured && loopbackReachable !== false);
+    const routerConfigured = this.router ? this.router.available() : undefined;
+    const loopbackUp = loopbackConfigured && loopbackReachable !== false;
+    const tier = napiBound ? 'napi' : loopbackUp ? 'loopback' : routerConfigured ? 'router' : 'none';
+    const available = napiBound || loopbackUp || routerConfigured === true;
 
     return {
       tier,
@@ -260,12 +296,15 @@ export class TensorzeroTransportAdapter implements InferenceGatewayPort {
       napiBound,
       loopbackConfigured,
       ...(loopbackReachable !== undefined ? { loopbackReachable } : {}),
+      ...(routerConfigured !== undefined ? { routerConfigured } : {}),
       ...(available
         ? {}
         : {
             reason:
               !napiBound && !loopbackConfigured
-                ? 'napi embedded gateway unbound and no loopback endpoint configured'
+                ? `napi embedded gateway unbound and no loopback endpoint configured${
+                    routerConfigured === false ? '; direct provider router has no key source' : ''
+                  }`
                 : (loopReason ?? 'loopback gateway not reachable'),
           }),
     };
@@ -283,6 +322,27 @@ export class TensorzeroTransportAdapter implements InferenceGatewayPort {
     } catch (err) {
       this.log.debug({ err: message(err), model: req.model }, 'napi stream tier threw — degrading to loopback SSE');
       return null;
+    }
+  }
+
+  /**
+   * Rung-3 router call guarded like the napi tiers: an unwired key source is a
+   * truthful decline (with reason) and a thrown error resolves a decline —
+   * never an exception across the seam, never a silent reroute.
+   */
+  private async safeRouter(req: InferenceRequest): Promise<InferenceResult | null> {
+    if (!this.router) return null;
+    if (!this.router.available()) {
+      return notRouted(
+        req.model,
+        'direct provider router has no key source wired (no BYOK secrets seam, no platform keys)',
+      );
+    }
+    try {
+      return await this.router.complete(req);
+    } catch (err) {
+      this.log.debug({ err: message(err), model: req.model }, 'direct router tier threw — declining truthfully');
+      return notRouted(req.model, 'direct provider router errored');
     }
   }
 

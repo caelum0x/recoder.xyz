@@ -69,6 +69,24 @@ describe("extraResources fail-loud gate", () => {
             );
         });
 
+        it("bundles the owned beads bd where the backend resolver looks, and the gate covers it", () => {
+            // beads-bin.ts resolves <resources>/backend/engines/beads/bin/bd in
+            // packaged mode; the source is the LOCAL go build (never committed —
+            // >100MB, stripped from git history), so the gate must name it (with
+            // the build hint) when it is missing.
+            const entry = config.extraResources.find(
+                (e: { from?: string }) => typeof e === "object" && e?.from === "../server/engines/beads/bin/bd"
+            );
+            expect(entry).toBeDefined();
+            expect(entry.to).toBe("backend/engines/beads/bin/bd");
+            expect(() => assertExtraResourcesExist(config.extraResources, fixtureRoot)).toThrowError(
+                /server\/engines\/beads\/bin\/bd/
+            );
+            expect(() => assertExtraResourcesExist(config.extraResources, fixtureRoot)).toThrowError(
+                /go build -o bin\/bd \.\/cmd\/bd/
+            );
+        });
+
         it("release .node sources are release paths — no debug fallback", () => {
             const nodeSources = config.extraResources
                 .map((e: { from?: string }) => e.from ?? "")

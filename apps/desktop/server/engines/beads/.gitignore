@@ -1,4 +1,9 @@
 # Binaries
+# /bin/bd is the OWNED desktop-packaging build output (electron-builder copies
+# it into extraResources). It is >100MB and was deliberately stripped from git
+# history — this deeper rule must out-rank apps/desktop/.gitignore's
+# `!server/engines/**/bin/**` negation so it can never be committed again.
+/bin/bd
 /beads
 /bd
 *.exe

@@ -112,3 +112,47 @@ describe('OpsRecorderClient wire contract (X-API-Key, not bearer)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('OpsRecorderClient — supervised live URL provider + auth-disabled probe', () => {
+  it('with no static baseUrl the LIVE provider URL is consulted per call', async () => {
+    const fetchMock = stubFetch(new Response('[]', { status: 200 }));
+    let live: string | null = null;
+    const c = client({ baseUrl: null, urlProvider: () => live });
+
+    // Daemon not yet healthy ⇒ truthful down, no network call, no fabrication.
+    await expect(c.availability()).resolves.toEqual({
+      status: 'down',
+      reason: 'ops-recorder sidecar not configured (no URL)',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // Daemon publishes its endpoint ⇒ the SAME client starts probing it live.
+    live = 'http://127.0.0.1:8894/';
+    await expect(c.availability()).resolves.toEqual({ status: 'up' });
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe('http://127.0.0.1:8894/work-signals');
+  });
+
+  it('a static baseUrl override wins over the live provider', async () => {
+    const fetchMock = stubFetch(new Response('[]', { status: 200 }));
+    const c = client({ baseUrl: 'http://127.0.0.1:9000', urlProvider: () => 'http://127.0.0.1:8894' });
+    await c.fetchSignals();
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe('http://127.0.0.1:9000/work-signals');
+  });
+
+  it('authDisabled skips the token preflight and lets the live probe decide', async () => {
+    stubFetch(new Response('[]', { status: 200 }));
+    await expect(client({ token: null, authDisabled: true }).availability()).resolves.toEqual({
+      status: 'up',
+    });
+  });
+
+  it('authDisabled stays truthful: an unreachable sidecar is still down', async () => {
+    stubFetch(new Error('ECONNREFUSED'));
+    await expect(client({ token: null, authDisabled: true }).availability()).resolves.toEqual({
+      status: 'down',
+      reason: 'ops-recorder sidecar unreachable',
+    });
+  });
+});

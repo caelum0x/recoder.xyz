@@ -85,6 +85,8 @@ export class MemoryComposer implements MemoryModule {
       config: cfg,
       ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
       ...(deps.colbertFetch ? { colbertFetch: deps.colbertFetch } : {}),
+      ...(deps.embedFallback ? { embedFallback: deps.embedFallback } : {}),
+      ...(deps.lanceLoader ? { lanceLoader: deps.lanceLoader } : {}),
     });
 
     // Repository: relations over the executor; items/candidates delegate to the
@@ -198,12 +200,27 @@ export class MemoryComposer implements MemoryModule {
         : { name: 'colbert', available: false, reason: 'COLBERT_RERANK_URL not set' },
     );
 
-    // vector store (mirror).
-    readiness.push(
-      this.foundation.store.configured
-        ? { name: 'vector', available: true }
-        : { name: 'vector', available: false, reason: 'QDRANT_URL not set' },
-    );
+    // vector store (mirror) — truthful async probe: qdrant mirrors its URL;
+    // the embedded lance store actually attempts its napi/SDK load.
+    try {
+      const storeProbe = await this.foundation.probeStore();
+      readiness.push(
+        storeProbe.available
+          ? { name: 'vector', available: true, detail: { backend: storeProbe.backend } }
+          : {
+              name: 'vector',
+              available: false,
+              reason: storeProbe.reason ?? `${storeProbe.backend} vector store unavailable`,
+              detail: { backend: storeProbe.backend },
+            },
+      );
+    } catch (err) {
+      readiness.push({
+        name: 'vector',
+        available: false,
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    }
 
     // embedding (mirror).
     const embedProvider = this.foundation.embedder.provider ?? 'none';
@@ -233,6 +250,7 @@ export class MemoryComposer implements MemoryModule {
         mem0Sidecar: this.cfg.mem0SidecarUrl ? hostOf(this.cfg.mem0SidecarUrl) : null,
         colbert: Boolean(this.cfg.colbertRerankUrl),
         vector: this.foundation.store.configured,
+        vectorBackend: this.foundation.storeBackend,
         retrievalConfigured: this.foundation.configured,
         beads: this.beads.available(),
       },

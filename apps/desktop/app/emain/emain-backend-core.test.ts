@@ -26,6 +26,7 @@ import {
     PHASE,
     pickFreePort,
     pollHealth,
+    resolveBeadsBinPath,
     resolveLoginShellPath,
     resolveTmuxBin,
     writeCockpitWidgetConfig,
@@ -164,6 +165,60 @@ describe("resolveTmuxBin", () => {
     });
 });
 
+describe("resolveBeadsBinPath", () => {
+    const savedBeadsBin = process.env.BEADS_BIN;
+
+    beforeEach(() => {
+        delete process.env.BEADS_BIN;
+    });
+
+    afterEach(() => {
+        if (savedBeadsBin == null) {
+            delete process.env.BEADS_BIN;
+        } else {
+            process.env.BEADS_BIN = savedBeadsBin;
+        }
+    });
+
+    it("prefers the bundled extraResources bd when packaged", () => {
+        const existsSync = (p: string) => p === "/Resources/backend/engines/beads/bin/bd";
+        const bin = resolveBeadsBinPath({
+            isPackaged: true,
+            repoRoot: "/repo",
+            resourcesPath: "/Resources",
+            existsSync,
+        });
+        expect(bin).toBe("/Resources/backend/engines/beads/bin/bd");
+    });
+
+    it("uses the owned repo build in dev when it exists", () => {
+        const existsSync = (p: string) => p === "/repo/apps/desktop/server/engines/beads/bin/bd";
+        const bin = resolveBeadsBinPath({ isPackaged: false, repoRoot: "/repo", existsSync });
+        expect(bin).toBe("/repo/apps/desktop/server/engines/beads/bin/bd");
+    });
+
+    it("returns null when no candidate exists (fill-only — backend resolver stays the truthful gate)", () => {
+        const bin = resolveBeadsBinPath({
+            isPackaged: true,
+            repoRoot: "/repo",
+            resourcesPath: "/Resources",
+            existsSync: () => false,
+        });
+        expect(bin).toBeNull();
+    });
+
+    it("an explicit BEADS_BIN env always wins", () => {
+        process.env.BEADS_BIN = "/operator/bd";
+        const bin = resolveBeadsBinPath({
+            isPackaged: true,
+            repoRoot: "/repo",
+            resourcesPath: "/Resources",
+            existsSync: (p: string) => p === "/Resources/backend/engines/beads/bin/bd",
+        });
+        expect(bin).toBe("/operator/bd");
+    });
+});
+
 describe("loadOrCreateSecrets", () => {
     it("generates and persists secrets on first run", () => {
         const fs = makeMemFs();
@@ -255,6 +310,42 @@ describe("assembleBackendEnv", () => {
             electronRunAsNode: true,
         });
         expect(env.ELECTRON_RUN_AS_NODE).toBe("1");
+    });
+
+    it("injects BEADS_BIN fill-only when a resolved bd path is supplied", () => {
+        const env = assembleBackendEnv({
+            baseEnv: {},
+            port: 1,
+            dataDir: "/d",
+            tmuxBin: "/t",
+            apiKeyHashSalt: "s",
+            internalServiceKey: "i",
+            beadsBin: "/Resources/backend/engines/beads/bin/bd",
+        });
+        expect(env.BEADS_BIN).toBe("/Resources/backend/engines/beads/bin/bd");
+    });
+
+    it("never overrides an explicit BEADS_BIN and leaves it absent when unresolved", () => {
+        const overridden = assembleBackendEnv({
+            baseEnv: { BEADS_BIN: "/operator/bd" },
+            port: 1,
+            dataDir: "/d",
+            tmuxBin: "/t",
+            apiKeyHashSalt: "s",
+            internalServiceKey: "i",
+            beadsBin: "/Resources/backend/engines/beads/bin/bd",
+        });
+        expect(overridden.BEADS_BIN).toBe("/operator/bd");
+        const absent = assembleBackendEnv({
+            baseEnv: {},
+            port: 1,
+            dataDir: "/d",
+            tmuxBin: "/t",
+            apiKeyHashSalt: "s",
+            internalServiceKey: "i",
+            beadsBin: null,
+        });
+        expect(absent.BEADS_BIN).toBeUndefined();
     });
 
     it("augments PATH with the login-shell PATH (installed agents become resolvable)", () => {

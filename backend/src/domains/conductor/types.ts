@@ -27,8 +27,25 @@ export type ConductorRuntimeKind =
   | 'pi'
   | 'openfang';
 
-/** Pane attention classification produced by the dmux heuristics. */
-export type AttentionState = 'needs_you' | 'working' | 'idle';
+/**
+ * Live attention classification, derived truthfully from the durable workspace
+ * state, the run's lifecycle RunEvents, and the terminal tail (dmux-derived
+ * heuristics — see `attention/attention-classifier.ts`).
+ *
+ *  - `awaiting_approval`  the run is blocked on a human approval/permission
+ *  - `agent_idle_prompt`  the agent settled at an input prompt, waiting on you
+ *  - `error`              the run/workspace failed truthfully
+ *  - `review_ready`       the work is done and reviewable (review → merge flow)
+ *  - `working`            active progress indicators observed
+ *  - `unknown`            NO truthful signal (never guessed, never faked)
+ */
+export type AttentionState =
+  | 'awaiting_approval'
+  | 'agent_idle_prompt'
+  | 'error'
+  | 'review_ready'
+  | 'working'
+  | 'unknown';
 
 /**
  * The read-model of a workspace the API/terminal surfaces return. A projection
@@ -51,9 +68,11 @@ export interface WorkspaceView {
   readonly createdBy: string;
   readonly createdAt: string;
   readonly updatedAt: string;
-  /** Live pane attention (absent when the workspace has no live substrate handle). */
+  /** Live attention classification (`'unknown'` when there is no truthful signal). */
   readonly attention?: AttentionState;
-  /** Whether the hosting substrate currently reports a live handle. */
+  /** Why the attention state was chosen (the truthful signal, or the lack of one). */
+  readonly attentionReason?: string;
+  /** Whether the hosting substrate currently reports a live handle (absent = not probed). */
   readonly live?: boolean;
 }
 

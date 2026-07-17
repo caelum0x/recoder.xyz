@@ -24,6 +24,7 @@ import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
 import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
 import type { CloudConfig } from './config.js';
+import type { CloudGovernanceGatePort } from './ports/governance-gate.port.js';
 import type { CloudRepositories } from './ports/cloud-repository.port.js';
 import type { SandboxProvider } from './ports/sandbox-provider.port.js';
 import { createCloudRepositories } from './repositories/cloud.repository.js';
@@ -51,6 +52,8 @@ export class CloudComposer implements CloudModule {
   private readonly log: Logger;
   private readonly cfg: CloudConfig;
   private readonly middleware: AuthMiddleware;
+  /** Phase-3 governance gate (capability token). Absent ⇒ warn-logged auth-only writes. */
+  private readonly gate: CloudGovernanceGatePort | undefined;
 
   private readonly repos: CloudRepositories;
   private readonly tenancyService: TenancyService;
@@ -65,6 +68,7 @@ export class CloudComposer implements CloudModule {
     this.log = deps.logger;
     this.cfg = cfg;
     this.middleware = deps.middleware;
+    this.gate = deps.governanceGate;
 
     // Durable state-of-record over the single persistence executor.
     this.repos = createCloudRepositories(executor);
@@ -155,6 +159,8 @@ export class CloudComposer implements CloudModule {
         fleet: this.fleetService,
         mw: this.middleware,
         logger: this.log,
+        // Phase-3 governance decide→audit seam guarding EVERY write edge.
+        ...(this.gate ? { gate: this.gate } : {}),
         // Deny-safe active-preview count over the deployment repo (`NaN` on error).
         activePreviewCount: async (tenantId: string) => {
           if (!this.repos.deployments.isAvailable()) return Number.NaN;

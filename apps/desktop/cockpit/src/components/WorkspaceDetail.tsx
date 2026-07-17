@@ -21,6 +21,7 @@
 import { useState } from 'preact/hooks';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
+import { ApprovalActions } from './ApprovalActions';
 import { DiffView } from './DiffView';
 import { FileTree } from './FileTree';
 import { RunPanel } from './RunPanel';
@@ -397,6 +398,14 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
           {busy === 'archive' ? 'Archiving…' : 'Archive'}
         </button>
       </div>
+
+      {/* Inline approve/reject for the awaiting_approval state: the REAL pending
+          Approval records for this workspace's task, decided via the existing
+          approvals API. Only rendered when the backend state genuinely is
+          awaiting_approval — never speculatively. */}
+      {workspace.state === 'awaiting_approval' && (
+        <ApprovalActions workspace={workspace} onChanged={onChanged} />
+      )}
 
       {prMeta?.url && (
         <a class="pr-link" href={prMeta.url} target="_blank" rel="noreferrer">PR: {prMeta.url}</a>

@@ -25,6 +25,11 @@ export interface AgentOsHealthDeps {
   readonly executorAvailable: boolean;
   readonly outboxPublisher: OutboxPublisherPort;
   readonly instructionCompiler: InstructionCompilerPort;
+  /**
+   * Squad-autopilot seam posture (null when the autopilot is not composed —
+   * a disabled feature is omitted from health, never reported as impairment).
+   */
+  readonly squadAutopilot?: { readonly beadsWired: boolean; readonly conductorWired: boolean } | null;
 }
 
 export async function buildAgentOsHealth(deps: AgentOsHealthDeps): Promise<ComponentHealth> {
@@ -56,7 +61,22 @@ export async function buildAgentOsHealth(deps: AgentOsHealthDeps): Promise<Compo
     ...(compilerStatus !== 'up' ? { reason: 'instruction sources unreadable' } : {}),
   };
 
-  const engines: readonly EngineStatus[] = [repository, outbox, compiler];
+  const engines: EngineStatus[] = [repository, outbox, compiler];
+
+  // Squad autopilot (only when composed): both seams wired → up; else degraded
+  // with the missing seam(s) named — the loop ticks but cannot dispatch.
+  const autopilot = deps.squadAutopilot;
+  if (autopilot) {
+    const missing = [
+      ...(autopilot.beadsWired ? [] : ['beads engine client not wired']),
+      ...(autopilot.conductorWired ? [] : ['conductor dispatch seam not wired']),
+    ];
+    engines.push(
+      missing.length === 0
+        ? { name: 'squad-autopilot', status: 'up' }
+        : { name: 'squad-autopilot', status: 'degraded', reason: missing.join('; ') },
+    );
+  }
 
   // The repo is always serving (even memory) — only an unknown/down repo would be
   // truly down. Treat memory/json as degraded (serving), never down.

@@ -91,7 +91,7 @@ function defaultId(): string {
 }
 
 /** Write an OpenAI-style error body with a truthful status + message. */
-function sendOpenAiError(res: Response, status: number, message: string, type: string): void {
+export function sendOpenAiError(res: Response, status: number, message: string, type: string): void {
   res.status(status).json({ error: { message, type, code: null, param: null } });
 }
 

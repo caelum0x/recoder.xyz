@@ -4,8 +4,8 @@
  *  - slices the typed `AgentOsConfig` out of the injected `AppConfig` (no env
  *    reads, no top-level singletons),
  *  - selects the state-of-record repository driver (an injected repository wins;
- *    else in-memory degrade — the postgres/json adapters are wired at
- *    integration behind the same port),
+ *    else the durable `PostgresAgentOsRepository` over the injected persistence
+ *    executor; else in-memory degrade — all behind the same frozen port),
  *  - builds the governance-gated write adapter, the instruction compiler, and
  *    the NATS/log-only outbox publisher,
  *  - composes the RunEvent ingest bus + the at-least-once outbox drain,
@@ -28,12 +28,17 @@ import type { RunEventBusPort } from './ports/run-event.port.js';
 import type { OutboxPublisherPort } from './ports/outbox-publisher.port.js';
 import type { InstructionCompilerPort } from './ports/instruction-compiler.port.js';
 import { InMemoryAgentOsRepository } from './adapters/in-memory-agent-os.repository.js';
+import { PostgresAgentOsRepository } from './adapters/postgres-agent-os.repository.js';
+import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
 import { createGovernanceGateAdapter } from './adapters/governance-gate.adapter.js';
 import { createInstructionCompilerAdapter } from './adapters/instruction-compiler.adapter.js';
 import { createNatsOutboxPublisher } from './adapters/nats-outbox-publisher.adapter.js';
 import { RunEventIngestService } from './services/run-event-ingest.service.js';
 import { OutboxDrainService } from './services/outbox-drain.service.js';
 import { SquadService, InMemorySquadStore } from './services/squad.service.js';
+import { SquadAutopilotService } from './services/squad-autopilot.service.js';
+import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
+import { buildSquadBoardRouter } from './routes/squad-board.routes.js';
 import { buildAgentOsRouter } from './routes/agent-os.routes.js';
 import { buildInternalAgentOsRouter } from './routes/internal-agent-os.routes.js';
 import { buildAgentOsMcpTools } from './mcp/agent-os-engine.js';
@@ -46,12 +51,13 @@ export class AgentOsComposer implements AgentOsModule {
   private readonly cfg: AgentOsConfig;
   private readonly repo: AgentOsRepositoryPort;
   private readonly effectiveDriver: AgentOsRepositoryDriver;
-  private readonly executorAvailable: boolean;
+  private readonly executor: QueryExecutor | null;
   private readonly outboxPublisher: OutboxPublisherPort & { close?(): Promise<void> };
   private readonly instructionCompiler: InstructionCompilerPort;
   private readonly ingest: RunEventIngestService;
   private readonly drain: OutboxDrainService;
   private readonly squads: SquadService | null;
+  private readonly autopilot: SquadAutopilotService | null;
   private readonly router: Router;
   private readonly internalRouter: Router;
   private started = false;
@@ -65,21 +71,25 @@ export class AgentOsComposer implements AgentOsModule {
     this.cfg = cfg;
     this.outboxPublisher = outboxPublisher;
 
-    // Repository selection: an explicit injection wins (integration supplies the
-    // pg/json adapter behind the port). Absent that, degrade to in-memory and
-    // report the effective driver truthfully in health.
+    // Repository selection: an explicit injection wins; else the DURABLE pg
+    // adapter binds to the injected persistence executor when the configured
+    // driver is `postgres`; else degrade to in-memory and report the effective
+    // driver truthfully in health. A temporarily-down executor still binds pg
+    // (queries fail truthfully and recover with the pool; health shows degraded).
+    this.executor = deps.executor ?? null;
     if (deps.repository) {
       this.repo = deps.repository;
       this.effectiveDriver = cfg.repositoryDriver;
-      this.executorAvailable = Boolean(deps.executor?.isAvailable());
+    } else if (cfg.repositoryDriver === 'postgres' && this.executor) {
+      this.repo = new PostgresAgentOsRepository(this.executor);
+      this.effectiveDriver = 'postgres';
     } else {
       this.repo = new InMemoryAgentOsRepository();
       this.effectiveDriver = 'memory';
-      this.executorAvailable = false;
       if (cfg.repositoryDriver !== 'memory') {
         this.log.warn(
           { configuredDriver: cfg.repositoryDriver },
-          'agent-os: no repository adapter injected — degrading to in-memory state-of-record',
+          'agent-os: no repository adapter or executor injected — degrading to in-memory state-of-record',
         );
       }
     }
@@ -99,6 +109,22 @@ export class AgentOsComposer implements AgentOsModule {
 
     this.squads = cfg.squadsEnabled ? new SquadService({ store: new InMemorySquadStore() }) : null;
 
+    // The autopilot loop (cron→beads→conductor) — opt-in on top of squads. The
+    // beads seam is injected now; the conductor seam is usually attached late
+    // (`attachSquadAutopilotConductor`) since bootstrap builds it after agent-os.
+    // Absent seams ⇒ ticks report a truthful `degraded`, never a faked launch.
+    this.autopilot =
+      cfg.squadsEnabled && cfg.squadAutopilotEnabled
+        ? new SquadAutopilotService({
+            beads: deps.beadsEngine ?? null,
+            conductor: deps.conductorDispatch ?? null,
+            squads: this.squads,
+            logger: this.log,
+            intervalMs: cfg.squadAutopilotIntervalMs,
+            maxDispatchesPerTick: cfg.squadAutopilotMaxPerTick,
+          })
+        : null;
+
     const inner = buildAgentOsRouter({
       repository: this.repo,
       middleware: deps.middleware,
@@ -114,6 +140,10 @@ export class AgentOsComposer implements AgentOsModule {
       middleware: deps.middleware,
     });
     this.router = Router();
+    // Board first: its literal `/squads/board` path must win over any later table.
+    this.router.use(
+      buildSquadBoardRouter({ squads: this.squads, autopilot: this.autopilot, middleware: deps.middleware }),
+    );
     this.router.use(inner);
     this.router.use('/internal', this.internalRouter);
   }
@@ -140,6 +170,20 @@ export class AgentOsComposer implements AgentOsModule {
     return this.squads;
   }
 
+  /** The squad autopilot loop (null when squads/autopilot are disabled). */
+  squadAutopilot(): SquadAutopilotService | null {
+    return this.autopilot;
+  }
+
+  /** Late-bind the conductor dispatch seam (bootstrap builds it after agent-os). */
+  attachSquadAutopilotConductor(port: SquadConductorPort): void {
+    if (!this.autopilot) {
+      this.log.debug('agent-os: squad autopilot disabled — conductor seam not attached');
+      return;
+    }
+    this.autopilot.attachConductor(port);
+  }
+
   routes(): Router {
     return this.router;
   }
@@ -156,9 +200,10 @@ export class AgentOsComposer implements AgentOsModule {
   async health(): Promise<ComponentHealth> {
     return buildAgentOsHealth({
       repositoryDriver: this.effectiveDriver,
-      executorAvailable: this.executorAvailable,
+      executorAvailable: this.executor?.isAvailable() ?? false,
       outboxPublisher: this.outboxPublisher,
       instructionCompiler: this.instructionCompiler,
+      squadAutopilot: this.autopilot ? this.autopilot.seams() : null,
     });
   }
 
@@ -166,17 +211,20 @@ export class AgentOsComposer implements AgentOsModule {
     if (this.started) return;
     this.started = true;
     this.drain.start();
+    this.autopilot?.start();
     this.log.info(
       {
         repositoryDriver: this.effectiveDriver,
         outbox: await this.outboxPublisher.health(),
         squads: this.cfg.squadsEnabled,
+        squadAutopilot: this.autopilot !== null,
       },
       'agent-os module started',
     );
   }
 
   async stop(): Promise<void> {
+    this.autopilot?.stop();
     this.drain.stop();
     if (this.outboxPublisher.close) {
       await this.outboxPublisher.close().catch(() => undefined);

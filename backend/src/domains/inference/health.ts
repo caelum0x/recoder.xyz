@@ -61,6 +61,7 @@ export async function buildInferenceHealth(deps: InferenceHealthDeps): Promise<C
       napiBound: gw.napiBound,
       loopbackConfigured: gw.loopbackConfigured,
       ...(gw.loopbackReachable !== undefined ? { loopbackReachable: gw.loopbackReachable } : {}),
+      ...(gw.routerConfigured !== undefined ? { routerConfigured: gw.routerConfigured } : {}),
     },
   };
 

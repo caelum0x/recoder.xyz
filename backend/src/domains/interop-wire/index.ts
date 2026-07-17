@@ -69,6 +69,7 @@ import { interopWireHealth } from './health.js';
 import { createEnvelopeService } from './wire/a2a-envelope.service.js';
 import { createAgentCardService } from './wire/agent-card.service.js';
 import { createSignedIngressGate } from './wire/signed-ingress.gate.js';
+import { createEd25519IngressGate, createPeerKeyResolver } from './wire/ed25519-ingress.gate.js';
 import { createA2AJsonRpcServer } from './wire/a2a-jsonrpc-server.js';
 import { createAgentRegistryRepo } from './repositories/agent-registry.repository.js';
 import { createTaskStoreRepo } from './repositories/task-store.repository.js';
@@ -102,15 +103,30 @@ export function createInteropWireModule(deps: InteropWireModuleDeps): InteropWir
   const agentCard = createAgentCardService(cfg.localCard, {
     fetcher: deps.remoteCardFetcher ?? null,
   });
-  const signedIngress = createSignedIngressGate(envelope, {
+  const jsonRpc = createA2AJsonRpcServer();
+  const agents = createAgentRegistryRepo({ executor });
+  const tasks = createTaskStoreRepo({ executor });
+  const hmacIngress = createSignedIngressGate(envelope, {
     requireSigned: cfg.requireSignedIngress,
     hmacSecret: cfg.hmacSecret,
     allowInsecure: cfg.allowInsecureIngress,
     maxFutureSkewMs: cfg.maxFutureSkewMs,
   });
-  const jsonRpc = createA2AJsonRpcServer();
-  const agents = createAgentRegistryRepo({ executor });
-  const tasks = createTaskStoreRepo({ executor });
+  // ed25519 envelopes are verified asymmetrically (peer public keys: config map
+  // → peer registry); everything else falls through to the frozen HMAC gate.
+  const signedIngress = createEd25519IngressGate({
+    inner: hmacIngress,
+    envelope,
+    mode: cfg.ed25519Mode,
+    maxFutureSkewMs: cfg.maxFutureSkewMs,
+    resolveKey: createPeerKeyResolver({
+      staticKeys: cfg.ed25519PeerKeys,
+      registry: agents,
+      registryOwnerId: cfg.ed25519RegistryOwnerId,
+      logger: deps.logger,
+    }),
+    logger: deps.logger,
+  });
 
   const transport: A2ATransport = {
     async ingressEnvelope<TPayload = unknown>(value: unknown): Promise<IngressResult<TPayload>> {

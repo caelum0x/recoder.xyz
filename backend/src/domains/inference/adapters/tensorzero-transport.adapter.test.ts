@@ -13,7 +13,7 @@ import type {
   GatewayEmbeddingResult,
   GatewayHealth,
 } from '../llm-gateway-client.js';
-import { TensorzeroTransportAdapter, type NapiTierPort } from './tensorzero-transport.adapter.js';
+import { TensorzeroTransportAdapter, type NapiTierPort, type RouterTierPort } from './tensorzero-transport.adapter.js';
 import { inferenceConfigSchema, type InferenceConfig } from '../config.js';
 import type { StreamFetchLike, StreamResponse } from './gateway-stream.js';
 import type {
@@ -153,6 +153,86 @@ describe('TensorzeroTransportAdapter.complete (ladder)', () => {
     expect(result.routed).toBe(false);
     expect(result.tier).toBe('none');
     expect(result.reason).toBeTruthy();
+  });
+});
+
+describe('TensorzeroTransportAdapter — rung 3 (direct BYOK router)', () => {
+  function fakeRouter(result: InferenceResult | 'unavailable'): RouterTierPort {
+    return {
+      available: () => result !== 'unavailable',
+      complete: async () =>
+        result === 'unavailable' ? (undefined as never) : result,
+    };
+  }
+
+  it('serves via the router when napi is unbound and loopback is down', async () => {
+    const adapter = new TensorzeroTransportAdapter({
+      logger: log,
+      config: config(),
+      loopback: fakeLoopback({ configured: false }),
+      napi: fakeNapi(false, null),
+      router: fakeRouter({ routed: true, tier: 'router', model: REQ.model, content: 'from-direct' }),
+    });
+    const result = await adapter.complete(REQ);
+    expect(result.routed).toBe(true);
+    expect(result.tier).toBe('router');
+    expect(result.content).toBe('from-direct');
+  });
+
+  it('routes the direct rung FIRST when the request carries preferDirect', async () => {
+    const adapter = new TensorzeroTransportAdapter({
+      logger: log,
+      config: config(),
+      loopback: fakeLoopback(),
+      napi: fakeNapi(true, { routed: true, tier: 'napi', model: REQ.model, content: 'from-napi' }),
+      router: fakeRouter({ routed: true, tier: 'router', model: REQ.model, content: 'from-direct' }),
+    });
+    const result = await adapter.complete({ ...REQ, preferDirect: true });
+    expect(result.tier).toBe('router'); // plan-directed rung 3 wins over a bound napi tier
+  });
+
+  it('declines truthfully with the router reason folded in when every rung fails', async () => {
+    const adapter = new TensorzeroTransportAdapter({
+      logger: log,
+      config: config(),
+      loopback: fakeLoopback({ configured: false }),
+      napi: fakeNapi(false, null),
+      router: fakeRouter({
+        routed: false,
+        tier: 'none',
+        model: REQ.model,
+        content: null,
+        reason: 'no openai API key available',
+      }),
+    });
+    const result = await adapter.complete(REQ);
+    expect(result.routed).toBe(false);
+    expect(result.reason).toContain('direct: no openai API key available');
+  });
+
+  it('declines truthfully (never throws) when the router has no key source', async () => {
+    const adapter = new TensorzeroTransportAdapter({
+      logger: log,
+      config: config(),
+      loopback: fakeLoopback({ configured: false }),
+      napi: fakeNapi(false, null),
+      router: fakeRouter('unavailable'),
+    });
+    const result = await adapter.complete(REQ);
+    expect(result.routed).toBe(false);
+    expect(result.reason).toContain('no key source wired');
+  });
+
+  it('health reports tier `router` + routerConfigured when only rung 3 can serve', async () => {
+    const adapter = new TensorzeroTransportAdapter({
+      logger: log,
+      config: config(),
+      loopback: fakeLoopback({ configured: false }),
+      napi: fakeNapi(false, null),
+      router: fakeRouter({ routed: true, tier: 'router', model: REQ.model, content: 'x' }),
+    });
+    const health = await adapter.health();
+    expect(health).toMatchObject({ tier: 'router', available: true, routerConfigured: true });
   });
 });
 

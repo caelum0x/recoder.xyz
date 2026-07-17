@@ -95,6 +95,9 @@ function wireConfig(hmacSecret: string | null): InteropWireConfig {
     allowInsecureIngress: false,
     signingMode: 'required',
     maxFutureSkewMs: 300_000,
+    ed25519Mode: 'enforce',
+    ed25519PeerKeys: {},
+    ed25519RegistryOwnerId: null,
     heartbeatStaleMs: 90_000,
     localCard: { id: 'test-instance', name: 'recoder-test', capabilities: ['a2a'] },
   };

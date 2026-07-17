@@ -121,6 +121,12 @@ export {
   DEFAULT_INTERVAL_MS,
   DEFAULT_MAX_MS,
   CAPTURE_LINES,
+  decodeControlModeData,
+  stripAnsi,
+  stripDcsEnvelope,
+  parseControlModeLine,
+  supportsControlMode,
+  MIN_CONTROL_MODE_VERSION,
 } from './observe/index.js';
 export type {
   RunTailInput,
@@ -128,6 +134,7 @@ export type {
   TailSubstrate,
   TailHandle,
   CaptureDeltaResult,
+  ControlModeNotification,
 } from './observe/index.js';
 
 // === Ports — every dependency-inversion seam (for backend adapters) ===
