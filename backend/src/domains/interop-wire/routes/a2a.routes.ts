@@ -12,7 +12,7 @@
  * not-wired method. Bootstrap MAY additionally front these with the interop
  * domain's ext-authz + rate-limit middleware at mount time.
  */
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import { asyncHandler, sendSuccess } from '../../../shared/errors.js';
 import type { ComponentHealth } from '../../../shared/health-types.js';
 import type { A2ATransport } from '../ports/a2a-transport.port.js';
@@ -25,6 +25,14 @@ export interface A2ARouterDeps {
   readonly jsonRpc: A2AJsonRpcServer;
   /** Fresh truthful wire health (the frozen module's `health()`). */
   readonly health: () => ComponentHealth;
+  /**
+   * Optional admission guard mounted in FRONT of `POST /rpc`. Absent ⇒ the
+   * existing hostile-by-default posture (the dispatcher answers a spec error
+   * for any not-wired method). The composer wires `createRpcAdmissionGuard`
+   * here so the publicly-reachable wire stays governed by the same
+   * signed-ingress posture as `/ingress` (fail-closed in production).
+   */
+  readonly rpcAdmission?: RequestHandler;
 }
 
 /** Build the `/api/a2a` wire router. */
@@ -49,6 +57,7 @@ export function buildA2ARoutes(deps: A2ARouterDeps): Router {
 
   router.post(
     '/rpc',
+    ...(deps.rpcAdmission ? [deps.rpcAdmission] : []),
     asyncHandler(async (req, res) => {
       const response = await jsonRpc.handleA2ARpc(req.body);
       // JSON-RPC carries its own error object; the envelope stays 200 at the HTTP layer.

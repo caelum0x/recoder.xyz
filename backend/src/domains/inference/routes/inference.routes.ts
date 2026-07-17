@@ -6,6 +6,7 @@
  *   GET    /inference/models              — routable model catalog (enabled)
  *   GET    /inference/health              — truthful delivery-ladder health
  *   POST   /inference/complete            — buffered completion (auth; accounted)
+ *   POST   /inference/feedback            — attach a feedback signal to an inference_id
  *   GET    /inference/usage               — the caller's recent usage + totals
  *   GET    /inference/keys                — the caller's BYOK provider-key metadata
  *   POST   /inference/keys/:provider/rotate — bump key_version (metadata only)
@@ -28,7 +29,7 @@ import type { InferenceMessage, InferenceRole } from '../types.js';
 
 export interface InferenceRoutesDeps {
   readonly gateway: InferenceGatewayPort;
-  readonly routing: Pick<InferenceRoutingService, 'complete'>;
+  readonly routing: Pick<InferenceRoutingService, 'complete' | 'feedback'>;
   readonly catalog: ModelCatalogRepository;
   readonly ledger: UsageLedgerRepository;
   readonly providerKeys: ProviderKeyRepository;
@@ -44,6 +45,12 @@ const completeBodySchema = z.object({
     .min(1),
   temperature: z.number().optional(),
   maxTokens: z.number().int().positive().optional(),
+});
+
+const feedbackBodySchema = z.object({
+  inferenceId: z.string().trim().min(1),
+  metricName: z.string().trim().min(1).max(128),
+  value: z.union([z.boolean(), z.number(), z.string().max(10_000)]),
 });
 
 const providerSchema = z
@@ -103,6 +110,30 @@ export function buildInferenceRouter(deps: InferenceRoutesDeps): Router {
           return;
         }
         sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'no inference tier available'));
+        return;
+      }
+      sendSuccess(res, { result });
+    }),
+  );
+
+  router.post(
+    '/inference/feedback',
+    mw.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const parsed = feedbackBodySchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, parsed.error.issues[0]?.message ?? 'invalid body'));
+        return;
+      }
+      const result = await routing.feedback({
+        inferenceId: parsed.data.inferenceId,
+        metricName: parsed.data.metricName,
+        value: parsed.data.value,
+        ...(req.principal?.userId ? { userId: req.principal.userId } : {}),
+      });
+      if (!result.routed) {
+        // Truthful degrade: no feedback-capable tier is bound — never a faked accept.
+        sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'no feedback-capable inference tier available'));
         return;
       }
       sendSuccess(res, { result });

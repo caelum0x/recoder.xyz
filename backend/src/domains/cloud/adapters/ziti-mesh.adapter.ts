@@ -40,9 +40,10 @@ export function createZitiMeshAdapter(deps: ZitiMeshAdapterDeps): ZitiMeshAdapte
     if (!base) return { engine: 'ziti', status: 'down', reason: 'ziti endpoint not configured' };
     const r = await probe(fetchLike, `${base}/health`, { timeoutMs: 3000 });
     if (r.status === null) return { engine: 'ziti', status: 'unknown', reason: r.reason ?? 'unreachable' };
-    return r.ok || r.status < 500
-      ? { engine: 'ziti', status: 'up' }
-      : { engine: 'ziti', status: 'degraded', reason: `health returned ${r.status}` };
+    if (r.ok) return { engine: 'ziti', status: 'up' };
+    return r.status >= 500
+      ? { engine: 'ziti', status: 'degraded', reason: `health returned ${r.status}` }
+      : { engine: 'ziti', status: 'degraded', reason: `unexpected ${r.status} — endpoint may not be the ziti engine` };
   }
 
   async function identities(): Promise<readonly ZitiIdentity[]> {

@@ -56,7 +56,7 @@ const beadsDown: BeadsMemoryPort = {
   note: () => false,
 };
 
-function candidate(): MemoryCandidate {
+function candidate(overrides: Partial<MemoryCandidate> = {}): MemoryCandidate {
   return {
     candidateId: 'c1',
     scope: 'repo',
@@ -66,12 +66,29 @@ function candidate(): MemoryCandidate {
     evidence: { taskId: 't1', artifactId: 'a1' },
     proposedBy: 'agent:1',
     proposedAt: '2026-07-15T00:00:00Z',
+    ...overrides,
   };
 }
 
-function fakeRepo(): { repo: MemoryRepository; items: MemoryItem[]; candidates: MemoryCandidate[] } {
+/** A live fake beads port that records which ids get promoted. */
+function beadsUp(): { port: BeadsMemoryPort; promoted: string[] } {
+  const promoted: string[] = [];
+  const port: BeadsMemoryPort = {
+    available: () => true,
+    remember: () => 'bd-unused',
+    recall: () => [],
+    promote: (id) => {
+      promoted.push(id);
+      return true;
+    },
+    note: () => false,
+  };
+  return { port, promoted };
+}
+
+function fakeRepo(seed: MemoryCandidate = candidate()): { repo: MemoryRepository; items: MemoryItem[]; candidates: MemoryCandidate[] } {
   const items: MemoryItem[] = [];
-  const candidates: MemoryCandidate[] = [candidate()];
+  const candidates: MemoryCandidate[] = [seed];
   const repo: MemoryRepository = {
     async listItems() {
       return items;
@@ -160,6 +177,39 @@ describe('createMemoryLifecycle.accept', () => {
     expect(result.promoted).toBe(false);
     expect(items).toHaveLength(0);
     expect(result.verdict.effect).toBe('needs_approval');
+  });
+
+  it('promotes the beads wisp by its bd-issued id, never the local candidateId', async () => {
+    const { repo } = fakeRepo(candidate({ beadsRef: 'bd-42' }));
+    const beads = beadsUp();
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: fakeGate('allow'),
+      beads: beads.port,
+      logger: silentLogger,
+    });
+
+    const result = await lifecycle.accept({ userId: 'u1', candidateId: 'c1', principal });
+    expect(result.promoted).toBe(true);
+    // The bd id captured at propose time — NOT the locally-minted 'c1'/'mc_' id.
+    expect(beads.promoted).toEqual(['bd-42']);
+  });
+
+  it('skips beads promote when the candidate carries no beadsRef (still materializes)', async () => {
+    const { repo, items } = fakeRepo(candidate()); // no beadsRef: bd was down at propose
+    const beads = beadsUp();
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: fakeGate('allow'),
+      beads: beads.port,
+      logger: silentLogger,
+    });
+
+    const result = await lifecycle.accept({ userId: 'u1', candidateId: 'c1', principal });
+    // Durable store-of-record promotion still happens; no bogus bd promote issued.
+    expect(result.promoted).toBe(true);
+    expect(items).toHaveLength(1);
+    expect(beads.promoted).toEqual([]);
   });
 
   it('throws NOT_FOUND for an unknown candidate', async () => {

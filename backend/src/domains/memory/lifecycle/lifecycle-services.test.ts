@@ -21,6 +21,22 @@ const beadsDown: BeadsMemoryPort = {
   note: () => false,
 };
 
+/** A live fake beads port that issues a bd id and records remember calls. */
+function beadsUp(bdId: string): { port: BeadsMemoryPort; remembered: Parameters<BeadsMemoryPort['remember']>[0][] } {
+  const remembered: Parameters<BeadsMemoryPort['remember']>[0][] = [];
+  const port: BeadsMemoryPort = {
+    available: () => true,
+    remember: (input) => {
+      remembered.push(input);
+      return bdId;
+    },
+    recall: () => [],
+    promote: () => true,
+    note: () => false,
+  };
+  return { port, remembered };
+}
+
 function repoWithCapture(): { repo: MemoryRepository; stored: MemoryCandidate[]; relations: MemoryRelation[] } {
   const stored: MemoryCandidate[] = [];
   const relations: MemoryRelation[] = [];
@@ -80,6 +96,64 @@ describe('candidate-service.propose', () => {
     });
     expect(candidate.candidateId).toBe('mc_1');
     expect(candidate.status).toBe('candidate_created');
+    expect(stored).toHaveLength(1);
+  });
+
+  it('persists the bd-issued wisp id as beadsRef (the promote handle)', async () => {
+    const { repo, stored } = repoWithCapture();
+    const beads = beadsUp('bd-42');
+    const svc = createCandidateService({ repository: repo, beads: beads.port, logger: silentLogger, newId: () => 'mc_1' });
+    const candidate = await svc.propose({
+      userId: 'u1',
+      scope: 'repo',
+      title: 'fact',
+      body: 'body',
+      proposedBy: 'agent:1',
+      evidence: { taskId: 't1', artifactId: 'a1' },
+    });
+    // The bd id (NOT the local mc_ id) is what memory-lifecycle.accept promotes.
+    expect(candidate.beadsRef).toBe('bd-42');
+    expect(stored[0]?.beadsRef).toBe('bd-42');
+    expect(beads.remembered).toHaveLength(1);
+    expect(beads.remembered[0]?.title).toBe('fact');
+  });
+
+  it('stores the candidate WITHOUT beadsRef when bd is down (truthful degrade)', async () => {
+    const { repo, stored } = repoWithCapture();
+    const svc = createCandidateService({ repository: repo, beads: beadsDown, logger: silentLogger, newId: () => 'mc_1' });
+    const candidate = await svc.propose({
+      userId: 'u1',
+      scope: 'repo',
+      title: 'fact',
+      body: 'body',
+      proposedBy: 'agent:1',
+      evidence: { taskId: 't1', artifactId: 'a1' },
+    });
+    expect(candidate.beadsRef).toBeUndefined();
+    expect(stored).toHaveLength(1);
+  });
+
+  it('still stores the candidate when beads.remember throws (mirror is best-effort)', async () => {
+    const { repo, stored } = repoWithCapture();
+    const throwingBeads: BeadsMemoryPort = {
+      available: () => true,
+      remember: () => {
+        throw new Error('bd exploded');
+      },
+      recall: () => [],
+      promote: () => false,
+      note: () => false,
+    };
+    const svc = createCandidateService({ repository: repo, beads: throwingBeads, logger: silentLogger, newId: () => 'mc_1' });
+    const candidate = await svc.propose({
+      userId: 'u1',
+      scope: 'repo',
+      title: 'fact',
+      body: 'body',
+      proposedBy: 'agent:1',
+      evidence: { taskId: 't1', artifactId: 'a1' },
+    });
+    expect(candidate.beadsRef).toBeUndefined();
     expect(stored).toHaveLength(1);
   });
 

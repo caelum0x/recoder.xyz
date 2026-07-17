@@ -71,6 +71,38 @@ export interface InferenceResult {
   readonly denied?: 'quota';
 }
 
+/**
+ * A feedback signal attached to a prior inference by `inference_id`
+ * (merge/approve = positive). `value` mirrors TensorZero's `POST /feedback`:
+ * a boolean/float metric value, or a comment/demonstration string.
+ */
+export interface FeedbackRequest {
+  /** The gateway `inference_id` the signal targets (from a routed result). */
+  readonly inferenceId: string;
+  /** The TensorZero metric name (e.g. `task_success`, `comment`). */
+  readonly metricName: string;
+  /** The signal value (boolean/float metric, or a comment string). */
+  readonly value: boolean | number | string;
+  /** The authenticated caller (audit attribution). */
+  readonly userId?: string;
+}
+
+/**
+ * The truthful result of a feedback submission. `routed` is false (with a
+ * `reason`) when no feedback-capable tier could accept the signal — never a
+ * fabricated `feedbackId`.
+ */
+export interface FeedbackResult {
+  readonly routed: boolean;
+  readonly tier: DeliveryTier;
+  readonly inferenceId: string;
+  readonly metricName: string;
+  /** The gateway's `feedback_id` (present only when actually routed + reported). */
+  readonly feedbackId?: string;
+  /** Truthful reason when `routed` is false. */
+  readonly reason?: string;
+}
+
 /** One streamed delta emitted through the `onDelta` sink. */
 export interface StreamDelta {
   /** Present on the first delta only. */

@@ -183,12 +183,28 @@ export function createMemoryLifecycle(deps: MemoryLifecycleDeps): MemoryLifecycl
       }
 
       // Best-effort promote the beads wisp to durable Dolt-versioned memory.
-      if (beads.available()) {
-        try {
-          beads.promote(candidate.candidateId);
-        } catch (err) {
-          logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'beads promote failed');
+      // `bd promote` only accepts the bd-issued wisp id captured at propose time
+      // (`beadsRef`) — never the locally-minted candidateId. When the ref is
+      // absent (bd was down at propose) there is no wisp to promote: skip
+      // truthfully instead of issuing a promote that can never succeed.
+      if (candidate.beadsRef) {
+        if (beads.available()) {
+          try {
+            beads.promote(candidate.beadsRef);
+          } catch (err) {
+            logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'beads promote failed');
+          }
+        } else {
+          logger.warn(
+            { candidateId: candidate.candidateId, beadsRef: candidate.beadsRef },
+            'beads unavailable — wisp not promoted to durable Dolt memory',
+          );
         }
+      } else {
+        logger.info(
+          { candidateId: candidate.candidateId },
+          'candidate has no beads wisp ref (bd was down at propose) — beads promote skipped',
+        );
       }
 
       return { promoted: true, memory: storedMemory, candidate: storedCandidate, verdict };

@@ -15,7 +15,7 @@ import type {
 import { TensorzeroTransportAdapter, type NapiTierPort } from './tensorzero-transport.adapter.js';
 import { inferenceConfigSchema, type InferenceConfig } from '../config.js';
 import type { StreamFetchLike, StreamResponse } from './gateway-stream.js';
-import type { InferenceRequest, InferenceResult, StreamDelta } from '../types.js';
+import type { FeedbackRequest, FeedbackResult, InferenceRequest, InferenceResult, StreamDelta } from '../types.js';
 
 const log = { info() {}, warn() {}, error() {}, debug() {} } as unknown as Logger;
 
@@ -60,8 +60,16 @@ function fakeLoopback(over: Partial<{
   };
 }
 
-function fakeNapi(available: boolean, result: InferenceResult | null): NapiTierPort {
-  return { available: () => available, complete: async () => result };
+function fakeNapi(
+  available: boolean,
+  result: InferenceResult | null,
+  feedback?: (req: FeedbackRequest) => Promise<FeedbackResult | null>,
+): NapiTierPort {
+  return {
+    available: () => available,
+    complete: async () => result,
+    ...(feedback ? { feedback } : {}),
+  };
 }
 
 const REQ: InferenceRequest = { model: 'openai/gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }] };
@@ -152,6 +160,61 @@ describe('TensorzeroTransportAdapter.completeStream', () => {
     expect(result.tokenGranular).toBe(false); // buffered, not token-granular
     expect(result.content).toBe('buffered');
     expect(deltas).toEqual([{ role: 'assistant' }, { content: 'buffered' }]);
+  });
+});
+
+describe('TensorzeroTransportAdapter.feedback', () => {
+  const FEEDBACK: FeedbackRequest = { inferenceId: 'inf-1', metricName: 'task_success', value: true };
+
+  it('routes feedback through a bound napi tier with a feedback seam', async () => {
+    const adapter = new TensorzeroTransportAdapter({
+      logger: log,
+      config: config(),
+      loopback: fakeLoopback(),
+      napi: fakeNapi(true, null, async (req) => ({
+        routed: true,
+        tier: 'napi',
+        inferenceId: req.inferenceId,
+        metricName: req.metricName,
+        feedbackId: 'fb-9',
+      })),
+    });
+    const result = await adapter.feedback(FEEDBACK);
+    expect(result).toEqual({
+      routed: true,
+      tier: 'napi',
+      inferenceId: 'inf-1',
+      metricName: 'task_success',
+      feedbackId: 'fb-9',
+    });
+  });
+
+  it('reports a truthful not-routed when the napi tier is unbound', async () => {
+    const adapter = new TensorzeroTransportAdapter({
+      logger: log,
+      config: config(),
+      loopback: fakeLoopback(),
+      napi: fakeNapi(false, null),
+    });
+    const result = await adapter.feedback(FEEDBACK);
+    expect(result.routed).toBe(false);
+    expect(result.tier).toBe('none');
+    expect(result.feedbackId).toBeUndefined(); // never fabricated
+    expect(result.reason).toBeTruthy();
+  });
+
+  it('never throws across the seam when the napi feedback call throws', async () => {
+    const adapter = new TensorzeroTransportAdapter({
+      logger: log,
+      config: config(),
+      loopback: fakeLoopback(),
+      napi: fakeNapi(true, null, async () => {
+        throw new Error('native boom');
+      }),
+    });
+    const result = await adapter.feedback(FEEDBACK);
+    expect(result.routed).toBe(false);
+    expect(result.reason).toBeTruthy();
   });
 });
 

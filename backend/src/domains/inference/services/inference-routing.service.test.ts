@@ -1,8 +1,9 @@
 /**
  * `InferenceRoutingService` — verifies accounting: a routed completion appends a
  * priced usage-ledger row (cost from the catalog) + an `ok` delivery-outcome row;
- * a non-routed call records a `failed` outcome and charges nothing; and a ledger
- * write failure never breaks delivery (accounting is best-effort).
+ * a non-routed call records a `failed` outcome and charges nothing; a ledger
+ * write failure never breaks delivery (accounting is best-effort); and feedback
+ * is wired to delivery outcomes (audited, best-effort, truthful when declined).
  */
 import { describe, it, expect, vi } from 'vitest';
 import type { Logger } from '../../../shared/logger.js';
@@ -41,6 +42,7 @@ function gatewayReturning(result: InferenceResult): InferenceGatewayPort {
     complete: async () => result,
     completeStream: async () => ({ ...result, streamed: true, tokenGranular: true }),
     embed: async () => ({ routed: false, tier: 'none', model: result.model, embeddings: null }),
+    feedback: async (req) => ({ routed: false, tier: 'none', inferenceId: req.inferenceId, metricName: req.metricName, reason: 'no feedback tier in this fake' }),
     health: async () => ({ tier: 'loopback', available: true, napiBound: false, loopbackConfigured: true }),
   };
 }
@@ -101,5 +103,56 @@ describe('InferenceRoutingService.complete accounting', () => {
     const result = await service.complete({ model: 'openai/gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }] });
     expect(result.routed).toBe(true); // delivery survives accounting failure
     expect(result.content).toBe('ok');
+  });
+});
+
+describe('InferenceRoutingService.feedback', () => {
+  function serviceWith(gateway: InferenceGatewayPort, outcomes: DeliveryOutcomeRepository) {
+    const ledger = { append: vi.fn(async () => null), recentForUser: vi.fn(), totalsForUser: vi.fn(), isDurable: () => true } as unknown as UsageLedgerRepository;
+    return new InferenceRoutingService({ logger: log, gateway, catalog: catalog(null), ledger, outcomes });
+  }
+
+  const FEEDBACK = { inferenceId: 'inf-1', metricName: 'task_success', value: true, userId: 'u1' } as const;
+
+  it('forwards routed feedback and appends an ok delivery-outcome audit row', async () => {
+    const outcomes = { append: vi.fn(async () => null), recentForUser: vi.fn(), isDurable: () => true } as unknown as DeliveryOutcomeRepository;
+    const gateway = {
+      ...gatewayReturning({ routed: false, tier: 'none', model: 'm', content: null }),
+      feedback: async () => ({ routed: true, tier: 'napi', inferenceId: 'inf-1', metricName: 'task_success', feedbackId: 'fb-1' }),
+    } as InferenceGatewayPort;
+
+    const result = await serviceWith(gateway, outcomes).feedback(FEEDBACK);
+
+    expect(result).toEqual({ routed: true, tier: 'napi', inferenceId: 'inf-1', metricName: 'task_success', feedbackId: 'fb-1' });
+    expect(outcomes.append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'u1',
+        model: 'feedback:task_success',
+        tier: 'napi',
+        routed: true,
+        status: 'ok',
+        reason: 'feedback task_success on inf-1 (feedback_id fb-1)',
+      }),
+    );
+  });
+
+  it('returns the truthful not-routed result and audits a failed outcome', async () => {
+    const outcomes = { append: vi.fn(async () => null), recentForUser: vi.fn(), isDurable: () => true } as unknown as DeliveryOutcomeRepository;
+    const result = await serviceWith(gatewayReturning({ routed: false, tier: 'none', model: 'm', content: null }), outcomes).feedback(FEEDBACK);
+
+    expect(result.routed).toBe(false);
+    expect(result.reason).toBeTruthy();
+    expect(outcomes.append).toHaveBeenCalledWith(expect.objectContaining({ routed: false, status: 'failed', tier: 'none' }));
+  });
+
+  it('never breaks the submission when the outcome audit write throws', async () => {
+    const outcomes = { append: vi.fn(async () => { throw new Error('db down'); }), recentForUser: vi.fn(), isDurable: () => true } as unknown as DeliveryOutcomeRepository;
+    const gateway = {
+      ...gatewayReturning({ routed: false, tier: 'none', model: 'm', content: null }),
+      feedback: async () => ({ routed: true, tier: 'napi' as const, inferenceId: 'inf-1', metricName: 'task_success' }),
+    } as InferenceGatewayPort;
+
+    const result = await serviceWith(gateway, outcomes).feedback(FEEDBACK);
+    expect(result.routed).toBe(true); // the audit is best-effort, never blocking
   });
 });

@@ -39,9 +39,10 @@ export function createXdsEnvoyAdapter(deps: XdsEnvoyAdapterDeps): XdsEnvoyAdapte
     if (!base) return { engine: 'xds', status: 'down', reason: 'xds endpoint not configured' };
     const r = await probe(fetchLike, `${base}/health`, { timeoutMs: 3000 });
     if (r.status === null) return { engine: 'xds', status: 'unknown', reason: r.reason ?? 'unreachable' };
-    return r.ok || r.status < 500
-      ? { engine: 'xds', status: 'up' }
-      : { engine: 'xds', status: 'degraded', reason: `health returned ${r.status}` };
+    if (r.ok) return { engine: 'xds', status: 'up' };
+    return r.status >= 500
+      ? { engine: 'xds', status: 'degraded', reason: `health returned ${r.status}` }
+      : { engine: 'xds', status: 'degraded', reason: `unexpected ${r.status} — endpoint may not be the xds engine` };
   }
 
   async function clusters(): Promise<readonly XdsCluster[]> {

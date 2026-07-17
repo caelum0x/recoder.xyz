@@ -19,9 +19,13 @@
  *     guarantee, so we refuse to claim success. `deny`/`needs_approval` verdicts
  *     pass through even if audit fails (they already block); the audit failure is
  *     logged. (The integration step may relax this to degrade-to-log if desired.)
- *   - For `needs_approval`, an existing matching `approved` record is attached as
- *     `approvalId` (evidence the caller may use to proceed); the gate itself does
- *     not silently flip the effect.
+ *   - For `needs_approval`, a REAL `approved` record for the same task+action
+ *     CLEARS the gate: the verdict is returned as `allow` carrying that record's
+ *     id as `approvalId` and a `cleared by approval <id>` reason, and the
+ *     clearance is sealed into the durable audit chain. Everything else stays
+ *     fail-closed: no repo / no taskId / no matching approved record / a lookup
+ *     fault all leave the verdict blocking, and the kernel's bare
+ *     `approvalGateId` NEVER clears anything.
  */
 import type { Logger } from '../../../shared/logger.js';
 import type { Principal } from '../../identity/types.js';
@@ -67,17 +71,32 @@ export class GovernanceGateService implements GovernanceGate {
     const req = this.buildRequest(action, principal, ctx, now);
 
     // 1-2. Risk decision (ladder is fail-closed; never throws a policy outcome).
-    const verdict = await this.kernel.decide(req);
+    const kernelVerdict = await this.kernel.decide(req);
 
-    // 3. Attach an existing approval record (evidence) for a needs_approval gate.
-    const approvalId = await this.resolveApprovalId(action, verdict, ctx);
+    // 3. Approval clearance: a `needs_approval` verdict backed by a REAL
+    //    `approved` record for this task+action is cleared to `allow` — the
+    //    recorded human decision IS the authorization. The clearance is sealed
+    //    into the audit chain below (step 4). Fail-closed everywhere else: the
+    //    kernel's bare `approvalGateId` never clears, a lookup fault never clears.
+    const clearedByApprovalId = await this.resolveApprovalClearance(action, kernelVerdict, ctx);
+    const verdict: KernelVerdict = clearedByApprovalId
+      ? {
+          ...kernelVerdict,
+          effect: 'allow',
+          reason: `cleared by approval ${clearedByApprovalId} — ${kernelVerdict.reason}`,
+        }
+      : kernelVerdict;
+    const approvalId = clearedByApprovalId ?? kernelVerdict.approvalGateId;
 
     // 4. Seal into the durable Merkle chain. A failure to record an ALLOW fails
-    //    closed (an un-audited allow cannot be trusted); a blocking verdict passes
-    //    through with the audit failure logged.
+    //    closed (an un-audited allow cannot be trusted — including an allow that
+    //    was cleared by an approval); a blocking verdict passes through with the
+    //    audit failure logged.
     let auditHash: string | undefined;
     try {
-      const record = await this.audit.append(this.toAuditEntry(action, principal, verdict, ctx));
+      const record = await this.audit.append(
+        this.toAuditEntry(action, principal, verdict, ctx, clearedByApprovalId),
+      );
       auditHash = record.entryHash;
     } catch (err) {
       this.log?.error({ err, action, actor: principal.userId }, 'governance audit seal failed');
@@ -144,22 +163,33 @@ export class GovernanceGateService implements GovernanceGate {
     };
   }
 
-  /** Look up an existing `approved` record that would clear a needs_approval gate. */
-  private async resolveApprovalId(
+  /**
+   * Find the REAL `approved` record that clears a `needs_approval` verdict for
+   * this task+action. Returns its id, or `undefined` when nothing clears —
+   * fail-closed: no repo / no taskId / no matching approved record / a lookup
+   * fault all leave the verdict blocking. The kernel's bare `approvalGateId`
+   * NEVER clears anything (it is only an evidence pointer).
+   */
+  private async resolveApprovalClearance(
     action: GovernanceAction,
     verdict: KernelVerdict,
     ctx: GateDecisionContext,
   ): Promise<string | undefined> {
-    if (verdict.effect !== 'needs_approval') return verdict.approvalGateId;
-    if (!this.approvals || !ctx.taskId) return verdict.approvalGateId;
+    if (verdict.effect !== 'needs_approval') return undefined;
+    if (!this.approvals || !ctx.taskId) return undefined;
     try {
       const approved = await this.approvals.hasApproval(ctx.taskId, action);
-      if (!approved) return verdict.approvalGateId;
-      const list = await this.approvals.list({ taskId: ctx.taskId, status: 'approved', limit: 1 });
-      return list[0]?.id ?? verdict.approvalGateId;
+      if (!approved) return undefined;
+      const records = await this.approvals.list({ taskId: ctx.taskId, status: 'approved' });
+      // Only a record for the SAME action clears; without its id there is no
+      // auditable evidence, so the verdict stays blocking.
+      return records.find((r) => r.action === action)?.id;
     } catch (err) {
-      this.log?.warn({ err, action, taskId: ctx.taskId }, 'governance approval lookup failed');
-      return verdict.approvalGateId;
+      this.log?.warn(
+        { err, action, taskId: ctx.taskId },
+        'governance approval lookup failed — leaving needs_approval in place',
+      );
+      return undefined;
     }
   }
 
@@ -168,6 +198,7 @@ export class GovernanceGateService implements GovernanceGate {
     principal: Principal,
     verdict: KernelVerdict,
     ctx: GateDecisionContext,
+    clearedByApprovalId?: string,
   ): AuditEntryInput {
     return {
       actorId: principal.userId,
@@ -184,6 +215,8 @@ export class GovernanceGateService implements GovernanceGate {
         runId: ctx.runId,
         target: ctx.target,
         autonomous: ctx.autonomous ?? false,
+        // Evidence that a needs_approval verdict was cleared by a human decision.
+        ...(clearedByApprovalId ? { clearedByApprovalId } : {}),
         // Sanitized metadata only — never secret values.
         metadata: ctx.metadata ?? {},
       },

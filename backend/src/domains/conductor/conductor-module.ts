@@ -558,8 +558,12 @@ export class ConductorComposer implements ConductorModule {
     const action = 'workspace.pr';
     // Production rule: opening a PR pushes the branch (customer-visible delivery)
     // — the governance gate is THE approval seam; a deny never reaches git/gh.
+    // The workspace's taskId anchors approval correlation: an `approved` record
+    // for (taskId, action) clears a needs_approval verdict on retry.
+    const workspace = await this.engine.getWorkspace(workspaceId);
     const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
       target: { environment: 'conductor' },
+      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
       metadata: { workspaceId, base: input.base },
     });
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
@@ -583,8 +587,12 @@ export class ConductorComposer implements ConductorModule {
   ): Promise<ConductorWriteResult<MergeResultView>> {
     const action = 'workspace.merge';
     // A merge is THE customer-visible delivery — gate before any git/gh runs.
+    // The workspace's taskId anchors approval correlation: an `approved` record
+    // for (taskId, action) clears a needs_approval verdict on retry.
+    const workspace = await this.engine.getWorkspace(workspaceId);
     const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
       target: { environment: 'conductor' },
+      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
       metadata: { workspaceId, strategy: input.strategy },
     });
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };

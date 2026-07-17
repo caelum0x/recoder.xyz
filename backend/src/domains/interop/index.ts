@@ -61,7 +61,11 @@ export interface InteropModule {
   agentCard(): AgentCardService;
   /** The A2A JSON-RPC dispatcher (wire skeleton). */
   jsonRpc(): A2AJsonRpcServer;
-  /** The `/api/a2a` router: health + agent-card + the ext-authz-guarded RPC edge. */
+  /**
+   * The `/api/a2a` admission-side router (`GET /admission/health` only). The
+   * wire paths (`/health`, `/agent-card`, `/rpc`, `/ingress`) are owned by the
+   * interop-wire router mounted at the same base — never shadowed here.
+   */
   routes(): Router;
   /** Truthful component health. */
   health(): ComponentHealth;

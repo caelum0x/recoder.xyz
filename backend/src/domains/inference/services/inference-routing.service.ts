@@ -21,6 +21,8 @@ import type {
   DeliveryStatus,
   EmbeddingRequest,
   EmbeddingResult,
+  FeedbackRequest,
+  FeedbackResult,
   InferenceRequest,
   InferenceResult,
   InferenceStreamResult,
@@ -150,6 +152,39 @@ export class InferenceRoutingService {
   /** Route an embedding call (accounted as input-only usage). */
   async embed(req: EmbeddingRequest): Promise<EmbeddingResult> {
     return this.gateway.embed(req);
+  }
+
+  /**
+   * Attach a feedback signal to a prior `inference_id` (merge/approve =
+   * positive) and best-effort append a delivery-outcome audit row so feedback
+   * is wired to delivery outcomes. Mirrors the accounting law: the audit write
+   * NEVER blocks or fails the submission; the result is always truthful
+   * (`{ routed:false, reason }` when no feedback-capable tier is bound).
+   */
+  async feedback(req: FeedbackRequest): Promise<FeedbackResult> {
+    const startedAt = this.now();
+    const result = await this.gateway.feedback(req);
+    try {
+      await this.outcomes.append({
+        userId: req.userId ?? null,
+        model: `feedback:${req.metricName}`,
+        tier: result.tier,
+        routed: result.routed,
+        streamed: false,
+        tokenGranular: false,
+        latencyMs: this.now() - startedAt,
+        status: result.routed ? 'ok' : 'failed',
+        reason: result.routed
+          ? `feedback ${req.metricName} on ${req.inferenceId}${result.feedbackId ? ` (feedback_id ${result.feedbackId})` : ''}`
+          : (result.reason ?? null),
+      });
+    } catch (err) {
+      this.log.warn(
+        { err: message(err), inferenceId: req.inferenceId, metricName: req.metricName },
+        'feedback outcome accounting failed (ignored)',
+      );
+    }
+    return result;
   }
 
   /** Record usage + delivery outcome. Never throws (accounting must not fail delivery). */

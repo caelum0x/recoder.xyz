@@ -1,14 +1,16 @@
 /**
  * The inference domain's own MCP tools (the in-proc `inference` server):
- * `inference.models`, `inference.health`, `inference.complete`. Every call still
- * passes the interop `authorize→risk→policy→audit` gate at the host boundary, so
- * these handlers stay thin and truthful over the module surface.
+ * `inference.models`, `inference.health`, `inference.complete`,
+ * `inference.feedback`. Every call still passes the interop
+ * `authorize→risk→policy→audit` gate at the host boundary, so these handlers
+ * stay thin and truthful over the module surface.
  *
  * `inference.models` / `inference.health` are READ-ONLY (always safe).
  * `inference.complete` is a governed call: the host risk-gates model invocation
  * (spend), and the routing service records the usage-ledger + delivery-outcome
- * rows. All results are truthful — an unroutable call returns `{ routed:false }`
- * with a reason, never a fabricated completion.
+ * rows. `inference.feedback` attaches a signal to a prior inference_id (audited
+ * as a delivery outcome). All results are truthful — an unroutable call returns
+ * `{ routed:false }` with a reason, never a fabricated completion/feedback_id.
  */
 import type { McpToolRegistration } from '../../../shared/module-base.js';
 import type { InferenceGatewayPort } from '../ports/inference-gateway.port.js';
@@ -22,7 +24,7 @@ export const INFERENCE_MCP_SERVER_ID = 'inference';
 export interface InferenceMcpDeps {
   readonly gateway: InferenceGatewayPort;
   readonly catalog: ModelCatalogRepository;
-  readonly routing: Pick<InferenceRoutingService, 'complete'>;
+  readonly routing: Pick<InferenceRoutingService, 'complete' | 'feedback'>;
 }
 
 const VALID_ROLES: ReadonlySet<string> = new Set(['system', 'user', 'assistant', 'tool']);
@@ -32,6 +34,13 @@ interface CompleteInput {
   readonly messages?: unknown;
   readonly temperature?: number;
   readonly maxTokens?: number;
+  readonly requestedBy?: string;
+}
+
+interface FeedbackInput {
+  readonly inferenceId?: string;
+  readonly metricName?: string;
+  readonly value?: unknown;
   readonly requestedBy?: string;
 }
 
@@ -86,6 +95,31 @@ export function buildInferenceMcpTools(deps: InferenceMcpDeps): readonly McpTool
         return { result };
       },
     },
+    {
+      name: 'inference.feedback',
+      description:
+        'Attach a feedback signal (boolean/float metric or comment string) to a prior inference_id ' +
+        '(merge/approve = positive). Audited as a delivery outcome. Returns a truthful { routed, feedbackId? } — ' +
+        'never a fabricated feedback_id.',
+      handler: async (raw: unknown) => {
+        const input = (raw ?? {}) as FeedbackInput;
+        const inferenceId = input.inferenceId?.trim();
+        if (!inferenceId) return { error: 'inferenceId (string) is required' };
+        const metricName = input.metricName?.trim();
+        if (!metricName) return { error: 'metricName (string) is required' };
+        const value = input.value;
+        if (typeof value !== 'boolean' && typeof value !== 'number' && typeof value !== 'string') {
+          return { error: 'value (boolean | number | string) is required' };
+        }
+        const result = await deps.routing.feedback({
+          inferenceId,
+          metricName,
+          value,
+          ...(input.requestedBy?.trim() ? { userId: input.requestedBy.trim() } : {}),
+        });
+        return { result };
+      },
+    },
   ];
 }
 
@@ -100,6 +134,6 @@ export const inferenceMcpServer = {
   displayName: 'Inference (BYOK LLM gateway)',
   transport: 'in-proc' as const,
   enabled: true,
-  toolNames: ['inference.models', 'inference.health', 'inference.complete'] as readonly string[],
+  toolNames: ['inference.models', 'inference.health', 'inference.complete', 'inference.feedback'] as readonly string[],
   metadata: { external: false },
 };

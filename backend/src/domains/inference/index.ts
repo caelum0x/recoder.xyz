@@ -94,7 +94,7 @@ export interface InferenceModule {
   generateConfig(): Promise<GeneratedTzConfig>;
   /** The inference control + OpenAI-compatible routers. */
   routes(): Router;
-  /** The inference MCP tools (models / health / complete). */
+  /** The inference MCP tools (models / health / complete / feedback). */
   mcp(): readonly McpToolRegistration[];
   /** Truthful component health. */
   health(): Promise<ComponentHealth>;

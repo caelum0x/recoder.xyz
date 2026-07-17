@@ -14,7 +14,7 @@ import type {
   SidecarSpec,
   SidecarSupervisorPort,
 } from '../../ports/sidecar-supervisor.port.js';
-import { down, type EngineHealth } from '../../types.js';
+import { down, up, type EngineHealth } from '../../types.js';
 import { Mem0Adapter, type Mem0ClientFns } from './mem0.adapter.js';
 import { BrowserUseAdapter } from './browser-use.adapter.js';
 import { PalMcpAdapter } from './pal-mcp.adapter.js';
@@ -114,9 +114,47 @@ describe('Mem0Adapter', () => {
   });
 });
 
+/** A supervisor with a LIVE loopback-http handle (the supervised sidecar is up). */
+function liveSupervisor(baseUrl: string): { port: SidecarSupervisorPort; setHandle(h: SidecarHandle | null): void } {
+  let current: SidecarHandle | null = {
+    engineId: 'browser-use',
+    transport: 'loopback-http',
+    baseUrl,
+  };
+  const port: SidecarSupervisorPort = {
+    async preflight(): Promise<PreflightResult> {
+      return { ok: true };
+    },
+    async ensureStarted(): Promise<SidecarHandle | null> {
+      return current;
+    },
+    async stop(): Promise<void> {},
+    handle(): SidecarHandle | null {
+      return current;
+    },
+    async health(spec: SidecarSpec): Promise<EngineHealth> {
+      return current
+        ? up(spec.engineId as never, 'sidecar')
+        : down(spec.engineId as never, 'sidecar', 'not started');
+    },
+    async stopAll(): Promise<void> {},
+  };
+  return { port, setHandle: (h) => { current = h; } };
+}
+
+/** A fetch stub that records POSTs and answers like the browser-use service. */
+function fetchStub(body: Record<string, unknown>) {
+  const calls: Array<{ url: string; method: string; body: string }> = [];
+  const fetchImpl = async (url: string, init: { method: string; body: string }) => {
+    calls.push({ url, method: init.method, body: init.body });
+    return { ok: true, status: 200, json: async () => body };
+  };
+  return { calls, fetchImpl };
+}
+
 describe('BrowserUseAdapter', () => {
   it('reports down (no puppeteer, no BROWSER_USE_URL) and degrades navigate', async () => {
-    const adapter = new BrowserUseAdapter({ supervisor: deadSupervisor, config: config(), log });
+    const adapter = new BrowserUseAdapter({ supervisor: deadSupervisor, config: config(), log, env: {} });
     const health = await adapter.health();
     expect(health.status).toBe('down');
     const res = await adapter.invoke({ op: 'navigate', input: { url: 'https://example.com' } });
@@ -124,10 +162,56 @@ describe('BrowserUseAdapter', () => {
   });
 
   it('rejects navigate without a url', async () => {
-    const adapter = new BrowserUseAdapter({ supervisor: deadSupervisor, config: config(), log });
+    const adapter = new BrowserUseAdapter({ supervisor: deadSupervisor, config: config(), log, env: {} });
     const res = await adapter.invoke({ op: 'navigate', input: {} });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe('bad_input');
+  });
+
+  it('routes invoke through the SUPERVISED sidecar baseUrl (POST <baseUrl>/navigate)', async () => {
+    const { port } = liveSupervisor('http://127.0.0.1:8897');
+    const { calls, fetchImpl } = fetchStub({ url: 'https://example.com/', title: 'Example' });
+    const adapter = new BrowserUseAdapter({ supervisor: port, config: config(), log, fetch: fetchImpl, env: {} });
+    const res = await adapter.invoke({ op: 'navigate', input: { url: 'https://example.com' } });
+    expect(res.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe('http://127.0.0.1:8897/navigate');
+    expect(calls[0]?.method).toBe('POST');
+    expect(JSON.parse(calls[0]?.body ?? '{}')).toEqual({ url: 'https://example.com' });
+  });
+
+  it('re-resolves the sidecar URL lazily — a handle appearing AFTER boot is picked up', async () => {
+    const { port, setHandle } = liveSupervisor('http://127.0.0.1:8897');
+    setHandle(null); // sidecar not up yet at first invoke
+    const { calls, fetchImpl } = fetchStub({ text: 'hello', url: 'https://example.com/' });
+    const adapter = new BrowserUseAdapter({ supervisor: port, config: config(), log, fetch: fetchImpl, env: {} });
+    const before = await adapter.invoke({ op: 'extract', input: { url: 'https://example.com' } });
+    expect(before.ok).toBe(false); // no sidecar + no puppeteer → truthful fail
+    expect(calls).toHaveLength(0);
+    setHandle({ engineId: 'browser-use', transport: 'loopback-http', baseUrl: 'http://127.0.0.1:8897' });
+    const after = await adapter.invoke({ op: 'extract', input: { url: 'https://example.com' } });
+    expect(after.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe('http://127.0.0.1:8897/extract');
+  });
+
+  it('falls back to externalUrls["browser-use"] when no supervised handle exists', async () => {
+    const { calls, fetchImpl } = fetchStub({ imageBase64: 'aGk=', url: 'https://example.com/' });
+    const cfg = config({
+      externalUrls: {
+        colbert: null,
+        'ops-recorder': null,
+        multica: null,
+        ziti: null,
+        'tensorzero-loopback': null,
+        mem0: null,
+        'browser-use': 'http://operator.example:9000',
+      },
+    });
+    const adapter = new BrowserUseAdapter({ supervisor: deadSupervisor, config: cfg, log, fetch: fetchImpl, env: {} });
+    const res = await adapter.invoke({ op: 'screenshot', input: { url: 'https://example.com' } });
+    expect(res.ok).toBe(true);
+    expect(calls[0]?.url).toBe('http://operator.example:9000/screenshot');
   });
 });
 

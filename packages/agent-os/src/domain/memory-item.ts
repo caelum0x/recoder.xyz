@@ -80,4 +80,10 @@ export type MemoryCandidate = {
   reviewedAt?: string;
   reviewReason?: string;
   expiresAt?: string | null;
+  /**
+   * The bd (beads) issue id issued when the candidate wisp was mirrored into
+   * the issue-graph shared memory. This is the ONLY id `bd promote` accepts;
+   * absent when beads was unavailable at propose time (truthful degrade).
+   */
+  beadsRef?: string;
 };

@@ -24,6 +24,8 @@ import type { InferenceGatewayPort, StreamSink } from '../ports/inference-gatewa
 import type {
   EmbeddingRequest,
   EmbeddingResult,
+  FeedbackRequest,
+  FeedbackResult,
   InferenceHealth,
   InferenceRequest,
   InferenceResult,
@@ -51,6 +53,12 @@ export interface NapiTierPort {
    * throws (a failed boot leaves the tier unavailable, degrade-safe).
    */
   ensureBooted?(): Promise<void>;
+  /**
+   * OPTIONAL feedback seam (the embedded gateway's `POST /feedback`
+   * equivalent). Resolves `null` to DECLINE (not bound / native call failed);
+   * a tier without the seam simply omits the method.
+   */
+  feedback?(req: FeedbackRequest): Promise<FeedbackResult | null>;
 }
 
 export interface TensorzeroTransportDeps {
@@ -183,6 +191,29 @@ export class TensorzeroTransportAdapter implements InferenceGatewayPort {
       model,
       embeddings: null,
       reason: result.reason ?? 'no embedding tier available',
+    };
+  }
+
+  async feedback(req: FeedbackRequest): Promise<FeedbackResult> {
+    // Only the napi embedded gateway carries a feedback seam (the loopback
+    // `LlmGatewayPort` skin has no feedback surface) — no ladder to descend.
+    if (this.napi?.available() && this.napi.feedback) {
+      try {
+        const result = await this.napi.feedback(req);
+        if (result?.routed) return result;
+      } catch (err) {
+        this.log.debug(
+          { err: message(err), inferenceId: req.inferenceId, metricName: req.metricName },
+          'napi feedback threw — degrading to truthful not-routed',
+        );
+      }
+    }
+    return {
+      routed: false,
+      tier: 'none',
+      inferenceId: req.inferenceId,
+      metricName: req.metricName,
+      reason: 'no feedback-capable tier available (napi embedded gateway unbound; loopback has no feedback seam)',
     };
   }
 
