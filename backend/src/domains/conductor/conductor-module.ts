@@ -31,7 +31,7 @@ import type { ComponentHealth } from '../../shared/health-types.js';
 import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { Principal } from '../identity/types.js';
 import { sliceConductorConfig, type ConductorConfig } from './config.js';
-import type { GateVerdict, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView } from './ports/index.js';
+import type { GateVerdict, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView, SteerTransportPort } from './ports/index.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type { WorkspaceRepositoryPort } from './ports/workspace-repository.port.js';
@@ -51,6 +51,7 @@ import {
 import { createCompletionHookSink } from './adapters/completion-hook.adapter.js';
 import { toLoggerPort } from './adapters/logger.adapter.js';
 import { createConductorRegistry, type ConductorRegistry } from './adapters/substrate-registry.adapter.js';
+import { listConductorRuntimes, type ConductorRuntimeView } from './adapters/runtime-listing.adapter.js';
 import { createWorkspaceRepository } from './adapters/workspace-repository.adapter.js';
 import { createRunEventSink } from './adapters/run-event-sink.adapter.js';
 import { createRunTailer, type ConductorRunTailer } from './adapters/run-tailer.adapter.js';
@@ -124,6 +125,8 @@ export class ConductorComposer implements ConductorModule {
   private readonly codeIntel?: CodeIntelPort;
   /** OPTIONAL GitHub identity seam (`GET /github/status`); absent ⇒ truthful not-connected. */
   private readonly github?: GithubStatusPort;
+  /** OPTIONAL live send-keys transport; absent ⇒ steering refuses truthfully. */
+  private readonly steerTransport?: SteerTransportPort;
   /** OPTIONAL pre-dispatch quota gate (set by bootstrap; absent ⇒ degrade OPEN). */
   private entitlementGate?: EntitlementGate;
   private started = false;
@@ -136,6 +139,7 @@ export class ConductorComposer implements ConductorModule {
     this.brain = deps.brain;
     this.codeIntel = deps.codeIntel;
     this.github = deps.githubStatus;
+    this.steerTransport = deps.steerTransport;
 
     const loggerPort = toLoggerPort(this.log);
 
@@ -365,17 +369,46 @@ export class ConductorComposer implements ConductorModule {
     if (workspace.state !== 'running') {
       return { ok: false, verdict, reason: `workspace is ${workspace.state}, not running` };
     }
-    // The live send-keys transport is provided by the interactive substrate wired
-    // at the composition root; absent it, steering is refused truthfully (never faked).
-    await recordConductorAudit(
-      this.gate,
-      conductorAuditEntry(action, principal, verdict, { workspaceId: input.workspaceId }),
-    );
-    return {
-      ok: false,
-      verdict,
-      reason: 'steering requires a live interactive substrate (none wired in this composition)',
-    };
+    // The live send-keys transport is wired at the composition root (tmux-backed);
+    // absent it, steering is refused truthfully (never faked).
+    if (!this.steerTransport) {
+      return {
+        ok: false,
+        verdict,
+        reason: 'steering requires a live send-keys transport (none wired in this composition)',
+      };
+    }
+    // No live session address ⇒ nothing to steer into (never launched / torn down).
+    if (!workspace.sessionName) {
+      return {
+        ok: false,
+        verdict,
+        reason: 'workspace has no live session handle (nothing to steer)',
+      };
+    }
+    const keys = input.keys;
+    if (!keys.trim()) {
+      return { ok: false, verdict, reason: 'steer keys must be non-empty' };
+    }
+    try {
+      await this.steerTransport.sendKeys({
+        sessionName: workspace.sessionName,
+        keys,
+        submit: input.submit ?? true,
+      });
+      await recordConductorAudit(
+        this.gate,
+        conductorAuditEntry(action, principal, verdict, {
+          workspaceId: input.workspaceId,
+          bytes: keys.length,
+        }),
+      );
+      return { ok: true, verdict };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'steer delivery failed';
+      this.log.warn({ err, workspaceId: input.workspaceId }, 'conductor steerWorkspace delivery failed');
+      return { ok: false, verdict, reason };
+    }
   }
 
   async reconcile(principal: Principal): Promise<ConductorWriteResult<ReconcileReport>> {
@@ -398,6 +431,15 @@ export class ConductorComposer implements ConductorModule {
 
   substrates(): readonly SubstrateAvailabilityView[] {
     return this.registry.availability();
+  }
+
+  /**
+   * Every selectable runtime with truthful availability: PATH-probed CLIs plus
+   * the native in-process openfang runtime (live engine probe via its
+   * registered substrate — unwired/engine-absent ⇒ `available:false` + reason).
+   */
+  async runtimes(): Promise<readonly ConductorRuntimeView[]> {
+    return listConductorRuntimes({ registry: this.registry });
   }
 
   async githubStatus(): Promise<GithubStatusView> {

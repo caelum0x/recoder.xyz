@@ -31,10 +31,11 @@ export interface InferenceGatewayPort {
   complete(req: InferenceRequest): Promise<InferenceResult>;
 
   /**
-   * Route one STREAMED completion. When the loopback tier is active this emits
-   * REAL per-token SSE deltas through `onDelta` (`tokenGranular:true`). When the
-   * ladder degrades to the napi embedded gateway (no stream seam) it emits the
-   * full content as one delta (`tokenGranular:false`) — truthful either way.
+   * Route one STREAMED completion. The napi embedded gateway (when built with
+   * the `inferenceStream` binding) and the loopback SSE tier both emit REAL
+   * per-chunk deltas through `onDelta` (`tokenGranular:true`). When the ladder
+   * degrades to a buffered completion it emits the full content as one delta
+   * (`tokenGranular:false`) — truthful either way.
    */
   completeStream(req: InferenceRequest, onDelta: StreamSink): Promise<InferenceStreamResult>;
 

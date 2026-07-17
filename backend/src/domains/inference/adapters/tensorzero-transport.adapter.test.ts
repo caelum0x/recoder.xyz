@@ -1,8 +1,9 @@
 /**
  * `TensorzeroTransportAdapter` — the delivery LADDER. Verifies: napi-first routing,
  * decline-and-fall-through to loopback, truthful `none` when no tier serves, REAL
- * token-granular streaming via the loopback SSE seam vs. the buffered single-delta
- * degrade, embeddings via loopback, and truthful tiered health.
+ * token-granular streaming via the napi in-process stream seam and the loopback
+ * SSE seam vs. the buffered single-delta degrade, embeddings via loopback, and
+ * truthful tiered health.
  */
 import { describe, it, expect } from 'vitest';
 import type { Logger } from '../../../shared/logger.js';
@@ -15,7 +16,15 @@ import type {
 import { TensorzeroTransportAdapter, type NapiTierPort } from './tensorzero-transport.adapter.js';
 import { inferenceConfigSchema, type InferenceConfig } from '../config.js';
 import type { StreamFetchLike, StreamResponse } from './gateway-stream.js';
-import type { FeedbackRequest, FeedbackResult, InferenceRequest, InferenceResult, StreamDelta } from '../types.js';
+import type {
+  FeedbackRequest,
+  FeedbackResult,
+  InferenceRequest,
+  InferenceResult,
+  InferenceStreamResult,
+  StreamDelta,
+} from '../types.js';
+import type { StreamSink } from '../ports/inference-gateway.port.js';
 
 const log = { info() {}, warn() {}, error() {}, debug() {} } as unknown as Logger;
 
@@ -69,6 +78,28 @@ function fakeNapi(
     available: () => available,
     complete: async () => result,
     ...(feedback ? { feedback } : {}),
+  };
+}
+
+/** A napi tier WITH the in-process stream seam: emits `tokens` as real deltas. */
+function fakeNapiStream(tokens: string[] | null, over: Partial<NapiTierPort> = {}): NapiTierPort {
+  return {
+    available: () => true,
+    complete: async () => null,
+    async completeStream(req: InferenceRequest, onDelta: StreamSink): Promise<InferenceStreamResult | null> {
+      if (!tokens) return null; // decline (addon lacks the binding / native failure)
+      onDelta({ role: 'assistant' });
+      for (const t of tokens) onDelta({ content: t });
+      return {
+        routed: true,
+        tier: 'napi',
+        model: req.model,
+        content: tokens.join(''),
+        streamed: true,
+        tokenGranular: true,
+      };
+    },
+    ...over,
   };
 }
 
@@ -144,6 +175,74 @@ describe('TensorzeroTransportAdapter.completeStream', () => {
     // role delta first, then one content delta per token.
     expect(deltas[0]).toEqual({ role: 'assistant' });
     expect(deltas.filter((d) => d.content).map((d) => d.content)).toEqual(['Hel', 'lo']);
+  });
+
+  it('streams REAL in-process deltas via the napi tier first when preferred + bound', async () => {
+    const adapter = new TensorzeroTransportAdapter({
+      logger: log,
+      config: config(),
+      loopback: fakeLoopback({ configured: true }),
+      streamFetch: sseFetch(['never-used']),
+      napi: fakeNapiStream(['Hel', 'lo']),
+    });
+    const deltas: StreamDelta[] = [];
+    const result = await adapter.completeStream(REQ, (d) => deltas.push(d));
+    expect(result.routed).toBe(true);
+    expect(result.tier).toBe('napi');
+    expect(result.streamed).toBe(true);
+    expect(result.tokenGranular).toBe(true);
+    expect(result.content).toBe('Hello');
+    expect(deltas[0]).toEqual({ role: 'assistant' });
+    expect(deltas.filter((d) => d.content).map((d) => d.content)).toEqual(['Hel', 'lo']);
+  });
+
+  it('falls through to loopback SSE when the napi stream tier declines', async () => {
+    const adapter = new TensorzeroTransportAdapter({
+      logger: log,
+      config: config(),
+      loopback: fakeLoopback({ configured: true }),
+      streamFetch: sseFetch(['from-', 'loopback']),
+      napi: fakeNapiStream(null), // decline → ladder continues
+    });
+    const deltas: StreamDelta[] = [];
+    const result = await adapter.completeStream(REQ, (d) => deltas.push(d));
+    expect(result.tier).toBe('loopback');
+    expect(result.tokenGranular).toBe(true);
+    expect(result.content).toBe('from-loopback');
+    expect(deltas.filter((d) => d.content).map((d) => d.content)).toEqual(['from-', 'loopback']);
+  });
+
+  it('tries the napi stream tier as the fallback rung when napi is not preferred', async () => {
+    const adapter = new TensorzeroTransportAdapter({
+      logger: log,
+      config: config({ napiFirst: false }),
+      loopback: fakeLoopback({ configured: false }), // loopback SSE unavailable
+      napi: fakeNapiStream(['in-', 'proc']),
+    });
+    const deltas: StreamDelta[] = [];
+    const result = await adapter.completeStream(REQ, (d) => deltas.push(d));
+    expect(result.tier).toBe('napi');
+    expect(result.tokenGranular).toBe(true);
+    expect(result.content).toBe('in-proc');
+  });
+
+  it('a throwing napi stream tier degrades safely to loopback SSE (never across the seam)', async () => {
+    const adapter = new TensorzeroTransportAdapter({
+      logger: log,
+      config: config(),
+      loopback: fakeLoopback({ configured: true }),
+      streamFetch: sseFetch(['ok']),
+      napi: fakeNapiStream(null, {
+        completeStream: async () => {
+          throw new Error('native boom');
+        },
+      }),
+    });
+    const deltas: StreamDelta[] = [];
+    const result = await adapter.completeStream(REQ, (d) => deltas.push(d));
+    expect(result.routed).toBe(true);
+    expect(result.tier).toBe('loopback');
+    expect(result.content).toBe('ok');
   });
 
   it('degrades to a buffered single-delta emit when streaming is disabled', async () => {

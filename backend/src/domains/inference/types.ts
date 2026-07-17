@@ -113,9 +113,9 @@ export interface StreamDelta {
 
 /**
  * The result of a streamed completion. `tokenGranular` is TRUE only when the
- * active tier emitted real per-token SSE (the loopback gateway); it is FALSE
- * when the ladder degraded to a buffered single-chunk emit (the napi embedded
- * gateway has no stream seam) — truthful either way.
+ * active tier emitted real per-chunk deltas (the napi embedded gateway's
+ * `inferenceStream` binding, or the loopback SSE gateway); it is FALSE when
+ * the ladder degraded to a buffered single-chunk emit — truthful either way.
  */
 export interface InferenceStreamResult extends InferenceResult {
   readonly streamed: boolean;

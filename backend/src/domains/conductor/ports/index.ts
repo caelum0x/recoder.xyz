@@ -58,6 +58,12 @@ export type {
   BrainProvenanceRef,
 } from './brain.port.js';
 
+// --- Live steering (send-keys transport into the interactive session) ---
+export type {
+  SteerTransportPort,
+  SteerKeysInput,
+} from './steer-transport.port.js';
+
 // --- Exposed surface: terminal WS + the governance write seam ---
 export type {
   TerminalStreamPort,

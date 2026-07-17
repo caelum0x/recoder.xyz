@@ -31,6 +31,14 @@ import * as nodeCrypto from "node:crypto";
 import * as nodeFs from "node:fs";
 import * as net from "node:net";
 import * as nodePath from "node:path";
+import {
+    OPENFANG_ADDON_ENV,
+    OPENFANG_CONFIG_ENV,
+    OPENFANG_HOME_ENV,
+    OpenfangRuntimeEnv,
+    resolveOpenfangRuntimeEnv,
+    TENSORZERO_ADDON_ENV,
+} from "./emain-backend-runtime-env";
 
 export type SupervisorPhase = "idle" | "starting" | "ready" | "crashed" | "failed" | "stopped";
 
@@ -320,6 +328,10 @@ export function assembleBackendEnv(opts: {
     internalServiceKey: string;
     electronRunAsNode?: boolean;
     loginShellPath?: string;
+    /** Resolved native openfang/tensorzero env (fill-only; see emain-backend-runtime-env.ts). */
+    openfang?: OpenfangRuntimeEnv;
+    /** BYOK provider keys from the desktop secret store (fill-only; base env wins). */
+    byokSecrets?: Record<string, string>;
 }): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = {
         ...opts.baseEnv,
@@ -345,6 +357,30 @@ export function assembleBackendEnv(opts: {
         RECODER_TMUX_BUILD_PATH: opts.tmuxBin,
         TMUX_BIN: opts.tmuxBin,
     };
+    // BYOK provider keys from the desktop secret store, fill-only: an explicit
+    // env var (operator/dev-shell override) always wins over the stored key.
+    // Values never appear in logs — only names are ever logged by callers.
+    for (const [name, value] of Object.entries(opts.byokSecrets ?? {})) {
+        if (!env[name] && typeof value === "string" && value.trim()) {
+            env[name] = value;
+        }
+    }
+    // Native openfang/tensorzero runtime env, fill-only for the same reason.
+    // The resolver already returns null for pieces the operator set explicitly
+    // or that are absent on disk (truthful degrade — never a dead path).
+    if (opts.openfang) {
+        const fills: Array<[string, string | null]> = [
+            [OPENFANG_ADDON_ENV, opts.openfang.addonPath],
+            [OPENFANG_HOME_ENV, opts.openfang.homeDir],
+            [OPENFANG_CONFIG_ENV, opts.openfang.configPath],
+            [TENSORZERO_ADDON_ENV, opts.openfang.tensorzeroAddonPath],
+        ];
+        for (const [name, value] of fills) {
+            if (value && !env[name]) {
+                env[name] = value;
+            }
+        }
+    }
     // Packaged: the backend + mint scripts are spawned with process.execPath,
     // which is the Electron app binary — not plain node. ELECTRON_RUN_AS_NODE=1
     // makes it behave as a bare Node runtime so `node dist/server.js` works.
@@ -582,11 +618,9 @@ export const CockpitWidgetKey = "defwidget@recoder-cockpit";
  * object is written (not just the url). Rewritten on every onReady, it is
  * self-healing across port changes; other user-defined widgets are preserved.
  */
-export function writeCockpitWidgetConfig(opts: {
-    configDir: string;
-    port: number;
-    fs?: FsLike;
-}): { widgetsPath: string } {
+export function writeCockpitWidgetConfig(opts: { configDir: string; port: number; fs?: FsLike }): {
+    widgetsPath: string;
+} {
     const fs: FsLike = opts.fs || (nodeFs as unknown as FsLike);
     const widgetsPath = nodePath.join(opts.configDir, "widgets.json");
     let widgets: Record<string, any> = {};
@@ -651,6 +685,13 @@ export interface BackendSupervisorOptions {
     portIsFree?: (port: number) => Promise<boolean>;
     mintKey?: (env: NodeJS.ProcessEnv) => Promise<string>;
     resolveLoginShellPath?: () => string;
+    /**
+     * BYOK provider keys for the native openfang/tensorzero runtimes. The glue
+     * passes a reader over the terminal's encrypted secret store (safeStorage);
+     * absent ⇒ no keys are injected (dev shells still flow through baseEnv).
+     * A throwing reader degrades truthfully to a keyless spawn (logged).
+     */
+    readByokSecrets?: () => Record<string, string>;
     log?: (level: string, message: string, extra?: object) => void;
     onReady?: (auth: { port: number; backendUrl: string; apiKey: string | null }) => void;
     healthTimeoutMs?: number;
@@ -695,6 +736,7 @@ export class BackendSupervisor {
     _pickFreePort: () => Promise<number>;
     _portIsFree: (port: number) => Promise<boolean>;
     _mintKey: (env: NodeJS.ProcessEnv) => Promise<string>;
+    _readByokSecrets: () => Record<string, string>;
     _resolveLoginShellPath: () => string;
     _log: (level: string, message: string, extra?: object) => void;
     _onReady?: (auth: { port: number; backendUrl: string; apiKey: string | null }) => void;
@@ -726,6 +768,7 @@ export class BackendSupervisor {
         // :3100 must not change test outcomes).
         this._portIsFree = options.portIsFree || portIsFree;
         this._mintKey = options.mintKey || ((env) => this._mintKeyViaScript(env));
+        this._readByokSecrets = options.readByokSecrets || (() => ({}));
         this._resolveLoginShellPath = options.resolveLoginShellPath || resolveLoginShellPathCached;
         this._log = options.log || (() => {});
         this._onReady = options.onReady;
@@ -835,6 +878,35 @@ export class BackendSupervisor {
 
             this._fs.mkdirSync(this.dataDir, { recursive: true });
 
+            // Native openfang/tensorzero runtime env + BYOK provider keys, so
+            // the backend's in-process runtime can be selected for REAL turns.
+            // Both are fill-only and truthful: absent pieces stay absent (the
+            // backend reports the runtime unavailable), a secret-store failure
+            // degrades to a keyless spawn — never a faked value.
+            const openfangEnv = resolveOpenfangRuntimeEnv({
+                isPackaged: this.isPackaged,
+                repoRoot: this.repoRoot,
+                resourcesPath: this.resourcesPath,
+                dataDir: this.dataDir,
+                baseEnv: process.env,
+                existsSync: this._fs.existsSync,
+            });
+            let byokSecrets: Record<string, string> = {};
+            try {
+                byokSecrets = this._readByokSecrets();
+            } catch (err) {
+                this._appendLog("warn", "BYOK secret read failed; native runtimes spawn keyless", {
+                    error: err instanceof Error ? err.message : String(err),
+                });
+            }
+            this._appendLog("info", "native runtime env resolved", {
+                openfangAddon: Boolean(openfangEnv.addonPath || process.env.OPENFANG_NATIVE_ADDON),
+                tensorzeroAddon: Boolean(openfangEnv.tensorzeroAddonPath || process.env.TENSORZERO_GATEWAY_NAPI_NODE),
+                openfangHome: openfangEnv.homeDir || process.env.OPENFANG_HOME || null,
+                // Names only — key VALUES must never reach the log.
+                byokKeys: Object.keys(byokSecrets),
+            });
+
             const env = assembleBackendEnv({
                 baseEnv: process.env,
                 port,
@@ -849,6 +921,8 @@ export class BackendSupervisor {
                 // detect the agent CLIs (claude/codex/…) a GUI launch would
                 // otherwise not see.
                 loginShellPath: this._resolveLoginShellPath(),
+                openfang: openfangEnv,
+                byokSecrets,
             });
 
             this.port = port;

@@ -32,7 +32,6 @@
  *  - Bodies validated fail-fast with the uniform `sendError` envelope.
  */
 import { Router } from 'express';
-import { runtimeAvailability } from '@recoder/substrate';
 import { ErrorCode, createError, sendError, sendSuccess, asyncHandler } from '../../../shared/errors.js';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { WorkspaceSubstrate } from '@recoder/agent-os';
@@ -230,13 +229,14 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     }),
   );
 
-  // Installed agent CLIs (claude/codex/…) — a fresh PATH probe per request so the
-  // cockpit's "N agents ready" is truthful, never a cached assumption.
+  // Selectable runtimes: installed agent CLIs (fresh PATH probe per request so
+  // the cockpit's "N agents ready" is truthful, never a cached assumption) PLUS
+  // the native in-process openfang runtime with its live engine availability.
   router.get(
     '/runtimes',
     middleware.authenticate,
     asyncHandler(async (_req, res) => {
-      sendSuccess(res, { runtimes: await runtimeAvailability() });
+      sendSuccess(res, { runtimes: await module.runtimes() });
     }),
   );
 

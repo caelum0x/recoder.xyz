@@ -15,6 +15,11 @@
 //! - `boot` — builds `ClientBuilderMode::EmbeddedGateway` (the same mode the
 //!   TensorZero Python client uses); no Axum HTTP server is started.
 //! - `inference` — one full inference (routing + variants + fallbacks), async.
+//! - `inferenceStream` — one STREAMED inference: every `InferenceResponseChunk`
+//!   is delivered through a `ThreadsafeFunction` callback as JSON (real
+//!   per-token deltas, in-process), followed by a `done` event on the SAME
+//!   callback (FIFO — the JS side can rely on all chunks having been delivered
+//!   once `done` arrives). The promise resolves with an aggregated summary.
 //! - `feedback` — record metric/comment feedback for a prior inference/episode.
 //!
 //! ## What is NOT exposed (and why, truthfully)
@@ -44,6 +49,8 @@
 
 use std::path::PathBuf;
 
+use futures::StreamExt;
+use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
 use tensorzero_core::client::{
     Client, ClientBuilder, ClientBuilderMode, ClientInferenceParams, FeedbackParams,
@@ -159,20 +166,7 @@ impl EmbeddedGateway {
     /// forced off — this binding returns the complete response as JSON.
     #[napi]
     pub async fn inference(&self, params_json: String) -> Result<String, napi::Error> {
-        let raw: serde_json::Value = serde_json::from_str(&params_json)
-            .map_err(|e| napi::Error::from_reason(format!("invalid inference params: {e}")))?;
-        // The HTTP wire format defaults most fields; the client struct does not.
-        // Merge the caller's JSON over a serialized `Default` so the JS surface
-        // matches `POST /inference` (callers only supply what they mean).
-        let mut merged = serde_json::to_value(ClientInferenceParams::default())
-            .map_err(|e| napi::Error::from_reason(format!("default params serialize: {e}")))?;
-        if let (Some(base), Some(user)) = (merged.as_object_mut(), raw.as_object()) {
-            for (key, value) in user {
-                base.insert(key.clone(), value.clone());
-            }
-        }
-        let mut params: ClientInferenceParams = serde_json::from_value(merged)
-            .map_err(|e| napi::Error::from_reason(format!("invalid inference params: {e}")))?;
+        let mut params = parse_inference_params(&params_json)?;
         params.stream = Some(false);
         let output = self
             .client
@@ -188,6 +182,78 @@ impl EmbeddedGateway {
             .map_err(|e| napi::Error::from_reason(format!("serialize response: {e}")))
     }
 
+    /// Run one STREAMED inference through the embedded gateway (real per-token
+    /// deltas, in-process — the napi equivalent of `POST /inference` with
+    /// `stream: true`).
+    ///
+    /// Each `InferenceResponseChunk` is serialized and delivered to `on_event`
+    /// as `{"chunk": <InferenceResponseChunk>}`. After the final chunk a
+    /// `{"done": <summary>}` event is delivered on the SAME callback — the
+    /// threadsafe-function queue is FIFO, so once JS observes `done` every
+    /// chunk has been delivered (the async promise resolution and the callback
+    /// queue have no cross-ordering guarantee; `done` is the truthful flush
+    /// barrier). The promise resolves with the same aggregated summary JSON:
+    /// `{"inference_id","episode_id","content","usage","chunks"}`.
+    ///
+    /// A mid-stream provider error rejects the promise (truthful failure —
+    /// never a silently truncated success).
+    #[napi]
+    pub async fn inference_stream(
+        &self,
+        params_json: String,
+        on_event: ThreadsafeFunction<String>,
+    ) -> Result<String, napi::Error> {
+        let mut params = parse_inference_params(&params_json)?;
+        params.stream = Some(true);
+        let output = self
+            .client
+            .inference(params)
+            .await
+            .map_err(|e| napi::Error::from_reason(format!("inference failed: {e}")))?;
+        let InferenceOutput::Streaming(mut stream) = output else {
+            return Err(napi::Error::from_reason(
+                "unexpected non-streaming response with `stream: true`",
+            ));
+        };
+
+        // Aggregate a truthful summary while forwarding every chunk.
+        let mut content = String::new();
+        let mut inference_id = serde_json::Value::Null;
+        let mut episode_id = serde_json::Value::Null;
+        let mut usage = serde_json::Value::Null;
+        let mut chunks: u32 = 0;
+        while let Some(item) = stream.next().await {
+            let chunk = item
+                .map_err(|e| napi::Error::from_reason(format!("inference stream failed: {e}")))?;
+            let value = serde_json::to_value(&chunk)
+                .map_err(|e| napi::Error::from_reason(format!("serialize chunk: {e}")))?;
+            aggregate_chunk(
+                &value,
+                &mut content,
+                &mut inference_id,
+                &mut episode_id,
+                &mut usage,
+            );
+            chunks += 1;
+            let event = serde_json::to_string(&serde_json::json!({ "chunk": value }))
+                .map_err(|e| napi::Error::from_reason(format!("serialize chunk event: {e}")))?;
+            on_event.call(Ok(event), ThreadsafeFunctionCallMode::NonBlocking);
+        }
+
+        let summary = serde_json::json!({
+            "inference_id": inference_id,
+            "episode_id": episode_id,
+            "content": content,
+            "usage": usage,
+            "chunks": chunks,
+        });
+        let done = serde_json::to_string(&serde_json::json!({ "done": summary }))
+            .map_err(|e| napi::Error::from_reason(format!("serialize done event: {e}")))?;
+        on_event.call(Ok(done), ThreadsafeFunctionCallMode::NonBlocking);
+        serde_json::to_string(&summary)
+            .map_err(|e| napi::Error::from_reason(format!("serialize summary: {e}")))
+    }
+
     /// Send feedback for a prior inference/episode. `params_json` matches the
     /// gateway's `POST /feedback` body (`FeedbackParams`).
     #[napi]
@@ -201,5 +267,66 @@ impl EmbeddedGateway {
             .map_err(|e| napi::Error::from_reason(format!("feedback failed: {e}")))?;
         serde_json::to_string(&response)
             .map_err(|e| napi::Error::from_reason(format!("serialize response: {e}")))
+    }
+}
+
+/// Parse a `POST /inference`-shaped JSON body into `ClientInferenceParams`.
+///
+/// The HTTP wire format defaults most fields; the client struct does not.
+/// Merge the caller's JSON over a serialized `Default` so the JS surface
+/// matches `POST /inference` (callers only supply what they mean).
+fn parse_inference_params(params_json: &str) -> Result<ClientInferenceParams, napi::Error> {
+    let raw: serde_json::Value = serde_json::from_str(params_json)
+        .map_err(|e| napi::Error::from_reason(format!("invalid inference params: {e}")))?;
+    let mut merged = serde_json::to_value(ClientInferenceParams::default())
+        .map_err(|e| napi::Error::from_reason(format!("default params serialize: {e}")))?;
+    if let (Some(base), Some(user)) = (merged.as_object_mut(), raw.as_object()) {
+        for (key, value) in user {
+            base.insert(key.clone(), value.clone());
+        }
+    }
+    serde_json::from_value(merged)
+        .map_err(|e| napi::Error::from_reason(format!("invalid inference params: {e}")))
+}
+
+/// Fold one serialized `InferenceResponseChunk` into the streaming summary.
+///
+/// Works on the JSON wire shape (the untagged chat/json chunk union): chat
+/// chunks carry `content: [ContentBlockChunk]` (text blocks appended in order),
+/// json chunks carry `raw: String`. Ids come from the first chunk that has
+/// them; `usage` keeps the last non-null value (the gateway emits it on the
+/// final chunk).
+fn aggregate_chunk(
+    value: &serde_json::Value,
+    content: &mut String,
+    inference_id: &mut serde_json::Value,
+    episode_id: &mut serde_json::Value,
+    usage: &mut serde_json::Value,
+) {
+    if inference_id.is_null()
+        && let Some(id) = value.get("inference_id").filter(|v| !v.is_null())
+    {
+        *inference_id = id.clone();
+    }
+    if episode_id.is_null()
+        && let Some(id) = value.get("episode_id").filter(|v| !v.is_null())
+    {
+        *episode_id = id.clone();
+    }
+    if let Some(next_usage) = value.get("usage").filter(|v| !v.is_null()) {
+        *usage = next_usage.clone();
+    }
+    if let Some(blocks) = value.get("content").and_then(serde_json::Value::as_array) {
+        for block in blocks {
+            let is_text = block.get("type").and_then(serde_json::Value::as_str) == Some("text");
+            if !is_text {
+                continue;
+            }
+            if let Some(text) = block.get("text").and_then(serde_json::Value::as_str) {
+                content.push_str(text);
+            }
+        }
+    } else if let Some(raw) = value.get("raw").and_then(serde_json::Value::as_str) {
+        content.push_str(raw);
     }
 }

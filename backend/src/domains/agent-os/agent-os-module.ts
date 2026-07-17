@@ -35,6 +35,7 @@ import { RunEventIngestService } from './services/run-event-ingest.service.js';
 import { OutboxDrainService } from './services/outbox-drain.service.js';
 import { SquadService, InMemorySquadStore } from './services/squad.service.js';
 import { buildAgentOsRouter } from './routes/agent-os.routes.js';
+import { buildInternalAgentOsRouter } from './routes/internal-agent-os.routes.js';
 import { buildAgentOsMcpTools } from './mcp/agent-os-engine.js';
 import { buildAgentOsHealth } from './health.js';
 
@@ -52,6 +53,7 @@ export class AgentOsComposer implements AgentOsModule {
   private readonly drain: OutboxDrainService;
   private readonly squads: SquadService | null;
   private readonly router: Router;
+  private readonly internalRouter: Router;
   private started = false;
 
   private constructor(
@@ -99,11 +101,21 @@ export class AgentOsComposer implements AgentOsModule {
 
     const inner = buildAgentOsRouter({
       repository: this.repo,
+      middleware: deps.middleware,
+    });
+    // The INTERNAL_SERVICE_KEY-gated ingest edges (events / steps / runtime-
+    // evidence / outbox drain). Exposed via `internalRoutes()` for the canonical
+    // `/internal/agent-os` mount AND kept reachable under the module's own
+    // `<mountBase>/internal/*` (back-compat with the existing `/internal/events`).
+    this.internalRouter = buildInternalAgentOsRouter({
+      repository: this.repo,
       runEventBus: this.ingest,
+      drain: this.drain,
       middleware: deps.middleware,
     });
     this.router = Router();
     this.router.use(inner);
+    this.router.use('/internal', this.internalRouter);
   }
 
   /** Async factory — connects the outbox transport before constructing. */
@@ -130,6 +142,11 @@ export class AgentOsComposer implements AgentOsModule {
 
   routes(): Router {
     return this.router;
+  }
+
+  /** The `/internal/agent-os/*` router (INTERNAL_SERVICE_KEY-gated ingest edges). */
+  internalRoutes(): Router {
+    return this.internalRouter;
   }
 
   mcp(): readonly McpToolRegistration[] {

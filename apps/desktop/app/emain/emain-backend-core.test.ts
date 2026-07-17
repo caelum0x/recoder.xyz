@@ -13,7 +13,7 @@
 
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
     assembleBackendEnv,
     BackendSupervisor,
@@ -268,6 +268,66 @@ describe("assembleBackendEnv", () => {
             loginShellPath: "/opt/homebrew/bin:/usr/bin:/Users/me/.local/bin",
         });
         expect(env.PATH).toBe("/usr/bin:/bin:/opt/homebrew/bin:/Users/me/.local/bin");
+    });
+});
+
+describe("assembleBackendEnv native runtime injection", () => {
+    const base = {
+        port: 1,
+        dataDir: "/d",
+        tmuxBin: "/t",
+        apiKeyHashSalt: "s",
+        internalServiceKey: "i",
+    };
+
+    it("injects BYOK secrets fill-only (an explicit base env var wins)", () => {
+        const env = assembleBackendEnv({
+            ...base,
+            baseEnv: { SAMBANOVA_API_KEY: "from-shell" },
+            byokSecrets: { SAMBANOVA_API_KEY: "from-store", CEREBRAS_API_KEY: "cb-store" },
+        });
+        expect(env.SAMBANOVA_API_KEY).toBe("from-shell");
+        expect(env.CEREBRAS_API_KEY).toBe("cb-store");
+    });
+
+    it("skips empty BYOK values (never injects a blank key)", () => {
+        const env = assembleBackendEnv({
+            ...base,
+            baseEnv: {},
+            byokSecrets: { CEREBRAS_API_KEY: "   " },
+        });
+        expect(env.CEREBRAS_API_KEY).toBeUndefined();
+    });
+
+    it("injects the resolved openfang/tensorzero env and omits null pieces", () => {
+        const env = assembleBackendEnv({
+            ...base,
+            baseEnv: {},
+            openfang: {
+                addonPath: "/Resources/native/openfang_napi.node",
+                homeDir: "/ud/backend-data/openfang",
+                configPath: null,
+                tensorzeroAddonPath: "/Resources/native/tensorzero_gateway_napi.node",
+            },
+        });
+        expect(env.OPENFANG_NATIVE_ADDON).toBe("/Resources/native/openfang_napi.node");
+        expect(env.OPENFANG_HOME).toBe("/ud/backend-data/openfang");
+        expect(env.OPENFANG_CONFIG).toBeUndefined();
+        expect(env.TENSORZERO_GATEWAY_NAPI_NODE).toBe("/Resources/native/tensorzero_gateway_napi.node");
+    });
+
+    it("never overrides an explicit openfang env var from the base env", () => {
+        const env = assembleBackendEnv({
+            ...base,
+            baseEnv: { OPENFANG_NATIVE_ADDON: "/custom.node" },
+            openfang: {
+                addonPath: "/resolved.node",
+                homeDir: null,
+                configPath: null,
+                tensorzeroAddonPath: null,
+            },
+        });
+        expect(env.OPENFANG_NATIVE_ADDON).toBe("/custom.node");
     });
 });
 
@@ -625,6 +685,67 @@ describe("BackendSupervisor.start", () => {
         expect(result.ok).toBe(true);
         expect(sup.port).toBe(3123);
         expect(opts.pickFreePort).not.toHaveBeenCalled();
+    });
+});
+
+describe("BackendSupervisor BYOK + openfang env injection", () => {
+    // The supervisor assembles over the REAL process.env; blank out the probe
+    // key so a dev shell that happens to export it cannot flip the outcome.
+    beforeEach(() => vi.stubEnv("SAMBANOVA_API_KEY", ""));
+    afterEach(() => vi.unstubAllEnvs());
+
+    it("spawns the backend with the BYOK keys the injected reader returns", async () => {
+        const child = makeFakeChild();
+        const spawn = vi.fn(() => child);
+        const fetchImpl = vi.fn(async () => ({ status: 200, json: async () => ({ success: true }) }));
+        const readByokSecrets = vi.fn(() => ({ SAMBANOVA_API_KEY: "sk-store-test" }));
+        const sup = new BackendSupervisor(baseOptions({ spawn, fetchImpl, readByokSecrets }) as any);
+
+        const result = await sup.start();
+
+        expect(result.ok).toBe(true);
+        expect(readByokSecrets).toHaveBeenCalled();
+        // The BACKEND child spawn (not the mint helper) carries the key.
+        const backendSpawn = spawn.mock.calls.find(([, args]: any) => String(args[0]).includes("server.ts")) as any;
+        expect(backendSpawn[2].env.SAMBANOVA_API_KEY).toBe("sk-store-test");
+    });
+
+    it("degrades to a keyless spawn (still READY) when the secret reader throws", async () => {
+        const child = makeFakeChild();
+        const spawn = vi.fn(() => child);
+        const fetchImpl = vi.fn(async () => ({ status: 200, json: async () => ({ success: true }) }));
+        const readByokSecrets = vi.fn(() => {
+            throw new Error("keychain locked");
+        });
+        const sup = new BackendSupervisor(baseOptions({ spawn, fetchImpl, readByokSecrets }) as any);
+
+        const result = await sup.start();
+
+        expect(result.ok).toBe(true);
+        expect(sup.phase).toBe(PHASE.READY);
+        const backendSpawn = spawn.mock.calls.find(([, args]: any) => String(args[0]).includes("server.ts")) as any;
+        // The stubbed-blank probe key stays blank — no store value leaked in.
+        expect(backendSpawn[2].env.SAMBANOVA_API_KEY || "").toBe("");
+    });
+
+    it("pins a hermetic OPENFANG_HOME under the supervisor DATA_DIR in the spawn env", async () => {
+        const child = makeFakeChild();
+        const spawn = vi.fn(() => child);
+        const fetchImpl = vi.fn(async () => ({ status: 200, json: async () => ({ success: true }) }));
+        const opts = baseOptions({ spawn, fetchImpl });
+        const sup = new BackendSupervisor(opts as any);
+
+        const result = await sup.start();
+
+        expect(result.ok).toBe(true);
+        const backendSpawn = spawn.mock.calls.find(([, args]: any) => String(args[0]).includes("server.ts")) as any;
+        const env = backendSpawn[2].env;
+        if (process.env.OPENFANG_HOME) {
+            // A dev shell's explicit OPENFANG_HOME always wins (fill-only).
+            expect(env.OPENFANG_HOME).toBe(process.env.OPENFANG_HOME);
+        } else {
+            expect(env.OPENFANG_HOME).toBe(path.join(opts.userDataDir, "backend-data", "openfang"));
+        }
     });
 });
 
