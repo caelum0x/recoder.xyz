@@ -59,6 +59,11 @@ import {
   createPlanCatalog as createDistributionPlanCatalog,
 } from '@recoder/distribution';
 import { createByokResolver, polarCatalogEntries } from './billing-seams.js';
+import {
+  createLocalRunDispatch,
+  createRemoteEnvelopeSender,
+  type EnvelopeFetch,
+} from './interop-wire-seams.js';
 import { createMemoryModule } from '../domains/memory/index.js';
 import { createCloudModule } from '../domains/cloud/index.js';
 import {
@@ -642,17 +647,32 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   //     those over the frozen core and exposes `routes()` (`/api/interop`),
   //     `wireRoutes()` (`/api/a2a`), `mcp()`, and `start()/stop()`, so it is now
   //     mounted + registered + lifecycled (no longer accessor-only). Middleware is the
-  //     composed identity auth; the OPTIONAL conductor `localRun` + remote-peer
-  //     `remoteSender` seams are left unwired (no clean adapter available on this box),
-  //     so runtime + remote dispatch legs fail truthfully rather than fabricate a run.
+  //     composed identity auth. The OPTIONAL conductor `localRun` (Phase-5b
+  //     `createWorkspace`) + remote-peer `remoteSender` (outbound A2A over the peer's
+  //     advertised `card.url`) seams are NOW wired here from the composition-root
+  //     seams (`interop-wire-seams.ts`): an admitted `message/send` to a `runtime`
+  //     target launches a real governed run, and a `remote_a2a`/connector target
+  //     delivers the sealed envelope to its peer. Both degrade TRUTHFULLY — a refused
+  //     launch / a peer with no url / a non-2xx or network fault surfaces as `ok:false`
+  //     with the real reason, never a fabricated run or faked send. Conductor is built
+  //     above (Phase-5b), so both seams are available at this point.
   //     Config folded from the `interopWire` override slice. Degrade-safe: no HMAC
   //     secret in prod ⇒ unsigned ingress rejected; no executor path ⇒ in-memory. ---
+  const interopLocalRun = createLocalRunDispatch({
+    conductor,
+    repoRoot: bootEnv.CONDUCTOR_REPO_ROOT ?? process.cwd(),
+  });
+  const interopRemoteSender = createRemoteEnvelopeSender({
+    fetch: globalThis.fetch as unknown as EnvelopeFetch,
+  });
   const interopWire = createInteropWireComposer({
     config,
     logger: childLogger('interop-wire'),
     executor: persistence.executor(),
     overrides: config.interopWire,
     middleware: identity.middleware(),
+    localRun: interopLocalRun,
+    remoteSender: interopRemoteSender,
   });
   // interop-wire is a SUB-SLICE of the interop domain (no distinct DomainKey), so it
   // registers under its own bootstrap token — NEVER `DOMAIN_TOKENS.interop` (that
