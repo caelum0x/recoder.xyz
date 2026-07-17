@@ -33,6 +33,8 @@
  *   GET  /api/agent-os/memory/lifecycle/candidates    reviewed memory candidates
  *   POST /api/agent-os/memory/lifecycle/candidates             propose a candidate (with evidence)
  *   POST /api/agent-os/memory/lifecycle/candidates/:id/review  accept/reject a candidate
+ *   GET  /api/agent-os/approvals                      list approvals (filterable by task/status)
+ *   POST /api/agent-os/approvals/:id/decide           approve / deny a pending approval
  */
 import { ConductorClient } from '@recoder/conductor-ui';
 import type {
@@ -41,6 +43,9 @@ import type {
 } from '@recoder/conductor-ui';
 import type {
   ApiEnvelope,
+  ApprovalDecision,
+  ApprovalRecord,
+  ApprovalStatus,
   BrainStats,
   ConductorHealth,
   ConductorSession,
@@ -456,6 +461,36 @@ export const api = {
       `/memory/lifecycle/candidates/${encodeURIComponent(candidateId)}/review`,
       body,
     ),
+
+  /**
+   * List governance approvals (GET /api/agent-os/approvals), optionally
+   * filtered by the task and/or status. The board's awaiting_approval card
+   * uses `{ taskId, status: 'pending' }` to find what is actually blocking a
+   * workspace — the payload is keyed (`{ approvals: [...] }`).
+   */
+  listApprovals: (filters?: { taskId?: string; status?: ApprovalStatus }) => {
+    const params = new URLSearchParams();
+    if (filters?.taskId) params.set('taskId', filters.taskId);
+    if (filters?.status) params.set('status', filters.status);
+    const qs = params.toString();
+    return agentOsRequest<unknown>('GET', `/approvals${qs ? `?${qs}` : ''}`).then((d) =>
+      pickList<ApprovalRecord>(d, 'approvals'),
+    );
+  },
+
+  /**
+   * Decide a pending approval (POST /api/agent-os/approvals/:id/decide).
+   * The decider identity is the authenticated principal server-side — never
+   * sent from here. Approving does NOT advance the workspace by itself: the
+   * gate clears when the blocked action is retried, so callers must keep that
+   * truthful in the UI.
+   */
+  decideApproval: (approvalId: string, body: { decision: ApprovalDecision; reason?: string }) =>
+    agentOsRequest<unknown>(
+      'POST',
+      `/approvals/${encodeURIComponent(approvalId)}/decide`,
+      body,
+    ).then((d) => pick<ApprovalRecord>(d, 'approval')),
 
   // --- MCP control plane (mounted at /api/mcp, NOT /api/conductor or /api/agent-os) ---
 

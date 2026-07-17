@@ -10,6 +10,12 @@ export type {
   ProviderKeyCache,
   ProviderKeyRepository,
 } from './provider-keys.port.js';
+export type {
+  ByokKeyResolver,
+  ByokSecretsPort,
+  ByokStoreResult,
+  InferenceKeyWriteGate,
+} from './byok-resolver.port.js';
 export type { ModelCatalogRepository, ModelCatalogUpsert } from './model-catalog.port.js';
 export type {
   UsageLedgerRepository,

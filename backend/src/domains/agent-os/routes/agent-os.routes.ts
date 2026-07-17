@@ -6,14 +6,15 @@
  * edges (events / steps / runtime-evidence / outbox drain) live in
  * `internal-agent-os.routes.ts`, mounted by the composer.
  *
- * Additional per-aggregate CRUD edges (tasks/runs/approvals/artifacts/…) land in
- * their own route files during integration; this file wires the load-bearing
- * summary surfaces the spine needs first.
+ * The per-aggregate CRUD edge table (spaces/agents/tasks/runs/approvals/
+ * artifacts/memory/instructions/policies/events) lives in
+ * `agent-os-crud.routes.ts` and is mounted here after the summary surfaces.
  */
 import { Router, type Request, type Response } from 'express';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { AgentOsRepositoryPort } from '../ports/agent-os-repository.port.js';
 import { sendSuccess, sendError, createError, ErrorCode } from '../../../shared/errors.js';
+import { buildAgentOsCrudRouter } from './agent-os-crud.routes.js';
 
 export interface AgentOsRoutesDeps {
   readonly repository: AgentOsRepositoryPort;
@@ -48,6 +49,9 @@ export function buildAgentOsRouter(deps: AgentOsRoutesDeps): Router {
       sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, message(error)));
     }
   });
+
+  // — Full per-aggregate CRUD edge table (self-gated per route) —
+  router.use(buildAgentOsCrudRouter({ repository, middleware }));
 
   return router;
 }

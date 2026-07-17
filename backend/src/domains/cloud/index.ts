@@ -60,6 +60,12 @@ export type {
   XdsCluster,
 } from './ports/mesh.port.js';
 export type {
+  CloudGovernanceGatePort,
+  GovernanceAction,
+  GateDecisionContext,
+  GateVerdict,
+} from './ports/governance-gate.port.js';
+export type {
   CloudRepositories,
   TenantRepository,
   SandboxRepository,
@@ -79,6 +85,9 @@ export type {
 
 // Persistence (concrete CloudRepositories over QueryExecutor).
 export { createCloudRepositories } from './repositories/cloud.repository.js';
+
+// Governance write seam (guard BEFORE a cloud mutation; seal the audit AFTER).
+export { guardCloudWrite, recordCloudAudit, type GuardedCloudWrite } from './services/cloud-write-gate.js';
 
 // Tenancy (the WORKING isolation + quota + placement gate).
 export {
@@ -155,6 +164,7 @@ import type { PreviewDeployService as PreviewDeployServiceType } from './service
 import type { FleetSupervisorService as FleetSupervisorServiceType } from './services/fleet-supervisor.service.js';
 import type { MeshDiagnosticsService as MeshDiagnosticsServiceType } from './services/mesh-diagnostics.service.js';
 import type { LocalContainerRuntime as LocalContainerRuntimeType } from './adapters/local-container.adapter.js';
+import type { CloudGovernanceGatePort as CloudGovernanceGatePortType } from './ports/governance-gate.port.js';
 
 /**
  * Dependencies injected by bootstrap (after persistence + identity + billing).
@@ -177,6 +187,13 @@ export interface CloudModuleDeps {
   readonly runEvents?: CloudRunEventSinkType;
   /** Self-host container runtime (docker/podman); absent ⇒ local provider `down`. */
   readonly localRuntime?: LocalContainerRuntimeType;
+  /**
+   * Phase-3 governance gate (`governance.gate()`, injected by bootstrap) guarding
+   * EVERY cloud write via `decide → audit` — the conductor/identity pattern.
+   * Absent ⇒ warn-logged auth-only writes (degrade-open until the serial wiring
+   * lands); PRESENT ⇒ policy is authoritative and an erroring gate fails CLOSED.
+   */
+  readonly governanceGate?: CloudGovernanceGatePortType;
 }
 
 /** The public surface every other domain + the edge consume. */

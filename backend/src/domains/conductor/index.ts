@@ -15,7 +15,7 @@
  * module refuses to construct (writes must be governed).
  */
 import type { Router } from 'express';
-import type { RunEvent, Workspace } from '@recoder/agent-os';
+import type { RunEvent, Workspace, WorkspaceState } from '@recoder/agent-os';
 import type { ReconcileReport } from '@recoder/substrate';
 import type { ConductorSubstrate, WorkLockPort, AdmissionPort } from '@recoder/substrate';
 import type { AppConfig } from '../../shared/app-config.js';
@@ -36,6 +36,7 @@ import type {
   ReconcileFindingView,
   SteerInput,
   SubstrateAvailabilityView,
+  WorkspaceView,
 } from './types.js';
 import type { CreateConductorWorkspaceInput, ConductorWriteResult } from './conductor-module.js';
 import type { WorkspaceDiffView, WorkspaceTreeView } from './review/workspace-review.ops.js';
@@ -126,6 +127,26 @@ export interface ConductorModule {
   ): Promise<ConductorWriteResult<Workspace>>;
   /** Steer a live agent (send-keys) — GATED (`workspace.steer`). */
   steerWorkspace(input: SteerInput, principal: Principal): Promise<ConductorWriteResult<void>>;
+  /**
+   * Gracefully STOP a running workspace — GATED (`workspace.stop`): substrate
+   * session kill (worktree preserved for review) + `cancelled` transition +
+   * audit. A kill fault refuses truthfully with the state UNCHANGED.
+   */
+  stopWorkspace(workspaceId: string, principal: Principal): Promise<ConductorWriteResult<Workspace>>;
+  /**
+   * ADVANCE the workspace one lifecycle step (review → merge flow) — GATED
+   * (`workspace.advance`). Pure transitions only; the agent-os state machine
+   * enforces from→to legality and delivery states keep their own edges.
+   */
+  advanceWorkspaceState(
+    workspaceId: string,
+    to: WorkspaceState,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<Workspace>>;
+  /** Attention-enriched read model of one workspace (truthful `'unknown'` on no signal). */
+  workspaceView(workspaceId: string): Promise<WorkspaceView | null>;
+  /** Attention-enriched views of every workspace (the cockpit list's badges). */
+  listWorkspaceViews(): Promise<WorkspaceView[]>;
   /** RunEvents for a workspace's run — the conversation + lifecycle log. */
   listWorkspaceEvents(workspaceId: string): Promise<RunEvent[]>;
   /** Captured pane text (the stream client's poll fallback). */

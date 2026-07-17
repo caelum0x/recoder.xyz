@@ -32,7 +32,13 @@ import type {
 } from './ports/index.js';
 import type { InferenceRoutingService } from './services/inference-routing.service.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
-import type { NapiTierPort } from './adapters/tensorzero-transport.adapter.js';
+import type {
+  ByokKeyResolver,
+  ByokSecretsPort,
+  InferenceKeyWriteGate,
+} from './ports/byok-resolver.port.js';
+import type { NapiTierPort, RouterTierPort } from './adapters/tensorzero-transport.adapter.js';
+import type { ProviderFetchLike } from './adapters/direct-provider.transport.js';
 import type { StreamFetchLike } from './adapters/gateway-stream.js';
 import type { GeneratedTzConfig } from './adapters/tz-config-generator.js';
 
@@ -65,6 +71,25 @@ export interface InferenceModuleDeps {
   readonly napiEngine?: EngineClientPort;
   /** Envelope-encryption vault for the BYOK key cache (default: unavailable). */
   readonly vault?: KeyVaultPort;
+
+  // --- Rung 3 (direct BYOK multi-provider router) + governed key writes ------
+  /**
+   * The governance secrets seam (`governance.secrets()`) — the durable
+   * envelope-encrypted store BYOK keys resolve from. Absent ⇒ BYOK resolution
+   * + key writes are truthfully disabled (rung 3 falls back to platform keys).
+   */
+  readonly secrets?: ByokSecretsPort;
+  /**
+   * The governance gate (`governance.gate()`) governing key writes. Absent ⇒
+   * `PUT /inference/keys/:provider` fails CLOSED until `setGovernanceGate`.
+   */
+  readonly gate?: InferenceKeyWriteGate;
+  /** Platform fallback API keys by provider id (bootstrap env fold; may be empty). */
+  readonly platformProviderKeys?: Readonly<Record<string, string>>;
+  /** Rung-3 transport override (tests). */
+  readonly router?: RouterTierPort;
+  /** Injectable buffered fetch for the rung-3 provider calls (default: global fetch). */
+  readonly providerFetch?: ProviderFetchLike;
 }
 
 /** The public surface bootstrap + other domains consume. */
@@ -82,6 +107,14 @@ export interface InferenceModule {
    * truthful non-routed result (BYOK subjects bypass token metering inside the gate).
    */
   setEntitlementGate(gate: EntitlementGate): void;
+  /**
+   * Inject the governance gate governing BYOK key writes (bootstrap:
+   * `inference.setGovernanceGate(governance.gate())`). Until wired, the
+   * key-write route fails CLOSED with a truthful 503.
+   */
+  setGovernanceGate(gate: InferenceKeyWriteGate): void;
+  /** The BYOK key resolver (delivery-path key resolution + governed store). */
+  byokResolver(): ByokKeyResolver;
   /** The routable model catalog. */
   catalog(): ModelCatalogRepository;
   /** The token/cost usage ledger. */

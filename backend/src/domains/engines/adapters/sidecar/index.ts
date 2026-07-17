@@ -9,5 +9,13 @@ export type { Mem0Op, Mem0AdapterDeps, Mem0ClientFns, Mem0Fetch } from './mem0.a
 export { BrowserUseAdapter, browserUseEngineBinder } from './browser-use.adapter.js';
 export type { BrowserUseOp, BrowserUseAdapterDeps } from './browser-use.adapter.js';
 
+export { browserSessionEngineBinder } from './browser-session.binder.js';
+export { executeBrowserVerification } from './browser-verification.executor.js';
+export type {
+  BrowserVerifyAssertion,
+  BrowserVerifyRequest,
+  BrowserVerificationRun,
+} from './browser-verification.executor.js';
+
 export { PalMcpAdapter, palPlanEngineBinder } from './pal-mcp.adapter.js';
 export type { PalMcpAdapterDeps, PalExternalCall } from './pal-mcp.adapter.js';

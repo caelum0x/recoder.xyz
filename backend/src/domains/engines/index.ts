@@ -33,6 +33,7 @@ import type { EngineRegistryPort, McpHostPort } from './ports/index.js';
 import type { ModuleToolsRegistration } from './mcp/host-registrar.js';
 import type { DomainToolsRegistration } from './adapters/domain-tools-bridge.adapter.js';
 import type { EngineId, EngineHealth } from './types.js';
+import type { GithubModule } from './github/index.js';
 
 /** Dependencies injected by bootstrap (after persistence + identity + governance). */
 export interface EnginesModuleDeps {
@@ -69,6 +70,11 @@ export interface EnginesModule {
    * tier binds over (CONFLICT #8-safe: shared `.node` load). Null if undeclared.
    */
   tensorzero(): EngineClientPort | null;
+  /**
+   * The unified GitHub module (docs/modules/github.md): gh CLI + recodergit
+   * facets behind ONE interface, and the single truthful `GithubHealth` source.
+   */
+  github(): GithubModule;
   /** The in-memory declared-engine catalog (capability discovery surface). */
   registry(): EngineRegistryPort;
   /** The interop-gated MCP host agent-os + conductor register their tools into. */
@@ -96,8 +102,19 @@ export interface EnginesModule {
   ): DomainToolsRegistration;
   /** Truthful live health for every declared engine. */
   listHealth(): Promise<readonly EngineHealth[]>;
-  /** The read-only `/engines` router (list + per-engine health). */
+  /**
+   * The `/api/mcp` domain router: the read-only `/engines` surface PLUS the
+   * governed MCP HTTP edge the agents' stdio bridge calls (`GET /servers`,
+   * `POST /tools/:server/:tool/call`, `POST /call`, `POST /engines/:id/restart`).
+   * Every tool call traverses interop's `authorize → risk → execute → audit`.
+   */
   routes(): Router;
+  /**
+   * The `INTERNAL_SERVICE_KEY`-gated worker surface bootstrap mounts at
+   * `/internal/engines` (→ `GET /internal/engines/health`: truthful per-engine
+   * health).
+   */
+  internalRoutes(): Router;
   /** The engines-domain MCP tools (`engine.list` / `engine.health` / `engine.restart`). */
   mcp(): readonly McpToolRegistration[];
   /** Truthful component health (per-engine breakdown). */
@@ -143,3 +160,7 @@ export type {
   DomainToolsSource,
   DomainToolsRegistration,
 } from './adapters/domain-tools-bridge.adapter.js';
+
+/** The unified GitHub module surface (single truthful `GithubHealth` source). */
+export type { GithubModule } from './github/index.js';
+export type { GithubHealth, GithubFacetHealth } from './github/index.js';

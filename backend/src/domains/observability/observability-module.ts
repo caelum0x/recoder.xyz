@@ -75,6 +75,12 @@ export interface ObservabilityModuleDeps {
   readonly board?: SignalBoard;
   /** Optional alert delivery seam (notify engine / herd board). */
   readonly notifier?: AlertNotifier;
+  /**
+   * Optional LIVE ops-recorder URL source (the engines module's supervised
+   * daemon endpoint — null until its first health passes). Consulted lazily
+   * when no static `opsRecorderUrl` override is configured.
+   */
+  readonly opsRecorderUrlProvider?: () => string | null;
   /** Not-yet-in-AppConfig observability values (OTLP, ops-recorder URL, tokens). */
   readonly overrides?: ObservabilityConfigOverrides;
 }
@@ -157,11 +163,14 @@ export class ObservabilityComposer implements ObservabilityModule {
       defaultSpaceId: this.cfg.defaultSpaceId,
     });
 
-    // 6. Ops-recorder loopback client + work-signals service.
+    // 6. Ops-recorder loopback client + work-signals service. The static URL
+    //    wins; otherwise the supervised daemon's LIVE endpoint is read lazily.
     this.opsClient = new OpsRecorderClient({
       logger: deps.logger,
       baseUrl: this.cfg.opsRecorderUrl,
+      ...(deps.opsRecorderUrlProvider ? { urlProvider: deps.opsRecorderUrlProvider } : {}),
       token: this.cfg.opsRecorderToken,
+      authDisabled: this.cfg.opsRecorderAuthDisabled,
     });
     this.workSignals = new WorkSignalsService({
       logger: deps.logger,
@@ -190,7 +199,11 @@ export class ObservabilityComposer implements ObservabilityModule {
     this.log.info(
       {
         tracingExport: this.otelTracer.exporting,
-        opsRecorder: this.cfg.opsRecorderUrl ? 'configured' : 'absent',
+        opsRecorder: this.cfg.opsRecorderUrl
+          ? 'configured'
+          : deps.opsRecorderUrlProvider
+            ? 'supervised (live endpoint)'
+            : 'absent',
         alerting: this.cfg.alertingEnabled,
       },
       'observability composed',

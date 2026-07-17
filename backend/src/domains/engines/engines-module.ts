@@ -54,6 +54,7 @@ import {
   BrowserUseAdapter,
   PalMcpAdapter,
   browserUseEngineBinder,
+  browserSessionEngineBinder,
   palPlanEngineBinder,
 } from './adapters/sidecar/index.js';
 import {
@@ -63,6 +64,8 @@ import {
   RecodergitAdapter,
   beadsEngineBinder,
 } from './adapters/cli/index.js';
+import { createRecoderGitService, type RecoderGitService } from './recodergit-service.js';
+import { GithubModule, githubEngineBinder, repoEngineBinder } from './github/index.js';
 import { InteropHostBundle } from './mcp/mcp-host.js';
 import { buildEnginesMcpTools, enginesMcpServer } from './mcp/engines-engine.js';
 import { registerModuleToolsOnHost, type ModuleToolsRegistration } from './mcp/host-registrar.js';
@@ -70,6 +73,11 @@ import {
   registerDomainToolsOnHost,
   type DomainToolsRegistration,
 } from './adapters/domain-tools-bridge.adapter.js';
+import {
+  buildMcpEdgeRouter,
+  buildInternalEnginesRouter,
+  type RestartOutcome,
+} from './routes/mcp-edge.routes.js';
 import { buildEnginesHealth } from './health.js';
 import type { EnginesModule, EnginesModuleDeps } from './index.js';
 
@@ -124,6 +132,8 @@ export class EnginesComposer implements EnginesModule {
   private readonly daemonSupervisor: DaemonSupervisor;
   private readonly sidecarSupervisor: SidecarSupervisor;
   private readonly adapters: ReadonlyMap<EngineId, EngineClientPort>;
+  private readonly recodergitService: RecoderGitService;
+  private readonly githubModule: GithubModule;
   private readonly hostBundle: InteropHostBundle;
   private hostReady = false;
   private napiRegistration: NapiEngineRegistration | null = null;
@@ -153,13 +163,32 @@ export class EnginesComposer implements EnginesModule {
       kernel: deps.kernel,
     });
 
+    // ONE shared recodergit service backs both the CLI adapter and the unified
+    // GitHub module, so freshness/health state is a single source of truth.
+    this.recodergitService = createRecoderGitService();
     this.adapters = this.buildAdapters();
+
+    // The unified GitHub module: gh CLI + recodergit facets, ONE GithubHealth.
+    this.githubModule = new GithubModule({
+      log: this.log,
+      repoRoot: this.cfg.repoRoot ?? null,
+      recodergit: this.recodergitService,
+    });
 
     // The interop-gated MCP host, seeded with THIS domain's engine binders. The
     // wiring guard logs (does not throw) for servers agent-os/conductor still bind.
     this.hostBundle = new InteropHostBundle({
       ...(this.cfg.palRootDir ? { palRootDir: this.cfg.palRootDir } : {}),
-      engineBinders: [beadsEngineBinder(), browserUseEngineBinder(), palPlanEngineBinder()],
+      engineBinders: [
+        beadsEngineBinder(),
+        browserUseEngineBinder(),
+        // `recoder.browser` (open/snapshot/verify) over the SUPERVISED sidecar
+        // adapter — the fix for the "advertised but 404 on call" gap.
+        browserSessionEngineBinder(this.adapters.get('browser-use') ?? null),
+        palPlanEngineBinder(),
+        githubEngineBinder(this.githubModule),
+        repoEngineBinder({ repoRoot: this.cfg.repoRoot ?? null }),
+      ],
       onWiringWarning: (err) =>
         this.log.debug(
           { err: err instanceof Error ? err.message : String(err) },
@@ -216,7 +245,10 @@ export class EnginesComposer implements EnginesModule {
     map.set('beads', new BeadsAdapter({ config: this.cfg, log: this.log }));
     map.set('tmux', new TmuxAdapter({ config: this.cfg, log: this.log }));
     map.set('dmux', new DmuxAdapter({ config: this.cfg, log: this.log }));
-    map.set('recodergit', new RecodergitAdapter({ config: this.cfg, log: this.log }));
+    map.set(
+      'recodergit',
+      new RecodergitAdapter({ config: this.cfg, log: this.log, service: this.recodergitService }),
+    );
 
     return map;
   }
@@ -259,6 +291,14 @@ export class EnginesComposer implements EnginesModule {
 
   tensorzero(): EngineClientPort | null {
     return this.client('tensorzero');
+  }
+
+  /**
+   * The unified GitHub module — the ONE `GithubHealth` source (gh CLI +
+   * recodergit facets) and the engine behind the `github.*` MCP tools.
+   */
+  github(): GithubModule {
+    return this.githubModule;
   }
 
   registry(): EngineRegistryPort {
@@ -355,7 +395,15 @@ export class EnginesComposer implements EnginesModule {
     );
   }
 
-  /** The read-only `/engines` router: list declared engines + per-engine health. */
+  /**
+   * The domain router mounted at `/api/mcp` (the engines mountBase):
+   *  - GET  /engines, GET /engines/health — read-only declared-engine surface,
+   *  - GET  /servers                       — the gated MCP registry catalog,
+   *  - POST /tools/:server/:tool/call      — the governed edge the agents'
+   *    stdio bridge calls (interop gate: authorize → risk → execute → audit),
+   *  - POST /call                          — same call, server/tool in the body,
+   *  - POST /engines/:id/restart           — governed restart (admin-gated).
+   */
   routes(): Router {
     const router = Router();
     router.get('/engines', this.middleware.authenticate, (_req, res) => {
@@ -364,7 +412,58 @@ export class EnginesComposer implements EnginesModule {
     router.get('/engines/health', this.middleware.authenticate, (_req, res) => {
       void this.listHealth().then((engines) => res.json({ engines }));
     });
+    // The governed MCP HTTP edge — every tool call traverses the interop gate
+    // via `host.call()`; this router never executes a handler itself.
+    router.use(
+      buildMcpEdgeRouter({
+        host: this.hostBundle,
+        mw: this.middleware,
+        log: this.log,
+        restartEngine: (id, requestedBy, reason) =>
+          this.restartEngineById(id, requestedBy, reason),
+      }),
+    );
     return router;
+  }
+
+  /** The `INTERNAL_SERVICE_KEY`-gated worker surface (`/internal/engines`). */
+  internalRoutes(): Router {
+    return buildInternalEnginesRouter({
+      mw: this.middleware,
+      listHealth: () => this.listHealth(),
+    });
+  }
+
+  /**
+   * The ONE restart path (shared by the MCP `engine.restart` tool and the HTTP
+   * edge). Truthful outcomes: a napi/CLI engine is `skipped` (not restartable),
+   * a failed stop/start surfaces `failed` + reason — never a faked restart.
+   */
+  private async restartEngineById(
+    id: EngineId,
+    requestedBy: string,
+    reason?: string,
+  ): Promise<RestartOutcome> {
+    const descriptor = this.registryImpl.get(id);
+    if (!descriptor || !descriptor.restartable) {
+      return { outcome: 'skipped', reason: 'not restartable' };
+    }
+    const adapter = this.adapters.get(id);
+    if (!adapter) return { outcome: 'skipped', reason: 'no adapter bound' };
+    try {
+      await adapter.stop();
+      await adapter.start();
+      const record = {
+        engineId: id,
+        requestedBy,
+        outcome: 'restarted' as const,
+        ...(reason ? { reason } : {}),
+      };
+      void this.healthRepo.recordRestart(record).catch(() => undefined);
+      return { outcome: 'restarted' };
+    } catch (err) {
+      return { outcome: 'failed', reason: err instanceof Error ? err.message : String(err) };
+    }
   }
 
   mcp(): readonly McpToolRegistration[] {
@@ -376,23 +475,7 @@ export class EnginesComposer implements EnginesModule {
         if (!adapter) return null;
         return adapter.health();
       },
-      restart: async (id, requestedBy, reason) => {
-        const descriptor = this.registryImpl.get(id);
-        if (!descriptor || !descriptor.restartable) {
-          return { outcome: 'skipped', reason: 'not restartable' };
-        }
-        const adapter = this.adapters.get(id);
-        if (!adapter) return { outcome: 'skipped', reason: 'no adapter bound' };
-        try {
-          await adapter.stop();
-          await adapter.start();
-          const record = { engineId: id, requestedBy, outcome: 'restarted' as const, ...(reason ? { reason } : {}) };
-          void this.healthRepo.recordRestart(record).catch(() => undefined);
-          return { outcome: 'restarted' };
-        } catch (err) {
-          return { outcome: 'failed', reason: err instanceof Error ? err.message : String(err) };
-        }
-      },
+      restart: (id, requestedBy, reason) => this.restartEngineById(id, requestedBy, reason),
     });
   }
 

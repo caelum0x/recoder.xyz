@@ -24,7 +24,7 @@ import type { SocialModule, SocialModuleDeps } from './index.js';
 import { createSocialModule } from './index.js';
 import type { DispatchPort } from './ports/dispatch.port.js';
 import type { PublicTunnelPort } from './ports/tunnel.port.js';
-import { createOpenclawGateway } from './adapters/openclaw-gateway.adapter.js';
+import { createOpenclawGateway, type OpenclawGateway } from './adapters/openclaw-gateway.adapter.js';
 import { createChannelAdapterRegistry, type ChannelAdapterRegistry } from './adapters/channel-adapter-registry.js';
 import {
   createConnectorSecretsAdapter,
@@ -66,6 +66,8 @@ export interface SocialComposerDeps extends SocialModuleDeps {
   /** Optional live zrok opener + pre-opened base URL for NAT webhook exposure. */
   readonly zrokOpener?: ZrokOpener;
   readonly zrokPublicBaseUrl?: string | null;
+  /** Test seam: override the channel gateway (defaults to the real openclaw one). */
+  readonly gateway?: OpenclawGateway;
 }
 
 /** The composite surface bootstrap mounts + registers. */
@@ -108,7 +110,7 @@ export function createSocialComposer(deps: SocialComposerDeps): SocialComposite 
     ...(deps.vault ? { vault: deps.vault } : {}),
     ...(deps.directSecrets ? { directResolver: deps.directSecrets } : {}),
   });
-  const gateway = createOpenclawGateway();
+  const gateway = deps.gateway ?? createOpenclawGateway();
   const channels = createChannelAdapterRegistry({ gateway, secrets });
 
   // --- dispatch (conductor /run + reply agent) via ports --------------------
@@ -146,6 +148,34 @@ export function createSocialComposer(deps: SocialComposerDeps): SocialComposite 
   }
 
   let started = false;
+  /** Live long-poll monitor handles (per enabled channel), stopped on `stop()`. */
+  const monitorHandles = new Map<ChannelId, { stop(): Promise<void> }>();
+
+  /**
+   * Start the long-poll ingress monitor for one enabled channel. Truthful
+   * degrade: an unresolvable port (dep absent) or a monitor fault leaves the
+   * channel down + logged — never a faked "monitoring" state.
+   */
+  async function startMonitor(channel: ChannelId): Promise<void> {
+    const port = await channels.get(channel);
+    if (!port || typeof port.monitor !== 'function') {
+      deps.logger.info({ channel }, 'social channel monitor skipped (connector unavailable)');
+      return;
+    }
+    try {
+      const handle = await port.monitor('default', (message) => {
+        const env = toInboundEnvelope(channel, message);
+        if (env) void safe(() => pipeline.ingest(env));
+      });
+      monitorHandles.set(channel, handle);
+      deps.logger.info({ channel }, 'social channel monitor started');
+    } catch (err) {
+      deps.logger.warn(
+        { channel, err: err instanceof Error ? err.message : String(err) },
+        'social channel monitor failed to start (channel stays down)',
+      );
+    }
+  }
 
   return {
     name: 'social',
@@ -180,10 +210,15 @@ export function createSocialComposer(deps: SocialComposerDeps): SocialComposite 
       if (started) return;
       started = true;
       const enabled = CHANNEL_IDS.filter((id) => cfg.channels[id]?.enabled);
+      // Long-poll ingress monitors for every ENABLED channel (webhook channels'
+      // connectors no-op/refuse their monitor truthfully). Started concurrently;
+      // each degrades independently and never blocks boot.
+      await Promise.all(enabled.map((id) => startMonitor(id)));
       deps.logger.info(
         {
           ownerId,
           enabledChannels: enabled,
+          monitoring: [...monitorHandles.keys()],
           conductor: Boolean(deps.conductor),
           inference: Boolean(deps.inference),
           zrok: cfg.zrok.enabled,
@@ -193,7 +228,11 @@ export function createSocialComposer(deps: SocialComposerDeps): SocialComposite 
     },
 
     async stop(): Promise<void> {
-      // Idempotent, degrade-safe: monitors are owned by bootstrap-supplied runners.
+      // Idempotent, degrade-safe: stop every live channel monitor.
+      const handles = [...monitorHandles.entries()];
+      monitorHandles.clear();
+      await Promise.all(handles.map(([, handle]) => safe(() => handle.stop())));
+      started = false;
     },
   };
 }

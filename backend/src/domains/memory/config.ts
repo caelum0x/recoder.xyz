@@ -42,6 +42,12 @@ export const memoryConfigSchema = z.object({
   /** In-memory only; never logged, never surfaced. */
   qdrantApiKey: z.string().nullable(),
 
+  // — Embedded vector store (Lance napi) — the no-server default when Qdrant is absent —
+  /** Local Lance data dir (`LANCE_DATA_DIR`); `null` → embedded store is a truthful no-op. */
+  lanceDataDir: z.string().nullable().default(null),
+  /** Dir holding `lance_npm_bindings.node` (`LANCE_NATIVE_DIR` / `RECODER_NATIVE_DIR`). */
+  lanceNativeDir: z.string().nullable().default(null),
+
   // — Collections —
   mem0Collection: z.string().min(1),
   retrievalCollection: z.string().min(1),
@@ -82,6 +88,8 @@ export type MemoryConfig = z.infer<typeof memoryConfigSchema>;
 export interface MemoryConfigOverrides {
   readonly qdrantUrl?: string | null;
   readonly qdrantApiKey?: string | null;
+  readonly lanceDataDir?: string | null;
+  readonly lanceNativeDir?: string | null;
   readonly mem0Collection?: string;
   readonly retrievalCollection?: string;
   readonly colbertRerankUrl?: string | null;
@@ -109,6 +117,12 @@ function normSecret(v: string | null | undefined): string | null {
   return t ? t : null;
 }
 
+/** Trim a filesystem-path override to a value or `null` (paths are not URLs). */
+function normPath(v: string | null | undefined): string | null {
+  const t = v?.trim();
+  return t ? t : null;
+}
+
 /**
  * Project the memory slice out of the whole config. Derives `isProduction` + the
  * internal-service key `AppConfig` already carries and defaults the rest
@@ -130,6 +144,9 @@ export function sliceMemoryConfig(
     qdrantUrl: normUrl(overrides.qdrantUrl),
     qdrantApiKeyPresent: qdrantApiKey !== null,
     qdrantApiKey,
+
+    lanceDataDir: normPath(overrides.lanceDataDir),
+    lanceNativeDir: normPath(overrides.lanceNativeDir),
 
     mem0Collection: overrides.mem0Collection?.trim() || DEFAULT_MEM0_COLLECTION,
     retrievalCollection: overrides.retrievalCollection?.trim() || DEFAULT_RETRIEVAL_COLLECTION,

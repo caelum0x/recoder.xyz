@@ -11,10 +11,16 @@
  *   1. `BEADS_BIN` env — an explicit absolute path. If set but missing, resolve
  *      to undefined (an explicit-but-broken override must not silently fall
  *      through to a different binary).
- *   2. The owned build output under the repo: `apps/desktop/server/engines/beads/bin/bd` (our build
+ *   2. Packaged desktop resources (electron-builder extraResources ships the
+ *      owned build to `<resources>/backend/engines/beads/bin/bd`): via
+ *      `process.resourcesPath` when present, and dist-relative from this module
+ *      (`<resources>/backend/dist/domains/engines` → three ups → `backend/`)
+ *      because the ELECTRON_RUN_AS_NODE backend child has no resourcesPath.
+ *   3. The owned build output under the repo: `apps/desktop/server/engines/beads/bin/bd` (our build
  *      target), then `apps/desktop/server/engines/beads/bd` (the vendored Makefile's BUILD_DIR=. output).
- *   3. PATH lookup — returns the bare name `bd` only when some PATH dir
- *      actually contains it, preserving prior spawn semantics.
+ *   4. PATH lookup — returns the bare name `bd` only when some PATH dir
+ *      actually contains it, preserving prior spawn semantics. This stays LAST:
+ *      a PATH bd may be DB-incompatible with the vendored issue graph.
  *
  * DEGRADE-SAFE: returns undefined when nothing is found — callers keep their
  * existing "bd unavailable → skip" behavior; this module never throws and
@@ -34,8 +40,17 @@ const OWNED_REL_PATHS: readonly string[][] = [
   ['apps', 'desktop', 'server', 'engines', 'beads', 'bd'],
 ];
 
+/** Injectable seams for {@link resolveBeadsBin} (unit tests; defaults are the real ones). */
+export type ResolveBeadsBinDeps = {
+  existsSync?: (p: string) => boolean;
+  /** Overrides Electron's `process.resourcesPath` (absent in plain Node). */
+  resourcesPath?: string;
+  /** Overrides this module's own directory (`__dirname`). */
+  moduleDir?: string;
+};
+
 /** The dir this module lives in, resilient across ESM/CJS output. */
-function moduleDir(): string {
+function defaultModuleDir(): string {
   try {
     return __dirname;
   } catch {
@@ -43,11 +58,27 @@ function moduleDir(): string {
   }
 }
 
+/**
+ * Candidates inside a PACKAGED desktop install, where extraResources ships the
+ * owned build to `<resources>/backend/engines/beads/bin/bd`. Two routes because
+ * the backend child runs with ELECTRON_RUN_AS_NODE=1 (no `process.resourcesPath`):
+ * the module dir is `<resources>/backend/dist/domains/engines`, so three ups
+ * land on `<resources>/backend` (same shape recodergit-service.ts relies on).
+ */
+function packagedCandidates(dir: string, resourcesPath: string | undefined): string[] {
+  const candidates: string[] = [];
+  if (resourcesPath) {
+    candidates.push(join(resourcesPath, 'backend', 'engines', 'beads', 'bin', 'bd'));
+  }
+  candidates.push(join(dir, '..', '..', '..', 'engines', 'beads', 'bin', 'bd'));
+  return candidates;
+}
+
 /** Bounded walk up to the repo root (dir containing the vendored apps/desktop/server/engines/beads). Never loops. */
-function findRepoRoot(startDir: string): string | undefined {
+function findRepoRoot(startDir: string, exists: (p: string) => boolean): string | undefined {
   let dir = startDir;
   for (let i = 0; i < 12; i++) {
-    if (existsSync(join(dir, 'apps', 'desktop', 'server', 'engines', 'beads', 'go.mod'))) return dir;
+    if (exists(join(dir, 'apps', 'desktop', 'server', 'engines', 'beads', 'go.mod'))) return dir;
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
@@ -56,35 +87,48 @@ function findRepoRoot(startDir: string): string | undefined {
 }
 
 /** True when some dir on PATH contains an entry named `name`. */
-function existsOnPath(name: string, env: NodeJS.ProcessEnv): boolean {
+function existsOnPath(name: string, env: NodeJS.ProcessEnv, exists: (p: string) => boolean): boolean {
   const path = env.PATH ?? '';
   for (const dir of path.split(delimiter)) {
     if (!dir) continue;
-    if (existsSync(join(dir, name))) return true;
+    if (exists(join(dir, name))) return true;
   }
   return false;
 }
 
 /**
  * Resolve the `bd` binary the conductor should shell to, WITHOUT building it.
- * Order: BEADS_BIN env → owned repo build (`apps/desktop/server/engines/beads/bin/bd`) → PATH (`bd`).
+ * Order: BEADS_BIN env → packaged desktop resources → owned repo build
+ * (`apps/desktop/server/engines/beads/bin/bd`) → PATH (`bd`).
  * Returns undefined when none is found (degrade-safe — callers skip cleanly).
  */
-export function resolveBeadsBin(env: NodeJS.ProcessEnv = process.env): string | undefined {
+export function resolveBeadsBin(
+  env: NodeJS.ProcessEnv = process.env,
+  deps: ResolveBeadsBinDeps = {},
+): string | undefined {
+  const exists = deps.existsSync ?? existsSync;
   const explicit = env[BEADS_BIN_ENV]?.trim();
   if (explicit) {
-    return existsSync(explicit) ? explicit : undefined;
+    return exists(explicit) ? explicit : undefined;
   }
 
-  const root = findRepoRoot(moduleDir());
+  const dir = deps.moduleDir ?? defaultModuleDir();
+  const resourcesPath =
+    deps.resourcesPath ??
+    (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  for (const candidate of packagedCandidates(dir, resourcesPath)) {
+    if (exists(candidate)) return candidate;
+  }
+
+  const root = findRepoRoot(dir, exists);
   if (root) {
     for (const rel of OWNED_REL_PATHS) {
       const candidate = join(root, ...rel);
-      if (existsSync(candidate)) return candidate;
+      if (exists(candidate)) return candidate;
     }
   }
 
-  return existsOnPath('bd', env) ? 'bd' : undefined;
+  return existsOnPath('bd', env, exists) ? 'bd' : undefined;
 }
 
 /**

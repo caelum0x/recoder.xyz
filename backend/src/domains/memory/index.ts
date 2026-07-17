@@ -37,6 +37,8 @@ import type { HarvestService } from './lifecycle/harvest.js';
 import type { RelateService } from './lifecycle/relate.js';
 import type { FetchLike } from './vector-store.js';
 import type { ColbertFetch } from './adapters/colbert-sidecar.client.js';
+import type { EmbeddingPort } from './ports/embedding.port.js';
+import type { LanceModuleLoader } from './adapters/lance-napi.client.js';
 
 /** Dependencies injected by bootstrap (after persistence + identity + governance). */
 export interface MemoryModuleDeps {
@@ -56,6 +58,14 @@ export interface MemoryModuleDeps {
   readonly fetchImpl?: FetchLike;
   /** Injectable fetch for the ColBERT sidecar (tests). */
   readonly colbertFetch?: ColbertFetch;
+  /**
+   * OPTIONAL embeddings fallback — the inference domain's embed seam, shaped as
+   * the domain `EmbeddingPort` by bootstrap (NO cross-domain import here). Used
+   * when no HTTP embed provider (tensorzero/openai) is configured or one fails.
+   */
+  readonly embedFallback?: EmbeddingPort;
+  /** Test seam for the embedded Lance (napi) vector store module loader. */
+  readonly lanceLoader?: LanceModuleLoader;
 }
 
 /** The public surface every other domain consumes. */

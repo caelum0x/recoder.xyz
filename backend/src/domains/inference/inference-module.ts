@@ -46,11 +46,15 @@ import {
 } from './adapters/default-transports.js';
 import { createEngineClientNapiTier } from './adapters/engine-client-napi-tier.js';
 import { createProviderKeyCache } from './adapters/byok-key-cache.js';
+import { createByokKeyResolver } from './adapters/byok-key-resolver.js';
+import { createDirectProviderTransport } from './adapters/direct-provider.transport.js';
+import type { ByokKeyResolver, InferenceKeyWriteGate } from './ports/byok-resolver.port.js';
 import { generateTzConfig, type GeneratedTzConfig } from './adapters/tz-config-generator.js';
 import type { StreamFetchLike } from './adapters/gateway-stream.js';
 import { InferenceRoutingService } from './services/inference-routing.service.js';
 import { buildInferenceRouter } from './routes/inference.routes.js';
 import { createOpenAiCompatRouter } from './routes/openai-compat.routes.js';
+import { createOpenAiEmbeddingsRouter } from './routes/openai-embeddings.routes.js';
 import { buildInferenceMcpTools } from './mcp/inference-engine.js';
 import { buildInferenceHealth } from './health.js';
 import type { InferenceModule, InferenceModuleDeps } from './index.js';
@@ -83,7 +87,9 @@ export class InferenceComposer implements InferenceModule {
   private readonly outcomeRepo: DeliveryOutcomeRepository;
   private readonly providerKeyRepo: ProviderKeyRepository;
   private readonly keyCacheImpl: ProviderKeyCache;
+  private readonly byokResolverImpl: ByokKeyResolver;
   private readonly routingService: InferenceRoutingService;
+  private keyWriteGate?: InferenceKeyWriteGate;
   private started = false;
 
   constructor(deps: InferenceModuleDeps) {
@@ -101,6 +107,17 @@ export class InferenceComposer implements InferenceModule {
     // Encrypted BYOK key cache (disabled when the vault is unavailable).
     this.keyCacheImpl = createProviderKeyCache({ vault: deps.vault ?? unavailableVault() });
 
+    // BYOK key RESOLUTION into the delivery path: cache → governance secrets →
+    // cache upsert. Without the secrets seam the resolver reports disabled and
+    // rung 3 declines truthfully (never a plaintext side-channel).
+    this.byokResolverImpl = createByokKeyResolver({
+      logger: this.log,
+      cache: this.keyCacheImpl,
+      repository: this.providerKeyRepo,
+      secrets: deps.secrets,
+    });
+    if (deps.gate) this.keyWriteGate = deps.gate;
+
     // Assemble the delivery ladder (full override wins; else build default tiers).
     if (deps.gateway) {
       this.gatewayPort = deps.gateway;
@@ -115,12 +132,23 @@ export class InferenceComposer implements InferenceModule {
           ? createEngineClientNapiTier(deps.napiEngine, this.log)
           : createEmbeddedNapiTier(this.log));
       this.napiTier = napi;
+      // Rung 3: the direct BYOK multi-provider router (override → default).
+      const router =
+        deps.router ??
+        createDirectProviderTransport({
+          logger: this.log,
+          resolver: this.byokResolverImpl,
+          platformKeys: deps.platformProviderKeys ?? {},
+          ...(deps.providerFetch ? { fetch: deps.providerFetch } : {}),
+          timeoutMs: this.cfg.requestTimeoutMs,
+        });
       this.gatewayPort = new TensorzeroTransportAdapter({
         logger: this.log,
         config: this.cfg,
         loopback,
         ...(streamFetch ? { streamFetch } : {}),
         napi,
+        router,
       });
     }
 
@@ -145,6 +173,20 @@ export class InferenceComposer implements InferenceModule {
   /** Inject the optional billing entitlement gate (BYOK-aware token quota). */
   setEntitlementGate(gate: EntitlementGate): void {
     this.routingService.setEntitlementGate(gate);
+  }
+
+  /**
+   * Inject the governance gate that governs BYOK key writes. Until set (or
+   * passed as `deps.gate`), `PUT /inference/keys/:provider` fails CLOSED with a
+   * truthful 503 — a secret write is never allowed ungoverned.
+   */
+  setGovernanceGate(gate: InferenceKeyWriteGate): void {
+    this.keyWriteGate = gate;
+  }
+
+  /** The BYOK key resolver (delivery-path key resolution + governed store). */
+  byokResolver(): ByokKeyResolver {
+    return this.byokResolverImpl;
   }
 
   catalog(): ModelCatalogRepository {
@@ -179,6 +221,8 @@ export class InferenceComposer implements InferenceModule {
         ledger: this.ledgerRepo,
         providerKeys: this.providerKeyRepo,
         keyCache: this.keyCacheImpl,
+        resolver: this.byokResolverImpl,
+        getGate: () => this.keyWriteGate,
         mw: this.middleware,
       }),
     );
@@ -189,6 +233,13 @@ export class InferenceComposer implements InferenceModule {
     });
     router.use('/inference', openai);
     router.use('/gateway', openai);
+    // Embeddings edge: `/inference/v1/embeddings` and `/gateway/v1/embeddings`.
+    const embeddings = createOpenAiEmbeddingsRouter({
+      routing: this.routingService,
+      authenticateRequest: this.middleware.authenticate,
+    });
+    router.use('/inference', embeddings);
+    router.use('/gateway', embeddings);
     return router;
   }
 

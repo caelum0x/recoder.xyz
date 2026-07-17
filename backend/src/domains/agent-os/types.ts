@@ -14,6 +14,8 @@ import type { GovernanceGate } from './ports/governance-gate.port.js';
 import type { InstructionCompilerPort } from './ports/instruction-compiler.port.js';
 import type { OutboxPublisherPort } from './ports/outbox-publisher.port.js';
 import type { AgentOsRepositoryPort } from './ports/agent-os-repository.port.js';
+import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
+import type { EngineClientPort } from '../engines/ports/engine-client.port.js';
 import type { AgentOsConfigOverrides } from './config.js';
 
 /**
@@ -40,6 +42,17 @@ export interface AgentOsDeps {
   readonly repository?: AgentOsRepositoryPort;
   readonly outboxPublisher?: OutboxPublisherPort;
   readonly instructionCompiler?: InstructionCompilerPort;
+  /**
+   * The beads `EngineClientPort` (`engines.client('beads')`) the squad autopilot
+   * pulls ready issues through. Absent ⇒ autopilot ticks degrade truthfully.
+   */
+  readonly beadsEngine?: EngineClientPort | null;
+  /**
+   * The narrow conductor dispatch seam the autopilot launches workspaces
+   * through. Bootstrap builds the conductor AFTER agent-os, so this is usually
+   * attached late via `attachSquadAutopilotConductor` instead.
+   */
+  readonly conductorDispatch?: SquadConductorPort | null;
 }
 
 /**

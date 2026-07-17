@@ -135,6 +135,9 @@ const envSchema = z.object({
   // --- Memory & retrieval slice ---
   QDRANT_URL: z.string().optional(),
   QDRANT_API_KEY: z.string().optional(),
+  LANCE_DATA_DIR: z.string().optional(),
+  LANCE_NATIVE_DIR: z.string().optional(),
+  RECODER_NATIVE_DIR: z.string().optional(),
   COLBERT_RERANK_URL: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
 
@@ -149,6 +152,10 @@ const envSchema = z.object({
   A2A_HMAC_SECRET: z.string().optional(),
   A2A_SIGNING_KEY_ID: z.string().optional(),
   A2A_REQUIRE_SIGNED_INGRESS: z.string().optional(),
+  A2A_ED25519_MODE: z.enum(['permissive', 'enforce']).optional(),
+  /** JSON object: { "<key_id>": "<raw hex | base64 | PEM public key>" }. */
+  A2A_ED25519_PEER_KEYS: z.string().optional(),
+  A2A_ED25519_REGISTRY_OWNER: z.string().optional(),
 });
 
 type ParsedEnv = z.infer<typeof envSchema>;
@@ -331,11 +338,17 @@ function buildCloudOverrides(env: ParsedEnv): CloudConfigOverrides {
   };
 }
 
-/** Build the memory override slice from env. */
+/**
+ * Build the memory override slice from env. `lanceDataDir` defaults under the
+ * repo data dir so the embedded Lance (napi) vector store is the DEFAULT when
+ * `QDRANT_URL` is unset — no external vector DB required for a working boot.
+ */
 function buildMemoryOverrides(env: ParsedEnv): MemoryConfigOverrides {
   return {
     qdrantUrl: opt(env.QDRANT_URL) ?? null,
     qdrantApiKey: opt(env.QDRANT_API_KEY) ?? null,
+    lanceDataDir: opt(env.LANCE_DATA_DIR) ?? path.resolve(process.cwd(), 'data', 'lance'),
+    lanceNativeDir: opt(env.LANCE_NATIVE_DIR) ?? opt(env.RECODER_NATIVE_DIR) ?? null,
     colbertRerankUrl: opt(env.COLBERT_RERANK_URL) ?? null,
     mem0SidecarUrl: opt(env.MEM0_BASE_URL) ?? null,
     embedTensorzeroUrl: opt(env.TENSORZERO_URL) ?? null,
@@ -356,13 +369,38 @@ function buildSocialOverrides(env: ParsedEnv): SocialConfigOverrides {
   };
 }
 
+/**
+ * Parse the ed25519 static peer-key trust map (JSON object of key_id → public
+ * key). Malformed JSON must not crash boot — degrade to no static keys
+ * (truthful: the registry/enforce posture still applies downstream).
+ */
+function parseEd25519PeerKeys(raw: string | undefined): Record<string, string> | null {
+  if (!raw || raw.trim().length === 0) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
+    const entries = Object.entries(parsed).filter(
+      ([, v]) => typeof v === 'string' && v.length > 0,
+    ) as [string, string][];
+    return entries.length > 0 ? Object.fromEntries(entries) : null;
+  } catch {
+    return null; // truthful degrade: no static trust map
+  }
+}
+
 /** Build the interop-wire override slice from env. */
 function buildInteropWireOverrides(env: ParsedEnv): InteropWireConfigOverrides {
+  const peerKeys = parseEd25519PeerKeys(env.A2A_ED25519_PEER_KEYS);
   return {
     hmacSecret: opt(env.A2A_HMAC_SECRET) ?? null,
     ...(opt(env.A2A_SIGNING_KEY_ID) ? { signingKeyId: opt(env.A2A_SIGNING_KEY_ID) } : {}),
     ...(env.A2A_REQUIRE_SIGNED_INGRESS !== undefined
       ? { requireSignedIngress: asBool(env.A2A_REQUIRE_SIGNED_INGRESS, false) }
+      : {}),
+    ...(env.A2A_ED25519_MODE ? { ed25519Mode: env.A2A_ED25519_MODE } : {}),
+    ...(peerKeys ? { ed25519PeerKeys: peerKeys } : {}),
+    ...(opt(env.A2A_ED25519_REGISTRY_OWNER)
+      ? { ed25519RegistryOwnerId: opt(env.A2A_ED25519_REGISTRY_OWNER)! }
       : {}),
   };
 }

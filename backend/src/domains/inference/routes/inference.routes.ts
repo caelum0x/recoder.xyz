@@ -9,12 +9,17 @@
  *   POST   /inference/feedback            — attach a feedback signal to an inference_id
  *   GET    /inference/usage               — the caller's recent usage + totals
  *   GET    /inference/keys                — the caller's BYOK provider-key metadata
+ *   PUT    /inference/keys/:provider      — GOVERNED key write: encrypt + store the
+ *                                           caller's BYOK key (governance `decide`
+ *                                           gates it; vault-down fails closed)
  *   POST   /inference/keys/:provider/rotate — bump key_version (metadata only)
- *   DELETE /inference/keys/:provider      — delete a provider-key metadata row
+ *   DELETE /inference/keys/:provider      — delete the key (secret + metadata + cache)
  *
- * SECURITY: no key material is ever returned — `/keys` surfaces metadata only.
- * Mutating routes require a real (non-anonymous) principal; usage + keys are
- * app-layer scoped to `principal.userId`.
+ * SECURITY: no key material is ever returned or logged — `/keys` surfaces
+ * metadata only; the PUT body's `key` value goes straight into the resolver's
+ * encrypted store and is never echoed (not even in validation errors). Mutating
+ * routes require a real (non-anonymous) principal; usage + keys are app-layer
+ * scoped to `principal.userId`.
  */
 import { Router } from 'express';
 import { z } from 'zod';
@@ -23,6 +28,7 @@ import type { AuthMiddleware } from '../../identity/middleware/authenticate.midd
 import type { InferenceGatewayPort } from '../ports/inference-gateway.port.js';
 import type { ModelCatalogRepository } from '../ports/model-catalog.port.js';
 import type { ProviderKeyRepository, ProviderKeyCache } from '../ports/provider-keys.port.js';
+import type { ByokKeyResolver, InferenceKeyWriteGate } from '../ports/byok-resolver.port.js';
 import type { UsageLedgerRepository } from '../ports/usage-ledger.port.js';
 import type { InferenceRoutingService } from '../services/inference-routing.service.js';
 import type { InferenceMessage, InferenceRole } from '../types.js';
@@ -34,6 +40,15 @@ export interface InferenceRoutesDeps {
   readonly ledger: UsageLedgerRepository;
   readonly providerKeys: ProviderKeyRepository;
   readonly keyCache: ProviderKeyCache;
+  /** The BYOK key resolver (encrypted store + cache) behind the key-write route. */
+  readonly resolver: ByokKeyResolver;
+  /**
+   * Lazy accessor for the governance gate governing key writes (the gate is
+   * wired post-construction by bootstrap). Resolving `undefined` ⇒
+   * `PUT /inference/keys/:provider` fails CLOSED with a truthful 503 (a secret
+   * write is a governed mutation — never allowed ungoverned by default).
+   */
+  readonly getGate: () => InferenceKeyWriteGate | undefined;
   readonly mw: AuthMiddleware;
 }
 
@@ -60,9 +75,19 @@ const providerSchema = z
   .max(64)
   .regex(/^[a-z0-9._-]+$/i, 'provider may contain only letters, digits, and . _ -');
 
+// The key value is validated by LENGTH ONLY with fixed messages — a zod refine
+// echoing the received value could leak key material into an error envelope.
+const keyWriteBodySchema = z.object({
+  key: z
+    .string({ message: 'key must be a string' })
+    .trim()
+    .min(8, { message: 'key must be at least 8 characters' })
+    .max(4096, { message: 'key must be at most 4096 characters' }),
+});
+
 /** Build the inference control router. */
 export function buildInferenceRouter(deps: InferenceRoutesDeps): Router {
-  const { gateway, routing, catalog, ledger, providerKeys, keyCache, mw } = deps;
+  const { gateway, routing, catalog, ledger, providerKeys, keyCache, resolver, getGate, mw } = deps;
   const router = Router();
 
   router.get(
@@ -163,6 +188,63 @@ export function buildInferenceRouter(deps: InferenceRoutesDeps): Router {
     }),
   );
 
+  router.put(
+    '/inference/keys/:provider',
+    mw.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const provider = providerSchema.safeParse(req.params.provider);
+      if (!provider.success) {
+        sendError(res, createError(ErrorCode.INVALID_INPUT, provider.error.issues[0]?.message ?? 'invalid provider'));
+        return;
+      }
+      const body = keyWriteBodySchema.safeParse(req.body ?? {});
+      if (!body.success) {
+        // Fixed messages only — never echo the received key material.
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, body.error.issues[0]?.message ?? 'invalid body'));
+        return;
+      }
+      const principal = req.principal;
+      if (!principal || principal.isAnonymous) {
+        sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'a real principal is required to store a provider key'));
+        return;
+      }
+
+      // GOVERNED WRITE: a secret mutation must pass the gate. No gate wired ⇒
+      // fail CLOSED with a truthful 503 (never an ungoverned secret write).
+      const gate = getGate();
+      if (!gate) {
+        sendError(
+          res,
+          createError(ErrorCode.SERVICE_UNAVAILABLE, 'BYOK key writes are disabled: the governance gate is not wired'),
+        );
+        return;
+      }
+      const verdict = await gate.decide('inference.key.write', principal, {
+        target: { toolName: 'inference.key.write' },
+        metadata: { provider: provider.data },
+      });
+      if (verdict.effect !== 'allow') {
+        sendError(
+          res,
+          createError(
+            ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+            `provider key write ${verdict.effect === 'needs_approval' ? 'requires approval' : 'denied'}: ${verdict.reason}`,
+          ),
+        );
+        return;
+      }
+
+      const stored = await resolver.store(principal.userId, provider.data, body.data.key);
+      if (!stored.stored) {
+        // Truthful fail-closed degrade (vault down / secrets seam unwired).
+        sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, stored.reason));
+        return;
+      }
+      // Metadata only — never the key material.
+      sendSuccess(res, { provider: provider.data, stored: true, key: stored.record });
+    }),
+  );
+
   router.post(
     '/inference/keys/:provider/rotate',
     mw.authenticateMutating,
@@ -194,12 +276,12 @@ export function buildInferenceRouter(deps: InferenceRoutesDeps): Router {
         return;
       }
       const userId = req.principal?.userId ?? '';
-      const removed = await providerKeys.delete(userId, parsed.data);
+      // Removes the encrypted secret + the metadata row + the cached entry.
+      const removed = await resolver.remove(userId, parsed.data);
       if (!removed) {
         sendError(res, createError(ErrorCode.NOT_FOUND, 'provider key not found or already deleted'));
         return;
       }
-      keyCache.invalidate(userId);
       sendSuccess(res, { provider: parsed.data, deleted: true });
     }),
   );

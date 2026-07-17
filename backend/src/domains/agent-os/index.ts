@@ -21,9 +21,12 @@ import type { ComponentHealth } from '../../shared/health-types.js';
 import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { AgentOsRepositoryPort } from './ports/agent-os-repository.port.js';
 import type { RunEventBusPort } from './ports/run-event.port.js';
+import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
+import type { SquadAutopilotService } from './services/squad-autopilot.service.js';
 import type { AgentOsDeps } from './types.js';
 
 export type { AgentOsDeps } from './types.js';
+export type { SquadConductorPort, SquadDispatchRequest, SquadDispatchResult } from './ports/squad-autopilot.port.js';
 
 /** The public surface every consumer of the control plane compiles against. */
 export interface AgentOsModule {
@@ -42,6 +45,13 @@ export interface AgentOsModule {
   internalRoutes(): Router;
   /** Read-only MCP introspection tools (summary / tasks / runs). */
   mcp(): readonly McpToolRegistration[];
+  /** The squad autopilot loop (null when squads/autopilot are disabled). */
+  squadAutopilot(): SquadAutopilotService | null;
+  /**
+   * Late-bind the conductor dispatch seam onto the autopilot (bootstrap builds
+   * the conductor AFTER agent-os). No-op (logged) when the autopilot is off.
+   */
+  attachSquadAutopilotConductor(port: SquadConductorPort): void;
   /** Truthful component health (repository / outbox / instruction compiler). */
   health(): Promise<ComponentHealth>;
   /** Boot hook — starts the outbox drain loop (idempotent). */

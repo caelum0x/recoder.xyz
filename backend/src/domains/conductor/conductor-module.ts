@@ -25,7 +25,7 @@ import {
   type ReconcileReport,
   type WorkspaceEngineDeps,
 } from '@recoder/substrate';
-import type { RunEvent, Workspace, WorkspaceSubstrate } from '@recoder/agent-os';
+import type { RunEvent, Workspace, WorkspaceState, WorkspaceSubstrate } from '@recoder/agent-os';
 import type { Logger } from '../../shared/logger.js';
 import type { ComponentHealth } from '../../shared/health-types.js';
 import type { McpToolRegistration } from '../../shared/module-base.js';
@@ -40,7 +40,9 @@ import type {
   SteerInput,
   SubstrateAvailabilityView,
   SubstrateKind,
+  WorkspaceView,
 } from './types.js';
+import { classifyAttention, type AttentionResult } from './attention/attention-classifier.js';
 import type { ConductorModule, ConductorModuleDeps } from './index.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
@@ -94,6 +96,9 @@ import { detectDevCommand, type DevCommandView } from './adapters/dev-command.ad
 /** The create request the routes/callers build (createdBy is stamped from the principal). */
 export type CreateConductorWorkspaceInput = Omit<CreateWorkspaceInput, 'createdBy'>;
 
+/** How many trailing terminal lines the attention probe captures. */
+const ATTENTION_TAIL_LINES = 60;
+
 /**
  * The outcome of a governed conductor write. `ok` reflects whether the action was
  * PERFORMED (gate allowed AND execution succeeded); `verdict` is always present;
@@ -105,6 +110,32 @@ export interface ConductorWriteResult<T> {
   readonly value?: T;
   readonly reason?: string;
 }
+
+/** States a `stop` may act on — exactly those with a legal `→ cancelled` transition. */
+const STOPPABLE_STATES: readonly WorkspaceState[] = [
+  'created',
+  'setting_up',
+  'ready',
+  'running',
+  'awaiting_approval',
+];
+
+/**
+ * Legal `advance` targets — the PURE lifecycle steps of the review → merge flow
+ * (RECODER-PRODUCT-DESIGN). Side-effectful/evidence-bearing states are excluded
+ * on purpose: `merging`/`merged` require `/merge` (a real git delivery),
+ * `archived` requires `/archive` (teardown), and `failed` must come from a real
+ * failure, never a hand-set flag. Legality of the specific from→to step is then
+ * enforced by the canonical agent-os workspace state machine.
+ */
+export const ADVANCE_TARGET_STATES: readonly WorkspaceState[] = [
+  'ready',
+  'running',
+  'awaiting_approval',
+  'awaiting_review',
+  'changes_requested',
+  'cancelled',
+];
 
 export class ConductorComposer implements ConductorModule {
   readonly name = 'conductor' as const;
@@ -411,6 +442,133 @@ export class ConductorComposer implements ConductorModule {
     }
   }
 
+  /**
+   * Gracefully STOP a workspace's run: kill the live substrate session (the
+   * worktree is PRESERVED for review), release the write-lock scope, transition
+   * the record to `cancelled`, and seal the action into the audit chain.
+   * Truthful throughout: a substrate kill that fails leaves the record's state
+   * UNCHANGED (the agent may still be live) and surfaces the reason.
+   */
+  async stopWorkspace(
+    workspaceId: string,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<Workspace>> {
+    const action = 'workspace.stop';
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
+      target: { environment: 'conductor' },
+      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+      metadata: { workspaceId },
+    });
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    if (!workspace) return { ok: false, verdict, reason: `workspace not found: ${workspaceId}` };
+    if (!STOPPABLE_STATES.includes(workspace.state)) {
+      return { ok: false, verdict, reason: `workspace is ${workspace.state}, not stoppable` };
+    }
+
+    // Kill the live session FIRST (keep the worktree — the work stays reviewable).
+    // A kill fault refuses truthfully: the state of record must not claim
+    // `cancelled` while the agent may still be running.
+    if (workspace.sessionName || workspace.worktreePath) {
+      try {
+        await this.registry.getFull(workspace.substrate).teardown(
+          { ref: workspaceId, sessionName: workspace.sessionName, worktreePath: workspace.worktreePath },
+          { removeIsolation: false },
+        );
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : 'substrate kill failed';
+        this.log.warn({ err, workspaceId }, 'conductor stopWorkspace substrate kill failed');
+        return { ok: false, verdict, reason: `stop failed (session may still be live): ${reason}` };
+      }
+    }
+
+    // Release the write-lock so the repo scope frees for the next workspace.
+    // Degrade-safe: a lock fault never blocks the stop (the agent is dead).
+    if (this.engineDeps.lock) {
+      try {
+        await this.engineDeps.lock.release({
+          workspaceId,
+          spaceId: workspace.spaceId,
+          taskId: workspace.taskId,
+        });
+      } catch (err) {
+        this.log.warn({ err, workspaceId }, 'lock release on stop failed');
+      }
+    }
+
+    try {
+      const stopped = await this.engine.advanceWorkspace(workspaceId, 'cancelled', undefined, {
+        stoppedBy: principal.userId,
+        stoppedAt: new Date().toISOString(),
+      });
+      this.terminalService.publishSync({
+        workspaceId,
+        kind: 'state',
+        state: stopped.state,
+        at: stopped.updatedAt,
+      });
+      await recordConductorAudit(
+        this.gate,
+        conductorAuditEntry(action, principal, verdict, { workspaceId, from: workspace.state }),
+      );
+      return { ok: true, verdict, value: stopped };
+    } catch (err) {
+      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'stop failed' };
+    }
+  }
+
+  /**
+   * ADVANCE a workspace one lifecycle step (review → merge flow): a governed,
+   * PURE state transition. Only {@link ADVANCE_TARGET_STATES} are accepted
+   * (delivery states need their evidence-bearing edges); the from→to legality is
+   * enforced by the canonical agent-os state machine — an illegal step is a
+   * truthful refusal, never a forced write.
+   */
+  async advanceWorkspaceState(
+    workspaceId: string,
+    to: WorkspaceState,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<Workspace>> {
+    const action = 'workspace.advance';
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
+      target: { environment: 'conductor' },
+      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+      metadata: { workspaceId, to },
+    });
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    if (!workspace) return { ok: false, verdict, reason: `workspace not found: ${workspaceId}` };
+    if (!ADVANCE_TARGET_STATES.includes(to)) {
+      return {
+        ok: false,
+        verdict,
+        reason: `'${to}' is not an advance target (merge/archive/stop own their transitions)`,
+      };
+    }
+    try {
+      const advanced = await this.engine.advanceWorkspace(workspaceId, to, undefined, {
+        advancedBy: principal.userId,
+      });
+      this.terminalService.publishSync({
+        workspaceId,
+        kind: 'state',
+        state: advanced.state,
+        at: advanced.updatedAt,
+      });
+      await recordConductorAudit(
+        this.gate,
+        conductorAuditEntry(action, principal, verdict, {
+          workspaceId,
+          from: workspace.state,
+          to,
+        }),
+      );
+      return { ok: true, verdict, value: advanced };
+    } catch (err) {
+      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'advance failed' };
+    }
+  }
+
   async reconcile(principal: Principal): Promise<ConductorWriteResult<ReconcileReport>> {
     const action = 'workspace.reconcile';
     const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
@@ -518,6 +676,88 @@ export class ConductorComposer implements ConductorModule {
       exitCode: exitCode ?? null,
       recentOutput,
       state: workspace.state,
+    };
+  }
+
+  // --- workspace views (attention-enriched read model) --------------------------
+
+  /**
+   * The attention-enriched read model of one workspace, or null. The attention
+   * classification is derived truthfully from the durable state, the run's
+   * RunEvents, and (for live states) the captured terminal tail; every signal
+   * source is degrade-safe — a capture/repository fault is a MISSING signal
+   * (`'unknown'`), never a fabricated one.
+   */
+  async workspaceView(workspaceId: string): Promise<WorkspaceView | null> {
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    if (!workspace) return null;
+    return this.buildWorkspaceView(workspace);
+  }
+
+  /** Attention-enriched views of every workspace (the cockpit list's badges). */
+  async listWorkspaceViews(): Promise<WorkspaceView[]> {
+    const workspaces = await this.engine.listWorkspaces();
+    return Promise.all(workspaces.map((workspace) => this.buildWorkspaceView(workspace)));
+  }
+
+  private async buildWorkspaceView(workspace: Workspace): Promise<WorkspaceView> {
+    // Probe the substrate ONLY where the live tail can decide (running-ish states
+    // with a handle) — listing must not shell out per archived record.
+    let tail: string | null | undefined;
+    let live: boolean | undefined;
+    const probeLive =
+      (workspace.state === 'running' || workspace.state === 'changes_requested') &&
+      Boolean(workspace.sessionName || workspace.worktreePath);
+    if (probeLive) {
+      try {
+        const substrate = this.registry.getFull(workspace.substrate);
+        const handle = {
+          ref: workspace.workspaceId,
+          sessionName: workspace.sessionName,
+          worktreePath: workspace.worktreePath,
+        };
+        [live, tail] = await Promise.all([
+          substrate.alive(handle),
+          substrate.capture(handle, ATTENTION_TAIL_LINES),
+        ]);
+      } catch (err) {
+        // Missing signal, not a fabricated one — the classifier reports unknown.
+        this.log.warn({ err, workspaceId: workspace.workspaceId }, 'attention probe faulted');
+      }
+    }
+
+    let events: readonly RunEvent[] | undefined;
+    try {
+      events = await this.engine.listWorkspaceEvents(workspace.workspaceId);
+    } catch (err) {
+      this.log.warn({ err, workspaceId: workspace.workspaceId }, 'attention event read faulted');
+    }
+
+    const attention: AttentionResult = classifyAttention({
+      state: workspace.state,
+      ...(events ? { events } : {}),
+      ...(tail !== undefined ? { tail } : {}),
+    });
+
+    return {
+      workspaceId: workspace.workspaceId,
+      spaceId: workspace.spaceId,
+      projectId: workspace.projectId,
+      taskId: workspace.taskId,
+      ...(workspace.runId ? { runId: workspace.runId } : {}),
+      runtimeId: workspace.runtimeId,
+      substrate: workspace.substrate,
+      branch: workspace.branch,
+      baseRef: workspace.baseRef,
+      ...(workspace.worktreePath ? { worktreePath: workspace.worktreePath } : {}),
+      ...(workspace.sessionName ? { sessionName: workspace.sessionName } : {}),
+      state: workspace.state,
+      createdBy: workspace.createdBy,
+      createdAt: workspace.createdAt,
+      updatedAt: workspace.updatedAt,
+      attention: attention.attention,
+      attentionReason: attention.reason,
+      ...(live !== undefined ? { live } : {}),
     };
   }
 

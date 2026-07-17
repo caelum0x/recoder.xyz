@@ -19,6 +19,17 @@ import type { AppConfig } from '../../shared/app-config.js';
 export const wireSigningModeSchema = z.enum(['off', 'hmac', 'required']);
 export type WireSigningMode = z.infer<typeof wireSigningModeSchema>;
 
+/**
+ * How ed25519-signed envelopes are enforced at the wire edge:
+ *   - `enforce`    — unknown-key / invalid-signature ed25519 envelopes are
+ *                    REJECTED (production default; fail-closed).
+ *   - `permissive` — verification runs when a peer key resolves; failures are
+ *                    LOGGED and the envelope is allowed (solo/dev default, so
+ *                    nothing breaks before peers exchange keys).
+ */
+export const ed25519ModeSchema = z.enum(['permissive', 'enforce']);
+export type Ed25519Mode = z.infer<typeof ed25519ModeSchema>;
+
 export const interopWireConfigSchema = z.object({
   isProduction: z.boolean(),
   /** Reject unsigned inbound envelopes when true (forced on in production). */
@@ -32,6 +43,12 @@ export const interopWireConfigSchema = z.object({
   signingMode: wireSigningModeSchema,
   /** Max ms of clock skew tolerated on a signed envelope's `signed_at`. */
   maxFutureSkewMs: z.number().int().positive(),
+  /** ed25519 posture: `enforce` rejects invalid/unknown-key; `permissive` logs-and-allows. */
+  ed25519Mode: ed25519ModeSchema,
+  /** Static trust map: signature `key_id` → ed25519 public key (raw hex/base64 or PEM). */
+  ed25519PeerKeys: z.record(z.string(), z.string()),
+  /** Owner scope for peer-registry public-key lookups; `null` ⇒ registry lookup off. */
+  ed25519RegistryOwnerId: z.string().nullable(),
   /** Ms without a heartbeat before a registered agent is marked `stale`/`down`. */
   heartbeatStaleMs: z.number().int().positive(),
   /** Local agent-card identity served at `/.well-known/agent.json`. */
@@ -56,6 +73,9 @@ export interface InteropWireConfigOverrides {
   readonly allowInsecureIngress?: boolean;
   readonly signingMode?: WireSigningMode;
   readonly maxFutureSkewMs?: number;
+  readonly ed25519Mode?: Ed25519Mode;
+  readonly ed25519PeerKeys?: Readonly<Record<string, string>>;
+  readonly ed25519RegistryOwnerId?: string | null;
   readonly heartbeatStaleMs?: number;
   readonly localCard?: Partial<InteropWireConfig['localCard']>;
 }
@@ -86,6 +106,10 @@ export function sliceInteropWireConfig(
     allowInsecureIngress: overrides.allowInsecureIngress ?? !isProduction,
     signingMode,
     maxFutureSkewMs: overrides.maxFutureSkewMs ?? DEFAULT_MAX_FUTURE_SKEW_MS,
+    // Fail-closed in production, log-and-allow in solo/dev — see `ed25519ModeSchema`.
+    ed25519Mode: overrides.ed25519Mode ?? (isProduction ? 'enforce' : 'permissive'),
+    ed25519PeerKeys: overrides.ed25519PeerKeys ?? {},
+    ed25519RegistryOwnerId: overrides.ed25519RegistryOwnerId ?? null,
     heartbeatStaleMs: overrides.heartbeatStaleMs ?? DEFAULT_HEARTBEAT_STALE_MS,
     localCard: {
       id: overrides.localCard?.id ?? `${serviceName}:${app.runtime.instanceId}`,

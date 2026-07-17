@@ -206,6 +206,40 @@ export function resolveTmuxBin(opts: {
     return candidates[0] || repoCandidate;
 }
 
+/**
+ * Resolve the owned beads `bd` binary the backend's issue-graph memory shells to.
+ * Packaged: <resourcesPath>/backend/engines/beads/bin/bd (bundled via
+ * extraResources — never from git; the >100MB binary is built locally).
+ * Dev: <repoRoot>/apps/desktop/server/engines/beads/bin/bd.
+ * Unlike tmux this is FILL-ONLY: returns null when no candidate exists, so the
+ * backend's own resolver (BEADS_BIN → packaged → repo build → PATH) stays the
+ * single truthful availability gate instead of an explicit-but-broken override
+ * masking it. An explicit BEADS_BIN env always wins.
+ */
+export function resolveBeadsBinPath(opts: {
+    isPackaged: boolean;
+    repoRoot: string;
+    resourcesPath?: string;
+    existsSync?: (p: string) => boolean;
+}): string {
+    const existsSync = opts.existsSync || nodeFs.existsSync;
+    const explicit = process.env.BEADS_BIN;
+    if (explicit && explicit.trim()) {
+        return explicit.trim();
+    }
+    const candidates: string[] = [];
+    if (opts.isPackaged && opts.resourcesPath) {
+        candidates.push(nodePath.join(opts.resourcesPath, "backend", "engines", "beads", "bin", "bd"));
+    }
+    candidates.push(nodePath.join(opts.repoRoot, "apps", "desktop", "server", "engines", "beads", "bin", "bd"));
+    for (const candidate of candidates) {
+        if (existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    return null;
+}
+
 export interface BackendSecrets {
     apiKeyHashSalt: string;
     internalServiceKey: string;
@@ -328,6 +362,8 @@ export function assembleBackendEnv(opts: {
     internalServiceKey: string;
     electronRunAsNode?: boolean;
     loginShellPath?: string;
+    /** Resolved owned beads bd path (fill-only — null stays absent; see resolveBeadsBinPath). */
+    beadsBin?: string;
     /** Resolved native openfang/tensorzero env (fill-only; see emain-backend-runtime-env.ts). */
     openfang?: OpenfangRuntimeEnv;
     /** BYOK provider keys from the desktop secret store (fill-only; base env wins). */
@@ -357,6 +393,12 @@ export function assembleBackendEnv(opts: {
         RECODER_TMUX_BUILD_PATH: opts.tmuxBin,
         TMUX_BIN: opts.tmuxBin,
     };
+    // Owned beads bd, fill-only: an explicit BEADS_BIN (operator override) wins;
+    // an unresolved bd stays absent so the backend degrades truthfully instead
+    // of chasing a path the supervisor could not verify.
+    if (opts.beadsBin && !env.BEADS_BIN) {
+        env.BEADS_BIN = opts.beadsBin;
+    }
     // BYOK provider keys from the desktop secret store, fill-only: an explicit
     // env var (operator/dev-shell override) always wins over the stored key.
     // Values never appear in logs — only names are ever logged by callers.
@@ -875,6 +917,12 @@ export class BackendSupervisor {
                 resourcesPath: this.resourcesPath,
                 existsSync: this._fs.existsSync,
             });
+            const beadsBin = resolveBeadsBinPath({
+                isPackaged: this.isPackaged,
+                repoRoot: this.repoRoot,
+                resourcesPath: this.resourcesPath,
+                existsSync: this._fs.existsSync,
+            });
 
             this._fs.mkdirSync(this.dataDir, { recursive: true });
 
@@ -921,6 +969,7 @@ export class BackendSupervisor {
                 // detect the agent CLIs (claude/codex/…) a GUI launch would
                 // otherwise not see.
                 loginShellPath: this._resolveLoginShellPath(),
+                beadsBin,
                 openfang: openfangEnv,
                 byokSecrets,
             });
@@ -952,6 +1001,7 @@ export class BackendSupervisor {
             this._appendLog("info", "spawning backend child", {
                 backendUrl,
                 tmuxBin,
+                beadsBin,
                 strictAuth: spawnEnv.STRICT_AUTH,
             });
             this._spawnChild(spawnEnv);
