@@ -179,4 +179,38 @@ describe('multi-dispatch response strategies', () => {
     expect(res.strategy).toBe('all');
     expect(res.ok).toBe(false);
   });
+
+  it('one peer: first == quorum == all == the single reply', async () => {
+    // With a single reachable peer every strategy collapses to the same result:
+    // the one reply is the whole quorum and the whole fan-out (required = 1).
+    for (const strategy of ['all', 'first', 'quorum'] as const) {
+      const { dispatch } = buildService(['solo'], senderFailing(new Set()));
+      const res = await dispatch.dispatch({ userId: OWNER, targets: ['solo'], envelope: envelope('hi'), strategy });
+      expect(res.ok).toBe(true);
+      expect(res.satisfied).toEqual({ succeeded: 1, required: 1 });
+      expect(res.legs.filter((l) => l.ok)).toHaveLength(1);
+    }
+  });
+
+  it('one peer down: every strategy reports the same truthful failure', async () => {
+    for (const strategy of ['all', 'first', 'quorum'] as const) {
+      const { dispatch } = buildService(['solo'], senderFailing(new Set(['solo'])));
+      const res = await dispatch.dispatch({ userId: OWNER, targets: ['solo'], envelope: envelope('hi'), strategy });
+      expect(res.ok).toBe(false);
+      expect(res.satisfied.succeeded).toBe(0);
+    }
+  });
+
+  it('zero peers: a truthful empty result — never a fabricated success', async () => {
+    for (const strategy of ['all', 'first', 'quorum'] as const) {
+      const { dispatch, tasks } = buildService([], senderFailing(new Set()));
+      const res = await dispatch.dispatch({ userId: OWNER, targets: [], envelope: envelope('hi'), strategy });
+      // No peers can never be "satisfied": ok stays false with an empty leg set.
+      expect(res.ok).toBe(false);
+      expect(res.legs).toHaveLength(0);
+      expect(res.satisfied.succeeded).toBe(0);
+      // The projection is NOT advanced to working on an empty fan-out.
+      expect((await tasks.get(res.taskId, OWNER))?.state).toBe('failed');
+    }
+  });
 });
