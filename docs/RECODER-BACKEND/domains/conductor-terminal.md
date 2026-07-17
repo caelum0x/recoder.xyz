@@ -88,7 +88,7 @@ conductor/
     tmux-orchestrator.ts               # tmux session primitives (start/list/capture/send-keys/kill/exit-code)
     tmux-path.ts                       # pinned tmux binary resolution + version guard
     terminal-stream.ts                 # /terminal control-mode WS handler (attach, stream, steer)
-    live-events.ts                     # /sync workspace RunEvent stream (SSE/WS fan-out)
+    live-events.ts                     # /api/conductor/workspaces/:id/stream RunEvent fan-out (doc-`/sync`/collaboration cut)
 
   locks/
     conductor-locks.ts                 # work-lock adapter over @recoder/coordination
@@ -98,7 +98,7 @@ conductor/
 
   routes/
     conductor.routes.ts                # /api/conductor/* HTTP edges
-    terminal.routes.ts                 # WS /terminal + /sync mount
+    terminal.routes.ts                 # WS /terminal + /workspaces/:id/stream mount
 
   mcp/
     conductor-engine.ts                # registerConductorMcpTools(router): workspace_* MCP tools
@@ -176,7 +176,7 @@ conductor/
 | `terminal/tmux-orchestrator.ts` | ts | client | Raw tmux session primitives (start/list/capture-pane/send-keys/kill/exit-code) | `startSession`, `listSessions`, `capturePane`, `sendKeys`, `killSession`, `paneExitCode`, `conductorAvailability` |
 | `terminal/tmux-path.ts` | ts | client | Resolve pinned tmux binary + version guard (fail-safe if absent) | `TMUX_BIN`, `resolveTmux()` |
 | `terminal/terminal-stream.ts` | ts | middleware | `/terminal` control-mode WS: attach read-only client, stream decoded output, steer via send-keys | `attachTerminalStream(ws, workspaceId, session)` |
-| `terminal/live-events.ts` | ts | middleware | `/sync` workspace RunEvent fan-out (per-workspace subscriber registry) | `attachWorkspaceStream(ws, workspaceId)`, `publishRunEvent(e)` |
+| `terminal/live-events.ts` | ts | middleware | `/api/conductor/workspaces/:id/stream` RunEvent fan-out (per-workspace subscriber registry) | `attachWorkspaceStream(ws, workspaceId)`, `publishRunEvent(e)` |
 
 ### Locks / Audit
 | File | kind | Responsibility | Key exports |
@@ -188,7 +188,7 @@ conductor/
 | File | kind | Responsibility | Key exports |
 |---|---|---|---|
 | `routes/conductor.routes.ts` | route | `/api/conductor/*` edges; zod-validate body; interop chain; `sendSuccess`/`sendError` | `conductorRouter(deps): Router` |
-| `routes/terminal.routes.ts` | route | Mount WS `/terminal` + `/sync`, auth via session cookie | `mountTerminalWs(app, deps)` |
+| `routes/terminal.routes.ts` | route | Mount WS `/terminal` + `/workspaces/:id/stream`, auth via session cookie | `mountTerminalWs(app, deps)` |
 | `mcp/conductor-engine.ts` | client | Register conductor MCP tools on the ToolRouter (wiring checklist) | `registerConductorMcpTools(router, deps)` |
 
 ### Migrations
@@ -285,7 +285,7 @@ WRITES additionally pass `gate.decide`. `/internal/*` (if any) is
 | Path | Purpose |
 |---|---|
 | `/terminal` | Control-mode terminal stream (attach to a workspace's tmux; stream output; steer via send-keys) — mounted by `http` domain, handler from `terminal-stream.ts` |
-| `/sync` | Live per-workspace `RunEvent` fan-out (state changes, log deltas, attention) |
+| `/api/conductor/workspaces/:id/stream` | Live per-workspace `RunEvent` fan-out (state changes, log deltas, attention). *(The old doc-`/sync`/collaboration product surface was cut.)* |
 
 ### MCP tools (`mcp/conductor-engine.ts`)
 Registered via the wiring checklist (add to `IN_PROC_SERVERS` in interop-host +
@@ -373,7 +373,7 @@ sandbox}` lanes and dangling `fleet/` import in `conductor-health.ts`
 5. **Locks + audit** — `conductor-locks`, `conductor-audit`. Route EVERY write
    through `gate.decide` + `record_audit`.
 6. **Terminal** — `tmux-path`, `tmux-orchestrator`, `terminal-stream` (`/terminal`),
-   `live-events` (`/sync`).
+   `live-events` (`/api/conductor/workspaces/:id/stream`).
 7. **Edges** — `routes/conductor.routes.ts`, `routes/terminal.routes.ts`,
    `mcp/conductor-engine.ts` (wiring checklist). Interop chain on every call.
 8. **Composer** — `conductor-module.ts` + `index.ts` fuse it all; `health.ts`

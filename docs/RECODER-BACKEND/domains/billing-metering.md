@@ -1,7 +1,7 @@
 # Billing, Metering & Plans — Domain Design
 
 Folder prefix: `backend/src/domains/billing/`
-Owner boundary: **Money.** The Polar/Stripe clients, plans/entitlements, usage
+Owner boundary: **Money.** The MoR provider clients (Polar/Creem/Paddle/Dodo — never Stripe), plans/entitlements, usage
 metering + quotas, billing webhooks, invoicing, plan→capability mapping,
 BYOK-vs-platform billing, and **fail-safe health that degrades explicitly when
 provider keys are missing (never fakes readiness).**
@@ -12,8 +12,9 @@ Serves the **website** (checkout, plan page, invoices) and the **desktop**
 
 ## 1. Overview
 
-Recoder.xyz is the **plan authority**; the payment providers (Polar as
-Merchant-of-Record, Stripe as an alternate MoR/card processor) are behind a
+Recoder.xyz is the **plan authority**; the payment providers are **Merchant-of-Record
+only** (Polar, Creem, Paddle, Dodo Payments — **never Stripe**, per owner mandate),
+selected by `BILLING_PROVIDER` (default `polar`) and each behind the same
 single `BillingProviderPort`. The domain never invents entitlement state: the
 durable source of a subscription/grant is a webhook-confirmed provider event
 projected into Postgres, and the effective plan for a user is
@@ -24,7 +25,7 @@ Three responsibilities, one composer:
 1. **Plans & entitlements** — a `PlanCatalog` (free/pro/team/max/enterprise) with
    a plan→capability matrix, and an `EntitlementGate` other domains call to ask
    "may this subject do X?" It reuses `@recoder/distribution`'s
-   `createBillingService` (entitlement resolver + Polar benefit fusion) and adds
+   `createBillingService` (entitlement resolver + MoR benefit fusion) and adds
    the **BYOK-vs-platform** decision (a BYOK user with `hasOwnApiKey` bypasses
    token-metered quota but still passes feature gates).
 2. **Metering & quotas** — durable per-run / per-token / per-engine usage events
@@ -32,10 +33,10 @@ Three responsibilities, one composer:
    quota counters with reset windows enforced fail-safe (deny/zero-headroom on
    miss, never inflated).
 3. **Money edges** — checkout, customer portal, invoices, and **signed
-   webhooks** (Polar + Stripe) that reconcile subscription/grant state.
+   webhooks** (`/webhooks/:provider`, provider ∈ polar|creem|paddle|dodo) that reconcile subscription/grant state.
 
-**Fail-safe law (non-negotiable):** when `POLAR_ACCESS_TOKEN` /
-`STRIPE_SECRET_KEY` / webhook secrets are absent, the provider adapter reports
+**Fail-safe law (non-negotiable):** when the active provider's
+`*_ACCESS_TOKEN`/`*_API_KEY` / `*_WEBHOOK_SECRET` are absent, the provider adapter reports
 `down`, checkout/portal return a truthful `SERVICE_UNAVAILABLE`, quota checks
 **deny** (zero headroom), and `health()` is `degraded:true` — never a faked 200.
 
@@ -51,20 +52,23 @@ flows through `GovernanceGate.decide()`; every **edge + MCP call** passes the
 ```
 backend/src/domains/billing/
   index.ts                              # factory + the ONE public BillingModule interface
-  billing-module.ts                     # composer: fuses distribution + Stripe + metering + gate
+  billing-module.ts                     # composer: fuses distribution + MoR providers + metering + gate
   config.ts                             # typed BillingConfig slice (from AppConfig)
   types.ts                              # domain types (BillingSubject, PlanTier, UsageRecord, Invoice…)
   health.ts                             # truthful per-provider up|down aggregate
 
   ports/
-    billing-provider.port.ts            # BillingProviderPort — the Polar|Stripe seam
+    billing-provider.port.ts            # BillingProviderPort — the MoR-provider seam (Polar|Creem|Paddle|Dodo)
     metering.repo.port.ts               # MeteringRepository — usage/quota/subscription/invoice data port
     entitlement.port.ts                 # EntitlementGate — exposed to ALL other domains
 
   adapters/
     distribution-billing.adapter.ts     # wraps @recoder/distribution createBillingService (REUSE)
-    polar.adapter.ts                    # Polar provider adapter over polar-client (REUSE, moved)
-    stripe.adapter.ts                   # NEW Stripe provider adapter (degrade-safe)
+    polar.adapter.ts                    # Polar (MoR) provider adapter over polar-client (REUSE, moved)
+    creem.adapter.ts                    # Creem (MoR) provider adapter (degrade-safe)
+    paddle.adapter.ts                   # Paddle (MoR) provider adapter (degrade-safe)
+    dodo.adapter.ts                     # Dodo Payments (MoR) provider adapter (degrade-safe)
+    shared.ts                           # shared MoR adapter helpers (fetch + signature verify)
 
   services/
     plan-catalog.service.ts             # free/pro/team/max/enterprise + plan→capability matrix
@@ -92,7 +96,7 @@ backend/src/domains/billing/
     quota.service.test.ts
     entitlement.service.test.ts
     webhook.service.test.ts
-    stripe.adapter.test.ts
+    mor-adapters.test.ts
     billing.repository.test.ts
     health.test.ts
 ```
@@ -104,16 +108,16 @@ backend/src/domains/billing/
 | # | path | lang | kind | responsibility | keyExports |
 |---|------|------|------|----------------|------------|
 | 1 | `index.ts` | ts | service | Public entrypoint; pure factory, no singletons | `createBillingModule(deps): BillingModule`, `BillingModule`, `BillingModuleDeps` |
-| 2 | `billing-module.ts` | ts | service | Composer: builds providers (Polar+Stripe), distribution BillingService, repo-backed services; exposes `EntitlementGate`; aggregates health; routes writes through governance | `createBillingModuleImpl` |
+| 2 | `billing-module.ts` | ts | service | Composer: builds the MoR providers (Polar/Creem/Paddle/Dodo), distribution BillingService, repo-backed services; exposes `EntitlementGate`; aggregates health; routes writes through governance | `createBillingModuleImpl` |
 | 3 | `config.ts` | ts | config | Zod-typed `BillingConfig` slice read ONLY from `AppConfig` (never `process.env`); provider keys, webhook secrets, meter flush interval, plan→product map | `BillingConfigSchema`, `BillingConfig` |
 | 4 | `types.ts` | ts | type | Domain types not in `packages/*`: `BillingSubject`, `PlanTier`, `UsageRecord`, `Invoice`, `EntitlementView`, `MeterBatch`, `WebhookEnvelope`, `PortalIntent` | those types |
 | 5 | `health.ts` | ts | service | Compose per-provider + repo health into `HealthReport`; `degraded:true` when any key missing; truthful `engines:[{name,status}]` | `billingHealth(deps): HealthReport` |
-| 6 | `ports/billing-provider.port.ts` | ts | port | The Polar\|Stripe seam: checkout, portal, subscription read, meter emit, invoice list, webhook verify+parse, health | `BillingProviderPort`, `CheckoutIntent`, `PortalSession`, `ProviderSubscription`, `ParsedWebhook` |
+| 6 | `ports/billing-provider.port.ts` | ts | port | The MoR-provider seam (Polar\|Creem\|Paddle\|Dodo): checkout, portal, subscription read, meter emit, invoice list, webhook verify+parse, health | `BillingProviderPort`, `CheckoutIntent`, `PortalSession`, `ProviderSubscription`, `ParsedWebhook` |
 | 7 | `ports/metering.repo.port.ts` | ts | port | Repository PORT (impl in persistence): usage events, quota counters, subscriptions, invoices, webhook idempotency | `MeteringRepository` |
 | 8 | `ports/entitlement.port.ts` | ts | port | The gate OTHER domains consume: `checkEntitlement`, `checkQuota`, `resolvePlan`, `isBYOK` | `EntitlementGate`, `EntitlementDecision`, `QuotaDecision` |
 | 9 | `adapters/distribution-billing.adapter.ts` | ts | adapter | Wraps `@recoder/distribution` `createBillingService`/`createEntitlementResolver`/`createPolarBillingAdapter`; degrade-safe unhealthy when unconfigured | `createDistributionBillingAdapter` |
 | 10 | `adapters/polar.adapter.ts` | ts | adapter | `BillingProviderPort` over the existing `polar-client.ts` (moved in-place); checkout/portal/products/subscriptions; HMAC webhook verify | `createPolarProviderAdapter` |
-| 11 | `adapters/stripe.adapter.ts` | ts | adapter | NEW `BillingProviderPort` over Stripe REST (`fetch`, no SDK lock); `constructEvent` signature verify; degrades to `down` when `STRIPE_SECRET_KEY` absent | `createStripeProviderAdapter` |
+| 11 | `adapters/{creem,paddle,dodo}.adapter.ts` + `adapters/shared.ts` | ts | adapter | `BillingProviderPort` over each MoR provider's REST (`fetch`, no SDK lock, shared helpers); signature verify; degrades to `down` when that provider's `*_API_KEY`/`*_WEBHOOK_SECRET` absent | `createCreemProviderAdapter`, `createPaddleProviderAdapter`, `createDodoProviderAdapter` |
 | 12 | `services/plan-catalog.service.ts` | ts | service | The tier catalog + `plan→capability` matrix + `plan→productId` map; resolves a `PlanTier` from a plan string; deny-by-default floor | `createPlanCatalog`, `PLAN_CAPABILITIES`, `planCapabilities(plan)` |
 | 13 | `services/entitlement.service.ts` | ts | service | Effective-plan resolution (`max(auth, webhook-confirmed)`), feature gates via distribution `hasFeature`, **BYOK-vs-platform** rule | `createEntitlementService` (impl of `EntitlementGate`) |
 | 14 | `services/quota.service.ts` | ts | service | Resolve limits from plan tier, check headroom against counters, atomic consume, window reset; fail-safe deny | `createQuotaService`, `QuotaService` |
@@ -122,14 +126,14 @@ backend/src/domains/billing/
 | 17 | `services/webhook.service.ts` | ts | service | Verify signature via provider adapter, dedupe on `event_id`, reconcile subscription/entitlement, emit `RunEvent`; all under governance | `createWebhookService`, `WebhookService` |
 | 18 | `persistence/billing.repository.ts` | ts | repository | Concrete `MeteringRepository` over injected `QueryExecutor` (`:param` SQL, `WHERE user_id=:userId`); no RLS | `createBillingRepository` |
 | 19 | `routes/billing.routes.ts` | ts | route | Session-auth edges; zod-validate; `sendSuccess`/`sendError`; each write → interop chain + governance | `createBillingRouter(deps)` |
-| 20 | `routes/billing-webhooks.routes.ts` | ts | route | Raw-body POST webhook edges (Polar/Stripe); signature-authenticated, not session; hands to `WebhookService` | `createBillingWebhookRouter(deps)` |
+| 20 | `routes/billing-webhooks.routes.ts` | ts | route | Raw-body `POST /webhooks/:provider` edges (polar|creem|paddle|dodo); signature-authenticated, not session; hands to `WebhookService` | `createBillingWebhookRouter(deps)` |
 | 21 | `mcp/billing-engine.ts` | ts | service | READ-ONLY MCP tools on the `EntitlementGate`; conforms to `@recoder/agent-mcp` ToolRouter; `registerBillingMcpTools` for the wiring checklist | `createBillingEngine`, `registerBillingMcpTools` |
 | 22 | `migrations/0001_billing_core.sql` | sql | migration | `billing_subscriptions`, `billing_invoices`, `billing_webhook_events` | tables + indexes |
 | 23 | `migrations/0002_billing_usage.sql` | sql | migration | `billing_usage_events`, `billing_usage_counters` | tables + indexes |
 | 24 | `__tests__/quota.service.test.ts` | ts | test | Headroom, consume, reset window, unlimited (`limit=0`), fail-safe deny on repo error | — |
 | 25 | `__tests__/entitlement.service.test.ts` | ts | test | Effective-plan max, feature gate allow/deny, BYOK bypasses token quota but not feature gate | — |
 | 26 | `__tests__/webhook.service.test.ts` | ts | test | Bad signature → reject; duplicate `event_id` → no-op; `subscription.active` → plan upgrade projected | — |
-| 27 | `__tests__/stripe.adapter.test.ts` | ts | test | `down` when key absent; signature verify golden vector; checkout URL shape | — |
+| 27 | `__tests__/mor-adapters.test.ts` | ts | test | each MoR adapter: `down` when key absent; signature verify golden vector; checkout URL shape | — |
 | 28 | `__tests__/billing.repository.test.ts` | ts | test | `:param` binding, idempotency UNIQUE on usage key, `WHERE user_id` scoping | — |
 | (29) | `__tests__/health.test.ts` | ts | test | Missing keys → `degraded:true` + per-provider `down`; never fakes `up` | — |
 
@@ -144,7 +148,7 @@ CREATE TABLE IF NOT EXISTS billing_subscriptions (
   subject_id           TEXT NOT NULL,              -- user_id or org_id
   subject_kind         TEXT NOT NULL DEFAULT 'user',
   plan                 TEXT NOT NULL,              -- free|pro|team|max|enterprise
-  provider             TEXT NOT NULL,              -- polar|stripe
+  provider             TEXT NOT NULL,              -- polar|creem|paddle|dodo
   provider_customer_id TEXT,
   provider_sub_id      TEXT,
   status               TEXT NOT NULL,              -- active|past_due|canceled|trialing
@@ -227,11 +231,10 @@ Mounted by the `edge` domain route table. All pass the interop chain.
 | GET | `/api/billing/entitlements` | session | Full entitlement view (features + quotas) | no |
 | GET | `/api/billing/usage` | session | Usage headroom/summary per kind | no |
 | GET | `/api/billing/invoices` | session | List invoices (provider + local) | no |
-| POST | `/api/billing/checkout` | session | Create hosted checkout (Polar\|Stripe) for a plan | **yes** |
+| POST | `/api/billing/checkout` | session | Create hosted checkout (active MoR provider) for a plan | **yes** |
 | POST | `/api/billing/portal` | session | Create customer-portal session URL | **yes** |
 | GET | `/api/billing/health` | public | Truthful provider readiness (no secrets leaked) | no |
-| POST | `/api/billing/webhooks/polar` | **signature** | Polar webhook → reconcile | **yes** |
-| POST | `/api/billing/webhooks/stripe` | **signature** | Stripe webhook → reconcile | **yes** |
+| POST | `/api/billing/webhooks/:provider` | **signature** | MoR webhook (provider ∈ polar\|creem\|paddle\|dodo) → reconcile | **yes** |
 | POST | `/internal/billing/meter` | `INTERNAL_SERVICE_KEY` | Worker/conductor emits a `UsageRecord` | **yes** |
 
 Webhook routes need the **raw request body** (before JSON parse) for HMAC
@@ -265,10 +268,10 @@ Consumed by: `conductor` (before dispatching a run — quota + feature gate),
   `billing.subscription.changed` / `billing.usage.recorded`.
 - `@recoder/agent-mcp` ToolRouter — MCP registration.
 
-**Provider seam** (`ports/billing-provider.port.ts`) — Polar & Stripe both implement:
+**Provider seam** (`ports/billing-provider.port.ts`) — every MoR provider implements:
 ```ts
 export interface BillingProviderPort {
-  readonly name: 'polar' | 'stripe';
+  readonly name: 'polar' | 'creem' | 'paddle' | 'dodo';
   startCheckout(i: CheckoutIntent): Promise<CheckoutResult>;
   createPortalSession(customerId: string, returnUrl: string): Promise<PortalSession>;
   getSubscription(subId: string): Promise<ProviderSubscription | null>;
@@ -302,8 +305,8 @@ export interface BillingProviderPort {
 - Verification script `scripts/verify-byok-e2e.sh` for the BYOK-vs-platform path.
 
 **NEW (write):**
-- `adapters/stripe.adapter.ts` — distribution ships only Polar; Stripe is a new
-  degrade-safe `BillingProviderPort` (fetch-based, `constructEvent` sig verify).
+- `adapters/{creem,paddle,dodo}.adapter.ts` + `adapters/shared.ts` — distribution ships only Polar;
+  the other three MoR providers are new degrade-safe `BillingProviderPort`s (fetch-based, per-provider sig verify). **No Stripe.**
 - Durable **Postgres metering** (`persistence/billing.repository.ts` +
   migrations) — distribution's quota is provider-fed/in-memory; we need
   auditable per-run/token/engine records + idempotency + reset windows.
@@ -348,8 +351,8 @@ DB-backed here.
    other domains can wire before any provider exists.
 4. **Quota + metering:** `quota.service.ts`, `metering.service.ts`
    (+ `quota.service.test.ts`). Fail-safe deny path first.
-5. **Providers:** `polar.adapter.ts` (move existing), `stripe.adapter.ts`
-   (+ `stripe.adapter.test.ts`), `invoice.service.ts`.
+5. **Providers:** `polar.adapter.ts` (move existing), `{creem,paddle,dodo}.adapter.ts` + `shared.ts`
+   (+ `mor-adapters.test.ts`), `invoice.service.ts`.
 6. **Webhooks:** `webhook.service.ts` (+ `webhook.service.test.ts`),
    `routes/billing-webhooks.routes.ts` (raw body).
 7. **Edges + MCP:** `routes/billing.routes.ts`, `mcp/billing-engine.ts` (move),
@@ -361,4 +364,4 @@ DB-backed here.
    test:contracts:agent-os`, `scripts/verify-byok-e2e.sh`.
 
 No engine daemons/crates/py sidecars — billing is pure TS spine work; the only
-external transports are HTTPS to Polar/Stripe (fetch) behind the provider port.
+external transports are HTTPS to the MoR providers (Polar/Creem/Paddle/Dodo, fetch) behind the provider port.

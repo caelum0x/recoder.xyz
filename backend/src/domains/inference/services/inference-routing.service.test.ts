@@ -106,6 +106,73 @@ describe('InferenceRoutingService.complete accounting', () => {
   });
 });
 
+describe('InferenceRoutingService token metering', () => {
+  function serviceWithMeter(result: InferenceResult, record: (i: unknown) => Promise<{ inserted: boolean }>) {
+    const ledger = { append: vi.fn(async () => null), recentForUser: vi.fn(async () => []), totalsForUser: vi.fn(), isDurable: () => true } as unknown as UsageLedgerRepository;
+    const outcomes = { append: vi.fn(async () => null), recentForUser: vi.fn(async () => []), isDurable: () => true } as unknown as DeliveryOutcomeRepository;
+    const service = new InferenceRoutingService({ logger: log, gateway: gatewayReturning(result), catalog: catalog(ENTRY), ledger, outcomes });
+    service.setUsageMeter({ record: record as never });
+    return service;
+  }
+
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it('meters prompt + completion tokens (totalTokens) on a routed completion, idempotent by inferenceId', async () => {
+    const record = vi.fn(async () => ({ inserted: true as const }));
+    const service = serviceWithMeter(
+      { routed: true, tier: 'napi', model: 'openai/gpt-4o-mini', content: 'hi', inferenceId: 'inf-9', usage: { inputTokens: 1000, outputTokens: 500, totalTokens: 1500 } },
+      record,
+    );
+
+    await service.complete({ model: 'openai/gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }], userId: 'u1' });
+    await flush();
+
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ subjectId: 'u1', kind: 'token', quantity: 1500, engine: 'openai', idempotencyKey: 'token:inf-9' }),
+    );
+  });
+
+  it('does NOT meter a non-routed completion (nothing to charge)', async () => {
+    const record = vi.fn(async () => ({ inserted: true as const }));
+    const service = serviceWithMeter({ routed: false, tier: 'none', model: 'openai/gpt-4o-mini', content: null, reason: 'unconfigured' }, record);
+
+    await service.complete({ model: 'openai/gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }], userId: 'u1' });
+    await flush();
+
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('does NOT meter when the request has no attributable userId', async () => {
+    const record = vi.fn(async () => ({ inserted: true as const }));
+    const service = serviceWithMeter(
+      { routed: true, tier: 'napi', model: 'openai/gpt-4o-mini', content: 'hi', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
+      record,
+    );
+
+    await service.complete({ model: 'openai/gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }] });
+    await flush();
+
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('degrade-safe: a metering throw never breaks delivery', async () => {
+    const record = vi.fn(async () => {
+      throw new Error('billing down');
+    });
+    const service = serviceWithMeter(
+      { routed: true, tier: 'napi', model: 'openai/gpt-4o-mini', content: 'ok', usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } },
+      record as never,
+    );
+
+    const result = await service.complete({ model: 'openai/gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }], userId: 'u1' });
+    await flush();
+
+    expect(result.routed).toBe(true);
+    expect(result.content).toBe('ok');
+  });
+});
+
 describe('InferenceRoutingService.feedback', () => {
   function serviceWith(gateway: InferenceGatewayPort, outcomes: DeliveryOutcomeRepository) {
     const ledger = { append: vi.fn(async () => null), recentForUser: vi.fn(), totalsForUser: vi.fn(), isDurable: () => true } as unknown as UsageLedgerRepository;

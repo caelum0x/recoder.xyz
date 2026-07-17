@@ -35,6 +35,20 @@ export interface RemoteEnvelopeSender {
   send(target: AgentRow, sealed: EgressEnvelope): Promise<{ ok: boolean; error?: string }>;
 }
 
+/**
+ * The multi-peer RESPONSE STRATEGY that decides when a fan-out is "satisfied":
+ *  - `all`    — every attempted leg must succeed (the default; all-or-reported).
+ *  - `first`  — the FIRST successful leg satisfies it; remaining targets are NOT
+ *               attempted (first-wins, short-circuit — the cheapest peer that
+ *               answers wins). Truthfully reported via un-attempted `skipped` legs.
+ *  - `quorum` — at least `quorum` legs must succeed (default: strict majority).
+ *
+ * Every strategy is TRUTHFUL: `ok` reflects the real per-leg outcomes, never a
+ * faked success, and the task projection transitions to `working` only when the
+ * strategy is genuinely satisfied.
+ */
+export type DispatchStrategy = 'all' | 'first' | 'quorum';
+
 /** One dispatched leg's outcome (per target). */
 export interface DispatchLeg {
   readonly targetId: string;
@@ -49,8 +63,12 @@ export interface DispatchLeg {
 export interface MultiDispatchResult {
   readonly taskId: string;
   readonly legs: readonly DispatchLeg[];
-  /** True when EVERY leg succeeded (fan-out is all-or-reported). */
+  /** True when the {@link DispatchStrategy} was genuinely satisfied. */
   readonly ok: boolean;
+  /** The strategy that decided `ok` (echoed for truthful downstream logging). */
+  readonly strategy: DispatchStrategy;
+  /** The number of successful legs / the threshold the strategy required. */
+  readonly satisfied: { readonly succeeded: number; readonly required: number };
 }
 
 export interface DispatchMessageInput<TPayload = unknown> {
@@ -63,6 +81,13 @@ export interface DispatchMessageInput<TPayload = unknown> {
   readonly prompt?: string;
   /** Reuse an existing task projection instead of creating one. */
   readonly taskId?: string;
+  /** The multi-peer response strategy (default `all`). */
+  readonly strategy?: DispatchStrategy;
+  /**
+   * The explicit success threshold for `quorum` (clamped to `[1, targets.length]`).
+   * Absent ⇒ strict majority (`floor(n/2) + 1`). Ignored for `all`/`first`.
+   */
+  readonly quorum?: number;
 }
 
 export interface MultiDispatchDeps {
@@ -126,6 +151,8 @@ export function createMultiDispatchService(deps: MultiDispatchDeps): MultiDispat
 
   return {
     async dispatch<TPayload = unknown>(input: DispatchMessageInput<TPayload>): Promise<MultiDispatchResult> {
+      const strategy = input.strategy ?? 'all';
+      const required = requiredSuccesses(strategy, input.targets.length, input.quorum);
       const taskId = input.taskId ?? newTaskId();
       if (!input.taskId) {
         await safe(() =>
@@ -140,21 +167,47 @@ export function createMultiDispatchService(deps: MultiDispatchDeps): MultiDispat
       const sealed = await transport.egressEnvelope(input.envelope);
 
       const legs: DispatchLeg[] = [];
-      for (const targetId of input.targets) {
+      let succeeded = 0;
+      for (let i = 0; i < input.targets.length; i += 1) {
+        const targetId = input.targets[i]!;
         const target = await safe(() => registry.get(targetId, input.userId));
-        if (!target) {
-          legs.push({ targetId, kind: 'remote_a2a', ok: false, code: 'target_not_found', reason: `Target ${targetId} not found or not owned.` });
-          continue;
+        const leg = target
+          ? await dispatchLeg(target, input, sealed)
+          : { targetId, kind: 'remote_a2a' as const, ok: false, code: 'target_not_found', reason: `Target ${targetId} not found or not owned.` };
+        legs.push(leg);
+        if (leg.ok) succeeded += 1;
+        // `first` short-circuits the moment a leg succeeds: the remaining targets
+        // are recorded truthfully as `skipped` (not attempted), never faked ok.
+        if (strategy === 'first' && leg.ok) {
+          for (let j = i + 1; j < input.targets.length; j += 1) {
+            legs.push({ targetId: input.targets[j]!, kind: 'remote_a2a', ok: false, code: 'skipped', reason: 'first-wins strategy satisfied — target not attempted.' });
+          }
+          break;
         }
-        legs.push(await dispatchLeg(target, input, sealed));
       }
 
-      const ok = legs.length > 0 && legs.every((l) => l.ok);
-      // Advance the projection: working when any leg launched, else failed.
+      const ok = succeeded >= required && input.targets.length > 0;
+      // Advance the projection: working when the strategy is satisfied, else failed.
       await safe(() => tasks.transition(taskId, input.userId, ok ? 'working' : 'failed'));
-      return { taskId, legs, ok };
+      return { taskId, legs, ok, strategy, satisfied: { succeeded, required } };
     },
   };
+}
+
+/** The number of successful legs a strategy needs (clamped to `[1, n]`). */
+export function requiredSuccesses(strategy: DispatchStrategy, targetCount: number, quorum?: number): number {
+  if (targetCount <= 0) return 1; // empty fan-out can never satisfy (ok stays false).
+  switch (strategy) {
+    case 'all':
+      return targetCount;
+    case 'first':
+      return 1;
+    case 'quorum': {
+      const majority = Math.floor(targetCount / 2) + 1;
+      const want = typeof quorum === 'number' && Number.isFinite(quorum) ? Math.trunc(quorum) : majority;
+      return Math.min(Math.max(want, 1), targetCount);
+    }
+  }
 }
 
 function leg(target: AgentRow, ok: boolean, code: string, reason: string): DispatchLeg {

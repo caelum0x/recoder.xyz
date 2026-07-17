@@ -21,6 +21,8 @@ import type { AuthMiddleware } from '../../identity/middleware/authenticate.midd
 import type { Principal } from '../../identity/types.js';
 import type { EntitlementGate } from '../ports/entitlement.port.js';
 import type { MeteringRepository } from '../ports/metering-repo.port.js';
+import type { BillingWriteGate } from '../ports/governance-gate.port.js';
+import type { InvoiceService } from '../invoice.service.js';
 import type { PlanCatalog } from '../services/plan-catalog.service.js';
 import type { ProviderRegistry } from '../provider-registry.js';
 import { PLAN_TIERS, type BillingSubject, type PlanTier } from '../types.js';
@@ -30,8 +32,16 @@ export interface BillingRouterDeps {
   readonly registry: ProviderRegistry;
   readonly catalog: PlanCatalog;
   readonly repo: MeteringRepository;
+  readonly invoices: InvoiceService;
   readonly mw: AuthMiddleware;
   readonly logger: Logger;
+  /**
+   * The governance write gate (`decide` facet) that billing MUTATIONS pass
+   * through for policy + durable audit. Injected at bootstrap; returns
+   * `undefined` until wired, in which case mutations proceed UNGATED
+   * (degrade-safe — the authenticated own-subject edge still protects them).
+   */
+  readonly getGate: () => BillingWriteGate | undefined;
 }
 
 /** Purchasable tiers only (never `free`; `enterprise` is negotiated upstream). */
@@ -59,8 +69,32 @@ function principalOf(req: Request): Principal | null {
 }
 
 export function buildBillingRouter(deps: BillingRouterDeps): Router {
-  const { gate, registry, catalog, repo, mw, logger } = deps;
+  const { gate, registry, catalog, repo, invoices, mw, logger, getGate } = deps;
   const router = Router();
+
+  /**
+   * Run the governance gate for a billing mutation. Returns `null` when the
+   * caller may proceed (an `allow` verdict, OR the gate is not wired yet), or a
+   * ready-to-send AppError when the verdict blocks. Fails safe: a deny/needs
+   * approval surfaces truthfully, never a fabricated allow.
+   */
+  async function guardMutation(
+    action: 'billing.checkout' | 'billing.cancel',
+    principal: Principal,
+    metadata: Readonly<Record<string, unknown>>,
+  ): Promise<ReturnType<typeof createError> | null> {
+    const writeGate = getGate();
+    if (!writeGate) return null; // degrade-safe: ungated until bootstrap wires it
+    const verdict = await writeGate.decide(action, principal, {
+      target: { toolName: action },
+      metadata,
+    });
+    if (verdict.effect === 'allow') return null;
+    return createError(
+      ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+      `${action} ${verdict.effect === 'needs_approval' ? 'requires approval' : 'denied'}: ${verdict.reason}`,
+    );
+  }
 
   router.get(
     '/plan',
@@ -91,6 +125,17 @@ export function buildBillingRouter(deps: BillingRouterDeps): Router {
         return;
       }
       const subject = subjectOf(principal);
+      // GOVERNED MUTATION: route the checkout through the governance gate for
+      // policy + durable audit (no-op when the gate is not wired yet).
+      const blocked = await guardMutation('billing.checkout', principal, {
+        plan: parsed.data.plan,
+        provider: registry.activeName,
+        subjectKind: subject.kind,
+      });
+      if (blocked) {
+        sendError(res, blocked);
+        return;
+      }
       const productId = catalog.productForPlan(parsed.data.plan, registry.activeName);
       if (!productId) {
         sendError(
@@ -129,18 +174,35 @@ export function buildBillingRouter(deps: BillingRouterDeps): Router {
         return;
       }
       const subject = subjectOf(principal);
-      const [subscription, invoices, view] = await Promise.all([
+      const [subscription, invoiceRows, view] = await Promise.all([
         repo.getActiveSubscription(subject.subjectId),
-        repo.listInvoices(subject.subjectId, 20),
+        invoices.list(subject.subjectId, 20),
         gate.view(subject),
       ]);
       sendSuccess(res, {
         provider: registry.activeName,
         plan: view.plan,
         subscription,
-        invoices,
+        invoices: invoiceRows,
         canManage: subscription != null && subscription.status !== 'canceled',
       });
+    }),
+  );
+
+  router.get(
+    '/invoices',
+    mw.authenticate,
+    asyncHandler(async (req, res) => {
+      const principal = principalOf(req);
+      if (!principal) {
+        sendError(res, createError(ErrorCode.AUTH_REQUIRED));
+        return;
+      }
+      const subject = subjectOf(principal);
+      // Durable receipt history, newest first — served off the invoice
+      // projection (fail-safe: an empty list when the projection is unavailable).
+      const rows = await invoices.list(subject.subjectId, 50);
+      sendSuccess(res, { provider: registry.activeName, invoices: rows });
     }),
   );
 
@@ -162,6 +224,18 @@ export function buildBillingRouter(deps: BillingRouterDeps): Router {
       const sub = await repo.getActiveSubscription(subject.subjectId);
       if (!sub || !sub.providerSubId) {
         sendError(res, createError(ErrorCode.NOT_FOUND, 'no active subscription to cancel'));
+        return;
+      }
+      // GOVERNED MUTATION: a subscription cancel passes the governance gate for
+      // policy + durable audit (no-op when the gate is not wired yet).
+      const blocked = await guardMutation('billing.cancel', principal, {
+        provider: sub.provider,
+        providerSubId: sub.providerSubId,
+        atPeriodEnd: parsed.data.atPeriodEnd ?? true,
+        subjectKind: subject.kind,
+      });
+      if (blocked) {
+        sendError(res, blocked);
         return;
       }
       // Cancel with the provider the subscription belongs to (not necessarily the

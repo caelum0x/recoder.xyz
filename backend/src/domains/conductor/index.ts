@@ -27,7 +27,9 @@ import type { AuthMiddleware } from '../identity/middleware/authenticate.middlew
 import type { Principal } from '../identity/types.js';
 import type { ConductorConfigOverrides } from './config.js';
 import type { GovernanceGatePort, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView, SteerTransportPort } from './ports/index.js';
+import type { McpInjectPort } from './ports/mcp-inject.port.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
+import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
@@ -111,6 +113,14 @@ export interface ConductorModuleDeps {
    * `ok:false` with the transport's reason.
    */
   readonly steerTransport?: SteerTransportPort;
+  /**
+   * Optional per-worktree `.mcp.json` injector: on a successful launch the composer
+   * writes a secret-free `.mcp.json` into the workspace's worktree pointing the
+   * launched agent at the GOVERNED backend MCP host (the Recoder capability-tools
+   * bridge). Absent ⇒ injection is a truthful skip (the agent runs without the
+   * Recoder toolbelt, never a fabricated write). See `adapters/mcp-inject.adapter.ts`.
+   */
+  readonly mcpInject?: McpInjectPort;
 }
 
 /** The public surface bootstrap registers and the edge/interop consume. */
@@ -201,6 +211,15 @@ export interface ConductorModule {
    * refused truthfully (never a fabricated success).
    */
   setEntitlementGate(gate: EntitlementGate): void;
+  /**
+   * Inject the OPTIONAL billing usage meter. Set post-construction by bootstrap
+   * (`conductor.setUsageMeter(billing.metering())`), next to the entitlement gate.
+   * When wired, a completed/failed run meters one `agent_run` for the owning
+   * subject (idempotent by the workspace/run anchor) so the pre-dispatch quota
+   * actually decrements. Absent ⇒ a truthful no-op (no per-run metering). A
+   * metering hiccup never blocks or delays the terminal RunEvent.
+   */
+  setUsageMeter(meter: UsageMeterPort): void;
   /** Truthful per-substrate availability (`GET /substrates`). */
   substrates(): readonly SubstrateAvailabilityView[];
   /**

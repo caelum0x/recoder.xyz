@@ -117,6 +117,109 @@ describe('conductor completion hook', () => {
     expect(harvestOnCompletion).not.toHaveBeenCalled();
   });
 
+  it('meters one agent_run on a terminal event (idempotent by the workspace anchor)', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const record = vi.fn(async () => ({ inserted: true as const }));
+    const sink = createCompletionHookSink({
+      inner,
+      getMeter: () => ({ record }),
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('completed'));
+    await flush();
+
+    expect(inner.append).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subjectId: 'user_alice',
+        kind: 'agent_run',
+        quantity: 1,
+        runId: 'run_ws_1',
+        idempotencyKey: 'agent_run:ws_1',
+      }),
+    );
+  });
+
+  it('meters a failed run too (a launched run consumed one agent_run)', async () => {
+    const record = vi.fn(async () => ({ inserted: true as const }));
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      getMeter: () => ({ record }),
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('failed'));
+    await flush();
+
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ kind: 'agent_run', subjectId: 'user_alice' }));
+  });
+
+  it('does NOT meter when the subject is unresolvable (no createdBy) — a truthful skip', async () => {
+    const record = vi.fn(async () => ({ inserted: true as const }));
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      getMeter: () => ({ record }),
+      getWorkspace: async () => null, // no owning workspace ⇒ no userId
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('completed'));
+    await flush();
+
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('does NOT meter on non-terminal events', async () => {
+    const record = vi.fn(async () => ({ inserted: true as const }));
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      getMeter: () => ({ record }),
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('log', { eventId: 'evt_log' }));
+    await flush();
+
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('degrade-safe: a meter that is not yet wired (getMeter returns undefined) is a no-op', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const sink = createCompletionHookSink({
+      inner,
+      getMeter: () => undefined, // bootstrap has not injected the billing meter yet
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await expect(sink.append(event('completed'))).resolves.toBeUndefined();
+    await flush();
+    expect(inner.append).toHaveBeenCalledTimes(1);
+  });
+
+  it('degrade-safe: a meter throw never rejects append (terminal event unaffected)', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const sink = createCompletionHookSink({
+      inner,
+      getMeter: () => ({
+        record: vi.fn(async () => {
+          throw new Error('billing down');
+        }),
+      }),
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await expect(sink.append(event('completed'))).resolves.toBeUndefined();
+    await flush();
+    expect(inner.append).toHaveBeenCalledTimes(1);
+  });
+
   it('degrade-safe: a harvest throw never rejects append (terminal event unaffected)', async () => {
     const inner = { append: vi.fn(async () => {}) };
     const sink = createCompletionHookSink({

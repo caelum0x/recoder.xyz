@@ -33,12 +33,14 @@ import { createAgentRegistryService, type AgentRegistryService } from './registr
 import { createHeartbeatSloService, type HeartbeatSloService } from './registry/heartbeat-slo.js';
 import { createScratchpadService, type ScratchpadService } from './bridge/scratchpad.js';
 import { createContextBridgeService, type ContextBridgeService } from './bridge/context-bridge.js';
+import { createHandoffService, type HandoffService } from './dispatch/handoff.js';
 import { registerRuntimeConnectors } from './runtimes/index.js';
 import { buildA2ARoutes } from './routes/a2a.routes.js';
 import { createRpcAdmissionGuard } from './routes/rpc-admission.middleware.js';
 import { buildAgentsRoutes } from './routes/agents.routes.js';
 import { buildTasksRoutes } from './routes/tasks.routes.js';
 import { buildInteropMcpTools } from './mcp/interop-engine.js';
+import { buildInteropWriteMcpTools } from './mcp/interop-write-engine.js';
 
 /** Dependencies bootstrap injects into the composer (extends the core deps). */
 export interface InteropWireComposerDeps extends InteropWireModuleDeps {
@@ -63,6 +65,8 @@ export interface InteropWireComposite {
   dispatch(): MultiDispatchService;
   scratchpad(): ScratchpadService;
   contextBridge(): ContextBridgeService;
+  /** The explicit A2A handoff verb (transfer a task + context to another target). */
+  handoff(): HandoffService;
   /** The `/api/interop` router (agents + tasks). */
   routes(): Router;
   /** The `/api/a2a` wire router (agent-card + rpc + ingress). */
@@ -101,6 +105,8 @@ export function createInteropWireComposer(deps: InteropWireComposerDeps): Intero
     ...(deps.remoteSender ? { remoteSender: deps.remoteSender } : {}),
   });
 
+  const handoff = createHandoffService({ tasks: taskLifecycle, contextBridge, dispatch, envelope: core.envelope() });
+
   // Wire the four canonical A2A JSON-RPC methods onto the frozen server.
   registerA2AMethods({ jsonRpc: core.jsonRpc(), tasks: taskLifecycle, dispatch, envelope: core.envelope() });
 
@@ -115,11 +121,12 @@ export function createInteropWireComposer(deps: InteropWireComposerDeps): Intero
     dispatch: () => dispatch,
     scratchpad: () => scratchpad,
     contextBridge: () => contextBridge,
+    handoff: () => handoff,
 
     routes(): Router {
       const router = makeRouter();
       router.use('/agents', buildAgentsRoutes({ registry, heartbeat, middleware: deps.middleware }));
-      router.use('/tasks', buildTasksRoutes({ tasks: taskLifecycle, contextBridge, scratchpad, middleware: deps.middleware }));
+      router.use('/tasks', buildTasksRoutes({ tasks: taskLifecycle, contextBridge, scratchpad, handoff, middleware: deps.middleware }));
       return router;
     },
 
@@ -153,7 +160,13 @@ export function createInteropWireComposer(deps: InteropWireComposerDeps): Intero
     },
 
     mcp(): readonly McpToolRegistration[] {
-      return buildInteropMcpTools({ registry, heartbeat, tasks: taskLifecycle, contextBridge, jsonRpc: core.jsonRpc(), ownerId });
+      // Read-only introspection tools ++ the governed A2A WRITE tools
+      // (send_task / dispatch / respond / inbox). Both pass the host's
+      // authorize→risk→policy→audit chain at the MCP boundary.
+      return [
+        ...buildInteropMcpTools({ registry, heartbeat, tasks: taskLifecycle, contextBridge, jsonRpc: core.jsonRpc(), ownerId }),
+        ...buildInteropWriteMcpTools({ dispatch, tasks: taskLifecycle, envelope: core.envelope(), ownerId }),
+      ];
     },
 
     health: () => core.health(),

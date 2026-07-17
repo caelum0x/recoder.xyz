@@ -59,6 +59,7 @@ import { buildInferenceMcpTools } from './mcp/inference-engine.js';
 import { buildInferenceHealth } from './health.js';
 import type { InferenceModule, InferenceModuleDeps } from './index.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
+import type { UsageMeterPort } from './ports/usage-meter.port.js';
 
 /** A permanently-unavailable vault → the BYOK cache disables (no plaintext cache). */
 function unavailableVault(): KeyVaultPort {
@@ -173,6 +174,11 @@ export class InferenceComposer implements InferenceModule {
   /** Inject the optional billing entitlement gate (BYOK-aware token quota). */
   setEntitlementGate(gate: EntitlementGate): void {
     this.routingService.setEntitlementGate(gate);
+  }
+
+  /** Inject the optional billing usage meter (per-completion token metering). */
+  setUsageMeter(meter: UsageMeterPort): void {
+    this.routingService.setUsageMeter(meter);
   }
 
   /**

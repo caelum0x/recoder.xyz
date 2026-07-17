@@ -29,6 +29,7 @@ import type { AuthMiddleware } from '../identity/middleware/authenticate.middlew
 import type { BillingProviderPort } from './ports/billing-provider.port.js';
 import type { EntitlementGate } from './ports/entitlement.port.js';
 import type { MeteringRepository } from './ports/metering-repo.port.js';
+import type { BillingWriteGate } from './ports/governance-gate.port.js';
 import type { BillingConfig } from './config.js';
 import { createBillingRepository } from './persistence/billing.repository.js';
 import { createPlanCatalog, type PlanCatalog } from './services/plan-catalog.service.js';
@@ -37,9 +38,11 @@ import { createEntitlementService } from './services/entitlement.service.js';
 import { createMeteringService, type MeteringService } from './services/metering.service.js';
 import { createQuotaService, type QuotaService } from './services/quota.service.js';
 import { createWebhookService, type WebhookService } from './services/webhook.service.js';
+import { createInvoiceService, type InvoiceService } from './invoice.service.js';
 import { createProviderRegistry, type ProviderRegistry } from './provider-registry.js';
 import { buildBillingRouter } from './routes/billing.routes.js';
 import { buildBillingWebhooksRouter } from './routes/billing-webhooks.routes.js';
+import { buildInternalBillingRouter } from './routes/internal-billing.routes.js';
 import { buildBillingMcpTools } from './mcp/billing-engine.js';
 import { buildBillingHealth } from './health.js';
 import type { BillingModule, BillingModuleDeps } from './index.js';
@@ -59,6 +62,9 @@ export class BillingComposer implements BillingModule {
   private readonly meteringService: MeteringService;
   private readonly quotaService: QuotaService;
   private readonly webhookService: WebhookService;
+  private readonly invoiceService: InvoiceService;
+  /** The governance write gate for billing mutations. Injected at bootstrap. */
+  private writeGate?: BillingWriteGate;
   private started = false;
 
   constructor(deps: BillingModuleDeps, cfg: BillingConfig) {
@@ -112,17 +118,35 @@ export class BillingComposer implements BillingModule {
       ...(deps.resolveByok ? { resolveByok: deps.resolveByok } : {}),
     });
 
-    // Signature-gated, idempotent webhook reconcile (the ONLY projection writer).
+    // Durable invoice/receipt projection over the SAME metering repo. The
+    // webhook reconcile is the only writer; reads serve the billing UI.
+    this.invoiceService = createInvoiceService({ repo: this.repo, logger: this.log });
+
+    // Signature-gated, idempotent webhook reconcile (the ONLY projection writer)
+    // — reconciles both the subscription snapshot AND the invoice receipt.
     this.webhookService = createWebhookService({
       repo: this.repo,
       catalog: this.catalog,
       registry: this.registry,
+      invoices: this.invoiceService,
       logger: this.log,
     });
+
+    if (deps.gate) this.writeGate = deps.gate;
   }
 
   gate(): EntitlementGate {
     return this.entitlement;
+  }
+
+  /**
+   * Inject the governance gate that billing MUTATIONS (checkout/cancel) pass
+   * through for policy + durable audit. Until set (or passed as `deps.gate`),
+   * those mutations proceed UNGATED (degrade-safe — still authenticated + own
+   * subject only). Never fabricates an audit record the gate did not make.
+   */
+  setGovernanceGate(gate: BillingWriteGate): void {
+    this.writeGate = gate;
   }
 
   metering(): MeteringService {
@@ -147,8 +171,10 @@ export class BillingComposer implements BillingModule {
         registry: this.registry,
         catalog: this.catalog,
         repo: this.repo,
+        invoices: this.invoiceService,
         mw: this.middleware,
         logger: this.log,
+        getGate: () => this.writeGate,
       }),
     );
     router.use(
@@ -158,6 +184,14 @@ export class BillingComposer implements BillingModule {
       }),
     );
     return router;
+  }
+
+  /** The `/internal/billing/*` router: `POST /meter` (INTERNAL_SERVICE_KEY-gated). */
+  internalRoutes(): Router {
+    return buildInternalBillingRouter({
+      metering: this.meteringService,
+      middleware: this.middleware,
+    });
   }
 
   mcp(): readonly McpToolRegistration[] {

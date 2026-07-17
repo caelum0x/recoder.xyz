@@ -26,12 +26,14 @@ import type { AuthMiddleware } from '../../identity/middleware/authenticate.midd
 import type { RecallService } from '../recall/recall-fusion.js';
 import type { CandidateService, MemoryScope } from '../lifecycle/candidate-service.js';
 import type { MemoryLifecycle } from '../lifecycle/memory-lifecycle.js';
+import type { ForgetService } from '../lifecycle/forget.js';
 import type { RelateService } from '../lifecycle/relate.js';
 
 export interface MemoryRouterDeps {
   readonly recall: RecallService;
   readonly candidates: CandidateService;
   readonly lifecycle: MemoryLifecycle;
+  readonly forget: ForgetService;
   readonly relations: RelateService;
   readonly middleware: AuthMiddleware;
 }
@@ -41,7 +43,7 @@ const MEMORY_SCOPES: readonly MemoryScope[] = ['user', 'org', 'space', 'repo', '
 /** Build the memory router (mount under `/api/agent-os`). */
 export function buildMemoryRouter(deps: MemoryRouterDeps): Router {
   const router = Router();
-  const { recall, candidates, lifecycle, relations, middleware } = deps;
+  const { recall, candidates, lifecycle, forget, relations, middleware } = deps;
 
   // --- recall ----------------------------------------------------------------
 
@@ -139,6 +141,27 @@ export function buildMemoryRouter(deps: MemoryRouterDeps): Router {
         candidateId: req.params.id,
         principal: req.principal!,
         reason: requireString(body, 'reason'),
+      });
+      sendSuccess(res, result);
+    }),
+  );
+
+  // --- items -----------------------------------------------------------------
+
+  // Forget a durable memory item. GATED by governance; a non-allow verdict
+  // returns a truthful `{ forgotten:false, verdict }` (never a fabricated delete).
+  router.post(
+    '/memory/items/:id/forget',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const result = await forget.forget({
+        userId: req.principal!.userId,
+        memoryId: req.params.id,
+        principal: req.principal!,
+        reason: requireString(body, 'reason'),
+        ...(optionalString(body, 'taskId') ? { taskId: optionalString(body, 'taskId')! } : {}),
+        ...(optionalString(body, 'runId') ? { runId: optionalString(body, 'runId')! } : {}),
       });
       sendSuccess(res, result);
     }),

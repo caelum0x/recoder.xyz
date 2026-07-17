@@ -9,12 +9,15 @@
  *  - `governance_audit_verify`  — re-walk the durable Merkle chain (tamper check).
  *  - `governance_locks_list`    — active path/work locks (conflict visibility).
  *
- * The write-bearing tools (decide / request-approval / secret set) are governed
- * mutations and are contributed behind the gate by later phases; this engine owns
- * the read-only introspection surface and degrades safely (never fakes a result).
+ * The write-bearing tools (decide / request-approval / approval-decide /
+ * acquire-lock / release-lock / secret-set) are governed mutations contributed by
+ * `buildGovernanceWriteTools`, each SELF-GATED through `gate().decide` before it
+ * touches state; this engine composes both surfaces and degrades safely (never
+ * fakes a result).
  */
 import type { McpToolRegistration } from '../../../shared/module-base.js';
 import type { GovernanceModule } from '../index.js';
+import { buildGovernanceWriteTools } from './governance-write-tools.js';
 
 interface LocksListInput {
   readonly holderAgentId?: string;
@@ -22,6 +25,13 @@ interface LocksListInput {
 }
 
 export function buildGovernanceMcpTools(module: GovernanceModule): readonly McpToolRegistration[] {
+  return [
+    ...buildGovernanceReadTools(module),
+    ...buildGovernanceWriteTools(module),
+  ];
+}
+
+function buildGovernanceReadTools(module: GovernanceModule): readonly McpToolRegistration[] {
   return [
     {
       name: 'governance_kernel_status',

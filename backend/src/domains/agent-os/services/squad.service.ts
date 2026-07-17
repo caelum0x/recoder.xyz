@@ -140,6 +140,21 @@ export class SquadService {
     return this.store.listSquads(spaceId);
   }
 
+  /** Read-only introspection: one squad by id (null when unknown — never invented). */
+  async getSquad(squadId: string): Promise<Squad | null> {
+    return this.store.getSquad(squadId);
+  }
+
+  /** Read-only introspection: a squad's members (empty when unknown/none). */
+  async listMembers(squadId: string): Promise<SquadMember[]> {
+    return this.store.listMembers(squadId);
+  }
+
+  /** Read-only introspection: a squad's recorded routing activity (empty when none). */
+  async listActivity(squadId: string): Promise<SquadActivity[]> {
+    return this.store.listActivity(squadId);
+  }
+
   /**
    * Route a task to a squad member. Leader-first (when eligible), else the
    * highest-weight eligible member (deterministic tie-break by agentId). Records

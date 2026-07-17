@@ -144,6 +144,18 @@ export {
   type MeshDiagnosticsDeps,
 } from './services/mesh-diagnostics.service.js';
 
+// Custom domains: CRUD + DNS/TLS verification (verifier is an injected seam).
+export {
+  createDomainsService,
+  type DomainsService,
+  type DomainsServiceDeps,
+  type DomainVerifierPort,
+  type DomainVerifierResult,
+} from './services/domains.service.js';
+
+// Governance-gated WRITE MCP tools (sandbox provision/destroy + domain CRUD).
+export { buildCloudWriteMcpTools, type CloudWriteMcpDeps } from './mcp/cloud-write-engine.js';
+
 // Composed health.
 export { buildCloudHealth, type CloudHealthDeps } from './health.js';
 
@@ -164,6 +176,7 @@ import type { PreviewDeployService as PreviewDeployServiceType } from './service
 import type { FleetSupervisorService as FleetSupervisorServiceType } from './services/fleet-supervisor.service.js';
 import type { MeshDiagnosticsService as MeshDiagnosticsServiceType } from './services/mesh-diagnostics.service.js';
 import type { LocalContainerRuntime as LocalContainerRuntimeType } from './adapters/local-container.adapter.js';
+import type { DomainsService as DomainsServiceType, DomainVerifierPort as DomainVerifierPortType } from './services/domains.service.js';
 import type { CloudGovernanceGatePort as CloudGovernanceGatePortType } from './ports/governance-gate.port.js';
 
 /**
@@ -187,6 +200,8 @@ export interface CloudModuleDeps {
   readonly runEvents?: CloudRunEventSinkType;
   /** Self-host container runtime (docker/podman); absent ⇒ local provider `down`. */
   readonly localRuntime?: LocalContainerRuntimeType;
+  /** Real DNS/TLS ownership prober for custom domains; absent ⇒ `verify` stays truthfully pending. */
+  readonly domainVerifier?: DomainVerifierPortType;
   /**
    * Phase-3 governance gate (`governance.gate()`, injected by bootstrap) guarding
    * EVERY cloud write via `decide → audit` — the conductor/identity pattern.
@@ -209,6 +224,8 @@ export interface CloudModule {
   fleet(): FleetSupervisorServiceType;
   /** The read-only mesh diagnostics (ziti + xDS registrations + status). */
   mesh(): MeshDiagnosticsServiceType;
+  /** The custom-domains service (CRUD + DNS/TLS verification). */
+  domains(): DomainsServiceType;
   /** The concrete repositories (tenant-scoped; for cross-domain read wiring). */
   repositories(): CloudRepositories;
   /** The `/api/agent-os/cloud` router. */

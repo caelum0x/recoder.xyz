@@ -40,8 +40,10 @@ import { createFleetSupervisorService, type FleetSupervisorService } from './ser
 import { createZitiMeshAdapter } from './adapters/ziti-mesh.adapter.js';
 import { createXdsEnvoyAdapter } from './adapters/xds-envoy.adapter.js';
 import { createMeshDiagnosticsService, type MeshDiagnosticsService } from './services/mesh-diagnostics.service.js';
+import { createDomainsService, type DomainsService, type DomainVerifierPort } from './services/domains.service.js';
 import { buildCloudRouter } from './routes/cloud.routes.js';
 import { buildCloudMcpTools } from './mcp/cloud-engine.js';
+import { buildCloudWriteMcpTools } from './mcp/cloud-write-engine.js';
 import { buildCloudHealth } from './health.js';
 import type { ProviderId } from './types.js';
 import type { CloudModule, CloudModuleDeps } from './index.js';
@@ -62,6 +64,7 @@ export class CloudComposer implements CloudModule {
   private readonly previewService: PreviewDeployService;
   private readonly fleetService: FleetSupervisorService;
   private readonly meshService: MeshDiagnosticsService;
+  private readonly domainsService: DomainsService;
   private started = false;
 
   constructor(deps: CloudModuleDeps, cfg: CloudConfig, executor: QueryExecutor) {
@@ -121,6 +124,15 @@ export class CloudComposer implements CloudModule {
       xds: createXdsEnvoyAdapter({ endpoint: cfg.xdsEndpoint, logger: this.log }),
       logger: this.log,
     });
+
+    // Custom-domains CRUD + DNS/TLS verification. The verifier is an optional
+    // seam (real DNS/ACME prober); absent ⇒ `verify` truthfully stays pending.
+    this.domainsService = createDomainsService({
+      repo: this.repos.domains,
+      logger: this.log,
+      cnameTarget: cfg.previewBaseDomain,
+      ...(deps.domainVerifier ? { verifier: deps.domainVerifier } : {}),
+    });
   }
 
   tenancy(): TenancyService {
@@ -143,6 +155,10 @@ export class CloudComposer implements CloudModule {
     return this.meshService;
   }
 
+  domains(): DomainsService {
+    return this.domainsService;
+  }
+
   /** The concrete repositories (for cross-domain read wiring; tenant-scoped). */
   repositories(): CloudRepositories {
     return this.repos;
@@ -157,6 +173,7 @@ export class CloudComposer implements CloudModule {
         preview: this.previewService,
         mesh: this.meshService,
         fleet: this.fleetService,
+        domains: this.domainsService,
         mw: this.middleware,
         logger: this.log,
         // Phase-3 governance decide→audit seam guarding EVERY write edge.
@@ -172,7 +189,18 @@ export class CloudComposer implements CloudModule {
   }
 
   mcp(): readonly McpToolRegistration[] {
-    return buildCloudMcpTools(this);
+    return [
+      ...buildCloudMcpTools(this),
+      // Governance-gated WRITE tools (provision/destroy sandbox, domain CRUD) —
+      // the same `decide → audit` gate the HTTP edges use (defence in depth).
+      ...buildCloudWriteMcpTools({
+        tenancy: this.tenancyService,
+        provisioner: this.provisionerService,
+        domains: this.domainsService,
+        logger: this.log,
+        ...(this.gate ? { gate: this.gate } : {}),
+      }),
+    ];
   }
 
   async health(): Promise<ComponentHealth> {
@@ -214,4 +242,4 @@ export class CloudComposer implements CloudModule {
 }
 
 // Re-export the local runtime + run-event seams so bootstrap can type its bridges.
-export type { LocalContainerRuntime, CloudRunEventSink, TenantBillingQuotaPort };
+export type { LocalContainerRuntime, CloudRunEventSink, TenantBillingQuotaPort, DomainVerifierPort };

@@ -108,6 +108,9 @@ export function registerA2AMethods(deps: A2AMethodDeps): void {
       envelope: env,
       prompt: typeof msg.text === 'string' ? msg.text : undefined,
       ...(typeof p.taskId === 'string' ? { taskId: p.taskId } : {}),
+      // Optional multi-peer response strategy (default `all`; validated in dispatch).
+      ...(p.strategy === 'all' || p.strategy === 'first' || p.strategy === 'quorum' ? { strategy: p.strategy } : {}),
+      ...(typeof p.quorum === 'number' ? { quorum: p.quorum } : {}),
     });
     return result;
   });

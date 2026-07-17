@@ -18,6 +18,7 @@ import type { Logger } from '../../../shared/logger.js';
 import { ErrorCode, createError } from '../../../shared/errors.js';
 import type { MemoryRepository } from '../ports/memory-repository.port.js';
 import type { BeadsMemoryPort } from '../ports/beads-memory.port.js';
+import type { MemoryWriteAllowlist } from './write-allowlist.js';
 
 /** The scope vocabulary a candidate may be filed under (mirrors agent-os). */
 export type MemoryScope = MemoryCandidate['scope'];
@@ -56,6 +57,11 @@ export interface CandidateServiceDeps {
   readonly repository: MemoryRepository;
   readonly beads: BeadsMemoryPort;
   readonly logger: Logger;
+  /**
+   * OPTIONAL governance write allowlist — a deterministic scope filter enforced
+   * BEFORE the candidate is shaped/mirrored. Absent → no scope restriction.
+   */
+  readonly allowlist?: MemoryWriteAllowlist;
   /** Injectable clock + id for deterministic tests. */
   readonly now?: () => string;
   readonly newId?: () => string;
@@ -88,13 +94,17 @@ function requireEvidence(input: ProposeCandidateInput): void {
 
 /** Build the candidate service. */
 export function createCandidateService(deps: CandidateServiceDeps): CandidateService {
-  const { repository, beads, logger } = deps;
+  const { repository, beads, logger, allowlist } = deps;
   const now = deps.now ?? (() => new Date().toISOString());
   const newId = deps.newId ?? defaultId;
 
   return {
     async propose(input: ProposeCandidateInput): Promise<MemoryCandidate> {
       requireEvidence(input);
+
+      // Governance allowlist: a NON-EMPTY allowlist denies writes to a scope not
+      // on it (fail-closed AUTHZ). Empty/absent allowlist → no restriction.
+      allowlist?.assert({ scope: String(input.scope), proposedBy: input.proposedBy });
 
       const title = input.title.trim();
       const body = input.body.trim();

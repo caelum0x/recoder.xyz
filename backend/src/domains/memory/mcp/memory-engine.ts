@@ -9,19 +9,35 @@
  *  - `memory_remember` — WRITE (ephemeral): propose an EVIDENCE-BACKED candidate
  *    wisp. It never writes durable memory (that is the governed accept path); an
  *    unevidenced remember is rejected, never silently stored.
+ *  - `memory_promote`  — WRITE (governed): promote a candidate wisp → durable
+ *    item. It passes THE governance write seam (`memory.promote`); a non-allow
+ *    verdict returns a truthful `{ promoted:false, verdict }`, NEVER a fabricated
+ *    success. Agents cannot self-promote past a gate that denies them.
+ *  - `memory_relate`   — WRITE: record a relation edge between two durable items
+ *    over the four legal kinds (supersedes / derived-from / contradicts /
+ *    relates-to); a down pool throws truthfully rather than faking the edge.
  *
  * The caller identity is supplied by the host from the authorized principal (the
  * `userId` field), NOT trusted from free-form model output beyond that binding.
+ * `memory_promote` reconstructs a `Principal` from that bound `userId` so the
+ * governance gate makes an independent, truthful decision.
  */
 import type { McpToolRegistration } from '../../../shared/module-base.js';
 import { createError, ErrorCode } from '../../../shared/errors.js';
+import type { Principal } from '../../identity/types.js';
 import type { RecallService } from '../recall/recall-fusion.js';
 import type { CandidateService, MemoryScope } from '../lifecycle/candidate-service.js';
+import type { MemoryLifecycle } from '../lifecycle/memory-lifecycle.js';
+import type { ForgetService } from '../lifecycle/forget.js';
+import type { RelateService } from '../lifecycle/relate.js';
 
 /** The module surface the memory MCP tools bind to. */
 export interface MemoryMcpModule {
   recall(): RecallService;
   candidates(): CandidateService;
+  lifecycle(): MemoryLifecycle;
+  forget(): ForgetService;
+  relations(): RelateService;
 }
 
 interface RecallInput {
@@ -42,6 +58,29 @@ interface RememberInput {
   readonly discoveredFrom?: string;
 }
 
+interface PromoteInput {
+  readonly userId?: string;
+  readonly candidateId?: string;
+  readonly supersedesMemoryId?: string;
+  readonly taskId?: string;
+  readonly runId?: string;
+}
+
+interface RelateInput {
+  readonly userId?: string;
+  readonly fromMemoryId?: string;
+  readonly toMemoryId?: string;
+  readonly kind?: string;
+}
+
+interface ForgetInput {
+  readonly userId?: string;
+  readonly memoryId?: string;
+  readonly reason?: string;
+  readonly taskId?: string;
+  readonly runId?: string;
+}
+
 const VALID_SCOPES: readonly string[] = ['user', 'org', 'space', 'repo', 'path', 'agent', 'task-type'];
 
 function requireUserId(input: { userId?: string }): string {
@@ -50,8 +89,31 @@ function requireUserId(input: { userId?: string }): string {
   return userId;
 }
 
+function requireField(value: string | undefined, name: string): string {
+  const trimmed = value?.trim();
+  if (!trimmed) throw createError(ErrorCode.MISSING_REQUIRED_FIELD, `${name} is required`);
+  return trimmed;
+}
+
 function coerceScope(scope: string | undefined): MemoryScope {
   return (scope && VALID_SCOPES.includes(scope) ? scope : 'repo') as MemoryScope;
+}
+
+/**
+ * Reconstruct a `Principal` from the host-bound `userId` for the governance gate.
+ * The MCP call already cleared the host's `authorize→risk` step, so the caller is
+ * an authenticated write-capable principal — but it carries NO elevated scopes,
+ * so `gate.decide('memory.promote', …)` renders its own truthful verdict (an
+ * agent that the policy denies simply gets `{ promoted:false }`, never a bypass).
+ */
+function principalFromUserId(userId: string): Principal {
+  return {
+    userId,
+    scopes: ['read', 'write'],
+    kind: 'apikey',
+    isAnonymous: false,
+    raw: { via: 'mcp' },
+  };
 }
 
 export function buildMemoryMcpTools(module: MemoryMcpModule): readonly McpToolRegistration[] {
@@ -106,6 +168,70 @@ export function buildMemoryMcpTools(module: MemoryMcpModule): readonly McpToolRe
           ...(input.discoveredFrom ? { discoveredFrom: input.discoveredFrom } : {}),
         });
         return { candidate };
+      },
+    },
+    {
+      name: 'memory_promote',
+      description:
+        'Promote a candidate wisp → durable memory item, GATED by governance (memory.promote). Requires candidateId. A non-allow verdict returns { promoted:false, verdict } truthfully — it never writes durable memory on the runtime\'s own authority.',
+      handler: async (raw: unknown) => {
+        const input = (raw ?? {}) as PromoteInput;
+        const userId = requireUserId(input);
+        const candidateId = requireField(input.candidateId, 'candidateId');
+        const result = await module.lifecycle().accept({
+          userId,
+          candidateId,
+          principal: principalFromUserId(userId),
+          ...(input.supersedesMemoryId?.trim() ? { supersedesMemoryId: input.supersedesMemoryId.trim() } : {}),
+          ...(input.taskId?.trim() ? { taskId: input.taskId.trim() } : {}),
+          ...(input.runId?.trim() ? { runId: input.runId.trim() } : {}),
+        });
+        return {
+          promoted: result.promoted,
+          verdict: result.verdict,
+          candidate: result.candidate,
+          ...(result.memory ? { memory: result.memory } : {}),
+        };
+      },
+    },
+    {
+      name: 'memory_relate',
+      description:
+        'Record a relation edge between two durable memory items. Requires fromMemoryId, toMemoryId, and kind (one of: supersedes, derived-from, contradicts, relates-to). A down persistence pool throws truthfully rather than fabricating the edge.',
+      handler: async (raw: unknown) => {
+        const input = (raw ?? {}) as RelateInput;
+        const userId = requireUserId(input);
+        const relation = await module.relations().relate({
+          userId,
+          fromMemoryId: requireField(input.fromMemoryId, 'fromMemoryId'),
+          toMemoryId: requireField(input.toMemoryId, 'toMemoryId'),
+          kind: requireField(input.kind, 'kind'),
+        });
+        return { relation };
+      },
+    },
+    {
+      name: 'memory_forget',
+      description:
+        'Forget (tombstone) a durable memory item, GATED by governance (memory.forget). Requires memoryId and reason. A non-allow verdict returns { forgotten:false, verdict } truthfully; on allow the item is retired from active recall — it never deletes durable memory on the runtime\'s own authority.',
+      handler: async (raw: unknown) => {
+        const input = (raw ?? {}) as ForgetInput;
+        const userId = requireUserId(input);
+        const memoryId = requireField(input.memoryId, 'memoryId');
+        const reason = requireField(input.reason, 'reason');
+        const result = await module.forget().forget({
+          userId,
+          memoryId,
+          principal: principalFromUserId(userId),
+          reason,
+          ...(input.taskId?.trim() ? { taskId: input.taskId.trim() } : {}),
+          ...(input.runId?.trim() ? { runId: input.runId.trim() } : {}),
+        });
+        return {
+          forgotten: result.forgotten,
+          verdict: result.verdict,
+          item: result.item,
+        };
       },
     },
   ];

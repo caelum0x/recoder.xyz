@@ -33,6 +33,7 @@ export {
 
 // Ports (frozen seams).
 export type { BillingProviderPort } from './ports/billing-provider.port.js';
+export type { BillingWriteGate } from './ports/governance-gate.port.js';
 export type {
   MeteringRepository,
   SubscriptionUpsert,
@@ -119,6 +120,7 @@ import type { BillingProviderPort as BillingProviderPortType } from './ports/bil
 import type { EntitlementGate as EntitlementGateType } from './ports/entitlement.port.js';
 import type { MeteringService as MeteringServiceType } from './services/metering.service.js';
 import type { QuotaService as QuotaServiceType } from './services/quota.service.js';
+import type { BillingWriteGate as BillingWriteGateType } from './ports/governance-gate.port.js';
 import type { BillingConfigOverrides } from './config.js';
 import type { BillingSubject, PlanTier } from './types.js';
 
@@ -143,6 +145,12 @@ export interface BillingModuleDeps {
   readonly resolveByok?: (subject: BillingSubject) => Promise<boolean> | boolean;
   /** The distribution grant port (grant-based lifts). Absent ⇒ deny-on-miss. */
   readonly billingPort?: import('@recoder/distribution').BillingPort;
+  /**
+   * The governance write gate (`decide` facet) that billing MUTATIONS pass
+   * through for policy + durable audit. Optional: absent ⇒ mutations proceed
+   * ungated (degrade-safe) until `setGovernanceGate` is called at bootstrap.
+   */
+  readonly gate?: BillingWriteGateType;
 }
 
 /** The public surface every other domain consumes. */
@@ -150,6 +158,11 @@ export interface BillingModule {
   readonly name: 'billing';
   /** THE cross-domain gate: `resolvePlan`/`check`/`checkFeature`/`checkQuota`/`view`. */
   gate(): EntitlementGateType;
+  /**
+   * Inject the governance write gate that billing mutations (checkout/cancel)
+   * pass through for policy + durable audit. Idempotent; degrade-safe until set.
+   */
+  setGovernanceGate(gate: BillingWriteGateType): void;
   /** The durable usage ledger + provider flush loop. */
   metering(): MeteringServiceType;
   /** The focused headroom engine (check + enforce-consume). */
@@ -158,6 +171,8 @@ export interface BillingModule {
   provider(): BillingProviderPortType;
   /** The `/api/billing` router: plan/checkout/portal/cancel + raw-body webhooks. */
   routes(): Router;
+  /** The `/internal/billing/*` router: `POST /meter` (INTERNAL_SERVICE_KEY-gated). */
+  internalRoutes(): Router;
   /** Read-only MCP introspection tools (plan/usage/provider status). */
   mcp(): readonly McpToolRegistration[];
   /** Truthful component health (degrade-safe — never a faked `up`). */

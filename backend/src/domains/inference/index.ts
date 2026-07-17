@@ -32,6 +32,7 @@ import type {
 } from './ports/index.js';
 import type { InferenceRoutingService } from './services/inference-routing.service.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
+import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type {
   ByokKeyResolver,
   ByokSecretsPort,
@@ -107,6 +108,14 @@ export interface InferenceModule {
    * truthful non-routed result (BYOK subjects bypass token metering inside the gate).
    */
   setEntitlementGate(gate: EntitlementGate): void;
+  /**
+   * Inject the OPTIONAL billing usage meter. Set post-construction by bootstrap
+   * (`inference.setUsageMeter(billing.metering())`), next to the entitlement gate.
+   * When wired, each routed completion meters its `token` quantity (prompt +
+   * completion) for the request's subject so the `token` quota decrements. Absent
+   * ⇒ a truthful no-op (no token metering). A metering hiccup never fails delivery.
+   */
+  setUsageMeter(meter: UsageMeterPort): void;
   /**
    * Inject the governance gate governing BYOK key writes (bootstrap:
    * `inference.setGovernanceGate(governance.gate())`). Until wired, the

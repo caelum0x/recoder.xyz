@@ -20,14 +20,14 @@ domain repo impl (identity/UserRepo, agent-os/TaskRepo, billing/InvoiceRepo, …
 
 Design laws this domain enforces for the whole backend:
 
-1. **One pool, one authority.** A single shared `pg.Pool` is created here from `AppConfig.persistence.databaseUrl`. No other domain constructs a pool. (The existing `connection-manager.ts` — encrypted *user-project external* DB connections — is a **separate** capability that also lives here, kept distinct from the control-plane pool.)
+1. **One pool, one authority.** A single shared `pg.Pool` is created here (`client/pg-pool.ts`) from `AppConfig.persistence.databaseUrl`. No other domain constructs a pool. (The v1 `connection-manager.ts` — encrypted *user-project external* DB connections — was **CUT** with the v1 `database/` dir and is NOT part of this domain.)
 2. **Parameterized only.** All access goes through the `:param` executor which compiles named params to positional `$n` and rejects raw string interpolation. Inherits the existing `query-executor.ts` security analysis (injection-pattern detection, param type validation, error sanitization, bounded audit log).
 3. **App-layer access control.** No Supabase RLS, no `auth.uid()`, no Basejump. Tenancy is `WHERE user_id = :user_id` enforced in the base repo; the `Session.userId` (from identity) is threaded into every scoped query.
 4. **Recoder-owned state-of-record.** The canonical Task/Run/Approval/Artifact/Memory tables are agent-os `@recoder/agent-os` shapes; persistence stores them but never reinterprets them. State is versioned (append-only event log + snapshot rows) so time-travel and audit are truthful.
-5. **Degrade-safe.** Missing/invalid `DATABASE_URL` → the module reports `down` (never a faked `up`). Migration failure logs + is reported, never thrown into boot (matches the existing `apply-migrations` boot pattern). SQLite driver is a dev/embedded fallback only.
+5. **Degrade-safe.** Missing/invalid `DATABASE_URL` → the module reports `down` (never a faked `up`). Migration failure logs + is reported, never thrown into boot (matches the existing `apply-migrations` boot pattern). The non-Postgres fallback is **in-memory** (the v1 SQLite driver was cut with the `database/` dir) — dev/embedded only.
 6. **Consolidation.** The three legacy logical DBs (`recoder_main` auth+app, `recoder_backend` API, `recoder_pm` PM+pgvector) consolidate into ONE physical database using **Postgres schemas** (`core`, `agent_os`, `pm`, `billing`, `kv`) so cross-domain joins and one migration ledger are possible. `pgvector` extension is enabled once, globally.
 
-**REUSE vs NEW (headline):** the existing `backend/src/database/*` (connection-manager, query-executor, drivers, schema-inspector) and `backend/src/agent-os/migrations/apply-migrations.ts` are **moved behind this composer and generalized** — not rewritten. NEW work is: the `:param` named-param compiler, the `RepositoryFactory` + `BaseRepository`, the DB-backed `KvStoreRepository` (replacing deleted JSON persistence), the state-of-record versioning helpers, the consolidated migration set, and the composer/ports/health wiring.
+**REUSE vs NEW (headline):** the existing `query-executor` + `schema-inspector` logic and `backend/src/agent-os/migrations/apply-migrations.ts` are **moved behind this composer and generalized** — not rewritten. (The v1 `connection-manager` + `drivers/` (incl. sqlite) were **CUT** with the v1 `database/` dir, not moved.) NEW work is: the `:param` named-param compiler, the `RepositoryFactory` + `BaseRepository`, the DB-backed `KvStoreRepository` (replacing deleted JSON persistence, with an in-memory fallback), the state-of-record versioning helpers, the consolidated migration set, and the composer/ports/health wiring.
 
 ---
 
@@ -49,16 +49,15 @@ backend/src/domains/persistence/
 
   client/
     pg-pool.ts                      # shared pg.Pool factory; prod-URL validation; SSL; graceful drain
-    connection-manager.ts           # MOVED: encrypted external user-project DB connections (AES-256-GCM)
+    # NOTE (SHIPPED): connection-manager.ts was CUT with the v1 `database/` dir — not moved here.
 
   query/
     query-executor.ts               # MOVED+generalized: :param executor, helpers, security analysis, audit
     named-params.ts                 # NEW: compile ":name" SQL + params object → ("$1..", values[]) positional
     transaction.ts                  # NEW: withTransaction(fn) — BEGIN/COMMIT/ROLLBACK on a pooled client
 
-  drivers/
-    postgres.driver.ts              # MOVED: pg driver wrapper (query, typed fields, pool client)
-    sqlite.driver.ts                # MOVED: sqlite driver — dev/embedded fallback ONLY
+  # NOTE (SHIPPED): no drivers/ dir. The sqlite driver was CUT with the v1 `database/` dir;
+  # the non-Postgres fallback is now IN-MEMORY (kv-store.repository.ts + persistence-module.ts).
 
   repositories/
     base.repository.ts              # NEW: abstract BaseRepository<T> — CRUD + user_id scoping + row<->entity map
@@ -112,12 +111,12 @@ backend/migrations/
 | `ports/kv-store.port.ts` | ts | port | Namespaced KV contract (replaces JSON persistence) | `interface KvStore { get, set, delete, list, getJson, setJson }` |
 | `ports/migration-runner.port.ts` | ts | port | Migration contract | `interface MigrationRunner { apply, status }` |
 | `client/pg-pool.ts` | ts | client | Build/own the single shared `pg.Pool`; SSL from config; prod-URL validation; graceful `drain()` | `createPgPool(cfg): Pool`, `drainPool(pool)`, `poolStats(pool): PoolStats` |
-| `client/connection-manager.ts` | ts | client | MOVED — encrypted (AES-256-GCM) *external user-project* DB connections, distinct from control-plane pool | `connectionManager`, `encryptCredential`, `DatabaseConnection` |
-| `query/query-executor.ts` | ts | service | MOVED+generalized — impl of `QueryExecutor`; wraps named-params + driver + injection analysis + error sanitize + bounded audit log | `class PgQueryExecutor implements QueryExecutor`, `analyzeQuery` |
+| ~~`client/connection-manager.ts`~~ | — | — | **CUT** with the v1 `database/` dir — not part of this domain | — |
+| `query/query-executor.ts` | ts | service | MOVED+generalized — impl of `QueryExecutor`; wraps named-params + pg pool + injection analysis + error sanitize + bounded audit log | `class PgQueryExecutor implements QueryExecutor`, `analyzeQuery` |
 | `query/named-params.ts` | ts | service | NEW — compile `:name` placeholders + params object to positional `$n`; expand array params for `IN (:ids)`; throw on missing/extra | `compileNamedQuery(sql, params): { text, values }` |
 | `query/transaction.ts` | ts | service | NEW — `withTransaction(fn)`: checkout client, BEGIN, run fn with a tx-scoped executor, COMMIT/ROLLBACK, release | `withTransaction<T>(pool, fn): Promise<T>` |
-| `drivers/postgres.driver.ts` | ts | client | MOVED — pg driver wrapper (typed `query`, fields, pooled client) | `class PostgresDriver` |
-| `drivers/sqlite.driver.ts` | ts | client | MOVED — sqlite driver, **dev/embedded fallback only**; blocked in prod path | `class SqliteDriver`, `validateDatabasePath` |
+| ~~`drivers/postgres.driver.ts`~~ | — | — | **CUT** — the pg driver logic folded into `client/pg-pool.ts` + `query/query-executor.ts` (no separate `drivers/` dir) | — |
+| ~~`drivers/sqlite.driver.ts`~~ | — | — | **CUT** with the v1 `database/` dir; the non-Postgres fallback is now **in-memory** | — |
 | `repositories/base.repository.ts` | ts | repository | NEW — abstract CRUD base: `findAll/findById/create/update/delete`, mandatory `user_id` scoping, row↔entity mapping, optimistic version bump | `abstract class BaseRepository<T, Id>` |
 | `repositories/kv-store.repository.ts` | ts | repository | NEW — `KvStore` impl over `core.kv_store`; JSON values, per-namespace, TTL sweep; **replaces deleted `loadStore/saveStore`** | `class KvStoreRepository implements KvStore` |
 | `repositories/repository-factory.ts` | ts | repository | NEW — the seam: injects the shared `QueryExecutor` into any domain's repo class; central place DI hands out repos | `class RepositoryFactory`, `createRepositoryFactory(executor)` |
@@ -247,12 +246,12 @@ MCP tools (`mcp/persistence-engine.ts`, registered via IN_PROC_SERVERS + ENGINE_
 ## 7. Reuse notes
 
 **MOVE behind composer (do NOT rewrite):**
-- `backend/src/database/connection-manager.ts` → `client/connection-manager.ts` (external user-project encrypted connections).
 - `backend/src/database/query-executor.ts` → `query/query-executor.ts` (keep injection analysis, param validation, error sanitization, bounded audit; add `:param` compile + `one/read/mutate` helpers).
-- `backend/src/database/drivers/{postgresql,sqlite}.ts` → `drivers/*`.
 - `backend/src/database/schema-inspector.ts` → `schema/schema-inspector.ts`.
 - `backend/src/agent-os/migrations/apply-migrations.ts` → `migrations/migration-runner.ts` (generalize from the agent-os dir to `backend/migrations/`; keep the `dist→src` `.sql` resolution + ledger + degrade-safe boot).
-- `backend/src/agent-os/repositories/postgres-agent-os.repository.ts` — **stays in agent-os** but its `Queryable` is now satisfied by persistence's `QueryExecutor`; the in-memory/json fallbacks it uses become the `memory`/dev drivers.
+- `backend/src/agent-os/repositories/postgres-agent-os.repository.ts` — **stays in agent-os** but its `Queryable` is now satisfied by persistence's `QueryExecutor`; the non-Postgres fallback is in-memory.
+
+**CUT with the v1 `database/` dir (NOT moved here):** `connection-manager.ts` (external user-project encrypted connections) and `drivers/{postgresql,sqlite}.ts` — the sqlite fallback is replaced by an in-memory fallback; the pg driver folds into `client/pg-pool.ts` + `query/query-executor.ts`.
 
 **REUSE `packages/*` (do not redefine):** `@recoder/agent-os` + `@recoder/agent-schemas` (the row shapes stored), `@recoder/agent-events` (outbox/RunEvent rows), `@recoder/governance` + `@recoder/interop` (write/edge gates), `@recoder/auth` (`Session.userId`), `@recoder/logger`, `@recoder/utils`.
 

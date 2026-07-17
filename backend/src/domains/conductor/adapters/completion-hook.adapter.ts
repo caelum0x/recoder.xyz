@@ -20,6 +20,7 @@ import type { RunEvent, Workspace } from '@recoder/agent-os';
 import type { Logger } from '../../../shared/logger.js';
 import type { RunEventSinkPort } from '../ports/run-event-sink.port.js';
 import type { CodeIntelPort } from '../ports/code-intel.port.js';
+import type { UsageMeterPort } from '../ports/usage-meter.port.js';
 import type { ConductorBrainMemory } from './brain-memory.adapter.js';
 
 export interface CompletionHookDeps {
@@ -29,6 +30,13 @@ export interface CompletionHookDeps {
   readonly brain?: ConductorBrainMemory;
   /** OPTIONAL code-intel (beads close/note). Absent ⇒ no issue-graph update. */
   readonly codeIntel?: CodeIntelPort;
+  /**
+   * OPTIONAL billing usage-meter resolver (j: per-run metering). A thunk (not a
+   * value) because the meter is injected post-construction by bootstrap
+   * (`ConductorModule.setUsageMeter`), AFTER this sink is built. Returns
+   * `undefined` until wired ⇒ a truthful no-op (no metering).
+   */
+  readonly getMeter?: () => UsageMeterPort | undefined;
   /** Resolve the owning workspace (for userId/taskId provenance) — may return null. */
   readonly getWorkspace: (workspaceId: string) => Promise<Workspace | null>;
   readonly logger: Logger;
@@ -44,8 +52,8 @@ function isTerminal(type: RunEvent['type']): type is 'completed' | 'failed' {
  * `inner` unchanged when neither capability is wired (zero overhead).
  */
 export function createCompletionHookSink(deps: CompletionHookDeps): RunEventSinkPort {
-  const { inner, brain, codeIntel, getWorkspace, logger } = deps;
-  if (!brain && !codeIntel) return inner;
+  const { inner, brain, codeIntel, getMeter, getWorkspace, logger } = deps;
+  if (!brain && !codeIntel && !getMeter) return inner;
 
   return {
     async append(event: RunEvent): Promise<void> {
@@ -83,6 +91,25 @@ export function createCompletionHookSink(deps: CompletionHookDeps): RunEventSink
             .catch((err) =>
               logger.warn({ err, taskId }, 'conductor beads completeWork hook faulted'),
             );
+        }
+
+        // (j) billing metering — the run consumed one `agent_run`; meter it durably
+        // so the pre-dispatch quota gate actually decrements (idempotent by the
+        // workspace/run anchor, so a re-emitted terminal event is a no-op). Needs a
+        // resolvable owning subject (`createdBy`) — else a truthful skip. Fire-and-
+        // forget + degrade-safe: a metering fault NEVER stalls the terminal event.
+        const meter = getMeter?.();
+        if (meter && userId) {
+          const anchor = workspaceId ?? event.runId ?? taskId ?? event.eventId;
+          void meter
+            .record({
+              subjectId: userId,
+              kind: 'agent_run',
+              quantity: 1,
+              ...(event.runId ? { runId: event.runId } : {}),
+              idempotencyKey: `agent_run:${anchor}`,
+            })
+            .catch((err) => logger.warn({ err, taskId }, 'conductor agent_run meter hook faulted'));
         }
       } catch (err) {
         logger.warn(

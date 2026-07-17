@@ -34,6 +34,9 @@ export const LEGAL_TASK_TRANSITIONS: Readonly<Record<A2ATaskState, readonly A2AT
   canceled: [],
 };
 
+/** The non-terminal states an agent may still act on (the "inbox"). */
+export const OPEN_TASK_STATES: readonly A2ATaskState[] = ['submitted', 'working', 'input-required'];
+
 /** True when `state` is terminal (no further transition permitted). */
 export function isTerminalTaskState(state: A2ATaskState): boolean {
   return (TERMINAL_TASK_STATES as readonly A2ATaskState[]).includes(state);
@@ -65,6 +68,10 @@ export interface TaskLifecycleService {
   create(input: CreateTaskInput): Promise<TaskRow>;
   /** Read one task, owner-scoped; `null` when absent / not owned. */
   get(id: string, userId: string): Promise<TaskRow | null>;
+  /** List an owner's tasks (most-recent-first), optionally filtered by state. */
+  list(userId: string, opts?: { states?: readonly A2ATaskState[]; limit?: number }): Promise<readonly TaskRow[]>;
+  /** The owner's OPEN (non-terminal) tasks — the agent's work inbox. */
+  inbox(userId: string, limit?: number): Promise<readonly TaskRow[]>;
   /** Attempt a state transition; refuses illegal/terminal moves (fail-closed). */
   transition(id: string, userId: string, to: A2ATaskState): Promise<TransitionResult>;
   /** Cancel a task (helper over `transition` to `canceled`). */
@@ -84,6 +91,18 @@ export function createTaskLifecycleService(repo: TaskStoreRepo): TaskLifecycleSe
 
     async get(id: string, userId: string): Promise<TaskRow | null> {
       return repo.getTask(id, userId);
+    },
+
+    async list(
+      userId: string,
+      opts?: { states?: readonly A2ATaskState[]; limit?: number },
+    ): Promise<readonly TaskRow[]> {
+      return repo.listTasks(userId, opts);
+    },
+
+    async inbox(userId: string, limit?: number): Promise<readonly TaskRow[]> {
+      // The non-terminal states an agent may still act on.
+      return repo.listTasks(userId, { states: OPEN_TASK_STATES, ...(limit ? { limit } : {}) });
     },
 
     async transition(id: string, userId: string, to: A2ATaskState): Promise<TransitionResult> {

@@ -5,7 +5,7 @@
 import http from 'node:http';
 import { describe, it, expect, afterEach } from 'vitest';
 
-import { createToken } from '../shared/di-tokens.js';
+import { createToken, DOMAIN_TOKENS } from '../shared/di-tokens.js';
 import { createContainer } from './container.js';
 import { loadConfig, type EnvSource } from './config.js';
 import { createHealthRegistry } from './health-registry.js';
@@ -22,6 +22,22 @@ function httpGet(port: number, path: string): Promise<{ status: number; body: st
       res.on('end', () => resolve({ status: res.statusCode ?? 0, body: data }));
     });
     req.on('error', reject);
+  });
+}
+
+/** Raw HTTP POST (no body) — used to probe a mounted+gated internal route. */
+function httpPost(port: number, path: string): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      { host: '127.0.0.1', port, path, method: 'POST', headers: { 'content-type': 'application/json' } },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, body: data }));
+      },
+    );
+    req.on('error', reject);
+    req.end('{}');
   });
 }
 
@@ -143,5 +159,29 @@ describe('start()', () => {
     const body = JSON.parse(res.body) as { success: boolean; error: { code: string } };
     expect(body.success).toBe(false);
     expect(body.error.code).toBe('NOT_FOUND');
+  });
+
+  it('mounts the internal memory harvest edge (gated, not 404)', async () => {
+    // Proves the memory.internalRoutes() seam is composed at the route table under
+    // /internal/agent-os/memory. Without INTERNAL_SERVICE_KEY the requireInternal
+    // gate fails CLOSED (503 SERVICE_UNAVAILABLE) — a truthful "gate not configured",
+    // NOT a 404. A 404 here would mean the router was never mounted.
+    handle = await start({ env: baseEnv, installSignalHandlers: false });
+    const address = handle.server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    const res = await httpPost(port, '/internal/agent-os/memory/harvest');
+    expect(res.status).not.toBe(404);
+    expect(res.status).toBe(503);
+    const body = JSON.parse(res.body) as { success: boolean; error: { code: string } };
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe('SERVICE_UNAVAILABLE');
+  });
+
+  it('registers the billing + conductor domains after seam wiring', async () => {
+    // Boot proves the billing.setGovernanceGate() + conductor mcpInject wiring did
+    // not throw at the composition root; both domains resolve from the container.
+    handle = await start({ env: baseEnv, installSignalHandlers: false });
+    expect(handle.container.has(DOMAIN_TOKENS.billing)).toBe(true);
+    expect(handle.container.has(DOMAIN_TOKENS.conductor)).toBe(true);
   });
 });

@@ -76,16 +76,20 @@ backend/src/domains/inference/
     byok-store.port.ts                 # BYOK credential repository PORT (persistence provides impl)
     model-catalog.port.ts              # model/provider registry repository PORT
     feedback-store.port.ts             # delivery-outcome/feedback repository PORT
-  adapters/
-    tensorzero-napi.adapter.ts         # rung 1: in-proc EmbeddedGateway via .node (wraps tensorzero-client napi facade)
-    tensorzero-loopback.adapter.ts     # rung 2: TZ OpenAI-wire client over UDS/127.0.0.1 (wraps LlmGatewayPort)
-    llm-router.adapter.ts              # rung 3: direct BYOK multi-provider (wraps engines/llm-router)
+  adapters/                            # SHIPPED: the TZ rungs are consolidated into ONE transport adapter
+    tensorzero-transport.adapter.ts    # SINGLE TensorZero transport: napi-tier (in-proc EmbeddedGateway) → loopback wire
+    engine-client-napi-tier.ts         # the in-proc `.node` EmbeddedGateway tier the transport wraps
+    direct-provider.transport.ts       # rung 3: direct BYOK multi-provider (wraps engines/llm-router)
+    default-transports.ts              # the SINGLE coupling point that assembles the ladder
+    gateway-stream.ts                  # SSE streaming framing
     tz-config-generator.ts             # registry -> tensorzero.toml (wraps engines/tensorzero-config)
-    byok-key-cache.adapter.ts          # AES-256-GCM per-user key cache (wraps engines/byok-key-cache + vault)
-    token-accounting.adapter.ts        # usage -> billing meter + RunEvent emit
+    byok-key-cache.ts / byok-key-resolver.ts  # AES-256-GCM per-user key cache + resolution (vault)
+    token-accounting.ts                # usage -> billing meter + RunEvent emit
   routes/
-    inference.routes.ts                # /api/gateway/* edges (health, complete, embed, models, feedback)
-    openai-compat.routes.ts            # /api/gateway/v1/chat/completions + /v1/embeddings (OpenAI wire + SSE)
+    inference.routes.ts                # /api/inference/* edges (health, complete, embed, models, feedback, usage, keys)
+    openai-compat.routes.ts            # /api/inference/v1/* + /api/gateway/v1/* chat/completions (OpenAI wire + SSE)
+    openai-embeddings.routes.ts        # /api/inference/v1/embeddings + /api/gateway/v1/embeddings
+    inference-feedback.routes.ts / inference-keys.routes.ts
   mcp/
     inference-engine.ts                # register InferenceMcpTools: inference.complete/embed/feedback/models
   repositories/
@@ -100,10 +104,7 @@ backend/src/domains/inference/
     feedback-loop.test.ts              # DeliveryOutcome -> TZ feedback() + repo persistence
 
 backend/migrations/
-  20260715_0001_inference_provider_keys.sql
-  20260715_0002_inference_model_catalog.sql
-  20260715_0003_inference_delivery_outcome.sql
-  20260715_0004_inference_usage_ledger.sql
+  inference_0001_gateway.sql           # SHIPPED: ONE consolidated migration (provider keys + model catalog + delivery outcome + usage ledger), not four
 ```
 
 Rust engine (reused in place, not a new file — listed for the wiring seam):
@@ -125,22 +126,19 @@ Rust engine (reused in place, not a new file — listed for the wiring seam):
 | 8 | `ports/byok-store.port.ts` | ts | port | BYOK credential repository interface (persistence impl). | `ByokStore`, `ProviderKeyRecord` |
 | 9 | `ports/model-catalog.port.ts` | ts | port | Model/provider registry repository interface. | `ModelCatalogStore` |
 | 10 | `ports/feedback-store.port.ts` | ts | port | Delivery-outcome persistence interface. | `FeedbackStore` |
-| 11 | `adapters/tensorzero-napi.adapter.ts` | ts | client | Rung 1. Wraps the in-proc EmbeddedGateway `.node` (tensorzero-client napi facade). `probe()` = addon loaded + config validated. Degrades to `down` when addon absent. | `createTensorzeroNapiTransport(deps): LlmTransport` |
-| 12 | `adapters/tensorzero-loopback.adapter.ts` | ts | client | Rung 2. Wraps `LlmGatewayPort` over TZ OpenAI wire (UDS/loopback). Never throws; returns `{configured,routed,reason}`. | `createTensorzeroLoopbackTransport(deps): LlmTransport` |
-| 13 | `adapters/llm-router.adapter.ts` | ts | client | Rung 3. Wraps `engines/llm-router` for direct BYOK multi-provider incl. Anthropic-native. Missing key → explicit error, never silent reroute. | `createLlmRouterTransport(deps): LlmTransport` |
+| 11 | `adapters/tensorzero-transport.adapter.ts` (+ `engine-client-napi-tier.ts`) | ts | client | SHIPPED SINGLE TZ transport: napi-tier (in-proc EmbeddedGateway `.node`) → loopback OpenAI wire, both behind one adapter. `probe()` reflects real bind state; degrades to `down` when addon+gateway absent. | `createTensorzeroTransport(deps)`, `NapiTierPort` |
+| 12 | `adapters/default-transports.ts` | ts | client | The SINGLE coupling point that assembles the transport ladder (TZ transport + direct provider) for the module. | `buildDefaultTransports(deps)` |
+| 13 | `adapters/direct-provider.transport.ts` | ts | client | Rung 3. Direct BYOK multi-provider incl. Anthropic-native. Missing key → explicit error, never silent reroute. | `createDirectProviderTransport(deps)` |
 | 14 | `adapters/tz-config-generator.ts` | ts | client | Builds `tensorzero.toml` from the catalog (env var NAMES only, never key material) and materializes to a temp path for `EmbeddedGateway.boot`. | `generateTensorzeroConfig(catalog): string`, `materializeConfig(toml): Promise<string>` |
 | 15 | `adapters/byok-key-cache.adapter.ts` | ts | client | Per-user AES-256-GCM key cache (VaultDriver, 5-min TTL); resolution order per-user → platform → env; fail-safe. | `createByokResolver(deps): { resolve(userId, provider): Promise<ResolvedKey \| null> }` |
 | 16 | `adapters/token-accounting.adapter.ts` | ts | client | Maps `Usage` → billing meter (`billing.checkQuota`/record) + emits `RunEvent`; degrades to log-only when billing `down`. | `createTokenAccountant(deps): { account(usage, ctx): Promise<void> }` |
-| 17 | `routes/inference.routes.ts` | ts | route | `/api/gateway` edges: `GET /health` (public, no key leak), `POST /complete`, `POST /embed`, `GET /models`, `POST /feedback`. zod-validated, `sendSuccess`/`sendError`, interop chain. | `createInferenceRouter(deps): Router` |
+| 17 | `routes/inference.routes.ts` | ts | route | `/api/inference` edges: `GET /health` (**session-authed**, no key leak), `POST /complete`, `GET /models`, `POST /feedback`, `GET /usage`, `GET/PUT/DELETE /keys/:provider`. zod-validated, `sendSuccess`/`sendError`, interop chain. | `buildInferenceRouter(deps): Router` |
 | 18 | `routes/openai-compat.routes.ts` | ts | route | OpenAI wire: `POST /v1/chat/completions` (+ SSE `stream:true`), `POST /v1/embeddings`. Honest error bodies; status before stream. | `createOpenAiCompatRouter(deps): Router` |
 | 19 | `mcp/inference-engine.ts` | ts | client | Registers MCP tools `inference.complete`/`inference.embed`/`inference.feedback`/`inference.models` on the ToolRouter; each passes interop `authorize→risk→policy→audit`. | `registerInferenceMcpTools(router, deps)` |
 | 20 | `repositories/byok-store.repository.ts` | ts | repository | Concrete `ByokStore` (pg `:param`, `WHERE user_id = :user_id`, encrypted-at-rest ciphertext columns). | `createByokStoreRepository(qx): ByokStore` |
 | 21 | `repositories/model-catalog.repository.ts` | ts | repository | Concrete `ModelCatalogStore` (pg). Seeds default platform models. | `createModelCatalogRepository(qx): ModelCatalogStore` |
 | 22 | `repositories/feedback-store.repository.ts` | ts | repository | Concrete `FeedbackStore` (pg) for delivery outcomes + inference ids. | `createFeedbackStoreRepository(qx): FeedbackStore` |
-| 23 | `migrations/…provider_keys.sql` | sql | migration | `inference_provider_keys` table. | — |
-| 24 | `migrations/…model_catalog.sql` | sql | migration | `inference_model_catalog` table. | — |
-| 25 | `migrations/…delivery_outcome.sql` | sql | migration | `inference_delivery_outcome` table. | — |
-| 26 | `migrations/…usage_ledger.sql` | sql | migration | `inference_usage_ledger` table. | — |
+| 23 | `backend/migrations/inference_0001_gateway.sql` | sql | migration | SHIPPED: ONE consolidated migration — `inference_provider_keys` + `inference_model_catalog` + `inference_delivery_outcome` + `inference_usage_ledger`. | — |
 | T1 | `__tests__/inference-module.test.ts` | ts | test | Ladder: napi→loopback→router fallthrough; degrade to `down`; governance `decide` denial short-circuits; RunEvent emitted. | — |
 | T2 | `__tests__/openai-compat.routes.test.ts` | ts | test | OpenAI mapping, SSE chunk framing, `[DONE]`, honest error status. | — |
 | T3 | `__tests__/byok-resolution.test.ts` | ts | test | key precedence, cache hit/expiry, fail-safe on missing key. | — |
@@ -215,17 +213,18 @@ index (user_id, created_at), index (run_id)
 
 ## 5. Edges (HTTP / WS / MCP)
 
-Mounted by the `edge` domain route table under `/api/gateway`. Every write passes interop `authorize→risk→policy→audit`; `/internal/*` variants are `INTERNAL_SERVICE_KEY`-gated.
+Mounted by the `edge` domain route table under `/api/inference` (with `/api/gateway/v1/*` kept as the OpenAI-wire alias). Every write passes interop `authorize→risk→policy→audit`; `/internal/*` variants are `INTERNAL_SERVICE_KEY`-gated.
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| GET | `/api/gateway/health` | public | truthful `{configured, endpoint, rungs}` — never the key |
-| GET | `/api/gateway/models` | session | catalog for the desktop AI panel + agents model picker |
-| POST | `/api/gateway/complete` | session | governed completion (single-shot) |
-| POST | `/api/gateway/embed` | session | governed embedding (serves memory/colbert) |
-| POST | `/api/gateway/feedback` | session | DeliveryOutcome → TZ `feedback()` |
-| POST | `/api/gateway/v1/chat/completions` | session/BYOK | OpenAI wire; `stream:true` → SSE `chat.completion.chunk` + `[DONE]` |
-| POST | `/api/gateway/v1/embeddings` | session/BYOK | OpenAI wire embeddings |
+| GET | `/api/inference/health` | **session** | truthful `{configured, endpoint, rungs}` — never the key |
+| GET | `/api/inference/models` | session | catalog for the desktop AI panel + agents model picker |
+| POST | `/api/inference/complete` | session | governed completion (single-shot) |
+| POST | `/api/inference/feedback` | session | DeliveryOutcome → TZ `feedback()` |
+| GET | `/api/inference/usage` | session | token/cost usage ledger summary |
+| GET/PUT/DELETE | `/api/inference/keys/:provider` | session | BYOK provider-key metadata (governed writes) |
+| POST | `/api/inference/v1/chat/completions` (+ `/api/gateway/v1/...` alias) | session/BYOK | OpenAI wire; `stream:true` → SSE `chat.completion.chunk` + `[DONE]` |
+| POST | `/api/inference/v1/embeddings` (+ `/api/gateway/v1/...` alias) | session/BYOK | OpenAI wire embeddings |
 
 **MCP tools** (registered via wiring checklist — add to `IN_PROC_SERVERS` + `ENGINE_SERVERS`, `registerInferenceMcpTools`, call in `buildInProcEngineRouter`):
 `inference.complete`, `inference.embed`, `inference.feedback`, `inference.models`.
@@ -268,7 +267,7 @@ Mounted by the `edge` domain route table under `/api/gateway`. Every write passe
 ## 8. Implementation order
 
 1. **Ports + types + config** (files 3,4,6–10) — lock the seams first so persistence/billing/governance wiring is known.
-2. **Migrations** (23–26) + **repositories** (20–22) — DB-backed BYOK/catalog/feedback; verify with a persistence contract test.
+2. **Migration** (23, the ONE consolidated `inference_0001_gateway.sql`) + **repositories** (20–22) — DB-backed BYOK/catalog/feedback; verify with a persistence contract test.
 3. **Transport adapters** (11–13) behind `LlmTransport`, folding in the existing `tensorzero-client` / `llm-router` / napi facade unchanged; **tz-config-generator** (14) + **byok-key-cache** (15).
 4. **Composer** (2) — assemble the ladder, wire governance `decide` + RunEvent + token-accounting (16); **health** (5).
 5. **Edges** (17,18) + **MCP** (19) — mount via edge table + MCP wiring checklist.

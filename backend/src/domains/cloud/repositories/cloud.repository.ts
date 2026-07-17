@@ -551,6 +551,13 @@ function createDomainRepository(qx: QueryExecutor): DomainRepository {
       );
       return rows.map(mapDomain);
     },
+    async delete(id: string, tenantId: string): Promise<boolean> {
+      const affected = await qx.mutate(
+        `DELETE FROM cloud_domains WHERE id = :id AND tenant_id = :tenantId`,
+        { id, tenantId },
+      );
+      return num(affected, 0) > 0;
+    },
   };
 }
 

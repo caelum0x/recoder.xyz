@@ -16,6 +16,7 @@ import type { OutboxPublisherPort } from './ports/outbox-publisher.port.js';
 import type { AgentOsRepositoryPort } from './ports/agent-os-repository.port.js';
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
 import type { EngineClientPort } from '../engines/ports/engine-client.port.js';
+import type { WorkflowDriver } from '@recoder/agent-workflows';
 import type { AgentOsConfigOverrides } from './config.js';
 
 /**
@@ -53,6 +54,14 @@ export interface AgentOsDeps {
    * attached late via `attachSquadAutopilotConductor` instead.
    */
   readonly conductorDispatch?: SquadConductorPort | null;
+  /**
+   * The workflow dispatch seam — the frozen `@recoder/agent-workflows`
+   * `WorkflowDriver`. Absent ⇒ workflow CRUD still works over the in-memory
+   * store, but `/workflows/:id/dispatch` degrades truthfully to `not_configured`
+   * (never a faked run). Bootstrap injects a concrete driver once the runtime
+   * seams are built.
+   */
+  readonly workflowDriver?: WorkflowDriver | null;
 }
 
 /**
