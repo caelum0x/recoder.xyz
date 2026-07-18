@@ -547,3 +547,193 @@ describe('WorkspaceDetail PAL plan provenance', () => {
     });
   });
 });
+
+/**
+ * Cross-workspace state bleed — the App keys WorkspaceDetail by workspaceId.
+ *
+ * WorkspaceDetail carries per-workspace LOCAL state (the active `tab`, the
+ * `actionOutcome` from an Open-PR/Merge/Archive action, and the in-flight
+ * `busy` flag). At App.tsx the panel is rendered with `key={selected.workspaceId}`
+ * so switching the selected workspace REMOUNTS the panel and resets that state,
+ * instead of misattributing workspace A's governance outcome / error / busy
+ * state / tab selection to workspace B (a truthfulness violation).
+ *
+ * These tests reproduce App's render decision faithfully: a keyed root remounts
+ * on id change (the fix), while the unkeyed variant bleeds A's state onto B (the
+ * bug the key closes).
+ */
+describe('WorkspaceDetail cross-workspace state bleed (keyed by workspaceId)', () => {
+  function reviewWs(overrides: Partial<Workspace> = {}): Workspace {
+    return workspace({ state: 'awaiting_review', ...overrides });
+  }
+
+  const wsA = reviewWs({ workspaceId: 'ws-A', taskId: 'task_A', branch: 'feature/a' });
+  const wsB = reviewWs({ workspaceId: 'ws-B', taskId: 'task_B', branch: 'feature/b' });
+
+  /** A 409 delivery-gate response, exactly as the conductor serialises it. */
+  function gate409(action: string): Response {
+    return makeResponse({
+      status: 409,
+      ok: false,
+      body: {
+        success: false,
+        error: `Delivery blocked: no approving Approval for action '${action}'`,
+        data: { state: 'awaiting_approval', action, transitioned: true },
+      },
+    });
+  }
+
+  /** App.tsx renders `<WorkspaceDetail key={selected.workspaceId} … />`. */
+  function KeyedHarness({ ws }: { ws: Workspace }) {
+    return (
+      <WorkspaceDetail key={ws.workspaceId} workspace={ws} onClose={() => undefined} onChanged={() => undefined} />
+    );
+  }
+
+  /** The pre-fix render: no key, so the instance (and its state) is reused. */
+  function UnkeyedHarness({ ws }: { ws: Workspace }) {
+    return <WorkspaceDetail workspace={ws} onClose={() => undefined} onChanged={() => undefined} />;
+  }
+
+  function tabButton(c: HTMLDivElement, text: string): HTMLButtonElement {
+    const btn = Array.from(c.querySelectorAll('.detail-tabs .tab')).find(
+      (b) => (b.textContent ?? '').trim() === text,
+    );
+    if (!btn) throw new Error(`tab "${text}" not found`);
+    return btn as HTMLButtonElement;
+  }
+
+  it('remounts on workspace switch — B never shows A\'s gate verdict / error / tab', async () => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.endsWith('/merge')) return gate409('merge');
+      if (typeof url === 'string' && url.endsWith('/diff')) {
+        return makeResponse({
+          status: 200,
+          ok: true,
+          body: {
+            success: true,
+            data: {
+              workspaceId: 'ws-A',
+              baseRef: 'main',
+              branch: 'feature/a',
+              stat: ' README.md | 1 +',
+              patch: 'diff --git a/README.md b/README.md',
+              untracked: [],
+              changedFiles: 1,
+            },
+          },
+        });
+      }
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
+    });
+
+    const c = document.createElement('div');
+    document.body.appendChild(c);
+    container = c;
+
+    // Workspace A: select the Diff tab, then Merge → the delivery gate fires.
+    act(() => render(<KeyedHarness ws={wsA} />, c));
+    await flush(20);
+    act(() => tabButton(c, 'Diff').click());
+    await flush(20);
+    clickButtonByText(c, 'Merge');
+    await flush(20);
+
+    // A shows its gate verdict on the Diff tab.
+    expect(c.querySelector('.detail-gate-verdict'), 'A shows its own gate verdict').toBeTruthy();
+    expect(tabButton(c, 'Diff').classList.contains('tab-active')).toBe(true);
+
+    // Operator clicks workspace B in the sidebar → App re-renders the keyed panel.
+    act(() => render(<KeyedHarness ws={wsB} />, c));
+    await flush(20);
+
+    // B must NOT inherit A's governance outcome, error, or tab selection.
+    expect(c.querySelector('.detail-gate-verdict'), 'B must not show A\'s gate verdict').toBeNull();
+    expect(c.querySelector('.action-error')).toBeNull();
+    expect(c.querySelector('.action-note')).toBeNull();
+    // Tab reset to the default (Changes), not the Diff tab A had open.
+    expect(tabButton(c, 'Changes').classList.contains('tab-active')).toBe(true);
+    expect(tabButton(c, 'Diff').classList.contains('tab-active')).toBe(false);
+  });
+
+  it('the in-flight busy state does not disable B\'s buttons after the switch', async () => {
+    let releaseMerge: () => void = () => undefined;
+    const mergePending = new Promise<void>((resolve) => {
+      releaseMerge = resolve;
+    });
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.endsWith('/merge')) {
+        await mergePending; // hold the action in-flight → busy === 'merge'
+        return makeResponse({ status: 200, ok: true, body: { success: true, data: {} } });
+      }
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
+    });
+
+    const c = document.createElement('div');
+    document.body.appendChild(c);
+    container = c;
+
+    act(() => render(<KeyedHarness ws={wsA} />, c));
+    await flush(20);
+    clickButtonByText(c, 'Merge');
+    await flush(20);
+
+    // A's Merge button is now busy: relabeled and disabled.
+    const mergeBtnA = Array.from(c.querySelectorAll('button')).find((b) =>
+      (b.textContent ?? '').trim() === 'Merging…',
+    ) as HTMLButtonElement | undefined;
+    expect(mergeBtnA, 'A\'s merge is in-flight').toBeTruthy();
+    expect(mergeBtnA?.disabled).toBe(true);
+
+    // Switch to B while A's merge is still in-flight.
+    act(() => render(<KeyedHarness ws={wsB} />, c));
+    await flush(20);
+
+    // B is a fresh instance: its Merge button is enabled and reads 'Merge'.
+    expect(
+      Array.from(c.querySelectorAll('button')).some((b) => (b.textContent ?? '').trim() === 'Merging…'),
+      'B must not inherit A\'s busy label',
+    ).toBe(false);
+    const mergeBtnB = Array.from(c.querySelectorAll('button')).find((b) =>
+      (b.textContent ?? '').trim() === 'Merge',
+    ) as HTMLButtonElement | undefined;
+    expect(mergeBtnB, 'B offers a fresh, ready Merge').toBeTruthy();
+    expect(mergeBtnB?.disabled).toBe(false);
+    // The Archive action is likewise not disabled by A's stale busy flag.
+    const archiveBtnB = Array.from(c.querySelectorAll('button')).find((b) =>
+      (b.textContent ?? '').trim() === 'Archive',
+    ) as HTMLButtonElement | undefined;
+    expect(archiveBtnB?.disabled).toBe(false);
+
+    // Release A's in-flight merge so the test leaves no dangling work.
+    releaseMerge();
+    await flush(10);
+  });
+
+  it('WITHOUT the key the same instance bleeds A\'s gate verdict onto B (documents the bug)', async () => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.endsWith('/merge')) return gate409('merge');
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
+    });
+
+    const c = document.createElement('div');
+    document.body.appendChild(c);
+    container = c;
+
+    act(() => render(<UnkeyedHarness ws={wsA} />, c));
+    await flush(20);
+    clickButtonByText(c, 'Merge');
+    await flush(20);
+    expect(c.querySelector('.detail-gate-verdict')).toBeTruthy();
+
+    // Re-render the SAME position with B but no key → Preact reuses the instance,
+    // so A's gate verdict wrongly persists. This is exactly what the App-level
+    // `key={selected.workspaceId}` prevents.
+    act(() => render(<UnkeyedHarness ws={wsB} />, c));
+    await flush(20);
+    expect(
+      c.querySelector('.detail-gate-verdict'),
+      'unkeyed: A\'s verdict bleeds onto B — the bug the key fixes',
+    ).toBeTruthy();
+  });
+});

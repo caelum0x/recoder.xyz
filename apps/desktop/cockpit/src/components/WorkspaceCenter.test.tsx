@@ -285,4 +285,38 @@ describe('WorkspaceCenter open-in-terminal handoff', () => {
     expect(btn.disabled).toBe(true);
     expect(btn.title).toContain('No agent session');
   });
+
+  it('does not bleed workspace A\'s terminal-handoff failure note onto workspace B', async () => {
+    // The bridge throws → openWorkspaceTerminal() returns false → the button
+    // records a truthful "Couldn't hand this session" note for workspace A.
+    const config = {
+      backendUrl: BACKEND_URL,
+      token: 't',
+      openWorkspaceTerminal: () => {
+        throw new Error('host refused');
+      },
+    };
+    (globalThis as Record<string, unknown>).window = { __RECODER_COCKPIT__: config };
+    (globalThis as Record<string, unknown>).__RECODER_COCKPIT__ = config;
+
+    // Mount A, click "Open in terminal", and confirm the failure note appears.
+    const c = mountCenter(workspace({ workspaceId: 'ws-A', sessionName: 'recoder-ws-A' }));
+    await flush(20);
+    await act(async () => {
+      findOpenButton(c).click();
+    });
+    await flush(10);
+    expect(c.querySelector('.open-in-terminal-error')).toBeTruthy();
+    expect(c.textContent).toContain("Couldn't hand this session to the terminal host.");
+
+    // Switch the SAME center pane to workspace B (WorkspaceCenter is reconciled
+    // in place, unkeyed — exactly how App.tsx renders it). B must start clean:
+    // its keyed OpenInTerminalButton remounts, so A's stale note is gone.
+    act(() => {
+      render(<WorkspaceCenter workspace={workspace({ workspaceId: 'ws-B', sessionName: 'recoder-ws-B' })} />, c);
+    });
+    await flush(20);
+    expect(c.querySelector('.open-in-terminal-error')).toBeNull();
+    expect(c.textContent).not.toContain("Couldn't hand this session to the terminal host.");
+  });
 });

@@ -315,8 +315,13 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
         {/* The REAL terminal now lives in the wave host: this asks the desktop
             shell to open the workspace's live tmux session as a terminal block
             (wave-desktop fusion §5). In a plain browser the button is disabled
-            with a truthful hint — never a dead embedded terminal. */}
-        <OpenInTerminalButton workspace={workspace} />
+            with a truthful hint — never a dead embedded terminal.
+
+            Keyed on the workspace id: WorkspaceCenter itself is reconciled in
+            place (unkeyed at App.tsx) when the operator switches workspaces, so
+            without a key the button reuses the same instance and bleeds
+            workspace A's terminal-handoff failure note onto B. */}
+        <OpenInTerminalButton key={workspace.workspaceId} workspace={workspace} />
         <span class="ws-center-meta">{live ? 'live' : ''}</span>
       </div>
 
