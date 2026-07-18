@@ -417,6 +417,11 @@ export function App() {
           {/* RIGHT: file diffs + terminal + PR/merge status for the selection. */}
           {selected && (
             <WorkspaceDetail
+              // Keyed on the workspace id so switching the selected workspace
+              // remounts the panel — resetting per-workspace local state
+              // (tab / actionOutcome / busy) instead of bleeding workspace A's
+              // gate verdict, error note, or in-flight busy state onto B.
+              key={selected.workspaceId}
               workspace={selected}
               onClose={() => setSelectedId(null)}
               onChanged={() => board.refresh()}
