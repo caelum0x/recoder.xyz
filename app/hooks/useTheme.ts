@@ -61,7 +61,10 @@ export function useTheme() {
     // Listen for system theme changes
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = (e: MediaQueryListEvent) => {
-      if (savedTheme === 'system') {
+      // Read the current preference live so an explicit choice made after mount
+      // (e.g. user picks Light) is respected, and a later switch to 'system' is honored.
+      const currentTheme = (localStorage.getItem('recoder-theme') as Theme) || 'system';
+      if (currentTheme === 'system') {
         const newResolved = e.matches ? 'dark' : 'light';
         setResolvedTheme(newResolved);
         applyTheme(newResolved);
