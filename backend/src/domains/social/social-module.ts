@@ -199,7 +199,7 @@ export function createSocialComposer(deps: SocialComposerDeps): SocialComposite 
     },
 
     mcp(): readonly McpToolRegistration[] {
-      return buildSocialMcpTools({ repository: core.repository(), channels, config: cfg, ownerId });
+      return buildSocialMcpTools({ repository: core.repository(), channels, config: cfg });
     },
 
     async health(): Promise<ComponentHealth> {
