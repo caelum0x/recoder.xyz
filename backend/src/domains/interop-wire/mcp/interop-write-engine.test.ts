@@ -12,7 +12,7 @@ import { createTaskLifecycleService } from '../dispatch/task-lifecycle.js';
 import { createEnvelopeService } from '../wire/a2a-envelope.service.js';
 import { createMultiDispatchService, type RemoteEnvelopeSender } from '../dispatch/multi-dispatch.js';
 import { buildInteropWriteMcpTools } from './interop-write-engine.js';
-import type { McpToolRegistration } from '../../../shared/module-base.js';
+import type { McpToolCaller, McpToolRegistration } from '../../../shared/module-base.js';
 import type { A2ATransport } from '../ports/a2a-transport.port.js';
 import type { AgentRegistryRepo } from '../ports/agent-registry.repo.js';
 import type { AgentRow } from '../types.js';
@@ -25,6 +25,8 @@ const OFFLINE_EXECUTOR = {
 } as never;
 
 const OWNER = 'user-1';
+/** The host-authorized caller the edge binds for OWNER (the honest principal). */
+const OWNER_CALLER: McpToolCaller = { userId: OWNER };
 
 function remoteAgent(id: string): AgentRow {
   return { id, userId: OWNER, kind: 'remote_a2a', card: { id, name: id, capabilities: [] }, status: 'unknown' };
@@ -59,8 +61,10 @@ function build() {
   const dispatch = createMultiDispatchService({ transport, registry: fakeRegistry(['peer-a', 'peer-b']), tasks, remoteSender: okSender });
   const tools = buildInteropWriteMcpTools({ dispatch, tasks, envelope, ownerId: OWNER });
   const byName = new Map(tools.map((t) => [t.name, t] as const));
-  const call = <T = unknown>(name: string, input: unknown): Promise<T> =>
-    Promise.resolve(byName.get(name)!.handler(input) as T);
+  // Default to the host-authorized OWNER caller (as the edge binds it); tests that
+  // exercise the spoof/absent paths pass an explicit caller instead.
+  const call = <T = unknown>(name: string, input: unknown, caller: McpToolCaller | undefined = OWNER_CALLER): Promise<T> =>
+    Promise.resolve(byName.get(name)!.handler(input, caller) as T);
   return { tasks, tools, byName, call };
 }
 
@@ -130,5 +134,77 @@ describe('interop-wire write MCP tools', () => {
     expect(ids).toContain('open-1');
     expect(ids).not.toContain('done-1');
     expect(res.tasks.every((t) => t.state !== 'completed')).toBe(true);
+  });
+
+  // --- SECURITY: the subject is bound to the host-authorized caller, not args ---
+
+  it('interop_respond BLOCKS a cross-tenant spoof — victim id never reaches the data seam', async () => {
+    const { byName, tasks } = build();
+    // Victim owns a live task. Attacker is a DIFFERENT authorized principal.
+    await tasks.create({ id: 'victim-task', userId: 'victim', state: 'working' });
+    const attacker: McpToolCaller = { userId: 'attacker' };
+    // Instrument the data seam so we can prove the victim id never reaches it.
+    const seen: string[] = [];
+    const realGet = tasks.get.bind(tasks);
+    tasks.get = ((taskId: string, userId: string) => {
+      seen.push(userId);
+      return realGet(taskId, userId);
+    }) as typeof tasks.get;
+    // Attacker forges args.userId = 'victim' to respond to the victim's task.
+    await expect(
+      byName.get('interop_respond')!.handler({ userId: 'victim', taskId: 'victim-task', text: 'pwn' }, attacker),
+    ).rejects.toMatchObject({ code: 'AUTHZ_PROJECT_ACCESS_DENIED' });
+    expect(seen).not.toContain('victim');
+    // The victim's task is untouched (no message appended).
+    expect((await tasks.messages('victim-task')).length).toBe(0);
+  });
+
+  it('interop_inbox BLOCKS cross-tenant inbox disclosure (foreign args.userId → 403)', async () => {
+    const { byName, tasks } = build();
+    await tasks.create({ id: 'victim-open', userId: 'victim', state: 'working' });
+    const attacker: McpToolCaller = { userId: 'attacker' };
+    await expect(
+      byName.get('interop_inbox')!.handler({ userId: 'victim' }, attacker),
+    ).rejects.toMatchObject({ code: 'AUTHZ_PROJECT_ACCESS_DENIED' });
+  });
+
+  it('interop_send_task BLOCKS impersonated dispatch (from = victim) — foreign args.userId → 403', async () => {
+    const { byName } = build();
+    const attacker: McpToolCaller = { userId: 'attacker' };
+    await expect(
+      byName.get('interop_send_task')!.handler({ userId: 'victim', targets: ['peer-a'], text: 'x' }, attacker),
+    ).rejects.toMatchObject({ code: 'AUTHZ_PROJECT_ACCESS_DENIED' });
+  });
+
+  it('refuses every write tool when NO caller is bound (edge-exposed ⇒ AUTH_REQUIRED)', async () => {
+    const { byName } = build();
+    for (const name of ['interop_send_task', 'interop_dispatch', 'interop_respond', 'interop_inbox']) {
+      await expect(
+        byName.get(name)!.handler({ userId: OWNER, taskId: 't', targets: ['peer-a'], text: 'x' }, undefined),
+      ).rejects.toMatchObject({ code: 'AUTH_REQUIRED' });
+    }
+  });
+
+  it('no args.userId resolves the callers OWN subject (self-service)', async () => {
+    const { byName, tasks } = build();
+    await tasks.create({ id: 'self-1', userId: OWNER, state: 'working' });
+    const res = (await byName.get('interop_respond')!.handler(
+      { taskId: 'self-1', text: 'done' },
+      OWNER_CALLER,
+    )) as { ok: boolean; taskId: string };
+    expect(res.ok).toBe(true);
+    expect((await tasks.messages('self-1')).at(-1)?.role).toBe('agent');
+  });
+
+  it('an admin/internal caller MAY act on an arbitrary subject', async () => {
+    const { byName, tasks } = build();
+    await tasks.create({ id: 'other-1', userId: 'other', state: 'working' });
+    const admin: McpToolCaller = { userId: 'ops', scopes: ['internal'] };
+    const res = (await byName.get('interop_respond')!.handler(
+      { userId: 'other', taskId: 'other-1', text: 'ack' },
+      admin,
+    )) as { ok: boolean };
+    expect(res.ok).toBe(true);
+    expect((await tasks.messages('other-1')).at(-1)?.role).toBe('agent');
   });
 });

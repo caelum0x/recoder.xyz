@@ -13,10 +13,25 @@
  *
  * Degrade-safe: with no conductor/remote seam wired, dispatch legs fail truthfully
  * and the tool reports `ok:false` with the leg reasons — never a faked success.
- * Caller identity (`userId`) comes from the host's authorized principal; it is
- * never trusted from free-form model output beyond that binding.
+ *
+ * TENANT SCOPING (SECURITY): every tool here acts on OWNER-scoped tenant state —
+ * `interop_respond` reads/transitions a task via `tasks.get(taskId, userId)`,
+ * `interop_inbox` discloses `tasks.inbox(userId)`, and send/dispatch stamp the A2A
+ * envelope `from = userId` (impersonation surface). The subject (`userId`) is a
+ * tenant-owned selector, so — exactly like the caller-bound READ sibling
+ * (`mcp/interop-engine.ts`) — it is derived from the host-authorized
+ * {@link McpToolCaller}, NEVER trusted from free-form `args`. The edge binds the
+ * authenticated principal as the caller; the `args.userId` subject-selector is NOT
+ * edge-bound, so trusting it would let any authorized caller respond to / transition
+ * / read another tenant's task, disclose its inbox, or dispatch a task impersonating
+ * a victim (`from = victim`). Therefore:
+ *   - A NON-privileged caller may only act on its OWN `userId`; a foreign
+ *     `args.userId` is rejected (403 `AUTHZ_PROJECT_ACCESS_DENIED`). No args ⇒ the
+ *     caller's own id. Only an `admin`/`internal` caller may name an arbitrary id.
+ *   - These tools are the governed WRITE surface exposed through the HTTP edge, so
+ *     an ABSENT caller is refused (`AUTH_REQUIRED`) — never resolved from the arg.
  */
-import type { McpToolRegistration } from '../../../shared/module-base.js';
+import type { McpToolCaller, McpToolRegistration } from '../../../shared/module-base.js';
 import { createError, ErrorCode } from '../../../shared/errors.js';
 import type { EnvelopeService } from '../wire/a2a-envelope.service.js';
 import type { DispatchStrategy, MultiDispatchResult, MultiDispatchService } from '../dispatch/multi-dispatch.js';
@@ -27,7 +42,11 @@ export interface InteropWriteEngineDeps {
   readonly dispatch: MultiDispatchService;
   readonly tasks: TaskLifecycleService;
   readonly envelope: EnvelopeService;
-  /** The owner scope these write tools resolve against (service identity fallback). */
+  /**
+   * The service identity scope. Retained for parity with the read sibling and
+   * future trusted-internal wiring; the write tools do NOT fall back to it for
+   * subject resolution — an absent caller is refused (`AUTH_REQUIRED`).
+   */
   readonly ownerId: string;
 }
 
@@ -72,6 +91,17 @@ function coerceStrategy(raw: string | undefined): DispatchStrategy {
   return raw && (VALID_STRATEGIES as readonly string[]).includes(raw) ? (raw as DispatchStrategy) : 'all';
 }
 
+/** Trim to a non-empty string, or `undefined`. */
+function str(v: unknown): string | undefined {
+  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+}
+
+/** Does the caller carry an elevated scope that may act on an arbitrary subject? */
+function isPrivileged(caller: McpToolCaller): boolean {
+  const scopes = caller.scopes ?? [];
+  return scopes.includes('admin') || scopes.includes('internal');
+}
+
 /** The truthful, MCP-shaped view of a dispatch outcome. */
 function viewDispatch(result: MultiDispatchResult) {
   return {
@@ -84,12 +114,33 @@ function viewDispatch(result: MultiDispatchResult) {
 }
 
 export function buildInteropWriteMcpTools(deps: InteropWriteEngineDeps): readonly McpToolRegistration[] {
-  const { dispatch, tasks, envelope, ownerId } = deps;
-  const owner = (input: { userId?: string }): string =>
-    typeof input.userId === 'string' && input.userId.length > 0 ? input.userId : ownerId;
+  const { dispatch, tasks, envelope } = deps;
 
-  async function dispatchMessage(input: SendTaskInput, reuseTaskId: boolean) {
-    const userId = owner(input);
+  /**
+   * Resolve the OWNER subject a governed write is keyed to, bound to the
+   * host-authorized caller. A caller-supplied `args.userId` is NOT an authority
+   * source: a non-privileged caller may only act as its OWN subject (a differing
+   * `args.userId` is a 403 cross-tenant spoof), only an `admin`/`internal` caller
+   * may name an arbitrary subject, and — since this is the edge-exposed WRITE
+   * surface — an absent caller is refused (`AUTH_REQUIRED`) rather than trusting
+   * the arg.
+   */
+  const resolveSubject = (raw: unknown, caller: McpToolCaller | undefined, tool: string): string => {
+    const callerId = caller ? str(caller.userId) : undefined;
+    if (!callerId) {
+      throw createError(ErrorCode.AUTH_REQUIRED, `${tool}: no authorized caller identity`);
+    }
+    const requested = str((raw as { userId?: unknown } | undefined)?.userId);
+    if (requested && requested !== callerId && !isPrivileged(caller!)) {
+      throw createError(
+        ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+        `${tool}: caller may only act on its own tenant subject`,
+      );
+    }
+    return requested ?? callerId;
+  };
+
+  async function dispatchMessage(input: SendTaskInput, userId: string, reuseTaskId: boolean) {
     const targets = requireStringArray(input.targets);
     const text = typeof input.text === 'string' ? input.text : '';
     if (reuseTaskId && (typeof input.taskId !== 'string' || input.taskId.length === 0)) {
@@ -118,21 +169,23 @@ export function buildInteropWriteMcpTools(deps: InteropWriteEngineDeps): readonl
       name: 'interop_send_task',
       description:
         'Open a NEW A2A task and fan a message out to one or more registered targets under a response strategy (all | first | quorum). Returns the taskId + per-leg outcomes; ok reflects the real strategy result (never faked).',
-      handler: (raw: unknown) => dispatchMessage((raw ?? {}) as SendTaskInput, false),
+      handler: async (raw: unknown, caller?: McpToolCaller) =>
+        dispatchMessage((raw ?? {}) as SendTaskInput, resolveSubject(raw, caller, 'interop_send_task'), false),
     },
     {
       name: 'interop_dispatch',
       description:
         'Fan a follow-up message onto an EXISTING A2A task (taskId required) to one or more targets under a response strategy. Truthful per-leg outcomes; degrade-safe when no dispatch seam is wired.',
-      handler: (raw: unknown) => dispatchMessage((raw ?? {}) as SendTaskInput, true),
+      handler: async (raw: unknown, caller?: McpToolCaller) =>
+        dispatchMessage((raw ?? {}) as SendTaskInput, resolveSubject(raw, caller, 'interop_dispatch'), true),
     },
     {
       name: 'interop_respond',
       description:
         'Append an agent RESPONSE message to an owned A2A task and OPTIONALLY move it to a new state (working | input-required | completed | failed). Owner-scoped: an unowned/absent task is refused, never fabricated.',
-      handler: async (raw: unknown) => {
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const input = (raw ?? {}) as RespondInput;
-        const userId = owner(input);
+        const userId = resolveSubject(raw, caller, 'interop_respond');
         const taskId = input.taskId?.trim();
         if (!taskId) throw createError(ErrorCode.MISSING_REQUIRED_FIELD, 'taskId is required');
         const text = typeof input.text === 'string' ? input.text : '';
@@ -159,10 +212,10 @@ export function buildInteropWriteMcpTools(deps: InteropWriteEngineDeps): readonl
       name: 'interop_inbox',
       description:
         "List the caller's OPEN (non-terminal: submitted | working | input-required) A2A tasks — the agent's work inbox, most-recent-first. Read-only; returns [] truthfully when none are open.",
-      handler: async (raw: unknown) => {
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const input = (raw ?? {}) as InboxInput;
         const limit = typeof input.limit === 'number' && input.limit > 0 ? Math.trunc(input.limit) : undefined;
-        const tasksOpen = await tasks.inbox(owner(input), limit);
+        const tasksOpen = await tasks.inbox(resolveSubject(raw, caller, 'interop_inbox'), limit);
         return {
           count: tasksOpen.length,
           tasks: tasksOpen.map((t) => ({ id: t.id, state: t.state, runtimeId: t.runtimeId, correlation: t.correlation, updatedAt: t.updatedAt })),

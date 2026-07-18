@@ -8,8 +8,29 @@
  * `IN_PROC_SERVERS` (interop-host) + `ENGINE_SERVERS` (inproc-engines) and this
  * builder called in `buildInProcEngineRouter`, else the tools 404 (see the wiring
  * report). Write-bearing operations stay on the governed HTTP edges.
+ *
+ * TENANT SCOPING (SECURITY): the A2A agent registry, task projections, and task
+ * context bundles are all OWNER-scoped tenant data. The subject (`userId`) is a
+ * tenant-owned selector, so it is derived from the host-authorized
+ * {@link McpToolCaller} — NEVER trusted from free-form `args` alone. The edge binds
+ * the authenticated principal as the caller for the CALL; the `args.userId`
+ * subject-selector these tools read is NOT edge-bound, so trusting it would let any
+ * authenticated caller list another tenant's agents or read another tenant's A2A
+ * task + message log / context bundle (cross-tenant task/inbox disclosure).
+ * Therefore, for `interop_list_agents`, `interop_get_task`, and
+ * `interop_task_context`:
+ *   - A NON-privileged caller may only resolve its OWN `userId`; a foreign
+ *     `args.userId` is rejected (403 `AUTHZ_PROJECT_ACCESS_DENIED`). No args ⇒ the
+ *     caller's own id. Only an `admin`/`internal` caller may name an arbitrary id.
+ *   - Absent a bound caller ⇒ the TRUSTED in-proc/direct path (the edge always
+ *     binds a caller): resolve against the service identity (`deps.ownerId`), or an
+ *     explicit `args.userId` when a trusted internal caller supplies one.
+ * `interop_agent_liveness` (a derived up/degraded/down verdict keyed by agentId,
+ * not a tenant subject) and `interop_methods` (global JSON-RPC advertisement)
+ * expose no owner-scoped subject and stay unbound.
  */
-import type { McpToolRegistration } from '../../../shared/module-base.js';
+import { createError, ErrorCode } from '../../../shared/errors.js';
+import type { McpToolCaller, McpToolRegistration } from '../../../shared/module-base.js';
 import type { AgentRegistryService } from '../registry/agent-registry.js';
 import type { HeartbeatSloService } from '../registry/heartbeat-slo.js';
 import type { TaskLifecycleService } from '../dispatch/task-lifecycle.js';
@@ -29,25 +50,54 @@ export interface InteropEngineDeps {
 interface OwnedInput {
   readonly userId?: string;
 }
-interface AgentInput extends OwnedInput {
+interface AgentInput {
   readonly agentId?: string;
 }
 interface TaskInput extends OwnedInput {
   readonly taskId?: string;
 }
 
+/** Trim to a non-empty string, or `undefined`. */
+function str(v: unknown): string | undefined {
+  return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+}
+
+/** Does the caller carry an elevated scope that may name an arbitrary subject? */
+function isPrivileged(caller: McpToolCaller): boolean {
+  const scopes = caller.scopes ?? [];
+  return scopes.includes('admin') || scopes.includes('internal');
+}
+
 export function buildInteropMcpTools(deps: InteropEngineDeps): readonly McpToolRegistration[] {
-  const owner = (raw: unknown): string => {
-    const input = (raw ?? {}) as OwnedInput;
-    return typeof input.userId === 'string' && input.userId.length > 0 ? input.userId : deps.ownerId;
+  /**
+   * Resolve the OWNER subject these read tools scope against, binding it to the
+   * host-authorized caller. A bound, non-privileged caller may only read its OWN
+   * subject; a foreign `args.userId` is a cross-tenant spoof and is refused. An
+   * absent/empty caller is the trusted in-proc path → the service identity (or an
+   * explicit internal-supplied `args.userId`).
+   */
+  const resolveSubject = (raw: unknown, caller: McpToolCaller | undefined, tool: string): string => {
+    const requested = str((raw as OwnedInput | undefined)?.userId);
+    const callerId = caller ? str(caller.userId) : undefined;
+    if (!callerId) {
+      // Trusted internal/direct path (the edge always binds a caller).
+      return requested ?? deps.ownerId;
+    }
+    if (requested && requested !== callerId && !isPrivileged(caller!)) {
+      throw createError(
+        ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+        `${tool}: caller may only read its own tenant subject`,
+      );
+    }
+    return requested ?? callerId;
   };
 
   return [
     {
       name: 'interop_list_agents',
-      description: 'List registered A2A agents / runtime endpoints for an owner (read-only).',
-      handler: async (raw: unknown) => {
-        const agents = await deps.registry.list(owner(raw));
+      description: 'List registered A2A agents / runtime endpoints for the calling owner (read-only, owner-scoped).',
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
+        const agents = await deps.registry.list(resolveSubject(raw, caller, 'interop_list_agents'));
         return {
           count: agents.length,
           agents: agents.map((a) => ({ id: a.id, kind: a.kind, runtimeId: a.runtimeId, status: a.status, capabilities: a.card.capabilities })),
@@ -65,22 +115,24 @@ export function buildInteropMcpTools(deps: InteropEngineDeps): readonly McpToolR
     },
     {
       name: 'interop_get_task',
-      description: 'Fetch one A2A task projection + its message log (owner-scoped; null when absent).',
-      handler: async (raw: unknown) => {
+      description: 'Fetch one A2A task projection + its message log (owner-scoped; null when absent / not owned).',
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const input = (raw ?? {}) as TaskInput;
         if (!input.taskId) return { error: 'taskId is required' };
-        const task = await deps.tasks.get(input.taskId, owner(raw));
+        const userId = resolveSubject(raw, caller, 'interop_get_task');
+        const task = await deps.tasks.get(input.taskId, userId);
         if (!task) return { task: null };
         return { task, messages: await deps.tasks.messages(input.taskId) };
       },
     },
     {
       name: 'interop_task_context',
-      description: 'The compact context bundle for a task (recent messages + live scratchpad notes).',
-      handler: async (raw: unknown) => {
+      description: 'The compact context bundle for an owned task (recent messages + live scratchpad notes).',
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const input = (raw ?? {}) as TaskInput;
         if (!input.taskId) return { error: 'taskId is required' };
-        return { bundle: await deps.contextBridge.build({ taskId: input.taskId, userId: owner(raw) }) };
+        const userId = resolveSubject(raw, caller, 'interop_task_context');
+        return { bundle: await deps.contextBridge.build({ taskId: input.taskId, userId }) };
       },
     },
     {
