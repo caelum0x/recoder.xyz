@@ -21,6 +21,47 @@ import {
   extractSessionTokenFromHeader,
   parseSessionToken,
 } from '@recoder/auth/edge';
+import {
+  fetchBackendSession,
+  isBackendSeamEnabled,
+  type BackendSeamUser,
+} from '@/lib/auth-backend-seam';
+
+/**
+ * Enrich a backend-resolved session user with the website-local `hasApiKey`
+ * flag and normalize it into the shape every `getSession` consumer expects.
+ * Kept non-fatal: an API-key lookup failure still returns an authenticated
+ * session (hasApiKey=false) rather than dropping the user.
+ */
+async function enrichSeamSession(user: BackendSeamUser, expiresAtIso: string) {
+  let hasApiKey = false;
+  try {
+    const appUser = await prisma.users.findUnique({
+      where: { email: user.email },
+      select: { id: true },
+    });
+    const userIdForKeys = appUser?.id || user.id;
+    hasApiKey =
+      (await prisma.user_api_keys.count({
+        where: { userId: userIdForKeys, isActive: true },
+      })) > 0;
+  } catch (keyCheckError) {
+    logger.warn('API key check failed (non-fatal)', { error: String(keyCheckError) });
+  }
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      image: user.image,
+      hasApiKey,
+      subscription: 'free',
+      role: 'user',
+    },
+    expires: expiresAtIso,
+  };
+}
 
 /**
  * Extract and validate user from a CLI Bearer token.
@@ -108,6 +149,27 @@ export async function getUserFromToken(request: NextRequest) {
  */
 export async function getSession(request?: NextRequest) {
   try {
+    // Phase A backend seam (OFF by default, gated by RECODER_AUTH_BACKEND_SEAM):
+    // resolve against the ONE backend-owned Better Auth authority first. A
+    // positive backend session is authoritative; a negative/unreachable backend
+    // returns null and we fall through to the existing local resolution below,
+    // so this can never lock users out. See lib/auth-backend-seam.ts.
+    if (isBackendSeamEnabled()) {
+      try {
+        const cookieHeader = request
+          ? request.headers.get('cookie')
+          : (await headers()).get('cookie');
+        const seam = await fetchBackendSession(cookieHeader);
+        if (seam?.user) {
+          return await enrichSeamSession(seam.user, seam.expiresAt);
+        }
+      } catch (seamError) {
+        logger.warn('Backend auth seam resolution failed, falling back to local', {
+          error: String(seamError),
+        });
+      }
+    }
+
     // Resolve Better Auth session through the canonical server API first.
     // This keeps /api/auth/session and route-level auth checks consistent.
     try {

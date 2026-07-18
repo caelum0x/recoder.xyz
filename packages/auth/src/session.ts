@@ -43,6 +43,15 @@ export async function verifySessionToken(
   // Compatibility bridge: production currently has mixed auth schemas.
   // Prefer legacy plural tables first (`sessions` + `users`), then fallback
   // to singular Better Auth tables (`session` + `user`).
+  //
+  // TODO(phase-a-identity): DELETE this legacy-plural preference block (and the
+  // mirror blocks in getAuthUserById/getAuthUserByEmail below) ONLY AFTER the
+  // forward-only backfill `app/prisma/migrations/20260718000000_backfill_singular_identity.sql`
+  // has run in production, the residual-* diagnostics are zero, and the SSO +
+  // CLI device-flow verification suites pass. Removing it before prod data is
+  // migrated BREAKS login for any user whose row exists only in the plural
+  // tables. See the runbook in docs/RECODER-NEXT-PHASE.md Phase A / the Wave 9
+  // GAP-AUDIT row. Do NOT delete in this commit.
   let legacyRows: Array<{
     sessionId: string;
     userId: string;

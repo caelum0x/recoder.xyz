@@ -182,4 +182,21 @@ describe("readByokSecretsFromStore", () => {
         expect(BYOK_SECRET_ENV_NAMES).toContain("TENSORZERO_API_KEY");
         expect(BYOK_SECRET_ENV_NAMES).toContain("TENSORZERO_GATEWAY_API_KEY");
     });
+
+    it("allowlists the Gemini keys that power the packaged mem0 default (google) provider", () => {
+        expect(BYOK_SECRET_ENV_NAMES).toContain("GEMINI_API_KEY");
+        expect(BYOK_SECRET_ENV_NAMES).toContain("GOOGLE_API_KEY");
+    });
+
+    it("passes GEMINI_API_KEY through from the secret store (into the backend/mem0 spawn env)", () => {
+        const fs = makeFs(encode({ GEMINI_API_KEY: "gm-real", MY_BANK_PASSWORD: "hunter2" }));
+        const out = readByokSecretsFromStore({ secretsFilePath: storePath, decrypt: decode, fs });
+        expect(out).toEqual({ GEMINI_API_KEY: "gm-real" });
+    });
+
+    it("omits GEMINI_API_KEY when it is absent from the store (mem0 then degrades truthfully)", () => {
+        const fs = makeFs(encode({ ANTHROPIC_API_KEY: "sk-ant" }));
+        const out = readByokSecretsFromStore({ secretsFilePath: storePath, decrypt: decode, fs });
+        expect(out.GEMINI_API_KEY).toBeUndefined();
+    });
 });

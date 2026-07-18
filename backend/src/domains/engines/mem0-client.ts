@@ -74,25 +74,38 @@ export interface ProviderBlock {
   config: Record<string, unknown>;
 }
 
+/**
+ * Owner decision: packaged mem0 defaults to Google/Gemini for BOTH the LLM
+ * (fact extraction) and the embedder when the provider env var is UNSET — one
+ * `GEMINI_API_KEY` powers both. `.env.capabilities.recoder-server` documents
+ * this same default (`MEM0_LLM_PROVIDER=google` / `MEM0_EMBEDDER_PROVIDER=google`),
+ * but the packaged desktop does not load that server env file, so the DEFAULT
+ * must live in code. An explicit `MEM0_LLM_PROVIDER` / `MEM0_EMBEDDER_PROVIDER`
+ * always wins; a resolved `google` provider with no key degrades truthfully.
+ */
+export const DEFAULT_MEM0_PROVIDER = 'google';
+
 function googleKey(): string | undefined {
   return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 }
 
 /**
- * Resolve an OSS LLM provider from available BYO/self-hosted config. Cloud-first
- * (OpenAI / OpenRouter / Google) so it runs on servers without local inference;
- * Ollama only when explicitly chosen or it's the only thing configured.
+ * Resolve an OSS LLM provider from available BYO/self-hosted config. Google is
+ * the DEFAULT when `MEM0_LLM_PROVIDER` is unset (owner decision); an explicit
+ * override (openai / openrouter / ollama / google) always wins. When google is
+ * the effective provider but no key is present, the chain falls through to any
+ * other configured cloud key, and finally to null (truthful degrade — never a
+ * faked provider).
  */
-function resolveOssLlm(): ProviderBlock | null {
-  const override = process.env.MEM0_LLM_PROVIDER;
+export function resolveOssLlm(): ProviderBlock | null {
+  const override = process.env.MEM0_LLM_PROVIDER?.trim() || DEFAULT_MEM0_PROVIDER;
   const google = googleKey();
-  const noCloud = !process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY && !google;
 
-  if (override === 'ollama' || (!override && process.env.OLLAMA_BASE_URL && noCloud)) {
+  if (override === 'ollama') {
     return { provider: 'ollama', config: { baseURL: process.env.OLLAMA_BASE_URL || 'http://localhost:11434', model: process.env.MEM0_LLM_MODEL || 'llama3.1' } };
   }
-  if (override === 'google' || (!override && google && !process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY)) {
-    if (google) return { provider: 'google', config: { apiKey: google, model: process.env.MEM0_LLM_MODEL || 'gemini-2.0-flash' } };
+  if (override === 'google' && google) {
+    return { provider: 'google', config: { apiKey: google, model: process.env.MEM0_LLM_MODEL || 'gemini-2.0-flash' } };
   }
   if (process.env.OPENAI_API_KEY) {
     return { provider: 'openai', config: { apiKey: process.env.OPENAI_API_KEY, model: process.env.MEM0_LLM_MODEL || 'gpt-4o-mini' } };
@@ -107,18 +120,21 @@ function resolveOssLlm(): ProviderBlock | null {
 }
 
 /**
- * Resolve an OSS embedder. OpenRouter has NO embeddings API, so embeddings come
- * from OpenAI, Google/Gemini, or Ollama — letting servers use a cloud key.
+ * Resolve an OSS embedder. Google is the DEFAULT when `MEM0_EMBEDDER_PROVIDER`
+ * is unset (owner decision — one `GEMINI_API_KEY` powers LLM + embeddings); an
+ * explicit override always wins. OpenRouter has NO embeddings API, so a resolved
+ * `google` provider with no key falls through to OpenAI, Google, or Ollama, and
+ * finally to null (truthful degrade — never a faked provider).
  */
-function resolveOssEmbedder(): ProviderBlock | null {
-  const override = process.env.MEM0_EMBEDDER_PROVIDER;
+export function resolveOssEmbedder(): ProviderBlock | null {
+  const override = process.env.MEM0_EMBEDDER_PROVIDER?.trim() || DEFAULT_MEM0_PROVIDER;
   const google = googleKey();
 
-  if (override === 'ollama' || (!override && process.env.OLLAMA_BASE_URL && !process.env.OPENAI_API_KEY && !google)) {
+  if (override === 'ollama') {
     return { provider: 'ollama', config: { baseURL: process.env.OLLAMA_BASE_URL || 'http://localhost:11434', model: process.env.MEM0_EMBED_MODEL || 'nomic-embed-text' } };
   }
-  if (override === 'google' || (!override && google && !process.env.OPENAI_API_KEY)) {
-    if (google) return { provider: 'google', config: { apiKey: google, model: process.env.MEM0_EMBED_MODEL || 'gemini-embedding-001' } };
+  if (override === 'google' && google) {
+    return { provider: 'google', config: { apiKey: google, model: process.env.MEM0_EMBED_MODEL || 'gemini-embedding-001' } };
   }
   if (process.env.OPENAI_API_KEY) {
     return { provider: 'openai', config: { apiKey: process.env.OPENAI_API_KEY, model: process.env.MEM0_EMBED_MODEL || 'text-embedding-3-small' } };
@@ -279,7 +295,8 @@ export async function mem0Health(): Promise<Mem0Health> {
     return {
       available: false,
       mode,
-      reason: 'No MEM0_API_KEY and no self-hostable LLM+embedder (set OPENAI_API_KEY, OPENROUTER_API_KEY, or OLLAMA_BASE_URL)',
+      reason:
+        "No MEM0_API_KEY and no usable LLM+embedder for the default 'google' provider — set GEMINI_API_KEY (powers both mem0 LLM + embeddings), or pick another provider via MEM0_LLM_PROVIDER/MEM0_EMBEDDER_PROVIDER with OPENAI_API_KEY / OPENROUTER_API_KEY / OLLAMA_BASE_URL",
     };
   }
   const resolved = await getClient();
