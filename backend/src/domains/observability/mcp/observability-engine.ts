@@ -14,8 +14,19 @@
  * It composes the SAME services the routes use — it does NOT duplicate log
  * read/search (that stays in `agent-os/mcp/logs-engine.ts`), it only surfaces the
  * aggregated health/metrics/audit/signals views.
+ *
+ * ACTOR IDENTITY (SECURITY): `obs_audit_search` filters the governance audit chain
+ * by `actorId` — another actor's governance actions/effects are tenant-owned data,
+ * so the filter is derived from the host-authorized {@link McpToolCaller}, NEVER
+ * from free-form `args` alone. A NON-privileged caller may only read its OWN audit
+ * rows: its `actorId` filter is FORCED to the caller's `userId`, and a caller-named
+ * `args.actorId` for anyone else is rejected (403) rather than served (cross-actor
+ * audit-trail disclosure). Only an `admin`/`internal` caller may name an arbitrary
+ * `actorId` (or omit it for the global ops view). Absent a caller, the handler
+ * refuses (never guesses an identity).
  */
-import type { McpToolRegistration } from '../../../shared/module-base.js';
+import type { McpToolCaller, McpToolRegistration } from '../../../shared/module-base.js';
+import { createError, ErrorCode } from '../../../shared/errors.js';
 import type { HealthAggregator } from '../services/health-aggregator.service.js';
 import type { WorkSignalsService } from '../services/work-signals.service.js';
 import type { AuditXdrProjection } from '../adapters/audit-xdr.adapter.js';
@@ -32,6 +43,36 @@ export interface ObservabilityMcpDeps {
 
 function str(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+}
+
+/** Does the caller carry an elevated scope that may filter by an arbitrary actor? */
+function isPrivileged(caller: McpToolCaller): boolean {
+  const scopes = caller.scopes ?? [];
+  return scopes.includes('admin') || scopes.includes('internal');
+}
+
+/**
+ * Resolve the `actorId` audit filter, bound to the authorized {@link McpToolCaller}.
+ * A NON-privileged caller is pinned to its OWN `userId` (a caller-supplied
+ * `args.actorId` for another actor is rejected 403, never used as a selector); an
+ * `admin`/`internal` caller may name any `actorId` or omit it for the global view.
+ * Absent a caller, refuse (never guess an identity).
+ */
+function resolveActorId(raw: unknown, caller: McpToolCaller | undefined): string | undefined {
+  const authUserId = str(caller?.userId);
+  if (!caller || !authUserId) {
+    throw createError(ErrorCode.AUTH_REQUIRED, 'obs_audit_search: no authorized caller identity');
+  }
+  const requested = str((raw as { actorId?: unknown } | null)?.actorId);
+  if (isPrivileged(caller)) return requested;
+  // Non-privileged: own actor only. A foreign args.actorId is rejected, not served.
+  if (requested && requested !== authUserId) {
+    throw createError(
+      ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+      'obs_audit_search: caller may only read its own audit rows',
+    );
+  }
+  return authUserId;
 }
 
 /** Build the observability MCP tools (registered via the wiring checklist). */
@@ -55,11 +96,12 @@ export function buildObservabilityMcpTools(deps: ObservabilityMcpDeps): readonly
     {
       name: 'obs_audit_search',
       description: 'Query the governance Merkle audit chain (XDR). Re-verifies the proof first; a tampered chain returns verified:false with no rows.',
-      handler: async (raw: unknown) => {
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const args = (raw ?? {}) as Record<string, unknown>;
+        const actorId = resolveActorId(raw, caller);
         const effect = args.effect === 'allow' || args.effect === 'deny' ? args.effect : undefined;
         return deps.auditXdr.verifyAndProject({
-          ...(str(args.actorId) ? { actorId: str(args.actorId) } : {}),
+          ...(actorId ? { actorId } : {}),
           ...(str(args.action) ? { action: str(args.action) } : {}),
           ...(effect ? { effect } : {}),
           limit: Math.min(Number(args.limit) || 100, 500),
