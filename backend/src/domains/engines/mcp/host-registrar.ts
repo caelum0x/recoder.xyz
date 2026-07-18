@@ -28,16 +28,33 @@ import type {
   McpServerRegistration,
   McpToolCallInput,
   McpToolResult,
+  EdgeBoundToolCallInput,
 } from '../ports/mcp-host.port.js';
 
 /**
- * Project the host-authorized `actor` onto the {@link McpToolCaller} a domain
- * handler binds its mutation subject to. The host already ran `authorize → risk`
- * for this call, so `actor.agentId` IS the identity the call was authorized under
- * (the HTTP edge sets it from the caller's authenticated principal). An empty
- * agentId yields `undefined` so the handler refuses rather than guesses.
+ * Project the EDGE-BOUND authenticated caller onto the {@link McpToolCaller} a
+ * domain handler binds its mutation subject to.
+ *
+ * SECURITY: `actor.agentId` is caller-controlled at the HTTP edge (free-form
+ * request body), so it MUST NOT decide the tenant subject — trusting it lets a
+ * caller spoof a victim's tenant (cross-tenant provision/destroy/domain abuse).
+ * The edge instead threads the AUTHENTICATED principal as `input.caller`
+ * (`userId`/`orgId`/`scopes`); prefer it, carrying the real org + scopes so a
+ * handler's admin/internal and org-membership logic operate on true values.
+ * Only for a TRUSTED internal/direct call (no edge, so no bound `caller`) do we
+ * fall back to `actor.agentId`. An empty identity yields `undefined` so the
+ * handler refuses rather than guesses.
  */
 function callerFromInput(input: McpToolCallInput): McpToolCaller | undefined {
+  const bound = (input as EdgeBoundToolCallInput).caller;
+  const boundUserId = typeof bound?.userId === 'string' ? bound.userId.trim() : '';
+  if (boundUserId) {
+    return {
+      userId: boundUserId,
+      ...(bound?.orgId ? { orgId: bound.orgId } : {}),
+      ...(bound?.scopes ? { scopes: bound.scopes } : {}),
+    };
+  }
   const userId = typeof input.actor?.agentId === 'string' ? input.actor.agentId.trim() : '';
   if (!userId) return undefined;
   return { userId };

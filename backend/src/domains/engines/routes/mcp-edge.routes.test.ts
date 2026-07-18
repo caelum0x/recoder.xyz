@@ -216,19 +216,30 @@ describe('governed MCP edge (mocked host)', () => {
     );
   });
 
-  it('attributes the body actor (agentId + toolRules) when supplied', async () => {
+  it('takes the body actor toolRules but FORCES the acting identity to the principal', async () => {
     await request(base, '/tools/demo/demo.echo/call', {
       method: 'POST',
       body: {
         actor: {
+          // SECURITY: a caller-supplied agentId must NOT become the acting
+          // identity — it is forced to the authenticated principal (`tester`).
           agentId: 'agent_smith',
           permissions: { toolRules: [{ toolName: 'demo.echo', effect: 'allow' }] },
         },
       },
     });
-    expect(callSpy).toHaveBeenLastCalledWith(
-      expect.objectContaining({ actor: expect.objectContaining({ agentId: 'agent_smith' }) }),
-    );
+    const input = callSpy.mock.lastCall?.[0] as {
+      actor: { agentId: string; permissions: { toolRules: unknown[] } };
+      caller?: { userId: string };
+    };
+    // The spoofed agentId is dropped; the gate sees the real principal identity.
+    expect(input.actor.agentId).toBe('tester');
+    // …but the body actor's deny-biased tool rules still flow to the gate.
+    expect(input.actor.permissions.toolRules).toEqual([
+      { toolName: 'demo.echo', effect: 'allow' },
+    ]);
+    // …and the edge-bound tenant caller is the authenticated principal.
+    expect(input.caller?.userId).toBe('tester');
   });
 
   it('returns 404 NOT_FOUND for an unknown server (transport-level, host never called)', async () => {
@@ -417,6 +428,59 @@ describe('governed MCP edge — tenant identity binding (security)', () => {
       },
     );
   });
+
+  it('IGNORES a spoofed actor.agentId: acting identity + bound caller are the principal', async () => {
+    // The exact cross-tenant vector: attacker authenticates as themselves but
+    // tries to bind the call to a victim via body.actor.agentId. The edge must
+    // force both the gate actor and the tenant caller to `attacker`.
+    await withServer(
+      authWith({ userId: 'attacker', orgId: 'org_att', scopes: ['read'], isAnonymous: false }),
+      async (base, callSpy) => {
+        const res = await request(base, '/tools/demo/demo.echo/call', {
+          method: 'POST',
+          body: { actor: { agentId: 'victim-user-id' }, args: { query: 'x' } },
+        });
+        expect(res.status).toBe(200);
+        const input = callSpy.mock.lastCall?.[0] as {
+          actor: { agentId: string };
+          caller?: { userId: string; orgId?: string; scopes?: readonly string[] };
+        };
+        // agentId no longer wins — the gate is governed under the real principal.
+        expect(input.actor.agentId).toBe('attacker');
+        // …and the edge-bound tenant caller carries the principal's real
+        // userId/orgId/scopes (never the spoofed victim id).
+        expect(input.caller).toEqual({
+          userId: 'attacker',
+          orgId: 'org_att',
+          scopes: ['read'],
+        });
+      },
+    );
+  });
+
+  it('also ignores a spoofed actor.agentId on the body-addressed /call variant', async () => {
+    await withServer(
+      authWith({ userId: 'attacker', scopes: [], isAnonymous: false }),
+      async (base, callSpy) => {
+        const res = await request(base, '/call', {
+          method: 'POST',
+          body: {
+            server: 'demo',
+            tool: 'demo.echo',
+            actor: { agentId: 'victim-user-id' },
+            args: {},
+          },
+        });
+        expect(res.status).toBe(200);
+        const input = callSpy.mock.lastCall?.[0] as {
+          actor: { agentId: string };
+          caller?: { userId: string };
+        };
+        expect(input.actor.agentId).toBe('attacker');
+        expect(input.caller?.userId).toBe('attacker');
+      },
+    );
+  });
 });
 
 // --- REAL gate: domain-tools bridge registration → authorize → execute → audit ---
@@ -494,6 +558,77 @@ describe('governed MCP edge (real InteropHostBundle + domain-tools bridge)', () 
     const body = res.json() as { data: { status: string; reason: string } };
     expect(body.data.status).toBe('denied');
     expect(body.data.reason).toContain('not registered');
+  });
+});
+
+// --- REAL host end-to-end: the in-proc handler governs under the principal ---
+
+describe('governed MCP edge — in-proc caller binding through the real host (security)', () => {
+  it('a spoofed actor.agentId does NOT reach the domain handler; the bound principal does', async () => {
+    // Drive the WHOLE seam: real edge → real InteropHostBundle → real
+    // host-registrar delegating handler. The tool captures its `caller` (the
+    // subject a cloud/memory write would govern under). The request supplies a
+    // spoofed `actor.agentId` and an attacker principal; the handler MUST see the
+    // principal, never the spoof — the exact cross-tenant hole finding #2 covers.
+    const captured: Array<{ userId: string; orgId?: string; scopes?: readonly string[] }> = [];
+    const bundle = new InteropHostBundle();
+    const [registration] = registerDomainToolsOnHost(
+      bundle,
+      [
+        {
+          serverId: 'cap-domain',
+          tools: [
+            {
+              name: 'cap.who',
+              description: 'capture the host-authorized caller',
+              handler: async (
+                _args: unknown,
+                caller?: { userId: string; orgId?: string; scopes?: readonly string[] },
+              ) => {
+                if (caller) captured.push(caller);
+                return { seenUserId: caller?.userId ?? null };
+              },
+            },
+          ],
+        },
+      ],
+      fakeLog,
+    );
+    expect(registration?.skipped).toBe(false);
+
+    const attackerMw: RequestHandler = (req, _res, next) => {
+      req.principal = {
+        userId: 'attacker',
+        orgId: 'org_att',
+        scopes: ['read'],
+        isAnonymous: false,
+      } as Principal;
+      next();
+    };
+    const mw = {
+      authenticate: attackerMw,
+      authenticateMutating: attackerMw,
+      requireAdmin: attackerMw,
+      requireInternal: attackerMw,
+    } as unknown as AuthMiddleware;
+    const restartEngine = vi.fn(async (): Promise<RestartOutcome> => ({ outcome: 'skipped' }));
+    const { base, server } = await startServer(
+      buildMcpEdgeRouter({ host: bundle, mw, log: fakeLog, restartEngine }),
+    );
+    try {
+      const res = await request(base, '/tools/cap-domain/cap.who/call', {
+        method: 'POST',
+        body: { actor: { agentId: 'victim-user-id' }, args: {} },
+      });
+      expect(res.status).toBe(200);
+      const body = res.json() as { data: { status: string; result: { content: { seenUserId: string } } } };
+      expect(body.data.status).toBe('completed');
+      // The handler governed under the authenticated principal, not the spoof.
+      expect(body.data.result.content.seenUserId).toBe('attacker');
+      expect(captured).toEqual([{ userId: 'attacker', orgId: 'org_att', scopes: ['read'] }]);
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
   });
 });
 

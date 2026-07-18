@@ -32,7 +32,12 @@ import {
 import type { Logger } from '../../../shared/logger.js';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { Principal } from '../../identity/types.js';
-import type { McpHostPort, HostCallOutcome } from '../ports/mcp-host.port.js';
+import type { McpToolCaller } from '../../../shared/module-base.js';
+import type {
+  McpHostPort,
+  HostCallOutcome,
+  EdgeBoundToolCallInput,
+} from '../ports/mcp-host.port.js';
 import { isEngineId } from '../constants.js';
 import type { EngineHealth, EngineId } from '../types.js';
 
@@ -151,6 +156,26 @@ function bindTenantIdentity(
 }
 
 /**
+ * Build the EDGE-BOUND {@link McpToolCaller} from the AUTHENTICATED principal.
+ *
+ * SECURITY: this is the tenant subject an in-proc handler (cloud/memory/conductor)
+ * governs under — it is derived ONLY from the authenticated principal, NEVER from
+ * the caller-controlled `actor.agentId` in the request body. It carries the real
+ * `orgId` + `scopes` so a handler's admin/internal and org-membership logic
+ * operate on true values. Absent principal ⇒ undefined (no edge-bound identity;
+ * the mutating middleware already gated the request).
+ */
+function edgeBoundCaller(principal: Principal | null): McpToolCaller | undefined {
+  const authUserId = principal?.userId?.trim();
+  if (!authUserId) return undefined;
+  return {
+    userId: authUserId,
+    ...(principal?.orgId ? { orgId: principal.orgId } : {}),
+    scopes: principal?.scopes ?? [],
+  };
+}
+
+/**
  * Project a gate outcome onto the wire (SECURITY: `auditEventId` only — the raw
  * audit event embeds the call args). `error` mirrors `reason` on `failed` so the
  * bridge's `data.error` fallback reads truthfully.
@@ -204,14 +229,23 @@ export function buildMcpEdgeRouter(deps: McpEdgeRoutesDeps): Router {
     // the host executes — a cross-tenant claim is rejected, never forwarded.
     const bound = bindTenantIdentity(body.args ?? {}, principal);
     if (!bound.ok) return { status: 'forbidden' };
-    const agentId = body.actor?.agentId ?? principal?.userId ?? 'agent_http';
+    // SECURITY: the acting identity is the AUTHENTICATED principal, never the
+    // caller-controlled `body.actor.agentId` (which would let a caller spoof a
+    // victim's tenant for the cloud write tools). When authenticated, force
+    // `actor.agentId` to `principal.userId`; the body actor contributes only its
+    // deny-biased `toolRules` (for the gate) — its `agentId` is display/legacy.
+    const authUserId = principal?.userId?.trim();
+    const agentId = authUserId || body.actor?.agentId || 'agent_http';
     const actor = buildEdgeActor(agentId, body.actor?.permissions?.toolRules ?? []);
-    const outcome = await host.call({
+    const caller = edgeBoundCaller(principal);
+    const input: EdgeBoundToolCallInput = {
       server,
       toolName,
       actor,
       args: bound.args,
-    });
+      ...(caller ? { caller } : {}),
+    };
+    const outcome = await host.call(input);
     log.info(
       { serverId, toolName, agentId, status: outcome.status },
       'mcp edge: governed tool call',

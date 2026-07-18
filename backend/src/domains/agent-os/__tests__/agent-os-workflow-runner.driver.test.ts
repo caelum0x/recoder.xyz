@@ -97,4 +97,46 @@ describe('AgentOsWorkflowRunnerDriver', () => {
       driver.signal(run.workflowRunId, { type: 'input', nodeId: 'gate', data: {} }),
     ).rejects.toThrow('no durable resume seam');
   });
+
+  it('bounds the run index by evicting the oldest terminal runs past maxRuns', async () => {
+    // Handler-backed verification ⇒ every run reaches the terminal `completed`.
+    const ports: AgentOsWorkflowRunnerPorts = {
+      runVerification: async () => ({ status: 'completed', output: { ok: true } }),
+    };
+    const driver = new AgentOsWorkflowRunnerDriver({ ports, maxRuns: 2 });
+
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const run = await driver.start(def());
+      expect(run.status).toBe('completed');
+      ids.push(run.workflowRunId);
+    }
+
+    // The index never grows past the cap: the 3 oldest terminal runs are gone…
+    expect(driver.getRun(ids[0])).toBeNull();
+    expect(driver.getRun(ids[1])).toBeNull();
+    expect(driver.getRun(ids[2])).toBeNull();
+    // …while the two most-recent runs remain addressable.
+    expect(driver.getRun(ids[3])).toMatchObject({ status: 'completed' });
+    expect(driver.getRun(ids[4])).toMatchObject({ status: 'completed' });
+  });
+
+  it('retains live (non-terminal) runs over the cap and evicts them only as a fallback', async () => {
+    // Approval nodes park runs in `waiting` (non-terminal), so terminal-first
+    // eviction cannot free space — the oldest live run is dropped last-resort.
+    const driver = new AgentOsWorkflowRunnerDriver({ maxRuns: 2 });
+    const gate = { nodes: [{ nodeId: 'gate', kind: 'approval' as const, label: 'Gate', config: {} }] };
+
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const run = await driver.start(def(gate));
+      expect(run.status).toBe('waiting');
+      ids.push(run.workflowRunId);
+    }
+
+    // Oldest live run evicted to honour the cap; the two newest survive.
+    expect(driver.getRun(ids[0])).toBeNull();
+    expect(driver.getRun(ids[1])?.status).toBe('waiting');
+    expect(driver.getRun(ids[2])?.status).toBe('waiting');
+  });
 });
