@@ -16,8 +16,24 @@ import type {
   ExternalMcpServerConfig,
 } from '@recoder/interop';
 import type { McpToolCallInput, McpToolResult } from '@recoder/agent-mcp';
+import type { McpToolCaller } from '../../../shared/module-base.js';
 
 export type { HostCallOutcome, McpServerRegistration, McpToolCallInput, McpToolResult };
+
+/**
+ * A gated call input carrying the EDGE-BOUND authenticated caller.
+ *
+ * SECURITY: `McpToolCallInput.actor.agentId` is caller-controlled at the HTTP
+ * edge (free-form request body). It MUST NOT be trusted as the tenant subject an
+ * in-proc handler acts for. The edge instead threads the AUTHENTICATED principal
+ * (`userId`/`orgId`/`scopes`) as this `caller` field, which the interop host
+ * passes through unchanged to the executor. In-proc handlers (via the
+ * host-registrar) derive their {@link McpToolCaller} from this bound field, never
+ * from `actor.agentId`. Absent ⇒ trusted internal call (no edge) or unauthenticated.
+ */
+export interface EdgeBoundToolCallInput extends McpToolCallInput {
+  readonly caller?: McpToolCaller;
+}
 
 /**
  * A registered in-proc tool handler: the real execution behind an authorized

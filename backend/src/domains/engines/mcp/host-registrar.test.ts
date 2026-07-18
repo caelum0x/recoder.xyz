@@ -115,6 +115,72 @@ describe('registerModuleToolsOnHost', () => {
     expect((outBeta as { content: unknown }).content).toEqual({ ok: 'beta' });
   });
 
+  it('binds the domain handler to the EDGE-BOUND caller, never the spoofable actor.agentId', async () => {
+    // SECURITY (finding #2): actor.agentId is caller-controlled at the HTTP edge.
+    // The delegating handler must pass the domain handler the edge-bound `caller`
+    // (the authenticated principal), never `actor.agentId`.
+    const seen: Array<{ userId: string; orgId?: string; scopes?: readonly string[] } | undefined> = [];
+    const host = new FakeHost();
+    registerModuleToolsOnHost(
+      host,
+      'sec',
+      [
+        {
+          name: 'who',
+          description: 'capture caller',
+          handler: (
+            _args: unknown,
+            caller?: { userId: string; orgId?: string; scopes?: readonly string[] },
+          ) => {
+            seen.push(caller);
+            return { ok: true };
+          },
+        },
+      ],
+      fakeLogger(),
+    );
+    const server = host.getServer('sec') as McpServerRegistration;
+    // An input that carries BOTH a spoofed actor.agentId and the real bound caller.
+    const input = {
+      server,
+      toolName: 'who',
+      args: {},
+      actor: { agentId: 'victim-user-id' },
+      caller: { userId: 'attacker', orgId: 'org_att', scopes: ['read'] },
+    } as unknown as McpToolCallInput;
+    await host.call(input);
+    expect(seen).toEqual([{ userId: 'attacker', orgId: 'org_att', scopes: ['read'] }]);
+  });
+
+  it('falls back to actor.agentId for a TRUSTED internal call (no edge-bound caller)', async () => {
+    const seen: Array<{ userId: string } | undefined> = [];
+    const host = new FakeHost();
+    registerModuleToolsOnHost(
+      host,
+      'trust',
+      [
+        {
+          name: 'who',
+          description: 'capture caller',
+          handler: (_args: unknown, caller?: { userId: string }) => {
+            seen.push(caller);
+            return { ok: true };
+          },
+        },
+      ],
+      fakeLogger(),
+    );
+    const server = host.getServer('trust') as McpServerRegistration;
+    const input = {
+      server,
+      toolName: 'who',
+      args: {},
+      actor: { agentId: 'internal-service' },
+    } as unknown as McpToolCallInput;
+    await host.call(input);
+    expect(seen).toEqual([{ userId: 'internal-service' }]);
+  });
+
   it('degrades safely to a truthful no-op + warn when the host is absent', () => {
     const logger = fakeLogger();
     const result = registerModuleToolsOnHost(null, 'demo', tools, logger);
