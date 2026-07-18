@@ -168,6 +168,48 @@ describe('ConversationView is the friendly skin', () => {
     expect(posted[0].body).toEqual({ text: 'Tidy the imports' });
   });
 
+  it('does not bleed an unsent composer draft across workspaces', async () => {
+    // WorkspaceDetail is reused unkeyed when the operator clicks a different
+    // workspace, so ConversationView keeps its instance. A draft typed for A
+    // must NEVER survive into B — otherwise Enter sends A's prompt to B's agent.
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url.endsWith('/message')) {
+        posted.push({ url, body: init?.body ? JSON.parse(init.body as string) : undefined });
+        return makeResponse({ status: 200, ok: true, body: { success: true, data: {} } });
+      }
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
+    });
+
+    const c = mount(workspace({ workspaceId: 'ws-A', state: 'awaiting_review' }));
+    await flush(20);
+
+    // Type a draft into A's composer but do NOT send it.
+    await act(async () => {
+      const input = c.querySelector('.ws-cmdbar-input') as HTMLInputElement;
+      input.value = 'rm -rf the old migrations';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect((c.querySelector('.ws-cmdbar-input') as HTMLInputElement).value).toBe('rm -rf the old migrations');
+
+    // Operator clicks workspace B — same reconciled tree (unkeyed reuse).
+    act(() => {
+      render(<ConversationView workspace={workspace({ workspaceId: 'ws-B', state: 'awaiting_review' })} />, c);
+    });
+    await flush(20);
+
+    // The composer draft must be cleared for B — no stale prompt lingering.
+    expect((c.querySelector('.ws-cmdbar-input') as HTMLInputElement).value).toBe('');
+
+    // Pressing Enter now sends nothing (empty draft), so B's agent is never
+    // started with A's prompt.
+    await act(async () => {
+      const form = c.querySelector('form.ws-cmdbar') as HTMLFormElement;
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    await flush(20);
+    expect(posted).toHaveLength(0);
+  });
+
   it('maps a finished agent state to friendly status (no scary internals)', async () => {
     (globalThis as Record<string, unknown>).fetch = vi.fn(async () =>
       makeResponse({ status: 200, ok: true, body: { success: true, data: [] } }),
