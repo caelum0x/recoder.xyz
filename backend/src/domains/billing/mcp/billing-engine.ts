@@ -10,10 +10,19 @@
  *  - `billing_usage_read`     — headroom for one metered kind (fail-safe: deny/zero).
  *  - `billing_provider_status`— the active MoR provider's truthful readiness.
  *
- * The subject is resolved from explicit args (`orgId` wins over `userId`); a
- * missing subject yields a truthful error rather than a guessed identity.
+ * TENANT IDENTITY (SECURITY): the billing subject is a tenant-owned target, so it
+ * is derived from the host-authorized {@link McpToolCaller} — NEVER from free-form
+ * `args` alone. `args.userId` is edge-bound to the authenticated principal, but
+ * `args.orgId` is NOT (`bindTenantIdentity` only covers `userId`); trusting a
+ * caller-supplied `orgId` would disclose another org's plan/quota (cross-tenant).
+ * So a NON-privileged caller may only read its OWN subject: an args-named subject
+ * must match the caller's `userId`/`orgId`, else it is rejected; with no args the
+ * caller's own subject (org scope wins) is used. Only an `admin`/`internal` caller
+ * may name an arbitrary subject (a service acting on behalf of a tenant). Absent a
+ * caller, the handler refuses rather than guessing an identity.
  */
-import type { McpToolRegistration } from '../../../shared/module-base.js';
+import type { McpToolCaller, McpToolRegistration } from '../../../shared/module-base.js';
+import { createError, ErrorCode } from '../../../shared/errors.js';
 import type { BillingModule } from '../index.js';
 import { USAGE_KINDS, type BillingSubject, type UsageKind } from '../types.js';
 
@@ -21,14 +30,54 @@ function str(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
 }
 
-/** Resolve a billing subject from tool args (org scope wins). Throws when absent. */
-function subjectFromArgs(raw: unknown): BillingSubject {
+/** Does the caller carry an elevated scope that may name an arbitrary subject? */
+function isPrivileged(caller: McpToolCaller): boolean {
+  const scopes = caller.scopes ?? [];
+  return scopes.includes('admin') || scopes.includes('internal');
+}
+
+/** The caller's OWN billing subject (org scope wins over user), mirroring the HTTP edge. */
+function callerOwnSubject(caller: McpToolCaller, userId: string): BillingSubject {
+  const orgId = str(caller.orgId);
+  return orgId ? { subjectId: orgId, kind: 'org' } : { subjectId: userId, kind: 'user' };
+}
+
+/** Read the explicitly requested subject from tool args (org scope wins), if any. */
+function requestedSubject(raw: unknown): BillingSubject | undefined {
   const args = (raw ?? {}) as Record<string, unknown>;
   const orgId = str(args.orgId);
   if (orgId) return { subjectId: orgId, kind: 'org' };
   const userId = str(args.userId);
   if (userId) return { subjectId: userId, kind: 'user' };
-  throw new Error('no billing subject: pass args.userId or args.orgId');
+  return undefined;
+}
+
+/**
+ * Resolve the billing subject the handler acts for, bound to the authorized
+ * {@link McpToolCaller}. A NON-privileged caller may only target its own subject;
+ * a cross-tenant request (an args `orgId`/`userId` the caller does not own) is
+ * rejected (403) rather than served. Absent a caller, refuse (never guess).
+ */
+function resolveSubject(raw: unknown, caller: McpToolCaller | undefined): BillingSubject {
+  const authUserId = str(caller?.userId);
+  if (!caller || !authUserId) {
+    throw createError(ErrorCode.AUTH_REQUIRED, 'billing: no authorized caller identity');
+  }
+  const requested = requestedSubject(raw);
+  if (!requested) return callerOwnSubject(caller, authUserId);
+  if (isPrivileged(caller)) return requested;
+  // Own-subject only: the requested subject must match the caller's identity.
+  const owns =
+    requested.kind === 'org'
+      ? str(caller.orgId) === requested.subjectId
+      : requested.subjectId === authUserId;
+  if (!owns) {
+    throw createError(
+      ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+      'billing: caller may only read its own subject',
+    );
+  }
+  return requested;
 }
 
 function normalizeKind(v: unknown): UsageKind {
@@ -43,8 +92,8 @@ export function buildBillingMcpTools(module: BillingModule): readonly McpToolReg
     {
       name: 'billing_plan_read',
       description: "Read a subject's effective plan + features + per-kind quota headroom (read-only).",
-      handler: async (raw: unknown) => {
-        const subject = subjectFromArgs(raw);
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
+        const subject = resolveSubject(raw, caller);
         const view = await module.gate().view(subject);
         return {
           subjectId: subject.subjectId,
@@ -66,8 +115,8 @@ export function buildBillingMcpTools(module: BillingModule): readonly McpToolReg
     {
       name: 'billing_usage_read',
       description: "Read a subject's quota headroom for one metered kind (fail-safe: deny/zero on miss).",
-      handler: async (raw: unknown) => {
-        const subject = subjectFromArgs(raw);
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
+        const subject = resolveSubject(raw, caller);
         const kind = normalizeKind((raw as { kind?: unknown })?.kind);
         const d = await module.gate().checkQuota(subject, kind);
         return {

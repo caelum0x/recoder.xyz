@@ -13,8 +13,13 @@
  * same gateway seam. All results are truthful — an unroutable call returns
  * `{ routed:false }` with a reason, never a fabricated
  * completion/embedding/feedback_id.
+ *
+ * TENANT IDENTITY: the `userId` a call is attributed to (quota + spend) is the
+ * HOST-AUTHORIZED, edge-bound caller (2nd handler param `caller.userId`), NEVER a
+ * caller-supplied arg. An earlier `args.requestedBy` selector let any caller
+ * attribute quota/spend to a victim (cross-tenant quota drain); it is dropped.
  */
-import type { McpToolRegistration } from '../../../shared/module-base.js';
+import type { McpToolRegistration, McpToolCaller } from '../../../shared/module-base.js';
 import type { InferenceGatewayPort } from '../ports/inference-gateway.port.js';
 import type { ModelCatalogRepository } from '../ports/model-catalog.port.js';
 import type { InferenceRoutingService } from '../services/inference-routing.service.js';
@@ -37,20 +42,30 @@ interface CompleteInput {
   readonly messages?: unknown;
   readonly temperature?: number;
   readonly maxTokens?: number;
-  readonly requestedBy?: string;
 }
 
 interface EmbedInput {
   readonly model?: string;
   readonly input?: unknown;
-  readonly requestedBy?: string;
 }
 
 interface FeedbackInput {
   readonly inferenceId?: string;
   readonly metricName?: string;
   readonly value?: unknown;
-  readonly requestedBy?: string;
+}
+
+/**
+ * The tenant `userId` an inference call is attributed to (quota + spend). It is
+ * the HOST-AUTHORIZED, edge-bound caller (`caller.userId`) — NEVER a caller-supplied
+ * arg (the old `args.requestedBy`, which let any caller drain/bill a victim's
+ * quota). Absent an edge-bound caller (direct/internal path, no bound identity),
+ * the call is unattributed and the routing gate degrades open — it is never
+ * attributed to a spoofed subject.
+ */
+function subjectUserId(caller?: McpToolCaller): string | undefined {
+  const userId = caller?.userId?.trim();
+  return userId ? userId : undefined;
 }
 
 /** Parse + validate an MCP messages array (system boundary — never trust input). */
@@ -88,18 +103,19 @@ export function buildInferenceMcpTools(deps: InferenceMcpDeps): readonly McpTool
       description:
         'Route a buffered chat completion through the delivery ladder (governed; usage + cost are ledgered). ' +
         'Returns a truthful { routed, tier, content, usage } — never a fabricated completion.',
-      handler: async (raw: unknown) => {
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const input = (raw ?? {}) as CompleteInput;
         const model = input.model?.trim();
         if (!model) return { error: 'model (string) is required' };
         const messages = parseMessages(input.messages);
         if (!messages) return { error: 'messages (non-empty array of {role,content}) is required' };
+        const userId = subjectUserId(caller);
         const result = await deps.routing.complete({
           model,
           messages,
           ...(typeof input.temperature === 'number' ? { temperature: input.temperature } : {}),
           ...(typeof input.maxTokens === 'number' ? { maxTokens: input.maxTokens } : {}),
-          ...(input.requestedBy?.trim() ? { userId: input.requestedBy.trim() } : {}),
+          ...(userId ? { userId } : {}),
         });
         return { result };
       },
@@ -109,7 +125,7 @@ export function buildInferenceMcpTools(deps: InferenceMcpDeps): readonly McpTool
       description:
         'Route an embedding call (string or string[] input) through the delivery ladder. ' +
         'Returns a truthful { routed, tier, embeddings, usage } — never fabricated vectors.',
-      handler: async (raw: unknown) => {
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const input = (raw ?? {}) as EmbedInput;
         const model = input.model?.trim();
         if (!model) return { error: 'model (string) is required' };
@@ -117,10 +133,11 @@ export function buildInferenceMcpTools(deps: InferenceMcpDeps): readonly McpTool
         if (parsed === null) {
           return { error: 'input (non-empty string or non-empty array of non-empty strings) is required' };
         }
+        const userId = subjectUserId(caller);
         const result = await deps.routing.embed({
           model,
           input: parsed,
-          ...(input.requestedBy?.trim() ? { userId: input.requestedBy.trim() } : {}),
+          ...(userId ? { userId } : {}),
         });
         return { result };
       },
@@ -131,7 +148,7 @@ export function buildInferenceMcpTools(deps: InferenceMcpDeps): readonly McpTool
         'Attach a feedback signal (boolean/float metric or comment string) to a prior inference_id ' +
         '(merge/approve = positive). Audited as a delivery outcome. Returns a truthful { routed, feedbackId? } — ' +
         'never a fabricated feedback_id.',
-      handler: async (raw: unknown) => {
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const input = (raw ?? {}) as FeedbackInput;
         const inferenceId = input.inferenceId?.trim();
         if (!inferenceId) return { error: 'inferenceId (string) is required' };
@@ -141,11 +158,12 @@ export function buildInferenceMcpTools(deps: InferenceMcpDeps): readonly McpTool
         if (typeof value !== 'boolean' && typeof value !== 'number' && typeof value !== 'string') {
           return { error: 'value (boolean | number | string) is required' };
         }
+        const userId = subjectUserId(caller);
         const result = await deps.routing.feedback({
           inferenceId,
           metricName,
           value,
-          ...(input.requestedBy?.trim() ? { userId: input.requestedBy.trim() } : {}),
+          ...(userId ? { userId } : {}),
         });
         return { result };
       },
