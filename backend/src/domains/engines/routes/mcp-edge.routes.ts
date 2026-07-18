@@ -31,6 +31,7 @@ import {
 } from '../../../shared/errors.js';
 import type { Logger } from '../../../shared/logger.js';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
+import type { Principal } from '../../identity/types.js';
 import type { McpHostPort, HostCallOutcome } from '../ports/mcp-host.port.js';
 import { isEngineId } from '../constants.js';
 import type { EngineHealth, EngineId } from '../types.js';
@@ -123,6 +124,33 @@ export function buildEdgeActor(agentId: string, toolRules: EdgeToolRules): Agent
 }
 
 /**
+ * Bind the tenant identity of a gated call to the AUTHENTICATED principal.
+ *
+ * SECURITY: `args` is free-form model output. Several gated tools (notably the
+ * memory surface) read `args.userId` as the tenant they act for. If a caller
+ * could put ANY `userId` in the args it would let any authenticated principal
+ * recall/forget/promote another user's memory — a cross-tenant hole. So the edge
+ * OVERRIDES `args.userId` with the authenticated `principal.userId` before the
+ * host ever sees the call. A caller that explicitly claims a DIFFERENT `userId`
+ * is rejected (403), UNLESS it carries an admin/internal scope (a service acting
+ * on behalf of a tenant). Absent an authenticated principal, args pass through
+ * unchanged (the mutating middleware already gated the request).
+ */
+function bindTenantIdentity(
+  args: Record<string, unknown>,
+  principal: Principal | null,
+): { readonly ok: true; readonly args: Record<string, unknown> } | { readonly ok: false } {
+  const authUserId = principal?.userId?.trim();
+  if (!authUserId) return { ok: true, args };
+  const claimed = typeof args.userId === 'string' ? args.userId.trim() : '';
+  const scopes = principal?.scopes ?? [];
+  const privileged =
+    principal?.kind === 'internal' || scopes.includes('admin') || scopes.includes('internal');
+  if (claimed && claimed !== authUserId && !privileged) return { ok: false };
+  return { ok: true, args: { ...args, userId: privileged && claimed ? claimed : authUserId } };
+}
+
+/**
  * Project a gate outcome onto the wire (SECURITY: `auditEventId` only — the raw
  * audit event embeds the call args). `error` mirrors `reason` on `failed` so the
  * bridge's `data.error` fallback reads truthfully.
@@ -164,23 +192,31 @@ export function buildMcpEdgeRouter(deps: McpEdgeRoutesDeps): Router {
     serverId: string,
     toolName: string,
     body: z.infer<typeof callBodySchema>,
-    fallbackAgentId: string,
-  ): Promise<{ notFound: true } | { notFound?: false; wire: Record<string, unknown> }> => {
+    principal: Principal | null,
+  ): Promise<
+    | { status: 'notFound' }
+    | { status: 'forbidden' }
+    | { status: 'ok'; wire: Record<string, unknown> }
+  > => {
     const server = host.getServer(serverId);
-    if (!server) return { notFound: true };
-    const agentId = body.actor?.agentId ?? fallbackAgentId;
+    if (!server) return { status: 'notFound' };
+    // SECURITY: bind the tenant `userId` to the authenticated principal BEFORE
+    // the host executes — a cross-tenant claim is rejected, never forwarded.
+    const bound = bindTenantIdentity(body.args ?? {}, principal);
+    if (!bound.ok) return { status: 'forbidden' };
+    const agentId = body.actor?.agentId ?? principal?.userId ?? 'agent_http';
     const actor = buildEdgeActor(agentId, body.actor?.permissions?.toolRules ?? []);
     const outcome = await host.call({
       server,
       toolName,
       actor,
-      args: body.args ?? {},
+      args: bound.args,
     });
     log.info(
       { serverId, toolName, agentId, status: outcome.status },
       'mcp edge: governed tool call',
     );
-    return { wire: outcomeToWire(outcome) };
+    return { status: 'ok', wire: outcomeToWire(outcome) };
   };
 
   const handleCall = (
@@ -194,17 +230,26 @@ export function buildMcpEdgeRouter(deps: McpEdgeRoutesDeps): Router {
         sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Invalid MCP call body.'));
         return;
       }
-      const fallbackAgentId = req.principal?.userId ?? 'agent_http';
       const ran = await runGatedCall(
         extracted.serverId,
         extracted.toolName,
         extracted.body,
-        fallbackAgentId,
+        req.principal ?? null,
       );
-      if (ran.notFound) {
+      if (ran.status === 'notFound') {
         sendError(
           res,
           createError(ErrorCode.NOT_FOUND, `MCP server not registered: ${extracted.serverId}`),
+        );
+        return;
+      }
+      if (ran.status === 'forbidden') {
+        sendError(
+          res,
+          createError(
+            ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+            'args.userId does not match the authenticated principal',
+          ),
         );
         return;
       }

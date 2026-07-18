@@ -17,9 +17,14 @@
  *    over the four legal kinds (supersedes / derived-from / contradicts /
  *    relates-to); a down pool throws truthfully rather than faking the edge.
  *
- * The caller identity is supplied by the host from the authorized principal (the
- * `userId` field), NOT trusted from free-form model output beyond that binding.
- * `memory_promote` reconstructs a `Principal` from that bound `userId` so the
+ * TENANT IDENTITY: `userId` is the tenant every handler acts for, and it MUST be
+ * the authenticated caller — never free-form model output. The governed MCP edge
+ * (`mcp-edge.routes.ts` → `bindTenantIdentity`) OVERRIDES `args.userId` with the
+ * authenticated `principal.userId` before the host executes, and rejects (403) a
+ * call whose args claim a different `userId` unless the caller carries an
+ * admin/internal scope. So by the time a handler runs, `input.userId` is the
+ * edge-bound authenticated identity, not a spoofable arg. `memory_promote` /
+ * `memory_forget` reconstruct a `Principal` from that bound `userId` so the
  * governance gate makes an independent, truthful decision.
  */
 import type { McpToolRegistration } from '../../../shared/module-base.js';
@@ -100,11 +105,12 @@ function coerceScope(scope: string | undefined): MemoryScope {
 }
 
 /**
- * Reconstruct a `Principal` from the host-bound `userId` for the governance gate.
- * The MCP call already cleared the host's `authorize→risk` step, so the caller is
- * an authenticated write-capable principal — but it carries NO elevated scopes,
- * so `gate.decide('memory.promote', …)` renders its own truthful verdict (an
- * agent that the policy denies simply gets `{ promoted:false }`, never a bypass).
+ * Reconstruct a `Principal` from the edge-bound `userId` for the governance gate.
+ * `userId` is the authenticated caller (the MCP edge overrode any args-supplied
+ * value with `principal.userId`; see the module header), so this is a real tenant
+ * identity — but it carries NO elevated scopes, so `gate.decide('memory.promote',
+ * …)` renders its own truthful verdict (an agent that the policy denies simply
+ * gets `{ promoted:false }`, never a bypass).
  */
 function principalFromUserId(userId: string): Principal {
   return {

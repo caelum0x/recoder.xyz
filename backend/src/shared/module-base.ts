@@ -12,14 +12,36 @@ import type { Router } from 'express';
 import type { ComponentHealth, HealthSource } from './health-types.js';
 
 /**
+ * The host-authorized caller identity threaded to a tool handler. The MCP host
+ * gates the CALL at its boundary; this is the SAME authorized principal, surfaced
+ * to the handler so a mutation can be bound to *who is calling* rather than to
+ * free-form model output. Absent ⇒ the handler must refuse (never guess identity).
+ *
+ * SECURITY: handlers that mutate tenant-owned state MUST derive their subject from
+ * this caller — not from their own `args` — and only honour an args-named subject
+ * for a caller carrying an `admin`/`internal` scope.
+ */
+export interface McpToolCaller {
+  /** Canonical owner id of the authorized caller (`Principal.userId`). */
+  readonly userId: string;
+  /** Optional organization scope of the caller (`Principal.orgId`). */
+  readonly orgId?: string;
+  /** Granted scope strings (e.g. `['read','write','admin','internal']`). */
+  readonly scopes?: readonly string[];
+}
+
+/**
  * A minimal MCP tool registration descriptor. The full contract is owned by
  * `@recoder/agent-mcp`; the spine only needs the opaque shape so a module can
  * declare tools without the edge importing the MCP package. Widened later.
+ *
+ * The optional second `caller` argument carries the host-authorized identity (see
+ * {@link McpToolCaller}); handlers that ignore it keep their single-arg shape.
  */
 export interface McpToolRegistration {
   readonly name: string;
   readonly description?: string;
-  readonly handler: (input: unknown) => Promise<unknown> | unknown;
+  readonly handler: (input: unknown, caller?: McpToolCaller) => Promise<unknown> | unknown;
 }
 
 /**

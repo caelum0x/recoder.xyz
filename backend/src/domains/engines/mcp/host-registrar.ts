@@ -22,13 +22,26 @@
  * registration); an empty serverId or empty tool list is a truthful skip.
  */
 import type { Logger } from '../../../shared/logger.js';
-import type { McpToolRegistration } from '../../../shared/module-base.js';
+import type { McpToolRegistration, McpToolCaller } from '../../../shared/module-base.js';
 import type {
   McpHostPort,
   McpServerRegistration,
   McpToolCallInput,
   McpToolResult,
 } from '../ports/mcp-host.port.js';
+
+/**
+ * Project the host-authorized `actor` onto the {@link McpToolCaller} a domain
+ * handler binds its mutation subject to. The host already ran `authorize → risk`
+ * for this call, so `actor.agentId` IS the identity the call was authorized under
+ * (the HTTP edge sets it from the caller's authenticated principal). An empty
+ * agentId yields `undefined` so the handler refuses rather than guesses.
+ */
+function callerFromInput(input: McpToolCallInput): McpToolCaller | undefined {
+  const userId = typeof input.actor?.agentId === 'string' ? input.actor.agentId.trim() : '';
+  if (!userId) return undefined;
+  return { userId };
+}
 
 /** Truthful, auditable outcome of a module-tool registration. */
 export interface ModuleToolsRegistration {
@@ -59,17 +72,18 @@ function buildServerRegistration(
 }
 
 /**
- * Wrap a domain's flat handler (`(args) => result`) as a gated in-proc handler
- * (`(McpToolCallInput) => McpToolResult`). The host runs this ONLY after the call
- * is authorized; it passes the validated `input.args` through and normalizes the
- * domain return into the `{ content, metadata }` result envelope.
+ * Wrap a domain's flat handler (`(args, caller?) => result`) as a gated in-proc
+ * handler (`(McpToolCallInput) => McpToolResult`). The host runs this ONLY after
+ * the call is authorized; it passes the validated `input.args` plus the
+ * host-authorized {@link McpToolCaller} through, and normalizes the domain return
+ * into the `{ content, metadata }` result envelope.
  */
 function delegatingHandler(
   serverId: string,
   tool: McpToolRegistration,
 ): (input: McpToolCallInput) => Promise<McpToolResult> {
   return async (input: McpToolCallInput): Promise<McpToolResult> => {
-    const content = await tool.handler(input.args);
+    const content = await tool.handler(input.args, callerFromInput(input));
     return { content, metadata: { serverId, toolName: tool.name, external: false } };
   };
 }

@@ -83,6 +83,17 @@ export interface IdentityModule {
   stop(): Promise<void>;
 }
 
+// The website plan-read seam (billing `resolveAuthPlan` half): bootstrap builds
+// `createBetterAuthPlanReader(logger)` and wires `readPlan` as `resolveAuthPlan`
+// so backend entitlement = max(authPlan, webhookPlan, distributionGrant).
+export {
+  createAuthPlanReader,
+  createBetterAuthPlanReader,
+  type AuthPlanReader,
+  type AuthPlanQuery,
+  type AuthPlanRow,
+} from './repositories/auth-plan.reader.js';
+
 // Value import last so the type-only imports above form no runtime cycle.
 import { IdentityModuleImpl } from './identity-module.js';
 

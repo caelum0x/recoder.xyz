@@ -31,6 +31,7 @@ import type {
   InferenceRequest,
   InferenceResult,
   InferenceStreamResult,
+  StreamDelta,
 } from '../types.js';
 import { notRouted, tokenUsage } from '../types.js';
 import { streamGatewayCompletion, type StreamFetchLike } from './gateway-stream.js';
@@ -161,10 +162,23 @@ export class TensorzeroTransportAdapter implements InferenceGatewayPort {
     const model = req.model || this.cfg.defaultModel;
     const normalized: InferenceRequest = { ...req, model };
 
+    // Count what actually reaches the caller's sink so a tier that partial-emits
+    // then FAILS mid-stream can never be followed by another emitting tier — the
+    // client must not receive duplicated/concatenated output (e.g. a napi
+    // "Hello wor" then a loopback "Hello world"). The napi tiers buffer their
+    // own deltas (see `safeNapiStream`) so a decline emits nothing here; this
+    // guard covers the loopback→buffered transition where the loopback tier
+    // streams live and cannot be buffered.
+    let emitted = 0;
+    const sink: StreamSink = (delta) => {
+      emitted += 1;
+      onDelta(delta);
+    };
+
     // napi tier first (real in-process chunk streaming, no HTTP hop) when
     // preferred + bound + built with the `inferenceStream` binding.
     if (this.cfg.streamingEnabled && this.cfg.napiFirst) {
-      const viaNapi = await this.safeNapiStream(normalized, onDelta);
+      const viaNapi = await this.safeNapiStream(normalized, sink);
       if (viaNapi?.routed) return viaNapi;
     }
 
@@ -187,10 +201,10 @@ export class TensorzeroTransportAdapter implements InferenceGatewayPort {
           normalized,
           (token) => {
             if (!roleSent) {
-              onDelta({ role: 'assistant' });
+              sink({ role: 'assistant' });
               roleSent = true;
             }
-            onDelta({ content: token });
+            sink({ content: token });
           },
         );
         if (result.ok && result.deltaCount > 0) {
@@ -214,7 +228,7 @@ export class TensorzeroTransportAdapter implements InferenceGatewayPort {
 
     // napi streaming as a fallback rung when it was not tried first.
     if (this.cfg.streamingEnabled && !this.cfg.napiFirst) {
-      const viaNapi = await this.safeNapiStream(normalized, onDelta);
+      const viaNapi = await this.safeNapiStream(normalized, sink);
       if (viaNapi?.routed) return viaNapi;
     }
 
@@ -223,10 +237,26 @@ export class TensorzeroTransportAdapter implements InferenceGatewayPort {
     if (!buffered.routed) {
       return { ...buffered, streamed: false, tokenGranular: false };
     }
+    // If a live streaming tier (loopback SSE) already pushed partial deltas to
+    // the caller before failing, re-emitting the full buffered completion would
+    // concatenate/duplicate the streamed output. Finalize truthfully instead of
+    // corrupting the stream — the caller already holds the partial deltas.
+    if (emitted > 0) {
+      return {
+        routed: false,
+        tier: 'none',
+        model,
+        content: null,
+        reason:
+          'a streaming tier emitted partial deltas then failed; refusing to re-emit a buffered completion (would duplicate streamed output)',
+        streamed: false,
+        tokenGranular: false,
+      };
+    }
     // For the buffered path the caller has not yet received a role delta unless
     // we streamed above; emit the framing here so the SSE shape stays valid.
-    onDelta({ role: 'assistant' });
-    if (buffered.content) onDelta({ content: buffered.content });
+    sink({ role: 'assistant' });
+    if (buffered.content) sink({ content: buffered.content });
     return { ...buffered, streamed: true, tokenGranular: false };
   }
 
@@ -314,11 +344,26 @@ export class TensorzeroTransportAdapter implements InferenceGatewayPort {
    * napi STREAM tier call guarded like `safeNapi`: an unbound tier / absent
    * seam / native failure resolves `null` (the ladder continues to loopback
    * SSE, then buffered) — never a thrown error, never a faked stream.
+   *
+   * CRITICAL: the tier may partial-emit deltas and THEN decline (the embedded
+   * engine fails mid-stream so `completeStream` resolves `null`). If those
+   * deltas had reached the caller's sink, the loopback SSE fallback would
+   * re-stream the full completion through the same sink and the client would see
+   * concatenated/duplicated output ("Hello wor" + "Hello world"). So we BUFFER
+   * the tier's deltas locally and only replay them to the real sink once the
+   * tier confirms a routed result; a decline (or throw) discards the buffer and
+   * leaves the sink pristine for the loopback fallback.
    */
   private async safeNapiStream(req: InferenceRequest, onDelta: StreamSink): Promise<InferenceStreamResult | null> {
     if (!this.napi?.available() || !this.napi.completeStream) return null;
+    const buffer: StreamDelta[] = [];
     try {
-      return await this.napi.completeStream(req, onDelta);
+      const result = await this.napi.completeStream(req, (delta) => buffer.push(delta));
+      if (result?.routed) {
+        for (const delta of buffer) onDelta(delta);
+        return result;
+      }
+      return null;
     } catch (err) {
       this.log.debug({ err: message(err), model: req.model }, 'napi stream tier threw — degrading to loopback SSE');
       return null;

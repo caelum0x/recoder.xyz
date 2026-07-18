@@ -37,7 +37,13 @@ import { RunEventIngestService } from './services/run-event-ingest.service.js';
 import { OutboxDrainService } from './services/outbox-drain.service.js';
 import { SquadService, InMemorySquadStore } from './services/squad.service.js';
 import { SquadAutopilotService } from './services/squad-autopilot.service.js';
-import { WorkflowService, InMemoryWorkflowDefinitionStore } from './services/workflow.service.js';
+import {
+  WorkflowService,
+  InMemoryWorkflowDefinitionStore,
+  type WorkflowDefinitionStore,
+} from './services/workflow.service.js';
+import { PostgresWorkflowDefinitionStore } from './adapters/postgres-workflow-definition.store.js';
+import { AgentOsWorkflowRunnerDriver } from './adapters/agent-os-workflow-runner.driver.js';
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
 import { buildSquadBoardRouter } from './routes/squad-board.routes.js';
 import { buildSquadReadRouter } from './routes/squad-read.routes.js';
@@ -129,13 +135,23 @@ export class AgentOsComposer implements AgentOsModule {
           })
         : null;
 
-    // Workflow-definition CRUD + dispatch. CRUD always works over the in-memory
-    // store (a pg store is the follow-up behind the same seam); dispatch runs a
-    // stored definition through the injected `WorkflowDriver` and degrades to a
-    // truthful `not_configured` when no driver is wired.
+    // Workflow-definition CRUD + dispatch. Definitions persist through the
+    // DURABLE pg store when the effective repository driver is postgres (they
+    // survive restart); else the in-memory store (no-DB degrade / tests), behind
+    // the same seam. Dispatch runs a stored definition through a `WorkflowDriver`:
+    // an injected driver wins (tests / explicit composition); else the default
+    // `AgentOsWorkflowRunnerDriver` — which SKINS the frozen
+    // `@recoder/agent-workflows` runner, so dispatch executes truthfully (nodes
+    // without a handler surface a `failed`/`waiting` run) instead of the legacy
+    // permanent `not_configured`. Bootstrap may inject a richer driver (real node
+    // handler ports) behind this same seam.
+    const workflowStore: WorkflowDefinitionStore =
+      this.effectiveDriver === 'postgres' && this.executor
+        ? new PostgresWorkflowDefinitionStore(this.executor)
+        : new InMemoryWorkflowDefinitionStore();
     this.workflows = new WorkflowService({
-      store: new InMemoryWorkflowDefinitionStore(),
-      driver: deps.workflowDriver ?? null,
+      store: workflowStore,
+      driver: deps.workflowDriver ?? new AgentOsWorkflowRunnerDriver(),
     });
 
     const inner = buildAgentOsRouter({

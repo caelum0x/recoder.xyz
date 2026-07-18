@@ -21,7 +21,10 @@ import { degraded, healthy, unhealthy } from '../../../shared/health-types.js';
 import { createError, ErrorCode, type AppError } from '../../../shared/errors.js';
 import { err, ok, type Result } from '../../../shared/result.js';
 import type { SandboxRepository } from '../ports/cloud-repository.port.js';
-import type { SandboxProvider } from '../ports/sandbox-provider.port.js';
+import type {
+  ProviderExecResult,
+  SandboxProvider,
+} from '../ports/sandbox-provider.port.js';
 import { quotaDeniedError, type TenancyService } from './tenancy.service.js';
 import {
   PROVIDER_IDS,
@@ -86,11 +89,30 @@ export interface SandboxProvisionerDeps {
   readonly reaperIntervalMs?: number;
 }
 
+/** A tenant-scoped in-sandbox command execution request. */
+export interface SandboxExecRequest {
+  readonly command: string;
+  readonly cwd?: string;
+  readonly timeoutMs?: number;
+  readonly env?: Readonly<Record<string, string>>;
+}
+
 export interface SandboxProvisionerService {
   provision(req: ProvisionRequest): Promise<Result<Sandbox, AppError>>;
   get(sandboxId: string, tenantId: string): Promise<Result<Sandbox, AppError>>;
   list(tenantId: string): Promise<readonly Sandbox[]>;
   destroy(sandboxId: string, tenantId: string): Promise<Result<void, AppError>>;
+  /**
+   * Run a command inside a live, tenant-owned sandbox (the conductor remote
+   * substrate exec seam). Fail-safe: an unknown/foreign/not-running sandbox, an
+   * unwired provider, or a provider without exec all resolve to a truthful `Err`
+   * — never a fabricated result.
+   */
+  execInSandbox(
+    sandboxId: string,
+    tenantId: string,
+    input: SandboxExecRequest,
+  ): Promise<Result<ProviderExecResult, AppError>>;
   /** Reap every expired sandbox; returns how many were reaped. Never throws. */
   reapExpired(): Promise<number>;
   /** Reconcile persisted rows against provider truth; returns rows corrected. */
@@ -317,6 +339,40 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
     return ok(undefined);
   }
 
+  async function execInSandbox(
+    sandboxId: string,
+    tenantId: string,
+    input: SandboxExecRequest,
+  ): Promise<Result<ProviderExecResult, AppError>> {
+    // Tenant ownership is enforced by `get` (WHERE tenant_id = :tenantId).
+    const loaded = await get(sandboxId, tenantId);
+    if (!loaded.ok) return err(loaded.error);
+    const sandbox = loaded.value;
+    if (sandbox.status !== 'running' || !sandbox.externalId) {
+      return err(
+        createError(ErrorCode.SERVICE_UNAVAILABLE, 'Sandbox is not running — cannot exec.', {
+          details: { status: sandbox.status },
+        }),
+      );
+    }
+    const provider = providers[sandbox.provider];
+    if (!provider || !provider.exec) {
+      return err(
+        createError(
+          ErrorCode.SERVICE_UNAVAILABLE,
+          `Provider '${sandbox.provider}' cannot execute commands in a sandbox.`,
+        ),
+      );
+    }
+    return provider.exec({
+      externalId: sandbox.externalId,
+      command: input.command,
+      ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
+      ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
+      ...(input.env ? { env: input.env } : {}),
+    });
+  }
+
   async function reapExpired(): Promise<number> {
     if (!repo.isAvailable()) return 0;
     let expired: readonly Sandbox[];
@@ -420,5 +476,5 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
     });
   }
 
-  return { provision, get, list, destroy, reapExpired, reconcile, startReaper, stop, health };
+  return { provision, get, list, destroy, execInSandbox, reapExpired, reconcile, startReaper, stop, health };
 }

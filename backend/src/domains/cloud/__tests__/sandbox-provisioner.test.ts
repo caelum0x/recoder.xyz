@@ -202,6 +202,94 @@ describe('SandboxProvisioner — launch failure', () => {
   });
 });
 
+describe('SandboxProvisioner — execInSandbox (conductor remote exec seam)', () => {
+  function runningRow(over: Partial<Sandbox> = {}): Sandbox {
+    return {
+      id: 'sb_run',
+      tenantId: 'tnt_1',
+      userId: 'user_1',
+      runId: null,
+      provider: 'daytona',
+      externalId: 'ext_run',
+      status: 'running',
+      region: 'us-east',
+      image: null,
+      resources: { cpuMillis: 1000, memMb: 1024 },
+      createdAt: '2026-07-15T00:00:00.000Z',
+      expiresAt: null,
+      lastHeartbeat: null,
+      metadata: {},
+      ...over,
+    };
+  }
+
+  it('executes a command in a running, tenant-owned sandbox via the provider', async () => {
+    const repo = memSandboxRepo({ expired: [runningRow()] });
+    let seenExternalId = '';
+    const provider = upProvider({
+      exec: async (input) => {
+        seenExternalId = input.externalId;
+        return ok({ exitCode: 0, stdout: 'ok', stderr: '', timedOut: false });
+      },
+    });
+    const svc = createSandboxProvisionerService({
+      repo,
+      tenancy: tenancyFor(),
+      providers: { daytona: provider },
+      logger: silentLogger,
+      reaperIntervalMs: 0,
+    });
+    const r = await svc.execInSandbox('sb_run', 'tnt_1', { command: 'echo hi' });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.stdout).toBe('ok');
+    expect(seenExternalId).toBe('ext_run');
+  });
+
+  it('denies exec on a foreign tenant (NOT_FOUND, never leaks another tenant sandbox)', async () => {
+    const repo = memSandboxRepo({ expired: [runningRow()] });
+    const svc = createSandboxProvisionerService({
+      repo,
+      tenancy: tenancyFor(),
+      providers: { daytona: upProvider({ exec: async () => ok({ exitCode: 0, stdout: '', stderr: '', timedOut: false }) }) },
+      logger: silentLogger,
+      reaperIntervalMs: 0,
+    });
+    const r = await svc.execInSandbox('sb_run', 'other_tenant', { command: 'echo hi' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe(ErrorCode.NOT_FOUND);
+  });
+
+  it('refuses exec on a non-running sandbox (SERVICE_UNAVAILABLE, never fabricated)', async () => {
+    const repo = memSandboxRepo({ expired: [runningRow({ status: 'stopped' })] });
+    const svc = createSandboxProvisionerService({
+      repo,
+      tenancy: tenancyFor(),
+      providers: { daytona: upProvider() },
+      logger: silentLogger,
+      reaperIntervalMs: 0,
+    });
+    const r = await svc.execInSandbox('sb_run', 'tnt_1', { command: 'echo hi' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe(ErrorCode.SERVICE_UNAVAILABLE);
+  });
+
+  it('fails truthfully when the provider cannot exec', async () => {
+    const repo = memSandboxRepo({ expired: [runningRow()] });
+    const noExec = upProvider();
+    delete (noExec as { exec?: unknown }).exec;
+    const svc = createSandboxProvisionerService({
+      repo,
+      tenancy: tenancyFor(),
+      providers: { daytona: noExec },
+      logger: silentLogger,
+      reaperIntervalMs: 0,
+    });
+    const r = await svc.execInSandbox('sb_run', 'tnt_1', { command: 'echo hi' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe(ErrorCode.SERVICE_UNAVAILABLE);
+  });
+});
+
 describe('SandboxProvisioner — TTL reaper', () => {
   it('destroys + reaps expired sandboxes', async () => {
     const expired: Sandbox = {
