@@ -186,6 +186,33 @@ export async function PUT(request: NextRequest) {
     if (name !== undefined) updateData.name = name;
     if (organization !== undefined) updateData.organization = organization;
 
+    // Org identity is a free-text string with no separate org/membership model,
+    // so an unrestricted self-set here is a cross-org join primitive: a user could
+    // set `organization` to another team's name and thereby read/manage that org's
+    // members via the team routes. Restrict self-set so a user may only NAME their
+    // own (unclaimed) organization — never adopt one another user already occupies.
+    // Joining a populated org must go through an explicit invite. Clearing the org
+    // (empty/undefined) and keeping the current value are always allowed.
+    if (
+      typeof organization === 'string' &&
+      organization.length > 0 &&
+      organization !== user.organization
+    ) {
+      const orgAlreadyOwned = await prisma.users.findFirst({
+        where: { organization, id: { not: user.id } },
+        select: { id: true },
+      });
+      if (orgAlreadyOwned) {
+        return NextResponse.json(
+          {
+            error:
+              'That organization is already in use. Ask one of its owners to invite you instead of joining by name.',
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     // Email change requires verification on the new address
     if (email && email !== user.email) {
       // Validate email format

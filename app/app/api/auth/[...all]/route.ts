@@ -93,6 +93,15 @@ async function proxyToBackend(
   if (body === undefined && method !== "GET" && method !== "HEAD") {
     body = Buffer.from(await request.arrayBuffer());
   }
+  // When we synthesize a JSON body here (the GET->POST /sign-in/social
+  // conversion below), the originating request carries no Content-Type, so the
+  // backend's Better Auth can't parse {provider, callbackURL} and the sign-in
+  // silently breaks. Stamp application/json for caller-supplied JSON string
+  // bodies only; the verbatim catch-all path (body read from the request) keeps
+  // whatever Content-Type the client already sent.
+  if (typeof init?.body === "string") {
+    headers.set("content-type", "application/json");
+  }
 
   let upstream: Response;
   try {
