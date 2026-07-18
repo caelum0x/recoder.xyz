@@ -8,17 +8,21 @@
 > unified identity, full-website scope), which carried into the new plan. Read
 > BUILD-STATUS first.
 >
-> **Phase-A progress (2026-07-16, session `71c380f29`+`811fe38a7`):** Phase 0 (server boots) long
-> done; the BACKEND half of Phase A is fully realized (in-process Better Auth, one config in
-> packages/auth consumed only by the backend, /internal/identity/* seams, zero APP_API_URL
-> delegation — verified by code scout). WEBSITE half started: the full site is RECONCILED back
-> into main `app/` (642 files from wave5/a2a-docs, main's newer bug-fix files kept, cruft
-> excluded) and `/api/auth/[...all]` now PROXIES the backend (one identity authority for all
-> auth flows + cookie issuance). Remaining Phase-A slices: unify the 57 lib/auth-config
-> server-side session READS onto the backend seam; migrate/link the plural `users` schema
-> (production data — owner call); Next 15.4.11→15.5.x security bump (needs install+build);
-> Dockerfile.production restore decision; stale root ecosystem.config.js still lists removed
-> pm/agency/agents surfaces.
+> **Phase-A progress (2026-07-18, branch `feat/enterprise-s0-p0`):** Phase 0 (server boots) long
+> done — the backend is now a **15-domain** control plane under `backend/src/domains/*` with a thin
+> 28-line `server.ts` → `bootstrap.start()` and **15 truthful health sources** (tsc 0, ~1462 tests).
+> The BACKEND half of Phase A is **shipped**: in-process Better Auth owned by the backend, one config
+> in `packages/auth` consumed only by the backend, unified `user`/`session`, **DB-backed `sk_` keys**
+> (out of the filesystem JSON store), zero `APP_API_URL` delegation. WEBSITE half in progress: the
+> full site is RECONCILED back into main `app/`, `/api/auth/[...all]` now PROXIES the backend, and the
+> **backend auth seam** (`RECODER_AUTH_BACKEND_SEAM`, `app/lib/auth-backend-seam.ts`, OFF by default)
+> plus an **idempotent `users→user` backfill migration**
+> (`app/prisma/migrations/20260718000000_backfill_singular_identity.sql`) are written. **The migration
+> is written but NOT yet run on prod** (owner-gated runbook: backup → migrate `recoder_main` → verify
+> counts → sso/device e2e → then delete the compat bridge); the raw-SQL compat bridge is KEPT until
+> then. Remaining Phase-A slices: flip the server-side session READS onto the backend seam; run the
+> backfill; Next 15.4.11→15.5.x security bump (needs install+build); Dockerfile.production restore
+> decision; stale root ecosystem.config.js still lists removed pm/agency/agents surfaces.
 
 > **Where we are.** The shell fusion is done: Wave is now `apps/desktop` (Electron+React `app/`,
 > Go `server/`, Preact `cockpit/`), engines live under `backend/engines/{py,rust}` +
@@ -53,32 +57,43 @@ from "scattered but present" into "the single thing desktop and website both sta
 
 ## Current reality (grounded, honest)
 
-| Area | Truth today | Key drift / gap |
+> **Note (2026-07-18):** this table captured the 2026-07-15 pre-build state. The comprehensive
+> backend has since SHIPPED — the "does not boot / delegates auth / route-only engines" gaps below
+> are CLOSED. Truth-now is folded into each row's right column; see BUILD-STATUS for the canonical
+> summary.
+
+| Area | Truth today | Status now |
 |---|---|---|
-| **Backend** | ONE Node/Express app `backend/` (`recoder-backend`, entry `backend/src/server.ts`). No Python backend (the `db.py`/SQLAlchemy memory is stale; only `backend/engines/py/mem0` has a `db.py`). | `server.ts` imports ~47 modules the owner deliberately deleted in `98b5ff910` — **it does not boot today**. Prune those imports (do NOT restore the files). |
-| **Auth** | Source of truth = the Next.js app on `recoder_main` via Better Auth `/api/auth/[...all]`. Backend **delegates** — verifies sessions over HTTP to `APP_API_URL/api/auth/verify-token` (`server.ts:592-656`). | **Two** Better Auth configs (`packages/auth/src/index.ts` `createAuth` on `authDatabase` vs `app/lib/auth-config.ts` `betterAuth` on the main Prisma client) hand-synced. **Two** identity schemas in one DB (`user`/`session` vs legacy `users`/`sessions`; drift bridge in `packages/auth/src/session.ts:43-113`). `sk_` platform keys live in a **filesystem JSON store**, not a DB. |
-| **Desktop auth** | Same `backend` binary, embedded. Local access via a minted `sk_` key (`conductor/mint-conductor-key.ts`) + Wave `X-AuthKey`; cloud identity via device-flow to `recoder.xyz`. | Cloud session verification couples the embedded backend to `recoder.xyz` being reachable. |
-| **Social** | The embedded backend **already hosts connectors** (`startConnectors()` at `server.ts:14445`, `/api/connectors` + `/api/connectors/webhook/:channel`). 8 channels via `@recoder/connectors` (at `apps/desktop/engines/openclaw`). | `apps/social` is a **redundant standalone deploy** (a strict subset — no conductor dispatch, no webhook, no interop gate). Its `channels.ts` duplicates `backend/src/connectors/channel-adapters.ts`. Discord WS source unwired; LINE/Slack webhooks need a public URL. |
-| **Engines** | Reached through ONE governed path: agent `.mcp.json` → stdio bridge → `POST /api/mcp/tools/:server/:tool/call` → interop gate (authorize→risk→execute→audit) → in-proc engine router / external stdio PAL. Desktop reaches engines **through** the embedded backend. | Route-only (not agent tools): mem0, multica, ziti, dmux. Disconnected from the runtime: `recoder-xds` (infra only), `openclaw` (separate service, not fused into the MCP host). multica↔coordination fusion open. |
+| **Backend** | ONE Node/Express app `backend/` (`recoder-backend`). No Python backend (the `db.py`/SQLAlchemy memory is stale; only `backend/engines/py/mem0` has a `db.py`). | ✅ **Boots.** The unbootable v1 `server.ts` was replaced by a thin 28-line `server.ts` → `bootstrap.start()`; the app is now **15 domains under `backend/src/domains/*`** (`src/` = `bootstrap/ domains/ http/ shared/ + logger.ts + server.ts`), tsc 0, boots with **15 truthful health sources**, ~1462 tests. |
+| **Auth** | Backend-owned. | ✅ **Unified.** The backend OWNS Better Auth (one config in `packages/auth` consumed only by the backend), reads the DB directly (no `APP_API_URL/verify-token` hop), unified `user`/`session` (+ `user_cli_link`, never dropping `users`), and **DB-backed `sk_` keys** (out of the filesystem JSON store). Website website consumes it over the shared `.recoder.xyz` cookie via the `/api/auth/[...all]` proxy. Compat bridge (`packages/auth/src/session.ts`) KEPT until the prod backfill runs. |
+| **Desktop auth** | Same `backend` binary, embedded. Local access via a DB-minted `sk_` key + Wave `X-AuthKey`; cloud identity via device-flow to `recoder.xyz`. | ✅ On the unified identity domain (`backend/src/domains/identity`); `sk_` mint rewritten over the DB-backed store. |
+| **Social** | The embedded backend hosts the connectors, now the `social` domain. | ✅ **Folded.** `apps/social` collapsed into the one embedded backend; the social domain serves **`/api/social`** (channels + webhooks; NOT `/api/connectors`). `apps/` = desktop only. Remaining: Discord inbound wiring; public-URL ingress for LINE/Slack webhooks behind NAT. |
+| **Engines** | Reached through ONE governed path: agent `.mcp.json` → stdio bridge → **`POST /api/mcp/tools/:server/:tool/call`** → interop/governance gate (authorize→risk→execute→audit) → in-proc engine router / external stdio PAL. | ✅ **The governed MCP HTTP edge is LIVE** (was 404). Every subject-bearing MCP tool binds identity to the host-authorized `McpToolCaller` (cross-tenant class closed). Engines are DEEP OSS modules (`backend/src/domains/engines` + `backend/engines/{py,rust}`), spawned on boot and consumed by the conductor run flow. |
 
 ---
 
-## Phase 0 — Unblock the backend (prerequisite, small)
+## Phase 0 — Unblock the backend (prerequisite, small) — ✅ DONE
 
-**Nothing below matters until `backend/src/server.ts` boots.** It imports ~47 deleted modules
-(owner-driven deletion `98b5ff910`). Fix = **prune** the dead imports + the code paths that used
-them, trimming `server.ts` to the kept surface (9 folders + a2a). This is a scoping decision only
-the owner can anchor — which capabilities stay vs go. See
-[[project_backend_server_unbootable]] memory. Verification: `tsx src/server.ts` reaches health-200
-(or a truthful env blocker like "no local Postgres"), not a module-resolution crash.
-
-**Owner input needed:** confirm the target capability surface for `server.ts` so pruning removes the
-right things (e.g. keep conductor + agent-os + connectors + gateway + mcp; drop the deleted
-billing/enterprise/lsp/public-api/etc. lanes, or re-add specific ones deliberately).
+**Resolved.** Rather than prune the 12,800-line v1 monolith, the owner drove a full comprehensive-
+backend rebuild: the unbootable `server.ts` is replaced by a thin 28-line `server.ts` →
+`bootstrap.start()`, and the capability surface is now **15 domains** under `backend/src/domains/*`
+(agent-os, billing, cloud, conductor, edge, engines, governance, identity, inference, interop,
+interop-wire, memory, observability, persistence, social). It boots with **15 truthful health
+sources** (each down/degraded is honest about a missing DB/substrate/provider), tsc 0, ~1462 tests.
+See [RECODER-BACKEND/BUILD-STATUS.md](./RECODER-BACKEND/BUILD-STATUS.md) for the phase-by-phase log
+and [[project_backend_server_unbootable]] memory.
 
 ---
 
-## Phase A — Auth + Data Spine (item 1: "backend owns all auth + DB for desktop and website")
+## Phase A — Auth + Data Spine (item 1: "backend owns all auth + DB for desktop and website") — ✅ BACKEND DONE / ⏳ WEBSITE IN PROGRESS
+
+> **Status (2026-07-18):** the BACKEND half is **shipped** — backend-owned Better Auth, one config in
+> `packages/auth`, unified `user`/`session` (+ `user_cli_link`), DB-backed `sk_` keys, direct-DB
+> verify (no `verify-token` hop). The WEBSITE half is **in progress**: `/api/auth/[...all]` proxies
+> the backend; the backend auth seam (`RECODER_AUTH_BACKEND_SEAM`, OFF by default) and the idempotent
+> `users→user` backfill migration are **written but the migration is NOT yet run on prod** — the
+> raw-SQL compat bridge stays until the owner-gated runbook runs it. The target architecture below is
+> now largely realized; each item is annotated ✅ / ⏳.
 
 > **Owner decisions locked (2026-07-15):**
 > 1. **Backend owns the Better Auth surface.** The Node backend hosts `/api/auth/[...all]` and reads
@@ -94,25 +109,27 @@ billing/enterprise/lsp/public-api/etc. lanes, or re-add specific ones deliberate
 website consume — one Better Auth config, one identity model, one place `sk_` keys live.
 
 **Target architecture:**
-- **One Better Auth instance**, owned by the backend, reading the DB **directly** (drop the
-  backend's HTTP `verify-token` hop to the Next.js app). The website and every surface consume it
-  over the shared `.recoder.xyz` session cookie + `@recoder/auth/edge` (already the shared cookie
-  contract). Collapse the two `betterAuth()` configs into `packages/auth`'s `createAuth()`.
-- **Resolve the schema drift**: pick Better Auth singular (`user`/`session`/`account`) as canonical,
-  migrate the legacy plural `users`/`sessions` data, then delete the raw-SQL compatibility bridge
-  (`packages/auth/src/session.ts:43-113`). Keep the **deliberate** web-`user` vs CLI-`users`
-  identity split only if the owner still wants it (decision point).
-- **`sk_` platform keys move into the DB** (out of the filesystem JSON store,
-  `backend/src/public-api/api-keys.ts` + `persistence`) so they're durable, auditable, and visible
-  to the website — while keeping the hash-at-rest + `API_KEY_HASH_SALT` model.
-- **Desktop rides the user's existing login** (conductor-style): the embedded backend reads the
+- ✅ **One Better Auth instance**, owned by the backend, reading the DB **directly** (the HTTP
+  `verify-token` hop is gone). The website and every surface consume it over the shared
+  `.recoder.xyz` session cookie. The two `betterAuth()` configs are collapsed into `packages/auth`'s
+  `createAuth()`, consumed only by the backend.
+- ⏳ **Resolve the schema drift**: Better Auth singular (`user`/`session`/`account`) is canonical and
+  unified in the backend (`+ user_cli_link`). The idempotent `users→user` backfill migration is
+  **written** (`app/prisma/migrations/20260718000000_backfill_singular_identity.sql`) but **NOT yet
+  run on prod**; the raw-SQL compatibility bridge (`packages/auth/src/session.ts`) is **kept** until
+  the owner runs the backfill runbook, after which the bridge is deleted.
+- ✅ **`sk_` platform keys moved into the DB** (out of the filesystem JSON store) so they're durable,
+  auditable, and visible to the website — the hash-at-rest + `API_KEY_HASH_SALT` model is preserved.
+  Lives in `backend/src/domains/identity` (`api-key.service.ts`); the desktop `sk_` mint was rewritten
+  over the DB-backed store.
+- ✅ **Desktop rides the user's existing login** (conductor-style): the embedded backend reads the
   local session/device token when present and only mints the local `sk_` for loopback bootstrap.
 
-**Work items (ordered):** unify the two auth configs → migrate/retire the plural schema → move `sk_`
-keys to Postgres → switch backend session-verify from HTTP-to-app to direct-DB → repoint the website
-onto the backend auth surface → delete the gutted main-tree `app/` remnant vs full worktree copy
-duplication (fix the broken `app/Dockerfile` referencing missing `app/package.json` +
-`packages/database/`).
+**Work items (ordered):** ✅ unify the two auth configs → ⏳ migrate/retire the plural schema (backfill
+migration written-not-run) → ✅ move `sk_` keys to Postgres → ✅ switch backend session-verify from
+HTTP-to-app to direct-DB → ⏳ repoint the website fully onto the backend auth surface (proxy live;
+server-side session READS still to flip onto the `RECODER_AUTH_BACKEND_SEAM`) → ⏳ resolve the
+site-copy/Dockerfile reconciliation.
 
 **Verification:** `scripts/sso-logout-matrix.sh`, `scripts/verify-auth-email-reset-e2e.sh`,
 `scripts/verify-cli-device-flow-e2e.sh` (existing suites); cross-subdomain session on
@@ -124,62 +141,70 @@ entirely (recommended: backend owns it, app proxies).
 
 ---
 
-## Phase B — Social gateways into desktop (item 2)
+## Phase B — Social gateways into desktop (item 2) — ✅ FOLDED / ⏳ INBOUND WIRING
 
 **Goal:** the desktop app is the social hub — one connector host (the embedded backend), no separate
 `apps/social` deploy, all 8 channels live.
 
-**Target:** collapse `apps/social` into `backend/src/connectors/` (the richer path — it already does
-conductor-workspace dispatch + webhook ingress + the `@recoder/interop` signed gate + an embedded
-reply agent). Delete the duplicated driver layer (`apps/social/src/channels.ts` →
-`backend/src/connectors/channel-adapters.ts` is the single source).
+**Status (2026-07-18):** ✅ `apps/social` is **folded** into the one embedded backend — the connectors
+became the **`social` domain** (`backend/src/domains/social`), serving **`/api/social`** (channels +
+webhooks). `apps/` = desktop only; the duplicated standalone deploy is gone. The single driver layer
+now lives in the social domain (no more `apps/social/src/channels.ts` fork). Remaining slices are the
+inbound/NAT-ingress wiring below.
 
 **Work items:**
-1. **Fold `apps/social`** — port its only unique bit (standalone status server + embedded pi reply)
-   into the backend if not already covered by `gateway.ts runEmbeddedAgent`, then delete the app.
-2. **Wire Discord inbound** — call `registerDiscordEventSource(...)`
-   (`backend/src/connectors/discord-event-source.ts:48`) at connector boot; today nothing does, so
-   Discord is send/probe-only.
-3. **Public-URL ingress for LINE/Slack webhooks** from inside a desktop app on `127.0.0.1` — reuse
-   `backend/src/a2a/zrok-agent-tunnel.ts` (or a relay) so HTTP-webhook channels work behind NAT.
+1. ✅ **Fold `apps/social`** — done; the social domain covers the standalone status + reply path.
+2. ⏳ **Wire Discord inbound** — Discord is still send/probe-only; register the Discord event source at
+   connector boot.
+3. ⏳ **Public-URL ingress for LINE/Slack webhooks** from inside a desktop app on `127.0.0.1` — reuse
+   a zrok-style tunnel (or a relay) so HTTP-webhook channels work behind NAT.
    Telegram/Slack-Socket/Feishu already work outbound with no tunnel.
-4. **Connector secrets** — the supervisor (`emain-backend-core.ts assembleBackendEnv`) must pass
-   `RECODER_CONNECTORS_*` / channel tokens into the spawned backend env; add a cockpit settings
-   surface to enter them.
+4. ⏳ **Connector secrets** — the supervisor must pass `RECODER_CONNECTORS_*` / channel tokens into the
+   spawned backend env; add a cockpit settings surface to enter them.
 
-**Verification:** `/api/connectors` reports each channel up|down truthfully from the embedded
+**Verification:** **`/api/social`** reports each channel up|down truthfully from the embedded
 backend; a Telegram/Slack inbound message opens a real conductor workspace end-to-end.
 
 ---
 
-## Phase C — Engine connectivity (item 3: "how engines connect to the desktop app")
+## Phase C — Engine connectivity (item 3: "how engines connect to the desktop app") — ✅ SPINE LIVE
 
 **Goal:** every engine reaches the desktop through the one governed MCP-host spine; close the
 route-only and disconnected gaps.
 
-**The spine is already correct** — keep it as the single contract:
-`.mcp.json` → `mcp/recoder-a2a-server.js` (stdio) → `POST /api/mcp/tools/:server/:tool/call` →
-interop gate → `buildInProcEngineRouter` (in-proc engine) or external stdio PAL. Adding an engine =
-the wiring checklist: register in `IN_PROC_SERVERS` (`agent-os/mcp/interop-host.ts:63`) +
-`ENGINE_SERVERS` (`agent-os/mcp/inproc-engines.ts:300`), write `register<X>McpTools`, call it in
-`buildInProcEngineRouter`, and the gate wraps it automatically.
+**Status (2026-07-18):** the **governed MCP HTTP edge `POST /api/mcp/tools/:server/:tool/call` is
+LIVE** (it was returning 404 before the rebuild). It routes through the interop/governance gate
+(authorize→risk→execute→audit) into the in-proc engine router or external stdio PAL, and every
+subject-bearing MCP tool binds identity to the host-authorized `McpToolCaller` at the trust boundary
+(the cross-tenant class is closed: non-privileged caller → own subject, foreign → 403, admin/internal
+→ arbitrary, absent → `AUTH_REQUIRED`). Engines are DEEP OSS modules (`backend/src/domains/engines` +
+`backend/engines/{py,rust}`), spawned on boot and consumed by the conductor run flow.
 
-**Work items (close the gaps):**
-1. **mem0 → MCP tool.** It's route-only + prompt-injection today; expose the memory search/remember
-   verbs as first-class agent MCP tools (the `memory` server exists — back it with the real
-   mem0-client path, not just the store adapter).
-2. **multica ↔ coordination fusion.** The `coordination` MCP port defaults to an in-memory lock
-   store; back it with the Go multica engine (`multica-client.ts`) so squad/leader-routing is real —
-   the documented-but-open gap.
-3. **ziti + recoder-xds** — leave as cloud/teams-tier (correctly deferred); document them as
-   infra-only, not agent tools, so they stop reading as "disconnected."
-4. **openclaw** — it's the social foundation (Phase B), not an MCP engine; formally mark it as the
-   connectors package host, not a stranded service.
-5. **Native-first bindings** where they pay off: tensorzero `stream()` (feeds Phase's AI panel
-   SSE), openfang runtime dispatchability (the `ConductorRuntimeId` closed-union blocker).
+**The spine is the single contract** — `.mcp.json` (stdio bridge) → `POST /api/mcp/tools/:server/:tool/call`
+→ governance gate → in-proc engine router or external stdio PAL. Adding an engine = the wiring
+checklist (register the server, write `register<X>McpTools`, wire it into the router; the gate wraps
+it automatically).
+
+**Work items:**
+1. ✅ **mem0 → MCP tool.** Memory is a real domain (`backend/src/domains/memory`): mem0 with the
+   `google`/Gemini embed default, a lance embedded `VectorStorePort`, colbert real MaxSim rerank, a
+   real qdrant liveness probe, and forget/harvest — plus an `inference.embed` MCP tool and the
+   OpenAI-compatible `/api/gateway/inference/v1/embeddings` edge. The conductor run flow recalls
+   memory (mem0 ∪ beads ∪ colbert) on launch and harvests on complete.
+2. ⏳ **multica ↔ coordination fusion.** Back the `coordination` lock store with the Go multica engine
+   so squad/leader-routing is real (needs PG15+ locally; prod PG17 fine) — still open.
+3. ✅ **ziti + recoder-xds** — cloud/teams-tier infra (the `cloud` domain: sandboxes/previews/tenancy/
+   mesh with a GovernanceGate on every write, fleet heartbeat, custom-domains + DNS/TLS verifier), not
+   agent tools.
+4. ✅ **openclaw** — the connectors package host behind the `social` domain (Phase B), not a stranded
+   service.
+5. ✅/⏳ **Native-first bindings**: the tensorzero release `.node` ships with REAL in-proc SSE via
+   `inferenceStream` (the napi ladder: in-proc → supervised loopback → direct BYOK rung-3 multi-
+   provider router, BYOK keys resolved from the governance secrets vault); openfang runtime
+   dispatchability is wired via env injection.
 
 **Verification:** `pnpm test:contracts:agent-os`, `pnpm test:evals:agent-os`; an agent in a workspace
-calls `memory.*` and `coordination.*` tools and they hit the real engines (not stubs).
+calls `memory.*` / inference tools and they hit the real engines (not stubs).
 
 ---
 
@@ -193,11 +218,12 @@ Phase 0 (unblock server.ts)  ──►  Phase A (auth+data spine)
                     Phase B (social → desktop)   Phase C (engine connectivity)
 ```
 
-- **Phase 0 is a hard gate** — no end-to-end verification of A/B/C is possible until the backend
-  boots. It's small but needs the owner's capability-surface decision.
+- **Phase 0 was the hard gate** — ✅ cleared: the backend boots (15 domains, 15 truthful health
+  sources), so end-to-end verification of A/B/C is now possible.
 - **Phase A is the highest-leverage and highest-risk** (auth is a release gate per AGENTS.md; the
-  `user`/`users` split and cross-subdomain sessions are load-bearing). Do it behind the existing
-  verification scripts, not by hand.
+  `user`/`users` split and cross-subdomain sessions are load-bearing). The backend half is shipped;
+  the remaining risk is the **prod `users→user` backfill (written but not run)** — run it behind the
+  existing verification scripts, not by hand.
 - **Phases B and C are independent** of each other and can run in parallel once A lands (both only
   need a booting, auth-correct backend).
 - **Disk constraint** (near-full APFS) — prune the store before big rebuilds; prefer moves over
@@ -212,8 +238,14 @@ Phase 0 (unblock server.ts)  ──►  Phase A (auth+data spine)
 **Resolved (2026-07-15):** backend owns `/api/auth/[...all]`; one unified identity model (no
 web/CLI split); full website in scope. See the Phase A decision box.
 
-**Still open:**
-1. **Phase 0:** confirm the target `server.ts` capability surface — which deleted lanes stay pruned
-   vs get deliberately re-added. Proposed default: keep conductor + agent-os + MCP host + connectors
-   + gateway + a2a; drop the deleted billing/enterprise/lsp/public-api/deployment/fleet lanes unless
-   named. (Some — like `public-api` for `sk_` keys — Phase A may re-introduce in DB-backed form.)
+**Resolved (2026-07-18):** the `server.ts` capability surface question is settled — the owner drove a
+full rebuild to **15 domains** (agent-os, billing — MoR Polar/Creem/Paddle/Dodo, no Stripe —, cloud,
+conductor, edge, engines, governance, identity, inference, interop, interop-wire, memory,
+observability, persistence, social). `sk_` keys are DB-backed in the identity domain.
+
+**Still open (owner-gated):**
+1. **Run the `users→user` backfill migration** on prod (backup → migrate `recoder_main` → verify
+   counts → sso/device e2e → then delete the compat bridge). The migration is written but not run.
+2. Flip the website's server-side session READS onto the backend seam (`RECODER_AUTH_BACKEND_SEAM`),
+   currently OFF by default.
+3. Next 15.4.11→15.5.x security bump (needs `pnpm install` + build; disk is APFS-critical).

@@ -25,7 +25,7 @@ Three responsibilities, one composer:
 1. **Plans & entitlements** — a `PlanCatalog` (free/pro/team/max/enterprise) with
    a plan→capability matrix, and an `EntitlementGate` other domains call to ask
    "may this subject do X?" It reuses `@recoder/distribution`'s
-   `createBillingService` (entitlement resolver + MoR benefit fusion) and adds
+   `createEntitlementResolver` (grant algebra) and adds
    the **BYOK-vs-platform** decision (a BYOK user with `hasOwnApiKey` bypasses
    token-metered quota but still passes feature gates).
 2. **Metering & quotas** — durable per-run / per-token / per-engine usage events
@@ -40,66 +40,78 @@ Three responsibilities, one composer:
 `down`, checkout/portal return a truthful `SERVICE_UNAVAILABLE`, quota checks
 **deny** (zero headroom), and `health()` is `degraded:true` — never a faked 200.
 
-Every **write** (checkout create, usage record, plan mutation from a webhook)
-flows through `GovernanceGate.decide()`; every **edge + MCP call** passes the
-`authorize→risk→policy→audit` interop chain. Webhook routes are authenticated by
-**signature verification** (not a session), then still audit-recorded.
+The subscription-mutating **edges** (`POST /checkout`, `POST /cancel`) pass
+through an injected `BillingWriteGate.decide()` (the governance `decide` facet)
+for policy + durable audit — **degrade-safe: ungated until bootstrap wires it**
+(`setGovernanceGate`), with the authenticated own-subject edge still protecting
+them. The durable **usage-ledger append** (`/internal/billing/meter`) is an
+idempotent write that is NOT gate-routed; the **webhook reconcile** is trusted by
+**raw-body signature verification** (not a session), then idempotently projected
+and audit-recorded. (SHIPPED as of Phase 9; the earlier "every write through
+`GovernanceGate`" framing was aspirational — metering and webhook writes are
+not gate-decided.)
 
 ---
 
-## 2. File Tree (~28 files)
+## 2. File Tree (35 files, as shipped Phase 9 — `df2fd7f7d`)
 
 ```
 backend/src/domains/billing/
-  index.ts                              # factory + the ONE public BillingModule interface
-  billing-module.ts                     # composer: fuses distribution + MoR providers + metering + gate
-  config.ts                             # typed BillingConfig slice (from AppConfig)
+  index.ts                              # factory (createBillingModule) + the public BillingModule interface
+  billing-module.ts                     # composer (class BillingComposer): fuses distribution + MoR providers + metering + gate
+  config.ts                             # typed BillingConfig slice (AppConfig + provider-key overrides)
   types.ts                              # domain types (BillingSubject, PlanTier, UsageRecord, Invoice…)
   health.ts                             # truthful per-provider up|down aggregate
+  provider-registry.ts                  # BILLING_PROVIDER-selected registry over the four MoR adapters
+  invoice.service.ts                    # invoice list/get + webhook receipt upsert (provider + local)
 
   ports/
     billing-provider.port.ts            # BillingProviderPort — the MoR-provider seam (Polar|Creem|Paddle|Dodo)
-    metering.repo.port.ts               # MeteringRepository — usage/quota/subscription/invoice data port
+    metering-repo.port.ts               # MeteringRepository — usage/quota/subscription/invoice data port
     entitlement.port.ts                 # EntitlementGate — exposed to ALL other domains
+    governance-gate.port.ts             # BillingWriteGate — the narrow governance `decide` facet billing mutations use
 
   adapters/
-    distribution-billing.adapter.ts     # wraps @recoder/distribution createBillingService (REUSE)
-    polar.adapter.ts                    # Polar (MoR) provider adapter over polar-client (REUSE, moved)
+    distribution-billing.adapter.ts     # wraps @recoder/distribution createEntitlementResolver (REUSE)
+    polar.adapter.ts                    # Polar (MoR) provider adapter (degrade-safe)
     creem.adapter.ts                    # Creem (MoR) provider adapter (degrade-safe)
     paddle.adapter.ts                   # Paddle (MoR) provider adapter (degrade-safe)
     dodo.adapter.ts                     # Dodo Payments (MoR) provider adapter (degrade-safe)
     shared.ts                           # shared MoR adapter helpers (fetch + signature verify)
 
   services/
-    plan-catalog.service.ts             # free/pro/team/max/enterprise + plan→capability matrix
-    entitlement.service.ts              # feature gates + BYOK-vs-platform decision
+    plan-catalog.service.ts             # free/pro/team/max/enterprise + plan→capability matrix + plan→productId
+    entitlement.service.ts              # feature gates + BYOK-vs-platform decision (impl of EntitlementGate)
     quota.service.ts                    # limit resolution, headroom, consume, reset windows
     metering.service.ts                 # record per-run/token/engine usage, idempotent batch flush
-    invoice.service.ts                  # invoice list/get (provider + local receipts)
-    webhook.service.ts                  # verify + dispatch provider events → reconcile state
+    webhook.service.ts                  # verify + dispatch provider events → reconcile projection
 
   persistence/
     billing.repository.ts               # concrete MeteringRepository over QueryExecutor (:param SQL)
 
   routes/
-    billing.routes.ts                   # HTTP edges (plan/checkout/usage/entitlements/invoices/portal)
-    billing-webhooks.routes.ts          # POST webhook edges (raw body + signature verify)
+    billing.routes.ts                   # session edges (plan/checkout/portal/invoices/cancel)
+    billing-webhooks.routes.ts          # POST /webhooks/:provider (raw body + signature verify)
+    internal-billing.routes.ts          # POST /meter (INTERNAL_SERVICE_KEY-gated usage ingest)
 
   mcp/
-    billing-engine.ts                   # MCP tools: billing.plan.read / usage.read / entitlement.check (REUSE, moved)
-
-  migrations/                           # registered into backend/migrations (canonical runner)
-    0001_billing_core.sql               # subscriptions + invoices + webhook_events (idempotency)
-    0002_billing_usage.sql              # usage_events + usage_counters
+    billing-engine.ts                   # read-only MCP tools: billing_plan_read / billing_usage_read / billing_provider_status
 
   __tests__/
-    quota.service.test.ts
     entitlement.service.test.ts
+    metering-quota.service.test.ts
     webhook.service.test.ts
-    mor-adapters.test.ts
-    billing.repository.test.ts
-    health.test.ts
+    invoice.service.test.ts
+    provider-registry.test.ts
+    internal-billing.routes.test.ts
+    billing-governance-gate.routes.test.ts
+    billing-engine.mcp.test.ts
 ```
+
+Migrations live in the canonical runner dir, NOT under the domain:
+`backend/migrations/billing_0001_core.sql` (subscriptions + invoices +
+webhook_events idempotency) and `backend/migrations/billing_0002_usage.sql`
+(usage_events + usage_counters).
 
 ---
 
@@ -108,40 +120,44 @@ backend/src/domains/billing/
 | # | path | lang | kind | responsibility | keyExports |
 |---|------|------|------|----------------|------------|
 | 1 | `index.ts` | ts | service | Public entrypoint; pure factory, no singletons | `createBillingModule(deps): BillingModule`, `BillingModule`, `BillingModuleDeps` |
-| 2 | `billing-module.ts` | ts | service | Composer: builds the MoR providers (Polar/Creem/Paddle/Dodo), distribution BillingService, repo-backed services; exposes `EntitlementGate`; aggregates health; routes writes through governance | `createBillingModuleImpl` |
+| 2 | `billing-module.ts` | ts | service | Composer: builds the MoR providers (Polar/Creem/Paddle/Dodo), distribution entitlement resolver, repo-backed services; exposes `EntitlementGate`; aggregates health; routes checkout/cancel mutations through the injected `BillingWriteGate` | `class BillingComposer` |
 | 3 | `config.ts` | ts | config | Zod-typed `BillingConfig` slice read ONLY from `AppConfig` (never `process.env`); provider keys, webhook secrets, meter flush interval, plan→product map | `BillingConfigSchema`, `BillingConfig` |
 | 4 | `types.ts` | ts | type | Domain types not in `packages/*`: `BillingSubject`, `PlanTier`, `UsageRecord`, `Invoice`, `EntitlementView`, `MeterBatch`, `WebhookEnvelope`, `PortalIntent` | those types |
 | 5 | `health.ts` | ts | service | Compose per-provider + repo health into `HealthReport`; `degraded:true` when any key missing; truthful `engines:[{name,status}]` | `billingHealth(deps): HealthReport` |
 | 6 | `ports/billing-provider.port.ts` | ts | port | The MoR-provider seam (Polar\|Creem\|Paddle\|Dodo): checkout, portal, subscription read, meter emit, invoice list, webhook verify+parse, health | `BillingProviderPort`, `CheckoutIntent`, `PortalSession`, `ProviderSubscription`, `ParsedWebhook` |
-| 7 | `ports/metering.repo.port.ts` | ts | port | Repository PORT (impl in persistence): usage events, quota counters, subscriptions, invoices, webhook idempotency | `MeteringRepository` |
-| 8 | `ports/entitlement.port.ts` | ts | port | The gate OTHER domains consume: `checkEntitlement`, `checkQuota`, `resolvePlan`, `isBYOK` | `EntitlementGate`, `EntitlementDecision`, `QuotaDecision` |
-| 9 | `adapters/distribution-billing.adapter.ts` | ts | adapter | Wraps `@recoder/distribution` `createBillingService`/`createEntitlementResolver`/`createPolarBillingAdapter`; degrade-safe unhealthy when unconfigured | `createDistributionBillingAdapter` |
-| 10 | `adapters/polar.adapter.ts` | ts | adapter | `BillingProviderPort` over the existing `polar-client.ts` (moved in-place); checkout/portal/products/subscriptions; HMAC webhook verify | `createPolarProviderAdapter` |
-| 11 | `adapters/{creem,paddle,dodo}.adapter.ts` + `adapters/shared.ts` | ts | adapter | `BillingProviderPort` over each MoR provider's REST (`fetch`, no SDK lock, shared helpers); signature verify; degrades to `down` when that provider's `*_API_KEY`/`*_WEBHOOK_SECRET` absent | `createCreemProviderAdapter`, `createPaddleProviderAdapter`, `createDodoProviderAdapter` |
-| 12 | `services/plan-catalog.service.ts` | ts | service | The tier catalog + `plan→capability` matrix + `plan→productId` map; resolves a `PlanTier` from a plan string; deny-by-default floor | `createPlanCatalog`, `PLAN_CAPABILITIES`, `planCapabilities(plan)` |
-| 13 | `services/entitlement.service.ts` | ts | service | Effective-plan resolution (`max(auth, webhook-confirmed)`), feature gates via distribution `hasFeature`, **BYOK-vs-platform** rule | `createEntitlementService` (impl of `EntitlementGate`) |
+| 7 | `ports/metering-repo.port.ts` | ts | port | Repository PORT (impl in persistence): usage events, quota counters, subscriptions, invoices, webhook idempotency | `MeteringRepository`, `SubscriptionUpsert`, `UsageEventInput`, `CounterUpsert`, `IdempotentWrite` |
+| 7b | `ports/governance-gate.port.ts` | ts | port | The narrow governance `decide` facet billing mutations (checkout/cancel) pass through; injected at bootstrap, degrade-safe until wired | `BillingWriteGate` |
+| 8 | `ports/entitlement.port.ts` | ts | port | The gate OTHER domains consume: `resolvePlan`, `check`, `checkFeature`, `checkQuota`, `isBYOK`, `view`, `health` | `EntitlementGate` |
+| 9 | `adapters/distribution-billing.adapter.ts` | ts | adapter | Wraps `@recoder/distribution` `createEntitlementResolver` (grant algebra reuse); degrade-safe `configured:false` + deny-on-miss when no `BillingPort` injected | `createDistributionBillingAdapter` |
+| 10 | `adapters/polar.adapter.ts` | ts | adapter | `BillingProviderPort` for Polar (MoR) via `fetch`; checkout/subscription/cancel; HMAC webhook verify; degrade-safe when key absent | `createPolarAdapter` |
+| 11 | `adapters/{creem,paddle,dodo}.adapter.ts` + `adapters/shared.ts` | ts | adapter | `BillingProviderPort` over each MoR provider's REST (`fetch`, no SDK lock, shared helpers); signature verify; degrades to `down` when that provider's `*_API_KEY`/`*_WEBHOOK_SECRET` absent | `createCreemAdapter`, `createPaddleAdapter`, `createDodoAdapter`; `provider-registry.ts` → `createProviderRegistry` |
+| 12 | `services/plan-catalog.service.ts` | ts | service | The tier catalog + `plan→capability` matrix + `plan→productId` map; resolves/`normalize`s a `PlanTier`; deny-by-default floor | `createPlanCatalog`, `PLAN_CAPABILITIES`, `PLAN_QUOTAS` |
+| 13 | `services/entitlement.service.ts` | ts | service | Effective-plan resolution (`max(auth, webhook-confirmed)`), feature gates via distribution grant algebra, **BYOK-vs-platform** rule | `createEntitlementService` (impl of `EntitlementGate`) |
 | 14 | `services/quota.service.ts` | ts | service | Resolve limits from plan tier, check headroom against counters, atomic consume, window reset; fail-safe deny | `createQuotaService`, `QuotaService` |
 | 15 | `services/metering.service.ts` | ts | service | Record per-run/token/engine `UsageRecord` (idempotency key), decrement counter, batch + flush to provider meter; retry-safe | `createMeteringService`, `MeteringService` |
-| 16 | `services/invoice.service.ts` | ts | service | List/get invoices merging provider invoices + local receipts; fail-safe empty on `down` | `createInvoiceService`, `InvoiceService` |
-| 17 | `services/webhook.service.ts` | ts | service | Verify signature via provider adapter, dedupe on `event_id`, reconcile subscription/entitlement, emit `RunEvent`; all under governance | `createWebhookService`, `WebhookService` |
-| 18 | `persistence/billing.repository.ts` | ts | repository | Concrete `MeteringRepository` over injected `QueryExecutor` (`:param` SQL, `WHERE user_id=:userId`); no RLS | `createBillingRepository` |
-| 19 | `routes/billing.routes.ts` | ts | route | Session-auth edges; zod-validate; `sendSuccess`/`sendError`; each write → interop chain + governance | `createBillingRouter(deps)` |
-| 20 | `routes/billing-webhooks.routes.ts` | ts | route | Raw-body `POST /webhooks/:provider` edges (polar|creem|paddle|dodo); signature-authenticated, not session; hands to `WebhookService` | `createBillingWebhookRouter(deps)` |
-| 21 | `mcp/billing-engine.ts` | ts | service | READ-ONLY MCP tools on the `EntitlementGate`; conforms to `@recoder/agent-mcp` ToolRouter; `registerBillingMcpTools` for the wiring checklist | `createBillingEngine`, `registerBillingMcpTools` |
-| 22 | `migrations/0001_billing_core.sql` | sql | migration | `billing_subscriptions`, `billing_invoices`, `billing_webhook_events` | tables + indexes |
-| 23 | `migrations/0002_billing_usage.sql` | sql | migration | `billing_usage_events`, `billing_usage_counters` | tables + indexes |
-| 24 | `__tests__/quota.service.test.ts` | ts | test | Headroom, consume, reset window, unlimited (`limit=0`), fail-safe deny on repo error | — |
+| 16 | `invoice.service.ts` (domain root) | ts | service | List/get invoices merging provider invoices + local receipts; `recordFromWebhook` receipt upsert; fail-safe empty on `down` | `createInvoiceService`, `InvoiceService` |
+| 17 | `services/webhook.service.ts` | ts | service | Verify signature via provider adapter, dedupe on `(provider,event_id)` **committed only after a durable projection**, reconcile subscription/invoice; no `RunEvent` bus (not wired) | `createWebhookService`, `WebhookService` |
+| 18 | `persistence/billing.repository.ts` | ts | repository | Concrete `MeteringRepository` over injected `QueryExecutor` (`:param` SQL, `WHERE subject_id=:subjectId`); no RLS | `createBillingRepository` |
+| 19 | `routes/billing.routes.ts` | ts | route | Session-auth edges (`/plan`,`/checkout`,`/portal`,`/invoices`,`/cancel`); zod-validate; `sendSuccess`/`sendError`; checkout/cancel → `BillingWriteGate` | `buildBillingRouter(deps)` |
+| 20 | `routes/billing-webhooks.routes.ts` | ts | route | Raw-body `POST /webhooks/:provider` edges (polar\|creem\|paddle\|dodo); signature-authenticated, not session; hands to `WebhookService` | `buildBillingWebhooksRouter(deps)` |
+| 20b | `routes/internal-billing.routes.ts` | ts | route | `POST /meter` behind `requireInternal` (`INTERNAL_SERVICE_KEY`); idempotent usage ingest into the shared ledger | `buildInternalBillingRouter(deps)` |
+| 21 | `mcp/billing-engine.ts` | ts | service | READ-ONLY MCP tools on the `EntitlementGate` (`billing_plan_read`/`billing_usage_read`/`billing_provider_status`); subject bound to the host-authorized `McpToolCaller` (own-subject only unless admin/internal) | `buildBillingMcpTools` |
+| 22 | `backend/migrations/billing_0001_core.sql` | sql | migration | `billing_subscriptions`, `billing_invoices`, `billing_webhook_events` | tables + indexes |
+| 23 | `backend/migrations/billing_0002_usage.sql` | sql | migration | `billing_usage_events`, `billing_usage_counters` | tables + indexes |
+| 24 | `__tests__/metering-quota.service.test.ts` | ts | test | Headroom, consume, reset window, unlimited (`limit=0`), fail-safe deny on repo error | — |
 | 25 | `__tests__/entitlement.service.test.ts` | ts | test | Effective-plan max, feature gate allow/deny, BYOK bypasses token quota but not feature gate | — |
 | 26 | `__tests__/webhook.service.test.ts` | ts | test | Bad signature → reject; duplicate `event_id` → no-op; `subscription.active` → plan upgrade projected | — |
-| 27 | `__tests__/mor-adapters.test.ts` | ts | test | each MoR adapter: `down` when key absent; signature verify golden vector; checkout URL shape | — |
-| 28 | `__tests__/billing.repository.test.ts` | ts | test | `:param` binding, idempotency UNIQUE on usage key, `WHERE user_id` scoping | — |
-| (29) | `__tests__/health.test.ts` | ts | test | Missing keys → `degraded:true` + per-provider `down`; never fakes `up` | — |
+| 27 | `__tests__/provider-registry.test.ts` | ts | test | `BILLING_PROVIDER` selects the active adapter; each adapter `down` when key absent | — |
+| 28 | `__tests__/invoice.service.test.ts` | ts | test | Provider+local receipt merge; `recordFromWebhook` idempotent upsert; fail-safe empty | — |
+| 29 | `__tests__/internal-billing.routes.test.ts` | ts | test | `requireInternal` gating; idempotent `recorded:false` on duplicate key | — |
+| 30 | `__tests__/billing-governance-gate.routes.test.ts` | ts | test | Checkout/cancel routed through `BillingWriteGate`; deny/needs-approval surfaced truthfully | — |
+| 31 | `__tests__/billing-engine.mcp.test.ts` | ts | test | Own-subject-only enforcement; admin/internal may name arbitrary subject; absent caller → AUTH_REQUIRED | — |
 
 ---
 
 ## 4. DB schema (`backend/migrations/`, raw parameterized SQL)
 
-`0001_billing_core.sql`
+`billing_0001_core.sql`
 ```sql
 CREATE TABLE IF NOT EXISTS billing_subscriptions (
   id                   TEXT PRIMARY KEY,
@@ -186,7 +202,7 @@ CREATE TABLE IF NOT EXISTS billing_webhook_events (
 );
 ```
 
-`0002_billing_usage.sql`
+`billing_0002_usage.sql`
 ```sql
 CREATE TABLE IF NOT EXISTS billing_usage_events (
   id              TEXT PRIMARY KEY,
@@ -227,15 +243,21 @@ Mounted by the `edge` domain route table. All pass the interop chain.
 
 | Method | Path | Auth | Purpose | Write→gov |
 |--------|------|------|---------|-----------|
-| GET | `/api/billing/plan` | session | Owner's authoritative plan + effective entitlements | no |
-| GET | `/api/billing/entitlements` | session | Full entitlement view (features + quotas) | no |
-| GET | `/api/billing/usage` | session | Usage headroom/summary per kind | no |
-| GET | `/api/billing/invoices` | session | List invoices (provider + local) | no |
+| GET | `/api/billing/plan` | session | Caller's effective entitlement view (plan + features + quotas via `gate.view`) | no |
+| GET | `/api/billing/portal` | session | Customer-portal data: active subscription + recent invoices + `canManage` | no |
+| GET | `/api/billing/invoices` | session | List invoices (provider + local receipt projection) | no |
 | POST | `/api/billing/checkout` | session | Create hosted checkout (active MoR provider) for a plan | **yes** |
-| POST | `/api/billing/portal` | session | Create customer-portal session URL | **yes** |
-| GET | `/api/billing/health` | public | Truthful provider readiness (no secrets leaked) | no |
-| POST | `/api/billing/webhooks/:provider` | **signature** | MoR webhook (provider ∈ polar\|creem\|paddle\|dodo) → reconcile | **yes** |
-| POST | `/internal/billing/meter` | `INTERNAL_SERVICE_KEY` | Worker/conductor emits a `UsageRecord` | **yes** |
+| POST | `/api/billing/cancel` | session | Cancel the caller's active subscription (now or at period end) | **yes** |
+| POST | `/api/billing/webhooks/:provider` | **signature** | MoR webhook (provider ∈ polar\|creem\|paddle\|dodo) → idempotent reconcile | no¹ |
+| POST | `/internal/billing/meter` | `INTERNAL_SERVICE_KEY` | Worker/conductor emits a `UsageRecord` (idempotent ledger append) | no¹ |
+
+¹ Webhook reconcile and metering ingest are NOT gate-decided: the webhook is
+trusted by raw-body signature verification, the meter append is an idempotent
+ledger write behind `INTERNAL_SERVICE_KEY`. Only `POST /checkout` and
+`POST /cancel` pass the `BillingWriteGate`. There is no `GET /entitlements`,
+`GET /usage`, `POST /portal`, or `GET /api/billing/health` route — the entitlement
+view is served off `/plan`, portal read is a `GET`, and health is a module-level
+`HealthSource` (not a billing HTTP edge).
 
 Webhook routes need the **raw request body** (before JSON parse) for HMAC
 verification — mounted with a raw body-parser ahead of the global `express.json`.
@@ -247,11 +269,13 @@ verification — mounted with a raw body-parser ahead of the global `express.jso
 **Exposed to other domains** (`ports/entitlement.port.ts`) — the load-bearing seam:
 ```ts
 export interface EntitlementGate {
-  resolvePlan(subject: BillingSubject): Promise<PlanTier>;
-  checkEntitlement(subject: BillingSubject, feature: Feature): Promise<EntitlementDecision>;
+  resolvePlan(subject: BillingSubject): Promise<PlanTier>;                       // max(auth, webhook-confirmed)
+  check(principal: Principal, req: EntitlementRequest): Promise<GateDecision>;   // unified feature|quota entrypoint
+  checkFeature(subject: BillingSubject, feature: Feature): Promise<EntitlementDecision>;
   checkQuota(subject: BillingSubject, kind: UsageKind, cost?: number): Promise<QuotaDecision>;
   isBYOK(subject: BillingSubject): Promise<boolean>;   // BYOK skips token-metered quota
-  health(): HealthReport;
+  view(subject: BillingSubject): Promise<EntitlementView>;   // plan + features + per-kind quotas
+  health(): ComponentHealth;
 }
 ```
 Consumed by: `conductor` (before dispatching a run — quota + feature gate),
@@ -262,47 +286,55 @@ Consumed by: `conductor` (before dispatching a run — quota + feature gate),
 - `AppConfig` (bootstrap) — provider keys via `config.ts`.
 - `Session` (identity) — subject resolution on session edges.
 - `QueryExecutor` (persistence) — the repo impl.
-- `GovernanceGate.decide()` (governance) — every write.
-- `InteropChain` (interop) — every edge + MCP call.
-- `RunEvent` bus (`@recoder/agent-events`) — webhook reconcile emits
-  `billing.subscription.changed` / `billing.usage.recorded`.
-- `@recoder/agent-mcp` ToolRouter — MCP registration.
+- `BillingWriteGate.decide()` (governance) — the `POST /checkout` + `POST /cancel`
+  mutations (injected via `setGovernanceGate`; degrade-safe ungated until wired).
+- `@recoder/agent-mcp` / the domain-tools MCP bridge — read-only tool registration.
+
+_Not wired (planned, not shipped):_ a `RunEvent` bus emit on webhook reconcile
+(`billing.subscription.changed` / `billing.usage.recorded`) — the reconcile loop
+projects to Postgres + audit only; no `@recoder/agent-events` emit exists yet. The
+per-edge `authorize→risk→policy→audit` interop-chain wrap is likewise not applied
+uniformly here — mutations use `BillingWriteGate`, webhooks use signature trust.
 
 **Provider seam** (`ports/billing-provider.port.ts`) — every MoR provider implements:
 ```ts
 export interface BillingProviderPort {
   readonly name: 'polar' | 'creem' | 'paddle' | 'dodo';
-  startCheckout(i: CheckoutIntent): Promise<CheckoutResult>;
-  createPortalSession(customerId: string, returnUrl: string): Promise<PortalSession>;
-  getSubscription(subId: string): Promise<ProviderSubscription | null>;
-  listInvoices(customerId: string): Promise<Invoice[]>;
-  emitUsage(events: MeterEvent[]): Promise<void>;
-  verifyWebhook(rawBody: Buffer, headers: Record<string,string>): ParsedWebhook | null; // null = bad sig
-  health(): Promise<ChannelHealth>;   // configured:false → down, truthful reason
+  createCheckout(intent: CheckoutIntent): Promise<CheckoutResult>;
+  getSubscription(providerSubId: string): Promise<ProviderSubscription | null>;
+  cancel(providerSubId: string, opts?: CancelOptions): Promise<ProviderSubscription | null>;
+  verifyWebhook(rawBody: Buffer, headers: Record<string,string>): boolean;      // pure sig bool
+  parseEvent(rawBody: Buffer, headers: Record<string,string>): ParsedWebhook | null; // null = bad sig
+  emitUsage(events: readonly MeterEvent[]): Promise<void>;   // optional meter feed; no-op when unsupported
+  health(): Promise<ProviderHealth>;   // configured:false → down, truthful reason
 }
 ```
+(No `createPortalSession` / `listInvoices` on the port — the portal edge reads the
+durable subscription + invoice projections directly; invoices come from the
+`InvoiceService` receipt projection, not a live provider list call.)
 
 ---
 
 ## 7. Reuse vs New
 
 **REUSE (do not rebuild):**
-- `@recoder/distribution` — `createBillingService`, `createEntitlementResolver`,
-  `createPolarBillingAdapter`, `createPlanCatalog`, and the `domain/*`
-  (`Plan`, `Feature`, `FEATURE_MATRIX`, `planSatisfies`, `Quota`,
-  `quotaHasHeadroom`, `consumeQuota`, `Entitlement`, `Subject`, `UsageKind`).
-  This is the **core** — `entitlement.service.ts` + `distribution-billing.adapter.ts`
-  wrap it; we do NOT redefine plan/quota/entitlement algebra.
-- `backend/src/engines/polar-client.ts` → moved behind `adapters/polar.adapter.ts`
-  (no 4th copy; the composer owns it).
-- `backend/src/routes/billing-polar.routes.ts` → folded into `routes/billing.routes.ts`
-  (behavior-preserving; `/api/billing/polar/*` paths kept as aliases).
-- `backend/src/agent-os/mcp/billing-engine.ts` (+ `.test.ts`) → moved to
-  `mcp/billing-engine.ts`; already conforms to `@recoder/agent-mcp` `billingMcpServer`.
-- `@recoder/agent-events` (`RunEvent`, outbox), `@recoder/governance` (gate),
-  `@recoder/interop` (chain), `@recoder/auth` (`Session`), `@recoder/agent-schemas`
-  (zod boundary validation), `@recoder/logger`.
+- `@recoder/distribution` — `createEntitlementResolver` (+ the `BillingPort`,
+  `Entitlement`, `Feature`, `Plan`, `Subject` types) is the reused grant algebra;
+  `entitlement.service.ts` + `distribution-billing.adapter.ts` wrap it and we do
+  NOT redefine plan/quota/entitlement algebra. (SHIPPED reality wires only
+  `createEntitlementResolver` — the earlier `createBillingService` /
+  `createPolarBillingAdapter` / `createPlanCatalog` reuse never materialized; the
+  plan catalog + quota counters are the domain's own, widening distribution with
+  the `max` tier + token/engine quota rows.)
+- `governance` (the `BillingWriteGate` `decide` facet), identity (`Principal` +
+  auth middleware), persistence (`QueryExecutor`), `@recoder/logger`.
 - Verification script `scripts/verify-byok-e2e.sh` for the BYOK-vs-platform path.
+
+_Superseded reuse claims (did NOT ship):_ the four MoR adapters are fresh
+`fetch`-based `BillingProviderPort`s (Polar included — NOT a move of a
+`polar-client.ts`); there are no behavior-preserving `/api/billing/polar/*`
+aliases; and the MCP tools (`mcp/billing-engine.ts` → `buildBillingMcpTools`) are
+the domain's own read-only surface, not a moved `billingMcpServer`.
 
 **NEW (write):**
 - `adapters/{creem,paddle,dodo}.adapter.ts` + `adapters/shared.ts` — distribution ships only Polar;
@@ -310,8 +342,9 @@ export interface BillingProviderPort {
 - Durable **Postgres metering** (`persistence/billing.repository.ts` +
   migrations) — distribution's quota is provider-fed/in-memory; we need
   auditable per-run/token/engine records + idempotency + reset windows.
-- `services/webhook.service.ts` — signature-verified reconcile → Postgres
-  projection + `RunEvent` (distribution has ports but no host webhook loop).
+- `services/webhook.service.ts` — signature-verified, idempotent reconcile →
+  Postgres subscription/invoice projection (dedup committed only after a durable
+  apply). (No `RunEvent` emit shipped — that remains planned.)
 - `services/plan-catalog.service.ts` — free/**pro**/team/**max**/enterprise +
   `plan→capability` + `plan→productId` map (widens distribution's matrix with
   the `max` tier and the token/engine capability rows).
@@ -343,21 +376,21 @@ DB-backed here.
 ## 9. Implementation order
 
 1. **Contracts first:** `types.ts`, `config.ts`, the three `ports/*`. (compiles, no logic)
-2. **Persistence:** `migrations/0001`, `0002`, `persistence/billing.repository.ts`
-   + `billing.repository.test.ts` (pg-backed, `:param`, idempotency UNIQUE).
+2. **Persistence:** `backend/migrations/billing_0001_core.sql`,
+   `billing_0002_usage.sql`, `persistence/billing.repository.ts`
+   (pg-backed, `:param`, idempotency UNIQUE).
 3. **Catalog + entitlement:** `plan-catalog.service.ts`,
    `distribution-billing.adapter.ts`, `entitlement.service.ts`
    (+ `entitlement.service.test.ts`) — this yields a working `EntitlementGate`
    other domains can wire before any provider exists.
 4. **Quota + metering:** `quota.service.ts`, `metering.service.ts`
    (+ `quota.service.test.ts`). Fail-safe deny path first.
-5. **Providers:** `polar.adapter.ts` (move existing), `{creem,paddle,dodo}.adapter.ts` + `shared.ts`
-   (+ `mor-adapters.test.ts`), `invoice.service.ts`.
+5. **Providers:** `polar.adapter.ts` + `{creem,paddle,dodo}.adapter.ts` + `shared.ts`
+   + `provider-registry.ts` (+ `provider-registry.test.ts`), `invoice.service.ts`.
 6. **Webhooks:** `webhook.service.ts` (+ `webhook.service.test.ts`),
-   `routes/billing-webhooks.routes.ts` (raw body).
-7. **Edges + MCP:** `routes/billing.routes.ts`, `mcp/billing-engine.ts` (move),
-   register via the wiring checklist (`IN_PROC_SERVERS` + `ENGINE_SERVERS` +
-   `registerBillingMcpTools` in `buildInProcEngineRouter`).
+   `routes/billing-webhooks.routes.ts` (raw body), `routes/internal-billing.routes.ts`.
+7. **Edges + MCP:** `routes/billing.routes.ts`, `mcp/billing-engine.ts`
+   (`buildBillingMcpTools`), registered through the domain-tools MCP bridge.
 8. **Compose + health:** `billing-module.ts`, `index.ts`, `health.ts`
    (+ `health.test.ts`). Wire into `bootstrap/container.ts` + `/health`.
 9. **Verify:** `pnpm check-types`, `pnpm test` (domain), `pnpm

@@ -1,5 +1,12 @@
 # Domain: Engines Integration (multi-language boundary)
 
+> **Status: SHIPPED** (Phase 6, commit `52ab47305`; deepened in-dir + spawned-on-boot
+> `0a1084282` / `149942e62`). Boots as 1 of 15 truthful health sources; the engines
+> exercise the real `backend/engines/` surfaces. This file is the design of record,
+> reconciled to what shipped — where the built surface diverged from the original plan
+> (file names, route paths, public accessors, the security subject-binding), the notes
+> below call it out inline.
+
 Folder prefix: `backend/src/domains/engines/`
 Owner seam: the **one governed path** every engine is reached through. This domain is
 the MCP host + engine-fusion layer — it binds all first-party and vendored engines
@@ -17,9 +24,16 @@ heavy lifting is done by capability **engines** in three other delivery shapes:
 | Delivery | Transport | Engines | Fusion law |
 |---|---|---|---|
 | **Rust napi** | in-process `.node` | openfang, tensorzero (embedded gateway), governance kernel | Native-first (default) |
-| **Rust/Go daemon** | supervised loopback HTTP | colbert, ops-recorder, multica, ziti, tensorzero (loopback fallback) | Subprocess-second |
+| **Rust/Go daemon** | supervised loopback HTTP | colbert, ops-recorder, multica, ziti | Subprocess-second |
 | **Python sidecar** | supervised stdio-MCP / loopback HTTP | mem0, browser-use, pal-mcp-server | Subprocess-second (ML only) |
 | **CLI binary** | one-shot subprocess | beads/`bd`, dmux, tmux, recodergit | Subprocess |
+
+> **TensorZero's fallback ladder lives in the `inference` domain, not here.** This domain
+> ships `adapters/napi/tensorzero-napi.adapter.ts` (the shared embedded-gateway `.node` load);
+> the `inference` domain binds over it and owns the degrade rungs (napi → supervised loopback →
+> direct BYOK rung-3 multi-provider router) in `engine-client-napi-tier.ts` /
+> `tensorzero-transport.adapter.ts` / `direct-provider.transport.ts`. There is no
+> `adapters/daemon/tensorzero-loopback.adapter.ts` in this domain.
 
 Every one of these is reached through **one** `EngineClientPort` per engine, supervised by
 **one** of three supervisors (napi loader / daemon supervisor / sidecar supervisor), and
@@ -52,7 +66,18 @@ governance gate and the interop `authorize→risk→policy→audit` chain before
 
 ---
 
-## 2. File tree (`backend/src/domains/engines/`, ~44 files)
+## 2. File tree (`backend/src/domains/engines/`)
+
+> **Shipped as ~102 files** (incl. co-located `*.test.ts`), larger than the ~44 planned
+> below. The extra surface is (a) the legacy conductor/engines/gateway flat files absorbed
+> DIRECTLY into the domain root rather than fully rewritten behind adapters —
+> `openfang-native.ts`, `openfang-runtime.ts`, `colbert-daemon.ts`, `ops-recorder-daemon.ts`,
+> `ops-recorder-adapter.ts`, `mem0-client.ts`, `multica-client.ts`, `ziti-client.ts`,
+> `beads-bin.ts`, `beads-engine.ts`, `browser-use-engine.ts`, `dmux-adapter.ts`,
+> `recodergit-service.ts`, `tmux-path.ts` all live at `domains/engines/*`; (b) a `github/`
+> subdir (unified gh-CLI + recodergit GitHub module, `docs/modules/github.md`); (c) the
+> per-daemon MCP-tool bindings under `adapters/daemon/mcp/`; and (d) more co-located tests.
+> The skeleton below is the seam's core; the named-file deltas are flagged inline.
 
 ```
 engines/
@@ -88,12 +113,14 @@ engines/
       tensorzero-napi.adapter.ts        # in-proc TensorZero EmbeddedGateway (.node): inference/feedback
       governance-napi.adapter.ts        # in-proc governance kernel (.node): decide/enforce/merkle-verify
     daemon/
-      colbert.adapter.ts                # loopback ColBERT rerank daemon client
-      ops-recorder.adapter.ts           # loopback ops-recorder signal-detection daemon client
-      multica.adapter.ts                # loopback multica squads/assignment daemon client (Go)
-      ziti.adapter.ts                   # loopback OpenZiti controller REST client (Go/edge-mgmt)
-      tensorzero-loopback.adapter.ts    # loopback TZ gateway fallback when napi absent (degrade path)
-      colbert.adapter.test.ts
+      colbert-loopback.adapter.ts       # loopback ColBERT rerank daemon client
+      ops-recorder-loopback.adapter.ts  # loopback ops-recorder signal-detection daemon client
+      multica-loopback.adapter.ts       # loopback multica squads/assignment daemon client (Go)
+      ziti-rest.adapter.ts              # loopback OpenZiti controller REST client (Go/edge-mgmt)
+      daemon-adapter-base.ts            # shared loopback-daemon adapter base
+      mcp/                              # per-daemon MCP-tool bindings (colbert/ops-recorder/multica/ziti)
+      colbert-loopback.adapter.test.ts
+      # NOTE: no tensorzero-loopback here — the TZ fallback ladder lives in domains/inference
     sidecar/
       mem0.adapter.ts                   # Python mem0 memory sidecar (loopback HTTP)
       browser-use.adapter.ts            # Python browser-use LLM-agent sidecar (loopback HTTP)
@@ -113,15 +140,16 @@ engines/
     engine-registry.test.ts
 
   routes/
-    engines.routes.ts                   # HTTP edges (list/health/restart + /api/mcp servers/call + /internal)
-
-  migrations/
-    NNNN_engine_registry.sql            # engine_registry + engine_health_log + engine_restart_log tables
-
-  __tests__/
-    engines-module.test.ts              # composer wiring + degrade-safe fan-out (integration)
-    mcp-host.contract.test.ts           # every registered tool passes authorize→risk→audit before execute
+    mcp-edge.routes.ts                  # the governed MCP HTTP edge + read/restart + /internal (buildMcpEdgeRouter + buildInternalEnginesRouter)
 ```
+
+> **Migration location:** the SQL lives at `backend/migrations/engine_0001_registry.sql`
+> (the centralized migrations dir the runner sorts lexically), NOT a domain-local
+> `migrations/` subdir. It creates `engine_registry` + `engine_health_log` + `engine_restart_log`
+> (schema in §4). The composer-wiring + degrade-safe-fan-out + gate-contract assertions the
+> planned `__tests__/` folder held ship as co-located `*.test.ts` beside their subjects
+> (`engines-module.test.ts` isn't present as a separate file; coverage is in the adapter/mcp/
+> supervisor tests + `mcp/mcp-host-wiring.test.ts`, `routes/mcp-edge.routes.test.ts`).
 
 ---
 
@@ -153,12 +181,12 @@ engines/
 | 22 | `adapters/napi/openfang-napi.adapter.ts` | ts | client | In-proc openfang kernel `.node` adapter: exposes the agent-engine dispatch surface; degrades to daemon adapter or `down`. | `class OpenfangNapiAdapter implements EngineClientPort`, `createOpenfangAdapter()` |
 | 23 | `adapters/napi/tensorzero-napi.adapter.ts` | ts | client | In-proc TensorZero `EmbeddedGateway` `.node`: `inference()`/`feedback()`; falls back to `tensorzero-loopback` then `down`. | `class TensorzeroNapiAdapter implements EngineClientPort` |
 | 24 | `adapters/napi/governance-napi.adapter.ts` | ts | client | In-proc governance kernel `.node`: `decide/enforce_tool/record_audit/verify_audit` + Merkle verifier; byte-interop pinned to golden vectors. Backs `@recoder/governance` facade. | `class GovernanceNapiAdapter implements EngineClientPort`, `verifyMerkle()` |
-| 25 | `adapters/daemon/colbert.adapter.ts` | ts | client | Loopback ColBERT rerank daemon client (rerank passages); `down` when binary absent. | `class ColbertAdapter implements EngineClientPort` |
-| 26 | `adapters/daemon/ops-recorder.adapter.ts` | ts | client | Loopback ops-recorder signal-detection daemon client. | `class OpsRecorderAdapter implements EngineClientPort` |
-| 27 | `adapters/daemon/multica.adapter.ts` | ts | client | Loopback multica squads/assignment daemon (Go) — optional enrichment, not source of truth. | `class MulticaAdapter implements EngineClientPort` |
-| 28 | `adapters/daemon/ziti.adapter.ts` | ts | client | OpenZiti controller Edge-Management REST client (identity/enrollment); fail-safe when unconfigured. | `class ZitiAdapter implements EngineClientPort` |
-| 29 | `adapters/daemon/tensorzero-loopback.adapter.ts` | ts | client | TZ gateway loopback fallback used when the napi addon is absent; supervised binary, degrade to `down`. | `class TensorzeroLoopbackAdapter implements EngineClientPort` |
-| 30 | `adapters/daemon/colbert.adapter.test.ts` | ts | test | Asserts rerank round-trip + `down` when daemon missing. | — |
+| 25 | `adapters/daemon/colbert-loopback.adapter.ts` | ts | client | Loopback ColBERT rerank daemon client (rerank passages); `down` when binary absent. | `class ColbertAdapter implements EngineClientPort` |
+| 26 | `adapters/daemon/ops-recorder-loopback.adapter.ts` | ts | client | Loopback ops-recorder signal-detection daemon client. | `class OpsRecorderAdapter implements EngineClientPort` |
+| 27 | `adapters/daemon/multica-loopback.adapter.ts` | ts | client | Loopback multica squads/assignment daemon (Go) — optional enrichment, not source of truth. | `class MulticaAdapter implements EngineClientPort` |
+| 28 | `adapters/daemon/ziti-rest.adapter.ts` | ts | client | OpenZiti controller Edge-Management REST client (identity/enrollment); fail-safe when unconfigured. | `class ZitiAdapter implements EngineClientPort` |
+| 29 | _(moved to `domains/inference`)_ | ts | client | The TZ loopback fallback is NOT here — the inference domain owns the napi→loopback→BYOK ladder (`engine-client-napi-tier.ts`). A shared `daemon-adapter-base.ts` + `adapters/daemon/mcp/*` (per-daemon MCP-tool bindings) ship in its place. | — |
+| 30 | `adapters/daemon/colbert-loopback.adapter.test.ts` | ts | test | Asserts rerank round-trip + `down` when daemon missing. | — |
 | 31 | `adapters/sidecar/mem0.adapter.ts` | ts | client | Python mem0 memory sidecar over loopback HTTP; degrade to `down` when venv absent. | `class Mem0Adapter implements EngineClientPort` |
 | 32 | `adapters/sidecar/browser-use.adapter.ts` | ts | client | Python browser-use LLM-agent sidecar (navigate/extract/screenshot) over loopback HTTP. | `class BrowserUseAdapter implements EngineClientPort` |
 | 33 | `adapters/sidecar/pal-mcp.adapter.ts` | ts | client | Python `pal-mcp-server` over stdio-MCP; registers as an EXTERNAL MCP server in the host with truthful availability. | `class PalMcpAdapter`, `buildPalRegistration()` |
@@ -172,12 +200,14 @@ engines/
 | 41 | `mcp/engine-registry.ts` | ts | service | The `IN_PROC_SERVERS` catalog + register order + a wiring-checklist guard (asserts every `ENGINE_SERVERS` server is in `IN_PROC_SERVERS` and has a handler — fails boot loudly if a new engine skips a step). | `IN_PROC_SERVERS`, `assertWiringComplete()` |
 | 42 | `mcp/engines-engine.ts` | ts | route | THIS domain's own MCP tools: `engine.list` (descriptors+health), `engine.health` (one engine), `engine.restart` (governance-gated write). Follows the ToolRouter shape. | `registerEnginesMcpTools(router, deps)`, `enginesMcpServer` |
 | 43 | `mcp/engine-registry.test.ts` | ts | test | Asserts `assertWiringComplete()` catches a server registered in one list but not the other / missing handler. | — |
-| 44 | `routes/engines.routes.ts` | ts | route | HTTP edges (see §5); all pass the interop chain; writes governance-gated; `/internal/*` key-gated. | `enginesRoutes(deps): Router` |
-| 45 | `migrations/NNNN_engine_registry.sql` | sql | migration | Creates `engine_registry`, `engine_health_log`, `engine_restart_log`. | — |
-| 46 | `__tests__/engines-module.test.ts` | ts | test | Composer wiring: all adapters registered, missing-binary fan-out all report `down`, module boots. | — |
-| 47 | `__tests__/mcp-host.contract.test.ts` | ts | test | Contract: no in-proc tool executes without passing authorize→risk→audit; unregistered handler throws truthfully. | — |
+| 44 | `routes/mcp-edge.routes.ts` | ts | route | HTTP edges (see §5); all pass the interop chain; writes governance-gated; `/internal/*` key-gated. Also binds tenant identity to the authenticated principal (see §5 security note). | `buildMcpEdgeRouter(deps): Router`, `buildInternalEnginesRouter(deps): Router` |
+| 45 | `backend/migrations/engine_0001_registry.sql` | sql | migration | Creates `engine_registry`, `engine_health_log`, `engine_restart_log` (centralized migrations dir, not domain-local). | — |
+| 46 | `mcp/mcp-host-wiring.test.ts` + `routes/mcp-edge.routes.test.ts` | ts | test | Composer/host wiring + degrade-safe fan-out; contract: no in-proc tool executes without authorize→risk→audit; unregistered handler throws truthfully; tenant-binding on the edge. | — |
 
-> ~47 entries incl. co-located tests; the non-test file count lands at ~40 (~44 with the 4 nearest test files listed inline). This is the production surface, not a skeleton.
+> The table above is the planned core seam (~47 entries). **The shipped domain is ~102 files**
+> — the extra surface is the absorbed legacy flat files, the `github/` module, the
+> `adapters/daemon/mcp/` per-daemon tool bindings, and more co-located tests (see the §2 note).
+> This is the production surface, not a skeleton.
 
 ---
 
@@ -231,21 +261,38 @@ CREATE INDEX IF NOT EXISTS idx_engine_restart_log_engine_time
 
 ## 5. HTTP / MCP edges
 
-Mounted by the `edge` domain route table. Every edge carries a `Session` (identity) and passes
-the interop `authorize→risk→policy→audit` chain. Reads are safe; the one write (restart) is
-governance-gated + approval-capable. Responses use `sendSuccess`/`sendError(createError(code,msg))`.
+The domain router mounts at the `/api/mcp` base (bootstrap `DOMAIN_REGISTRY.engines.mountBase`),
+plus an `INTERNAL_SERVICE_KEY`-gated worker router at `/internal/engines`. Every tool call carries
+the authenticated `Principal` and passes the interop `authorize→risk→execute→audit` chain via
+`host.call()` — the edge NEVER executes a handler itself. Responses use
+`sendSuccess`/`sendError(createError(code,msg))`; gate outcomes ride a 200 envelope whose
+`data.status` carries the truthful decision (`completed`/`denied`/`needs_approval`/`failed`).
+
+> The per-engine **list + health** surface ships as **MCP tools** (`engine.list` / `engine.health`
+> in `mcp/engines-engine.ts`), not standalone REST routes — the shipped router has no
+> `GET /api/agent-os/engines`. The `/api/mcp` edge below is the governed wire the agents' stdio
+> bridge (`mcp/recoder-capability-tools.cjs`) calls.
 
 | method | path | auth | gate | purpose |
 |---|---|---|---|---|
-| GET | `/api/agent-os/engines` | session | interop read | List engine descriptors + transport + live health. |
-| GET | `/api/agent-os/engines/:id/health` | session | interop read | One engine's truthful health (probe + last log). |
-| POST | `/api/agent-os/engines/:id/restart` | session | governance write + interop risk (`needs_approval`) | Restart a supervised daemon/sidecar; records `engine_restart_log` + governance audit. napi/CLI engines return a truthful "not restartable" (`SERVICE_UNAVAILABLE`). |
-| GET | `/api/mcp/servers` | session | interop read | List every MCP server (in-proc + external) from the gated registry with health. |
-| POST | `/api/mcp/call` | session | full interop `authorize→risk→execute→audit` | Governed tool call — delegates to `InteropHostBundle.call()`. |
-| GET | `/internal/engines/health` | `INTERNAL_SERVICE_KEY` | internal | Worker-to-backend aggregate engine health (supervision loop). |
+| GET | `/api/mcp/servers` | principal | interop read | List every MCP server (in-proc + external) from the gated registry with health. |
+| POST | `/api/mcp/tools/:server/:tool/call` | mutating principal | full interop `authorize→risk→execute→audit` | The bridge's contract — governed tool call, delegates to `host.call()`. |
+| POST | `/api/mcp/call` | mutating principal | full interop `authorize→risk→execute→audit` | Same governed call, `{ server, tool, actor?, args? }` in the body. |
+| POST | `/api/mcp/engines/:id/restart` | principal + `requireAdmin` | admin/internal write | Restart a supervised daemon/sidecar; records `engine_restart_log`. napi/CLI engines return a truthful `skipped` ("not restartable"). |
+| GET | `/internal/engines/health` | `INTERNAL_SERVICE_KEY` (`requireInternal`) | internal | Worker-to-backend aggregate engine health (supervision loop). |
+
+**SECURITY — tenant subject-binding (cross-tenant class closed).** The gated call edges do NOT
+trust caller-supplied identity in `args`/`actor`. Before `host.call()`, `bindTenantIdentity()`
+OVERRIDES `args.userId` with the authenticated `principal.userId` (a caller claiming a DIFFERENT
+`userId` is rejected `403` unless it carries an admin/internal scope), and the acting `actor.agentId`
++ the edge-bound `McpToolCaller` (`userId`/`orgId`/`scopes`) are derived ONLY from the authenticated
+principal — never from `body.actor.agentId`. This closed the systemic cross-tenant hole in the
+subject-bearing MCP tools (memory/cloud/billing/identity).
 
 Error codes reused (no new codes): `SERVICE_UNAVAILABLE` (engine down / not restartable),
-`AUTHZ_PROJECT_ACCESS_DENIED` (caller lacks scope). All inbound bodies validated with zod at the boundary.
+`AUTHZ_PROJECT_ACCESS_DENIED` (cross-tenant claim / caller lacks scope), `NOT_FOUND`
+(unknown server / engine), `VALIDATION_ERROR` (bad body). All inbound bodies validated with zod
+at the boundary.
 
 ---
 
@@ -253,9 +300,16 @@ Error codes reused (no new codes): `SERVICE_UNAVAILABLE` (engine down / not rest
 
 ### Exposed to other domains (this domain's public surface)
 
-- **`EnginesModule`** (`index.ts`) — `getMcpHost(): McpHostPort`, `getEngine(id): EngineClientPort | null`,
-  typed accessors (`tensorzero()`, `openfang()`, `governanceKernel()`, `colbert()`, `mem0()`,
-  `browserUse()`, `beads()`, `recodergit()`, …), `health(): HealthReport`, `start()/stop()`.
+- **`EnginesModule`** (`index.ts`) — the shipped surface is a single generic engine accessor plus
+  a few named ones: `client(id): EngineClientPort | null`, `endpoint(id): string | null`
+  (live loopback base URL), `tensorzero(): EngineClientPort | null` (the shared `.node` the
+  inference napi tier binds over — CONFLICT #8-safe), `github(): GithubModule`,
+  `registry(): EngineRegistryPort`, `host(): McpHostPort`,
+  `registerModuleTools(serverId, tools)` / `registerDomainTools(serverId, tools)` (collision-safe
+  host bridge for domains that expose `mcp()`), `mcp(): McpToolRegistration[]`,
+  `routes()` / `internalRoutes(): Router`, `listHealth(): Promise<EngineHealth[]>`,
+  `health(): Promise<ComponentHealth>`, `start()`/`stop()`. (There are no per-engine
+  `openfang()`/`colbert()`/`mem0()`/… accessors — use `client(id)`.)
 - **`McpHostPort`** (`ports/mcp-host.port.ts`) — consumed by `interop`/`agent-os` edges + every
   domain that exposes MCP tools (the ToolRouter registration surface).
 - **`EngineClientPort<TReq,TRes>`** — the shape `inference`, `memory`, `conductor`, `governance`,
@@ -292,7 +346,8 @@ Error codes reused (no new codes): `SERVICE_UNAVAILABLE` (engine down / not rest
 - `backend/src/conductor/{openfang-daemon,openfang-native,governance-daemon,colbert-daemon,ops-recorder-daemon}.ts`
   → collapsed into the ONE `daemon-supervisor.ts` / `napi-loader.ts` + thin adapters.
 - `backend/src/engines/{tensorzero-client,multica-client,ziti-client}.ts` → daemon adapters.
-- `backend/src/gateway/tensorzero-client.ts` → `adapters/napi/tensorzero-napi.adapter.ts` + loopback fallback.
+- `backend/src/gateway/tensorzero-client.ts` → `adapters/napi/tensorzero-napi.adapter.ts` (the shared
+  `.node`); the loopback + BYOK fallback rungs landed in `domains/inference`, not here.
 
 **REUSE `packages/*` contracts:** `@recoder/interop` (`McpHost`, `ExternalMcpProcessManager`,
 `buildPalServerConfig`, `palServerAvailability`), `@recoder/agent-mcp` (`McpToolRouter`,

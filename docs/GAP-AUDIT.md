@@ -5,6 +5,57 @@ Build health: `tsc --noEmit` = 0 errors · server boots clean on :3719 · `/heal
 
 ---
 
+## 2026-07-18 CLOSURE
+
+> **Status: closed.** The gaps this audit measured on 2026-07-17 (the product sat at
+> ~60–65% of the documented surface) have been driven to near-doc-completeness on
+> branch `feat/enterprise-s0-p0`. Everything below §1–§4 is preserved verbatim as the
+> historical record of the 2026-07-17 gap state; this header records how it was closed.
+
+**What closed it:** the P0/P1/P2 build waves (plus the interop + Phase-A slices) closed
+the audited feature gaps, and nine hardening rounds — six of them an adversarial
+cross-tenant authorization review — closed a systemic security class. Net:
+
+- **Backend near-doc-complete.** The waves shipped the documented seams the audit found
+  composed-but-unwired or unstarted: real in-proc tensorzero SSE + BYOK/rung-3 inference +
+  `/v1/embeddings`; the governed **MCP HTTP tool-call edge** `POST /api/mcp/tools/:server/:tool/call`
+  (was 404, now LIVE); agent-os Postgres state-of-record + full CRUD + squad autopilots;
+  steer send-keys + conductor stop/advance/attention/tmux control-mode; github/browser
+  handlers; ed25519 A2A ingress; cloud governance; lance embedded memory; social run-flow
+  bridge; and P2 **billing metering emitters** so quotas actually decrement.
+- **Cross-tenant security class closed.** The new MCP write tools initially resolved
+  tenant/subject from caller-supplied args (cross-tenant quota drain, spend misattribution,
+  sandbox provision/destroy, memory read/forget, audit/billing disclosure, `identity_link`
+  hijack across ~26 tools). Every subject-bearing tool is now bound to the host-authorized
+  `McpToolCaller` at the MCP edge trust boundary; convergence verified by exhaustive
+  enumeration (only pure-infra MCP files remain caller-free).
+- **Integration bugs fixed** en route (fresh-DB migration `splitStatements` landmine;
+  dev-mint-conductor-key rewired onto the DB-backed `sk_` store; the approval-clearance /
+  A2A-admission fail-closed hardening from the in-flight branch, now landed).
+- **Verified green:** `tsc` 0 · ~1462 backend tests · boots with 15 truthful health sources.
+
+**Wave backlog — done vs owner-gated:**
+
+- **Done (Waves 0–8, 10, and the wired half of 9):** in-flight branch landed; packaging &
+  native-desktop runtime; bootstrap seam wiring; inference depth; agent-os durability &
+  edges; github module; terminal/conductor depth; governance/billing/cloud/interop edges;
+  memory & browsing; cockpit approve/reject. See
+  [RECODER-BACKEND/BUILD-STATUS.md](./RECODER-BACKEND/BUILD-STATUS.md#2026-07-18--doc-gap-closure--security-hardening-branch-featenterprise-s0-p0)
+  for the per-wave commit trail.
+- **Remaining — owner-gated (need prod access or an owner decision, deliberately NOT run):**
+  1. **Prod `users → user` migration run** — execute the backfill runbook against
+     `recoder_main` (backup → migrate → verify counts → sso/device e2e → then delete the
+     compat bridge). Idempotent migration is written; running it on production data is the
+     owner call.
+  2. **`COMPOSIO_API_KEY` rotation** — was hardcoded in `ecosystem.config.js` and is exposed
+     in git history; code now reads `process.env`, but the key itself must be rotated.
+  3. **Next `15.4.11 → 15.5.x` security bump** — needs a `pnpm install` and the box's APFS
+     disk is near-critical.
+
+The §4 stale-doc corrections have been applied across the reconciled doc set.
+
+---
+
 ## 1. Executive summary — how far is the product from the docs' full version?
 
 **The spine is real; the wiring and the package are not.** The greenfield 15-domain backend the docs mandate is BUILT: it typechecks clean, boots, composes 15 domain modules, and the core product loop (create workspace → tmux/openfang run → review → merge, governed + audited) works in dev. Roughly **~60–65% of the documented surface exists as code**; the remaining distance clusters into four shapes:

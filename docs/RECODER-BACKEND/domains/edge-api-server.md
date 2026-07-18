@@ -19,21 +19,21 @@ everything else ⇒ **public**, `interop:false`), with a per-provider `guardOver
 
 ## 1. Overview
 
-Today all of this lives inline in a single 542 KB `backend/src/server.ts` (express init at the top,
-`rateLimit(...)`, `cors(...)`, `requestIdMiddleware`, the `INTERNAL_SERVICE_KEY` block, ~47 `app.use`
-mounts, WS upgrade handling with `node-pty`). The Edge domain **extracts that plumbing behind a
-composer** so `server.ts` becomes thin (`parse env → bootstrap.start()`), and every other domain
-plugs in through one narrow contract (`RouteProvider`) instead of importing express and calling
-`app.use` itself.
+**SHIPPED — Phase 4 complete (26 files, 15/15 tests, commit `1948bd07`).** This plumbing *used to*
+live inline in a single ~542 KB `backend/src/server.ts` (express init at the top, `rateLimit(...)`,
+`cors(...)`, `requestIdMiddleware`, the `INTERNAL_SERVICE_KEY` block, ~47 `app.use` mounts, WS upgrade
+handling). The Edge domain **extracted that plumbing behind a composer**, so `server.ts` is now thin
+(`parse env → bootstrap.start()`) and every other domain plugs in through one narrow contract
+(`RouteProvider`) instead of importing express and calling `app.use` itself.
 
 Two physical locations, one logical domain:
 
 - **`backend/src/http/`** — the mechanical HTTP/WS server core: the express app builder, the ordered
   middleware chain, the WS upgrade dispatch + socket bridges, OpenAPI, and graceful lifecycle. This is
   framework wiring with no domain knowledge.
-- **`backend/src/domains/edge/`** — the domain composer: `createEdgeModule(deps)`, the declarative
-  route-mount table (path → domain router + guard policy), the `RouteProvider`/`WsBackend` ports the
-  other 13 domains implement, the `EdgeConfig` slice, and edge `health()`.
+- **`backend/src/domains/edge/`** — the domain composer: `EdgeComposer` (via `createEdgeModule(deps)`),
+  the declarative route-mount table (path → domain router + guard policy), the `RouteProvider`/`WsBackend` ports the
+  other 14 domains implement, the `EdgeConfig` slice, and edge `health()`.
 
 **Design invariant:** the edge is *stateless*. It owns **no DB tables**. It never makes a policy
 decision itself — it *invokes* the shared `InteropChain` (`@recoder/interop`) and `GovernanceGate`
@@ -61,15 +61,16 @@ backend/src/http/
     validate.ts                       # zod boundary validators: validateBody/Query/Params (@recoder/agent-schemas)
     error.ts                          # error-envelope terminal middleware + 404 handler + asyncHandler
     __tests__/
-      internal-key.test.ts            # integration: gate rejects missing/short/placeholder/wrong key
-      interop-gate.test.ts            # integration: deny verdict → AUTHZ envelope, audit always recorded
-      error.test.ts                   # integration: thrown/rejected handlers → stable envelope, no leak
+      _mock.ts                        # shared middleware test doubles (verifier, interop chain, config)
+      chain.test.ts                   # integration: canonical order + per-mount guard composition
+      cors.test.ts                    # integration: origin allowlist / preflight / no-* with credentials
+      validate.test.ts                # integration: zod body/query/params → VALIDATION envelope, field paths
   ws/
-    upgrade-router.ts                 # HTTP upgrade dispatch by path + auth-on-upgrade + origin check
-    terminal.socket.ts               # /terminal WS ↔ substrate pty/exec port (conductor terminal stream)
-    stream.socket.ts                  # /api/conductor/workspaces/:id/stream WS ↔ RunEvent fan-out (doc-`/sync`/collaboration cut)
-    __tests__/
-      upgrade-router.test.ts          # unauthenticated upgrade rejected; bad origin closed; path routing
+    upgrade-router.ts                 # the SINGLE server.on('upgrade') owner: path dispatch + origin check + auth-on-upgrade + WS rate-limit + dispatch to a registered WsBackend
+    upgrade-router.test.ts            # unauthenticated upgrade rejected; bad origin closed; path routing
+    # NOTE: the concrete WS backends are NOT here — they ship in the conductor domain
+    # (domains/conductor/terminal/) and register through the WsBackend seam:
+    #   /terminal, /sync, /api/conductor/workspaces/:id/stream (RunEvent fan-out).
 
 backend/src/domains/edge/
   index.ts                            # createEdgeModule(deps): EdgeModule — the ONE public interface
@@ -82,11 +83,14 @@ backend/src/domains/edge/
     route-provider.port.ts            # RouteProvider — every domain implements this to expose HTTP/MCP edges
     ws-backend.port.ts                # WsBackend — /terminal + workspace-stream backends implement this
   __tests__/
-    route-table.test.ts               # every mount has a guard; no duplicate/overlapping base paths
-    edge-module.test.ts               # boot mounts all providers; degraded provider → mount skipped + health down
+    config.test.ts                    # EdgeConfig zod slice: defaults, origin/limit parsing, internal-key presence
 ```
 
-**File count:** 26 (21 implementation/config/port + 5 tests).
+> The route-table (every mount has a guard, no overlapping bases) and edge-module boot invariants
+> (degraded provider skipped + surfaced in health) are asserted via `middleware/__tests__/chain.test.ts`
+> plus the boot `/health` check rather than dedicated `route-table.test.ts`/`edge-module.test.ts` files.
+
+**File count:** 27 (21 implementation/config/port + 5 tests + 1 shared test mock).
 
 ---
 
@@ -97,7 +101,7 @@ backend/src/domains/edge/
 | `http/app.ts` | ts | service | Build the express base app, attach `express-ws` to a raw `http.Server` (preserving the existing v4/v5 type-cast dance), install the middleware chain, return the app + server + upgrade handle. No route knowledge. | `createHttpApp(deps: HttpDeps): { app; server; wsUpgrade }`, `type HttpDeps` |
 | `http/lifecycle.ts` | ts | service | Graceful lifecycle: `listen()` with readiness resolve, connection tracking, `stop()` that stops accepting, drains in-flight (bounded timeout), closes WS + server, then resolves. Wired to `bootstrap` SIGTERM/SIGINT. | `startHttpServer(server, cfg): Promise<void>`, `stopHttpServer(server, opts): Promise<void>` |
 | `http/openapi.ts` | ts | service | Assemble an OpenAPI 3.1 document by walking the route table + each provider's declared operation specs (zod→JSON-Schema); serve `/api/openapi.json` and a minimal docs page. Degrade-safe: missing spec ⇒ path listed without schema, never crashes. | `buildOpenApiDoc(table): OpenApiDoc`, `mountOpenApi(app, table)` |
-| `http/middleware/chain.ts` | ts | middleware | The single canonical ordered pipeline so all 14 domains share one request lifecycle: `request-context → cors → body(limits) → rate-limit → auth → [internal-key on /internal] → interop-gate → route → error`. Exposes helpers to compose per-mount guards. | `buildGlobalChain(deps): RequestHandler[]`, `buildGuard(policy): RequestHandler[]` |
+| `http/middleware/chain.ts` | ts | middleware | The single canonical ordered pipeline so all 15 domains share one request lifecycle: `request-context → cors → body(limits) → rate-limit → auth → [internal-key on /internal] → interop-gate → route → error`. Exposes helpers to compose per-mount guards. | `buildGlobalChain(deps): RequestHandler[]`, `buildGuard(policy): RequestHandler[]` |
 | `http/middleware/request-context.ts` | ts | middleware | Assign/propagate `x-request-id` + W3C `traceparent`, bind a child `@recoder/logger` (`{ domain:'edge', requestId }`) onto `req`, emit structured start/finish logs, record latency/status to metrics. Replaces inline `requestIdMiddleware` + `metricsMiddleware`. | `requestContext(deps): RequestHandler`, `type RequestCtx` |
 | `http/middleware/cors.ts` | ts | middleware | Origin allowlist from `EdgeConfig.origins` (reuses existing `cors-utils` `ALLOWED_ORIGINS`/`getCorsHeadersForOrigin`), credentialed cross-subdomain (`.recoder.xyz`), preflight, explicit method/header allowlists. No `*` with credentials. | `corsMiddleware(cfg): RequestHandler` |
 | `http/middleware/rate-limit.ts` | ts | middleware | HTTP tiers (global API, container/heavy, auth-sensitive) via `express-rate-limit`, keyed by session/user then IP; binds the existing `ws-rate-limiter` for WS. Returns standard `429` envelope. | `httpRateLimiters(cfg): { api; heavy; auth }`, `wsRateLimit(cfg)` |
@@ -107,22 +111,21 @@ backend/src/domains/edge/
 | `http/middleware/validate.ts` | ts | middleware | Zod boundary validation for body/query/params using `@recoder/agent-schemas`; on failure returns a `VALIDATION` envelope with field paths (no stack). The only sanctioned inbound-validation entry point. | `validateBody(schema)`, `validateQuery(schema)`, `validateParams(schema)` |
 | `http/middleware/error.ts` | ts | middleware | Terminal error middleware: map thrown/`Result.err`/`createError` into `sendError`; unknown errors ⇒ `SERVICE_UNAVAILABLE` + server-side log with context, user-safe message only. Plus 404 handler and `asyncHandler` re-export from `backend/src/errors`. | `errorEnvelope(deps): ErrorRequestHandler`, `notFound(): RequestHandler` |
 | `http/ws/upgrade-router.ts` | ts | service | Single `server.on('upgrade')` dispatcher: origin check, auth-on-upgrade (session or internal key), route by path to a registered `WsBackend`, apply WS rate limit, reject with proper close codes. Replaces ad-hoc upgrade logic in `server.ts`. | `createUpgradeRouter(deps): { register(path, backend); handleUpgrade(req, socket, head) }` |
-| `http/ws/terminal.socket.ts` | ts | service | `/terminal` backend: bridge a WS to the substrate pty/exec port (`@recoder/substrate`) for the conductor terminal — resize, data, exit; per-frame rate limit; auth'd to the workspace via interop. Does NOT own pty (delegates to conductor/engines). | `createTerminalWsBackend(deps): WsBackend` |
-| `http/ws/stream.socket.ts` | ts | service | `/api/conductor/workspaces/:id/stream` backend: stream `RunEvent`s (`@recoder/agent-events`) to the cockpit/website (task/run/approval/verification state); backpressure-aware, replay-from-cursor, heartbeat. (The old doc-`/sync`/collaboration relay was cut.) | `createWorkspaceStreamWsBackend(deps): WsBackend` |
+| `domains/conductor/terminal/terminal-stream.ts` | ts | service | **Ships in the conductor domain, not `http/ws/`.** The `/terminal` backend bridges a WS to the conductor's **tmux control-mode** terminal (live output + inbound `send-keys` steer) and registers through the WsBackend seam. The edge owns only the upgrade router; the backend is conductor-owned. | `TerminalStreamService.terminalBackends(): WsBackend[]` |
+| `domains/conductor/terminal/live-events.ts` | ts | service | **Ships in the conductor domain.** The `/sync` and `/api/conductor/workspaces/:id/stream` backends fan out `RunEvent`s (`@recoder/agent-events`) to the cockpit/website (task/run/approval/verification state); registered through the WsBackend seam. (The old collaboration relay was cut; `/sync` remains.) | `createSyncBackend(hub)`, `createWorkspaceStreamBackend(hub)` |
 | `domains/edge/index.ts` | ts | service | Pure factory + the ONE public interface. Follows the `agent-os/service-container` pattern — no top-level singletons. | `createEdgeModule(deps: EdgeDeps): EdgeModule`, `type EdgeModule` |
 | `domains/edge/edge-module.ts` | ts | service | The composer: calls `createHttpApp`, applies the global chain, iterates the route table mounting each `RouteProvider` under its base + guard, registers WS backends, exposes `listen/stop/health`. Skips a provider whose module reports `down` and records it in health (degrade-safe, never fakes). | `EdgeModuleImpl` |
-| `domains/edge/route-table.ts` | ts | config | The declarative source of truth for the API surface: an array of `MountSpec` mapping `/api/agent-os`, `/api/a2a`, `/api/mcp`, `/internal/*`, `/health`, `/api/v1`, etc. to a provider key + guard policy. No express here — pure data consumed by the composer + OpenAPI. | `ROUTE_TABLE: MountSpec[]`, `resolveProviders(reg): MountSpec[]` |
+| `domains/edge/route-table.ts` | ts | config | The declarative source of truth for the API surface: joins the `DOMAIN_REGISTRY` mount bases (`/api/agent-os`, `/api/a2a`, `/api/mcp`, `/api/gateway`, `/api/social`, `/api/identity`, `/internal/*`, …) with the collected providers into `MountSpec`s, deriving each mount's `GuardPolicy` by base-path convention (`/internal/*` ⇒ internal-key; `/api/*` ⇒ session; else public). No express here — pure data consumed by the composer + OpenAPI. | `buildRouteTable(providers, opts): RouteTable`, `defaultGuardForBase(base): GuardPolicy` |
 | `domains/edge/config.ts` | ts | config | The typed `EdgeConfig` slice of `AppConfig` (origins, body limits, rate-limit tiers, ws heartbeat/timeouts, internal-key presence). Received at construction; domain code never reads `process.env`. | `EdgeConfig`, `edgeConfigSchema` (zod), `sliceEdgeConfig(app)` |
 | `domains/edge/health.ts` | ts | service | `health()`: server listening state + per-mount registration status (mounted / skipped-degraded / missing) + WS backend up/down; aggregated into `/health` + `/api/agent-os/health`. Truthful, labels `degraded:true`. | `edgeHealth(state): EdgeHealth` |
 | `domains/edge/types.ts` | ts | type | Shared edge types. | `EdgeModule`, `MountSpec`, `GuardPolicy`, `EdgeHealth`, `EdgeDeps` |
 | `domains/edge/ports/route-provider.port.ts` | ts | port | The contract every domain implements to expose edges without importing express directly: returns an express `Router`, optional MCP tool registrations, and OpenAPI operation specs, plus a `health()` probe the composer consults before mounting. | `RouteProvider` interface, `RouteProviderMeta` |
 | `domains/edge/ports/ws-backend.port.ts` | ts | port | The contract a WS stream backend implements (`onConnection(socket, ctx)`, `path`, `authScope`). `/terminal` + the workspace stream (and future domains) provide these; the upgrade router dispatches to them. | `WsBackend` interface, `WsConnectionCtx` |
-| `http/middleware/__tests__/internal-key.test.ts` | ts | test | `/internal` rejects absent/short/placeholder/dev-default/wrong keys (401/500 at boot); accepts valid key and synthesizes internal session. | — |
-| `http/middleware/__tests__/interop-gate.test.ts` | ts | test | Deny verdict ⇒ `AUTHZ_PROJECT_ACCESS_DENIED` envelope; allow + deny both produce an audit record; gate failure fails closed. | — |
-| `http/middleware/__tests__/error.test.ts` | ts | test | Thrown sync error, rejected async handler, and explicit `createError` all yield the stable envelope shape with no stack/secret leakage; 404 handler shape. | — |
-| `http/ws/__tests__/upgrade-router.test.ts` | ts | test | Unauthenticated upgrade closed `4401`; disallowed origin closed; correct path routes to the right backend; unknown path closed `4404`. | — |
-| `domains/edge/__tests__/route-table.test.ts` | ts | test | Every `MountSpec` has a `guard`; internal mounts flagged `internal:true`; no duplicate/overlapping base paths; every writeful mount carries a governance write scope. | — |
-| `domains/edge/__tests__/edge-module.test.ts` | ts | test | Boot mounts all healthy providers; a provider reporting `down` is skipped and surfaced in `health()` as degraded; `/health` reflects reality. | — |
+| `http/middleware/__tests__/chain.test.ts` | ts | test | Canonical pipeline order + per-mount guard composition: public mounts skip interop; `/api/*` requires a session; `/internal/*` requires the internal key; deny/audit behavior. | — |
+| `http/middleware/__tests__/cors.test.ts` | ts | test | Origin allowlist / preflight / credentialed cross-subdomain; never `*` with credentials. | — |
+| `http/middleware/__tests__/validate.test.ts` | ts | test | zod body/query/params failures yield a `VALIDATION` envelope with field paths and no stack. | — |
+| `http/ws/upgrade-router.test.ts` | ts | test | Unauthenticated upgrade rejected `401`; disallowed origin `403`; correct path routes to the right backend; unknown path `404`; verifier fault `503`. | — |
+| `domains/edge/__tests__/config.test.ts` | ts | test | `EdgeConfig` zod slice: defaults, origin/limit parsing, internal-key presence; production rejects a weak/placeholder key. | — |
 
 ---
 
@@ -156,23 +159,29 @@ No migrations under `backend/migrations/` belong to this domain.
 
 | Base | Provider (domain) | Guard | Notes |
 |------|-------------------|-------|-------|
-| `/api/agent-os/*` | agent-os | session + interop | canonical control-plane state |
+| `/api/agent-os/*` | agent-os (governance / memory / cloud / observability sub-mount here too) | session + interop | canonical control-plane state; governance mounts under this prefix, cloud at `/api/agent-os/cloud`, observability at `/api/agent-os/observability` |
 | `/api/a2a/*` | interop | a2a signed-envelope + interop | wire interop / connectors |
-| `/api/mcp/*` | engines (MCP host) | session/tool-perm + interop | MCP tool/resource registry |
-| `/internal/agent-os/*` | agent-os | internal-key | worker→backend |
-| `/internal/*` | (various) | internal-key | service-to-service only |
-| `/api/v1/*` | identity (public API keys) | api-key + rate-limit | external programmatic API |
+| `/api/mcp/*` | engines (MCP host) | session/tool-perm + interop | MCP tool/resource registry **+ the LIVE governed tool-call edge `POST /api/mcp/tools/:server/:tool/call`** (was 404) |
+| `/api/gateway/*` | inference | session + interop | OpenAI-compatible inference edge (incl. `POST /api/gateway/inference/v1/embeddings`) |
+| `/api/social/*` | social | session + interop | social connectors + channels (mounts at `/api/social`, **not** `/api/connectors`) |
+| `/api/identity/*` | identity | session / api-key + rate-limit | auth + DB-backed `sk_` API keys |
+| `/internal/agent-os/*` | agent-os | internal-key | worker→backend ingest |
+| `/internal/*` | (various) | internal-key | service-to-service only (e.g. `/internal/billing/meter`, `/internal/persistence`) |
 | `/api/conductor/*` | conductor | session + interop | workspaces/runs |
-| `/api/billing/*` | billing | session + interop | plans/usage |
-| `/api/governance/*` | governance | session + interop | policy/approvals/audit verify |
+| `/api/billing/*` | billing | session + interop | MoR plans/usage (Polar/Creem/Paddle/Dodo, **no Stripe**) |
 | ... | one `MountSpec` per domain | per-guard | added declaratively, never inline `app.use` |
 
 ### WebSocket upgrades (single dispatcher in `ws/upgrade-router.ts`)
 
 | Path | Backend | Auth | Purpose |
 |------|---------|------|---------|
-| `/terminal` | `terminal.socket.ts` → substrate pty/exec | session + workspace scope | conductor terminal I/O |
-| `/api/conductor/workspaces/:id/stream` | `stream.socket.ts` → RunEvent bus | session | cockpit/website live per-workspace control-plane stream *(doc-`/sync`/collaboration cut)* |
+| `/terminal` | conductor `terminal-stream.ts` → tmux control-mode | session (+ workspace scope) | conductor terminal I/O + `send-keys` steer |
+| `/sync` | conductor `live-events.ts` → sync hub | session | workspace sync events |
+| `/api/conductor/workspaces/:id/stream` | conductor `live-events.ts` → RunEvent bus | session | cockpit/website live per-workspace control-plane stream *(collaboration relay cut)* |
+
+The three concrete WS backends live in the **conductor** domain (`domains/conductor/terminal/`) and
+register through the edge's `WsBackend` seam; the edge owns only the single `upgrade-router.ts`
+dispatcher.
 
 Non-public HTTP edges and MCP tool calls pass the interop chain `authorize → risk → policy → audit`
 (public mounts are `interop:false`); domain routers additionally self-guard with one auth per surface
@@ -184,7 +193,7 @@ Non-public HTTP edges and MCP tool calls pass the interop chain `authorize → r
 
 ### Exposed to other domains
 
-- **`RouteProvider`** (`ports/route-provider.port.ts`) — the seam the other 13 domains wire to.
+- **`RouteProvider`** (`ports/route-provider.port.ts`) — the seam the other 14 domains wire to.
   ```ts
   interface RouteProvider {
     key: string;                              // domain key, e.g. 'agent-os'
@@ -197,7 +206,7 @@ Non-public HTTP edges and MCP tool calls pass the interop chain `authorize → r
 - **`WsBackend`** (`ports/ws-backend.port.ts`) — the seam for stream backends.
   ```ts
   interface WsBackend {
-    path: string;                              // '/terminal' | '/api/conductor/workspaces/:id/stream'
+    path: string;                              // '/terminal' | '/sync' | '/api/conductor/workspaces/:id/stream'
     authScope: 'session' | 'internal';
     onConnection(socket: WebSocket, ctx: WsConnectionCtx): void | Promise<void>;
   }
@@ -253,21 +262,23 @@ the top of `server.ts` are re-introduced only as proper `RouteProvider`s from th
 ## 8. Implementation Order
 
 1. **Ports first** — `ports/route-provider.port.ts`, `ports/ws-backend.port.ts`, `types.ts`,
-   `config.ts` (zod slice). These are the seam the other 13 designers wire to; land them first.
+   `config.ts` (zod slice). These are the seam the other 14 designers wire to; land them first.
 2. **Error + validation boundary** — `middleware/error.ts`, `middleware/validate.ts` (reuse
-   `backend/src/errors`). Add `error.test.ts` (RED→GREEN). Everything downstream depends on the
-   envelope being stable.
+   `backend/src/errors`). Add `validate.test.ts` (RED→GREEN; error-envelope stability also asserted in
+   `chain.test.ts`). Everything downstream depends on the envelope being stable.
 3. **Context + CORS + rate-limit** — `middleware/request-context.ts`, `cors.ts`, `rate-limit.ts`
    (port the existing inline logic behavior-preserving).
-4. **Auth + internal gate** — `middleware/auth.ts`, `middleware/internal-key.ts` +
-   `internal-key.test.ts`.
-5. **Interop gate** — `middleware/interop-gate.ts` + `interop-gate.test.ts` (deny→AUTHZ, always-audit).
+4. **Auth + internal gate** — `middleware/auth.ts`, `middleware/internal-key.ts` (internal-key
+   strength + gate behavior asserted via `chain.test.ts`).
+5. **Interop gate** — `middleware/interop-gate.ts` (deny→AUTHZ, always-audit; asserted via `chain.test.ts`).
 6. **Chain composer** — `middleware/chain.ts` fixes the canonical order.
 7. **App + lifecycle** — `http/app.ts`, `http/lifecycle.ts` (express-ws attach, graceful drain).
-8. **WS** — `ws/upgrade-router.ts` + `ws/terminal.socket.ts` + `ws/stream.socket.ts` +
-   `upgrade-router.test.ts`.
-9. **Route table + composer** — `route-table.ts`, `edge-module.ts`, `index.ts`, `health.ts` +
-   `route-table.test.ts` + `edge-module.test.ts`.
+8. **WS** — `ws/upgrade-router.ts` + `upgrade-router.test.ts`. The edge owns only the upgrade
+   router; the concrete `/terminal`, `/sync`, and `/api/conductor/workspaces/:id/stream` backends
+   ship in the conductor domain (Phase 5) and register through the `WsBackend` seam.
+9. **Route table + composer** — `route-table.ts`, `edge-module.ts` (`EdgeComposer`), `index.ts`,
+   `health.ts` + `config.test.ts` (route-table/module boot invariants covered by `chain.test.ts` +
+   the `/health` check).
 10. **OpenAPI** — `http/openapi.ts` (last; reads the finished table).
 11. **Bootstrap wiring** — `createEdgeModule(deps)` invoked from `bootstrap/container.ts`; `server.ts`
     shrinks to `parse env → bootstrap.start()`.

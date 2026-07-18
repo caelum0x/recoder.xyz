@@ -2,6 +2,7 @@
 
 > Folder prefix: `backend/src/domains/observability/` (+ Python sidecar `backend/engines/py/ops-recorder`)
 > Boundary: **Truthful operational visibility.** Structured logging, metrics, tracing, the audit/XDR sink, the aggregated health surface, and the ops-recorder work-signals pipeline (`stuck` / `blocked` / `needs-you` signals → board).
+> **Status: SHIPPED.** One of the 15 domains under `backend/src/domains/*`. Composer, ports, adapters, health aggregator, correlation, telemetry middleware, alerting/work-signals/audit-XDR services, routes, and read-only MCP tools are all in place with co-located tests. This doc has been reconciled to that reality; a few naming/path details below note where the design intent landed differently.
 
 ## 1. Overview
 
@@ -12,7 +13,7 @@ Observability is the domain that tells the truth about the running system. It ow
 1. **Logging** — pino structured logs, per-domain child loggers, request/run correlation IDs. Reuses `@recoder/logger` as the low-level sink; this domain adds correlation + redaction + a ring buffer for the ops surface.
 2. **Metrics** — a Prometheus registry (default + custom collectors), the `/metrics` scrape edge, SLO recording rules, RED/USE counters and histograms that every other domain increments through a thin injected `MetricsPort`.
 3. **Tracing** — an OpenTelemetry `NodeSDK` bootstrap, W3C trace-context propagation across HTTP/WS/MCP edges, span helpers, and OTLP export that degrades to a no-op exporter when no collector is configured.
-4. **Health aggregation** — pulls every domain's `health()` report through the `HealthRegistry` (from `bootstrap`), fuses per-engine `up|down`, and serves the canonical `/health`, `/health/full`, and `/api/agent-os/health` contracts. Never fakes green.
+4. **Health aggregation** — pulls every domain's `health()` report through the `HealthRegistry` (from `bootstrap`), fuses per-engine `up|down`, and serves the canonical `/health`, `/health/full`, and `/api/agent-os/health` contracts across all 15 domains. Never fakes green.
 
 Plus two operational sinks:
 
@@ -51,18 +52,21 @@ backend/src/domains/observability/
     correlation.service.ts                   # request/run correlation-id lifecycle (AsyncLocalStorage)
     alerting.service.ts                       # rule eval → notify (herd/notify engine), dedupe, ack
     work-signals.service.ts                  # normalize sidecar signals → RunEvent → board
+  repositories/observability.repository.ts   # concrete Pg impls of the repo ports + PgAuditReader
   routes/observability.routes.ts             # /health, /health/full, /metrics, /api/agent-os/observability/*
   middleware/telemetry.middleware.ts         # express+ws: correlation id, trace ctx, RED metrics, access log
-  mcp/observability-engine.ts                # MCP tools: obs.health / obs.metrics_query / obs.audit_search / obs.signals
+  mcp/observability-engine.ts                # MCP tools: obs_health / obs_metrics_query / obs_audit_search / obs_signals
   __tests__/
     health-aggregator.test.ts
     correlation.test.ts
     telemetry-middleware.test.ts
     work-signals.service.test.ts
     audit-xdr.adapter.test.ts
+    ops-recorder.adapter.test.ts
+    observability-engine.mcp.test.ts
 
 backend/migrations/
-  0014-observability-ops.sql                 # alert_rules, alert_events, work_signal_dispositions, slo_targets
+  observability_0001_ops.sql                 # alert_rules, alert_events, work_signal_dispositions, slo_targets
 
 backend/engines/py/ops-recorder/            # EXISTING sidecar — USED IN PLACE, not rewritten
   work-signals/ (main.py, api/, detectors/, normalizers/, storage/, handoff/, integrations/)
@@ -73,8 +77,8 @@ backend/engines/py/ops-recorder/            # EXISTING sidecar — USED IN PLACE
 | # | Path | Lang | Kind | Responsibility | Key exports |
 |---|------|------|------|----------------|-------------|
 | 1 | `index.ts` | ts | service | Pure factory: `createObservabilityModule(deps)`; re-exports the one public interface. | `createObservabilityModule`, `ObservabilityModule` |
-| 2 | `observability-module.ts` | ts | service | Composer. Wires pino/prom/otel/ops-recorder/audit adapters + services behind `ObservabilityModule`; exposes `metrics`/`tracer`/`health` ports to DI; aggregates engine health. | `ObservabilityModuleImpl` |
-| 3 | `config.ts` | ts | config | Zod slice: OTLP endpoint, `metricsAuthToken`, `sampleRatio`, `redactKeys[]`, `opsRecorderUrl`, `alertingEnabled`. Fail-safe defaults (no localhost in prod). | `ObservabilityConfig`, `observabilityConfigSchema` |
+| 2 | `observability-module.ts` | ts | service | Composer. Wires pino/prom/otel/ops-recorder/audit adapters + services behind `ObservabilityModule`; exposes `metrics`/`tracer`/`telemetry` ports to DI; aggregates engine health. | `ObservabilityComposer` |
+| 3 | `config.ts` | ts | config | Zod slice: OTLP endpoint, `metricsAuthPresent`, `isProduction`, `defaultSpaceId`, `sampleRatio`, `redactKeys[]`, `opsRecorderUrl`, `alertingEnabled`. Fail-safe defaults (no localhost in prod). | `sliceObservabilityConfig`, `observabilityConfigSchema`, `ObservabilityConfig` |
 | 4 | `types.ts` | ts | type | Domain types: `HealthFull`, `EngineHealth`, `SloTarget`, `AlertRule`, `AlertEvent`, `WorkSignal`, `SignalDisposition`, `XdrQuery`, `XdrRecord`. | (types) |
 | 5 | `health.ts` | ts | service | The module's OWN health (its four engines: logging always up; metrics up; tracing up/degraded; signals up/down). | `observabilityHealth(engines)` |
 | 6 | `ports/metrics.port.ts` | ts | port | Interface every domain injects to record metrics — decoupled from prom-client. `counter/gauge/histogram/timer`. | `MetricsPort`, `MetricHandle` |
@@ -91,17 +95,17 @@ backend/engines/py/ops-recorder/            # EXISTING sidecar — USED IN PLACE
 | 17 | `services/correlation.service.ts` | ts | service | `AsyncLocalStorage` correlation context: derive/propagate `correlationId` + `runId` + `traceId` across a request/run; used by logger + tracer + metrics labels. | `CorrelationContext`, `runWithCorrelation`, `currentCorrelation` |
 | 18 | `services/alerting.service.ts` | ts | service | Evaluate `AlertRule`s against metrics/health/SLO; dedupe + debounce; fire via `notify` engine / herd board; persist `AlertEvent`; ack path routes through governance gate. | `AlertingService`, `evaluateRules`, `acknowledgeAlert` |
 | 19 | `services/work-signals.service.ts` | ts | service | Pull raw signals from `WorkSignalsPort`, normalize to `RunEvent` (`@recoder/agent-events`), emit to the RunEvent bus + board; persist dispositions; disposition write → governance gate. | `WorkSignalsService`, `normalizeSignal`, `disposition` |
-| 20 | `routes/observability.routes.ts` | ts | route | Edges: `GET /health` (liveness, open), `GET /health/full` (interop-gated deep), `GET /metrics` (`INTERNAL_SERVICE_KEY`), `GET /api/agent-os/observability/{slo,alerts,signals,audit}`, `POST …/alerts/:id/ack`, `POST …/signals/:id/disposition`. | `observabilityRoutes(module)` |
+| 20 | `routes/observability.routes.ts` | ts | route | Edges: `GET /health` (liveness, open), `GET /health/full` + `GET /api/agent-os/health` (deep, open shallow-safe), `GET /metrics` (`requireInternal`, 503 when no auth token in prod), and the identity-mw-gated `GET /api/agent-os/observability/{slo,alerts,signals,audit,logs}`, `POST …/alerts/:id/ack`, `POST …/signals/:id/disposition`. Three exported route builders. | `buildHealthRoutes`, `buildMetricsRoutes`, `buildControlRoutes` |
 | 21 | `middleware/telemetry.middleware.ts` | ts | middleware | Express + express-ws: assign correlation id, extract/inject W3C trace ctx, open request span, record RED metrics (rate/errors/duration), structured access log. | `telemetryMiddleware`, `wsTelemetry` |
-| 22 | `mcp/observability-engine.ts` | ts | client | MCP tools an agent can call (behind interop): `obs.health`, `obs.metrics_query`, `obs.audit_search`, `obs.signals`. Registered via wiring checklist. | `registerObservabilityMcpTools` |
-| 23 | `migrations/0014-observability-ops.sql` | sql | migration | Tables: `alert_rules`, `alert_events`, `work_signal_dispositions`, `slo_targets`. Space/user-scoped, parameterized. | (DDL) |
+| 22 | `mcp/observability-engine.ts` | ts | client | READ-ONLY MCP tools an agent can call: `obs_health`, `obs_metrics_query`, `obs_audit_search`, `obs_signals`. `obs_audit_search` binds the caller subject via `McpToolCaller`. Registered via wiring checklist. | `buildObservabilityMcpTools` |
+| 23 | `migrations/observability_0001_ops.sql` | sql | migration | Tables: `slo_targets`, `alert_rules`, `alert_events`, `work_signal_dispositions`. Space-scoped, parameterized, idempotent (`IF NOT EXISTS`). | (DDL) |
 | T1 | `__tests__/health-aggregator.test.ts` | ts | test | Fusion correctness: one `down` engine → `degraded:true`; timeout → `unknown`; SLO rollup math. | — |
 | T2 | `__tests__/correlation.test.ts` | ts | test | Correlation propagates across async boundaries; nested runs isolate. | — |
 | T3 | `__tests__/telemetry-middleware.test.ts` | ts | test | Injects trace ctx, records RED metric on 200 + 500, redacts secrets in access log. | — |
 | T4 | `__tests__/work-signals.service.test.ts` | ts | test | Raw signal → RunEvent normalization; sidecar `down` → no fabricated signals + `degraded`. | — |
 | T5 | `__tests__/audit-xdr.adapter.test.ts` | ts | test | Merkle re-verify: valid chain returns records; tampered proof → error, not silent pass. | — |
 
-## 4. DB schema — `backend/migrations/0014-observability-ops.sql`
+## 4. DB schema — `backend/migrations/observability_0001_ops.sql`
 
 Observability owns minimal durable state (it's a signals domain). Access is app-layer scoped
 (`WHERE space_id = :space_id`), no RLS. All DDL parameterized/idempotent (`IF NOT EXISTS`).
@@ -166,17 +170,19 @@ CREATE INDEX IF NOT EXISTS idx_wsd_space_kind ON work_signal_dispositions(space_
 
 | Method | Path | Gate | Purpose |
 |--------|------|------|---------|
-| GET | `/health` | open (shallow, no secrets) | Liveness — process up + fast checks only. Load balancer probe. |
-| GET | `/health/full` | interop `authorize→risk→policy→audit` | Deep per-engine `up\|down` across all 14 domains + SLO rollup + `degraded` flags. The `/health/full` contract. |
-| GET | `/metrics` | `INTERNAL_SERVICE_KEY` | Prometheus scrape (RED/USE + SLO recording rules). |
-| GET | `/api/agent-os/health` | interop | Agent-OS canonical health alias (same fused report). |
-| GET | `/api/agent-os/observability/slo` | interop | SLO targets + current attainment. |
-| GET | `/api/agent-os/observability/alerts` | interop | List alert rules + firing/acked events (space-scoped). |
-| POST | `/api/agent-os/observability/alerts/:id/ack` | interop + governance gate | Acknowledge alert (write → `decide` + `record_audit`). |
-| GET | `/api/agent-os/observability/signals` | interop | List work-signals + dispositions. |
-| POST | `/api/agent-os/observability/signals/:id/disposition` | interop + governance gate | Set disposition (write → gate). |
-| GET | `/api/agent-os/observability/audit` | interop | XDR query over Merkle audit chain (re-verified before return). |
-| WS | `/sync` (telemetry frames) | via telemetry middleware | Live health/signal frames to cockpit ops surface. |
+| GET | `/health` | open (shallow, no secrets) | Liveness — process up + fast checks only; overall `down` → 503. Load balancer probe. |
+| GET | `/health/full` | open (shallow-safe deep report) | Deep per-engine `up\|down` across all 15 domains + SLO rollup + `degraded` flags; `down` → 503. The `/health/full` contract. |
+| GET | `/metrics` | `mw.requireInternal` (`INTERNAL_SERVICE_KEY`) | Prometheus scrape (RED/USE + SLO recording rules); 503 when no auth token configured in prod. |
+| GET | `/api/agent-os/health` | open | Agent-OS canonical health alias (same fused report). |
+| GET | `/api/agent-os/observability/slo` | `mw.authenticate` | SLO targets + current attainment. |
+| GET | `/api/agent-os/observability/alerts` | `mw.authenticate` | List alert rules + firing/acked events (space-scoped). |
+| POST | `/api/agent-os/observability/alerts/:id/ack` | `mw.authenticateMutating` + governance gate | Acknowledge alert (write → `decide` + `record_audit`). |
+| GET | `/api/agent-os/observability/signals` | `mw.authenticate` | List work-signals + dispositions. |
+| POST | `/api/agent-os/observability/signals/:id/disposition` | `mw.authenticateMutating` + governance gate | Set disposition (write → gate). |
+| GET | `/api/agent-os/observability/audit` | `mw.authenticate` | XDR query over Merkle audit chain (re-verified before return; tamper → `verified:false`, no rows). |
+| GET | `/api/agent-os/observability/logs` | `mw.authenticate` | Recent structured records from the ops ring buffer (bounded). |
+
+> Note: the control edges self-gate through the identity auth middleware (`mw.authenticate` / `mw.authenticateMutating`), not a literal interop `authorize→risk→policy→audit` router chain. `/health`, `/health/full`, and `/api/agent-os/health` are served unauthenticated (shallow-safe, no secrets). A dedicated WS `/sync` telemetry-frame edge is **not shipped**; the edge domain instead exposes a global-middleware seam (`edge-module.ts`) that observability's `telemetryMiddleware` taps for correlation + RED metrics, and the cockpit ops surface reads the `/logs`, `/signals`, and `/health/full` edges.
 
 ## 6. Ports exposed & consumed
 
@@ -216,7 +222,7 @@ CREATE INDEX IF NOT EXISTS idx_wsd_space_kind ON work_signal_dispositions(space_
 - `MetricsPort` / `TracerPort` / `HealthSource` / `WorkSignalsPort` port interfaces (new seams other domains consume).
 - prom-client registry adapter + OTel NodeSDK adapter (bootstrap glue; degrade-safe exporters).
 - correlation `AsyncLocalStorage` service + telemetry middleware.
-- health-aggregator (`/health/full` fusion + SLO rollup) — new, since it spans all 14 domains.
+- health-aggregator (`/health/full` fusion + SLO rollup) — new, since it spans all 15 domains.
 - alerting service + work-signals normalization service.
 - ops-recorder loopback adapter + audit-XDR projection adapter.
 - routes + MCP engine + migration.
@@ -232,7 +238,7 @@ CREATE INDEX IF NOT EXISTS idx_wsd_space_kind ON work_signal_dispositions(space_
 | Metrics registry | Always in-process `up` (no external dep). |
 | A domain `health()` times out | Aggregator returns `unknown` for it after timeout; overall `degraded:true`; never hangs. |
 | Governance gate unavailable for XDR verify | XDR query returns `SERVICE_UNAVAILABLE` (never returns unverified audit rows as if verified). |
-| `metricsAuthToken` missing in prod | `/metrics` returns 503 `SERVICE_UNAVAILABLE` (fails safe, no open scrape). |
+| Metrics auth token absent in prod (`!metricsAuthPresent && isProduction`) | `/metrics` returns 503 `SERVICE_UNAVAILABLE` (fails safe, no open scrape). |
 
 ## 9. Verification
 
@@ -244,14 +250,14 @@ CREATE INDEX IF NOT EXISTS idx_wsd_space_kind ON work_signal_dispositions(space_
 
 ## 10. Implementation order
 
-1. **Ports + config + types** (`ports/*`, `config.ts`, `types.ts`, `health.ts`) — the seams other 13 domains compile against. Ship first so parallel designers can inject `MetricsPort`/`TracerPort`/`HealthSource`.
+1. **Ports + config + types** (`ports/*`, `config.ts`, `types.ts`, `health.ts`) — the seams the other 14 domains compile against. Ship first so parallel designers can inject `MetricsPort`/`TracerPort`/`HealthSource`.
 2. **Correlation + logging adapter** (`correlation.service.ts`, `pino-logger.adapter.ts`) — foundational for every other signal.
 3. **Metrics + tracing adapters** (`prometheus-registry.adapter.ts`, `otel-tracer.adapter.ts`) + `telemetry.middleware.ts`.
 4. **Health aggregator** (`health-aggregator.service.ts`) + `/health`, `/health/full` routes — the headline contract.
-5. **Migration `0014`** + repositories wiring (persistence provides impl).
+5. **Migration `observability_0001_ops.sql`** + repositories wiring (concrete Pg repos in `repositories/observability.repository.ts`).
 6. **Ops-recorder adapter + work-signals service** (`ops-recorder.adapter.ts`, `work-signals.service.ts`) — loopback to existing Python sidecar; normalize to RunEvent.
 7. **Alerting service** + alert/signal edges (governance-gated writes).
 8. **Audit-XDR adapter** + audit edge (Merkle re-verify).
-9. **MCP engine** (`observability-engine.ts`) — register via wiring checklist (`IN_PROC_SERVERS` + `ENGINE_SERVERS` + `registerObservabilityMcpTools` in `buildInProcEngineRouter`).
+9. **MCP engine** (`observability-engine.ts`) — read-only `obs_*` tools registered via wiring checklist (`IN_PROC_SERVERS` + `ENGINE_SERVERS` + `buildObservabilityMcpTools` in `buildInProcEngineRouter`).
 10. **Composer + factory** (`observability-module.ts`, `index.ts`) — fuse all; register in `bootstrap/container.ts`.
 11. **Tests** T1–T5 throughout (TDD: aggregator + correlation first).

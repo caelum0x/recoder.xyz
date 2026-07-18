@@ -1,10 +1,10 @@
 # Recoder — Architecture: Apps · Modules · Engines (VSCode→Cursor)
 
-> **Status (2026-07-15) — the mandate below is now REALIZED.** The engines are deepened IN their
-> own dirs and USED by the built 15-domain backend (`backend/src/domains/*`): the supervisor spawns
-> the OSS engines on boot and the conductor run flow consumes them (memory recall/harvest, tensorzero
-> inference, governance, recodergit + beads). See
-> [RECODER-BACKEND/BUILD-STATUS.md](./RECODER-BACKEND/BUILD-STATUS.md) for live status.
+> **Status (2026-07-18) — the mandate below is now REALIZED.** The engines are deepened IN their
+> own dirs and USED by the built 15-domain backend (`backend/src/domains/*`): boots with 15 truthful
+> health sources, tsc 0, ~1462 backend tests. The supervisor spawns the OSS engines on boot and the
+> conductor run flow consumes them (memory recall/harvest, tensorzero inference, governance, recodergit
+> + beads). See [RECODER-BACKEND/BUILD-STATUS.md](./RECODER-BACKEND/BUILD-STATUS.md) for live status.
 
 > **Owner mandate (2026-07-14):** stop shipping thin wrapper layers. Each OSS directory IS a
 > first-class **module** of Recoder, used deeply and directly FROM ITS OWN DIR (never copied into
@@ -54,13 +54,23 @@ When backend composes engine-modules into a domain capability, the composer is r
 5. **Governed + audited** — writes through the policy gate; state-of-record stays Recoder-owned; the
    scattered old consumer code is MOVED behind it (no 4th copy).
 
-Current state: **15 domain composers now ship under `backend/src/domains/*`** and boot (tsc clean). The
-remaining work is deepening each engine in its own dir and folding the last scattered `src/conductor`/
-`src/agent-os` consumers behind each composer interface.
+Current state (2026-07-18): **15 domains ship under `backend/src/domains/*`** and boot (tsc 0, ~1462
+tests, 15 truthful health sources). The engines are deepened in their own dirs and the legacy flat dirs
+(`src/conductor`, `src/agent-os`, `src/a2a`, `src/connectors`, `src/gateway`, `src/network`, …) have been
+absorbed into their domains — `src/` is now `bootstrap/ domains/ http/ shared/`.
+
+> **Path reconciliation (read before the specs below).** The 12 capability specs are grouped by
+> *capability*, and several do NOT live in their own top-level domain dir — they were folded into the 15
+> shipped domains. Each section header now carries its real shipped path. Summary: **GITHUB / BROWSING /
+> SIGNALS / AGENT-ENGINE** live inside `domains/engines/`; **TERMINAL** inside `domains/conductor/`;
+> **COMMUNICATION** across `domains/interop/` + `domains/interop-wire/` (with `pal` in `domains/engines/`);
+> **NETWORKING** (mesh) inside `domains/cloud/`; **SQUADS** (autopilots) inside `domains/agent-os/`.
+> MEMORY, SOCIAL, INFERENCE, GOVERNANCE are their own domains. The other shipped domains not called out as
+> a numbered spec here: `identity`, `persistence`, `billing`, `edge`, `observability`.
 
 ---
 
-## 1. MEMORY module — `backend/src/domains/memory/` (composer target)
+## 1. MEMORY module — `backend/src/domains/memory/` (shipped)
 **Domain:** everything the agents remember. **Absorbs:** `backend/engines/py/mem0` (semantic vectors) + `apps/desktop/server/engines/beads`
 (issue-graph shared memory, the dolt store) + `backend/engines/py/colbert` (rerank) + agent-os memory candidates.
 
@@ -76,28 +86,30 @@ interface MemoryModule {
   health(): MemoryHealth   // {mem0: up|down, beadsSql: up|down, colbert: up|down}
 }
 ```
-**Today (scattered):** `bundle.ts` recall (mem0+beads inline), `beads-memory.ts`, `beads-sql.ts`,
-`memory-store-adapter.ts`, `mem0-client.ts`, `colbert-rerank.ts`. Five files, no single owner; recall
-logic is duplicated in enrichPrompt.
-**Ground-truth corrections:**
-- The live semantic path is the **owned `@recoder/mem0` TS package** (OSS Memory over the platform
-  Qdrant, `MEM0_COLLECTION=recoder_mem0`), NOT the Python `backend/engines/py/mem0` lib. `backend/engines/py/mem0`'s FastAPI server is
-  only an optional `MEM0_BASE_URL` target that **nothing spawns/supervises** — two parallel mem0 impls
-  = drift risk to resolve (one owned store contract, or a decisive drop of the Python server).
-- `backend/engines/py/colbert`: only the on-the-fly `rerank_server.py` (supervised loopback sidecar via
-  `conductor/colbert-daemon.ts`) is wired. `server.py` (real ANN-index search) + the indexing/training
-  pipeline are **unused**, and torch/colbert deps are typically absent → rerank degrades to a no-op
-  (identity order). A real retriever needs a built index (or a decision to only ever rerank).
-**Deep target:** one `MemoryModule` that OWNS recall fusion (mem0∪beads∪candidates → colbert rank →
-dedupe → provenance), routes `remember` to the right store by scope, and is the ONLY memory entry point
-(enrichPrompt, completion-watcher, the MCP memory tools all call it). mem0 self-activates as an owned
-sidecar; beads reads go SQL-direct (done), writes via bd; colbert reranks when up.
-**Build:** (a) create the module + move the 5 files behind it; (b) unify the recall path; (c) mem0
-owned-sidecar bootstrap; (d) point all callers at the module.
+**Superseded (was scattered pre-build):** the recall logic that lived in `bundle.ts`, `beads-memory.ts`,
+`beads-sql.ts`, `memory-store-adapter.ts`, `mem0-client.ts`, `colbert-rerank.ts` (five files, no single
+owner; recall duplicated in enrichPrompt) is now folded behind the shipped `MemoryModule` — one owner for
+recall/remember/forget/harvest.
+**Ground-truth (shipped):**
+- The live semantic path is the **owned `@recoder/mem0` TS package** (OSS Memory, **google/Gemini
+  embeddings by default**) behind the module's `VectorStorePort` — shipped with an **embedded LanceDB
+  adapter** (`memory/adapters/lance.adapter.ts`) and a **real Qdrant liveness probe**
+  (`memory/adapters/qdrant.adapter.ts`, `MEM0_COLLECTION=recoder_mem0`), NOT the Python
+  `backend/engines/py/mem0` lib. `backend/engines/py/mem0`'s FastAPI server stays an optional
+  `MEM0_BASE_URL` target (owner decision 1).
+- `backend/engines/py/colbert`: the `rerank_server.py` sidecar (supervised via the engines domain's
+  `colbert-daemon.ts`) now runs **LIVE ColBERT MaxSim rerank** — recall reports which reranker actually
+  ran (`colbert` when up, else `identity`), degrading truthfully to identity order when the sidecar/torch
+  is absent. `server.py` (ANN-index search) + the indexing/training pipeline remain unused (rerank-only,
+  per owner decision 2).
+**Shipped behavior:** one `MemoryModule` OWNS recall fusion (mem0∪beads∪candidates → colbert rank →
+dedupe → provenance), routes `remember` to the right store by scope, and is the memory entry point
+(enrichPrompt, completion-watcher, the MCP memory tools call it). beads reads go SQL-direct, writes via
+bd; colbert reranks when up; `forget`/`harvest` wired.
 
 ---
 
-## 2. SOCIAL module — `backend/src/domains/social/` (composer target)
+## 2. SOCIAL module — `backend/src/domains/social/` (shipped — mounts at `/api/social`)
 **Domain:** the agents' presence on human channels. **Absorbs:** `apps/desktop/engines/openclaw`
 (gateway-core, social-gateways channel drivers, agents, skills-reference) + the `apps/social` runtime.
 
@@ -112,13 +124,12 @@ interface SocialModule {
   health(): SocialHealth
 }
 ```
-**Today:** `@recoder/connectors` package (the real pipeline: registry, hostile-by-default gate, dispatch,
-pi-runner) at `apps/desktop/engines/openclaw` + `apps/social` (composition) + `backend/src/connectors/`
-(ingress + gateway). SEVEN per-channel `ConnectorPort` adapters are live and dispatch-tested
-(telegram/slack/signal/imessage/whatsapp/line/feishu); the **discord** adapter is exported but **not
-truly extracted** (still OpenClaw bot-core-coupled, ~172 type errors from un-ported clusters). The pieces
-exist; the backend doesn't yet own a Social *module* — connectors is a package, apps/social is a
-separate process.
+**Shipped:** the `SOCIAL` domain (`backend/src/domains/social/`) is live and **mounts at `/api/social`**
+(NOT `/api/connectors`) — it owns the connectors pipeline (registry, hostile-by-default gate, dispatch)
+built on `@recoder/connectors` (at `apps/desktop/engines/openclaw`), and the separate `apps/social`
+process has been **folded into the one embedded backend**. SEVEN per-channel `ConnectorPort` adapters are
+live and dispatch-tested (telegram/slack/signal/imessage/whatsapp/line/feishu); the **discord** adapter
+was **dropped from the exported channel set** (never truly extracted, OpenClaw-coupled — owner decision 5).
 **Deep target:** a backend `SocialModule` that supervises the channel drivers in-process (or owns the
 apps/social sidecar), exposes `onInbound → dispatchToConductor` so a Telegram message becomes a
 conductor workspace end-to-end, and surfaces channel health in the cockpit. openclaw's agents +
@@ -128,7 +139,7 @@ one channel (telegram) live end-to-end; (d) cockpit social panel.
 
 ---
 
-## 3. GITHUB module — `backend/src/domains/github/` (composer target)
+## 3. GITHUB module — `backend/src/domains/engines/github/` (shipped, inside the ENGINES domain)
 **Domain:** the agents' complete GitHub capability. **Absorbs:** `apps/desktop/engines/recodergit` (recodergit-engine
 code-graph + github ops, pr-swarm-review, claude-plugin) + the `gh` CLI operations.
 
@@ -152,9 +163,9 @@ GITHUB as the agents' **repo-comprehension** capability, paired with `gh` ops. N
 `@recoder/recodergit` (`packages/recodergit`) is **distinct** from the engine (`apps/desktop/engines/recodergit/recodergit`)
 — the wrapper depends on `@recoder/agent-os`, not the engine — and `apps/desktop/engines/recodergit` is NOT a root
 workspace member (consumed by dist path + spawn).
-**Today:** `recodergit-service.ts` (in-process lib + supervised `recodergit mcp --http` — done) +
-`github-engine.ts` (gh CLI) + `github-engine/pr-review.ts` + the `recoder.github` + `recoder.repo` MCP
-servers. TWO engines, split.
+**Shipped:** the GitHub capability lives in `backend/src/domains/engines/github/` (`github-module.ts` +
+the `github-mcp` binder) — unifying the recodergit code-intel lib + `gh` CLI ops + the `recoder.github` /
+`recoder.repo` MCP servers behind one module, bound to the host-authorized `McpToolCaller`.
 **Deep target:** one `GitHubModule` unifying recodergit code-intel + gh ops + swarm review behind a
 single interface; the MCP tools + the conductor's git-context all call it. The claude-plugin ships into
 conductor-provisioned Claude Code workspaces so agents get the recodergit slash-commands natively.
@@ -164,7 +175,7 @@ image). **License gate:** recodergit-engine is PolyForm-Noncommercial — resolv
 
 ---
 
-## 4. TERMINAL module — `backend/src/domains/terminal/` (composer target)
+## 4. TERMINAL module — `backend/src/domains/conductor/terminal/` (shipped, inside the CONDUCTOR domain)
 **Domain:** multiplexed, restart-survivable terminal sessions — the substrate agents run on.
 **Absorbs:** `apps/desktop/engines/tmux` (owned binary, sessions) + `apps/desktop/engines/dmux` (multiplexing: panes, layout/grid, attention,
 streaming, workers).
@@ -181,9 +192,11 @@ interface TerminalModule {
   health(): TerminalHealth
 }
 ```
-**Today (shallow — the critique):** `substrate-tmux.ts` + `tmux-orchestrator.ts` + `tmux-control-mode.ts`
-(the substrate) and `conductor/dmux/{operator-grid,attention}.ts` (TWO functions). tmux and dmux are two
-unrelated things; dmux's pane/streaming/worker engines are unused.
+**Shipped:** the terminal substrate lives in `backend/src/domains/conductor/terminal/` — a
+package-compatible tmux `ConductorSubstrate` with a **tmux control-mode observer** and real-time terminal
+streaming (`terminal-stream`), driving conductor `steer` (send-keys) and the run-screen plane. **Still
+partial:** dmux's richer pane/layout brain — the attention classifier is wired, but dmux's full
+pane/streaming/worker engines remain the deepening target.
 **Deep target:** ONE `TerminalModule` where tmux is the session substrate and dmux is the multiplexing
 brain over it — pane lifecycle, real-time streaming (control-mode), operator grid, attention — a single
 coherent terminal layer the conductor AND the shell's operator view both consume. Unify apps/desktop's
@@ -193,7 +206,7 @@ control-mode default-on feeding dmux's pane model; (c) wave shell on the same tm
 
 ---
 
-## 5. COMMUNICATION module — `backend/src/domains/communication/` (composer target)
+## 5. COMMUNICATION module — `backend/src/domains/interop/` + `backend/src/domains/interop-wire/` (shipped, split across the two INTEROP domains + `pal` in ENGINES)
 **Domain:** how agents decide, route, reach consensus, and talk to each other. **Absorbs:** `packages/pal`
 (planning/decision/consensus/model-routing, ported from pal-mcp) + the A2A stack (agent-to-agent
 messaging, task handoff).
@@ -210,13 +223,14 @@ interface CommunicationModule {
   health(): CommunicationHealth
 }
 ```
-**Today:** `packages/pal` (decision logic ported — done; `agent-os/mcp/pal-plan-engine.ts` registers
-`recoder.pal-plan` in-proc behind the interop gate) + A2A scattered across `a2a/*` + the conductor's
-runtime dispatch. Only the `pal.plan` slice is ported to `@recoder/pal`; the vendored Python
-`backend/engines/py/pal-mcp-server` (multi-model orchestration, conversation threading, `clink` subagent bridge,
-codereview/consensus/planner workflows) is now a **supervised sidecar** (`PalMcpAdapter` in the ENGINES
-domain, reached over the supervised seam, health `up` only when the uv venv answers), though its heavy
-orchestration is not yet the conductor's actual planner on the launch path.
+**Shipped:** the A2A spine is now the two **INTEROP domains** — `backend/src/domains/interop-wire/`
+(wire: **ed25519 ingress verification**, first/quorum/handoff dispatch, `localRun` via conductor +
+`remoteSender`) and `backend/src/domains/interop/` (the gate + rate-limiter). `@recoder/pal` provides the
+`recoder.pal-plan` decision slice (registered in-proc behind the interop gate); the vendored Python
+`backend/engines/py/pal-mcp-server` (multi-model orchestration, conversation threading, `clink` subagent
+bridge, 18 real tools via a live MCP handshake) is a **supervised sidecar** (`PalMcpAdapter` in the
+ENGINES domain, health `up` only when the uv venv answers). **Still planned:** pal's heavy orchestration
+becoming the conductor's actual launch-path planner.
 **Deep target:** a `CommunicationModule` that IS the conductor's decision layer (every workspace launch
 calls `plan()` for runtime/risk/approval) and the A2A spine (agent handoff/messaging). pal's consensus +
 escalation available to agents as a "consult" capability.
@@ -224,24 +238,25 @@ escalation available to agents as a "consult" capability.
 
 ---
 
-## 6. INFERENCE module — `backend/src/domains/inference/` (composer target)
+## 6. INFERENCE module — `backend/src/domains/inference/` (shipped)
 **Domain:** every LLM call. **Absorbs:** `backend/engines/rust/tensorzero` (embedded gateway) + the model registry + BYOK.
 
 **Interface**
 ```ts
 interface InferenceModule {
   infer(req: InferenceRequest): Promise<InferenceResult>     // routing/variants/fallback, in-process
-  stream(req: InferenceRequest): AsyncIterable<Chunk>        // (binding: add inference_stream)
+  stream(req: InferenceRequest): AsyncIterable<Chunk>        // shipped: REAL in-proc SSE via inferenceStream
   feedback(inferenceId: string, signal: FeedbackSignal): Promise<void>   // merge/approve = positive
   models(): ModelCatalogEntry[]
   health(): InferenceHealth
 }
 ```
-**Today:** `tensorzero-client.ts` is a dual-path degrade-safe adapter — native-first
-`EmbeddedGateway.boot().postInference` (in-process `tensorzero_gateway_napi.node`) → else a
-backend-supervised loopback `gateway` binary (127.0.0.1:3778 / `TENSORZERO_URL`) → else direct provider
-calls (never faked). `tensorzero-config.ts` (registry→TZ config — done). All calls route through the
-policy gate first, but the conductor run loop still calls providers directly in places.
+**Shipped:** a three-rung TensorZero ladder — the **release napi `.node`** giving **REAL in-process SSE**
+(`inferenceStream`) → a backend-supervised loopback `gateway` binary (127.0.0.1:3778 / `TENSORZERO_URL`)
+→ a **direct BYOK rung-3 multi-provider router** (never faked). **BYOK keys are resolved from the
+governance secrets vault** into the delivery path. Also live: an OpenAI-compatible
+**`/api/gateway/inference/v1/embeddings`** edge + the `inference.embed` MCP tool. `tensorzero-config.ts`
+generates the registry→TZ config; all calls route through the policy gate.
 **Deep target:** THE module every inference routes through; run loop uses `infer()` by default with BYOK
 keys as TZ credentials; streaming; feedback wired to delivery outcomes.
 **Build:** (a) module wraps the embedded gateway + config-gen; (b) run-loop reroute (G2 step 2);
@@ -249,7 +264,7 @@ keys as TZ credentials; streaming; feedback wired to delivery outcomes.
 
 ---
 
-## 7. AGENT-ENGINE module — `backend/src/domains/agent-engine/` (composer target)
+## 7. AGENT-ENGINE module — `backend/src/domains/engines/` (openfang) (shipped, inside the ENGINES domain)
 **Domain:** autonomous agents + the openfang kernel. **Absorbs:** `backend/engines/rust/openfang` (upstream RightNow-AI
 OpenFang, MIT — a full Rust "Agent OS": kernel of agents, Hands/background workers, triggers, workflows,
 event bus, KV memory + a wasmtime runtime, sqlite, ~40 channel adapters). Two surfaces: an HTTP sidecar
@@ -266,12 +281,14 @@ interface AgentEngineModule {
   health(): AgentEngineHealth
 }
 ```
-**Today:** `conductor/openfang-native.ts` (degrade-safe `.node` loader, ~51 methods, native-first
-in-process) + `openfang-runtime.ts` (driver — done) + `openfang-daemon.ts`/`oss-dispatch.ts` +
-`/api/agents/openfang/*` + cockpit blocks + wsh. The crate is vendored in-tree (upstream clone,
-`backend/engines/rust/openfang/`, no longer gitignored) and **not built by default** (ENOSPC-avoidance),
-so it degrades to undefined/loopback when the `.node` is absent. The runtime driver isn't dispatchable
-yet (closed `ConductorRuntimeId` union at `openfang-runtime.ts:35`).
+**Shipped:** openfang lives in `backend/src/domains/engines/` — `openfang-native.ts` (degrade-safe
+`.node` loader, ~51 methods, native-first in-process) + `openfang-runtime.ts` (the conductor runtime
+driver). The **`ConductorRuntimeId` union was widened** (`conductor/types.ts` now includes `'openfang'`),
+so a workspace can dispatch `runtimeId:'openfang'` → the in-process substrate (proven in
+`conductor-run-flow` / `runtime-listing` tests). The crate is vendored in-tree
+(`backend/engines/rust/openfang/`, no longer gitignored) and **not built by default** (ENOSPC-avoidance),
+so it degrades truthfully when the `.node` is absent. **Still planned:** Hands lifecycle + the event-bus
+↔ RunEvents bridge.
 **Deep target:** openfang as a first-class conductor runtime; its Hands as supervised autonomous
 background capabilities; its event bus bridged to RunEvents.
 **Build:** (a) widen ConductorRuntimeId → dispatch the driver; (b) Hands lifecycle in the conductor;
@@ -279,7 +296,7 @@ background capabilities; its event bus bridged to RunEvents.
 
 ---
 
-## 8. GOVERNANCE module — `backend/src/domains/governance/` (composer target)
+## 8. GOVERNANCE module — `backend/src/domains/governance/` (shipped)
 **Domain:** the moat — policy decisions + tamper-evident audit. **Engine dir:** `backend/engines/rust/recoder-governance`
 — **first-party (MIT), Recoder-OWNED** Rust governance kernel (a 9-crate workspace: types/audit/permission/
 approval/routing/kernel/ipc/daemon/napi), deliberately kept OUTSIDE the vendored upstream clones. The
@@ -291,59 +308,65 @@ ladder**: (1) napi in-process native kernel → (2) UDS daemon (`conductor/gover
 `recoder-governance-daemon`) → (3) pure-TS deny-biased fallback (no behavior change when the `.node` is
 absent). `conductor/governance-gate.ts` `decideDelivery()` drives the real facade on the delivery path
 (covered by `governance-gate.test.ts`); also `pal-plan.ts`, `solo-mode.ts`, `coordination-integration.ts`.
-**Deep target:** a `GovernanceModule` that seals EVERY conductor mutation (create/merge/archive/
-memory-promote) into the Merkle log and is the single `authorize→risk→audit` gate every module write flows
-through. **Build:** module wraps the native kernel; extend the seal to all mutations; audit-verify a full
-workspace lifecycle. (Richer policy crates — permission/approval/routing, persistence, checkpoints,
-replay — exist as slices; only audit+kernel are exercised via napi today.)
+**Shipped:** the `GOVERNANCE` domain seals conductor mutations (create/merge/archive/memory-promote, plus
+cloud/billing/memory write surfaces) into the Merkle log via `decide+recordAudit`, and the governed **MCP
+HTTP edge `POST /api/mcp/tools/:server/:tool/call`** is **LIVE** (was 404) — every subject-bearing MCP
+tool binds identity to the host-authorized `McpToolCaller` (cross-tenant class closed: non-privileged
+caller → own subject, foreign → 403, admin/internal → arbitrary, absent → `AUTH_REQUIRED`). **Still
+partial:** the richer policy crates — permission/approval/routing, persistence, checkpoints, replay —
+exist as slices; only audit+kernel are exercised via napi today.
 
-## 9. BROWSING module — `backend/src/domains/browsing/` (composer target)
+## 9. BROWSING module — `backend/src/domains/engines/` (browser-use) (shipped, inside the ENGINES domain)
 **Domain:** web automation for agents. **Engine dirs:** `backend/engines/py/browser-use` (async LLM browser-agent — Rust
 core, CDP, watchdogs) + `@recoder/agent-browser` (in-proc puppeteer) + `@recoder/browser-tools`.
-**Today:** `backend/engines/py/browser-use` is now a **supervised sidecar** (`BrowserUseAdapter` in the
-ENGINES domain, health `up` only when the uv venv answers, reached via `BROWSER_USE_URL`). The live
-functional path is still TS-first: `agent-os/mcp/browser-use-engine.ts` composes the owned
-`@recoder/agent-browser` over a degrade-safe driver — puppeteer (dynamic import) OR the HTTP `browser-use`
-sidecar — registering `browser.navigate/extract/screenshot` behind the interop gate (with neither present,
-tools return `not_configured`). The Python agent's deep loop is only reached over the sidecar seam.
+**Shipped:** `backend/engines/py/browser-use` is a **supervised sidecar** (`BrowserUseAdapter` in the
+ENGINES domain, health `up` only when the uv venv answers, reached via `BROWSER_USE_URL`) driving **LIVE
+Chrome via CDP**. The default functional path is TS-first: `engines/browser-use-engine.ts` composes the
+owned `@recoder/agent-browser` over a degrade-safe driver — puppeteer (dynamic import) OR the HTTP
+`browser-use` sidecar — registering `browser.navigate/extract/screenshot` behind the interop gate (with
+neither present, tools return `not_configured`). The Python agent's deep loop is reached over the sidecar seam.
 **Deep target:** one `BrowsingModule`
 (open/snapshot/extract/verify/navigate) with a **supervised** browser-use service (or its MCP server) actually
 running as the owned-venv sidecar and puppeteer as the light fallback; session/profile management,
 domain-allowlist wired to governance, artifact capture; the conductor's post-run browser-check calls it.
 **Build:** module unifies the two drivers; browser-use owned-venv bootstrap (uv + playwright install).
 
-## 10. SIGNALS module — `backend/src/domains/signals/` (composer target)
+## 10. SIGNALS module — `backend/src/domains/engines/` (ops-recorder) (shipped, inside the ENGINES domain)
 **Domain:** work-signals + activity observability. **Engine dir:** `backend/engines/py/ops-recorder` (Recoder-authored
 FastAPI service, real code in `backend/engines/py/ops-recorder/work-signals/`; detects STUCK GitHub/Linear work → normalized
 `WorkSignal` → auto-generated handoff prompt; supervised loopback sidecar :8073, `X-API-Key` auth).
-**Today:** `conductor/ops-recorder-daemon.ts` supervises `uvicorn main:app` with an auth preflight (refuses
-to spawn keyless) + `conductor/ops-recorder-adapter.ts` (`forwardToOpsRecorder`) + work-signals ingress.
-Backend only uses ingest+query; the service's own GH/Linear detectors/sync are bypassed and storage is a
+**Shipped:** `engines/ops-recorder-daemon.ts` supervises `uvicorn main:app` with an auth preflight
+(refuses to spawn keyless) + `engines/ops-recorder-adapter.ts` (`forwardToOpsRecorder`) + work-signals
+ingress; the sidecar now runs a **full ingest roundtrip + real GH/Linear detectors**. Storage is still a
 local JSON store. **Deep target:** a `SignalsModule` owning the signal ingress→conductor path
 (stuck/blocked/needs-you signals drive the board) with durable shared storage and the detection loop running
 against real GH/Linear tokens, default-on. **Build:** module wraps the sidecar; API key minted at boot;
 signals feed the board module. **Housekeeping:** `backend/engines/py/ops-recorder` LICENSE added
 (MIT, Recoder-authored — owner decision 6).
 
-## 11. NETWORKING module — `backend/src/domains/networking/` (composer target) (cloud tier — build now, mesh at cloud launch)
+## 11. NETWORKING module — `backend/src/domains/cloud/` (mesh) (shipped as diagnostics, inside the CLOUD domain — cloud tier, mesh at cloud launch)
 **Domain:** zero-trust mesh + service control plane. **Engine dirs:** `apps/desktop/server/engines/ziti` (OpenZiti — zero-trust
 networking, cryptographic identity per connection, dark services) + `apps/desktop/server/engines/recoder-xds` (real Envoy xDS
 control plane — dynamic LDS/CDS/RDS over ADS, the live equivalent of `backend/src/network`'s static
-bootstrap). **Today:** degrade-safe `ziti-client.ts`; `backend/src/network` generates the static
-Envoy bootstrap. **Deep target:** a `NetworkingModule` exposing mesh identity + peer status + LIVE xDS
-push as diagnostics now, activated at cloud/teams launch. **Build:** owned-binary builds out-of-band;
-health/diagnostics surface; mesh deferred to cloud.
+bootstrap). **Shipped:** the mesh capability is folded into the **CLOUD domain** —
+`cloud/adapters/ziti-mesh.adapter.ts` (OpenZiti identity/mesh) + `cloud/adapters/xds-envoy.adapter.ts`
+(Envoy xDS), plus the degrade-safe `engines/ziti-client.ts`. Exposed as **diagnostics only** (mesh
+identity + peer status + xDS), behind the `GovernanceGate` that guards every cloud write. **Still
+deferred:** no live data plane until the cloud/teams launch (owner decision 7).
 
-## 12. SQUADS module — `backend/src/domains/squads/` (composer target) (agents as teammates)
+## 12. SQUADS module — `backend/src/domains/agent-os/` (autopilots) (shipped, inside the AGENT-OS domain — agents as teammates)
 **Domain:** managed agents as first-class teammates — assignment, squads, autopilots, the team board.
 **Engine dir:** `apps/desktop/server/engines/multica` ("Multiplexed Information and Computing Agent" — assign issues to an agent
 like a colleague; agents claim work, report blockers, update status; **Squads** = a group under a leader
 agent that delegates; **Autopilots** = cron/webhook-triggered recurring agent work; WebSocket progress
 streaming). This is the human+agent TEAMWORK layer — a direct sibling of Recoder's own conductor/board,
 so it FUSES into them rather than running beside them.
-**Today:** `multica-client.ts` (degrade-safe loopback client, binary unbuilt). Recoder already owns the
-conductor (task lifecycle: enqueue/claim/start/complete), the board (`packages/herd` + cockpit), and
-beads (issue graph). **Deep target:** a `SquadsModule` that folds multica's distinctive primitives into
+**Shipped:** the **AGENT-OS domain** now owns **squad autopilots** (cron → beads → conductor) on top of
+the existing task lifecycle + beads assignment — multica's autopilot/squad ideas ported into the Recoder
+conductor rather than supervising the Go binary. `engines/multica-client.ts` remains a degrade-safe
+loopback client (binary unbuilt). Recoder already owns the conductor (enqueue/claim/start/complete), the
+board (`packages/herd` + cockpit), and beads (issue graph). **Deep target (partly shipped):** the
+`SquadsModule` folds multica's distinctive primitives into
 the Recoder conductor: **squads** (assign work to `@FrontendTeam`; a leader agent routes to a member) and
 **autopilots** (scheduled recurring agent runs that self-create the issue + route it), on top of the
 existing task lifecycle + beads assignment. Not a separate managed-agents server — its IDEAS become
@@ -354,7 +377,10 @@ rather than supervise the Go binary, since it overlaps our own control plane.
 
 ## Module build order
 
-Consolidation-first (each is "gather scattered code behind the interface", then deepen):
+> **All 12 are now shipped** (see each section's status). The order below is **historical** — the
+> consolidation-first sequence that was executed.
+
+Consolidation-first (each was "gather scattered code behind the interface", then deepen):
 1. **MEMORY** — highest leverage (5 scattered files, used every launch), no new deps.
 2. **GITHUB** — unify the two engines; the user's headline "GitHub engine for Claude Code".
 3. **TERMINAL** — the substrate; deepen dmux from 2 functions to the real pane/stream/layout brain.
@@ -373,16 +399,17 @@ one integration test proving a caller uses the module end-to-end + degrade-safe 
 1. **mem0 canonical store** → the owned `@recoder/mem0` (TS + platform Qdrant) is the ONE semantic
    memory path. `backend/engines/py/mem0`'s FastAPI server stays an optional, unspawned `MEM0_BASE_URL` target — not
    supervised, not deleted (no-pruning rule). The MEMORY module's `recall` uses `@recoder/mem0`.
-2. **colbert** → best-effort **rerank-only**. No ANN index build. When torch is absent the reranker is a
-   no-op identity pass (already the behavior); recall still fuses+dedupes without it.
+2. **colbert** → **rerank-only** (no ANN index build). The `rerank_server.py` sidecar now runs **LIVE
+   ColBERT MaxSim rerank** when up; when the sidecar/torch is absent the reranker degrades to an identity
+   pass and recall still fuses+dedupes without it (`rerankerUsed: colbert|identity` is reported).
 3. **recodergit license (PolyForm-Noncommercial)** → keep **dev / self-host only**, behind the
    degrade-safe CLI/lib path. NOT shipped commercially-embedded until relicensed. The GitHub module
    flags this; the capability degrades to `not_configured` cleanly when disabled.
-4. **openfang** → **widen the closed `ConductorRuntimeId` union** so the runtime driver is dispatchable
-   (`runtimeId:"openfang"`), completing the AGENT-ENGINE module. Owning a built binary stays disk-gated;
-   the union widening is code and is the deep target.
-5. **discord connector** → **drop from the exported channel set** (not truly extracted, ~172 type errors,
-   still OpenClaw-coupled). Keep the 7 working adapters; don't ship a broken channel.
+4. **openfang** → the closed `ConductorRuntimeId` union was **widened (done)** — `runtimeId:"openfang"`
+   dispatches to the in-process substrate, completing the AGENT-ENGINE module's runtime seam. Owning a
+   built `.node` stays disk-gated, so it degrades truthfully when absent.
+5. **discord connector** → **dropped from the exported channel set (done)** (never truly extracted,
+   still OpenClaw-coupled). The 7 working adapters ship; the broken channel does not.
 6. **ops-recorder LICENSE** → **added** (MIT, Recoder-authored — matches root `package.json` license).
 7. **networking (ziti/xds)** → **stays cloud-tier-deferred**. Registered + diagnostics only; no live data
    plane until the cloud/teams launch.

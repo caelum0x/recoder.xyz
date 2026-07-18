@@ -55,6 +55,7 @@ backend/src/domains/persistence/
     query-executor.ts               # MOVED+generalized: :param executor, helpers, security analysis, audit
     named-params.ts                 # NEW: compile ":name" SQL + params object → ("$1..", values[]) positional
     transaction.ts                  # NEW: withTransaction(fn) — BEGIN/COMMIT/ROLLBACK on a pooled client
+    query-guards.ts                 # SHIPPED: PORTED pure guards (injection detection, param-type validation, error sanitize)
 
   # NOTE (SHIPPED): no drivers/ dir. The sqlite driver was CUT with the v1 `database/` dir;
   # the non-Postgres fallback is now IN-MEMORY (kv-store.repository.ts + persistence-module.ts).
@@ -62,6 +63,7 @@ backend/src/domains/persistence/
   repositories/
     base.repository.ts              # NEW: abstract BaseRepository<T> — CRUD + user_id scoping + row<->entity map
     kv-store.repository.ts          # NEW: DB-backed KV over core.kv_store (replaces loadStore/saveStore)
+    kv-compat.ts                    # SHIPPED: SYNC facade preserving loadStore/saveStore/debouncedSave signatures over the async KV
     repository-factory.ts           # NEW: RepositoryFactory — binds QueryExecutor into per-aggregate repos
     state-of-record.repository.ts   # NEW: versioned append-only state log + snapshot read (time-travel)
 
@@ -86,9 +88,10 @@ backend/src/domains/persistence/
     migration-runner.test.ts        # idempotent ledger, degrade-safe failure, ordered application
     kv-store.repository.test.ts     # namespaced get/set/delete/list, TTL expiry, concurrent upsert
     health.test.ts                  # up when pool pings, down when pool absent, degraded on saturation
+    persistence-engine.mcp.test.ts  # SHIPPED: MCP tools require host-authorized caller (AUTH_REQUIRED absent); read-only enforcement
 
 backend/migrations/
-  0000_extensions_and_ledger.sql    # extensions (vector, pgcrypto, citext) + schemas + _recoder_migrations ledger
+  0000_extensions_and_ledger.sql    # extensions (pgcrypto, uuid-ossp, citext, vector) + schemas + _recoder_migrations ledger
   0001_kv_store.sql                 # core.kv_store (namespaced KV, JSONB value, TTL) — replaces JSON files
   0002_state_of_record.sql          # core.state_events (append-only) + core.state_snapshots (versioned)
 ```
@@ -115,17 +118,19 @@ backend/migrations/
 | `query/query-executor.ts` | ts | service | MOVED+generalized — impl of `QueryExecutor`; wraps named-params + pg pool + injection analysis + error sanitize + bounded audit log | `class PgQueryExecutor implements QueryExecutor`, `analyzeQuery` |
 | `query/named-params.ts` | ts | service | NEW — compile `:name` placeholders + params object to positional `$n`; expand array params for `IN (:ids)`; throw on missing/extra | `compileNamedQuery(sql, params): { text, values }` |
 | `query/transaction.ts` | ts | service | NEW — `withTransaction(fn)`: checkout client, BEGIN, run fn with a tx-scoped executor, COMMIT/ROLLBACK, release | `withTransaction<T>(pool, fn): Promise<T>` |
+| `query/query-guards.ts` | ts | service | SHIPPED — PORTED pure guards from the vetted legacy analysis: injection-pattern detection, param-type validation, error-message sanitization (no state) | `analyzeQuery`, param/error guards |
 | ~~`drivers/postgres.driver.ts`~~ | — | — | **CUT** — the pg driver logic folded into `client/pg-pool.ts` + `query/query-executor.ts` (no separate `drivers/` dir) | — |
 | ~~`drivers/sqlite.driver.ts`~~ | — | — | **CUT** with the v1 `database/` dir; the non-Postgres fallback is now **in-memory** | — |
 | `repositories/base.repository.ts` | ts | repository | NEW — abstract CRUD base: `findAll/findById/create/update/delete`, mandatory `user_id` scoping, row↔entity mapping, optimistic version bump | `abstract class BaseRepository<T, Id>` |
 | `repositories/kv-store.repository.ts` | ts | repository | NEW — `KvStore` impl over `core.kv_store`; JSON values, per-namespace, TTL sweep; **replaces deleted `loadStore/saveStore`** | `class KvStoreRepository implements KvStore` |
+| `repositories/kv-compat.ts` | ts | service | SHIPPED — SYNC facade preserving the deleted JSON `loadStore/saveStore/debouncedSave` signatures over the async KV: in-memory cache hydrated at boot, sync reads, async write-through (namespace `legacy-store`) | `loadStore`, `saveStore`, `debouncedSave`, `hydrate` |
 | `repositories/repository-factory.ts` | ts | repository | NEW — the seam: injects the shared `QueryExecutor` into any domain's repo class; central place DI hands out repos | `class RepositoryFactory`, `createRepositoryFactory(executor)` |
 | `repositories/state-of-record.repository.ts` | ts | repository | NEW — append-only `state_events` write + `state_snapshots` versioned read; powers time-travel + audit provenance | `class StateOfRecordRepository`, `appendEvent`, `readAt(version)` |
 | `schema/schema-inspector.ts` | ts | service | MOVED — read-only introspection of tables/columns/indexes for the MCP tool + `/introspect` edge | `schemaInspector`, `inspectTables`, `inspectColumns` |
 | `schema/seed.ts` | ts | service | NEW — idempotent seed loader for dev/test (upsert fixtures; no-op in prod unless `PERSISTENCE_ALLOW_SEED`) | `runSeeds(executor, env): Promise<SeedReport>` |
-| `schema/backup.ts` | ts | service | NEW — logical `pg_dump`/restore wrapper; approval-gated write; degrades to `down` when `pg_dump` absent | `createBackup(cfg): Promise<BackupResult>`, `restoreBackup(cfg, ref)` |
+| `schema/backup.ts` | ts | service | SHIPPED (helper only, NOT yet edge-wired) — logical `pg_dump`/restore wrapper; approval-gated write; degrades to `down` when `pg_dump` absent. No `/backup` route or module hook yet. | `createBackup(cfg): Promise<BackupResult>`, `restoreBackup(cfg, ref)` |
 | `migrations/migration-runner.ts` | ts | service | MOVED+generalized — reads `backend/migrations/*.sql` in lexical order, applies unseen files in a tx, records `_recoder_migrations` ledger; idempotent + degrade-safe | `class SqlMigrationRunner implements MigrationRunner`, `applyMigrations(pool, dir)` |
-| `routes/persistence.routes.ts` | ts | route | `/internal/persistence/health`, `POST /internal/persistence/migrate`, `GET /internal/persistence/introspect` — all `INTERNAL_SERVICE_KEY`-gated, writes through governance gate | `registerPersistenceRoutes(router, module)` |
+| `routes/persistence.routes.ts` | ts | route | `GET /internal/persistence/health`, `POST /internal/persistence/migrate`, `GET /internal/persistence/migrate/status`, `GET /internal/persistence/introspect`, `GET /internal/persistence/introspect/:schema/:table` — all `INTERNAL_SERVICE_KEY`-gated, writes through governance gate. (No `/backup` edge yet.) | `registerPersistenceRoutes(router, module)` |
 | `mcp/persistence-engine.ts` | ts | service | MCP tools `db_schema_inspect` (read) + `db_query_readonly` (SELECT-only, governance+interop gated) | `registerPersistenceMcpTools(host)` |
 | `0000_extensions_and_ledger.sql` | sql | migration | Enable `vector`, `pgcrypto`, `citext`; create schemas `core/agent_os/pm/billing/kv`; create migration ledger table | — |
 | `0001_kv_store.sql` | sql | migration | `core.kv_store(namespace, key, value jsonb, expires_at, version, updated_at)` PK `(namespace,key)` | — |
@@ -145,9 +150,10 @@ Consolidated single Postgres DB, partitioned by schema. Persistence owns the **f
 
 ```sql
 -- 0000_extensions_and_ledger.sql
-create extension if not exists vector;
 create extension if not exists pgcrypto;
+create extension if not exists "uuid-ossp";
 create extension if not exists citext;
+create extension if not exists vector;
 
 create schema if not exists core;
 create schema if not exists agent_os;
@@ -213,12 +219,17 @@ All internal, `INTERNAL_SERVICE_KEY`-gated, mounted by the `edge` domain's route
 |---|---|---|---|
 | GET | `/internal/persistence/health` | pool ping + migration ledger + saturation | internal key |
 | POST | `/internal/persistence/migrate` | apply pending migrations (idempotent) | internal key + governance write |
-| GET | `/internal/persistence/introspect` | list tables/columns/indexes (read-only) | internal key |
-| POST | `/internal/persistence/backup` | trigger logical backup | internal key + **approval-gated** |
+| GET | `/internal/persistence/migrate/status` | applied vs pending ledger (read-only) | internal key |
+| GET | `/internal/persistence/introspect` | list application tables (read-only) | internal key |
+| GET | `/internal/persistence/introspect/:schema/:table` | columns + indexes for one table | internal key |
+
+*(Planned, NOT yet shipped: `POST /internal/persistence/backup` — the `schema/backup.ts` `pg_dump` helper exists but is not yet wired into the module interface or a route; when added it is internal-key + **approval-gated**.)*
 
 MCP tools (`mcp/persistence-engine.ts`, registered via IN_PROC_SERVERS + ENGINE_SERVERS wiring checklist):
 - `db_schema_inspect` — read-only schema introspection for agents.
 - `db_query_readonly` — SELECT-only, param-bound, governance+interop gated, result-size capped.
+
+Both MCP tools bind to the **host-authorized `McpToolCaller`** at the MCP edge trust boundary: an absent caller → `AUTH_REQUIRED`; `db_query_readonly` rejects non-`SELECT` and non-allowlisted queries; a privileged (admin/internal) caller may run the raw read (mirroring the billing tool's privileged-subject path). This is part of the shipped cross-tenant authorization closure.
 
 ---
 
@@ -257,7 +268,7 @@ MCP tools (`mcp/persistence-engine.ts`, registered via IN_PROC_SERVERS + ENGINE_
 
 **CUT (owner-removed — do NOT restore):** `backend/src/database/` as a *top-level* dir (the stale location) and `backend/src/collaboration/persistence.ts` JSON store — folded into `KvStoreRepository`. The deleted JSON `loadStore/saveStore` + `data/*.json` are replaced by `core.kv_store`.
 
-**NEW:** `named-params.ts`, `transaction.ts`, `base.repository.ts`, `kv-store.repository.ts`, `repository-factory.ts`, `state-of-record.repository.ts`, `seed.ts`, `backup.ts`, the composer/ports/health/routes/mcp, and the `000x` consolidated migrations.
+**NEW:** `named-params.ts`, `transaction.ts`, `query-guards.ts` (ported guards, split out of the executor), `base.repository.ts`, `kv-store.repository.ts`, `kv-compat.ts` (the sync `loadStore/saveStore` facade over the async KV), `repository-factory.ts`, `state-of-record.repository.ts`, `seed.ts`, `backup.ts` (helper; not yet edge-wired), the composer/ports/health/routes/mcp, and the `000x` consolidated migrations.
 
 **Rust sqlx note:** `engines/rust/tensorzero` owns its own DB access via `sqlx` (root `.env` must stay dotenvy-parseable, `SQLX_OFFLINE=1`) — persistence records this as a fusion boundary and does **not** proxy it.
 

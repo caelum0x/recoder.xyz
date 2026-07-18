@@ -1,6 +1,6 @@
 # SQUADS module
 
-**Domain owner.** Uses the OSS engine(s) **in place** (never copied): apps/desktop/server/engines/multica (ported into conductor)
+**Domain owner.** Uses the OSS engine(s) **in place** (never copied): apps/desktop/server/engines/multica (leader-routing + autopilot logic ported into the **agent-os** domain — `backend/src/domains/agent-os/services/squad.service.ts` + `squad-autopilot.service.ts`; the autopilot dispatches to the conductor)
 
 > **SHIPPED POSTURE: read-only introspection** (owner decision). The squads surface
 > exposes only READ edges — `GET /api/agent-os/squads/*` (`squad-read.routes.ts`) and

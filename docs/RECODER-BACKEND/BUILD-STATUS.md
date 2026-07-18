@@ -10,7 +10,7 @@ A 26-agent doc-vs-code audit (`docs/GAP-AUDIT.md`, 337 capabilities, ~70 gaps �
 product measured ~60–65% of the docs' full version) drove six Workflow build waves
 that closed the gaps, then six adversarial-review rounds that closed a systemic
 cross-tenant authorization class. **12 commits, all verified green
-(tsc 0 · 1450 backend tests · boots with 15 truthful health sources).**
+(tsc 0 · ~1462 backend tests · boots with 15 truthful health sources).**
 
 **Feature waves:** P0 (tensorzero release napi + real in-proc SSE, fail-loud
 packaging gate, openfang env, steer send-keys, agent-os ingest) · P1 (BYOK

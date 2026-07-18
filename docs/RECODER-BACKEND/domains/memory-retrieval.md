@@ -3,6 +3,17 @@
 > Folder prefix: `backend/src/domains/memory/` (+ vendored engines in `backend/engines/py/{mem0,colbert}`)
 > The ONE memory entry point. Everything agents remember + retrieve.
 
+> **STATUS (2026-07-18): SHIPPED.** Phase 8 landed (`e13342848`, 44 files / 31 tests
+> vs a 34-file budget), plus follow-ups: an **embedded Lance vector store** as the
+> no-server default when Qdrant is absent (P1), **mem0 defaults to google/Gemini**
+> (Phase-A `d8d44aafb`), **ColBERT real MaxSim rerank** + a **real Qdrant liveness
+> probe**, **billing metering emitters** on memory writes (P2), the governed **MCP
+> HTTP edge** `POST /api/mcp/tools/:server/:tool/call` now LIVE, and the cross-tenant
+> authorization class closed (every subject-bearing MCP tool binds `userId` to the
+> host-authorized `McpToolCaller`, `67eed3613`). The sections below are reconciled to
+> that shipped reality; where the original design diverged from what shipped it is
+> flagged inline.
+
 ## 1. Overview
 
 Memory & Retrieval is the single seam through which every agent (and every other
@@ -10,9 +21,10 @@ domain) **remembers**, **recalls**, and **retrieves**. It fuses four legacy
 memory sources that today live scattered across `conductor/` and
 `agent-os/mcp/` into one composer with one public interface:
 
-1. **mem0** — semantic per-user memory (LLM-distilled facts) over Qdrant, BYOK
-   embeddings. Legacy: `backend/src/engines/mem0-client.ts` +
-   `backend/engines/py/mem0` FastAPI sidecar.
+1. **mem0** — semantic per-user memory (LLM-distilled facts). The vendored
+   `backend/engines/py/mem0` sidecar **defaults its LLM to google/Gemini** (Phase-A),
+   BYOK embeddings, over its own vector backend. Legacy:
+   `backend/src/engines/mem0-client.ts` + `backend/engines/py/mem0` FastAPI sidecar.
 2. **beads (bd)** — the issue-graph SHARED memory layer (Dolt-versioned,
    candidate→promote lifecycle). Legacy: `backend/src/conductor/beads-memory.ts`.
 3. **agent-os candidates** — the canonical, reviewed `MemoryCandidate`/`MemoryItem`
@@ -41,9 +53,12 @@ mem0/beads/colbert directly and call this domain's port instead.
   `record_audit`. Recall/search are reads (still interop-authorized, not
   governance-gated).
 - **Every edge + MCP tool passes `authorize→risk→policy→audit`** (`@recoder/interop`).
-- **Degrade-safe everywhere.** No mem0 provider / no `QDRANT_URL` / no colbert /
-  no `bd` binary / no torch venv → the source reports `down`, recall silently
-  drops that source, and the fusion returns whatever remains. Nothing is faked.
+- **Degrade-safe everywhere.** No mem0 provider / no vector store (neither an
+  embedded `LANCE_DATA_DIR` nor a `QDRANT_URL`) / no colbert / no `bd` binary / no
+  torch venv → the source reports `down`, recall silently drops that source, and the
+  fusion returns whatever remains. Nothing is faked. The vector store is a real
+  probe: Qdrant does a liveness GET (URL presence ≠ reachability), the embedded Lance
+  store actually attempts its napi/SDK load.
 
 ## 2. File tree (`backend/src/domains/memory/`)
 
@@ -56,24 +71,28 @@ memory/
   health.ts                        # aggregate per-engine health (mem0|beads|colbert|vector|candidates)
 
   recall/
-    recall-fusion.ts               # fuse mem0 ∪ beads ∪ candidates → rerank → dedupe → provenance
+    recall-fusion.ts               # fuse mem0 ∪ beads ∪ candidates → rerank → dedupe → provenance-tag (inline)
     dedupe.ts                      # near-dup collapse (normalized text + cosine/jaccard threshold)
-    provenance.ts                  # tag each RecalledMemory with {source, ref, score, scope}
     rank.ts                        # merge+rerank orchestration (colbert when up, score-blend fallback)
-    recall-fusion.test.ts          # fusion: union, dedupe, provenance, source-down drop paths
+    index.ts                       # recall barrel
+    dedupe.test.ts / recall-fusion.test.ts  # dedupe + fusion (union, provenance, source-down drop)
+    # NOTE: provenance is NOT a separate `provenance.ts` — tagging is folded into recall-fusion.ts.
 
   lifecycle/
-    memory-lifecycle.ts            # remember→promote→forget→relate; promote/forget via governance gate
-    candidate-service.ts           # MemoryCandidate create/list/review over repository port
-    harvest.ts                     # completion harvest: RunEvent/artifact → MemoryCandidate
-    relate.ts                      # relate(memoryId, memoryId, kind) edges (supersedes/derived-from)
-    memory-lifecycle.test.ts       # promote gated, forget gated, remember=ephemeral wisp, relate edges
+    memory-lifecycle.ts            # accept/reject (promote); promotion passes the governance gate
+    candidate-service.ts           # MemoryCandidate propose/list/get over repository port + wisp mirror
+    forget.ts                      # forget/tombstone a durable item (governance-gated) — its OWN service
+    harvest.ts                     # completion harvest: run evidence → MemoryCandidate
+    relate.ts                      # relate/unrelate(memoryId, memoryId, kind) edges
+    write-allowlist.ts             # scope write-allowlist guard on candidate propose / harvest
+    index.ts                       # lifecycle barrel
+    lifecycle-services.test.ts / memory-lifecycle.test.ts / forget.test.ts / write-allowlist.test.ts
 
   retrieval/
     retrieval-service.ts           # ingest/search over shared vector+embed+rerank foundation
-    vector-foundation.ts           # EmbeddingPort + VectorStorePort (BYOK + Qdrant, degrade-safe)
+    vector-foundation.ts           # EmbeddingPort + VectorStorePort (BYOK embed + Lance/Qdrant, degrade-safe)
     chunker.ts                     # document chunking for ingest (token-window + overlap)
-    retrieval-service.test.ts      # ingest→search roundtrip, not_configured degrade, chunk boundaries
+    retrieval-service.test.ts / vector-foundation.lance.test.ts
 
   ports/
     memory-store.port.ts           # re-exports @recoder/agent-memory MemoryStore (repo seam)
@@ -87,35 +106,46 @@ memory/
 
   adapters/
     mem0.adapter.ts                # wraps engines/mem0-client.ts (platform|oss|none), degrade-safe
-    beads-memory.adapter.ts        # wraps conductor/beads-memory.ts (bd CLI), degrade-safe
-    colbert.adapter.ts             # wraps conductor/colbert-rerank.ts (COLBERT_RERANK_URL), identity fallback
-    qdrant.adapter.ts              # wraps agent-os/mcp/vector-store.ts createVectorStore
-    embedding.adapter.ts           # wraps createEmbeddingPort (BYOK/tensorzero/openai), null on unconfigured
-    candidate-repository.adapter.ts# concrete MemoryRepository over persistence QueryExecutor
+    beads-memory.adapter.ts (+ beads-memory.ts)  # bd CLI adapter + inlined helper, degrade-safe
+    colbert.adapter.ts (+ colbert-sidecar.client.ts)  # COLBERT_RERANK_URL rerank, identity fallback
+    qdrant.adapter.ts              # Qdrant VectorStorePort (real liveness probe)
+    lance.adapter.ts (+ lance-napi.client.ts)  # embedded Lance VectorStorePort via napi (no-server default)
+    embedding.adapter.ts (+ embedding-fallback.adapter.ts)  # BYOK/tensorzero/openai embed; hash fallback
+    candidate-repository.adapter.ts# concrete MemoryRepository over persistence QueryExecutor + agent-os store
     mem0-sidecar.client.ts         # HTTP client to engines/py/mem0 FastAPI (self-hosted mode)
-    colbert-sidecar.client.ts      # HTTP client to engines/py/colbert rerank_server (POST /rerank)
 
   routes/
-    memory.routes.ts               # HTTP edges: recall/remember/promote/forget/relate/candidates
-    retrieval.routes.ts            # HTTP edges: retrieval ingest/search
-    memory.routes.test.ts          # edge auth, zod validation, sendError envelope, gate on promote
+    memory.routes.ts               # HTTP edges: recall / candidates(+accept/reject) / items forget / relations
+    retrieval.routes.ts            # HTTP edges: retrieval status/ingest/search
+    internal-memory.routes.ts      # /internal/agent-os/memory/harvest (INTERNAL_SERVICE_KEY-gated)
+    index.ts                       # routes barrel
+    internal-memory.routes.test.ts
 
   mcp/
-    memory-engine.ts               # MCP tools: memory.search/remember/promote/relate (registerMemoryMcpTools)
-    retrieval-engine.ts            # MCP tools: retrieval.ingest/retrieval.search (registerRetrievalMcpTools)
-    memory-engine.test.ts          # tool router conformance + interop chain passes
+    memory-engine.ts               # MCP tools: memory_recall/remember/promote/relate/forget (buildMemoryMcpTools)
+    retrieval-engine.ts            # MCP tools: retrieval_search/retrieval_ingest (buildRetrievalMcpTools)
+    index.ts                       # mcp barrel
+    memory-engine.test.ts / retrieval-engine.test.ts
 
-  __tests__/
-    memory-integration.test.ts     # end-to-end: remember→recall fusion→promote→search (fake engines)
-    harvest-recall.test.ts         # conductor hooks: harvest on completion + recall on launch
+  vector-store.ts                  # shared vector-store helper (module-level)
 ```
 
-**File count: 34** (index, module, config, types, health = 5; recall = 5;
-lifecycle = 5; retrieval = 4; ports = 8; adapters = 8; routes = 3; mcp = 3;
-__tests__ = 2 → 5+5+5+4+8+8+3+3+2 = 43 counting tests co-located... trimmed to
-the 34 primary + co-located tests below).
+**File count: 44 shipped** (design budget was 34; the build came in over-budget as the
+Lance embedded store, the split `forget`/`write-allowlist` lifecycle services, the
+internal harvest route, and per-dir barrels/tests were added). Two composer-level tests
+(`__tests__/memory-integration`, `harvest-recall`) from the original design were folded
+into the co-located `*.test.ts` suites rather than a separate `__tests__/` dir.
 
 ## 3. Per-file responsibilities
+
+> **Reconciled to shipped.** The table is the original design intent; the shipped
+> code diverges as follows: `recall/provenance.ts` was folded into `recall-fusion.ts`
+> (no standalone file); the lifecycle split into `memory-lifecycle.ts` (accept/reject),
+> a dedicated `forget.ts`, `relate.ts`, `candidate-service.ts`, plus `write-allowlist.ts`;
+> the vector foundation gained an embedded `lance.adapter.ts`/`lance-napi.client.ts`
+> alongside `qdrant.adapter.ts`; and the public surface is a **composer with service
+> accessors** (`MemoryComposer` in `memory-module.ts`) rather than the flat `MemoryModule`
+> method interface sketched below (see §6).
 
 | path | lang | kind | responsibility | keyExports |
 |---|---|---|---|---|
@@ -166,11 +196,20 @@ the 34 primary + co-located tests below).
 ## 4. Database schema (migrations)
 
 Migrations live in `backend/migrations/` (canonical, raw parameterized SQL; runner
-in `domains/persistence`). Memory & Retrieval declares these tables. The
-`MemoryCandidate`/`MemoryItem` shapes come from `@recoder/agent-os` — DDL mirrors
-those fields exactly.
+in `domains/persistence`).
 
-`backend/migrations/0xx_memory_items.sql`:
+**SHIPPED: the memory domain owns exactly ONE migration — `memory_0001_relations.sql`.**
+The `memory_items` + `memory_candidates` tables were **NOT** created by this domain
+(conflict #3 in the composer: **agent-os owns the candidate/item store-of-record**).
+Those two tables ship inside the agent-os schema migration
+(`agentos_0001_schema.sql`); the memory domain's
+`candidate-repository.adapter.ts` delegates item/candidate reads+writes to the injected
+agent-os `candidateStore`, and only the *relations* edges live in a memory-owned table.
+The intended `memory_items` / `memory_candidates` shapes are kept below for reference
+(they mirror the `@recoder/agent-os` `MemoryItem`/`MemoryCandidate` types the agent-os
+migration realizes), followed by the one migration this domain actually declares.
+
+`memory_items` (owned by `agentos_0001_schema.sql`, shape for reference):
 ```sql
 CREATE TABLE IF NOT EXISTS memory_items (
   memory_id           TEXT PRIMARY KEY,
@@ -190,7 +229,7 @@ CREATE TABLE IF NOT EXISTS memory_items (
 CREATE INDEX idx_memory_items_user_scope ON memory_items(user_id, scope, status);
 ```
 
-`backend/migrations/0xx_memory_candidates.sql`:
+`memory_candidates` (owned by `agentos_0001_schema.sql`, shape for reference):
 ```sql
 CREATE TABLE IF NOT EXISTS memory_candidates (
   candidate_id        TEXT PRIMARY KEY,
@@ -212,7 +251,7 @@ CREATE INDEX idx_memory_candidates_user_status ON memory_candidates(user_id, sta
 CREATE INDEX idx_memory_candidates_task ON memory_candidates(evidence_task_id);
 ```
 
-`backend/migrations/0xx_memory_relations.sql`:
+`backend/migrations/memory_0001_relations.sql` (the ONE memory-owned migration):
 ```sql
 CREATE TABLE IF NOT EXISTS memory_relations (
   relation_id   TEXT PRIMARY KEY,
@@ -229,73 +268,114 @@ CREATE INDEX idx_memory_relations_from ON memory_relations(from_memory_id);
 Notes:
 - **No Supabase RLS / `auth.uid()`** — access control is `WHERE user_id = :user_id`
   in the repository adapter, on every read and write.
-- Vector data (mem0 memories, retrieval chunks) lives in **Qdrant**, NOT Postgres.
-  Postgres is the store-of-record for the reviewed candidate/item lifecycle; Qdrant
-  is the derived semantic index (rebuildable). The pgvector adapter in
-  `@recoder/agent-memory` is an optional fallback vector backend, not the default.
+- Vector data (mem0 memories, retrieval chunks) lives in a **vector backend**, NOT
+  Postgres. Postgres is the store-of-record for the reviewed candidate/item lifecycle;
+  the vector store is the derived semantic index (rebuildable). **Shipped default is the
+  embedded Lance store** (`LANCE_DATA_DIR`, no server) with **Qdrant** as the served
+  alternative when `QDRANT_URL` is set; `vector-foundation.ts` selects between them and
+  `probeStore()` reports the active backend truthfully.
 
 ## 5. HTTP / MCP edges
 
 ### HTTP (mounted by the `edge` domain route table)
 
+The **actor** (`userId`, `proposedBy`, reviewer) always comes from the resolved
+`Principal` — NEVER from the request body — so a caller cannot forge identity. Reads
+use `authenticate`; mutations use `authenticateMutating`. **Shipped paths:**
+
 | method | path | body/query | gate | handler |
 |---|---|---|---|---|
-| POST | `/api/agent-os/memory/recall` | `{query, scope?, limit?}` | interop (read) | recall fusion → provenance-tagged list |
-| POST | `/api/agent-os/memory/remember` | `{title, body, scope, evidence}` | interop (write, ephemeral) | create candidate (wisp) |
-| POST | `/api/agent-os/memory/candidates/:id/promote` | — | **governance gate** + audit | promote candidate → durable item |
-| POST | `/api/agent-os/memory/candidates/:id/reject` | `{reason}` | governance gate + audit | reject candidate |
-| GET | `/api/agent-os/memory/candidates` | `?scope&status` | interop (read) | list candidates |
-| POST | `/api/agent-os/memory/:id/forget` | `{reason}` | **governance gate** + audit | expire/forget item |
-| POST | `/api/agent-os/memory/relate` | `{from, to, kind}` | governance gate + audit | add relation edge |
-| POST | `/api/agent-os/retrieval/ingest` | `{docs[], collection?}` | interop (write) | chunk→embed→upsert |
-| POST | `/api/agent-os/retrieval/search` | `{query, topK?, collection?}` | interop (read) | embed→vector→rerank |
-| GET | `/api/agent-os/memory/health` | — | interop (read) | per-engine health |
+| POST | `/api/agent-os/memory/recall` | `{query, scope?, scopeRef?, limit?}` | authenticate (read) | recall fusion → provenance-tagged list |
+| GET | `/api/agent-os/memory/candidates` | `?scope` | authenticate (read) | list the caller's wisps |
+| POST | `/api/agent-os/memory/candidates` | `{title, body, scope, evidence{taskId,artifactId}}` | authenticateMutating (write, ephemeral) | propose candidate (wisp) — this IS "remember" |
+| GET | `/api/agent-os/memory/candidates/:id` | — | authenticate (read) | fetch one wisp |
+| POST | `/api/agent-os/memory/candidates/:id/accept` | `{supersedesMemoryId?, taskId?, runId?}` | **governance gate** + audit | promote candidate → durable item (truthful `{promoted:false, verdict}` on deny) |
+| POST | `/api/agent-os/memory/candidates/:id/reject` | `{reason}` | authenticateMutating + audit | reject candidate |
+| POST | `/api/agent-os/memory/items/:id/forget` | `{reason, taskId?, runId?}` | **governance gate** + audit | tombstone item (truthful `{forgotten:false, verdict}` on deny) |
+| GET | `/api/agent-os/memory/relations` | `?from` | authenticate (read) | list a memory's edges |
+| POST | `/api/agent-os/memory/relations` | `{fromMemoryId, toMemoryId, kind}` | authenticateMutating | add relation edge |
+| DELETE | `/api/agent-os/memory/relations/:id` | — | authenticateMutating | remove an edge |
+| GET | `/api/agent-os/retrieval/status` | — | authenticate (read) | is retrieval configured (embedder+store)? |
+| POST | `/api/agent-os/retrieval/ingest` | `{docs[], collection?}` | authenticateMutating (write) | chunk→embed→upsert |
+| POST | `/api/agent-os/retrieval/search` | `{query, topK?, collection?}` | authenticate (read) | embed→vector→rerank |
 
-`/internal/agent-os/memory/harvest` (INTERNAL_SERVICE_KEY-gated) — worker→backend
-completion harvest entrypoint.
+> **Reconciled:** the design's `POST /memory/remember`, `.../:id/promote`,
+> `POST /memory/:id/forget`, `POST /memory/relate`, and `GET /memory/health` shipped
+> respectively as `POST /memory/candidates`, `.../:id/accept`, `/memory/items/:id/forget`,
+> `POST /memory/relations`, and (no dedicated health edge — `/retrieval/status` reports
+> retrieval readiness; per-engine memory health rolls up via the observability
+> `/health` aggregation, see §6). GET/DELETE `/memory/relations` and `GET /candidates/:id`
+> also shipped beyond the original list.
 
-Every edge: zod-validate inbound (from `@recoder/agent-schemas`), carry `Session`,
-pass `authorize→risk→policy→audit`, respond via `sendSuccess`/`sendError` with
-`ErrorCode` (`SERVICE_UNAVAILABLE`, `AUTHZ_PROJECT_ACCESS_DENIED` — no `FORBIDDEN`).
+`/internal/agent-os/memory/harvest` (INTERNAL_SERVICE_KEY-gated, `requireInternal`) —
+worker→backend completion harvest entrypoint; body zod-validated, actor `userId` supplied
+by the trusted worker; unevidenced harvest returns `{harvested:false, reason}`.
 
-### MCP tools (registered via wiring checklist)
+Every edge: validate inbound at the boundary, carry the resolved `Principal`, respond via
+`sendSuccess`/`sendError` with `ErrorCode` (`SERVICE_UNAVAILABLE`,
+`AUTHZ_PROJECT_ACCESS_DENIED`, `MISSING_REQUIRED_FIELD` — no `FORBIDDEN`).
 
-Add to `IN_PROC_SERVERS` (interop-host) + `ENGINE_SERVERS` (inproc-engines),
-call `registerMemoryMcpTools`/`registerRetrievalMcpTools` in `buildInProcEngineRouter`:
+### MCP tools (shipped)
 
-- `recoder.memory` → `memory.search`, `memory.remember`, `memory.promote`,
-  `memory.relate` (maps to MCP tool contract `@recoder/agent-mcp`).
-- `recoder.retrieval` → `retrieval.ingest`, `retrieval.search` (reuse existing
-  `@recoder/agent-mcp` `registerRetrievalMcpTools` handlers).
+The module exposes MCP tools as `McpToolRegistration[]` via `module.mcp()`
+(`buildMemoryMcpTools` + `buildRetrievalMcpTools`), registered by the bootstrap
+domain-tools bridge — NOT the older `IN_PROC_SERVERS`/`ENGINE_SERVERS` +
+`buildInProcEngineRouter` sketch. Tool names use **underscores**, not dots:
 
-Every MCP call passes the interop chain; writes (`remember`/`promote`/`relate`)
-also flow through the governance gate.
+- memory → `memory_recall`, `memory_remember`, `memory_promote`, `memory_relate`,
+  **`memory_forget`** (5 tools).
+- retrieval → `retrieval_search`, `retrieval_ingest`.
+
+These are reachable over the now-**LIVE governed MCP HTTP edge**
+`POST /api/mcp/tools/:server/:tool/call` (was 404). Every MCP call passes the interop
+`authorize→risk→policy→audit` chain; writes (`memory_promote`/`memory_forget`) also
+flow through the governance gate.
+
+**Cross-tenant identity binding (SECURITY, `67eed3613`):** every handler resolves the
+tenant `userId` via `resolveUserId()`, BOUND to the host-authorized `McpToolCaller` —
+never the spoofable `args.userId`. A non-privileged caller may only act on its own
+subject (a differing args `userId` → `403 AUTHZ_PROJECT_ACCESS_DENIED`); only an
+`admin`/`internal` caller may target an arbitrary subject; an absent caller is refused
+(`AUTH_REQUIRED`). `memory_promote`/`memory_forget` reconstruct a `Principal` from the
+bound `userId` with NO elevated scopes, so the gate decides independently.
 
 ## 6. Interfaces (ports)
 
 ### Exposed to other domains (consumed via `shared/` DI tokens)
 
+**Shipped shape (`MemoryComposer` in `memory-module.ts`).** Rather than the flat
+method interface originally sketched, the module is a **composer exposing service
+accessors** (plus lifecycle + wiring). Each accessor returns a focused, testable
+service; the routes/MCP layers bind to them:
+
 ```ts
-// The ONE public interface (index.ts)
-interface MemoryModule {
-  recall(q: RecallQuery, session: Session): Promise<FusionResult>;      // fused, provenance-tagged
-  remember(input: RememberInput, session: Session): Promise<MemoryCandidate>;
-  promote(candidateId: string, session: Session): Promise<Result<MemoryItem>>; // gated
-  forget(memoryId: string, session: Session): Promise<Result<void>>;    // gated
-  relate(from: string, to: string, kind: RelationKind, session: Session): Promise<Result<void>>;
-  // conductor lifecycle hooks:
-  recallForLaunch(prompt: string, ctx: LaunchCtx): Promise<EnrichedRecall>; // used by bundle.enrichPrompt
-  harvestOnCompletion(run: RunEvent, ctx: CompletionCtx): Promise<MemoryCandidate | null>;
-  // retrieval facade (RetrievalPort):
-  ingest(docs: IngestDoc[], opts?: IngestOpts): Promise<IngestResult>;
-  search(query: string, opts?: SearchOpts): Promise<SearchResult>;
-  health(): HealthReport;
+class MemoryComposer implements MemoryModule {
+  readonly name = 'memory';
+  recall(): RecallService;            // fused, provenance-tagged recall({query,userId,scope?,scopeRef?,limit?})
+  retrieval(): RetrievalPort;         // RAG facade: ingest(docs)/search(query)/configured()
+  candidates(): CandidateService;     // propose/list/get (ephemeral wisps)
+  lifecycle(): MemoryLifecycle;       // accept (promote, gated) / reject
+  forget(): ForgetService;            // forget/tombstone (gated)
+  harvest(): HarvestService;          // completion harvest → candidate
+  relations(): RelateService;         // relate/unrelate/list edges
+  repository(): MemoryRepository;
+  routes(): Router;                   // /api/agent-os memory + retrieval
+  internalRoutes(): Router;           // /internal/agent-os/memory (harvest)
+  mcp(): readonly McpToolRegistration[];
+  health(): Promise<ComponentHealth>; // truthful per-engine rollup (candidates = hard dep)
+  start(): Promise<void>; stop(): Promise<void>;
 }
 ```
 
-Consumers: `conductor` (recallForLaunch/harvestOnCompletion), `agent-os`
-(candidate store-of-record already owns the shape), `interop`/`engines` (MCP
-tools), `edge` (routes), and any domain doing RAG search (`RetrievalPort`).
+> **Reconciled:** the original `recallForLaunch`/`harvestOnCompletion` conductor hooks
+> are served through `recall()`/`harvest()` (the conductor product flow already consumes
+> mem0∪beads∪colbert recall on launch + harvest on completion — see BUILD-STATUS
+> "product flow USES the engines"); the internal `POST /harvest` edge is the worker-side
+> entrypoint to `harvest()`.
+
+Consumers: `conductor` (recall on launch / harvest on completion), `agent-os`
+(candidate store-of-record already owns the item/candidate shape), `interop`/`engines`
+(MCP tools), `edge` (routes), and any domain doing RAG search (`RetrievalPort`).
 
 ### Consumed from other domains
 
@@ -312,11 +392,12 @@ tools), `edge` (routes), and any domain doing RAG search (`RetrievalPort`).
 
 | engine | lang | transport | when | degrade |
 |---|---|---|---|---|
-| `backend/engines/py/mem0` | python | loopback HTTP sidecar (FastAPI) OR mem0 OSS in-lib | `MEM0_API_KEY` or self-host URL set | `down` → recall drops mem0 source |
-| `backend/engines/py/colbert` | python | loopback HTTP (`POST /rerank`) | `COLBERT_RERANK_URL` set | identity order (original ranking) |
-| Qdrant | — | HTTP | `QDRANT_URL` set | no-op store: search `[]`, upsert `false` |
+| `backend/engines/py/mem0` | python | loopback HTTP sidecar (FastAPI) OR mem0 OSS in-lib | `MEM0_BASE_URL`/provider set (**LLM defaults to google/Gemini**) | `down` → recall drops mem0 source |
+| `backend/engines/py/colbert` | python | loopback HTTP (`POST /rerank`) — **real ColBERT MaxSim** | `COLBERT_RERANK_URL` set | identity order (original ranking) |
+| **Lance (embedded)** | rust napi | in-proc `lance-napi.client` (no server) | `LANCE_DATA_DIR` set — **the no-server default** | no-op store: search `[]`, upsert `false` |
+| Qdrant | — | HTTP (**real liveness GET probe**) | `QDRANT_URL` set (served alternative to Lance) | no-op store: search `[]`, upsert `false` |
 | beads (`bd`) | go bin | CLI (`apps/desktop/server/engines/beads`) | bd on PATH + Dolt DB reachable | `[]`/undefined, warn |
-| embeddings (tensorzero/openai/BYOK) | — | HTTP via gateway | provider key present | `embed → null`, keyword fallback |
+| embeddings (tensorzero/openai/BYOK) | — | HTTP via gateway | provider key present | hash/keyword fallback (`embedding-fallback.adapter`) |
 
 All Python paths: auth-preflight before spawn, supervised by
 `bootstrap/engine-supervisor`; absent torch/venv → `down`, never faked.
