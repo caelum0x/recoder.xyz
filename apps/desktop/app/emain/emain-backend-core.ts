@@ -1026,8 +1026,21 @@ export class BackendSupervisor {
             }
 
             this.phase = PHASE.READY;
-            this.restartCount = 0;
-            this._lastReadyAt = this._now();
+            // Forgive the restart budget ONLY once the backend has proven it can
+            // stay up for a full restart window. Zeroing on every READY lets a
+            // boot that health-passes then crashes seconds later restart forever
+            // (a storm that never surfaces FAILED). _lastReadyAt still holds the
+            // PREVIOUS ready timestamp here, so this measures how long the last
+            // session actually lived before it died.
+            const readyAt = this._now();
+            if (
+                this._lastReadyAt != null &&
+                this.restartWindowMs > 0 &&
+                readyAt - this._lastReadyAt >= this.restartWindowMs
+            ) {
+                this.restartCount = 0;
+            }
+            this._lastReadyAt = readyAt;
             this._appendLog("info", "backend ready", {
                 backendUrl,
                 attempts: health.attempts,

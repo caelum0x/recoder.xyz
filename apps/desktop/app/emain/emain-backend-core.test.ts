@@ -841,7 +841,7 @@ describe("BackendSupervisor BYOK + openfang env injection", () => {
 });
 
 describe("BackendSupervisor crash + stop lifecycle", () => {
-    it("restarts on crash with backoff (until READY) and clears the crash count", async () => {
+    it("restarts on crash with backoff (until READY) but KEEPS the budget on a within-window flap", async () => {
         const children: ReturnType<typeof makeFakeChild>[] = [];
         const spawn = vi.fn(() => {
             const c = makeFakeChild();
@@ -864,6 +864,87 @@ describe("BackendSupervisor crash + stop lifecycle", () => {
 
         await new Promise((r) => setTimeout(r, backoffMs(1) + 50));
         expect(children.length).toBe(2);
+        expect(sup.phase).toBe(PHASE.READY);
+        // The restart happened ~1s after the last READY — far inside the default
+        // 60s window. Reaching READY again must NOT forgive the crash budget,
+        // otherwise a health-pass-then-crash backend restarts forever.
+        expect(sup.restartCount).toBe(1);
+    });
+
+    it("bounds a health-pass-then-crash storm — reaches FAILED instead of restarting forever", async () => {
+        // now() is injected so the ready->crash flap stays inside the restart
+        // window deterministically (no wall-clock dependence).
+        let clock = 0;
+        const now = () => clock;
+        const spawn = vi.fn(() => makeFakeChild());
+        const fetchImpl = vi.fn(async () => ({ status: 200, json: async () => ({ success: true }) }));
+        const sup = new BackendSupervisor(
+            baseOptions({
+                spawn,
+                fetchImpl,
+                now,
+                maxRestarts: 3,
+                restartWindowMs: 60000,
+                restartJitterMs: 0,
+            }) as any
+        );
+
+        await sup.start();
+        expect(sup.phase).toBe(PHASE.READY);
+        expect(sup.restartCount).toBe(0);
+
+        // Each cycle: the backend passes health, becomes READY, then crashes ~2s
+        // later — well inside the 60s window, so the budget must keep climbing.
+        for (let i = 0; i < 12; i++) {
+            clock += 2000;
+            (sup.child as any)._emit("exit", 1, null);
+            const phase: string = sup.phase;
+            if (phase === PHASE.FAILED) {
+                break;
+            }
+            // _onChildExit auto-schedules a backoff restart; cancel it and drive
+            // the respawn synchronously so the assertion is timer-independent.
+            if (sup._restartTimer) {
+                clearTimeout(sup._restartTimer);
+                sup._restartTimer = null;
+            }
+            await sup._startOnce();
+        }
+
+        expect(sup.phase).toBe(PHASE.FAILED);
+        expect(sup.lastError).toMatch(/giving up/);
+        expect(sup.restartCount).toBeLessThanOrEqual(3);
+    });
+
+    it("forgives the crash budget after the backend stayed READY for a full window", async () => {
+        let clock = 0;
+        const now = () => clock;
+        const spawn = vi.fn(() => makeFakeChild());
+        const fetchImpl = vi.fn(async () => ({ status: 200, json: async () => ({ success: true }) }));
+        const sup = new BackendSupervisor(
+            baseOptions({
+                spawn,
+                fetchImpl,
+                now,
+                maxRestarts: 3,
+                restartWindowMs: 60000,
+                restartJitterMs: 0,
+            }) as any
+        );
+
+        await sup.start();
+        sup.restartCount = 2;
+
+        // Backend ran healthily well past the window, then died once.
+        clock += 120000;
+        (sup.child as any)._emit("exit", 1, null);
+        // _onChildExit forgives a long healthy run; reaching READY again keeps it 0.
+        expect(sup.phase).not.toBe(PHASE.FAILED);
+        if (sup._restartTimer) {
+            clearTimeout(sup._restartTimer);
+            sup._restartTimer = null;
+        }
+        await sup._startOnce();
         expect(sup.phase).toBe(PHASE.READY);
         expect(sup.restartCount).toBe(0);
     });
