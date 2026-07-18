@@ -2,7 +2,40 @@
 
 > Living status of the comprehensive-backend build. Read this first to resume.
 > Design: [ARCHITECTURE.md](./ARCHITECTURE.md) · plan: [BUILD-ORDER.md](./BUILD-ORDER.md) ·
-> tree: [FILE-TREE.md](./FILE-TREE.md). **Last updated: 2026-07-15.**
+> tree: [FILE-TREE.md](./FILE-TREE.md). **Last updated: 2026-07-18.**
+
+## 2026-07-18 — doc-gap closure + security hardening (branch `feat/enterprise-s0-p0`)
+
+A 26-agent doc-vs-code audit (`docs/GAP-AUDIT.md`, 337 capabilities, ~70 gaps → the
+product measured ~60–65% of the docs' full version) drove six Workflow build waves
+that closed the gaps, then six adversarial-review rounds that closed a systemic
+cross-tenant authorization class. **12 commits, all verified green
+(tsc 0 · 1450 backend tests · boots with 15 truthful health sources).**
+
+**Feature waves:** P0 (tensorzero release napi + real in-proc SSE, fail-loud
+packaging gate, openfang env, steer send-keys, agent-os ingest) · P1 (BYOK
+inference + rung-3 + `/v1/embeddings`, agent-os Postgres state-of-record + CRUD +
+squad autopilots, the governed **MCP HTTP edge** `POST /api/mcp/tools/:s/:t/call`
+that was 404, github/browser handlers, conductor stop/advance/attention/tmux
+control-mode, ed25519 A2A ingress, cloud governance, lance memory, cockpit
+approve/reject) · P2 (billing **metering emitters** — quotas now decrement —
+governance/cloud/billing/conductor/memory write surfaces) · interop localRun +
+remoteSender · Phase-A (mem0 → Gemini default; website auth backend-seam +
+idempotent `users→user` backfill migration, bridge-preserving).
+
+**Security (rounds 1–6):** the feature waves shipped green but the new MCP tools
+resolved tenant/subject from caller-supplied args → cross-tenant quota drain, spend
+misattribution, sandbox provision/destroy, memory read/forget, audit/billing
+disclosure, identity leak, `identity_link` account hijack (~26 tools). Closed by
+binding every subject-bearing tool to the host-authorized `McpToolCaller` at the
+MCP edge trust boundary; converged + verified by exhaustive enumeration (only
+pure-infra MCP files remain caller-free).
+
+**Owner-gated follow-ups (need prod access / a decision):** (1) run the auth
+backfill migration runbook (backup → migrate `recoder_main` → verify counts →
+sso/device e2e → then delete the compat bridge); (2) **rotate `COMPOSIO_API_KEY`**
+(was hardcoded in `ecosystem.config.js`, exposed in git history, now `process.env`);
+(3) Next 15.4.11→15.5.x bump (needs `pnpm install`; box disk is APFS-critical).
 
 ## Where we are
 
