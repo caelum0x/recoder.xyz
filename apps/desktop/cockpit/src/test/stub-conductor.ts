@@ -48,6 +48,12 @@ export interface StubConductor {
   advance(workspaceId: string, state: WorkspaceState, message?: string): void;
   /** Append an arbitrary RunEvent for a workspace (e.g. a log line). */
   emit(workspaceId: string, event: Omit<RunEvent, 'eventId' | 'createdAt' | 'taskId'>): void;
+  /**
+   * Simulate mid-session token expiry: when on, GET /workspaces returns 401 the
+   * way the live backend does once the device token has expired, so the cockpit
+   * classifies the poll as UnauthorizedError.
+   */
+  setUnauthorized(on: boolean): void;
   /** How many times POST /workspaces/:id/archive was called. */
   archiveCalls(): number;
   /** Stop listening and free the port. */
@@ -58,6 +64,7 @@ interface StubState {
   workspaces: Map<string, Workspace>;
   events: Map<string, RunEvent[]>;
   archiveCount: number;
+  unauthorized: boolean;
 }
 
 const RUNTIMES: RuntimeAvailability[] = [
@@ -208,6 +215,9 @@ function handle(state: StubState, req: IncomingMessage, res: ServerResponse): vo
 
   // --- board ---
   if (method === 'GET' && path === '/api/conductor/workspaces') {
+    if (state.unauthorized) {
+      return sendJson(res, 401, { success: false, error: 'device token expired' });
+    }
     return sendJson(res, 200, { success: true, data: { workspaces: [...state.workspaces.values()] } });
   }
   if (method === 'POST' && path === '/api/conductor/workspaces') {
@@ -263,7 +273,7 @@ function handle(state: StubState, req: IncomingMessage, res: ServerResponse): vo
 
 /** Boot a stub conductor on an ephemeral port and resolve once it is listening. */
 export async function startStubConductor(): Promise<StubConductor> {
-  const state: StubState = { workspaces: new Map(), events: new Map(), archiveCount: 0 };
+  const state: StubState = { workspaces: new Map(), events: new Map(), archiveCount: 0, unauthorized: false };
   const server: Server = createServer((req, res) => {
     try {
       handle(state, req, res);
@@ -297,6 +307,9 @@ export async function startStubConductor(): Promise<StubConductor> {
       const log = state.events.get(workspaceId) || [];
       log.push(makeEvent(ws.taskId, event));
       state.events.set(workspaceId, log);
+    },
+    setUnauthorized(on) {
+      state.unauthorized = on;
     },
     archiveCalls: () => state.archiveCount,
     close: () =>

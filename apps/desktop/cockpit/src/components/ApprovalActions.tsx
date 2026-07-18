@@ -17,7 +17,7 @@
  *  - No pending record means there is genuinely nothing to decide — shown as
  *    an explicit empty state, never hidden and never fabricated.
  */
-import { useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import type { ApprovalDecision, ApprovalRecord, Workspace } from '../types';
@@ -115,6 +115,16 @@ export function ApprovalActions({ workspace, onChanged }: ApprovalActionsProps) 
     5000,
     [workspace.taskId],
   );
+
+  // Decided outcomes belong to a single task. This component instance is reused
+  // across workspace selections, so clear the per-record outcomes when the task
+  // changes — otherwise a decided row from the previous task leaks into the new
+  // task's detail panel as a stale DecidedNote.
+  const lastTaskId = useRef(workspace.taskId);
+  if (lastTaskId.current !== workspace.taskId) {
+    lastTaskId.current = workspace.taskId;
+    if (Object.keys(outcomes).length) setOutcomes({});
+  }
 
   async function decide(record: ApprovalRecord, decision: ApprovalDecision): Promise<void> {
     // Optimistic busy state the instant the operator clicks; a failure reverts

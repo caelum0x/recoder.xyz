@@ -245,6 +245,44 @@ describe('ApprovalActions inline approve/reject', () => {
     expect(note?.textContent).toContain('No pending approval record');
   });
 
+  it('does not leak a decided outcome across a workspace/task switch (same instance)', async () => {
+    // Task A has appr_1 pending; task B has appr_2 pending. The same
+    // ApprovalActions instance is reused when the operator switches workspaces.
+    const apprB = approval({ id: 'appr_2', taskId: 'task_gate_b', action: 'workspace.push' });
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async (url: string) => {
+      if (String(url).endsWith('/approvals/appr_1/decide')) {
+        return makeResponse({
+          body: { success: true, data: { approval: { ...approval(), status: 'approved' } } },
+        });
+      }
+      // The list is scoped by taskId — return the matching task's pending record.
+      if (String(url).includes('taskId=task_gate_b')) return approvalsList([apprB]);
+      return approvalsList([approval()]);
+    });
+
+    // Decide the approval on task A, then confirm the decided note renders.
+    const c = mount(workspace());
+    await flush(10);
+    clickButtonByText(c, 'Approve');
+    await flush(10);
+    expect(c.querySelector('.approval-row-decided')).toBeTruthy();
+
+    // Switch to workspace B (different task) on the SAME instance/container.
+    act(() => {
+      render(
+        <ApprovalActions workspace={workspace({ workspaceId: 'ws-b', taskId: 'task_gate_b' })} onChanged={() => undefined} />,
+        c,
+      );
+    });
+    await flush(10);
+
+    // The stale decided note from task A must be gone; only task B's pending row shows.
+    expect(c.querySelector('.approval-row-decided')).toBeNull();
+    const row = c.querySelector('.approval-row');
+    expect(row?.textContent).toContain('workspace.push');
+    expect(row?.textContent).not.toContain('workspace.merge');
+  });
+
   it('surfaces the real error when the approvals list itself cannot be fetched', async () => {
     (globalThis as Record<string, unknown>).fetch = vi.fn(async () =>
       makeResponse({ status: 503, ok: false, body: { success: false, error: 'governance down' } }),

@@ -9,7 +9,7 @@
  * The board view retains its special 3-pane layout — it is registered in the
  * registry for metadata/health purposes but rendered inline here.
  */
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { api, BackendUnreachableError, UnauthorizedError } from './lib/api';
 import { usePoll } from './lib/usePoll';
 import { useWorkspaceWaits } from './lib/useWorkspaceWaits';
@@ -85,6 +85,11 @@ export function App() {
   // the first time we hit a 401, before surfacing the SignIn panel.
   const [refreshAttempted, setRefreshAttempted] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // Re-entry guard for the silent-refresh effect. A REF (not `refreshing`) so
+  // that setting the in-flight flag does not re-run the effect and self-cancel
+  // its own pending refresh (which would wedge session-expiry recovery: no
+  // SignIn, no banner). See the effect below.
+  const refreshInFlight = useRef(false);
   // A sign-in completed this run. Clears the first-run gate even when the auth
   // result carried no display identity (the session is real either way).
   const [signedInThisRun, setSignedInThisRun] = useState(false);
@@ -159,8 +164,9 @@ export function App() {
   // success we re-poll silently; on failure we fall through to the SignIn panel.
   // Never fabricates a session — runDesktopRefresh returns not-ok on any failure.
   useEffect(() => {
-    if (!unauthenticated || refreshAttempted || refreshing) return;
+    if (!unauthenticated || refreshAttempted || refreshInFlight.current) return;
     let cancelled = false;
+    refreshInFlight.current = true;
     setRefreshing(true);
     runDesktopRefresh()
       .then((result) => {
@@ -171,6 +177,7 @@ export function App() {
         }
       })
       .finally(() => {
+        refreshInFlight.current = false;
         if (cancelled) return;
         setRefreshAttempted(true);
         setRefreshing(false);
@@ -178,7 +185,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [unauthenticated, refreshAttempted, refreshing]);
+  }, [unauthenticated, refreshAttempted]);
 
   // FIRST-RUN GATE (zero-config onboarding): inside the desktop shell, signing
   // in to recoder.xyz is the ONE thing we ask of the user — so when the shell
