@@ -30,9 +30,12 @@ function fakeRegistry(parse: (rawBody: Buffer) => ParsedWebhook | null): Provide
 
 interface RepoState {
   seen: Set<string>;
+  /** Event ids whose projection COMMITTED (the true dedup gate). */
+  processed: Set<string>;
   upserts: SubscriptionUpsert[];
   active?: BillingSubscription | null;
   throwOnRecord?: boolean;
+  throwOnUpsert?: boolean;
 }
 
 function fakeRepo(state: RepoState): MeteringRepository {
@@ -44,13 +47,17 @@ function fakeRepo(state: RepoState): MeteringRepository {
       return { inserted: true };
     },
     async upsertSubscription(sub: SubscriptionUpsert) {
+      if (state.throwOnUpsert) throw new Error('deadlock');
       state.upserts.push(sub);
     },
     async getActiveSubscription() {
       return state.active ?? null;
     },
-    async markWebhookProcessed() {
-      /* audit stamp — no-op in the fake */
+    async markWebhookProcessed(_provider: string, eventId: string) {
+      state.processed.add(eventId);
+    },
+    async wasWebhookProcessed(_provider: string, eventId: string) {
+      return state.processed.has(eventId);
     },
     isAvailable: () => true,
   };
@@ -93,12 +100,12 @@ function makeService(state: RepoState, parse: (b: Buffer) => ParsedWebhook | nul
 
 describe('webhook reconcile', () => {
   it('drops a bad signature (verifyAndParse → null)', () => {
-    const svc = makeService({ seen: new Set(), upserts: [] }, () => null);
+    const svc = makeService({ seen: new Set(), processed: new Set(), upserts: [] }, () => null);
     expect(svc.verifyAndParse('polar', Buffer.from('{}'), {})).toBeNull();
   });
 
   it('upgrades the projection on an active event', async () => {
-    const state: RepoState = { seen: new Set(), upserts: [] };
+    const state: RepoState = { seen: new Set(), processed: new Set(), upserts: [] };
     const svc = makeService(state, () => event({ subscription: sub('active', 'pro') }));
     const parsed = svc.verifyAndParse('polar', Buffer.from('{}'), {})!;
     const res = await svc.process(parsed, Buffer.from('{}'));
@@ -110,7 +117,7 @@ describe('webhook reconcile', () => {
   });
 
   it('is idempotent — a duplicate event id is a no-op', async () => {
-    const state: RepoState = { seen: new Set(), upserts: [] };
+    const state: RepoState = { seen: new Set(), processed: new Set(), upserts: [] };
     const svc = makeService(state, () => event({ subscription: sub('active', 'pro') }));
     const parsed = svc.verifyAndParse('polar', Buffer.from('{}'), {})!;
     await svc.process(parsed, Buffer.from('{}'));
@@ -121,7 +128,7 @@ describe('webhook reconcile', () => {
   });
 
   it('downgrades on a canceled event (status canceled → gate falls to free)', async () => {
-    const state: RepoState = { seen: new Set(), upserts: [], active: null };
+    const state: RepoState = { seen: new Set(), processed: new Set(), upserts: [], active: null };
     const svc = makeService(state, () => event({ type: 'subscription.canceled', subscription: sub('canceled', 'pro') }));
     const parsed = svc.verifyAndParse('polar', Buffer.from('{}'), {})!;
     const res = await svc.process(parsed, Buffer.from('{}'));
@@ -131,7 +138,7 @@ describe('webhook reconcile', () => {
   });
 
   it('cannot project a subject-less event (fail safe → no_subject)', async () => {
-    const state: RepoState = { seen: new Set(), upserts: [] };
+    const state: RepoState = { seen: new Set(), processed: new Set(), upserts: [] };
     const svc = makeService(state, () => event({ subjectId: undefined, subscription: sub('active', 'pro') }));
     const parsed = svc.verifyAndParse('polar', Buffer.from('{}'), {})!;
     const res = await svc.process(parsed, Buffer.from('{}'));
@@ -140,7 +147,7 @@ describe('webhook reconcile', () => {
   });
 
   it('ignores an event with no subscription snapshot', async () => {
-    const state: RepoState = { seen: new Set(), upserts: [] };
+    const state: RepoState = { seen: new Set(), processed: new Set(), upserts: [] };
     const svc = makeService(state, () => event({ type: 'ping', subscription: undefined }));
     const parsed = svc.verifyAndParse('polar', Buffer.from('{}'), {})!;
     const res = await svc.process(parsed, Buffer.from('{}'));
@@ -148,7 +155,7 @@ describe('webhook reconcile', () => {
   });
 
   it('surfaces a repo fault (route returns 5xx → provider retries)', async () => {
-    const state: RepoState = { seen: new Set(), upserts: [], throwOnRecord: true };
+    const state: RepoState = { seen: new Set(), processed: new Set(), upserts: [], throwOnRecord: true };
     const svc = makeService(state, () => event({ subscription: sub('active', 'pro') }));
     const parsed = svc.verifyAndParse('polar', Buffer.from('{}'), {})!;
     await expect(svc.process(parsed, Buffer.from('{}'))).rejects.toThrow('pool down');
@@ -165,11 +172,34 @@ describe('webhook reconcile', () => {
       cancelAtPeriodEnd: false,
       updatedAt: '2026-07-01T00:00:00.000Z',
     };
-    const state: RepoState = { seen: new Set(), upserts: [], active: existing };
+    const state: RepoState = { seen: new Set(), processed: new Set(), upserts: [], active: existing };
     const svc = makeService(state, () => event({ subscription: sub('active') /* no plan */ }));
     const parsed = svc.verifyAndParse('polar', Buffer.from('{}'), {})!;
     const res = await svc.process(parsed, Buffer.from('{}'));
     expect(res.plan).toBe('team');
     expect(state.upserts[0].plan).toBe('team');
+  });
+
+  it('re-applies a paid upgrade after a transient projection fault (marker NOT committed before the projection)', async () => {
+    // A provider re-delivers the SAME event id after the first apply faulted.
+    // The dedup marker must only be committed once the projection succeeds, so the
+    // retry re-applies the upgrade instead of dropping the user on the free tier.
+    const state: RepoState = { seen: new Set(), processed: new Set(), upserts: [], throwOnUpsert: true };
+    const svc = makeService(state, () => event({ subscription: sub('active', 'pro') }));
+    const parsed = svc.verifyAndParse('polar', Buffer.from('{}'), {})!;
+
+    // First delivery: upsertSubscription faults → surfaces (route 5xx). The event
+    // must be left un-processed (no dedup marker), and nothing was projected.
+    await expect(svc.process(parsed, Buffer.from('{}'))).rejects.toThrow('deadlock');
+    expect(state.processed.has('evt_1')).toBe(false);
+    expect(state.upserts).toHaveLength(0);
+
+    // The transient fault clears; the provider retries the SAME event id.
+    state.throwOnUpsert = false;
+    const res = await svc.process(parsed, Buffer.from('{}'));
+    expect(res.action).toBe('upserted');
+    expect(res.plan).toBe('pro');
+    expect(state.upserts).toHaveLength(1); // the upgrade is finally projected
+    expect(state.processed.has('evt_1')).toBe(true); // now durably deduped
   });
 });

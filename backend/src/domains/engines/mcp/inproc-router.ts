@@ -19,14 +19,9 @@ import {
   McpRegistry,
   McpToolRouter,
   gitNexusMcpServer,
-  tasksMcpServer,
-  runsMcpServer,
-  memoryMcpServer,
   beadsMcpServer,
   repoMcpServer,
   browserMcpServer,
-  approvalsMcpServer,
-  artifactsMcpServer,
   githubMcpServer,
   logsMcpServer,
   previewMcpServer,
@@ -72,18 +67,17 @@ export function buildInProcEngineRouter(
 
 /**
  * The in-proc servers whose tools the engine router owns the concrete engines
- * for. IDENTICAL set to the moved `agent-os/mcp/inproc-engines.ts` `ENGINE_SERVERS`.
+ * for — the subset of `IN_PROC_SERVERS` the wiring guard expects an engine binder
+ * to back. `tasks` / `runs` / `memory` / `approvals` / `artifacts` are NOT here:
+ * the engines composer supplies no binder for them and their real capability is
+ * exposed by the agent-os + memory domains under their own serverIds, so listing
+ * them would keep advertising dead `recoder.*` tools that fail on call.
  */
 export const ENGINE_SERVERS: readonly McpServerRegistration[] = [
   gitNexusMcpServer,
-  tasksMcpServer,
-  runsMcpServer,
-  memoryMcpServer,
   beadsMcpServer,
   repoMcpServer,
   browserMcpServer,
-  approvalsMcpServer,
-  artifactsMcpServer,
   githubMcpServer,
   logsMcpServer,
   previewMcpServer,

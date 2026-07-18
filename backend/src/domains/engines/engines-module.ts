@@ -189,10 +189,15 @@ export class EnginesComposer implements EnginesModule {
         githubEngineBinder(this.githubModule),
         repoEngineBinder({ repoRoot: this.cfg.repoRoot ?? null }),
       ],
+      // Surface an advertised-but-unbound engine server LOUDLY at boot (WARN),
+      // not silently on first call: a server left in ENGINE_SERVERS without a
+      // supplied binder has no in-proc handler, so its tools fail truthfully.
+      // Not a hard `enforceWiring` throw — boot stays resilient — but the gap is
+      // now visible in logs instead of only when an agent calls the dead tool.
       onWiringWarning: (err) =>
-        this.log.debug(
+        this.log.warn(
           { err: err instanceof Error ? err.message : String(err) },
-          'engines MCP host: engine binders pending from agent-os/conductor (expected pre-wiring)',
+          'engines MCP host: advertised engine server(s) have no bound handler — their tools will fail on call until a binder is supplied',
         ),
     });
     this.hostReady = true;

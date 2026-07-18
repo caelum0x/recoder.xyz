@@ -96,6 +96,9 @@ function memRepo(opts: { available?: boolean } = {}): MeteringRepository & { eve
       return { inserted: true };
     },
     async markWebhookProcessed() {},
+    async wasWebhookProcessed() {
+      return false;
+    },
   };
 }
 
