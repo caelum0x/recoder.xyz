@@ -116,6 +116,83 @@ describe('useTheme Hook', () => {
     });
   });
 
+  test('should not override an explicit theme choice when the OS preference flips', () => {
+    // Reproduces the stale-closure bug: mount on 'system', user explicitly picks
+    // 'light', then the OS flips to dark. The system listener must respect the
+    // live preference and leave the explicit 'light' choice intact.
+    localStorageMock.setItem('recoder-theme', 'system');
+
+    let changeHandler: ((e: MediaQueryListEvent) => void) | undefined;
+    let systemMatches = true; // OS currently in dark mode
+    (window.matchMedia as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (query: string) => ({
+        get matches() {
+          return query === '(prefers-color-scheme: dark)' ? systemMatches : false;
+        },
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: (_: string, cb: (e: MediaQueryListEvent) => void) => {
+          changeHandler = cb;
+        },
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })
+    );
+
+    const { result } = renderHook(() => useTheme());
+
+    // User explicitly switches to Light after mount.
+    act(() => {
+      result.current.setTheme('light');
+    });
+    expect(result.current.resolvedTheme).toBe('light');
+
+    // OS flips to dark and fires the media-query change event.
+    systemMatches = true;
+    act(() => {
+      changeHandler?.({ matches: true } as MediaQueryListEvent);
+    });
+
+    // The explicit Light choice must survive.
+    expect(result.current.theme).toBe('light');
+    expect(result.current.resolvedTheme).toBe('light');
+  });
+
+  test('should follow the OS when the user switches to system after mount', () => {
+    localStorageMock.setItem('recoder-theme', 'light');
+
+    let changeHandler: ((e: MediaQueryListEvent) => void) | undefined;
+    (window.matchMedia as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (query: string) => ({
+        matches: query === '(prefers-color-scheme: dark)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: (_: string, cb: (e: MediaQueryListEvent) => void) => {
+          changeHandler = cb;
+        },
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })
+    );
+
+    const { result } = renderHook(() => useTheme());
+
+    act(() => {
+      result.current.setTheme('system');
+    });
+
+    // OS flips to light; the app should follow because current preference is 'system'.
+    act(() => {
+      changeHandler?.({ matches: false } as MediaQueryListEvent);
+    });
+
+    expect(result.current.resolvedTheme).toBe('light');
+  });
+
   test('should switch between themes smoothly', () => {
     const { result } = renderHook(() => useTheme());
 
