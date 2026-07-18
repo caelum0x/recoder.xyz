@@ -28,6 +28,48 @@ import type { ColbertFetch } from '../adapters/colbert-sidecar.client.js';
 /** Which concrete store backs the `VectorStorePort` seam. */
 export type VectorStoreBackend = 'qdrant' | 'lance';
 
+/** Cheap Qdrant liveness probe timeout — health must not hang on a dead host. */
+const QDRANT_PROBE_TIMEOUT_MS = 5_000;
+
+/** Best-effort abort signal (absent in some runtimes; a fake fetch ignores it). */
+function probeSignal(ms: number): AbortSignal | undefined {
+  try {
+    const ctor = (AbortSignal as unknown as { timeout?: (n: number) => AbortSignal }).timeout;
+    return typeof ctor === 'function' ? ctor(ms) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Truthful liveness probe for the network-backed Qdrant store. URL presence is
+ * NOT reachability: an operator can set `QDRANT_URL` while the server is down.
+ * We GET `/collections` (the same authenticated surface real ingest/search use)
+ * and report `available` only on a 2xx — never from config presence alone.
+ */
+async function probeQdrant(
+  config: MemoryConfig,
+  fetchImpl?: FetchLike,
+): Promise<VectorStoreReadiness> {
+  const doFetch = fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
+  const base = String(config.qdrantUrl ?? '').replace(/\/+$/, '');
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (config.qdrantApiKey) headers['api-key'] = config.qdrantApiKey;
+  try {
+    const res = await doFetch(`${base}/collections`, {
+      method: 'GET',
+      headers,
+      signal: probeSignal(QDRANT_PROBE_TIMEOUT_MS),
+    });
+    return res.ok
+      ? { available: true, backend: 'qdrant' }
+      : { available: false, backend: 'qdrant', reason: `Qdrant probe returned HTTP ${res.status}` };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'unreachable';
+    return { available: false, backend: 'qdrant', reason: `Qdrant unreachable: ${detail}` };
+  }
+}
+
 /** Truthful async store readiness (for health rollup — never a faked up). */
 export interface VectorStoreReadiness {
   readonly available: boolean;
@@ -104,9 +146,12 @@ export function createVectorFoundation(deps: VectorFoundationDeps): VectorFounda
           ...(status.reason ? { reason: status.reason } : {}),
         };
       }
-      return store.configured
-        ? { available: true, backend: 'qdrant' }
-        : { available: false, backend: 'qdrant', reason: 'QDRANT_URL not set' };
+      // Network-backed Qdrant: URL presence is configured, not reachable. Only
+      // report `available` after a real liveness probe against the server.
+      if (!store.configured) {
+        return { available: false, backend: 'qdrant', reason: 'QDRANT_URL not set' };
+      }
+      return probeQdrant(config, deps.fetchImpl);
     },
   };
 }

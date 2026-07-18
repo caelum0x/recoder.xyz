@@ -237,8 +237,9 @@ export class MemoryComposer implements MemoryModule {
         : { name: 'colbert', available: false, reason: 'COLBERT_RERANK_URL not set' },
     );
 
-    // vector store (mirror) — truthful async probe: qdrant mirrors its URL;
-    // the embedded lance store actually attempts its napi/SDK load.
+    // vector store (mirror) — truthful async probe: qdrant does a real liveness
+    // GET (URL presence alone is not reachability); the embedded lance store
+    // actually attempts its napi/SDK load.
     try {
       const storeProbe = await this.foundation.probeStore();
       readiness.push(

@@ -13,6 +13,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { memoryConfigSchema, type MemoryConfig } from '../config.js';
+import type { FetchLike, HttpResponseLike } from '../vector-store.js';
 import type { EmbeddingPort } from '../ports/embedding.port.js';
 import type { LanceConnection, LanceModule, LanceRow, LanceTable } from '../adapters/lance-napi.client.js';
 import { createVectorFoundation } from './vector-foundation.js';
@@ -112,12 +113,50 @@ function fakeLanceModule(): { module: LanceModule; uris: string[] } {
 }
 
 describe('vector-foundation embedded lance adoption', () => {
-  it('keeps Qdrant as the store when QDRANT_URL is set', async () => {
+  it('keeps Qdrant as the store when QDRANT_URL is set and the server is live', async () => {
+    const calls: string[] = [];
+    const okFetch: FetchLike = async (url) => {
+      calls.push(url);
+      return { ok: true, status: 200, json: async () => ({ result: { collections: [] } }) };
+    };
     const foundation = createVectorFoundation({
       config: configWith({ qdrantUrl: 'http://localhost:6333' }),
+      fetchImpl: okFetch,
     });
     expect(foundation.storeBackend).toBe('qdrant');
     await expect(foundation.probeStore()).resolves.toEqual({ available: true, backend: 'qdrant' });
+    // The probe made a REAL liveness call — availability is not inferred from the URL.
+    expect(calls).toEqual(['http://localhost:6333/collections']);
+  });
+
+  it('reports the Qdrant store DOWN when the configured server is unreachable', async () => {
+    const downFetch: FetchLike = async () => {
+      throw new Error('ECONNREFUSED');
+    };
+    const foundation = createVectorFoundation({
+      config: configWith({ qdrantUrl: 'http://localhost:6333' }),
+      fetchImpl: downFetch,
+    });
+    const probe = await foundation.probeStore();
+    expect(probe.backend).toBe('qdrant');
+    // URL is present (store.configured) yet the probe truthfully reports NOT available.
+    expect(foundation.store.configured).toBe(true);
+    expect(probe.available).toBe(false);
+    expect(probe.reason).toMatch(/Qdrant unreachable.*ECONNREFUSED/);
+  });
+
+  it('reports the Qdrant store DOWN on a non-2xx probe response', async () => {
+    const errorFetch: FetchLike = async () => {
+      const res: HttpResponseLike = { ok: false, status: 503, json: async () => ({}) };
+      return res;
+    };
+    const foundation = createVectorFoundation({
+      config: configWith({ qdrantUrl: 'http://localhost:6333' }),
+      fetchImpl: errorFetch,
+    });
+    const probe = await foundation.probeStore();
+    expect(probe.available).toBe(false);
+    expect(probe.reason).toMatch(/HTTP 503/);
   });
 
   it('serves the full retrieval roundtrip over the embedded lance store on a temp dir', async () => {

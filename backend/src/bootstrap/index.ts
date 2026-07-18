@@ -1116,7 +1116,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     routerProvider('cloud', DOMAIN_REGISTRY.cloud.mountBase, cloud.routes()),
     // Social edges: connectors/bindings read models + the hostile-by-default webhook
     // ingress (`POST /api/social/webhooks/:channel`, RAW-body HMAC over req.rawBody).
-    routerProvider('social', '/api/social', social.routes()),
+    routerProvider('social', DOMAIN_REGISTRY.social.mountBase, social.routes()),
     // Interop-wire edges: A2A registry (agents) + task lifecycle/scratchpad (self-gated).
     routerProvider('interop-wire', '/api/interop', interopWire.routes()),
     // Interop-wire A2A WIRE: agent-card + JSON-RPC + signed ingress (mounts alongside

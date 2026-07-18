@@ -311,6 +311,47 @@ describe('startControlModeTail (streaming)', () => {
     expect(children[0]?.killed).toBe('SIGTERM');
   });
 
+  it('max attach duration reclaims the client even when the session stays alive (poller max-duration stop)', async () => {
+    // The poll tailer stops itself on max-duration WITHOUT the session dying
+    // (alive stays true), so the wrapped alive() self-clean never fires. The
+    // bounded maxAttachMs ceiling must reclaim the control client anyway and
+    // stop emitting post-terminal log events.
+    const { spawn, children } = makeSpawn();
+    const { input, events, captureCalls } = tailInput(); // inner stays alive:true
+    const tail = startControlModeTail(input, { ...DEPS(spawn), maxAttachMs: 15 });
+    expect(tail).toBeDefined();
+    expect(children[0]?.killed).toBeUndefined();
+
+    // Cross the max-attach ceiling — the client self-stops on its own timer.
+    await sleep(40);
+    expect(children[0]?.killed).toBe('SIGTERM');
+
+    // Post-terminal: any further pane output must NOT produce a log event, and
+    // capture() delegates to the inner substrate again (control client gone).
+    children[0]!.feed('%output %1 after-max\n');
+    await sleep(20);
+    expect(events).toHaveLength(0);
+    await expect(tail!.substrate.capture(HANDLE, 7)).resolves.toBe('inner-pane\n');
+    expect(captureCalls).toEqual([7]);
+    tail?.stop();
+  });
+
+  it('a clean %exit before the ceiling drops the max-attach timer (no dangling stop)', async () => {
+    const { spawn, children } = makeSpawn();
+    const { input, events } = tailInput();
+    const tail = startControlModeTail(input, { ...DEPS(spawn), maxAttachMs: 15, flushMs: 60_000 });
+
+    children[0]!.feed('%output %1 last\n%exit\n');
+    await sleep(5);
+    expect(events.map((e) => e.message)).toEqual(['last']);
+    // Let the (now-cleared) ceiling window elapse; capture stays delegated and
+    // no additional events are emitted by a lingering timer.
+    await sleep(30);
+    expect(events).toHaveLength(1);
+    await expect(tail!.substrate.capture(HANDLE)).resolves.toBe('inner-pane\n');
+    tail?.stop();
+  });
+
   it('exitCode stays delegated to the inner substrate (poller keeps terminal-event authority)', async () => {
     const { spawn } = makeSpawn();
     const { input } = tailInput();

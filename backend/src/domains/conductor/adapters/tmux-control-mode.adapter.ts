@@ -33,6 +33,7 @@ import {
   stripAnsi,
   stripDcsEnvelope,
   supportsControlMode,
+  DEFAULT_MAX_MS,
   MAX_DELTA_CHARS,
   type LoggerPort,
   type RunEventSink,
@@ -253,6 +254,14 @@ export interface ControlModeTailDeps {
   readonly exec?: ExecFn;
   /** Flush cadence override (tests). */
   readonly flushMs?: number;
+  /**
+   * Bounded lifetime for the control client, mirroring the poll tailer's
+   * `DEFAULT_MAX_MS` safety stop. The wrapped `alive()` only self-cleans on
+   * session death, but the poller ALSO stops itself on max-duration (with
+   * `alive` still true) — without this ceiling the control client would be
+   * orphaned and keep emitting post-terminal `log` events. Override in tests.
+   */
+  readonly maxAttachMs?: number;
   /** Clock seam for RunEvent ids/timestamps (tests). */
   readonly nowMs?: () => number;
 }
@@ -298,11 +307,13 @@ export function startControlModeTail(
   const logger = deps.logger ?? NOOP_LOGGER;
   const tmuxBin = deps.config.tmuxBin ?? 'tmux';
   const flushMs = deps.flushMs ?? CONTROL_MODE_FLUSH_MS;
+  const maxAttachMs = deps.maxAttachMs ?? DEFAULT_MAX_MS;
   const nowMs = deps.nowMs ?? Date.now;
 
   let pending = '';
   let seq = 0;
   let flushTimer: ReturnType<typeof setTimeout> | undefined;
+  let maxTimer: ReturnType<typeof setTimeout> | undefined;
 
   const appendLog = (text: string): void => {
     seq += 1;
@@ -352,6 +363,13 @@ export function startControlModeTail(
     if (finalFlush) flush();
   };
 
+  const clearMaxTimer = (): void => {
+    if (maxTimer) {
+      clearTimeout(maxTimer);
+      maxTimer = undefined;
+    }
+  };
+
   const attachment = attachControlMode(
     input.sessionName,
     {
@@ -366,12 +384,16 @@ export function startControlModeTail(
       },
       onExit: () => {
         // Session/client ended — flush what we have; the poller detects the
-        // terminal state (alive/exitCode) and emits completed/failed.
+        // terminal state (alive/exitCode) and emits completed/failed. The
+        // client is gone, so drop the bounded-lifetime ceiling too.
+        clearMaxTimer();
         stopFlushing(true);
       },
       onDegrade: () => {
         // Flush what we have; the wrapped capture() below starts delegating
-        // to the real substrate, so the poller resumes on its next tick.
+        // to the real substrate, so the poller resumes on its next tick. The
+        // client is gone, so drop the bounded-lifetime ceiling too.
+        clearMaxTimer();
         stopFlushing(true);
       },
     },
@@ -380,9 +402,26 @@ export function startControlModeTail(
   if (!attachment) return undefined;
 
   const stop = (): void => {
+    clearMaxTimer();
     stopFlushing(true);
     attachment.stop();
   };
+
+  // Bounded lifetime independent of the inner `alive()` signal. The poll tailer
+  // stops itself on max-duration WITHOUT the session dying (alive stays true),
+  // so the wrapped `alive()` self-clean below never fires for that path. Mirror
+  // the poller's DEFAULT_MAX_MS ceiling here so the control client (and its
+  // post-terminal `log` emission) is reclaimed deterministically instead of
+  // lingering until the tmux session itself eventually ends.
+  maxTimer = setTimeout(() => {
+    maxTimer = undefined;
+    logger.info('tmux control-mode listener reached max attach duration — self-stopping', {
+      workspaceId: input.workspaceId,
+      sessionName: input.sessionName,
+    });
+    stop();
+  }, maxAttachMs);
+  if (typeof maxTimer.unref === 'function') maxTimer.unref();
 
   const substrate: TailSubstrate = {
     capture: (handle: SubstrateHandle, lines?: number) =>
