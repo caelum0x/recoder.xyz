@@ -1,17 +1,26 @@
-# Recoder Backend — Complete File Tree (buildable plan)
+# Recoder Backend — Complete File Tree (buildable plan → shipped)
 
-> The full folder/file plan across all 14 domains + spine + engines. One line of
+> The full folder/file plan across all domains + spine + engines. One line of
 > responsibility per file. Grouped by area/language. This is the target the build
-> phases in [`BUILD-ORDER.md`](./BUILD-ORDER.md) fill in. Per-domain detail (DB
+> phases in [`BUILD-ORDER.md`](./BUILD-ORDER.md) filled in. Per-domain detail (DB
 > schema, edges, reuse notes) is in [`domains/`](./domains/). Legend: `[MOVE]` =
 > relocate existing code behind the composer, `[NEW]` = write from scratch,
 > `[REUSE]` = package/engine used in place. Tests are co-located.
+>
+> **SHIPPED (reconciled 2026-07-18):** all 12 phases are complete under
+> `backend/src/domains/*` — **15 domain dirs** (the planned `interop` shipped as
+> two: `interop` for the chain/gate/wire services + `interop-wire` for the a2a
+> routes/dispatch/runtimes/registry), booting with 15 truthful health sources,
+> tsc 0. Where the shipped tree diverges from the original plan below, a
+> `[SHIPPED]` note flags it inline; the design rationale is left intact. See
+> [`BUILD-STATUS.md`](./BUILD-STATUS.md) for the canonical phase/commit summary.
 
-Approx counts: spine ~26 · identity 36 · persistence 34 · edge 26 · agent-os 46 ·
-conductor 45 · interop 40 · engines 44 · inference 26 · social 30 · governance 33 ·
-memory 34 · billing 28 · cloud 27 · observability 23 → **~498 files** (incl.
-co-located tests, migrations, and the Rust/Python/Go engine seams referenced in
-place).
+Approx plan counts: spine ~26 · identity 36 · persistence 34 · edge 26 · agent-os 46 ·
+conductor 45 · interop (+ interop-wire) 40 · engines 44 · inference 26 · social 30 ·
+governance 33 · memory 34 · billing 28 · cloud 27 · observability 23 → **~498 files**
+(incl. co-located tests, migrations, and the Rust/Python/Go engine seams referenced
+in place). Shipped came in higher (~540 committed source files) once co-located
+tests and the interop/interop-wire split are counted.
 
 ---
 
@@ -30,7 +39,7 @@ backend/
     bootstrap/
       index.ts                              # [NEW] start(): build config → container → migrate → listen
       config.ts                             # [NEW] AppConfig loader: env → typed config, validated once (zod)
-      container.ts                          # [NEW] DI container: constructs all 14 modules in dependency order
+      container.ts                          # [NEW] DI container: constructs all domain modules in dependency order [SHIPPED: 15 domains]
       lifecycle.ts                          # [NEW] SIGTERM/SIGINT graceful start/drain/stop orchestration
       health-registry.ts                    # [NEW] registry of every domain HealthSource (fed to observability)
       engine-supervisor.ts                  # [NEW] boots/supervises napi/daemon/sidecar engines at startup
@@ -65,9 +74,12 @@ backend/
         __tests__/error.test.ts             # [NEW] thrown/rejected → stable envelope, no leak
       ws/
         upgrade-router.ts                   # [NEW] single server.on('upgrade') dispatch + auth + origin check
-        terminal.socket.ts                  # [NEW] /terminal WS ↔ conductor TerminalStreamPort (substrate pty)
-        stream.socket.ts                    # [NEW] /api/conductor/workspaces/:id/stream WS ↔ agent-os RunEvent fan-out (doc-sync/collaboration cut)
-        __tests__/upgrade-router.test.ts    # [NEW] unauth upgrade rejected; bad origin closed; path routing
+        upgrade-router.test.ts              # [NEW] unauth upgrade rejected; bad origin closed; path routing
+        # [SHIPPED] terminal.socket.ts / stream.socket.ts were NOT built as spine files.
+        # upgrade-router.ts dispatches to the conductor WS backends:
+        #   /terminal              → conductor/terminal/terminal-stream.ts (substrate pty control-mode)
+        #   /workspaces/:id/stream → conductor/terminal/live-events.ts (RunEvent fan-out)
+        # The doc-sync / collaboration socket was CUT (never shipped).
 ```
 
 ---
@@ -225,7 +237,7 @@ agent-os/
     space.service.ts                        # [MOVE] spaces + space policies + repo connect
     memory-candidate.service.ts             # [MOVE] remember→review lifecycle (no direct durable write)
     workflow.service.ts                     # [NEW] workflow definition CRUD + run dispatch (driver)
-    squad.service.ts                        # [NEW] squads: leader-routing + autopilots (ported multica)
+    squad.service.ts                        # [NEW] squads: leader-routing + autopilots (ported multica) [SHIPPED: + squad-autopilot.service.ts (cron→beads→conductor)]
     run-event-ingest.service.ts             # [NEW] RunEvent → validate → apply → append → outbox
     outbox-drain.service.ts                 # [MOVE] at-least-once drain loop (degrade-safe)
   controllers/
@@ -242,6 +254,8 @@ agent-os/
   migrations/
     0001-agent-os-schema.sql                # [MOVE] tasks/runs/approvals/artifacts/instructions/policies/spaces/events/outbox
     0003-squads.sql                         # [NEW] squads + squad_members + squad_activity
+    0004-state-of-record.sql                # [SHIPPED] Postgres state-of-record (append-only events + snapshots)
+    0005-workflow-definitions.sql           # [SHIPPED] workflow definition store
   __tests__/
     run-transition.test.ts                  # [NEW] legal/illegal state machine transitions
     run-event-ingest.test.ts                # [NEW] ingest → state + event + outbox, idempotency
@@ -326,6 +340,19 @@ conductor/
 
 ## Domain: interop — `backend/src/domains/interop/` (40 files)
 
+> **[SHIPPED]** This domain shipped as **two** dirs. `backend/src/domains/interop/`
+> holds the chain/gate + wire *services* (`gate/interop-chain.service.ts`,
+> `gate/governance-gate.adapter.ts`, `wire/{a2a-envelope,agent-card,a2a-jsonrpc-server,
+> signed-ingress}`, the interop/ext-authz/rate-limit middleware, and the
+> `interop-chain`/`a2a-transport` ports). `backend/src/domains/interop-wire/` holds the
+> a2a **routes** (`routes/{a2a,agents,tasks}.routes.ts` mounted at `/api/a2a/*`, plus
+> `rpc-admission.middleware.ts`), `dispatch/` (multi-dispatch, handoff, task-lifecycle,
+> a2a-methods), `runtimes/` (claude/codex/cursor/opencode/replit/windsurf adapters — the
+> per-runtime connectors shipped as adapters, not a `connectors.routes.ts`), `registry/`
+> (agent-registry + heartbeat-slo), `repositories/`, `bridge/` (context-bridge, scratchpad),
+> the `ed25519-ingress.gate.ts` (ed25519 ingress verification), and the interop MCP engine.
+> Both compose the same a2a-sdk contracts; the file list below is the pre-split plan.
+
 ```
 interop/
   index.ts                                  # [NEW] createInteropModule(deps) + InteropModule interface
@@ -371,9 +398,9 @@ interop/
     agent-registry.repository.ts            # [MOVE] concrete AgentRegistryRepo over QueryExecutor
     task-store.repository.ts                # [MOVE] concrete TaskStoreRepo (tasks/messages/scratchpad)
   routes/
-    interop.routes.ts                       # [MOVE] /api/a2a/* wire ingress + agent-card + registry
-    connectors.routes.ts                    # [MOVE] /api/a2a/connectors/* per-runtime connector control
-    runtimes.routes.ts                      # [MOVE] task-lifecycle/multi-dispatch/heartbeat/scratchpad/handoff
+    interop.routes.ts                       # [MOVE] /api/a2a/* wire ingress + agent-card + registry [SHIPPED as interop-wire/routes/{a2a,agents,tasks}.routes.ts]
+    connectors.routes.ts                    # [MOVE] per-runtime connector control [SHIPPED as interop-wire/runtimes/*.adapter.ts, not a route]
+    runtimes.routes.ts                      # [MOVE] task-lifecycle/multi-dispatch/heartbeat/scratchpad/handoff [SHIPPED under interop-wire/dispatch/ + registry/]
   mcp/
     interop-engine.ts                       # [NEW] MCP: send_task/task_respond/list_agents/inbox/dispatch
   migrations/
@@ -441,7 +468,8 @@ engines/
     engines-engine.ts                       # [NEW] MCP: engine.list/engine.health/engine.restart
     engine-registry.test.ts                 # [NEW] assertWiringComplete catches mis-registered engine
   routes/
-    engines.routes.ts                       # [NEW] list/health/restart + /api/mcp servers/call + /internal
+    engines.routes.ts                       # [NEW] list/health/restart + /internal
+    mcp-edge.routes.ts                      # [SHIPPED] governed MCP HTTP edge POST /api/mcp/tools/:server/:tool/call (was 404 → LIVE); binds every subject-bearing tool to the host-authorized McpToolCaller (cross-tenant class closed)
   migrations/
     NNNN_engine_registry.sql                # [NEW] engine_registry + engine_health_log + engine_restart_log
   __tests__/
@@ -474,8 +502,9 @@ inference/
     byok-key-cache.adapter.ts               # [MOVE] AES-256-GCM per-user key cache (vault, 5-min TTL)
     token-accounting.adapter.ts             # [NEW] usage → billing meter + RunEvent emit
   routes/
-    inference.routes.ts                     # [MOVE] /api/gateway/* (health, complete, embed, models, feedback)
-    openai-compat.routes.ts                 # [MOVE] /api/gateway/v1/{chat/completions,embeddings} (OpenAI wire + SSE)
+    inference.routes.ts                     # [MOVE] /api/gateway/* (health, complete, embed, models, feedback, BYOK keys — governed writes)
+    openai-compat.routes.ts                 # [MOVE] /api/gateway/v1/chat/completions (OpenAI wire + real in-proc SSE via inferenceStream)
+    openai-embeddings.routes.ts             # [SHIPPED] OpenAI-compatible embeddings edge mounted at /api/gateway/inference/v1/embeddings (+ /api/gateway/v1/embeddings); inference.embed MCP tool
   mcp/
     inference-engine.ts                     # [NEW] MCP: inference.complete/embed/feedback/models
   repositories/
@@ -525,8 +554,8 @@ social/
     connector-secrets.adapter.ts            # [NEW] @recoder/vault-backed secret resolution, degrade → down
     social-repository.adapter.ts            # [NEW] concrete SocialRepository over QueryExecutor
   routes/
-    social.routes.ts                        # [MOVE] GET /api/connectors + admin bind/unbind/send
-    webhook.routes.ts                       # [MOVE] POST /api/connectors/webhooks/:channel (RAW body, HMAC gate)
+    social.routes.ts                        # [MOVE] GET /api/social + admin bind/unbind/send + POST /api/social/webhooks/:channel (RAW body, HMAC gate) [SHIPPED: mounts at /api/social, NOT /api/connectors; webhook edge folded into this file]
+    channel-status.ts                       # [SHIPPED] read models for the health-shaped /api/social reads (planned webhook.routes.ts folded into social.routes.ts)
   mcp/
     social-engine.ts                        # [NEW] MCP: social.list_channels/send_message/channel_health
   migrations/
@@ -633,11 +662,12 @@ memory/
     vector-store.port.ts                    # [NEW] VectorStorePort: ensureCollection/upsert/search
     retrieval.port.ts                       # [NEW] RetrievalPort: ingest/search (RAG facade, consumed elsewhere)
   adapters/
-    mem0.adapter.ts                         # [MOVE] wraps engines/mem0-client.ts *(consume engines client — conflict #8)*
+    mem0.adapter.ts                         # [MOVE] wraps engines/mem0-client.ts *(consume engines client — conflict #8)* [SHIPPED: mem0 sidecar defaults to google/Gemini]
     beads-memory.adapter.ts                 # [MOVE] wraps conductor/beads-memory.ts (bd CLI)
     colbert.adapter.ts                      # [MOVE] wraps conductor/colbert-rerank.ts; identity fallback *conflict #8*
-    qdrant.adapter.ts                       # [MOVE] wraps agent-os/mcp/vector-store.ts createVectorStore
-    embedding.adapter.ts                    # [MOVE] wraps createEmbeddingPort (BYOK/tensorzero/openai)
+    qdrant.adapter.ts                       # [MOVE] wraps agent-os/mcp/vector-store.ts createVectorStore [SHIPPED: real qdrant liveness probe]
+    lance.adapter.ts                        # [SHIPPED] embedded LanceDB VectorStorePort (default, no external service) + lance-napi.client.ts
+    embedding.adapter.ts                    # [MOVE] wraps createEmbeddingPort (BYOK/tensorzero/openai) [SHIPPED: + embedding-fallback.adapter.ts]
     candidate-repository.adapter.ts         # [NEW] concrete MemoryRepository over QueryExecutor
     mem0-sidecar.client.ts                  # [MOVE] HTTP client to engines/py/mem0 FastAPI
     colbert-sidecar.client.ts               # [MOVE] HTTP client to engines/py/colbert rerank_server
@@ -689,7 +719,8 @@ billing/
     billing.repository.ts                   # [NEW] concrete MeteringRepository over QueryExecutor
   routes/
     billing.routes.ts                       # [MOVE] plan/checkout/usage/entitlements/invoices/portal
-    billing-webhooks.routes.ts              # [NEW] POST webhook edges (raw body + signature verify)
+    billing-webhooks.routes.ts              # [NEW] POST webhook edges (raw body + signature verify; idempotency dedup on processed_at)
+    internal-billing.routes.ts              # [SHIPPED] /internal/billing/meter — metering emitters decrement quotas at conductor+inference call sites
   mcp/
     billing-engine.ts                       # [MOVE] MCP: billing.plan.read/usage.read/entitlement.check
   migrations/

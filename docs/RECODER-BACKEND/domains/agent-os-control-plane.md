@@ -2,7 +2,17 @@
 
 **Folder prefix:** `backend/src/domains/agent-os/`
 **Boundary:** State-of-record owner — tasks, runs, approvals, artifacts, instructions, policies, spaces, events/outbox, workflows, memory candidates, and **squads** (leader-routing + autopilots ported from multica). Persists and serves the `@recoder/agent-os` contracts over `/api/agent-os/*` (+ `/internal/agent-os/*`).
-**Target size:** ~46 files.
+**Target size:** ~52 files (shipped).
+
+> **Reconciled to shipped reality (2026-07-18).** This domain COMPOSED the frozen
+> `@recoder/agent-os` package fresh (Phase 5a, commit `702f9d0d`) rather than
+> *moving* the legacy `backend/src/agent-os/` dir behind a composer — the granular
+> per-aggregate services this doc originally sketched (`task.service.ts`,
+> `run.service.ts`, `approval.service.ts`, …) live INSIDE the package
+> (`TaskService`, `transitionTaskRun`, `isAllowedTaskRunTransition`) and are wired
+> directly in the CRUD routes, so they do NOT exist as domain files. The legacy
+> flat `src/agent-os/` dir was later absorbed + removed (`84c3d41f3`). Sections
+> below are updated to the as-built tree; the design rationale is preserved.
 
 ---
 
@@ -19,14 +29,14 @@ Core responsibilities:
 5. **Squads.** Named teams (agents + humans) with a leader, per-member roles, capability routing, and autopilots — ported from multica into the TS conductor spine. Work can target a team, not just one agent.
 6. **Instructions / policies / memory candidates.** Compile instruction bundles (provenance-tracked), evaluate policy decisions, and manage the reviewable memory-candidate lifecycle (`remember → review → promote`, never a direct durable write).
 
-This domain is the **default composer target**: it MOVES the existing `backend/src/agent-os/` (71 files) behind a single `AgentOsModule` interface rather than creating a 4th copy. The heavy domain logic already lives in the `@recoder/agent-os` package (`RunService`, `ApprovalService`, `ArtifactService`, `TaskRoutingService`, `transitionTaskRun`, …) — this domain WIRES those services to persistence, governance, and edges.
+This domain COMPOSES the frozen `@recoder/agent-os` package fresh behind a single `AgentOsModule` interface rather than moving/copying the legacy `backend/src/agent-os/` dir (that flat dir was later absorbed + removed). The heavy domain logic already lives in the `@recoder/agent-os` package (`TaskService`, `transitionTaskRun`, `isAllowedTaskRunTransition`, run/approval/artifact contracts, …) — this domain WIRES those contracts to persistence, governance, and edges.
 
 ### Design principles honored
 
 - **Config only from bootstrap.** No `process.env` in domain code (the legacy `service-container.ts` reads env directly — this is REPLACED by a typed `AgentOsConfig` slice injected at construction).
 - **Pure factory.** `createAgentOsModule(deps)` — no top-level singletons (legacy `agentOsContainer` mutable singleton is removed).
-- **Repository is a port.** Business logic depends on `AgentOsRepositoryPort`; persistence provides the pg impl. Three drivers (pg/json/memory) exist as degrade-safe adapters.
-- **Truthful health.** `health()` reports `up|down` per engine (repository driver, outbox/NATS, governance gate, instruction compiler).
+- **Repository is a port.** Business logic depends on `AgentOsRepositoryPort`; persistence provides the pg impl. Two drivers (postgres/in-memory) ship as degrade-safe adapters — an injected repository wins, else the durable pg adapter binds to the injected executor, else in-memory degrade (all behind the same frozen port).
+- **Truthful health.** `health()` reports `up|down|degraded` per engine (repository driver, outbox/NATS, instruction compiler, squad autopilot seams).
 
 ---
 
@@ -35,62 +45,61 @@ This domain is the **default composer target**: it MOVES the existing `backend/s
 ```
 backend/src/domains/agent-os/
 ├── index.ts                              # factory + the ONE public interface (AgentOsModule)
-├── agent-os-module.ts                    # composer: fuses services + repo + gate behind the interface
-├── config.ts                             # AgentOsConfig slice (zod) + defaults
-├── types.ts                              # domain-internal types (not published)
-├── health.ts                             # health() aggregation for this module
-├── middleware/
-│   └── schema-guard.middleware.ts        # validateBody(zodSchema) boundary validation
+├── agent-os-module.ts                    # AgentOsComposer: fuses repo + gate + ingest + squads + workflows
+├── config.ts                             # AgentOsConfig slice (zod) + defaults + sliceAgentOsConfig()
+├── types.ts                              # domain-internal types (AgentOsDeps, ...)
+├── health.ts                             # buildAgentOsHealth() aggregation for this module
 ├── ports/
 │   ├── index.ts                          # barrel
 │   ├── agent-os-repository.port.ts       # Repository PORT (state-of-record CRUD) — EXPOSED to persistence
-│   ├── run-event-bus.port.ts             # RunEvent ingest + subscribe PORT — EXPOSED to conductor/runtimes
+│   ├── run-event.port.ts                 # RunEvent ingest + subscribe PORT — EXPOSED to conductor/runtimes
 │   ├── outbox-publisher.port.ts          # CloudEvents publisher PORT (consumed: interop/edge)
-│   ├── governance-gate.port.ts           # decide()/record_audit() PORT — CONSUMED from governance
-│   └── instruction-compiler.port.ts      # compile bundle PORT — CONSUMED from agent-instructions
+│   ├── governance-gate.port.ts           # decide()/recordAudit() PORT — CONSUMED from governance
+│   ├── instruction-compiler.port.ts      # compile bundle PORT — CONSUMED from agent-instructions
+│   └── squad-autopilot.port.ts           # SquadConductorPort dispatch seam (autopilot → conductor)
 ├── adapters/
 │   ├── postgres-agent-os.repository.ts   # pg impl of repository port (:param SQL, WHERE user_id)
-│   ├── json-file-agent-os.repository.ts  # json-file impl (degrade / dev)
 │   ├── in-memory-agent-os.repository.ts  # in-memory impl (tests / no-DB degrade)
-│   ├── governance-gate.adapter.ts        # wraps @recoder/governance; degrades to allow+log when down
+│   ├── postgres-workflow-definition.store.ts # durable pg workflow-definition store
+│   ├── agent-os-workflow-runner.driver.ts # default WorkflowDriver skinning @recoder/agent-workflows
+│   ├── governance-gate.adapter.ts        # wraps @recoder/governance gate seam
 │   ├── instruction-compiler.adapter.ts   # wraps @recoder/agent-instructions compiler
 │   └── nats-outbox-publisher.adapter.ts  # publishes to NATS; degrades to log-only sink
 ├── services/
 │   ├── run-transition.ts                 # PURE legal state machine (guards + transitionTaskRun wrap)
-│   ├── task.service.ts                   # task create/route/context-pack orchestration
-│   ├── run.service.ts                    # run lifecycle: claim/transition/handoff/verification
-│   ├── approval.service.ts               # approval request + approve/reject (gate-checked)
-│   ├── artifact.service.ts               # artifact + PR/preview artifact creation
-│   ├── instruction.service.ts            # compile + persist instruction bundles w/ provenance
-│   ├── policy.service.ts                 # policy decision evaluate + persist
-│   ├── space.service.ts                  # spaces + space policies + repo connect
-│   ├── memory-candidate.service.ts       # remember → review lifecycle (no direct durable write)
-│   ├── workflow.service.ts               # workflow definition CRUD + run dispatch (driver contract)
-│   ├── squad.service.ts                  # squads: leader-routing + autopilots (ported multica)
 │   ├── run-event-ingest.service.ts       # RunEvent → validate → apply → append → outbox
-│   └── outbox-drain.service.ts           # at-least-once drain loop (degrade-safe)
-├── controllers/
-│   └── agent-os.controller.ts            # HTTP handlers over the services (moved from legacy)
+│   ├── outbox-drain.service.ts           # at-least-once drain loop (degrade-safe)
+│   ├── squad.service.ts                  # squads: leader-routing + in-memory store (ported multica)
+│   ├── squad-autopilot.service.ts        # autopilot loop (cron→beads→conductor); truthful degrade
+│   └── workflow.service.ts               # workflow definition CRUD + dispatch (driver contract)
 ├── routes/
-│   ├── agent-os.routes.ts                # /api/agent-os/* main table
-│   ├── internal.routes.ts                # /internal/agent-os/* (INTERNAL_SERVICE_KEY) RunEvent ingest
-│   ├── memory-candidate.routes.ts        # /api/agent-os/memory/lifecycle/*
-│   ├── policy-evaluate.routes.ts         # /api/agent-os/policy/evaluate
-│   ├── workflow.routes.ts                # /api/agent-os/workflows/*
-│   └── squad.routes.ts                   # /api/agent-os/squads/*
+│   ├── agent-os.routes.ts                # /api/agent-os/* base table (summary/tasks/runs) + mounts CRUD
+│   ├── agent-os-crud.routes.ts           # full CRUD edge (spaces/agents/tasks/runs/artifacts/memory/...)
+│   ├── agent-os-crud.schemas.ts          # zod boundary schemas for the CRUD edge
+│   ├── internal-agent-os.routes.ts       # /internal/agent-os/* (INTERNAL_SERVICE_KEY) RunEvent ingest
+│   ├── squad-board.routes.ts             # GET /squads/board (autopilot roll-up)
+│   ├── squad-read.routes.ts              # /squads read-only introspection (list/detail/members/activity)
+│   ├── workflow.routes.ts                # /api/agent-os/workflows/* CRUD + dispatch
+│   └── workflow.schemas.ts               # zod schemas for the workflow edge
 ├── mcp/
-│   └── agent-os-engine.ts                # MCP tools: task.create/run.claim/approval.request/...
+│   └── agent-os-engine.ts                # READ-ONLY MCP tools: agent_os_summary/list_tasks/list_runs
 ├── migrations/                           # canonical SQL (mirrored to backend/migrations; runner in persistence)
 │   ├── 0001-agent-os-schema.sql          # tasks/runs/approvals/artifacts/instructions/policies/spaces/events/outbox
-│   ├── 0002-conductor-workspaces.sql     # conductor_workspaces + runtime_credentials
-│   └── 0003-squads.sql                   # squads + squad_members + squad_activity (NEW)
+│   ├── 0003-squads.sql                   # squads + squad_members + squad_activity
+│   ├── 0004-state-of-record.sql          # durable jsonb document store for PostgresAgentOsRepository
+│   └── 0005-workflow-definitions.sql     # durable jsonb store for PostgresWorkflowDefinitionStore
 └── __tests__/
     ├── run-transition.test.ts            # legal/illegal state machine transitions
     ├── run-event-ingest.test.ts          # ingest → state + event + outbox, idempotency
-    ├── approval-service.test.ts          # gate-checked approve/reject + audit append
-    ├── outbox-drain.test.ts              # at-least-once, NATS-down degrade
-    ├── squad.service.test.ts             # leader-routing + autopilot dispatch
-    └── agent-os-routes.integration.test.ts # /api/agent-os/* happy + 401/403/validation paths
+    ├── agent-os-crud.routes.test.ts      # /api/agent-os/* CRUD happy + 401/403/validation paths
+    ├── agent-os-repository.contract.test.ts # repository port contract (pg + in-memory parity)
+    ├── agent-os-engine.mcp.test.ts       # read-only MCP tool surface
+    ├── internal-agent-os.routes.test.ts  # INTERNAL_SERVICE_KEY-gated ingest edges
+    ├── postgres-workflow-definition.store.test.ts # durable workflow store
+    ├── agent-os-workflow-runner.driver.test.ts # workflow runner driver
+    ├── workflow.routes.test.ts / workflow.service.test.ts # workflow CRUD + dispatch
+    ├── squad.test.ts / squad-autopilot.test.ts # leader-routing + autopilot dispatch
+    └── squad-read.routes.test.ts / squad-board.routes.test.ts # squad read + board edges
 ```
 
 ---
@@ -99,54 +108,45 @@ backend/src/domains/agent-os/
 
 | Path | Lang | Kind | Responsibility | Key exports |
 |------|------|------|----------------|-------------|
-| `index.ts` | ts | service | Public factory + interface; the ONLY thing other domains import | `createAgentOsModule(deps): AgentOsModule`, `type AgentOsModule` |
-| `agent-os-module.ts` | ts | service | Composer: constructs services, wires repo/gate/outbox, exposes ports + `health()` | `AgentOsModuleImpl`, `buildAgentOsModule()` |
-| `config.ts` | ts | config | Zod `AgentOsConfig` slice (repo driver, db url, NATS url, outbox interval, feature flags); fail-safe defaults | `agentOsConfigSchema`, `type AgentOsConfig`, `resolveAgentOsConfig(slice)` |
-| `types.ts` | ts | type | Domain-internal DTOs not in packages/* (ingest result, drain stats, module deps) | `type AgentOsDeps`, `type IngestResult`, `type DrainStats` |
-| `health.ts` | ts | service | Aggregate per-engine `up|down` (repository, outbox/NATS, gate, compiler) into `HealthReport` | `buildAgentOsHealth(engines): HealthReport` |
-| `middleware/schema-guard.middleware.ts` | ts | middleware | `validateBody`/`validateQuery` — zod boundary validation → `sendError(VALIDATION_ERROR)` | `validateBody(schema)`, `validateQuery(schema)` |
-| `ports/agent-os-repository.port.ts` | ts | port | The state-of-record CRUD interface every stateful op depends on (list/upsert per aggregate + snapshot) | `interface AgentOsRepositoryPort`, `type AgentOsRepositorySnapshot` |
-| `ports/run-event-bus.port.ts` | ts | port | Ingest + subscribe seam for RunEvents (conductor/runtimes emit; drain consumes) | `interface RunEventBusPort`, `type RunEventEnvelope` |
+| `index.ts` | ts | service | Public factory + interface; the ONLY thing other domains import | `createAgentOsModule(deps): Promise<AgentOsModule>`, `interface AgentOsModule` |
+| `agent-os-module.ts` | ts | service | `AgentOsComposer`: selects repo driver, wires gate/outbox/ingest/drain/squads/workflows, exposes seams + `health()` | `class AgentOsComposer` (async `AgentOsComposer.create(deps)`) |
+| `config.ts` | ts | config | Zod `AgentOsConfig` slice (repo driver, NATS url, outbox/autopilot intervals, feature flags); fail-safe defaults | `type AgentOsConfig`, `type AgentOsRepositoryDriver`, `sliceAgentOsConfig(config, overrides)` |
+| `types.ts` | ts | type | Domain-internal DTOs not in packages/* (module deps, injected seams) | `type AgentOsDeps` |
+| `health.ts` | ts | service | Aggregate per-engine `up\|down\|degraded` (repository, outbox/NATS, compiler, squad autopilot) into `ComponentHealth` | `buildAgentOsHealth(engines): Promise<ComponentHealth>` |
+| `ports/agent-os-repository.port.ts` | ts | port | The state-of-record CRUD interface every stateful op depends on (list/upsert per aggregate + snapshot) | `interface AgentOsRepositoryPort`, `type AgentOsRepositorySnapshot`, `type RepositoryResult` |
+| `ports/run-event.port.ts` | ts | port | Ingest + subscribe seam for RunEvents (conductor/runtimes emit; drain consumes) | `interface RunEventBusPort`, `type RunEventEnvelope`, `type RunEventIngestResult` |
 | `ports/outbox-publisher.port.ts` | ts | port | Publish CloudEvents outbox records; ack/mark-delivered | `interface OutboxPublisherPort` |
-| `ports/governance-gate.port.ts` | ts | port | `decide(write)` + `recordAudit(entry)` seam consumed from governance domain | `interface GovernanceGatePort`, `type GateDecision` |
+| `ports/governance-gate.port.ts` | ts | port | `decide()` + `recordAudit()` seam consumed from governance domain | `interface GovernanceGatePort`, `type GateVerdict`, `type AuditRecord` |
 | `ports/instruction-compiler.port.ts` | ts | port | Compile an `InstructionBundle` from sources with provenance | `interface InstructionCompilerPort` |
+| `ports/squad-autopilot.port.ts` | ts | port | Conductor dispatch seam for the autopilot loop (late-bound by bootstrap) | `interface SquadConductorPort`, `type SquadDispatchRequest`, `type SquadDispatchResult` |
 | `ports/index.ts` | ts | port | Barrel re-export of all ports | (re-exports) |
-| `adapters/postgres-agent-os.repository.ts` | ts | repository | pg impl: parameterized `:param` SQL, `WHERE user_id = :user_id` scoping, jsonb columns; MOVED from legacy | `PostgresAgentOsRepository` |
-| `adapters/json-file-agent-os.repository.ts` | ts | repository | JSON-file impl via `loadStore/saveStore`; dev + degrade | `JsonFileAgentOsRepository` |
+| `adapters/postgres-agent-os.repository.ts` | ts | repository | pg impl: parameterized `:param` SQL over a lossless jsonb document store | `PostgresAgentOsRepository` |
 | `adapters/in-memory-agent-os.repository.ts` | ts | repository | In-memory impl; tests + no-DB degrade path | `InMemoryAgentOsRepository` |
-| `adapters/governance-gate.adapter.ts` | ts | client | Wraps `@recoder/governance` facade; on gate `down` degrades to **deny-by-default for risky writes / allow+log for safe** and reports `down` | `createGovernanceGateAdapter(deps)` |
-| `adapters/instruction-compiler.adapter.ts` | ts | client | Wraps `@recoder/agent-instructions/agent-os-compiler`; degrades to `down` when sources unreadable | `createInstructionCompilerAdapter()` |
-| `adapters/nats-outbox-publisher.adapter.ts` | ts | client | Publishes CloudEvents to NATS subject; degrades to log-only sink when NATS absent; MOVED from legacy | `createNatsOutboxPublisher(config)` |
-| `services/run-transition.ts` | ts | service | PURE guards over `isAllowedTaskRunTransition`/`transitionTaskRun` from `@recoder/agent-os`; rejects illegal moves | `applyRunTransition(run, to, ctx)`, `assertLegalTransition(from,to)` |
-| `services/task.service.ts` | ts | service | Task upsert/route/history/context-pack; wraps `TaskService`+`TaskRoutingService`; gate-checks writes | `TaskDomainService` |
-| `services/run.service.ts` | ts | service | Run claim/transition/handoff/verification-result; emits RunEvents; uses `run-transition` | `RunDomainService` |
-| `services/approval.service.ts` | ts | service | Approval request + approve/reject; gate + audit append; emits CloudEvents | `ApprovalDomainService` |
-| `services/artifact.service.ts` | ts | service | Artifact + PR/preview artifact creation; hash + provenance | `ArtifactDomainService` |
-| `services/instruction.service.ts` | ts | service | Compile + persist instruction bundles; provenance + source hashes | `InstructionDomainService` |
-| `services/policy.service.ts` | ts | service | Evaluate + persist `PolicyDecision` via `@recoder/agent-policy` | `PolicyDomainService` |
-| `services/space.service.ts` | ts | service | Spaces, space policies, GitHub repo connect; owner-scoped | `SpaceDomainService` |
-| `services/memory-candidate.service.ts` | ts | service | `remember → review` lifecycle; never writes durable memory directly; evidence-required | `MemoryCandidateDomainService` |
-| `services/workflow.service.ts` | ts | service | Workflow definition CRUD + run dispatch via `@recoder/workflow-engine` driver | `WorkflowDomainService` |
-| `services/squad.service.ts` | ts | service | Squads: create/roster/leader-routing + autopilots; ported multica; uses `@recoder/coordination` squad-dispatch | `SquadDomainService` |
+| `adapters/postgres-workflow-definition.store.ts` | ts | repository | Durable pg jsonb store for workflow definitions (survives restart) | `PostgresWorkflowDefinitionStore` |
+| `adapters/agent-os-workflow-runner.driver.ts` | ts | client | Default `WorkflowDriver` skinning the frozen `@recoder/agent-workflows` runner (truthful dispatch, not `not_configured`) | `AgentOsWorkflowRunnerDriver` |
+| `adapters/governance-gate.adapter.ts` | ts | client | Wraps the injected `@recoder/governance` gate seam; degrade-safe | `createGovernanceGateAdapter(deps)` |
+| `adapters/instruction-compiler.adapter.ts` | ts | client | Wraps `@recoder/agent-instructions/agent-os-compiler`; degrades when sources unreadable | `createInstructionCompilerAdapter(logger)` |
+| `adapters/nats-outbox-publisher.adapter.ts` | ts | client | Publishes CloudEvents to NATS subject; degrades to log-only sink when NATS absent | `createNatsOutboxPublisher(config)` |
+| `services/run-transition.ts` | ts | service | PURE guards over `isAllowedTaskRunTransition`/`transitionTaskRun` from `@recoder/agent-os`; rejects illegal moves | (pure transition helpers) |
 | `services/run-event-ingest.service.ts` | ts | service | Validate RunEvent → apply to state-of-record → append event log → enqueue outbox; idempotent by event id | `RunEventIngestService` |
-| `services/outbox-drain.service.ts` | ts | service | At-least-once drain loop; claims pending outbox, publishes, marks delivered; degrade-safe; MOVED from legacy | `OutboxDrainService`, `startOutboxDrainLoop(deps)` |
-| `controllers/agent-os.controller.ts` | ts | route | HTTP handlers delegating to services; `sendSuccess/sendError`; auth + owner scoping; MOVED from legacy | `AgentOsController` |
-| `routes/agent-os.routes.ts` | ts | route | `/api/agent-os/*` route table; mounts sub-routers; `authenticateRequest` + `validateBody` | `createAgentOsRouter(module)` |
-| `routes/internal.routes.ts` | ts | route | `/internal/agent-os/*` RunEvent ingest + evidence; `INTERNAL_SERVICE_KEY`-gated | `createInternalAgentOsRouter(module)` |
-| `routes/memory-candidate.routes.ts` | ts | route | `/api/agent-os/memory/lifecycle/*` candidate list/create/review | `createMemoryCandidateRouter(module)` |
-| `routes/policy-evaluate.routes.ts` | ts | route | `POST /api/agent-os/policy/evaluate` → live `PolicyDecision` | `createPolicyEvaluateRouter(module)` |
-| `routes/workflow.routes.ts` | ts | route | `/api/agent-os/workflows/*` definitions + dispatch | `createWorkflowRouter(module)` |
-| `routes/squad.routes.ts` | ts | route | `/api/agent-os/squads/*` roster + dispatch + activity | `createSquadRouter(module)` |
-| `mcp/agent-os-engine.ts` | ts | client | MCP tools (`task.create`, `run.claim`, `run.transition`, `approval.request`, `memory.remember`, `squad.dispatch`); conforms `@recoder/agent-mcp` ToolRouter; passes interop chain | `registerAgentOsMcpTools(router, module)` |
-| `migrations/0001-agent-os-schema.sql` | sql | migration | Core tables (see §4); vector ext; MOVED from legacy | (DDL) |
-| `migrations/0002-conductor-workspaces.sql` | sql | migration | `conductor_workspaces`, `runtime_credentials`; MOVED from legacy | (DDL) |
-| `migrations/0003-squads.sql` | sql | migration | `squads`, `squad_members`, `squad_activity` (NEW) | (DDL) |
-| `__tests__/run-transition.test.ts` | ts | test | All legal transitions pass; every illegal transition rejected with `ErrorCode` | — |
-| `__tests__/run-event-ingest.test.ts` | ts | test | Ingest applies state + appends event + enqueues outbox; duplicate event id is idempotent | — |
-| `__tests__/approval-service.test.ts` | ts | test | approve/reject gate-checked; audit entry appended; rejected write blocked | — |
-| `__tests__/outbox-drain.test.ts` | ts | test | Delivers pending once; NATS-down → records stay pending + health `down`, no data loss | — |
-| `__tests__/squad.service.test.ts` | ts | test | Leader-routing picks capability match; autopilot dispatch emits RunEvent | — |
-| `__tests__/agent-os-routes.integration.test.ts` | ts | test | happy path + 401 (no session) + 403 (cross-owner) + 400 (bad body) | — |
+| `services/outbox-drain.service.ts` | ts | service | At-least-once drain loop; claims pending outbox, publishes, marks delivered; degrade-safe | `OutboxDrainService` |
+| `services/squad.service.ts` | ts | service | Squads: create/roster/leader-routing over an in-memory store; ported multica | `SquadService`, `InMemorySquadStore` |
+| `services/squad-autopilot.service.ts` | ts | service | Autopilot loop (cron→beads→conductor); ticks report truthful `degraded` when a seam is absent | `SquadAutopilotService` |
+| `services/workflow.service.ts` | ts | service | Workflow definition CRUD + dispatch via a `WorkflowDriver`; durable pg or in-memory store | `WorkflowService`, `InMemoryWorkflowDefinitionStore`, `type WorkflowDefinitionStore` |
+| `routes/agent-os.routes.ts` | ts | route | `/api/agent-os/*` base table (`/summary`, `/tasks`, `/runs`) + mounts the CRUD sub-router | `buildAgentOsRouter(deps)` |
+| `routes/agent-os-crud.routes.ts` | ts | route | Full CRUD edge: spaces/agents/tasks/runs (create + transition, composing the frozen contracts)/artifacts/memory/instructions/policies/events; zod-validated | `buildAgentOsCrudRouter(deps)` |
+| `routes/agent-os-crud.schemas.ts` | ts | schema | Zod boundary schemas for the CRUD edge | (schema exports) |
+| `routes/internal-agent-os.routes.ts` | ts | route | `/internal/agent-os/*` RunEvent ingest (`/events`, `/runs/:runId/steps`, `/runtime-evidence`, `/outbox/drain`); `INTERNAL_SERVICE_KEY`-gated | `buildInternalAgentOsRouter(deps)` |
+| `routes/squad-board.routes.ts` | ts | route | `GET /squads/board` — autopilot roll-up (mounted first so it wins over `/squads/:squadId`) | `buildSquadBoardRouter(deps)` |
+| `routes/squad-read.routes.ts` | ts | route | `/squads` READ-ONLY introspection (list/detail/members/activity); squads are never mutated over HTTP/MCP | `buildSquadReadRouter(deps)` |
+| `routes/workflow.routes.ts` | ts | route | `/api/agent-os/workflows/*` definitions CRUD + `POST /workflows/:workflowId/dispatch` | `buildWorkflowRouter(deps)` |
+| `routes/workflow.schemas.ts` | ts | schema | Zod schemas for the workflow edge | (schema exports) |
+| `mcp/agent-os-engine.ts` | ts | client | READ-ONLY MCP introspection tools (`agent_os_summary`, `agent_os_list_tasks`, `agent_os_list_runs`) | `buildAgentOsMcpTools(repository)` |
+| `migrations/0001-agent-os-schema.sql` | sql | migration | Core tables (see §4); vector ext | (DDL) |
+| `migrations/0003-squads.sql` | sql | migration | `squads`, `squad_members`, `squad_activity` | (DDL) |
+| `migrations/0004-state-of-record.sql` | sql | migration | Lossless jsonb document store the `PostgresAgentOsRepository` binds to | (DDL) |
+| `migrations/0005-workflow-definitions.sql` | sql | migration | Durable jsonb store the `PostgresWorkflowDefinitionStore` binds to | (DDL) |
+| `__tests__/*` | ts | test | run-transition (legal/illegal), run-event-ingest (idempotent ingest→state+event+outbox), agent-os-crud routes (happy + 401/403/validation), repository contract (pg∥in-memory parity), MCP engine, internal ingest edges, workflow store/driver/routes/service, squad + squad-autopilot + squad read/board | — |
 
 ---
 
@@ -170,12 +170,16 @@ Canonical SQL lives here and is mirrored to `backend/migrations/`; the runner li
 - `github_delivery_links`, `webhook_deliveries`, `connector_installations`, `oss_components`
 - MCP registry mirror: `mcp_servers`, `mcp_tools`, `mcp_sessions`, `mcp_tool_calls`
 
-**Conductor workspaces (0002):** `conductor_workspaces`, `runtime_credentials`.
+> **Conductor workspaces** (`conductor_workspaces`, `runtime_credentials`) ship in the **conductor** domain's own migrations, not here. There is no `0002` in this domain — the migration numbering jumps `0001 → 0003`.
 
-**Squads (0003, NEW):**
+**Squads (0003):**
 - `squads(squad_id pk, space_id fk, display_name, leader_id, leader_kind, autopilot jsonb, owner_id, created_at, updated_at)`
 - `squad_members(squad_id fk, member_id, member_kind, role, project_id, added_at, primary key(squad_id, member_id))`
-- `squad_activity(activity_id pk, squad_id fk, actor, action, detail, at)` — capped log (200 rows/squad, pruned on insert)
+- `squad_activity(activity_id pk, squad_id fk, actor, action, detail, at)` — capped log (pruned on insert)
+
+**State-of-record (0004):** a lossless jsonb document store the `PostgresAgentOsRepository` binds to (durable, survives restart).
+
+**Workflow definitions (0005):** a lossless jsonb store the `PostgresWorkflowDefinitionStore` binds to (durable workflow definitions).
 
 ---
 
@@ -183,21 +187,25 @@ Canonical SQL lives here and is mirrored to `backend/migrations/`; the runner li
 
 Mounted by the `edge` domain's route table; every call passes the interop chain `authorize → risk → policy → audit`.
 
-**`/api/agent-os/*`** (session-authenticated, owner-scoped):
-- `GET /health`, `GET /summary`
-- `GET|POST /agents`, `POST /agents/reconcile`
-- `GET|POST /spaces`, `POST /spaces/:spaceId/repositories/github`, `GET|POST /spaces/:spaceId/policies`
-- `GET|POST /tasks`, `POST /tasks/route`, `GET /tasks/:taskId/history`, `GET /tasks/:taskId/context-pack`
-- `GET|POST /runs`, `POST /runs/:runId/claim`, `POST /runs/:runId/transition`, `POST /runs/:runId/handoff`, `POST /runs/:runId/verification-results`, `GET /runs/:runId/history`
-- `GET|POST /approvals`, `POST /approvals/:id/approve`, `POST /approvals/:id/reject`
-- `GET|POST /artifacts`, `POST /artifacts/pull-request`, `POST /artifacts/preview`
-- `GET|POST /runtime-evidence`
-- `GET|POST /instructions`, `POST /instructions/compile`
-- `POST /policy/evaluate`, `GET|POST /policies`
-- `GET|POST /memory/candidates`, `GET|POST /memory/lifecycle/candidates`, `POST /memory/lifecycle/candidates/:id/review`
-- `GET|POST /workflows`, `POST /workflows/:id/dispatch`
-- `GET|POST /squads`, `POST /squads/:id/members`, `POST /squads/:id/dispatch`, `GET /squads/:id/activity`
-- `GET /events` (paginated, immutable log)
+Reads sit behind `middleware.authenticate`; writes behind `middleware.authenticateMutating` (never an anonymous principal). Squads + instructions + policies + approvals are **read-only mirrors** on this surface — their authoritative lifecycle lives in the governance domain / the compiler / the gate; they are never mutated over `/api/agent-os` or MCP.
+
+**`/api/agent-os/*`** (session-authenticated):
+- `GET /summary`
+- `GET /agents`, `GET /agents/:agentId`, `POST /agents`
+- `GET /spaces`, `GET /spaces/:spaceId`, `POST /spaces`, `PUT /spaces/:spaceId/policy`
+- `GET /tasks`, `GET /tasks/:taskId`, `POST /tasks`
+- `GET /runs`, `GET /runs/:runId`, `POST /runs` (creation composes `TaskService.createRun`), `POST /runs/:runId/transition` (legality via `isAllowedTaskRunTransition`/`transitionTaskRun`)
+- `GET /approvals`, `GET /approvals/:approvalId` (READ-ONLY mirror)
+- `GET /artifacts`, `GET /artifacts/:artifactId`, `POST /artifacts`
+- `GET /runtime-evidence` (read model; ingest is the internal edge's)
+- `GET /memory/items`, `GET /memory/candidates`, `POST /memory/candidates` (evidence-backed proposal; promotion stays a reviewed action, never this edge)
+- `GET /instructions`, `GET /instructions/:bundleId` (READ-ONLY: compiler-produced)
+- `GET /policies`, `GET /policies/:decisionId` (READ-ONLY: gate-produced)
+- `GET /events` (filter by `taskId`/`runId`; append-only log)
+- `GET /workflows`, `GET /workflows/:workflowId`, `POST /workflows`, `DELETE /workflows/:workflowId`, `POST /workflows/:workflowId/dispatch`
+- `GET /squads/board`, `GET /squads`, `GET /squads/:squadId`, `GET /squads/:squadId/members`, `GET /squads/:squadId/activity` (all READ-ONLY)
+
+> **Not shipped as HTTP edges** (design sketch that reality did not build): `POST /agents/reconcile`, `POST /tasks/route`, task history/context-pack, run `claim`/`handoff`/`verification-results`, approval `approve`/`reject`, `POST /artifacts/pull-request`/`preview`, `POST /instructions/compile`, `POST /policy/evaluate`, and all squad mutations (`POST /squads`, `/members`, `/dispatch`). These operations live inside the composed services / other domains, not on this router.
 
 **`/internal/agent-os/*`** (`INTERNAL_SERVICE_KEY` header, worker-to-backend only):
 - `POST /events` — RunEvent ingest (batch)
@@ -205,7 +213,9 @@ Mounted by the `edge` domain's route table; every call passes the interop chain 
 - `POST /runtime-evidence` — evidence attach
 - `POST /outbox/drain` — manual drain trigger
 
-**WS:** run/event stream is exposed via the `edge` domain's `/sync` channel; this domain publishes `RunEvent`s onto the bus, edge fans out.
+(The same internal router is also reachable under the module's own `<mountBase>/internal/*` for back-compat.)
+
+**WS:** run/event stream is exposed via the `edge` domain's `/stream` channel; this domain publishes `RunEvent`s onto the bus, edge fans out.
 
 ---
 
@@ -224,7 +234,7 @@ Mounted by the `edge` domain's route table; every call passes the interop chain 
 - `QueryExecutor`/pg `Pool` ← persistence domain.
 - `Session` ← identity domain — carried on every request.
 - `AppConfig` slice ← bootstrap.
-- Policy engine ← `@recoder/agent-policy`; workflow driver ← `@recoder/workflow-engine`; squad dispatch ← `@recoder/coordination`.
+- Policy engine ← `@recoder/agent-policy`; workflow runner/driver ← `@recoder/agent-workflows`; squad autopilot dispatch ← the injected `SquadConductorPort` + beads seams.
 
 ---
 
@@ -239,19 +249,15 @@ Mounted by the `edge` domain's route table; every call passes the interop chain 
 - `@recoder/agent-policy` — deterministic policy decisions.
 - `@recoder/agent-memory` — candidate lifecycle helpers.
 - `@recoder/agent-mcp` — ToolRouter shape.
-- `@recoder/workflow-engine` / `@recoder/agent-workflows` — workflow driver contract.
-- `@recoder/coordination` — `squad-dispatch` + `squad-leader-policy` (leader routing).
-- `@recoder/oss-registry`, `@recoder/ui-agent-os` (cockpit summary), `@recoder/logger`.
+- `@recoder/agent-workflows` — workflow runner + driver contract (the shipped `AgentOsWorkflowRunnerDriver` skins it).
+- squad leader-routing is ported from multica into `services/squad.service.ts` (an in-memory store); the autopilot's dispatch flows through the injected `SquadConductorPort` + beads seams, not a package.
+- `@recoder/logger` and the shared http/error helpers.
 
-**REUSE existing backend code (MOVE behind composer, do not rewrite):**
-- `backend/src/agent-os/controllers/agent-os.controller.ts` → `controllers/agent-os.controller.ts`
-- `backend/src/agent-os/repositories/*` → `adapters/*-agent-os.repository.ts`
-- `backend/src/agent-os/outbox-drain.service.ts` + `outbox-drain-loop.ts` → `services/outbox-drain.service.ts`
-- `backend/src/agent-os/nats-outbox-publisher.ts` → `adapters/nats-outbox-publisher.adapter.ts`
-- `backend/src/agent-os/routes/{agent-os,internal,memory-candidate,policy-evaluate}.routes.ts` → `routes/*`
-- `backend/src/agent-os/middleware/schema-guard.middleware.ts` → `middleware/`
-- `backend/src/agent-os/migrations/000{1,2}-*.sql` → `migrations/`
-- `backend/src/a2a/squad.service.ts` + `squad-dispatch.service.ts` → `services/squad.service.ts` (ported to state-of-record instead of JSON store)
+**As-built (COMPOSED fresh, NOT moved):** Phase 5a composed the frozen `@recoder/agent-os` package directly (commit `702f9d0d`) rather than moving the legacy `backend/src/agent-os/` dir behind a composer. The granular controllers/repositories/routes this doc originally planned to MOVE were **not** carried over file-for-file:
+- The CRUD edge is written fresh in `routes/agent-os-crud.routes.ts` (composing `TaskService`/`transitionTaskRun`), not a moved `agent-os.controller.ts` — there is no `controllers/` dir.
+- Repositories are `postgres` + `in-memory` only (no `json-file` driver).
+- Boundary validation uses the shared `http/middleware/validate.js` + co-located `*.schemas.ts` — there is no `middleware/schema-guard.middleware.ts`.
+- The legacy flat `src/agent-os/` dir was later absorbed + removed (`84c3d41f3`); nothing in this domain still points at it.
 
 **REPLACE (do not carry forward):**
 - Legacy `service-container.ts` mutable singleton + direct `process.env` reads → replaced by `createAgentOsModule(deps)` pure factory + injected `AgentOsConfig`.
@@ -261,10 +267,11 @@ Mounted by the `edge` domain's route table; every call passes the interop chain 
 - `agent-os-module.ts` composer + `index.ts` factory + `config.ts` + `types.ts` + `health.ts`.
 - `ports/*` explicit port interfaces (formalize the seams).
 - `adapters/governance-gate.adapter.ts`, `adapters/instruction-compiler.adapter.ts`.
-- `services/run-transition.ts` (extract the state-machine guard), `services/run-event-ingest.service.ts`, `services/workflow.service.ts`, `services/squad.service.ts` (ported).
-- `routes/workflow.routes.ts`, `routes/squad.routes.ts`.
-- `mcp/agent-os-engine.ts` (MCP tool surface for control-plane ops).
-- `migrations/0003-squads.sql`.
+- `services/run-transition.ts` (extract the state-machine guard), `services/run-event-ingest.service.ts`, `services/workflow.service.ts`, `services/squad.service.ts` (ported) + `services/squad-autopilot.service.ts`.
+- `adapters/agent-os-workflow-runner.driver.ts` + `adapters/postgres-workflow-definition.store.ts`.
+- `routes/agent-os-crud.routes.ts` (+ schemas), `routes/workflow.routes.ts` (+ schemas), `routes/squad-read.routes.ts`, `routes/squad-board.routes.ts`.
+- `mcp/agent-os-engine.ts` (READ-ONLY MCP introspection tools — summary/list-tasks/list-runs).
+- `migrations/0003-squads.sql`, `0004-state-of-record.sql`, `0005-workflow-definitions.sql`.
 - tests in `__tests__/`.
 
 **REUSE, don't split:** the code-graph / recodergit / brain services currently living in `backend/src/agent-os/` are NOT state-of-record — they move to the **memory**/**conductor** domains respectively, not here. This keeps this domain's boundary clean (state-of-record only).
@@ -275,15 +282,24 @@ Mounted by the `edge` domain's route table; every call passes the interop chain 
 
 | Dependency absent | Behavior |
 |---|---|
-| Postgres (`AGENT_OS_DATABASE_URL` missing) | Repository falls back to json/memory driver; `health.repository = down` labelled `degraded`; risky writes denied by gate policy, never faked 200 |
+| Postgres executor absent / driver ≠ `postgres` | Repository falls back to the in-memory driver; health reports the effective driver truthfully (`memory`); infra faults on the pg path surface as truthful 503s, never faked 200 |
 | NATS | Outbox publisher becomes log-only sink; records stay `pending` in `event_outbox` (no loss); `health.outbox = down` |
-| Governance gate | Deny-by-default for risky writes (approvals, deploys, memory promote); allow+log for safe reads; `health.gate = down` |
-| Instruction compiler sources unreadable | `POST /instructions/compile` returns `SERVICE_UNAVAILABLE`; `health.compiler = down` |
+| Governance gate | Writes route through the injected gate seam; a denied verdict refuses the write, never a faked 200 |
+| Instruction compiler sources unreadable | Compiler is a consumed seam (not an HTTP edge here); it degrades truthfully in health when sources are unreadable |
+| Squad autopilot seams (beads/conductor) absent | Autopilot ticks report a truthful `degraded`, never a faked launch |
 | INTERNAL_SERVICE_KEY unset | `/internal/*` returns 401 for all callers (fail-closed) |
 
 ---
 
 ## 9. Implementation Order
+
+> **Historical build plan.** This ordering reflects the original design; the
+> as-built (Phase 5a, `702f9d0d`) deviated where noted above — it COMPOSED
+> `@recoder/agent-os` fresh (no legacy MOVE), shipped only `postgres` + `in-memory`
+> repositories, wrote the CRUD edge fresh (no `controllers/`, no
+> `middleware/schema-guard`), and exposed READ-ONLY MCP tools. The MCP engine
+> registers via `buildAgentOsMcpTools(repository)` in the composer, not
+> `registerAgentOsMcpTools`.
 
 1. **Ports + config + types + health** (`ports/*`, `config.ts`, `types.ts`, `health.ts`) — the seams first, so the composer and adapters compile against interfaces.
 2. **Repository adapters** — MOVE the three legacy repositories behind `AgentOsRepositoryPort`; keep `PostgresAgentOsRepository` as the primary.

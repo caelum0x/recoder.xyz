@@ -6,6 +6,12 @@
 > This document is the canonical map. Each of the 14 domains has its own detailed
 > design under [`domains/`](./domains/); the buildable file plan is
 > [`FILE-TREE.md`](./FILE-TREE.md); the phased plan is [`BUILD-ORDER.md`](./BUILD-ORDER.md).
+>
+> **Shipped as of 2026-07-18** (see [`BUILD-STATUS.md`](./BUILD-STATUS.md)): the 14
+> domains live under `backend/src/domains/*` and ship as **15 directories** — the
+> A2A/interop domain is split into a hostile-wire core (`interop/`) and its
+> dispatch/runtime composer (`interop-wire/`) — so the backend boots with **15
+> truthful health sources**. `tsc` is 0; ~1462 backend tests pass.
 
 ---
 
@@ -177,11 +183,15 @@ the full file tree, DB schema, edges, and reuse notes.
    + `WorkspaceRepositoryPort` + `TerminalStreamPort`.**
 
 6. **A2A & Interop Runtimes** — [`domains/a2a-interop-runtimes.md`](./domains/a2a-interop-runtimes.md) ·
-   `backend/src/domains/interop/` (40 files). The hostile-by-default wire (A2A envelope
-   ingress/egress, agent-cards, ed25519/HMAC verify) **and** the runtime fan-out
-   (`ConductorRuntime` adapters that turn a Task into a live coding-agent Run emitting
-   RunEvents). **Exposes `InteropChain` (authorize→risk→policy→audit) + `A2ATransport` +
-   `RuntimeRegistry.dispatch`.**
+   `backend/src/domains/interop/` **+ `backend/src/domains/interop-wire/`**. Ships as
+   two cooperating directories (hence 15 domain dirs / health sources): `interop/` is
+   the hostile-by-default wire core (A2A envelope ingress/egress, agent-cards, **ed25519
+   ingress verification**), and `interop-wire/` is the dispatch/runtime composer that
+   layers agent registry, heartbeat SLO, scratchpad/context bridge, handoff, the A2A
+   JSON-RPC methods, and the six coding-agent runtime connectors — turning a Task into a
+   live Run emitting RunEvents. It wires `localRun` (the conductor `createWorkspace` seam)
+   plus a `remoteSender`, with first/quorum/handoff dispatch. **Exposes `InteropChain`
+   (authorize→risk→policy→audit) + `A2ATransport` + `RuntimeRegistry.dispatch`.**
 
 7. **Engines Integration** — [`domains/engines-integration.md`](./domains/engines-integration.md) ·
    `backend/src/domains/engines/` (44 files). The ONE governed path every engine is
@@ -192,9 +202,12 @@ the full file tree, DB schema, edges, and reuse notes.
 
 8. **Inference & LLM Gateway** — [`domains/inference-gateway.md`](./domains/inference-gateway.md) ·
    `backend/src/domains/inference/` (26 files). Every LLM/embedding call funnels here:
-   the TensorZero embedded gateway (napi → loopback → direct-provider BYOK ladder), the
-   model catalog, SSE streaming, the feedback→delivery-outcome loop, token accounting,
-   and the OpenAI-compatible edge. **Exposes `InferenceGateway`.**
+   the TensorZero ladder — release napi `.node` with **real in-proc SSE** (`inferenceStream`)
+   → supervised loopback → **rung-3 direct multi-provider BYOK router** (keys resolved from
+   the governance secrets vault into the delivery path) — the model catalog, SSE streaming,
+   the feedback→delivery-outcome loop, token accounting, and the OpenAI-compatible edge
+   (`/api/gateway/inference/v1/chat/completions` + `/api/gateway/inference/v1/embeddings`,
+   plus `inference.embed` MCP tool). **Exposes `InferenceGateway`.**
 
 9. **Social Connectors** — [`domains/social-connectors.md`](./domains/social-connectors.md) ·
    `backend/src/domains/social/` (30 files). The agents' presence on human channels:
@@ -233,7 +246,7 @@ the full file tree, DB schema, edges, and reuse notes.
 14. **Observability & Ops** — [`domains/observability-ops.md`](./domains/observability-ops.md) ·
     `backend/src/domains/observability/` (23 files). Truthful operational visibility:
     structured logging + correlation, Prometheus metrics, OTel tracing, the aggregated
-    `/health` + `/health/full` surface across all 14 domains, the audit/XDR projection
+    `/health` + `/health/full` surface across all 15 domain health sources, the audit/XDR projection
     (re-verifies Merkle proofs), and the ops-recorder work-signals pipeline
     (stuck/blocked/needs-you → board). **Exposes `MetricsPort` + `TracerPort` +
     `HealthSource` + `CorrelationContext`.**
@@ -468,14 +481,18 @@ WS `/terminal` (control-mode terminal stream) + per-workspace `/api/conductor/wo
 `/internal/a2a/heartbeat`.
 
 **Engines / MCP** : `GET /api/agent-os/engines` (+`:id/health`, +`:id/restart`),
-`GET /api/mcp/servers`, `POST /api/mcp/call`, `GET /internal/engines/health`.
+`GET /api/mcp/servers` (gated registry catalog), `POST /api/mcp/tools/:server/:tool/call`
+(the LIVE governed tool-call edge — the bridge's contract; formerly 404),
+`GET /internal/engines/health`.
 
-**Inference** `/api/gateway/*`: `health`, `models`, `complete`, `embed`, `feedback`,
-`v1/chat/completions` (SSE), `v1/embeddings`.
+**Inference** `/api/gateway/inference/*` (with a `/api/gateway/gateway/*` alias):
+`models`, `complete`, `feedback`, and the OpenAI-compatible `v1/chat/completions`
+(SSE) + `v1/embeddings`.
 
-**Social** : `GET /api/connectors`, `POST /api/connectors/webhooks/:channel`
-(HMAC raw-body), `POST /api/connectors/:id/{bind,send}`, `DELETE .../bind/:chatRef`,
-`POST /internal/social/probe`.
+**Social** `/api/social/*`: `GET /` (summary), `GET /channels`, `GET /connectors`,
+`GET|POST /bindings` (+`DELETE /bindings/:connectorId/:chatRef`), `POST /send`,
+`GET /health`, `POST /webhooks/:channel` (HMAC raw-body). *(Mounts at `/api/social`,
+NOT `/api/connectors`.)*
 
 **Billing** `/api/billing/*`: `plan`, `entitlements`, `usage`, `invoices`,
 `checkout`, `portal`, `health`, `webhooks/:provider` (provider ∈ polar|creem|paddle|dodo, signature-verified).
@@ -500,6 +517,17 @@ social (`list_channels`/`send_message`/`channel_health`), governance (`decide`/`
 memory (`memory.*`/`retrieval.*`), billing (`plan.read`/`usage.read`/`entitlement.check`),
 cloud (`sandbox_provision`/`destroy`/`deploy`/`preview_url`/`preview_health`/`fleet_status`/`mesh_status`),
 observability (`health`/`metrics_query`/`audit_search`/`signals`).
+
+**Caller-binding (subject security — shipped).** Every subject-bearing MCP tool
+derives the tenant/subject it acts for from the **host-authorized `McpToolCaller`**
+bound at the MCP edge trust boundary (`McpToolCallInput.caller`), **never** from a
+spoofable `requestedBy`/`tenant` argument. The binding rule at the edge:
+non-privileged caller → its OWN subject; a foreign subject requested by a
+non-privileged caller → `403`; `admin`/`internal` scope → may target an arbitrary
+subject; an absent caller → `AUTH_REQUIRED`. This closed the cross-tenant
+authorization class (quota drain, spend misattribution, sandbox provision/destroy,
+memory read/forget, audit/billing disclosure, `identity_link` hijack) across ~26
+tools; only pure-infra MCP files remain legitimately caller-free.
 
 ---
 
@@ -536,7 +564,7 @@ Non-negotiable laws every domain obeys:
 1. **Truthful health.** Every module exposes `health(): { status, degraded, engines:[{name,status}] }`.
    A missing key/binary/venv → `down` with a reason. `degraded:true` when a module still
    serves but an engine is down. **Never a faked `up`, never a fabricated result.**
-   The observability aggregator fuses all 14; a timeout → `unknown`, never a hang.
+   The observability aggregator fuses all 15 domain health sources; a timeout → `unknown`, never a hang.
 2. **Every WRITE passes `GovernanceGate.decide()`** before persistence and appends to
    the SHA-256 Merkle audit chain. On gate fault: deny-biased (fail closed) for risky
    writes, allow+log for safe reads, never a silent allow.
@@ -547,7 +575,10 @@ Non-negotiable laws every domain obeys:
 5. **Security is enforced below the model.** Never trust agent output, MCP tool
    descriptions, runtime-reported success, browser content, or memory candidates.
    Always verify actor identity, task ownership, envelope validity, lock coverage,
-   approval records, artifact provenance.
+   approval records, artifact provenance. **Subject-bearing MCP tools bind the
+   tenant/subject to the host-authorized `McpToolCaller` at the edge, never to a
+   caller-supplied arg** (non-privileged → own subject, foreign → `403`,
+   admin/internal → arbitrary, absent → `AUTH_REQUIRED`).
 6. **State-of-record is Recoder-owned.** Runtimes/engines/sandboxes are replaceable
    execution surfaces that emit `RunEvent`s back; they never own task/approval/memory
    state. Restart-survivability: the record is persisted BEFORE launch; the reconciler

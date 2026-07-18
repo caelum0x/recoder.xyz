@@ -3,7 +3,9 @@
 **Folder prefix:** `backend/src/domains/cloud/` (+ used-in-place Go engines `apps/desktop/server/engines/{ziti,recoder-xds}`)
 **DI key:** `cloud`
 **Public interface:** `CloudModule` (from `index.ts`)
-**Tier:** Cloud/Teams (build now; the mesh data plane is *registered but not live* until launch).
+**Tier:** Cloud/Teams (built; the mesh data plane is *registered but not live* until launch).
+
+> **Status — SHIPPED (Phase 10, commit `0c7a063e7`; serial-integrated `489f2c95b`).** Live under `backend/src/domains/cloud/` (NOT `backend/src/modules/*`), mounted at `/api/agent-os/cloud` via the edge route table (`DOMAIN_REGISTRY.cloud.mountBase`), one of the 15 truthful health sources at boot. ~40 files, 33 domain tests. The mesh (ziti/xDS) stays registered/observable with no live data plane. This design doc has been reconciled to that shipped surface — where the built shape diverged from the original plan (adapter filenames, the read/write MCP split, tenant edge shape) the doc now describes what shipped.
 
 ---
 
@@ -18,11 +20,11 @@ The `cloud` domain is the **substrate provider for everything that runs off the 
 5. **Networking mesh diagnostics** — the ziti (zero-trust overlay) + recoder-xds (Envoy xDS) surface. **Registered and observable, no live data plane yet**: we expose identity/cluster registration status and health, but do not route production traffic through it until launch.
 6. **Deploy targets, domain/DNS, self-host vs cloud split** — target registry, custom-domain add + DNS/TLS verification records, and the flag that decides whether a capability provisions locally or in the cloud.
 
-**Boundary discipline.** The domain never shells out to a provider ad hoc. Every provider (Daytona, E2B, ziti, xds) is reached through a **port** in `ports/` with a **degrade-safe adapter** in `adapters/`. Missing keys/binaries → the engine reports `down`, the module reports `degraded:true`, and edges return `SERVICE_UNAVAILABLE` — never a faked success. Every **write** (provision, destroy, deploy, add-domain) routes through the governance gate; every **edge + MCP call** passes the interop `authorize→risk→policy→audit` chain.
+**Boundary discipline.** The domain never shells out to a provider ad hoc. Every provider (Daytona, E2B, ziti, xds) is reached through a **port** in `ports/` with a **degrade-safe adapter** in `adapters/`. Missing keys/binaries → the engine reports `down`, the module reports `degraded:true`, and edges return `SERVICE_UNAVAILABLE` — never a faked success. Every **write** (provision, destroy, deploy, preview-URL mint, add/verify/remove-domain) routes through the governance gate (`decide → audit`); every **edge** is guarded by the identity auth middleware, and every **MCP call** additionally clears the interop `authorize→risk→policy→audit` chain at the host boundary before it reaches a tool.
 
 ---
 
-## 2. File Tree (~25 files)
+## 2. File Tree (~40 files)
 
 ```
 backend/src/domains/cloud/
@@ -36,12 +38,16 @@ backend/src/domains/cloud/
     sandbox-provider.port.ts                # SandboxProvider (provision/get/destroy/exec/status) — reuses @recoder/agent-sandbox shape
     deploy-target.port.ts                   # DeployTarget + PreviewService (deploy/status/health)
     mesh.port.ts                            # MeshDiagnostics (ziti identities + xds clusters, status only)
+    governance-gate.port.ts                 # CloudGovernanceGatePort (decide/audit seam every write passes)
     cloud-repository.port.ts                # SandboxRepo/DeploymentRepo/TenantRepo/FleetRepo/DomainRepo/MeshRepo/PreviewTokenRepo interfaces
 
   adapters/
-    daytona-sandbox.adapter.ts              # Daytona provider (via @recoder/sandbox-daytona) — degrade-safe
-    e2b-sandbox.adapter.ts                  # E2B provider (via @recoder/agent-sandbox e2b-provider) — degrade-safe
+    daytona.adapter.ts                      # Daytona provider (via @recoder/sandbox-daytona) — degrade-safe
+    e2b.adapter.ts                          # E2B provider (via @recoder/agent-sandbox e2b-provider) — degrade-safe
     local-container.adapter.ts              # local docker/container fallback provider (self-host tier)
+    preview-target.adapter.ts               # preview deploy target (build → publish → base URL) for the deploy service
+    dns-verifier.adapter.ts                 # REAL node:dns TXT + node:tls cert prober (injected as domainVerifier)
+    http.ts                                 # shared fetch/probe helper the adapters use for real health probes
     ziti-mesh.adapter.ts                    # loopback REST/CLI to apps/desktop/server/engines/ziti — status only
     xds-envoy.adapter.ts                    # recoder-xds adapter (uses @recoder/network xds-contract) — status only
 
@@ -52,15 +58,18 @@ backend/src/domains/cloud/
     fleet-supervisor.service.ts             # fleet manifest, heartbeats, capacity accounting
     tenancy.service.ts                      # tenant tier/isolation/region + quota resolution + self-host-vs-cloud split
     mesh-diagnostics.service.ts             # merges ziti+xds status into one diagnostics view
+    domains.service.ts                      # custom-domain CRUD + DNS/TLS verification (verifier is an injected seam)
+    cloud-write-gate.ts                     # guardCloudWrite/recordCloudAudit — the shared governance decide→audit helpers
 
   repositories/
     cloud.repository.ts                     # concrete repo impls over persistence QueryExecutor (:param SQL)
 
   routes/
-    cloud.routes.ts                         # HTTP/WS edges, zod-validated, sendSuccess/sendError
+    cloud.routes.ts                         # HTTP edges, zod-validated, sendSuccess/sendError
 
   mcp/
-    cloud-engine.ts                         # MCP tools: provision/destroy/deploy/preview_url/preview_health/fleet/mesh
+    cloud-engine.ts                         # READ-only MCP tools: tenant_read/sandboxes_list/preview_health/mesh_status/fleet_status
+    cloud-write-engine.ts                   # governed WRITE MCP tools: sandbox_provision/destroy + domain_add/verify/remove
 
   __tests__/
     sandbox-provisioner.test.ts             # quota reject + provider fallback + reconcile
@@ -68,10 +77,15 @@ backend/src/domains/cloud/
     tenancy.quota.test.ts                   # tier isolation + quota exhaustion
     mesh-degrade.test.ts                    # ziti/xds absent → down, module degraded, no throw
     cloud.routes.test.ts                    # auth + validation + governance-gate on writes
+    cloud-domains-fleet.routes.test.ts      # domain CRUD/verify + fleet heartbeat/register edges
+    domains.service.test.ts                 # domain lifecycle + DNS/TLS verify state machine
+    dns-verifier.adapter.test.ts            # real TXT/TLS prober (truthful pending when unconfigured)
+    cloud-read-mcp.test.ts                  # read tools + tenant-subject binding (cross-tenant refused)
+    cloud-write-mcp.test.ts                 # write tools + governance + tenant-subject binding
 
 backend/migrations/
-  20260715_0001_cloud_core.sql              # cloud_tenants, cloud_sandboxes, cloud_deployments, cloud_preview_tokens
-  20260715_0002_cloud_fleet_mesh.sql        # cloud_fleet_nodes, cloud_domains, cloud_mesh_endpoints
+  cloud_0001_core.sql                       # cloud_tenants, cloud_sandboxes, cloud_deployments, cloud_preview_tokens
+  cloud_0002_fleet_mesh.sql                 # cloud_fleet_nodes, cloud_domains, cloud_mesh_endpoints
 ```
 
 Used-in-place engines (never copied): `apps/desktop/server/engines/ziti` (Go, zero-trust overlay), `apps/desktop/server/engines/recoder-xds` (Go, Envoy xDS control plane).
@@ -82,42 +96,54 @@ Used-in-place engines (never copied): `apps/desktop/server/engines/ziti` (Go, ze
 
 | Path | Lang | Kind | Responsibility | Key exports |
 |---|---|---|---|---|
-| `index.ts` | ts | service | Pure factory + the one public interface for the domain | `createCloudModule(deps: CloudDeps): CloudModule`, `interface CloudModule`, `interface CloudDeps` |
-| `cloud-module.ts` | ts | service | Composer: wires provider adapters + services behind `CloudModule`; reports per-engine health; routes writes through governance gate | `class CloudModuleImpl` |
+| `index.ts` | ts | service | Pure factory + the one public interface for the domain | `createCloudModule(deps: CloudModuleDeps): CloudModule`, `interface CloudModule`, `interface CloudModuleDeps` |
+| `cloud-module.ts` | ts | service | Composer: wires provider adapters + services behind `CloudModule`; reports per-engine health; routes writes through governance gate | `class CloudComposer` |
 | `config.ts` | ts | config | zod slice of `AppConfig` (provider keys, preview base domain, HMAC secret, region defaults, tenancy tier defaults); fail-safe when secrets absent | `CloudConfig`, `cloudConfigSchema`, `sliceCloudConfig(app)` |
 | `types.ts` | ts | type | Domain value types + status enums | `Sandbox`, `SandboxStatus`, `Deployment`, `DeployTargetKind`, `SignedPreviewUrl`, `Tenant`, `TenantTier`, `FleetNode`, `MeshEndpoint`, `DomainRecord` |
 | `health.ts` | ts | service | Collect each adapter's `up|down`, compute `degraded` | `buildCloudHealth(engines): HealthReport` |
 | `ports/sandbox-provider.port.ts` | ts | port | Provider-agnostic sandbox contract (consumed by conductor via substrate) | `interface SandboxProvider { provision, get, destroy, exec, status }`, `ProvisionSpec`, `ProviderId` |
 | `ports/deploy-target.port.ts` | ts | port | Deploy + preview contract | `interface DeployTarget`, `interface PreviewService { deploy, status, health }`, `PreviewHealth` |
 | `ports/mesh.port.ts` | ts | port | Read-only mesh status contract (registration + health, no traffic) | `interface MeshDiagnostics { zitiIdentities, xdsClusters, status }` |
+| `ports/governance-gate.port.ts` | ts | port | The `decide → audit` seam every cloud write passes (bootstrap injects the Phase-3 gate) | `CloudGovernanceGatePort`, `GovernanceAction`, `GateDecisionContext`, `GateVerdict` |
 | `ports/cloud-repository.port.ts` | ts | port | Repository interfaces this domain declares; persistence-backed impl injected | `SandboxRepository`, `DeploymentRepository`, `TenantRepository`, `FleetRepository`, `DomainRepository`, `MeshRepository`, `PreviewTokenRepository` |
-| `adapters/daytona-sandbox.adapter.ts` | ts | client | Daytona provider using `@recoder/sandbox-daytona`; auth-preflight; maps SDK errors → `Result`; `down` when key missing | `createDaytonaProvider(cfg, log): SandboxProvider` |
-| `adapters/e2b-sandbox.adapter.ts` | ts | client | E2B provider using `@recoder/agent-sandbox` e2b-provider; degrade-safe | `createE2bProvider(cfg, log): SandboxProvider` |
-| `adapters/local-container.adapter.ts` | ts | client | Local docker/container fallback for self-host tier; no cloud key needed | `createLocalContainerProvider(cfg, log): SandboxProvider` |
+| `adapters/daytona.adapter.ts` | ts | client | Daytona provider using `@recoder/sandbox-daytona`; auth-preflight; maps SDK errors → `Result`; `down` when key missing | `createDaytonaAdapter(deps): SandboxProvider` |
+| `adapters/e2b.adapter.ts` | ts | client | E2B provider using `@recoder/agent-sandbox` e2b-provider; degrade-safe | `createE2bAdapter(deps): SandboxProvider` |
+| `adapters/local-container.adapter.ts` | ts | client | Local docker/container fallback for self-host tier; no cloud key needed | `createLocalContainerAdapter(deps): SandboxProvider` |
+| `adapters/preview-target.adapter.ts` | ts | client | The preview deploy target (build → publish → base URL) the deploy service drives | `createPreviewTarget(deps): DeployTarget` |
+| `adapters/dns-verifier.adapter.ts` | ts | client | REAL DNS/TLS ownership prober (node:dns TXT + node:tls cert); injected as `domainVerifier` | `createDnsTlsVerifier(deps): DomainVerifierPort` |
+| `adapters/http.ts` | ts | client | Shared `fetch`/`probe` helper the adapters use for real health probes | `globalFetch`, `probe`, `FetchLike`, `HttpResponse` |
 | `adapters/ziti-mesh.adapter.ts` | ts | client | Loopback REST/CLI to ziti Go engine; returns identity list + health; `down` if binary/endpoint absent | `createZitiMeshAdapter(cfg, log)` |
-| `adapters/xds-envoy.adapter.ts` | ts | client | recoder-xds status via `@recoder/network` xds-contract; cluster/listener registration snapshot | `createXdsAdapter(cfg, log)` |
-| `services/sandbox-provisioner.service.ts` | ts | service | Resolve tenant quota → pick provider (tier + region + availability) → provision → persist → emit RunEvent; TTL reaper + reconcile against provider truth | `class SandboxProvisioner { provision, destroy, reconcile, reapExpired }` |
-| `services/preview-deploy.service.ts` | ts | service | Deploy artifact to target, mint signed URL, probe real health, persist `Deployment` + token; governance-gated | `class PreviewDeployService { deploy, getSignedUrl, health }` |
-| `services/preview-url-signer.ts` | ts | service | Stateless HMAC-SHA256 sign/verify of `{deploymentId, tenantId, exp}` + revocation lookup | `signPreviewUrl(claims, secret)`, `verifyPreviewUrl(token, secret)`, `isRevoked(id, repo)` |
-| `services/fleet-supervisor.service.ts` | ts | service | Register/heartbeat fleet nodes; compute capacity + `up|down`; expose manifest | `class FleetSupervisor { heartbeat, manifest, capacity }` |
-| `services/tenancy.service.ts` | ts | service | Resolve `Tenant` (tier/isolation/region/quota); decide self-host-vs-cloud; enforce cross-tenant isolation `WHERE tenant_id = :tenant_id` | `class TenancyService { resolve, checkQuota, placement }` |
-| `services/mesh-diagnostics.service.ts` | ts | service | Merge ziti + xds adapter snapshots into one diagnostics view; persist registry rows | `class MeshDiagnosticsService { snapshot, register }` |
+| `adapters/xds-envoy.adapter.ts` | ts | client | recoder-xds status via `@recoder/network` xds-contract; cluster/listener registration snapshot | `createXdsEnvoyAdapter(cfg, log)` |
+| `services/sandbox-provisioner.service.ts` | ts | service | Resolve tenant quota → pick provider (tier + region + availability) → provision → persist → emit RunEvent; TTL reaper + reconcile against provider truth | `createSandboxProvisionerService(deps): { provision, destroy, list, get, reconcile, reapExpired }` |
+| `services/preview-deploy.service.ts` | ts | service | Deploy artifact to target, mint signed URL, probe real health, persist `Deployment` + token; governance-gated | `createPreviewDeployService(deps): { deploy, status, getSignedUrl, health }` |
+| `services/preview-url-signer.ts` | ts | service | Stateless HMAC-SHA256 sign/verify of `{deploymentId, tenantId, exp}` + revocation lookup | `createPreviewUrlSigner(...)` |
+| `services/fleet-supervisor.service.ts` | ts | service | Register/heartbeat fleet nodes; compute capacity + `up|down`; expose manifest | `createFleetSupervisorService(deps): { heartbeat, register, list }` |
+| `services/tenancy.service.ts` | ts | service | Resolve/ensure `Tenant` (tier/isolation/region/quota); decide self-host-vs-cloud; enforce cross-tenant isolation `WHERE tenant_id = :tenant_id` | `createTenancyService(deps): { resolve, ensure, checkQuota, effectiveQuota, placement }` |
+| `services/mesh-diagnostics.service.ts` | ts | service | Merge ziti + xds adapter snapshots into one diagnostics view; persist registry rows | `createMeshDiagnosticsService(deps): { status }` |
+| `services/domains.service.ts` | ts | service | Custom-domain CRUD + DNS/TLS verification (verifier injected); truthful `pending` when unconfigured | `createDomainsService(deps): { list, get, add, verify, remove }` |
+| `services/cloud-write-gate.ts` | ts | service | The shared governance `decide → audit` helpers every write edge + write MCP tool call | `guardCloudWrite(...)`, `recordCloudAudit(...)` |
 | `repositories/cloud.repository.ts` | ts | repository | Concrete repo impls over persistence `QueryExecutor` (parameterized `:param` SQL, tenant-scoped) | `createCloudRepositories(qx): { sandboxes, deployments, tenants, fleet, domains, mesh, previewTokens }` |
-| `routes/cloud.routes.ts` | ts | route | Express router: sandboxes, deployments, preview, fleet, tenants, domains, mesh; zod-validate inbound; interop chain + governance on writes | `registerCloudRoutes(router, module, deps)` |
-| `mcp/cloud-engine.ts` | ts | client | MCP tool registration for cloud ops through ToolRouter | `registerCloudMcpTools(router, module)` |
+| `routes/cloud.routes.ts` | ts | route | Express router: tenant, sandboxes, deployments, preview, fleet, domains, mesh; zod-validate inbound; governance decide→audit on writes | `buildCloudRouter(deps): Router` |
+| `mcp/cloud-engine.ts` | ts | client | READ-only MCP introspection tools; tenant subject bound to the host-authorized `McpToolCaller` | `buildCloudMcpTools(module): McpToolRegistration[]` |
+| `mcp/cloud-write-engine.ts` | ts | client | Governed WRITE MCP tools (sandbox provision/destroy + domain add/verify/remove); same subject-binding + `decide → audit` | `buildCloudWriteMcpTools(deps): McpToolRegistration[]` |
 | `__tests__/sandbox-provisioner.test.ts` | ts | test | Quota reject, provider fallback (daytona down → e2b), reconcile drops orphan | — |
 | `__tests__/preview-url-signer.test.ts` | ts | test | Sign/verify roundtrip, expiry, tamper, revocation | — |
 | `__tests__/tenancy.quota.test.ts` | ts | test | Tier placement + quota exhaustion → `SERVICE_UNAVAILABLE` | — |
 | `__tests__/mesh-degrade.test.ts` | ts | test | ziti/xds absent → engines `down`, module `degraded`, no throw | — |
 | `__tests__/cloud.routes.test.ts` | ts | test | Auth required, zod rejects bad body, write hits governance gate | — |
-| `migrations/20260715_0001_cloud_core.sql` | sql | migration | tenants, sandboxes, deployments, preview_tokens | — |
-| `migrations/20260715_0002_cloud_fleet_mesh.sql` | sql | migration | fleet_nodes, domains, mesh_endpoints | — |
+| `__tests__/cloud-domains-fleet.routes.test.ts` | ts | test | Domain CRUD/verify + fleet heartbeat/register edges | — |
+| `__tests__/domains.service.test.ts` | ts | test | Domain lifecycle + DNS/TLS verify state machine | — |
+| `__tests__/dns-verifier.adapter.test.ts` | ts | test | Real TXT/TLS prober; truthful pending when unconfigured | — |
+| `__tests__/cloud-read-mcp.test.ts` | ts | test | Read tools + tenant-subject binding (cross-tenant refused) | — |
+| `__tests__/cloud-write-mcp.test.ts` | ts | test | Write tools + governance + tenant-subject binding | — |
+| `migrations/cloud_0001_core.sql` | sql | migration | tenants, sandboxes, deployments, preview_tokens | — |
+| `migrations/cloud_0002_fleet_mesh.sql` | sql | migration | fleet_nodes, domains, mesh_endpoints | — |
 
 ---
 
 ## 4. DB Schema
 
-All tables carry `tenant_id` and enforce app-layer isolation (`WHERE tenant_id = :tenant_id` — **no Supabase RLS**). Owned by `persistence`; migrations are canonical SQL.
+All tables carry `tenant_id` and enforce app-layer isolation (`WHERE tenant_id = :tenant_id` — **no Supabase RLS**). Owned by `persistence`; migrations are canonical SQL. **Shipped note:** every `id` primary key and `tenant_id`/`*_id` foreign key is `text` (not `uuid`) in the built migrations; the `uuid` annotations below describe intent only. Every statement is idempotent (`CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`).
 
 **`cloud_tenants`**
 `id uuid pk`, `org_id uuid`, `owner_user_id uuid`, `tier text check(self-host|cloud|teams)`, `isolation_level text`, `region text`, `quota jsonb` (max_sandboxes, max_concurrent, max_preview, cpu/mem caps), `created_at timestamptz`, `updated_at timestamptz`.
@@ -144,25 +170,39 @@ All tables carry `tenant_id` and enforce app-layer isolation (`WHERE tenant_id =
 
 ## 5. HTTP Edges
 
-Mounted by the `edge` domain route table under `/api/agent-os/cloud`. All pass interop `authorize→risk→policy→audit`; writes additionally hit `GovernanceGate.decide()`. `/internal/*` gated by `INTERNAL_SERVICE_KEY`.
+Mounted by the `edge` domain route table under `/api/agent-os/cloud` (`DOMAIN_REGISTRY.cloud.mountBase`). All pass the identity auth middleware; writes additionally hit the injected `CloudGovernanceGatePort` `decide → audit` seam (`guardCloudWrite`/`recordCloudAudit`) — an absent gate degrades open (warn-logged), an erroring gate fails **closed** (503 `AUTHZ_SERVICE_ERROR`). The internal fleet-ingest edges are gated by `mw.requireInternal` (`INTERNAL_SERVICE_KEY`), served from the same router (there is **no** separate `/internal/*` cloud mount).
+
+The tenant is always derived from the authenticated principal (org scope wins), **never** from the body.
 
 | Method | Path | Purpose | Gate |
 |---|---|---|---|
+| GET | `/api/agent-os/cloud/tenant` | The caller's tenant (auto-provisioned on first read) + quota + placement | read (ensure = write → governance) |
+| GET | `/api/agent-os/cloud/sandboxes` | List the caller tenant's sandboxes | read |
 | POST | `/api/agent-os/cloud/sandboxes` | Provision sandbox (quota-checked) | write → governance |
 | GET | `/api/agent-os/cloud/sandboxes/:id` | Sandbox status (tenant-scoped) | read |
 | DELETE | `/api/agent-os/cloud/sandboxes/:id` | Destroy sandbox | write → governance |
 | POST | `/api/agent-os/cloud/deployments` | Deploy artifact → preview | write → governance |
 | GET | `/api/agent-os/cloud/deployments/:id` | Deployment status | read |
-| GET | `/api/agent-os/cloud/deployments/:id/preview` | Mint/return signed preview URL | read (signed) |
+| GET | `/api/agent-os/cloud/deployments/:id/url` | Mint/return signed, expiring preview URL | write → governance (token mint) |
 | GET | `/api/agent-os/cloud/deployments/:id/health` | Truthful preview health probe | read |
-| GET | `/api/agent-os/cloud/fleet` | Fleet manifest + capacity | read |
-| GET/POST | `/api/agent-os/cloud/tenants` | Resolve / upsert tenant tier+quota | write → governance |
-| POST | `/api/agent-os/cloud/domains` | Add custom domain + DNS records | write → governance |
-| GET | `/api/agent-os/cloud/domains/:id/verify` | Re-check DNS/TLS verification | read |
 | GET | `/api/agent-os/cloud/mesh` | ziti/xds diagnostics snapshot | read |
-| POST | `/internal/agent-os/cloud/fleet/heartbeat` | Node heartbeat (worker→backend) | `INTERNAL_SERVICE_KEY` |
+| GET | `/api/agent-os/cloud/fleet` | Fleet manifest + capacity | read |
+| GET | `/api/agent-os/cloud/domains` | List the caller tenant's custom domains | read |
+| POST | `/api/agent-os/cloud/domains` | Add custom domain + DNS records | write → governance |
+| GET | `/api/agent-os/cloud/domains/:id` | One custom domain (tenant-scoped) | read |
+| POST | `/api/agent-os/cloud/domains/:id/verify` | Re-check DNS/TLS verification | write → governance |
+| DELETE | `/api/agent-os/cloud/domains/:id` | Detach a custom domain | write → governance |
+| POST | `/api/agent-os/cloud/fleet/heartbeat` | Node heartbeat (worker→backend) | `INTERNAL_SERVICE_KEY` |
+| POST | `/api/agent-os/cloud/fleet/register` | Node registers into the manifest | `INTERNAL_SERVICE_KEY` |
 
-MCP tools (`mcp/cloud-engine.ts`, via ToolRouter): `cloud_sandbox_provision`, `cloud_sandbox_destroy`, `cloud_deploy`, `cloud_preview_url`, `cloud_preview_health`, `cloud_fleet_status`, `cloud_mesh_status`. Registered per the checklist: add to `IN_PROC_SERVERS` (interop-host) + `ENGINE_SERVERS` (inproc-engines), export `registerCloudMcpTools`, call it in `buildInProcEngineRouter`.
+> **Reconciled vs the original plan:** tenant resolution is a singular `GET /tenant` (no `POST /tenants` — the tenant auto-provisions, gated as a write only when it does not exist yet); the signed-URL edge is `/deployments/:id/url` (not `/preview`) and is a governed **write** because it mints a token; domains added full CRUD (`GET` list, `GET /:id`, `DELETE /:id`) and verify is a `POST` (mutating); fleet ingest is two edges (`/heartbeat` + `/register`) on the cloud router under `requireInternal`, not a `/internal/*` mount.
+
+MCP tools (registered as the `cloud` server into the interop-gated MCP host; the governed HTTP edge `POST /api/mcp/tools/:server/:tool/call` is **LIVE**). The surface is split into a READ engine (`mcp/cloud-engine.ts` → `buildCloudMcpTools`) and a governed WRITE engine (`mcp/cloud-write-engine.ts` → `buildCloudWriteMcpTools`), both surfaced through the module's `mcp()` and wired in bootstrap as `{ name: 'cloud', tools: () => cloud.mcp() }`:
+
+- **Read:** `cloud_tenant_read`, `cloud_sandboxes_list`, `cloud_preview_health`, `cloud_mesh_status`, `cloud_fleet_status`.
+- **Write (governed):** `cloud_sandbox_provision`, `cloud_sandbox_destroy`, `cloud_domain_add`, `cloud_domain_verify`, `cloud_domain_remove`.
+
+There is no `cloud_deploy` or `cloud_preview_url` MCP tool — deploy and signed-URL minting are HTTP-edge only. **Tenant-subject binding (security hardening rounds 1–6):** every subject-bearing cloud tool derives the tenant from the host-authorized `McpToolCaller` (`caller.userId`/`orgId`), never from free-form args — a non-privileged caller is bound to its own tenant (an args-named subject is honoured only for an `admin`/`internal` scope, and the caller is ownership-checked before any authz/quota/data seam). A missing caller → `AUTH_REQUIRED`; a cross-tenant subject → `AUTHZ_PROJECT_ACCESS_DENIED`.
 
 ---
 
@@ -195,7 +235,7 @@ MCP tools (`mcp/cloud-engine.ts`, via ToolRouter): `cloud_sandbox_provision`, `c
 - `@recoder/substrate` — remote/exec/reconcile/observe ports (conductor↔sandbox seam).
 - `@recoder/network` — `envoy-config.ts`, `ext-authz`, `xds-contract.ts`, `overlay.ts`, `ports.ts`, `types.ts` for the xds/ziti adapters.
 - Go engines in place: `apps/desktop/server/engines/{ziti,recoder-xds}` — driven via loopback REST/CLI, never copied.
-- Existing MCP engines `backend/src/agent-os/mcp/{preview-engine.ts,deployment-engine.ts}` — **moved behind** `mcp/cloud-engine.ts` (no 4th copy); their logic folds into `PreviewDeployService`.
+- Existing MCP engines `backend/src/agent-os/mcp/{preview-engine.ts,deployment-engine.ts}` — folded into the cloud MCP surface (shipped as a read engine `mcp/cloud-engine.ts` + a governed write engine `mcp/cloud-write-engine.ts`); the preview/deploy logic lives in `PreviewDeployService`.
 - Legacy `backend/src/sandbox/*` (CUT dir) logic — container lifecycle/pool/recovery/snapshot/daytona-client/e2b-client is **ported DB-backed** into `sandbox-provisioner.service.ts` + adapters (re-introduced only because it is now Postgres state-of-record, per the CUT rule).
 - Shared envelope `sendSuccess`/`sendError`/`createError` + `ErrorCode` (`SERVICE_UNAVAILABLE`, `AUTHZ_PROJECT_ACCESS_DENIED`; **no `FORBIDDEN`/`EXTERNAL_SERVICE_ERROR`**), `@recoder/logger`, zod from `@recoder/agent-schemas`.
 
@@ -205,7 +245,9 @@ MCP tools (`mcp/cloud-engine.ts`, via ToolRouter): `cloud_sandbox_provision`, `c
 - `tenancy.service.ts` (tier/isolation/quota/placement) — new (multi-tenancy did not exist).
 - `fleet-supervisor.service.ts` (manifest + heartbeat capacity) — new.
 - `mesh-diagnostics.service.ts` + ziti/xds adapters as **read-only status** — new (registered, no live data plane).
-- The composer, ports, routes, mcp registration, and repositories — new domain scaffolding.
+- `domains.service.ts` + `adapters/dns-verifier.adapter.ts` (real node:dns TXT + node:tls cert prober) — new custom-domain CRUD + DNS/TLS verification.
+- `services/cloud-write-gate.ts` (`guardCloudWrite`/`recordCloudAudit`) + `ports/governance-gate.port.ts` — the shared `decide → audit` seam every write edge and write MCP tool passes.
+- The composer, ports, routes, the split read/write MCP engines, and repositories — new domain scaffolding.
 
 ---
 

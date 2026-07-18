@@ -1,10 +1,20 @@
 # Recoder Backend — Phased Build Order
 
-> The implementation sequence for the 14-domain backend described in
+> The implementation sequence for the backend described in
 > [`ARCHITECTURE.md`](./ARCHITECTURE.md) and enumerated in
 > [`FILE-TREE.md`](./FILE-TREE.md). Ordered by dependency: nothing is built before
 > the seam it stands on. Each phase lists what it unblocks, what reuses existing
 > code vs writes new, and how to verify before moving on.
+
+> **Status (2026-07-18): all 12 phases SHIPPED.** This document is now the historical
+> plan-of-record; the live state (per-phase commits, file counts, follow-ups) lives in
+> [`BUILD-STATUS.md`](./BUILD-STATUS.md). The 14 designed domains shipped as **15 domain
+> dirs under `backend/src/domains/*`** (interop split into `interop` + `interop-wire`);
+> `server.ts` is the thin `bootstrap.start()` entrypoint; the host boots with **15
+> truthful health sources** (`tsc` 0, ~1462 backend tests). After the phase build, a
+> 26-agent doc-vs-code gap audit drove six feature waves + six adversarial-review rounds
+> that closed a systemic cross-tenant authorization class — see
+> [**Post-build hardening**](#post-build-hardening-2026-07-18) below.
 
 ## Guiding rules
 
@@ -27,7 +37,7 @@
 
 ---
 
-## Phase 0 — Foundation: layout, config, DI, spine
+## Phase 0 — Foundation: layout, config, DI, spine ✅ SHIPPED
 
 **Goal:** a bootable empty host — `server.ts` → `bootstrap.start()` → an express
 app that listens, with the DI container, config loader, and shared error/health
@@ -53,7 +63,7 @@ into the container + a `HealthSource`).
 
 ---
 
-## Phase 1 — Persistence (data authority)
+## Phase 1 — Persistence (data authority) ✅ SHIPPED
 
 **Goal:** one shared `pg.Pool`, the `:param` `QueryExecutor`, the migration runner,
 the base `Repository`/`RepositoryFactory`, and the DB-backed `KvStore`. This is the
@@ -80,7 +90,7 @@ truthful; `pnpm check-types`.
 
 ---
 
-## Phase 2 — Identity & Auth (the credential seam)
+## Phase 2 — Identity & Auth (the credential seam) ✅ SHIPPED
 
 **Goal:** in-process Better Auth, DB-backed `sk_` keys, the CLI device flow, orgs/
 RBAC, and the load-bearing `SessionVerifier.verify(cred)→Principal` every domain
@@ -110,7 +120,7 @@ vitest; `scripts/sso-logout-matrix.sh`, `verify-auth-email-reset-e2e.sh`,
 
 ---
 
-## Phase 3 — Governance & Interop (the moat + the chain)
+## Phase 3 — Governance & Interop (the moat + the chain) ✅ SHIPPED
 
 **Goal:** the `GovernanceGate.decide()` write seam (napi→daemon→ts-fallback ladder,
 fail-closed), the tamper-evident Merkle audit chain, secrets, work locks, approvals,
@@ -140,17 +150,17 @@ and the `InteropChain` edge seam. Every later write and every edge stands on the
 
 ---
 
-## Phase 4 — Edge & API Server (the surface)
+## Phase 4 — Edge & API Server (the surface) ✅ SHIPPED
 
 **Goal:** shrink `server.ts` to `parse env → bootstrap.start()`; every domain plugs
 in through the `RouteProvider` seam and the one canonical middleware chain; WS
 upgrade dispatch for `/terminal` + `/api/conductor/workspaces/:id/stream`.
 
 **Build:**
-1. `ports/route-provider.port.ts` + `ports/ws-backend.port.ts` + `types.ts` + `config.ts` (freeze the seam the other 13 domains implement).
+1. `ports/route-provider.port.ts` + `ports/ws-backend.port.ts` + `types.ts` + `config.ts` (freeze the seam the other domains implement).
 2. `http/middleware/error.ts` `[MOVE]` + `validate.ts`, then `request-context.ts` `[MOVE]`, `cors.ts` `[MOVE]`, `rate-limit.ts` `[MOVE]`, `auth.ts` `[MOVE]`, `internal-key.ts` `[MOVE]` (consume governance gate from Phase 3), `interop-gate.ts` (wrap the Phase-3 chain), `chain.ts`.
 3. `http/app.ts` `[MOVE]` + `http/lifecycle.ts`.
-4. `http/ws/upgrade-router.ts` + `terminal.socket.ts` + `stream.socket.ts` (per-workspace RunEvent fan-out; the old doc-`/sync`/collaboration surface was cut) — **resolve conflict #6**: edge owns `server.on('upgrade')`; conductor/agent-os provide the WsBackends (wired in later phases).
+4. `http/ws/upgrade-router.ts` — the single `WsBackend` registry (longest-prefix path dispatch, auth + origin + rate-limit at the boundary). No standalone `*.socket.ts` deliverables: backends register into the router (the `/terminal` + per-workspace `.../stream` RunEvent fan-out backend ships as `conductor/terminal/terminal-stream.ts` in Phase 5; the old doc-`/sync`/collaboration surface was cut) — **resolve conflict #6**: edge owns `server.on('upgrade')`; conductor/agent-os provide the WsBackends (wired in later phases).
 5. `route-table.ts` + `edge-module.ts` + `index.ts` + `health.ts`.
 6. `http/openapi.ts` (reads the finished table).
 7. Wire `createEdgeModule(deps)` into `bootstrap/container.ts`; mount the already-built identity/persistence/governance providers.
@@ -169,7 +179,7 @@ still pass end-to-end.
 
 ---
 
-## Phase 5 — Agent-OS Control Plane + Conductor (state-of-record + the terminal)
+## Phase 5 — Agent-OS Control Plane + Conductor (state-of-record + the terminal) ✅ SHIPPED
 
 **Goal:** the control-plane state-of-record (tasks/runs/approvals/artifacts/events/
 outbox/squads) and THE terminal product (worktree+tmux execution, run-loop,
@@ -212,7 +222,7 @@ exit code), `health`, `governance-write`; `pnpm test:contracts:agent-os`,
 
 ---
 
-## Phase 6 — Engines Integration + Inference Gateway (the multi-language boundary)
+## Phase 6 — Engines Integration + Inference Gateway (the multi-language boundary) ✅ SHIPPED
 
 > **Owner mandate (2026-07-15):** each OSS engine in `backend/engines/{py,rust}/*`
 > becomes a DEEP backend module that exercises the engine's REAL surface in place
@@ -257,7 +267,7 @@ engines in place (openfang/tensorzero/recoder-governance napi, mem0/colbert/brow
 
 ---
 
-## Phase 7 — A2A wire completion + Social Connectors
+## Phase 7 — A2A wire completion + Social Connectors ✅ SHIPPED
 
 **Goal:** finish the A2A interop domain (wire ingress, dispatch, registry, bridge)
 and stand up the agents' human-channel presence.
@@ -289,7 +299,7 @@ and stand up the agents' human-channel presence.
 
 ---
 
-## Phase 8 — Memory & Retrieval
+## Phase 8 — Memory & Retrieval ✅ SHIPPED
 
 **Goal:** the one memory entry point — recall fusion (mem0 ∪ beads ∪ candidates →
 rerank → dedupe → provenance), the gated remember→promote→forget→relate lifecycle,
@@ -318,7 +328,7 @@ embeddings → truthful empty); `pnpm test:contracts:agent-os`.
 
 ---
 
-## Phase 9 — Billing, Metering & Plans
+## Phase 9 — Billing, Metering & Plans ✅ SHIPPED
 
 **Goal:** the `EntitlementGate` other domains gate on (quota + feature + BYOK), durable
 Postgres metering, signed webhooks, and fail-safe money health.
@@ -345,7 +355,7 @@ upgrade), `mor-adapters`, `billing.repository`, `health`; `scripts/verify-byok-e
 
 ---
 
-## Phase 10 — Cloud, Sandboxes & Multi-tenancy
+## Phase 10 — Cloud, Sandboxes & Multi-tenancy ✅ SHIPPED
 
 **Goal:** the off-box substrate provider — remote sandboxes, preview deploys with
 signed expiring URLs + truthful health, fleet supervisor, tenancy isolation +
@@ -372,10 +382,10 @@ Go engines `apps/desktop/server/engines/{ziti,recoder-xds}` (in place),
 
 ---
 
-## Phase 11 — Observability & Ops (the truth surface)
+## Phase 11 — Observability & Ops (the truth surface) ✅ SHIPPED
 
 **Goal:** structured logging + correlation, Prometheus metrics, OTel tracing, the
-aggregated `/health` + `/health/full` across all 14 domains, the audit/XDR
+aggregated `/health` + `/health/full` across all 15 domains, the audit/XDR
 projection, and the ops-recorder work-signals pipeline. Built last because it fuses
 every other domain's `HealthSource`.
 
@@ -457,3 +467,58 @@ cargo test                              # recoder-governance golden vectors (Pha
 A phase is complete only when its module reports truthful `up|down|degraded`, its
 degrade paths are unit-tested, and the relevant gate above passes — never claim
 success from implementation alone.
+
+---
+
+## Post-build hardening (2026-07-18)
+
+All 12 phases shipped green, but a 26-agent doc-vs-code gap audit
+(`docs/GAP-AUDIT.md`, 337 capabilities, ~70 gaps) measured the product at ~60–65% of
+the docs' full version. Six Workflow build waves closed the gaps, then six adversarial
+review rounds closed a systemic authorization defect. Result: **tsc 0 · ~1462 backend
+tests · boots with 15 truthful health sources.** Where the shipped surface differs from
+the phase plan above, this section is authoritative.
+
+**Feature waves (what changed vs the plan):**
+- **Inference (Phase 6):** the TensorZero napi ladder now runs the **release `.node`**
+  with REAL in-proc SSE via `inferenceStream` → supervised loopback → direct BYOK
+  rung-3 multi-provider router; BYOK keys resolve from the governance secrets vault into
+  the delivery path. OpenAI-compatible **`POST /api/gateway/inference/v1/embeddings`**
+  edge + `inference.embed` MCP tool landed.
+- **Engines MCP edge (Phase 6):** the governed **`POST /api/mcp/tools/:server/:tool/call`**
+  HTTP edge is LIVE (was 404).
+- **Agent-OS (Phase 5a):** Postgres state-of-record (`agentos_0004`) + full
+  `/api/agent-os` CRUD + `/internal/agent-os` ingest edges + **squad autopilots**
+  (cron→beads→conductor) + workflow driver & Postgres definition store.
+- **Billing (Phase 9):** **metering emitters** now decrement quotas at conductor +
+  inference call sites + `/internal/billing/meter`; invoice projection; webhook
+  idempotency dedups on `processed_at` (commit after projection). MoR only — Polar /
+  Creem / Paddle / Dodo, **no Stripe**.
+- **Conductor (Phase 5b):** create→persist→launch, steer `send-keys` (tmux),
+  stop/advance (cancel flows go only through `stopWorkspace`, **not** `advance`),
+  attention classifier, tmux control-mode observer, `.mcp.json` injection,
+  cloud-sandbox substrate bridge.
+- **Cloud (Phase 10):** `GovernanceGate` on every write, fleet heartbeat, custom-domains
+  + DNS/TLS verifier; mesh registered (`ziti` + `xds-envoy` status, no live data plane).
+- **Memory (Phase 8):** mem0 (google/Gemini default), lance embedded `VectorStorePort`,
+  colbert real MaxSim rerank, qdrant real liveness probe, forget/harvest.
+- **Interop (Phases 3/6/7):** the domain shipped as two dirs — `interop` (wire) +
+  `interop-wire` — with ed25519 ingress verification, `localRun` (conductor) +
+  `remoteSender` wired, and first/quorum/handoff dispatch.
+- **Social (Phase 7):** mounts at **`/api/social`** (not `/api/connectors`).
+- **Website Phase-A:** auth backend-seam (`RECODER_AUTH_BACKEND_SEAM`, off by default) +
+  idempotent `users→user` backfill migration (**not yet run on prod**; the compat bridge
+  is kept until the runbook runs).
+
+**Security rounds 1–6 (the authorization class):** the new subject-bearing MCP tools
+initially resolved tenant/subject from **caller-supplied args** → cross-tenant quota
+drain, spend misattribution, sandbox provision/destroy, memory read/forget,
+audit/billing disclosure, identity leak, `identity_link` account hijack (~26 tools).
+Closed by binding every subject-bearing tool to the host-authorized **`McpToolCaller`**
+at the MCP edge trust boundary (non-privileged caller → own subject, foreign → 403,
+admin/internal → arbitrary, absent → `AUTH_REQUIRED`); converged + verified by exhaustive
+enumeration (only pure-infra MCP files remain caller-free).
+
+**Owner-gated follow-ups (need prod access / a decision):** run the auth backfill
+migration runbook (then delete the compat bridge); rotate `COMPOSIO_API_KEY`; the
+Next 15.4.x→15.5.x bump. See [`BUILD-STATUS.md`](./BUILD-STATUS.md) for the live list.

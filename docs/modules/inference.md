@@ -2,7 +2,7 @@
 
 **Domain owner.** Uses the OSS engine(s) **in place** (never copied): backend/engines/rust/tensorzero
 
-**Interface:** `infer · stream · feedback · models · health`
+**Interface:** `infer · stream · embed · feedback · models · health`
 
 **Rule:** this module drives the real engine(s) directly and exposes ONE cohesive,
 governed, health-truthful interface to the backend. Depth lives in the engine dirs;

@@ -1,17 +1,22 @@
 # Domain: Conductor & Terminal Substrate
 
 > Folder prefix: `backend/src/domains/conductor/`
-> One of the 14 comprehensive-backend domains. This is **THE terminal product**:
-> parallel-agent execution over isolated git worktrees + tmux, the run-loop,
-> planner, restart-survivable reconciler, and the `/terminal` control-mode stream.
+> One of the 15 comprehensive-backend domains (Phase 5b). This is **THE terminal
+> product**: parallel-agent execution over isolated git worktrees + tmux, the
+> run flow, restart-survivable reconciler, and the `/terminal` control-mode stream.
+> **Status: SHIPPED** (composed fresh over `@recoder/substrate`, `fb548b8a`; run
+> flow uses the engines, `149942e62`). This doc has been reconciled to the
+> as-built tree — where the original design's proposed layout differs from what
+> shipped, the shipped names win.
 
 ## 1. Overview
 
 The Conductor domain composes the *execution substrate* under every agent run.
 A user opens Recoder, picks a coding agent (Claude Code, Codex, opencode, pi,
 openfang), and this domain provisions an isolated **git worktree**, launches the
-agent inside a **pinned-binary tmux session** (or Daytona / in-process / ssh
-substrate), streams its terminal output as `RunEvent`s, classifies pane
+agent inside a **pinned-binary tmux session** (the `tmux_worktree` default) — or
+the `in_process` openfang runtime or a `cloud-sandbox` substrate — streams its
+terminal output as `RunEvent`s, classifies pane
 attention (`needs-you | working | idle`), survives backend restarts via the
 reconciler, and produces a reviewable diff to merge or PR.
 
@@ -20,10 +25,11 @@ reconciler, the run-tailer polling+delta loop, the registry, the real headless
 CLI command resolution, review/diff) **already lives in `@recoder/substrate`**.
 This domain is the **backend composer**: it constructs that engine with concrete
 Recoder ports (persistence repository, coordination locks, resource governor
-admission, prompt-enrichment brain, run-event sink), registers the four real
+admission, prompt-enrichment brain, run-event sink), registers the real
 substrates, wires the governance gate on every write, and exposes HTTP/WS/MCP
-edges. It **moves** the existing 127-file `backend/src/conductor/` behind the
-composer interface — no 4th copy, no rewrite of proven behavior.
+edges. It was composed **fresh** over `@recoder/substrate` (Phase 5b) rather than
+copied; the legacy flat `backend/src/conductor/` lane was later absorbed and
+removed (`84c3d41f3`) — no 4th copy, no rewrite of proven behavior.
 
 Design laws obeyed:
 - **State-of-record stays Recoder-owned** — `conductor_workspaces` is the record;
@@ -40,87 +46,122 @@ Design laws obeyed:
 - **Native-first** — tmux control-mode + openfang in-process (napi `.node`) are
   the native fast paths; every path degrades to a truthful `down`.
 
-## 2. File Tree (`backend/src/domains/conductor/`)
+## 2. File Tree (`backend/src/domains/conductor/`) — as-built
+
+> The original design proposed dedicated `services/` and `locks/` dirs, a
+> `terminal.routes.ts`, and a set of `substrate-*.adapter.ts` files. What shipped
+> collapsed the run-loop / reconciler / planner logic into `@recoder/substrate`
+> (composed directly in `conductor-module.ts`), folded work-locks behind
+> `ports/work-lock.port.ts` + an injected coordination adapter (no `locks/` dir),
+> renamed the substrate adapters, split the terminal review ops into a `review/`
+> dir, and mounts the `/terminal` + `/stream` WS via the edge domain (no separate
+> `terminal.routes.ts`). Migrations live under `backend/migrations/` (not a
+> domain-local `migrations/` dir). Tests are colocated at the domain root and under
+> sub-dirs (not a single `__tests__/`).
 
 ```
 conductor/
   index.ts                             # factory createConductorModule(deps) + public ConductorModule iface
-  conductor-module.ts                  # the composer: fuses substrate engine + terminal + runloop behind one iface
-  config.ts                            # ConductorConfig slice (zod), read only from AppConfig
-  types.ts                             # domain-local types (not published)
+  conductor-module.ts                  # the composer (ConductorComposer): fuses substrate engine + terminal + run flow
+  config.ts                            # ConductorConfig zod slice + sliceConductorConfig(app, overrides)
+  types.ts                             # domain-local views (WorkspaceView, SteerInput, SubstrateAvailabilityView, …)
   health.ts                            # health(): per-engine up|down aggregate
-  errors.ts                            # domain→ErrorCode mapping (reuse shared/errors)
 
   ports/
     index.ts                           # barrel
-    workspace-repository.port.ts       # Repository PORT (impl lives in domains/persistence)
-    substrate-registry.port.ts         # narrow EngineSubstrate + registry view (re-exports @recoder/substrate)
+    workspace-repository.port.ts       # Repository PORT (impl in adapters/workspace-repository.adapter.ts)
+    substrate-registry.port.ts         # narrow substrate + registry view (re-exports @recoder/substrate)
     run-event-sink.port.ts             # RunEvent sink the tailer writes to
     work-lock.port.ts                  # coordination lock port (acquire/reacquire/release)
     admission.port.ts                  # resource-governor admission port
-    brain.port.ts                      # prompt-enrichment port (bundle)
-    terminal-stream.port.ts            # EXPOSED to http/edge: /terminal WS control iface
-    governance-gate.port.ts            # consumes @recoder/governance decide/record_audit
+    brain.port.ts                      # prompt-enrichment / memory brain port
+    terminal-stream.port.ts            # EXPOSED to edge: /terminal + /stream WS control iface
+    governance-gate.port.ts            # consumes governance decide/recordAudit
+    steer-transport.port.ts            # live send-keys transport (tmux-backed at the root)
+    mcp-inject.port.ts                 # per-worktree .mcp.json injector seam
+    cloud-sandbox.port.ts              # cloud substrate bridge (domains/cloud sandbox gateway)
+    code-intel.port.ts                 # recodergit index + beads issue-graph seam
+    github-status.port.ts              # gh login + git identity detection seam
+    entitlement-gate.port.ts           # OPTIONAL billing quota pre-dispatch gate (injected post-construct)
+    usage-meter.port.ts                # OPTIONAL billing per-run metering (injected post-construct)
 
   adapters/
-    index.ts                           # registerDefaultSubstrates(deps)
-    substrate-tmux.adapter.ts          # tmux_worktree substrate (DEFAULT) — worktree + pinned tmux
-    substrate-daytona.adapter.ts       # daytona remote sandbox substrate
-    substrate-in-process.adapter.ts    # openfang napi .node in-proc substrate
-    substrate-ssh.adapter.ts           # ssh remote-exec substrate
+    tmux-substrate.adapter.ts          # tmux_worktree substrate (DEFAULT) — worktree + pinned tmux
+    cli-runtime.adapter.ts             # external-CLI runtime dispatch (Claude Code/Codex/…) over tmux_worktree
+    openfang-runtime.adapter.ts        # in_process openfang napi .node runtime; truthful available:false if absent
+    cloud-sandbox-substrate.adapter.ts # cloud-sandbox substrate bridge to domains/cloud
+    substrate-registry.adapter.ts      # registry over injected concrete substrates + truthful availability
+    substrate-scan.adapter.ts          # reconcile's direct-substrate-query seam (scan failure degrades, never throws)
+    runtime-substrate-selector.ts      # pick runtime→substrate from availability
+    runtime-listing.adapter.ts         # GET /runtimes: PATH-probed CLIs + native openfang availability
+    run-tailer.adapter.ts              # substrate observe/run-tailer + active-tails registry; persists tail cursor
+    run-event-sink.adapter.ts          # durable + live RunEvent sink (fan-out + optional agent-os ingest)
     tmux-control-mode.adapter.ts       # opt-in real-time %output stream (degrade→poller)
-    dmux-attention.adapter.ts          # pane attention classifier (dmux heuristics, in place)
+    steer-transport.adapter.ts         # send-keys delivery into the live tmux session
     mcp-inject.adapter.ts              # write per-worktree .mcp.json (Recoder toolbelt), git-excluded
+    brain-memory.adapter.ts            # mem0 ∪ beads ∪ candidates → ColBERT rerank enrich + completion harvest
+    code-intel.adapter.ts              # recodergit repo index + beads trackWork/completeWork
+    issue-graph.adapter.ts             # beads issue-graph tracking
+    github-status.adapter.ts           # gh login + git identity detection
+    dev-command.adapter.ts             # detect a project's dev-server command
+    completion-hook.adapter.ts         # terminal-run hook → completion RunEvent + harvest + metering
+    workspace-repository.adapter.ts    # WorkspaceRepositoryPort impl over the persistence executor
+    logger.adapter.ts                  # domain logger adapter
 
-  services/
-    workspace-service.ts               # lifecycle facade over @recoder/substrate WorkspaceEngine
-    reconciler.ts                      # restart-survivable reconcile (live substrate ⋈ persisted rows)
-    run-tailer.ts                      # backend adapter over substrate observe/run-tailer + active registry
-    run-loop.ts                        # per-workspace run loop: launch→tail→complete→review handoff
-    planner.ts                         # conductor-planner: choose runtime/substrate/model from TaskSpec
-    prompt-enrichment.ts               # bundle: beads recall + colbert rerank → enriched prompt+provenance
-    review.ts                          # workspace diff / file tree / archive
-    review-publish.ts                  # merge to base / open PR (governed delivery)
-    resource-governor.ts               # admission control (disk/session/workspace caps)
-    completion-watcher.ts              # detect finished runs → emit completion RunEvent + memory candidate
+  attention/
+    attention-classifier.ts            # pane attention classifier (needs-you | working | idle | unknown)
+
+  review/
+    workspace-review.ops.ts            # workspace diff / file tree
+    workspace-publish.ops.ts           # merge to base / open PR (governed delivery)
+    workspace-continue.ops.ts          # continue/message: another run in the same worktree
+    preview-url-guard.ts               # validate + persist a sniffed loopback preview URL
 
   terminal/
-    tmux-orchestrator.ts               # tmux session primitives (start/list/capture/send-keys/kill/exit-code)
-    tmux-path.ts                       # pinned tmux binary resolution + version guard
-    terminal-stream.ts                 # /terminal control-mode WS handler (attach, stream, steer)
-    live-events.ts                     # /api/conductor/workspaces/:id/stream RunEvent fan-out (doc-`/sync`/collaboration cut)
-
-  locks/
-    conductor-locks.ts                 # work-lock adapter over @recoder/coordination
+    terminal-stream.ts                 # /terminal control-mode WS + /stream RunEvent fan-out (TerminalStreamService)
+    live-events.ts                     # SyncHub + /sync and /api/conductor/workspaces/:id/stream WsBackends
 
   audit/
     conductor-audit.ts                 # governance-gate write wrapper + audit-chain query/verify
 
   routes/
     conductor.routes.ts                # /api/conductor/* HTTP edges
-    terminal.routes.ts                 # WS /terminal + /workspaces/:id/stream mount
 
   mcp/
-    conductor-engine.ts                # registerConductorMcpTools(router): workspace_* MCP tools
+    conductor-engine.ts                # read-only MCP tools (conductor_list/get_workspace, substrates, findings)
+    conductor-write-tools.ts           # write MCP tools (conductor_steer/stop/advance)
 
-  migrations/
-    0001-conductor-workspaces.sql      # REUSE existing conductor_workspaces schema
-    0002-conductor-run-tails.sql       # NEW: persisted tail cursor (restart-survivable tailing)
-    0003-conductor-reconcile-findings.sql  # NEW: orphan/reconcile audit rows
+  __fixtures__/
+    harness.ts                         # shared test harness
 
-  __tests__/
-    workspace-lifecycle.test.ts        # create→setting_up→ready→running persisted-before-launch
-    reconciler.test.ts                 # restart survivability: orphan sessions/worktrees flagged not killed
-    substrate-registry.test.ts         # 4 substrates register; unavailable creds → available:false
-    terminal-stream.test.ts            # control-mode parse + degrade-to-poller
-    run-loop.test.ts                   # launch→tail→exitcode→completed; unknown exit ≠ fabricated 0
-    health.test.ts                     # truthful per-engine up|down; degraded labelling
-    governance-write.test.ts           # every write calls gate.decide + record_audit; deny blocks launch
+  # colocated tests (domain root + sub-dirs): workspace-lifecycle, reconciler,
+  # substrate-registry, terminal-stream, run-loop, health, governance-write, steer,
+  # workspace-advance/detail/stop/view/publish, conductor-run-flow, entitlement-gate,
+  # github-repos/status, approval-clearance, preview-url-guard, runtime-listing,
+  # plus adapters/*.test.ts and mcp/*.test.ts.
 ```
 
-**File count: 45.**
+**File count: 54 source files (87 including colocated tests).** Migrations live in
+`backend/migrations/`: `conductor_0001_workspaces.sql`,
+`conductor_0002_run_tails.sql`, `conductor_0003_reconcile_findings.sql`.
 
 ## 3. Per-File Responsibilities
+
+> **Reconciliation note:** the tables below capture the ORIGINAL design
+> decomposition. The canonical as-built layout is §2. The responsibilities still
+> hold, but several files were renamed or merged: the `services/*` facades
+> (`workspace-service` / `reconciler` / `run-loop` / `planner` /
+> `prompt-enrichment` / `review` / `review-publish` / `resource-governor` /
+> `completion-watcher`) are provided by `@recoder/substrate` composed directly in
+> `conductor-module.ts` plus `adapters/*` (`run-tailer`, `substrate-scan`,
+> `brain-memory`, `completion-hook`) and `review/*.ops.ts`; the substrate adapters
+> shipped as `tmux-substrate` / `cli-runtime` / `openfang-runtime` /
+> `cloud-sandbox-substrate` (not `substrate-tmux/daytona/in-process/ssh`);
+> `dmux-attention.adapter.ts` shipped as `attention/attention-classifier.ts`;
+> `terminal/tmux-orchestrator.ts` + `tmux-path.ts` folded into the substrate
+> adapters + config; `locks/conductor-locks.ts` folded behind
+> `ports/work-lock.port.ts`; there is no `terminal.routes.ts` (the WS mounts via
+> the edge domain). Write MCP tools live in `mcp/conductor-write-tools.ts`.
 
 ### Composer root
 | File | lang | kind | Responsibility | Key exports |
@@ -268,44 +309,69 @@ WRITES additionally pass `gate.decide`. `/internal/*` (if any) is
 | GET | `/workspaces` | List (scoped to caller's spaces) | |
 | GET | `/workspaces/:id` | Get one workspace view | |
 | GET | `/workspaces/:id/events` | RunEvent history | |
-| POST | `/workspaces/:id/advance` | Advance lifecycle state | ✅ gated |
-| POST | `/workspaces/:id/steer` | Send prompt/keys to the live agent | ✅ gated |
-| POST | `/workspaces/:id/continue` | Continue a finished/idle workspace | ✅ gated |
-| POST | `/workspaces/:id/stop` | Stop the agent (optional teardown) | ✅ gated |
+| GET | `/workspaces/:id/view` | Attention-enriched read model of one workspace | |
+| GET | `/views` | Attention-enriched views of every workspace | |
 | GET | `/workspaces/:id/diff` | Reviewable diff vs base | |
 | GET | `/workspaces/:id/tree` | File tree of the worktree | |
+| GET | `/workspaces/:id/dev-command` | Detected dev-server command | |
+| GET | `/workspaces/:id/output` | Captured pane text (poll fallback) | |
+| GET | `/workspaces/:id/status` | Live agent status: alive + exit code + recent output | |
+| POST | `/workspaces/:id/steer` | Send prompt/keys to the live agent | ✅ gated |
+| POST | `/workspaces/:id/stop` | Stop the agent (session kill, worktree preserved) | ✅ gated |
+| POST | `/workspaces/:id/advance` | Advance lifecycle state | ✅ gated |
+| POST | `/workspaces/:id/message` | Continue/chat: another run in the same worktree | ✅ gated |
 | POST | `/workspaces/:id/merge` | Merge to base (delivery-approval gate) | ✅ gated |
 | POST | `/workspaces/:id/pr` | Open PR (delivery-approval gate) | ✅ gated |
+| POST | `/workspaces/:id/archive` | Archive a finished workspace (teardown) | ✅ gated |
+| POST | `/workspaces/:id/preview-url` | Persist a sniffed loopback preview URL | ✅ gated |
 | POST | `/reconcile` | Force reconcile pass | ✅ gated |
+| GET | `/reconcile/findings` | Reconcile findings for operator/policy review | |
 | GET | `/substrates` | List substrates + availability | |
-| GET | `/runtimes` | List agent CLIs + availability | |
+| GET | `/runtimes` | List agent CLIs + native openfang runtime availability | |
+| GET | `/github/status` | GitHub connection + detected identity (token-free) | |
+| GET | `/github/repos` | Detected account's local-clonable repos (via `gh`) | |
 | GET | `/health` | Truthful conductor health | |
+
+> Note: the `/continue` edge shipped as `/workspaces/:id/message`; cancellation
+> flows only through `/stop` (not `/advance`).
 
 ### WebSocket
 | Path | Purpose |
 |---|---|
-| `/terminal` | Control-mode terminal stream (attach to a workspace's tmux; stream output; steer via send-keys) — mounted by `http` domain, handler from `terminal-stream.ts` |
-| `/api/conductor/workspaces/:id/stream` | Live per-workspace `RunEvent` fan-out (state changes, log deltas, attention). *(The old doc-`/sync`/collaboration product surface was cut.)* |
+| `/terminal` | Control-mode terminal stream (attach to a workspace's tmux; stream output; steer via inbound send-keys frames) — mounted by the `edge` domain, `TerminalStreamService` from `terminal/terminal-stream.ts` |
+| `/api/conductor/workspaces/:id/stream` | Live per-workspace full-`RunEvent` fan-out (state changes, log deltas, attention) — the client-exact `/stream` WsBackend from `terminal/live-events.ts` |
+| `/sync` | Legacy-shaped per-workspace RunEvent fan-out WsBackend over the same `SyncHub` (retained alongside `/stream`; NOT the old v1 collaborative document-sync surface, which was cut with the `code`/`collaboration` lanes) |
 
-### MCP tools (`mcp/conductor-engine.ts`)
-Registered via the wiring checklist (add to `IN_PROC_SERVERS` in interop-host +
-`ENGINE_SERVERS` in inproc-engines; `registerConductorMcpTools` called in
-`buildInProcEngineRouter`). Conform to `@recoder/agent-mcp` ToolRouter.
-- `recoder_workspace_create` — create + launch a workspace
-- `recoder_workspace_status` — state + attention + tail summary
-- `recoder_workspace_diff` — reviewable diff
-- `recoder_workspace_merge` — governed merge/PR
-- `recoder_workspace_events` — RunEvent stream slice
+### MCP tools (`mcp/conductor-engine.ts` + `mcp/conductor-write-tools.ts`)
+Registered as `McpToolRegistration`s the module exposes via `mcp()` and the
+domain-tools bridge mounts on the ToolRouter. Read tools
+(`mcp/conductor-engine.ts`):
+- `conductor_list_workspaces` — list workspace state-of-record
+- `conductor_get_workspace` — one workspace view
+- `conductor_substrates` — truthful substrate availability
+- `conductor_reconcile_findings` — reconcile findings for review
+
+Write tools (`mcp/conductor-write-tools.ts`, subject bound to the host-authorized
+`McpToolCaller`):
+- `conductor_steer` — send-keys steer a live agent (gated `workspace.steer`)
+- `conductor_stop` — stop a running workspace (gated `workspace.stop`)
+- `conductor_advance` — advance lifecycle state (gated `workspace.advance`)
 
 ## 6. Interfaces
 
 ### Exposed to other domains
 - **`ConductorModule`** (`index.ts`) — the ONE public interface: `createWorkspace`,
-  `advanceWorkspace`, `getWorkspace`, `listWorkspaces`, `steer`, `stop`, `reconcile`,
-  `substrates()`, `runtimes()`, `health()`, `mountTerminal(ws)`, `mcpTools()`.
+  `steerWorkspace`, `stopWorkspace`, `advanceWorkspaceState`, `getWorkspace`,
+  `listWorkspaces`, `workspaceView`/`listWorkspaceViews`, `workspaceDiff`/`workspaceTree`,
+  `mergeWorkspace`/`createWorkspacePr`, `sendWorkspaceMessage`, `setPreviewUrl`,
+  `archiveWorkspace`, `reconcile`, `substrates()`, `runtimes()`, `githubStatus()`/
+  `githubRepos()`, `setEntitlementGate()`/`setUsageMeter()` (billing, injected
+  post-construct), `terminal()`, `routes()`, `mcp()`, `health()`, `start()`/`stop()`.
 - **`WorkspaceRepositoryPort`** (`ports/`) — declared here, implemented by
-  `domains/persistence`. Business logic depends on the interface, never the driver.
-- **`TerminalStreamPort`** — consumed by `http` domain to attach the `/terminal` WS.
+  `adapters/workspace-repository.adapter.ts` over the persistence executor. Business
+  logic depends on the interface, never the driver.
+- **`TerminalStreamPort`** — consumed by the `edge` domain to attach the `/terminal`
+  + `/stream` WS.
 - Emits **`RunEvent`** (`@recoder/agent-events`) to the outbox for `agent-os`/`edge`.
 
 ### Consumed from other domains / packages
@@ -324,29 +390,32 @@ Registered via the wiring checklist (add to `IN_PROC_SERVERS` in interop-host +
 - `domains/persistence` — `QueryExecutor` (parameterized `:param` SQL) behind the repo port.
 - `domains/governance`, `domains/interop` — the gate + chain composers.
 
-## 7. Reuse Notes
+## 7. Reuse Notes (as-built)
 
-**REUSE (move behind composer, do NOT rewrite):**
+**REUSE (composed behind the composer, NOT rewritten):**
 - Whole `@recoder/substrate` package — engine, reconciler, run-tailer core,
   registry, real headless CLI command resolution, review/diff, exec primitives.
-  This domain is thin backend wiring over it.
-- Existing `backend/src/conductor/` (127 files) — `workspace-service`,
-  `run-tailer`, `reconcile`, `tmux-orchestrator`, `tmux-control-mode`, `dmux/`,
-  `mcp-inject`, `conductor-planner`, `bundle` (enrichment), `review`,
-  `review-publish`, `resource-governor`, `completion-watcher`, `conductor-locks`,
-  `conductor-audit`, `governance-gate`, `live-events`, `runtime-driver`,
-  `runtime-commands`, `oss-dispatch`, `substrate-*`. These MOVE under
-  `services/`, `terminal/`, `adapters/` — relocated behind ports, not re-copied.
+  This domain is thin backend wiring over it; the run-loop / planner /
+  reconciler logic lives here rather than in domain-local `services/*` files.
+- The legacy flat `backend/src/conductor/` lane (~127 files) was **composed fresh**
+  over `@recoder/substrate` in Phase 5b, then **absorbed and removed** (`84c3d41f3`)
+  — the equivalent behavior now lives under `conductor-module.ts` + `adapters/*` +
+  `review/*.ops.ts` + `terminal/*` + `audit/*` (see §2). No flat `conductor/` dir
+  remains in `src/`.
 - Engines used **in place** (never copied): `apps/desktop/engines/{tmux,dmux}`,
-  `backend/engines/rust/openfang` (napi `.node` in-proc substrate),
+  `backend/engines/rust/openfang` (napi `.node` in-proc runtime),
   `backend/engines/py/colbert` (rerank sidecar), `apps/desktop/server/engines/beads`.
+  The run flow consumes them in service code (`149942e62`): recodergit index +
+  beads track on create; mem0∪beads∪colbert recall on launch; openfang runtime /
+  tensorzero inference; memory harvest + beads close on complete.
 
 **CUT (owner-removed — do NOT restore):** the `backend/src/{code,collaboration,
 sandbox}` lanes and dangling `fleet/` import in `conductor-health.ts`
 (`getFleetHealth`) — re-introduce fleet only if DB-backed under observability.
 
-**WRITE NEW (small):**
-- `0002-conductor-run-tails.sql`, `0003-conductor-reconcile-findings.sql` migrations.
+**WRITE NEW (shipped):**
+- `backend/migrations/conductor_0002_run_tails.sql`,
+  `conductor_0003_reconcile_findings.sql` migrations.
 - `ports/*` explicit interface files (formalize the seams the existing wiring uses ad hoc).
 - `index.ts` / `conductor-module.ts` composer factory (the DI-root entrypoint,
   following `agent-os/service-container.ts`).
@@ -358,6 +427,13 @@ sandbox}` lanes and dangling `fleet/` import in `conductor-health.ts`
 `scripts/verify-cli-device-flow-e2e.sh` (agent CLI availability path).
 
 ## 8. Implementation Order
+
+> **As-built note:** this was the original build plan; the domain is now SHIPPED
+> (Phase 5b, `fb548b8a`). Where it names files/substrates that were renamed or
+> merged, §2 is canonical — e.g. the substrates shipped as `tmux_worktree`
+> (default), `in_process` (openfang), and `cloud-sandbox` (not tmux/daytona/
+> in-process/ssh); the `services/*` step folded into `@recoder/substrate` +
+> `adapters/*` + `review/*.ops.ts`; there is no `terminal.routes.ts`.
 
 1. **Ports + config first** — `ports/*`, `config.ts`, `types.ts`, `errors.ts`.
    Formalize the seams; move `process.env` into the `AppConfig` slice.

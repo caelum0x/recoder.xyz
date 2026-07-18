@@ -111,17 +111,18 @@ backend/src/domains/interop/
     task-store.repository.ts            # concrete TaskStoreRepo (tasks/messages/scratchpad)
 
   routes/
-    a2a.routes.ts                       # /api/a2a/* wire ingress (rpc/message/agent-card/health)
-    agents.routes.ts                    # /api/a2a/agents* registry edges
-    tasks.routes.ts                     # task-lifecycle, dispatch, heartbeat/slo, scratchpad, context-bridge edges
+    a2a.routes.ts                       # /api/a2a/* wire (rpc/ingress/agent-card/health) — see §5 for shipped paths
+    agents.routes.ts                    # /api/interop/agents* registry edges (heartbeat/liveness)
+    tasks.routes.ts                     # /api/interop/tasks/:id* (get/cancel/handoff/context/scratchpad)
+    rpc-admission.middleware.ts         # SHIPPED: admits public /api/a2a/rpc + /ingress at the wire boundary
     # (NO connectors.routes.ts / per-runtime /connectors/:runtime/{start,stop,stream,input} process surface — that was cut)
 
   mcp/
     interop-engine.ts                   # MCP tools: send_task, task_respond, list_agents, inbox, dispatch
 
-  migrations/
-    0001_interop_agents.sql             # interop_agents + interop_heartbeats tables
-    0002_interop_tasks_scratchpad.sql   # interop_tasks + interop_task_messages + interop_scratchpad tables
+  # SHIPPED: migrations live in the repo-shared backend/migrations/ dir, NOT under the domain:
+  #   backend/migrations/interop_0001_agents.sql           # interop_agents + interop_heartbeats tables
+  #   backend/migrations/interop_0002_tasks_scratchpad.sql # interop_tasks + interop_task_messages + interop_scratchpad tables
 
   __tests__/
     interop-chain.test.ts               # chain admits valid, rejects on each stage (authz/risk/policy)
@@ -173,9 +174,9 @@ backend/src/domains/interop/
 | `bridge/scratchpad.service.ts` | ts | service | Shared per-task scratchpad (append/read, TTL) | `Scratchpad`, `append`, `read` |
 | `repositories/agent-registry.repository.ts` | ts | repository | Concrete `AgentRegistryRepo` over `QueryExecutor` | `createAgentRegistryRepo(qx)` |
 | `repositories/task-store.repository.ts` | ts | repository | Concrete `TaskStoreRepo` | `createTaskStoreRepo(qx)` |
-| `routes/a2a.routes.ts` | ts | route | `/api/a2a/*` wire ingress (rpc/message/agent-card/health) | `a2aRoutes(module)` |
-| `routes/agents.routes.ts` | ts | route | `/api/a2a/agents*` registry edges | `agentsRoutes(module)` |
-| `routes/tasks.routes.ts` | ts | route | task-lifecycle/dispatch/heartbeat/slo/scratchpad/context-bridge | `tasksRoutes(module)` |
+| `routes/a2a.routes.ts` | ts | route | `/api/a2a/*` wire (rpc/ingress/agent-card/health) | `buildA2ARoutes(deps)` |
+| `routes/agents.routes.ts` | ts | route | `/api/interop/agents*` registry edges (heartbeat/liveness) | `buildAgentsRoutes(deps)` |
+| `routes/tasks.routes.ts` | ts | route | `/api/interop/tasks/:id*` (get/cancel/handoff/context/scratchpad) | `buildTasksRoutes(deps)` |
 | *(cut)* | — | — | no `connectors.routes.ts` / per-runtime connector *process* control surface | — |
 | `mcp/interop-engine.ts` | ts | client | MCP tools conforming to `@recoder/agent-mcp` ToolRouter | `registerInteropMcpTools(router)` |
 | `migrations/0001_interop_agents.sql` | sql | migration | agents + heartbeats tables | — |
@@ -191,9 +192,13 @@ backend/src/domains/interop/
 ## 4. Database schema (owned tables)
 
 All access via `domains/persistence` `QueryExecutor` with `:param` SQL and
-app-layer `WHERE user_id = :user_id`. No RLS.
+app-layer `WHERE user_id = :user_id`. No RLS. **SHIPPED filenames:** the two
+migrations live in the repo-shared `backend/migrations/` dir as
+`interop_0001_agents.sql` and `interop_0002_tasks_scratchpad.sql` (not under the
+domain dir). The repos degrade-safe to a bounded in-process store when the
+`QueryExecutor` is unavailable (never fabricating a persisted row).
 
-### `0001_interop_agents.sql`
+### `interop_0001_agents.sql`
 ```sql
 -- Registered A2A agents / runtime endpoints known to this instance.
 CREATE TABLE IF NOT EXISTS interop_agents (
@@ -220,7 +225,7 @@ CREATE TABLE IF NOT EXISTS interop_heartbeats (
 CREATE INDEX IF NOT EXISTS idx_interop_hb_seen ON interop_heartbeats(seen_at);
 ```
 
-### `0002_interop_tasks_scratchpad.sql`
+### `interop_0002_tasks_scratchpad.sql`
 ```sql
 -- A2A task lifecycle rows (projection; state-of-record stays in agent-os).
 CREATE TABLE IF NOT EXISTS interop_tasks (
@@ -261,20 +266,33 @@ CREATE TABLE IF NOT EXISTS interop_scratchpad (
 
 ## 5. HTTP / WS edges
 
-Mounted by the `edge` domain route table. Every call passes the `InteropChain`
-(`authorize→risk→policy→audit`); `/internal/*` is `INTERNAL_SERVICE_KEY`-gated.
-Responses use `sendSuccess` / `sendError(createError(code,msg))`.
+**SHIPPED MOUNTS (this section predated the two-router split).** Bootstrap mounts
+three interop-wire routers plus the gate router. Responses use `sendSuccess` /
+`sendError(createError(code,msg))`.
 
-### `routes/a2a.routes.ts` + `routes/agents.routes.ts` — `/api/a2a`
+- The **wire** face is at `/api/a2a` (`interop-wire` `wireRoutes()`) and the origin
+  root `/.well-known` (bare card).
+- The **registry + tasks** face is at `/api/interop` (`interop-wire` `routes()` —
+  NOT under `/api/a2a`).
+- The **gate** domain (`interop`) also mounts at `/api/a2a` but serves only its
+  admission health at `/api/a2a/admission/health` (it deliberately serves no wire
+  paths so it does not shadow the wire router).
+
+### wire — `/api/a2a` (`interop-wire/wire/*` + `routes/a2a.routes.ts`)
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/api/a2a/rpc` | A2A JSON-RPC ingress (signed-envelope gated) → `handleA2ARpc` |
-| POST | `/api/a2a/message` | Send an A2A message/task inbound (sealed → admitted) |
-| GET  | `/.well-known/agent.json` | Serve this instance's agent-card |
-| GET  | `/api/a2a/agents` | List registered agents (capability filter) |
-| POST | `/api/a2a/agents` | Register an agent/runtime endpoint |
-| DELETE | `/api/a2a/agents/:id` | Deregister |
-| GET  | `/api/a2a/agents/:id/card` | Resolve remote card (cached) |
+| GET  | `/api/a2a/health` | Wire health (registered JSON-RPC methods list, engines) |
+| GET  | `/api/a2a/agent-card` | This instance's agent-card (operator view) |
+| POST | `/api/a2a/rpc` | A2A JSON-RPC (`message/send`, `tasks/get`, `tasks/cancel`, `tasks/resubscribe`) — RPC-admission gated |
+| POST | `/api/a2a/ingress` | Signed-envelope ingress (HMAC/ed25519 verified before admission) |
+| GET  | `/.well-known/agent.json` | Bare agent-card at origin root (RFC 8615) — same card as `/api/a2a/agent-card` |
+| GET  | `/api/a2a/admission/health` | Gate (`interop` domain) admission health |
+
+> **Task creation + multi-dispatch are RPC, not REST.** There is no `POST /api/a2a/tasks`
+> / `POST /api/a2a/dispatch` route: a task is created and fanned out through the A2A
+> JSON-RPC `message/send` method (it drives `multi-dispatch` with the optional
+> `all`/`first`/`quorum` strategy). The old REST create/dispatch/slo/`/internal/heartbeat`
+> rows below were superseded by this RPC surface + the `/api/interop` registry routes.
 
 ### connector process routes — **CUT (not shipped)**
 
@@ -285,17 +303,21 @@ A2A dispatch happens over the wire runtimes in `interop-wire/runtimes/`
 (claude|codex|cursor|opencode|windsurf|replit — no pi/openfang). openfang runs
 in-process via conductor/engines, not as an interop connector process.
 
-### `routes/tasks.routes.ts`
+### registry + tasks — `/api/interop` (`interop-wire` `routes/agents.routes.ts` + `routes/tasks.routes.ts`)
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/api/a2a/tasks` | Create task → dispatch to runtime (task-lifecycle) |
-| GET  | `/api/a2a/tasks/:id` | Task state + messages |
-| POST | `/api/a2a/tasks/:id/cancel` | Cancel |
-| POST | `/api/a2a/dispatch` | Multi-dispatch (squad) fan-out |
-| GET  | `/api/a2a/slo` | Heartbeat/SLO snapshot |
-| POST | `/internal/a2a/heartbeat` | Runtime posts heartbeat (INTERNAL_SERVICE_KEY) |
-| GET/POST | `/api/a2a/tasks/:id/scratchpad` | Read/append scratchpad |
-| POST | `/api/a2a/tasks/:id/handoff` | Context-bridge handoff to another agent |
+| GET  | `/api/interop/agents` | List registered agents (capability filter) |
+| POST | `/api/interop/agents` | Register an agent/runtime endpoint |
+| GET  | `/api/interop/agents/:id` | Get a registered agent |
+| DELETE | `/api/interop/agents/:id` | Deregister |
+| POST | `/api/interop/agents/:id/heartbeat` | Record a heartbeat sample |
+| GET  | `/api/interop/agents/:id/liveness` | Heartbeat/SLO liveness snapshot |
+| GET  | `/api/interop/tasks/:id` | Task row + message log (projection) |
+| POST | `/api/interop/tasks/:id/cancel` | Cancel (fail-closed lifecycle transition) |
+| POST | `/api/interop/tasks/:id/handoff` | Context-bridge handoff to another agent |
+| GET  | `/api/interop/tasks/:id/context` | Compact context bundle (messages + notes) |
+| GET  | `/api/interop/tasks/:id/scratchpad` | Read scratchpad notes |
+| POST | `/api/interop/tasks/:id/scratchpad` | Append a scratchpad note |
 
 ---
 
@@ -340,7 +362,9 @@ langgraph/crewai/autogen), `@recoder/agent-events`, `@recoder/agent-mcp`,
 `@recoder/opencode-sdk`.
 
 **MOVE behind the composer from existing `backend/src/a2a/` (139 files) — do NOT
-rewrite, do NOT make a 4th copy:**
+rewrite, do NOT make a 4th copy:** *(SHIPPED: this absorption is DONE — the legacy
+flat `src/a2a/` dir was folded into `domains/interop` + `domains/interop-wire` and
+removed; the map below is retained as historical provenance.)*
 - Wire: `a2a-standard-server.ts`, `a2a-gateway.ts`, `a2a-event-bridge.ts`,
   `a2a-event-bus.ts`, `signed-ingress.middleware.ts`, `bridge-auth.ts`,
   `agent-card` builders → `wire/`.
@@ -397,20 +421,25 @@ no `EXTERNAL_SERVICE_ERROR`.
 
 ---
 
-## 9. MCP tools (`mcp/interop-engine.ts`)
+## 9. MCP tools (`mcp/interop-engine.ts` + `mcp/interop-write-engine.ts`)
 
-Conform to `@recoder/agent-mcp` ToolRouter. Register via the wiring checklist:
-add to `IN_PROC_SERVERS` (interop-host) + `ENGINE_SERVERS` (inproc-engines),
-export `registerInteropMcpTools(router)`, call it in `buildInProcEngineRouter`.
-Every tool call passes the InteropChain.
+Conform to `@recoder/agent-mcp` `McpToolRegistration`. **SHIPPED:** the tools split
+across a read engine (`interop-engine.ts`) and a write engine
+(`interop-write-engine.ts`); `interop-wire-module.mcp()` composes both and bootstrap
+registers them under the in-proc MCP server name **`interop-wire`**. Every tool call
+passes the InteropChain.
 
-| Tool | Purpose |
-|------|---------|
-| `interop_send_task` | Send a task to an agent/runtime (dispatch) |
-| `interop_task_respond` | Respond to an input-required task |
-| `interop_list_agents` | List registered agents + capabilities |
-| `interop_inbox` | Pull pending inbound A2A tasks for the actor |
-| `interop_dispatch` | Multi-dispatch fan-out (squad) |
+| Tool | Kind | Purpose |
+|------|------|---------|
+| `interop_list_agents` | read | List registered agents + capabilities |
+| `interop_agent_liveness` | read | Heartbeat/SLO liveness for an agent |
+| `interop_get_task` | read | Task row + message log (projection) |
+| `interop_task_context` | read | Compact context bundle for a task |
+| `interop_methods` | read | The registered A2A JSON-RPC method surface |
+| `interop_send_task` | write | Send a task to an agent/runtime (dispatch) |
+| `interop_dispatch` | write | Multi-dispatch fan-out (`all`/`first`/`quorum`) |
+| `interop_respond` | write | Respond to an input-required task |
+| `interop_inbox` | write | Pull pending inbound A2A tasks for the actor |
 
 ---
 
@@ -428,9 +457,12 @@ Every tool call passes the InteropChain.
    `signed-ingress.gate.ts` (wrap `@recoder/interop`) + `a2a-jsonrpc-server.ts`.
    Tests: `a2a-envelope.contract.test.ts`, `signed-ingress.gate.test.ts`
    (pin golden vectors from `@recoder/a2a-sdk`).
-5. **Runtimes** — `runtime-registry.ts` + `run-event.emitter.ts`, then each
-   adapter (claude→codex→opencode→pi→openfang) + `connector-process.supervisor.ts`.
-   Test: `runtime-registry.test.ts` (degrade-safe down path).
+5. **Runtimes** — the runtime-connector registry (`runtimes/index.ts` +
+   `runtime-connector.ts`), then each wire adapter
+   (claude→codex→opencode→cursor→windsurf→replit — **no pi/openfang wire adapter**,
+   **no connector-process supervisor**; openfang runs in-process via
+   conductor/engines). Dispatch legs error truthfully when the conductor `localRun`
+   seam is absent. Test: degrade-safe down path.
 6. **Dispatch + registry + bridge** — `task-lifecycle.service.ts` (state machine,
    emits RunEvents), `multi-dispatch`, `agent-registry`, `heartbeat-slo`,
    `context-bridge`, `scratchpad`. Test: `task-lifecycle.test.ts`.

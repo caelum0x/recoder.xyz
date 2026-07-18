@@ -17,21 +17,30 @@ truthful about current depth — where a layer is shallow, it says so.
 > `RECODER-MODULES.md` + `docs/modules/*` = the per-engine specs. `RECODER-NEXT-PHASE.md` is
 > superseded.
 
-> **Current reality (2026-07-15) — the layer stack below is largely REALIZED, not aspirational:**
+> **Current reality (2026-07-18) — the layer stack below is largely REALIZED, not aspirational:**
 > - **One project:** `apps/` = **desktop only** (wave shell + cockpit + the embedded backend;
 >   `apps/social` folded into the backend's social domain; wave + mobile folded/removed).
 > - **Backend BUILT + BOOTS:** the old v1 `server.ts` monolith was replaced by a 15-domain
 >   composed backend (`backend/src/{shared,bootstrap,http,domains}` — the legacy flat dirs
->   `a2a/agent-os/conductor/…` were absorbed + removed; **0 tsc errors**). Boots with 15
->   truthful health sources. Domains: persistence · identity · governance · interop · edge ·
->   agent-os · conductor · engines · inference · billing · memory · cloud · interop-wire ·
->   social · observability.
+>   `a2a/agent-os/conductor/…` were absorbed + removed; **0 tsc errors, ~1462 backend tests**).
+>   Boots with 15 truthful health sources. Domains: persistence · identity · governance ·
+>   interop · edge · agent-os · conductor · engines · inference · billing · memory · cloud ·
+>   interop-wire · social · observability.
 > - **Engines deepened IN their dirs + USED:** the supervisor spawns the OSS engines on boot
 >   (mem0/colbert/browser-use/ops-recorder live sidecars; openfang/tensorzero/governance in-proc
 >   napi; beads/multica/recoder-xds go binaries) and the domain services consume them. The
 >   conductor run flow uses memory recall/harvest, tensorzero inference, governance, recodergit +
 >   beads to power the workspace-for-agents product (external CLI + native openfang runtimes).
-> - Billing is merchant-of-record (Polar/Creem/Paddle/Dodo — no Stripe).
+> - **Inference ladder is live:** the TensorZero release `.node` streams REAL in-process SSE
+>   (`inferenceStream` napi binding) → supervised loopback → direct BYOK rung-3 multi-provider
+>   router (keys resolved from the governance secrets vault); OpenAI-compatible
+>   `/api/gateway/inference/v1/embeddings` edge + `inference.embed` MCP tool.
+> - **The governed MCP HTTP edge is LIVE:** `POST /api/mcp/tools/:server/:tool/call` (was 404).
+>   Every subject-bearing MCP tool binds identity to the host-authorized `McpToolCaller` (the
+>   cross-tenant class is closed — non-privileged → own subject, foreign → 403, admin/internal →
+>   arbitrary, absent → `AUTH_REQUIRED`).
+> - Billing is merchant-of-record (Polar/Creem/Paddle/Dodo — no Stripe); metering emitters
+>   decrement quotas at the conductor + inference call sites.
 
 ---
 
@@ -46,8 +55,9 @@ truthful about current depth — where a layer is shallow, it says so.
         ▲ consume ONLY over edges (HTTP/WS/MCP/A2A) — never reach into a module directly
 ┌───────────────────────────────────────────────────────────────────────────────────────┐
 │ EDGES (the backend's public seams — untrusted until proven)                             │
-│   /api/agent-os/*  /api/a2a/*  /api/mcp/*  /internal/agent-os/*  conductor.routes        │
-│   MCP host (~21 in-proc engines) · A2A wire · connectors ingress · WS /terminal + /stream │
+│   /api/agent-os/*  /api/a2a/*  /api/mcp/*  /api/social/*  /internal/*  conductor.routes    │
+│   MCP host (16 in-proc servers +agent-os/memory) + governed MCP HTTP tool-call edge ·     │
+│   A2A wire · social ingress · WS /terminal + per-workspace /stream                        │
 │   Contract packages (packages/*) are the typed shapes these edges speak.                 │
 └───────────────────────────────────────────────────────────────────────────────────────┘
         ▲ expose  │  every write passes the governance gate first
@@ -94,14 +104,14 @@ the backend integrates it today, and the honest depth gap.
 | `apps/desktop/server/engines/beads` | MEMORY | engine | cockpit board, all agents (`recoder.beads` MCP) | `beads-bin.ts` resolves the owned `bd` (never builds); `beads-sql.ts` read fast-path via the Dolt sql-server `ready_issues` VIEW; `beads-engine.ts` is the MCP executor. Writes via CLI. | CLI + SQL-read only; the Dolt sql-server is not owned/supervised; recall logic duplicated across `beads-memory.ts`/`beads-sql.ts`/`bundle.ts`. |
 | `backend/engines/py/mem0` | MEMORY | engine | cockpit (brain-stats) indirectly | **Live path is the OWNED `@recoder/mem0` TS package** (OSS Memory + platform client) over the platform Qdrant. The Python FastAPI server is now a **supervised sidecar** (`Mem0Adapter` in the ENGINES domain, health `up` only when the uv venv answers) reachable via `MEM0_BASE_URL`. | Two parallel mem0 impls (py lib + `@recoder/mem0`) = drift risk; the two paths are not yet consolidated behind one recall interface. |
 | `backend/engines/py/colbert` | MEMORY | engine | none directly (recall ranking) | `conductor/colbert-daemon.ts` supervises `rerank_server.py` as a loopback sidecar (`/health`, auto-restart, degrade-safe); `conductor/colbert-rerank.ts` is the per-call consumer. | Only the on-the-fly `rerank_server.py` is wired; `server.py` (real ANN index) + indexing/training are unused; torch usually absent → rerank is a no-op fallback. |
-| `backend/engines/rust/tensorzero` | INFERENCE | engine | desktop cockpit (`GatewayPanel`) | `tensorzero-client.ts` is native-first: loads `tensorzero_gateway_napi.node` → `EmbeddedGateway.boot().postInference` in-process; else supervises the loopback `gateway` binary (127.0.0.1:3778); else direct provider calls (never faked). `tensorzero-config.ts` = registry→TZ config. | No `stream()` binding yet; `feedback()` not wired to delivery outcomes; the conductor run loop still calls providers directly in places. |
+| `backend/engines/rust/tensorzero` | INFERENCE | engine | desktop cockpit (`GatewayPanel`) | Native-first ladder in the INFERENCE domain: loads the release `tensorzero_gateway_napi.node` → `EmbeddedGateway.postInference` in-process **with REAL in-proc SSE via the `inferenceStream` napi binding** → supervised loopback `gateway` (127.0.0.1:3778) → **direct BYOK rung-3 multi-provider router** (keys resolved from the governance secrets vault; never faked). OpenAI-compatible `/api/gateway/inference/v1/embeddings` edge + `inference.embed` MCP tool. | `feedback()` not yet wired to delivery outcomes; parts of the conductor run loop still call providers directly rather than through the ladder. |
 | `backend/engines/rust/openfang` | AGENT-ENGINE | engine | desktop cockpit (`AgentsPanel`) | `openfang-native.ts` degrade-safe `.node` loader (~51 napi exports, in-process); `openfang-runtime.ts` is an in-process `ConductorRuntime` driver, now **dispatchable** via `IN_PROCESS_RUNTIME_SPECS` (runtime-commands.ts) so a launcher can route `openfang` to it directly; `/api/agents/openfang/*`. Crate is vendored in-tree (upstream clone), not built by default. | Dispatch is via the in-process spec path, NOT the package's closed `ConductorRuntimeId` CLI union; Hands lifecycle + event-bus↔RunEvents bridge unwired; degrades to undefined when unbuilt. |
 | `backend/engines/rust/recoder-governance` | GOVERNANCE | engine | desktop cockpit (governance/audit nav) | Consumed via the `@recoder/governance` facade → napi kernel. Three-tier degrade ladder: napi in-process → UDS daemon (`governance-daemon.ts`) → pure-TS deny-biased fallback. `conductor/governance-gate.ts` `decideDelivery()` drives it on the delivery path. | `decide()` + Merkle audit on the delivery path are done; not yet the single gate EVERY module write flows through; richer policy crates (permission/approval/routing) unexercised via napi. |
 | `backend/engines/py/browser-use` | BROWSING | engine | cockpit (browser run evidence) | Live path is the owned `@recoder/agent-browser` over puppeteer (dynamic import); the Python agent is now a **supervised sidecar** (`BrowserUseAdapter` in the ENGINES domain, health `up` only when the uv venv answers) reachable via `BROWSER_USE_URL`; `browser-use-engine.ts` registers `browser.*` MCP tools behind the interop gate. | The Python agent's deep loop (Rust core, CDP, watchdogs, LLM loop) is only reached over the sidecar seam; domain-allowlist + artifact capture unwired. |
 | `backend/engines/py/ops-recorder` | SIGNALS | composer | cockpit (work-signals coordination) | `conductor/ops-recorder-daemon.ts` supervises `uvicorn main:app` (loopback :8073) with an auth preflight (won't spawn keyless); `ops-recorder-adapter.ts` forwards ingest/query. | Only ingest+query used; the service's own GH/Linear detectors are bypassed; local JSON store. (LICENSE added — MIT, Recoder-authored.) |
 | `backend/engines/py/pal-mcp-server` | COMMUNICATION | composer | cockpit indirectly (MCP registry, LLM router) | **NOT a sidecar.** Live path is the owned `@recoder/pal`; `pal-plan-engine.ts` registers `recoder.pal-plan` in-proc behind the interop gate (additive, does not disturb the Python server). | Only the `pal.plan` slice is ported; multi-model orchestration, conversation threading, and the `clink` subagent bridge are stranded in the vendored Python. |
 | `apps/desktop/engines/recodergit` | GITHUB | engine | backend engine + MCP tools (agents in workspaces) | `agent-os/recodergit-service.ts` resolves the vendored engine dist (`.../recodergit/dist/cli/index.js`) + supervises `recodergit mcp --http`. Separate wrapper pkg `@recoder/recodergit` (packages/recodergit, **distinct** from the engine) via `git-context.ts`. | GitHub capability split across TWO engines (recodergit code-graph + `github-engine.ts` gh ops); PolyForm-Noncommercial **license gate**; `apps/desktop/engines/recodergit` is NOT a root workspace member. |
-| `apps/desktop/engines/openclaw` | SOCIAL | engine | embedded backend `/api/connectors` edge (desktop hosts it) | `@recoder/connectors` (registry + hostile-by-default gate + dispatch + pi-runner) = the 8-channel foundation; `backend/src/connectors/` is the real ingress + gateway (webhook + interop signed gate + conductor dispatch), spawned INSIDE the desktop via `startConnectors()`. 8 `ConnectorPort` adapters (telegram/slack/discord/signal/imessage/whatsapp/line/feishu). Root workspace member. | `apps/social` is a redundant standalone deploy duplicating `channel-adapters.ts` — collapse it into the embedded backend (see NEXT-PHASE Phase B). Discord WS source unwired; LINE/Slack webhooks need a public URL from `127.0.0.1`; discord still bot-core-coupled. |
+| `apps/desktop/engines/openclaw` | SOCIAL | engine | embedded backend `/api/social` edge (desktop hosts it) | `@recoder/connectors` (registry + hostile-by-default gate + dispatch + pi-runner) = the 8-channel foundation; the SOCIAL domain (`backend/src/domains/social/`) is the real ingress + gateway (webhook + interop signed gate + conductor dispatch), mounted at `/api/social` (`/api/social/webhooks/*`, `/channels`, `/connectors`, `/health`) and spawned INSIDE the desktop. 8 `ConnectorPort` adapters (telegram/slack/discord/signal/imessage/whatsapp/line/feishu). Root workspace member. | `apps/social` (the redundant standalone deploy) is now folded into the embedded backend's social domain. Discord WS source unwired; LINE/Slack webhooks need a public URL from `127.0.0.1`; discord still bot-core-coupled. |
 | `apps/desktop/server/engines/multica` | SQUADS | engine | desktop cockpit board (target) | `multica-client.ts` supervises a degrade-safe loopback subprocess (127.0.0.1:38080, never builds); `routes/multica.routes.ts` (503 when absent); `a2a/squad.service.ts` is the LOCAL authoritative squad state (multica is optional enrichment). | Deep target is a PORT of its distinctive ideas (squads = leader-routing; autopilots = cron→beads→run) into the conductor — NOT deeper subprocess wiring. |
 | `apps/desktop/server/engines/ziti` | NETWORKING | engine | none (cloud tier; diagnostics) | `ziti-client.ts` is a degrade-safe REST client to an **external** Ziti controller (identity provisioning + OTT enrollment JWTs); `routes/ziti.routes.ts`. Vendored Go source not built/supervised. | Only the controller REST identity surface is used; no mesh / dark-service data plane; deferred to the cloud/teams tier. |
 | `apps/desktop/server/engines/recoder-xds` | NETWORKING | engine | none (cloud tier; diagnostics) | First-party Go xDS control plane (gRPC ADS on :18000). **NOT wired as a live client yet** — only `fleet/manifest.ts` registers it as a supervisable sidecar. The TS side generates the STATIC Envoy bootstrap (`/api/network/envoy-config`). | Nothing pushes the live `NetworkConfig` into its snapshot cache (no live LDS/CDS/RDS in prod); deferred to the cloud/teams tier. |
@@ -137,7 +147,7 @@ the backend integrates it today, and the honest depth gap.
 - Composers are now shipped: 15 domain modules under `backend/src/domains/*` boot via `src/bootstrap/` (tsc clean). The remaining work is deepening each domain and folding the last scattered `src/conductor`/`src/agent-os` consumers behind its interface.
 
 ### Edges
-- **May:** expose modules over HTTP (`/api/*`, `/internal/agent-os/*`), the MCP host (~21 in-proc engines, plus 2-3 bootstrap-added), the A2A wire, WS (`/terminal`, per-workspace `/api/conductor/workspaces/:id/stream`), and connector ingress.
+- **May:** expose modules over HTTP (`/api/*`, `/internal/*`), the MCP host (16 `IN_PROC_SERVERS` + the `agent-os`/`memory` domain-tool servers registered via `registerDomainTools` at bootstrap) **and the governed MCP HTTP tool-call edge `POST /api/mcp/tools/:server/:tool/call`** (was 404; now live, every subject-bearing tool bound to the host-authorized `McpToolCaller`), the A2A wire, WS (`/terminal`, per-workspace `/api/conductor/workspaces/:id/stream`), and social/connector ingress (`/api/social`).
 - **Must:** treat everything inbound as untrusted until proven — signature/identity/ownership/policy at the edge (the `authorize→risk→policy→audit` chain in `@recoder/interop`). `/internal/*` is `INTERNAL_SERVICE_KEY`-gated.
 - **Must not:** be the source of truth for task/approval/memory/artifact state — that stays in the Agent OS domain core (`@recoder/agent-os`) at the substrate.
 

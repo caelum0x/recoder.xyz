@@ -2,6 +2,13 @@
 
 `backend/src/domains/identity/` — the single identity authority for the comprehensive Recoder backend.
 
+> **Status: SHIPPED** (Phase 2, commit `349015859`; 40 files, 72/72 tests, part of
+> the boot's 15 truthful health sources). This doc has been reconciled to the shipped
+> `backend/src/domains/identity/` tree. Some port/file names, the migration numbering,
+> and the MCP tool surface differ from the original design brief — those are corrected
+> inline below. The design rationale (unify-without-merge, `SessionVerifier` seam,
+> degrade-safe auth) shipped as written.
+
 ## Overview
 
 Identity is the **first seam** every other domain wires to. It hosts Better Auth
@@ -44,54 +51,74 @@ table level**:
 - Better Auth keeps owning `user`, `session`, `account`, `verification` (via its own
   Prisma layer in `@recoder/auth`). This domain **does not recreate** those tables.
 - A new `user_cli_link` table maps a legacy `users.id` (CLI) to a canonical
-  `user.id` (web). `IdentityRepository.resolveIdentity()` returns one `Identity`
+  `user.id` (web). `IdentityReadModel.resolveIdentity()` returns one `Identity`
   regardless of which table a caller arrived through.
-- Migration `0004` **backfills links, never drops** the plural table. The physical
-  models stay separate; callers see one identity.
+- Migration `0006_legacy_users_link` **backfills links, never drops** the plural
+  table. The physical models stay separate; callers see one identity.
 
-## File tree (36 files under `backend/src/domains/identity/`)
+## File tree (40 files under `backend/src/domains/identity/`)
+
+> Shipped tree. Port files landed with shorter names than the brief
+> (`identity-repo.port.ts`, `api-key.port.ts`, `device-flow.port.ts`), the
+> `org-store` port split into `org.port.ts` + `rbac.port.ts`, and a `repositories/`
+> layer separates the pg-bound stores from the services. Migrations live in the flat
+> `backend/migrations/` dir (not under the domain) as `0003`–`0006`.
 
 ```
 identity/
-  index.ts                              # createIdentityModule() factory + public IdentityModule interface
-  identity-module.ts                    # composer: fuses better-auth + verifier + keys + device + orgs + rbac
+  index.ts                              # createIdentityModule() factory + IdentityModule interface; re-exports the auth-plan reader
+  identity-module.ts                    # IdentityModuleImpl composer: better-auth + verifier + middleware; feature deps injected (optional, degrade-safe)
   types.ts                              # Identity, Principal, PlatformApiKey, DeviceGrant, Org, Team, Role, Permission
   config.ts                             # IdentityConfig slice of AppConfig (secrets refs, TTLs, cookie domain)
   health.ts                             # health(): better-auth | auth-db | key-store | device-store | org-store
+  orgs-rbac.feature.ts                  # composes org.service + rbac.service (+ their repos) into one orgs/RBAC feature + router
   ports/
     session-verifier.port.ts            # SessionVerifier — identity→ALL domains (the load-bearing seam)
-    identity-repository.port.ts         # IdentityRepository — unified read model over user/users
-    api-key-store.port.ts               # ApiKeyStore — sk_ key persistence contract
-    device-grant-store.port.ts          # DeviceGrantStore — device/user code persistence contract
-    org-store.port.ts                   # OrgStore/TeamStore/MembershipStore + PermissionEvaluator contracts
+    identity-repo.port.ts               # IdentityReadModel — unified read model over user/users
+    api-key.port.ts                     # ApiKeyStore/ApiKeyValidator — sk_ key persistence + validation contract
+    device-flow.port.ts                 # DeviceGrantStore/DeviceTokenValidator — device/user code contract
+    org.port.ts                         # OrgStore/TeamStore/MembershipStore contracts
+    rbac.port.ts                        # PermissionEvaluator contract RBAC implements
   adapters/
-    better-auth.adapter.ts              # wraps @recoder/auth createAuth() + toNodeHandler; degrade-safe
+    better-auth.adapter.ts              # wraps @recoder/auth createAuth() + Web-Fetch handler; degrade-safe; AuthSenders for magic-link/reset
   api-key.service.ts                    # mint/validate/revoke sk_ keys (sha256+pepper, prefix index, last-used)
-  device-flow.service.ts               # RFC-8628 device authorization + rate-limited polling
+  device-flow.service.ts                # RFC-8628 device authorization + rate-limited polling
   principal.service.ts                  # implements SessionVerifier: cookie | sk_ | internal-key → Principal
   org.service.ts                        # orgs/teams/memberships/invites lifecycle (governance-gated writes)
   rbac.service.ts                       # implements PermissionEvaluator: role→permission expansion + can()
+  repositories/
+    api-key.repository.ts               # pg-backed ApiKeyStore (platform_api_key)
+    device-flow.repository.ts           # pg-backed DeviceGrantStore (device_grant)
+    identity.repository.ts              # IdentityReadModel over user/users + user_cli_link (link/resolve)
+    org.repository.ts                   # pg-backed org/team/membership store
+    rbac.repository.ts                  # pg-backed permission-override reads for the evaluator
+    auth-plan.reader.ts                 # website plan-read seam: feeds billing entitlement max(authPlan, webhookPlan, grant)
   routes/
-    auth.routes.ts                       # /api/auth/[...all] (Better Auth) + GET /api/auth/session
+    auth.routes.ts                      # /api/auth/[...all] (Better Auth) + GET /api/auth/session
     api-keys.routes.ts                  # /api/identity/keys CRUD (session-gated)
     device.routes.ts                    # /api/identity/device/{code,token,approve}
     orgs.routes.ts                      # /api/identity/orgs + teams + members + invites
-    internal-identity.routes.ts         # /internal/identity/{resolve,validate-key} (INTERNAL_SERVICE_KEY)
+    internal-identity.routes.ts         # /internal/identity/{resolve,validate-key,user/:id,link} (INTERNAL_SERVICE_KEY)
   middleware/
     authenticate.middleware.ts          # authenticate/authenticateMutating/requireAdmin/requireInternal/requirePermission
   mcp/
-    identity-engine.ts                  # registerIdentityMcpTools: identity_whoami/key_mint/key_list/key_revoke
-  migrations/
-    0001-identity-keys.sql              # platform_api_key
-    0002-device-grants.sql              # device_grant
-    0003-orgs-teams-rbac.sql            # organization, team, org_membership (+ org_permission_override)
-    0004-legacy-users-link.sql          # user_cli_link (unify without merge; backfill, never drop)
+    identity-engine.ts                  # registerIdentityMcpTools: identity_whoami / identity_resolve / identity_link (subject bound to host McpToolCaller)
   __tests__/
     api-key.service.test.ts             # mint/hash/validate/revoke/expiry + timing safety
-    device-flow.service.test.ts        # grant lifecycle, poll rate-limit, expiry, approval race
-    principal.service.test.ts          # cookie/sk_/internal precedence, anonymous fallback, invalid token
-    rbac.service.test.ts               # role expansion, can() allow/deny, org isolation
-    internal-identity.routes.test.ts   # INTERNAL_SERVICE_KEY gate (integration: resolve + validate-key)
+    device-flow.service.test.ts         # grant lifecycle, poll rate-limit, expiry, approval race
+    identity.repository.test.ts         # unify-without-merge: link + resolveIdentity over user/users
+    principal.service.test.ts           # cookie/sk_/internal precedence, anonymous fallback, invalid token
+    rbac.service.test.ts                # role expansion, can() allow/deny, org isolation
+    org.service.test.ts                 # org/team/membership/invite lifecycle, single-owner + slug uniqueness
+    internal-identity.routes.test.ts    # INTERNAL_SERVICE_KEY gate (integration: resolve + validate-key)
+  mcp/identity-engine.mcp.test.ts       # McpToolCaller subject binding: own-id OK, foreign → 403, admin arbitrary, absent → AUTH_REQUIRED
+  repositories/auth-plan.reader.test.ts # plan-read seam over the Better Auth user table
+
+# Migrations (flat backend/migrations/, run by the persistence domain):
+#   0003_identity_keys.sql       platform_api_key
+#   0004_device_grants.sql       device_grant
+#   0005_orgs_teams_rbac.sql     organization, team, org_membership (+ org_permission_override)
+#   0006_legacy_users_link.sql   user_cli_link (unify without merge; backfill, never drop)
 ```
 
 ## Per-file responsibilities
@@ -104,10 +131,11 @@ identity/
 | `config.ts` | ts | config | Typed `IdentityConfig` slice taken from `AppConfig` (never reads `process.env`). Fails SAFE: missing secret → engine reports `down`. | `IdentityConfig`, `sliceIdentityConfig(appConfig)` |
 | `health.ts` | ts | service | Aggregates per-engine `up\|down` (better-auth secret present? auth-db reachable? stores reachable?). Truthful, `degraded` flagged. | `buildIdentityHealth(deps): HealthReport` |
 | `ports/session-verifier.port.ts` | ts | port | **The identity→ALL seam.** Resolve any credential to a `Principal`. | `interface SessionVerifier { verify(cred): Promise<Principal \| null> }` |
-| `ports/identity-repository.port.ts` | ts | port | Unified read model over `user`/`users`; link + resolve. | `interface IdentityRepository { resolveIdentity, findUserById, resolveCliUser, linkLegacyUser }` |
-| `ports/api-key-store.port.ts` | ts | port | `sk_` key persistence contract (business logic depends on this, not on pg). | `interface ApiKeyStore { insert, findByPrefix, listForUser, revoke, touchLastUsed }` |
-| `ports/device-grant-store.port.ts` | ts | port | Device/user-code persistence contract. | `interface DeviceGrantStore { create, findByDeviceCodeHash, findByUserCode, approve, consume, expireStale }` |
-| `ports/org-store.port.ts` | ts | port | Org/team/membership persistence + the `PermissionEvaluator` interface RBAC implements. | `interface OrgStore`, `interface MembershipStore`, `interface PermissionEvaluator { can(principal, action, resource) }` |
+| `ports/identity-repo.port.ts` | ts | port | Unified read model over `user`/`users`; link + resolve. | `interface IdentityReadModel { resolveIdentity, findUserById, resolveCliUser, linkLegacyUser }` |
+| `ports/api-key.port.ts` | ts | port | `sk_` key persistence + validation contract (business logic depends on this, not on pg). | `interface ApiKeyStore { insert, findByPrefix, listForUser, revoke, touchLastUsed }`, `interface ApiKeyValidator` |
+| `ports/device-flow.port.ts` | ts | port | Device/user-code persistence + token-validation contract. | `interface DeviceGrantStore { create, findByDeviceCodeHash, findByUserCode, approve, consume, expireStale }`, `interface DeviceTokenValidator` |
+| `ports/org.port.ts` | ts | port | Org/team/membership persistence contracts. | `interface OrgStore`, `interface TeamStore`, `interface MembershipStore` |
+| `ports/rbac.port.ts` | ts | port | The `PermissionEvaluator` interface RBAC implements. | `interface PermissionEvaluator { can(principal, action, resource) }` |
 | `adapters/better-auth.adapter.ts` | ts | client | Wraps `@recoder/auth` `createAuth()`, exposes the Node handler for the catch-all route; supplies `sendMagicLink`/`sendResetPassword` bound to the observability/notify edge; degrades to `down` when `BETTER_AUTH_SECRET`/`AUTH_DATABASE_URL` missing (never fakes a 200). | `createBetterAuthAdapter(cfg)`, `BetterAuthAdapter` |
 | `api-key.service.ts` | ts | service | Mint `sk_<base62>` keys; store only `sha256(pepper + key)` + a lookup prefix; validate in constant time; enforce expiry/revocation; update `last_used_at` async. Every mint/revoke passes `GovernanceGate.decide()`. | `class ApiKeyService { mint, validate, list, revoke }` |
 | `device-flow.service.ts` | ts | service | RFC-8628 shape: `requestGrant()` returns `device_code`+`user_code`; `approve(userCode, principal)` binds it to a user; `exchange(deviceCode)` mints an `sk_` key and consumes the grant; `slow_down`/`authorization_pending`/`expired_token` polling semantics with interval rate-limit. | `class DeviceFlowService { requestGrant, approve, exchange, pollStatus }` |
@@ -118,13 +146,20 @@ identity/
 | `routes/api-keys.routes.ts` | ts | route | `GET/POST /api/identity/keys`, `DELETE /api/identity/keys/:id`. Session-gated; zod body validation; `sendSuccess`/`sendError`. | `buildApiKeysRouter(module, deps)` |
 | `routes/device.routes.ts` | ts | route | `POST /api/identity/device/code` (start), `POST /api/identity/device/token` (poll/exchange), `POST /api/identity/device/approve` (browser, session-gated). | `buildDeviceRouter(module, deps)` |
 | `routes/orgs.routes.ts` | ts | route | Orgs/teams/members/invites CRUD; `requirePermission` per action. | `buildOrgsRouter(module, deps)` |
-| `routes/internal-identity.routes.ts` | ts | route | `POST /internal/identity/resolve` (cookie/key → Principal for the website proxy), `POST /internal/identity/validate-key`. `INTERNAL_SERVICE_KEY`-gated via `requireInternal`. | `buildInternalIdentityRouter(module, deps)` |
+| `routes/internal-identity.routes.ts` | ts | route | `POST /internal/identity/resolve` (cookie/key → Principal for the website proxy), `POST /internal/identity/validate-key`, `GET /internal/identity/user/:id` (canonical read), `POST /internal/identity/link` (backfill a `user_cli_link`). `INTERNAL_SERVICE_KEY`-gated via `requireInternal`. | `buildInternalIdentityRouter(module, deps)` |
 | `middleware/authenticate.middleware.ts` | ts | middleware | Express factories built on `SessionVerifier`: `authenticate`, `authenticateMutating`, `requireAdmin` (`ADMIN_USER_IDS`), `requireInternal` (constant-time), `requirePermission(action)`, `verifyOrgAccess`. Moves the `server.ts` auth block behind the composer. | `createAuthMiddleware(module): { authenticate, authenticateMutating, requireAdmin, requireInternal, requirePermission, verifyOrgAccess }` |
-| `mcp/identity-engine.ts` | ts | service | MCP tools conforming to `@recoder/agent-mcp` ToolRouter: `identity_whoami`, `identity_key_mint`, `identity_key_list`, `identity_key_revoke`. Each passes `authorize→risk→policy→audit`. | `registerIdentityMcpTools(router, module)` |
-| `migrations/0001-identity-keys.sql` | sql | migration | `platform_api_key` table + indexes on `key_prefix`, `user_id`. | — |
-| `migrations/0002-device-grants.sql` | sql | migration | `device_grant` table + unique `user_code`, index on `device_code_hash`, `expires_at`. | — |
-| `migrations/0003-orgs-teams-rbac.sql` | sql | migration | `organization`, `team`, `org_membership`, `org_permission_override`. | — |
-| `migrations/0004-legacy-users-link.sql` | sql | migration | `user_cli_link` (auth_user_id ↔ legacy_users_id) + backfill; **no DROP** of `users`. | — |
+| `orgs-rbac.feature.ts` | ts | service | Composes `org.service` + `rbac.service` and their repositories into one orgs/RBAC feature and its router, so a parallel agent could extend orgs/RBAC without editing the module composer. | `createOrgsRbacFeature(deps)` |
+| `repositories/api-key.repository.ts` | ts | repository | pg-backed `ApiKeyStore` over `platform_api_key`. | `createApiKeyRepository(executor)` |
+| `repositories/device-flow.repository.ts` | ts | repository | pg-backed `DeviceGrantStore` over `device_grant`. | `createDeviceFlowRepository(executor)` |
+| `repositories/identity.repository.ts` | ts | repository | `IdentityReadModel` over `user`/`users` joined through `user_cli_link` (link + resolve; never merges the tables). | `createIdentityRepository(...)`, `AuthUserReader` |
+| `repositories/org.repository.ts` | ts | repository | pg-backed org/team/membership store. | `createOrgRepository(executor)` |
+| `repositories/rbac.repository.ts` | ts | repository | pg-backed permission-override reads for the evaluator. | `createRbacRepository(executor)` |
+| `repositories/auth-plan.reader.ts` | ts | repository | **Website plan-read seam.** Reads the caller's plan off the Better Auth `user` table; bootstrap wires `readPlan` as billing's `resolveAuthPlan`, so backend entitlement = `max(authPlan, webhookPlan, distributionGrant)`. Degrades to `null` when the auth DB is absent. | `createAuthPlanReader`, `createBetterAuthPlanReader`, `AuthPlanReader` |
+| `mcp/identity-engine.ts` | ts | service | MCP tools conforming to the `@recoder/agent-mcp` ToolRouter: `identity_whoami`, `identity_resolve`, `identity_link`. Subject is derived from the host-authorized `McpToolCaller` — NEVER from free-form args: a non-privileged caller resolves only its OWN `userId` (foreign id → 403), `identity_link` (a graph mutation) is admin/internal-only, and an absent caller is refused (`AUTH_REQUIRED`). `sk_` key management stays HTTP-only (no MCP mint/list/revoke tools). Each passes `authorize→risk→policy→audit`. | `registerIdentityMcpTools(router, module)` |
+| `backend/migrations/0003_identity_keys.sql` | sql | migration | `platform_api_key` table + indexes on `key_prefix`, `user_id`. | — |
+| `backend/migrations/0004_device_grants.sql` | sql | migration | `device_grant` table + unique `user_code`, index on `device_code_hash`, `expires_at`. | — |
+| `backend/migrations/0005_orgs_teams_rbac.sql` | sql | migration | `organization`, `team`, `org_membership`, `org_permission_override`. | — |
+| `backend/migrations/0006_legacy_users_link.sql` | sql | migration | `user_cli_link` (auth_user_id ↔ legacy_users_id) + backfill; **no DROP** of `users`. | — |
 | `__tests__/api-key.service.test.ts` | ts | test | Mint format, hash-at-rest (raw key never stored), constant-time validate, expiry/revocation, prefix collision. | — |
 | `__tests__/device-flow.service.test.ts` | ts | test | Grant lifecycle, poll `authorization_pending`/`slow_down`, expiry, double-consume race, approval binds correct user. | — |
 | `__tests__/principal.service.test.ts` | ts | test | Credential precedence, anonymous fallback under `STRICT_AUTH` on/off, invalid/expired token → null. | — |
@@ -138,7 +173,7 @@ identity/
 > this domain only *links* to it.
 
 ```sql
--- 0001 platform_api_key : sk_ keys, DB-backed, hashed at rest
+-- 0003_identity_keys : platform_api_key — sk_ keys, DB-backed, hashed at rest
 CREATE TABLE platform_api_key (
   id           TEXT PRIMARY KEY,               -- uuid
   user_id      TEXT NOT NULL,                  -- owning identity (canonical user.id)
@@ -155,7 +190,7 @@ CREATE TABLE platform_api_key (
 CREATE INDEX idx_pak_prefix ON platform_api_key (key_prefix);
 CREATE INDEX idx_pak_user   ON platform_api_key (user_id);
 
--- 0002 device_grant : RFC-8628 CLI device flow
+-- 0004_device_grants : device_grant — RFC-8628 CLI device flow
 CREATE TABLE device_grant (
   id                TEXT PRIMARY KEY,
   device_code_hash  TEXT NOT NULL,             -- sha256 of the device_code
@@ -173,7 +208,7 @@ CREATE TABLE device_grant (
 CREATE INDEX idx_dg_devicehash ON device_grant (device_code_hash);
 CREATE INDEX idx_dg_expires    ON device_grant (expires_at);
 
--- 0003 orgs / teams / rbac
+-- 0005_orgs_teams_rbac : orgs / teams / rbac
 CREATE TABLE organization (
   id            TEXT PRIMARY KEY,
   slug          TEXT NOT NULL UNIQUE,
@@ -208,7 +243,7 @@ CREATE TABLE org_permission_override (       -- optional per-membership grants/d
   effect        TEXT NOT NULL DEFAULT 'allow' -- allow|deny
 );
 
--- 0004 legacy link : unify user/users WITHOUT merging (backfill, never drop)
+-- 0006_legacy_users_link : unify user/users WITHOUT merging (backfill, never drop)
 CREATE TABLE user_cli_link (
   auth_user_id   TEXT NOT NULL,               -- canonical user.id (Better Auth)
   legacy_users_id TEXT NOT NULL,              -- legacy users.id (CLI plural)
@@ -236,6 +271,8 @@ parameterized `:param` SQL via the persistence `QueryExecutor`. **No Supabase RL
 | POST | `/api/identity/orgs/:id/{teams,members,invites}` | session + `requirePermission` | org management |
 | POST | `/internal/identity/resolve` | `INTERNAL_SERVICE_KEY` | website proxy: credential → `Principal` |
 | POST | `/internal/identity/validate-key` | `INTERNAL_SERVICE_KEY` | validate an `sk_` key for another service |
+| GET | `/internal/identity/user/:id` | `INTERNAL_SERVICE_KEY` | canonical identity read by id for another service |
+| POST | `/internal/identity/link` | `INTERNAL_SERVICE_KEY` | backfill a `user_cli_link` (legacy CLI id ↔ canonical user id) |
 
 Routes are mounted by the **`edge`** domain's route-mount table; every edge + MCP
 call passes the `@recoder/interop` `authorize→risk→policy→audit` chain.
@@ -249,8 +286,9 @@ call passes the `@recoder/interop` `authorize→risk→policy→audit` chain.
 - `Principal` type — `{ userId, orgId?, sessionId, kind: 'user'|'apikey'|'internal'|'anonymous', scopes, isAnonymous }`.
 - `PermissionEvaluator.can(principal, action, resource)` — consumed by any domain
   doing authorization (agent-os approvals, billing, governance).
-- `ApiKeyStore` / `IdentityRepository` — for domains that must resolve a user (billing, conductor).
-- MCP tools via `identity-engine.ts` (`identity_whoami` etc.).
+- `ApiKeyStore` / `IdentityReadModel` — for domains that must resolve a user (billing, conductor).
+- `AuthPlanReader` — the website plan-read seam billing consumes as `resolveAuthPlan`.
+- MCP tools via `identity-engine.ts` (`identity_whoami` / `identity_resolve` / `identity_link`).
 
 **Consumes (other domains → identity):**
 
@@ -290,8 +328,8 @@ call passes the `@recoder/interop` `authorize→risk→policy→audit` chain.
 - DB-backed `sk_` key store + `api-key.service.ts` (today `validatePlatformApiKey`
   is in-memory only — memory note: "sk_ keys → Postgres in identity").
 - `device-flow.service.ts` + `device_grant` table (no device flow exists in backend today).
-- Orgs/teams/RBAC (`org.service.ts`, `rbac.service.ts`, migration `0003`).
-- `user_cli_link` unification (migration `0004`) + `IdentityRepository.resolveIdentity`.
+- Orgs/teams/RBAC (`org.service.ts`, `rbac.service.ts`, migration `0005_orgs_teams_rbac`).
+- `user_cli_link` unification (migration `0006_legacy_users_link`) + `IdentityReadModel.resolveIdentity`.
 - The `SessionVerifier` / `PermissionEvaluator` ports and the composer.
 
 ## Implementation order
@@ -302,12 +340,12 @@ call passes the `@recoder/interop` `authorize→risk→policy→audit` chain.
    verify with `sso-logout-matrix.sh`.
 3. **principal.service** (implements `SessionVerifier`) + **authenticate.middleware** —
    move the server.ts auth block behind the composer; internal-key + anonymous paths.
-4. **api-key.service + store + migration 0001 + api-keys.routes** — DB-backed `sk_`;
+4. **api-key.service + store + migration `0003_identity_keys` + api-keys.routes** — DB-backed `sk_`;
    verify with `verify-byok-e2e.sh` shape.
-5. **device-flow.service + store + migration 0002 + device.routes** — verify with
+5. **device-flow.service + store + migration `0004_device_grants` + device.routes** — verify with
    `verify-cli-device-flow-e2e.sh`.
-6. **orgs + rbac + migrations 0003** — org.service, rbac.service, requirePermission.
-7. **migration 0004 + IdentityRepository unification** — backfill `user_cli_link`.
+6. **orgs + rbac + migration `0005_orgs_teams_rbac`** — org.service, rbac.service, requirePermission.
+7. **migration `0006_legacy_users_link` + IdentityReadModel unification** — backfill `user_cli_link`.
 8. **internal-identity.routes + mcp/identity-engine + health.ts** — wire MCP via the
    checklist (IN_PROC_SERVERS + ENGINE_SERVERS + registerIdentityMcpTools), aggregate health.
 9. **Tests throughout** (co-located), then `pnpm check-types` + `pnpm test:contracts:agent-os`.
