@@ -313,6 +313,17 @@ export function createBillingRepository(executor: QueryExecutor): MeteringReposi
       );
     },
 
+    async wasWebhookProcessed(provider: BillingProviderName, eventId) {
+      // Dedup gate = fully processed (processed_at set), not mere receipt: a row
+      // left by a prior faulted attempt (processed_at null) must NOT dedup.
+      const row = await executor.one<QueryRow>(
+        `select processed_at from billing_webhook_events
+           where provider = :provider and event_id = :eventId`,
+        { provider, eventId },
+      );
+      return row != null && row.processed_at != null;
+    },
+
     isAvailable() {
       return executor.isAvailable();
     },

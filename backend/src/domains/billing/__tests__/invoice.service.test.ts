@@ -28,6 +28,8 @@ interface RepoState {
   upserts: Invoice[];
   seen: Set<string>;
   throwOnList?: boolean;
+  throwOnUpsert?: boolean;
+  markedProcessed: string[];
 }
 
 function fakeRepo(state: RepoState): MeteringRepository {
@@ -37,6 +39,7 @@ function fakeRepo(state: RepoState): MeteringRepository {
       return state.invoices.slice(0, limit);
     },
     async upsertInvoice(inv: Invoice) {
+      if (state.throwOnUpsert) throw new Error('transient DB error');
       state.upserts.push(inv);
     },
     async recordWebhookEvent(row: { eventId: string }) {
@@ -44,7 +47,12 @@ function fakeRepo(state: RepoState): MeteringRepository {
       state.seen.add(row.eventId);
       return { inserted: true };
     },
-    async markWebhookProcessed() {},
+    async markWebhookProcessed(_provider: string, eventId: string) {
+      state.markedProcessed.push(eventId);
+    },
+    async wasWebhookProcessed(_provider: string, eventId: string) {
+      return state.markedProcessed.includes(eventId);
+    },
     async getActiveSubscription() {
       return null;
     },
@@ -101,7 +109,7 @@ function invoiceEvent(data: Record<string, unknown>, over: Partial<ParsedWebhook
 
 describe('invoice projection — list', () => {
   it('serves the durable rows on the happy path', async () => {
-    const state: RepoState = { invoices: [invoiceRow(), invoiceRow({ id: 'inv-2' })], upserts: [], seen: new Set() };
+    const state: RepoState = { invoices: [invoiceRow(), invoiceRow({ id: 'inv-2' })], upserts: [], seen: new Set(), markedProcessed: [] };
     const svc = createInvoiceService({ repo: fakeRepo(state) });
     const rows = await svc.list('u1', 20);
     expect(rows).toHaveLength(2);
@@ -109,7 +117,7 @@ describe('invoice projection — list', () => {
   });
 
   it('degrade-safe: a repo fault yields an empty list, never a throw', async () => {
-    const state: RepoState = { invoices: [invoiceRow()], upserts: [], seen: new Set(), throwOnList: true };
+    const state: RepoState = { invoices: [invoiceRow()], upserts: [], seen: new Set(), throwOnList: true, markedProcessed: [] };
     const svc = createInvoiceService({ repo: fakeRepo(state) });
     await expect(svc.list('u1')).resolves.toEqual([]);
   });
@@ -117,7 +125,7 @@ describe('invoice projection — list', () => {
 
 describe('invoice projection — recordFromWebhook', () => {
   it('projects a receipt from a verified invoice.paid event', async () => {
-    const state: RepoState = { invoices: [], upserts: [], seen: new Set() };
+    const state: RepoState = { invoices: [], upserts: [], seen: new Set(), markedProcessed: [] };
     const svc = createInvoiceService({ repo: fakeRepo(state) });
     const inv = await svc.recordFromWebhook(
       invoiceEvent({ invoice_id: 'pi_42', amount: 4900, currency: 'usd', status: 'paid' }),
@@ -128,7 +136,7 @@ describe('invoice projection — recordFromWebhook', () => {
   });
 
   it('self-filters a non-invoice event (returns null, nothing written)', async () => {
-    const state: RepoState = { invoices: [], upserts: [], seen: new Set() };
+    const state: RepoState = { invoices: [], upserts: [], seen: new Set(), markedProcessed: [] };
     const svc = createInvoiceService({ repo: fakeRepo(state) });
     const inv = await svc.recordFromWebhook(invoiceEvent({ invoice_id: 'x', amount: 1 }, { type: 'subscription.active' }));
     expect(inv).toBeNull();
@@ -136,17 +144,28 @@ describe('invoice projection — recordFromWebhook', () => {
   });
 
   it('fails safe when the event lacks a resolvable id/amount (never a fabricated receipt)', async () => {
-    const state: RepoState = { invoices: [], upserts: [], seen: new Set() };
+    const state: RepoState = { invoices: [], upserts: [], seen: new Set(), markedProcessed: [] };
     const svc = createInvoiceService({ repo: fakeRepo(state) });
     const inv = await svc.recordFromWebhook(invoiceEvent({ currency: 'usd' /* no id, no amount */ }));
     expect(inv).toBeNull();
+    expect(state.upserts).toHaveLength(0);
+  });
+
+  it('PROPAGATES a transient upsert fault (never returns null) so a collected receipt is not silently dropped', async () => {
+    const state: RepoState = { invoices: [], upserts: [], seen: new Set(), throwOnUpsert: true, markedProcessed: [] };
+    const svc = createInvoiceService({ repo: fakeRepo(state) });
+    // A resolvable invoice.paid whose persist fails must throw, NOT resolve to
+    // `null` — `null` would let the webhook route ACK 200 and lose the receipt.
+    await expect(
+      svc.recordFromWebhook(invoiceEvent({ invoice_id: 'pi_42', amount: 4900, currency: 'usd', status: 'paid' })),
+    ).rejects.toThrow('transient DB error');
     expect(state.upserts).toHaveLength(0);
   });
 });
 
 describe('invoice projection — webhook reconcile wiring (recordFromWebhook is live)', () => {
   it('an invoice.paid event yields the `invoiced` action + a durable upsert', async () => {
-    const state: RepoState = { invoices: [], upserts: [], seen: new Set() };
+    const state: RepoState = { invoices: [], upserts: [], seen: new Set(), markedProcessed: [] };
     const repo = fakeRepo(state);
     const invoices = createInvoiceService({ repo });
     const webhooks = createWebhookService({ repo, catalog, registry: fakeRegistry(), invoices });
@@ -155,5 +174,21 @@ describe('invoice projection — webhook reconcile wiring (recordFromWebhook is 
     expect(res.action).toBe('invoiced');
     expect(state.upserts).toHaveLength(1);
     expect(state.upserts[0].providerInvoiceId).toBe('pi_99');
+    expect(state.markedProcessed).toContain('evt_inv_1');
+  });
+
+  it('a transient invoice-upsert fault surfaces (route can 5xx) and does NOT mark the event processed', async () => {
+    const state: RepoState = { invoices: [], upserts: [], seen: new Set(), throwOnUpsert: true, markedProcessed: [] };
+    const repo = fakeRepo(state);
+    const invoices = createInvoiceService({ repo });
+    const webhooks = createWebhookService({ repo, catalog, registry: fakeRegistry(), invoices });
+    const parsed = invoiceEvent({ invoice_id: 'pi_99', amount: 999, currency: 'usd' });
+    // The upsert fault must propagate out of `process` so the webhook route
+    // returns 5xx and the provider re-delivers — never a swallowed 200.
+    await expect(webhooks.process(parsed, Buffer.from('{}'))).rejects.toThrow('transient DB error');
+    // The audit stamp must NOT be written for an event whose receipt never
+    // committed (otherwise the retry would look already-handled).
+    expect(state.markedProcessed).not.toContain('evt_inv_1');
+    expect(state.upserts).toHaveLength(0);
   });
 });

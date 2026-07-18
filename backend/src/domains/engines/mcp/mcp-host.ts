@@ -33,10 +33,9 @@ import {
   type McpServerRegistration,
 } from '@recoder/interop';
 import type { McpToolCallInput, McpToolResult } from '@recoder/agent-mcp';
-import { McpToolRouter } from '@recoder/agent-mcp';
+import { McpToolRouter, McpRegistry } from '@recoder/agent-mcp';
 import type { McpHostPort, InProcToolHandler } from '../ports/mcp-host.port.js';
 import {
-  buildInProcEngineRouter,
   forEachInProcEngineTool,
   ENGINE_SERVERS,
   type EngineToolBinder,
@@ -163,8 +162,25 @@ export class InteropHostBundle implements McpHostPort {
 
   private bindInProcEngines(binders: readonly EngineToolBinder[]): void {
     if (binders.length === 0) return;
-    const engineRouter: McpToolRouter = buildInProcEngineRouter(binders);
+    // Build the engine router over a registry we can INSPECT, so a delegating
+    // in-proc handler is bound ONLY for servers a binder actually registered.
+    // An `ENGINE_SERVERS` server with no supplied binder must NOT get a fake
+    // delegating handler: doing so both advertises a tool that silently fails on
+    // call ("No MCP handler registered") AND fools the wiring guard (its
+    // `handlerKeys` would falsely cover every engine tool). Leaving it unbound
+    // makes the gap surface truthfully — the guard flags it at boot.
+    const registry = new McpRegistry();
+    const engineRouter = new McpToolRouter(registry);
+    for (const bind of binders) {
+      try {
+        bind(engineRouter);
+      } catch {
+        /* isolate a broken binder; its tools stay unbound + are flagged by the guard */
+      }
+    }
+    const boundServerIds = new Set(registry.list().map((server) => server.serverId));
     forEachInProcEngineTool((serverId, toolName) => {
+      if (!boundServerIds.has(serverId)) return;
       this.registerInProcTool(serverId, toolName, (input) => engineRouter.call(input));
     });
   }

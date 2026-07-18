@@ -14,14 +14,9 @@
  * executor). A mismatch throws with the exact missing server/tool.
  */
 import {
-  tasksMcpServer,
-  runsMcpServer,
-  artifactsMcpServer,
-  approvalsMcpServer,
   githubMcpServer,
   repoMcpServer,
   browserMcpServer,
-  memoryMcpServer,
   beadsMcpServer,
   gitNexusMcpServer,
   previewMcpServer,
@@ -42,16 +37,20 @@ import type { McpServerRegistration } from '@recoder/interop';
  * The canonical in-proc server catalog the host exposes (registration only).
  * MOVED from `agent-os/mcp/interop-host.ts` — the composer seeds these into the
  * gated registry at boot. A server MUST be here to be visible to agents.
+ *
+ * NOT advertised here: `recoder.tasks` / `recoder.runs` / `recoder.artifacts` /
+ * `recoder.approvals` / `recoder.memory`. The engines composer supplies NO binder
+ * for them, so their tools (`tasks.create`, `runs.transition`, …) would sit in the
+ * gated catalog as `enabled` yet permanently fail on call ("No MCP handler
+ * registered"). The real task/run/approval/artifact/memory capability is exposed
+ * by the agent-os + memory domains under their OWN serverIds (`agent-os`,
+ * `memory`) via `registerDomainTools` at bootstrap — advertising the dead
+ * `recoder.*` duplicates would be a false capability claim.
  */
 export const IN_PROC_SERVERS: readonly McpServerRegistration[] = [
-  tasksMcpServer,
-  runsMcpServer,
-  artifactsMcpServer,
-  approvalsMcpServer,
   githubMcpServer,
   repoMcpServer,
   browserMcpServer,
-  memoryMcpServer,
   beadsMcpServer,
   gitNexusMcpServer,
   previewMcpServer,

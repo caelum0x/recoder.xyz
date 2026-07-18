@@ -98,6 +98,13 @@ export interface MeteringRepository {
   recordWebhookEvent(row: Omit<WebhookEventRow, 'receivedAt' | 'processedAt'>): Promise<IdempotentWrite>;
   /** Mark a webhook event processed (audit/reconcile completion). */
   markWebhookProcessed(provider: BillingProviderName, eventId: string, processedAt: string): Promise<void>;
+  /**
+   * True only when a webhook event was already FULLY processed (its projection
+   * committed). This — not mere receipt — is the dedup gate: a prior delivery
+   * that faulted mid-projection is left un-processed so a provider retry re-applies
+   * it, instead of being permanently dropped.
+   */
+  wasWebhookProcessed(provider: BillingProviderName, eventId: string): Promise<boolean>;
 
   /** True when the underlying pool is connectable (drives truthful health). */
   isAvailable(): boolean;

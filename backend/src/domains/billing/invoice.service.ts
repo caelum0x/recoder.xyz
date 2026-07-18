@@ -10,7 +10,10 @@
  * providerInvoiceId)`, so a retried webhook is a safe no-op.
  *
  * Fail-safe: an event that does not carry a resolvable invoice id + amount
- * yields `null` (nothing is written) rather than a fabricated receipt.
+ * yields `null` (nothing is written) rather than a fabricated receipt. A
+ * resolvable receipt that fails to persist, however, is NOT swallowed — the
+ * upsert fault propagates so the webhook route returns 5xx and the provider
+ * re-delivers, rather than losing the receipt for a collected payment.
  */
 import { randomUUID } from 'node:crypto';
 import type { MeteringRepository } from './ports/metering-repo.port.js';
@@ -27,9 +30,16 @@ export interface InvoiceService {
   /** Durable invoices for a subject, newest first (UI billing history). */
   list(subjectId: string, limit?: number): Promise<readonly Invoice[]>;
   /**
-   * Upsert an invoice from a verified `invoice.paid` webhook. Returns the row on
-   * success, or `null` when the event is not an invoice event / lacks the fields
-   * needed to project one (fail-safe: never fabricates a receipt).
+   * Upsert an invoice from a verified `invoice.paid` webhook.
+   *
+   * - Returns the row on success.
+   * - Returns `null` when there is nothing to project — the event is not an
+   *   invoice event, or it lacks the id/amount needed to build a receipt
+   *   (fail-safe: never fabricates a receipt).
+   * - THROWS (propagates) when a real `invoice.paid` receipt could not be
+   *   persisted (e.g. a transient DB fault). A collected payment must never be
+   *   silently dropped: the throw lets the webhook route return 5xx so the
+   *   provider re-delivers, instead of ACKing 200 and losing the receipt.
    */
   recordFromWebhook(event: ParsedWebhook): Promise<Invoice | null>;
 }
@@ -137,12 +147,21 @@ export function createInvoiceService(deps: InvoiceServiceDeps): InvoiceService {
         );
         return null;
       }
+      // A projectable receipt exists: it MUST commit. Do not swallow the fault —
+      // returning `null` here would let the webhook reconcile mark the event
+      // processed + ACK 200, permanently losing the receipt for a collected
+      // payment (the provider never re-delivers a 200). Propagate so the route
+      // returns 5xx and the provider retries. `null` is reserved for
+      // "nothing to project", never for "failed to persist".
       try {
         await repo.upsertInvoice(invoice);
         return invoice;
       } catch (error) {
-        logger?.warn?.({ error, eventId: event.eventId }, 'invoice.upsert failed');
-        return null;
+        logger?.error?.(
+          { error, eventId: event.eventId, provider: event.provider },
+          'invoice.upsert failed → propagating so the provider retries (receipt not lost)',
+        );
+        throw error;
       }
     },
   };

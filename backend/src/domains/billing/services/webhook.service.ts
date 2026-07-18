@@ -6,14 +6,18 @@
  *   1. `verifyAndParse` runs the provider adapter's `parseEvent`, which
  *      signature-verifies the RAW body first — a `null` means a bad signature and
  *      the route drops the event (never trusts an unverified payload).
- *   2. `process` records the event id (`ON CONFLICT DO NOTHING`); a duplicate is a
- *      no-op so a provider retry never double-applies.
+ *   2. `process` short-circuits an event that was ALREADY fully processed
+ *      (`wasWebhookProcessed`) as a duplicate no-op. Crucially, the dedup marker is
+ *      committed only AFTER the projection succeeds (step 4). If a projection faults
+ *      mid-flight, the event stays un-processed, so a provider retry re-applies it
+ *      instead of permanently dropping a paid upgrade.
  *   3. It upserts the subscription projection (idempotent on
  *      `(provider, provider_sub_id)`), mapping the provider status + product →
  *      our `PlanTier`. An `active`/`trialing` grant is an upgrade; a
  *      `canceled`/`past_due` grant naturally downgrades because the
  *      {@link EntitlementGate} only honors active/trialing subscriptions.
- *   4. It marks the event processed for audit.
+ *   4. Only once the projection is durable does it record the event + mark it
+ *      processed (the dedup + audit commit).
  *
  * The webhook route is the ONLY writer of these projections — they are never
  * written from an unauthenticated or unverified path.
@@ -89,24 +93,19 @@ export function createWebhookService(deps: WebhookServiceDeps): WebhookService {
   async function process(parsed: ParsedWebhook, rawBody: Buffer): Promise<WebhookProcessResult> {
     const base = { type: parsed.type, eventId: parsed.eventId, provider: parsed.provider } as const;
 
-    // 1. Idempotency: a repeated event id is a no-op (retry-safe).
-    let inserted = true;
+    // 1. Idempotency: ONLY a fully-processed event is a duplicate. A prior delivery
+    //    that faulted mid-projection is left un-processed (the marker is committed
+    //    only after a successful apply, see `commit`), so a provider retry re-applies
+    //    it here instead of dropping a paid upgrade forever.
     try {
-      const write = await repo.recordWebhookEvent({
-        eventId: parsed.eventId,
-        provider: parsed.provider,
-        type: parsed.type,
-        payloadHash: sha256(rawBody),
-      });
-      inserted = write.inserted;
+      if (await repo.wasWebhookProcessed(parsed.provider, parsed.eventId)) {
+        return { ...base, handled: true, duplicate: true, action: 'duplicate' };
+      }
     } catch (error) {
       // A repo fault must not ACK-and-lose the event: surface it so the route
       // returns 5xx and the provider retries.
-      logger?.error?.({ error, ...base }, 'webhook idempotency write failed');
+      logger?.error?.({ error, ...base }, 'webhook idempotency read failed');
       throw error;
-    }
-    if (!inserted) {
-      return { ...base, handled: true, duplicate: true, action: 'duplicate' };
     }
 
     // 2. Invoice projection: a verified `invoice.paid` event upserts a durable
@@ -116,7 +115,7 @@ export function createWebhookService(deps: WebhookServiceDeps): WebhookService {
     if (invoices) {
       const invoice = await invoices.recordFromWebhook(parsed);
       if (invoice) {
-        await markProcessed(parsed);
+        await commit(parsed, rawBody);
         return { ...base, handled: true, duplicate: false, action: 'invoiced' };
       }
     }
@@ -124,7 +123,7 @@ export function createWebhookService(deps: WebhookServiceDeps): WebhookService {
     // 3. Only reconcile events that carry a subscription snapshot.
     const snap = parsed.subscription;
     if (!snap) {
-      await markProcessed(parsed);
+      await commit(parsed, rawBody);
       return { ...base, handled: true, duplicate: false, action: 'ignored' };
     }
 
@@ -132,7 +131,7 @@ export function createWebhookService(deps: WebhookServiceDeps): WebhookService {
     const subjectId = parsed.subjectId;
     if (!subjectId) {
       logger?.warn?.({ ...base }, 'webhook has no resolvable subject → cannot project (marked processed)');
-      await markProcessed(parsed);
+      await commit(parsed, rawBody);
       return { ...base, handled: true, duplicate: false, action: 'no_subject' };
     }
 
@@ -174,7 +173,7 @@ export function createWebhookService(deps: WebhookServiceDeps): WebhookService {
       throw error;
     }
 
-    await markProcessed(parsed);
+    await commit(parsed, rawBody);
     return {
       ...base,
       handled: true,
@@ -183,6 +182,29 @@ export function createWebhookService(deps: WebhookServiceDeps): WebhookService {
       plan: resolvedPlan,
       status: snap.status,
     };
+  }
+
+  /**
+   * Commit the dedup + audit marker AFTER a successful projection. Recording the
+   * event receipt is surfaced on failure (route 5xx → provider retries → the
+   * idempotent projection re-applies); the processed stamp is best-effort.
+   */
+  async function commit(parsed: ParsedWebhook, rawBody: Buffer): Promise<void> {
+    try {
+      await repo.recordWebhookEvent({
+        eventId: parsed.eventId,
+        provider: parsed.provider,
+        type: parsed.type,
+        payloadHash: sha256(rawBody),
+      });
+    } catch (error) {
+      logger?.error?.(
+        { error, type: parsed.type, eventId: parsed.eventId, provider: parsed.provider },
+        'webhook idempotency write failed',
+      );
+      throw error;
+    }
+    await markProcessed(parsed);
   }
 
   async function markProcessed(parsed: ParsedWebhook): Promise<void> {

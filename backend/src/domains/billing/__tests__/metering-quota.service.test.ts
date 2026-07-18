@@ -94,6 +94,9 @@ function memRepo(opts: { available?: boolean; throwOnUsage?: boolean } = {}): Me
       return { inserted: true };
     },
     async markWebhookProcessed() {},
+    async wasWebhookProcessed() {
+      return false;
+    },
   };
 }
 
