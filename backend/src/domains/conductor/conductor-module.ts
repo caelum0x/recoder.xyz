@@ -128,8 +128,12 @@ const STOPPABLE_STATES: readonly WorkspaceState[] = [
  * (RECODER-PRODUCT-DESIGN). Side-effectful/evidence-bearing states are excluded
  * on purpose: `merging`/`merged` require `/merge` (a real git delivery),
  * `archived` requires `/archive` (teardown), and `failed` must come from a real
- * failure, never a hand-set flag. Legality of the specific from→to step is then
- * enforced by the canonical agent-os workspace state machine.
+ * failure, never a hand-set flag. `cancelled` is EXCLUDED too: it is reached only
+ * through `stopWorkspace`, which kills the live substrate session and releases the
+ * repo write-lock BEFORE flipping the record — advancing straight to `cancelled`
+ * would strand a zombie agent + a held lock while the state falsely reads
+ * cancelled. Legality of the specific from→to step is then enforced by the
+ * canonical agent-os workspace state machine.
  */
 export const ADVANCE_TARGET_STATES: readonly WorkspaceState[] = [
   'ready',
@@ -137,7 +141,6 @@ export const ADVANCE_TARGET_STATES: readonly WorkspaceState[] = [
   'awaiting_approval',
   'awaiting_review',
   'changes_requested',
-  'cancelled',
 ];
 
 export class ConductorComposer implements ConductorModule {

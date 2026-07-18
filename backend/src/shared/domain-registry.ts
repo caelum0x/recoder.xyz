@@ -85,7 +85,7 @@ export const DOMAIN_REGISTRY: Readonly<Record<DomainKey, DomainDescriptor>> = {
   },
   social: {
     key: 'social',
-    mountBase: '/api/connectors',
+    mountBase: '/api/social',
     description: "The agents' human-channel presence + mention gate.",
   },
   memory: {

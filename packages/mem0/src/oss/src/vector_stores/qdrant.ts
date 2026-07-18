@@ -1,7 +1,37 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { VectorStore } from "./base";
 import { SearchFilters, VectorStoreConfig, VectorStoreResult } from "../types";
+import { logger } from "../utils/logger";
 import * as fs from "fs";
+
+/**
+ * Extract a concise, truthful reason from a Qdrant init failure without dumping
+ * the raw multi-line stack. Node's `fetch failed` surfaces as a TypeError whose
+ * `cause` is an AggregateError carrying the real `code` (e.g. ECONNREFUSED), so
+ * we walk the cause chain (and any aggregated `errors`) to find the first code.
+ */
+export function describeQdrantError(error: unknown): string {
+  const seen = new Set<unknown>();
+  let current: any = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    if (typeof current.code === "string" && current.code.length > 0) {
+      return current.code;
+    }
+    if (Array.isArray(current.errors)) {
+      for (const nested of current.errors) {
+        if (nested && typeof nested.code === "string" && nested.code.length) {
+          return nested.code;
+        }
+      }
+    }
+    current = current.cause;
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return String(error);
+}
 
 interface QdrantConfig extends VectorStoreConfig {
   /**
@@ -99,7 +129,11 @@ export class Qdrant implements VectorStore {
 
     this.collectionName = config.collectionName;
     this.dimension = config.dimension || 1536; // Default OpenAI dimension
-    this.initialize().catch(console.error);
+    // Fire-and-forget: failures are already surfaced as a single structured
+    // degrade WARN inside _doInitialize. Swallow here to avoid an unhandled
+    // rejection AND a duplicate raw stack dump to stderr. Explicit callers that
+    // await initialize() still receive the rejection.
+    this.initialize().catch(() => {});
   }
 
   /**
@@ -499,7 +533,12 @@ export class Qdrant implements VectorStore {
       await this.ensureCollection(this.collectionName, this.dimension);
       await this.ensureCollection("memory_migrations", 1);
     } catch (error) {
-      console.error("Error initializing Qdrant:", error);
+      // Degrade-safe: emit ONE truthful line instead of dumping the raw
+      // `TypeError: fetch failed / AggregateError [ECONNREFUSED]` stack to
+      // stderr, consistent with how other engines report degraded health.
+      logger.warn(
+        `engine=mem0/qdrant status=degraded reason=${describeQdrantError(error)} — Qdrant initialization failed; vector memory unavailable`,
+      );
       throw error;
     }
   }

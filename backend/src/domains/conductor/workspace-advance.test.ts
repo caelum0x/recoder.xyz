@@ -86,6 +86,32 @@ describe('conductor advanceWorkspaceState', () => {
     expect((await module.getWorkspace(workspace.workspaceId))?.state).toBe('running');
   });
 
+  it('refuses cancellation via advance — /stop owns session teardown + lock release', async () => {
+    // Advancing straight to `cancelled` would flip the record while the live
+    // substrate session keeps running (zombie agent) and the write-lock stays
+    // held. Cancellation must flow ONLY through stopWorkspace, so `cancelled`
+    // is not an advance target: refuse truthfully, leave the run untouched.
+    const substrate = new FakeSubstrate();
+    const { module } = composeConductor({ substrates: [substrate] });
+    const workspace = await createRunning(module);
+
+    const result = await module.advanceWorkspaceState(
+      workspace.workspaceId,
+      'cancelled',
+      makePrincipal(),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toContain('not an advance target');
+    // State of record is unchanged — never a false `cancelled`.
+    const after = await module.getWorkspace(workspace.workspaceId);
+    expect(after?.state).toBe('running');
+    // The live session was NOT torn down (advance bypassed no teardown).
+    expect(
+      await substrate.alive({ ref: after!.sessionName!, sessionName: after!.sessionName }),
+    ).toBe(true);
+  });
+
   it('blocks the advance when the gate denies (no transition, no audit)', async () => {
     const gate = makeGate('allow');
     const { module } = composeConductor({ substrates: [new FakeSubstrate()], gate });
