@@ -100,6 +100,38 @@ describe('persistence MCP tools — caller binding + tenant-safe reads', () => {
     expect(executed).toHaveLength(0);
   });
 
+  it('db_query_readonly lets a TRUSTED internal caller run a raw read (tool stays live)', async () => {
+    const { module, executed } = fakeModule();
+    const q = tool(buildPersistenceMcpTools(module), 'db_query_readonly');
+    // A service / agent-os workflow acting for the platform carries `internal`
+    // scope — it is exempted from the (currently empty) agent relation allowlist,
+    // so its read reaches the executor instead of a blanket 403.
+    const out = (await q.handler(
+      { sql: 'select id from core.foo' },
+      caller({ scopes: ['internal'] }),
+    )) as { rows: unknown[]; truncated: boolean };
+    expect(out.rows).toEqual([]);
+    expect(out.truncated).toBe(false);
+    expect(executed).toEqual([{ sql: 'select id from core.foo' }]);
+  });
+
+  it('db_query_readonly lets an admin caller read a non-allowlisted table', async () => {
+    const { module, executed } = fakeModule();
+    const q = tool(buildPersistenceMcpTools(module), 'db_query_readonly');
+    await q.handler({ sql: 'select * from "user"' }, caller({ scopes: ['admin'] }));
+    expect(executed).toEqual([{ sql: 'select * from "user"' }]);
+  });
+
+  it('db_query_readonly keeps the edge binding: a non-privileged caller stays fail-closed', async () => {
+    const { module, executed } = fakeModule();
+    const q = tool(buildPersistenceMcpTools(module), 'db_query_readonly');
+    // Explicit read/write scopes are NOT privileged — the allowlist still applies.
+    await expect(
+      q.handler({ sql: 'select id from core.foo' }, caller({ scopes: ['read', 'write'] })),
+    ).rejects.toMatchObject({ code: 'AUTHZ_PROJECT_ACCESS_DENIED' });
+    expect(executed).toHaveLength(0);
+  });
+
   it('db_query_readonly still enforces SELECT-only and required sql (unchanged)', async () => {
     const { module, executed } = fakeModule();
     const q = tool(buildPersistenceMcpTools(module), 'db_query_readonly');
