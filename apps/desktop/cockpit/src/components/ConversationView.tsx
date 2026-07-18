@@ -290,7 +290,9 @@ export function ConversationView({ workspace }: ConversationViewProps) {
         </div>
       </div>
 
-      <Composer busy={sending} onSend={(t) => void send(t)} state={workspace.state} />
+      {/* key={wsId} remounts the Composer per workspace so an unsent draft can
+          never bleed across workspaces and get sent to the wrong agent. */}
+      <Composer key={wsId} busy={sending} onSend={(t) => void send(t)} state={workspace.state} />
     </section>
   );
 }

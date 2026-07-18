@@ -110,15 +110,25 @@ export function RunPanel({ workspace }: RunPanelProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Prefill the command once detection resolves and the user hasn't typed yet.
-  useEffect(() => {
-    if (!command && detected.data?.command) setCommand(detected.data.command);
-  }, [detected.data, command]);
+  // Whether the user has typed into the command box. Tracked with a ref (not
+  // `!command`) so that after a workspace switch the newly detected command can
+  // overwrite the previous workspace's stale prefill — usePoll keeps the old
+  // detected value until the new fetch resolves, so gating on `!command` alone
+  // would lock in the wrong worktree's command.
+  const editedRef = useRef(false);
 
-  // Reset when switching workspaces.
+  // Prefill the command from detection until the user has typed their own.
+  useEffect(() => {
+    if (!editedRef.current && detected.data?.command) setCommand(detected.data.command);
+  }, [detected.data]);
+
+  // Reset when switching workspaces so the new workspace's detected command
+  // prefills instead of launching the previous workspace's command.
   useEffect(() => {
     setSession(null);
     setError(null);
+    setCommand('');
+    editedRef.current = false;
   }, [workspace.workspaceId]);
 
   async function start() {
@@ -174,7 +184,10 @@ export function RunPanel({ workspace }: RunPanelProps) {
           class="run-panel-input"
           value={command}
           placeholder={detected.loading ? 'Detecting…' : 'e.g. pnpm run dev'}
-          onInput={(e) => setCommand((e.target as HTMLInputElement).value)}
+          onInput={(e) => {
+            editedRef.current = true;
+            setCommand((e.target as HTMLInputElement).value);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') start();
           }}
