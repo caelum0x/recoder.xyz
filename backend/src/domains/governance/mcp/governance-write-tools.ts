@@ -15,13 +15,21 @@
  * never fakes a mutation the gate blocked. `governance_decide` is the seam itself,
  * so it returns the verdict directly (no second mutation).
  *
- * The `actorId` from the tool args is the AUDIT SUBJECT (who the runtime acts for);
- * it never widens authority — the host already gated the call, and the kernel
- * classifies the mutation's risk here. A `kind: 'internal'` service principal is
- * synthesized so the gate/audit record a stable actor. Handlers stay thin, fail
- * fast on bad input (`{ ok: false, error }`), and degrade truthfully.
+ * SUBJECT BINDING (SECURITY): every mutation's actor/owner is derived from the
+ * HOST-AUTHORIZED caller (2nd handler param `McpToolCaller.userId`), NEVER from a
+ * caller-supplied `args.actorId`. The MCP edge only binds `args.userId`, so a raw
+ * `args.actorId` is unbound + spoofable — a caller could key a secret, hold/release
+ * a work lock, decide/open an approval, or seal a governance audit entry under a
+ * VICTIM's id. So a non-privileged caller may only act as ITS OWN subject: an args
+ * `actorId` that differs from the caller's `userId` is rejected (403) unless the
+ * caller carries an `admin`/`internal` scope (a service acting on behalf of a
+ * tenant); absent a caller the tool refuses (AUTH_REQUIRED). The gate principal is
+ * built from the edge-bound caller — never a fabricated `kind: 'internal'` minted
+ * from an arg. Handlers stay thin, fail fast on bad input (`{ ok: false, error }`),
+ * and degrade truthfully.
  */
-import type { McpToolRegistration } from '../../../shared/module-base.js';
+import type { McpToolCaller, McpToolRegistration } from '../../../shared/module-base.js';
+import { createError, ErrorCode } from '../../../shared/errors.js';
 import type { Principal } from '../../identity/types.js';
 import type { GovernanceGate } from '../ports/gate.port.js';
 import type { SecretsPort } from '../ports/secrets.port.js';
@@ -62,13 +70,59 @@ interface ToolInputError {
   readonly error: string;
 }
 
+/** The resolved actor of a governed mutation: its subject id + the gate principal. */
+interface ResolvedActor {
+  /** The subject the mutation is keyed/attributed to (secret owner, lock holder, …). */
+  readonly actorId: string;
+  /** The edge-bound principal the mutation self-gates + audits under. */
+  readonly principal: Principal;
+}
+
+/** Does the caller carry an elevated scope that may act as an arbitrary subject? */
+function isPrivileged(caller: McpToolCaller): boolean {
+  const scopes = caller.scopes ?? [];
+  return scopes.includes('admin') || scopes.includes('internal');
+}
+
 /**
- * Synthesize the service principal a write tool self-gates + audits under. The
- * host already authorized the call; `actorId` is the audit subject, not an
- * authority grant. `kind: 'internal'` — a runtime acting for itself.
+ * Resolve the actor a governed mutation is keyed to, bound to the HOST-AUTHORIZED
+ * {@link McpToolCaller}. A caller-supplied `args.actorId` is NOT an authority
+ * source: a non-privileged caller may only act as its own subject (a differing
+ * `actorId` is a 403), only an `admin`/`internal` caller may name an arbitrary
+ * subject, and absent a caller the tool refuses (AUTH_REQUIRED) rather than
+ * trusting the arg. The gate principal is built from the edge-bound caller (its
+ * real scopes/org), never a fabricated `kind: 'internal'` minted from an arg.
  */
-function servicePrincipal(actorId: string): Principal {
-  return { userId: actorId, scopes: ['write'], kind: 'internal', isAnonymous: false, raw: null };
+function resolveActor(
+  body: Record<string, unknown>,
+  caller: McpToolCaller | undefined,
+): ResolvedActor {
+  const authUserId = caller?.userId?.trim();
+  if (!caller || !authUserId) {
+    throw createError(ErrorCode.AUTH_REQUIRED, 'governance: no authorized caller identity');
+  }
+  const requested = optString(body, 'actorId');
+  let actorId = authUserId;
+  if (requested && requested !== authUserId) {
+    if (!isPrivileged(caller)) {
+      throw createError(
+        ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+        'governance: caller may only act as its own subject',
+      );
+    }
+    actorId = requested;
+  }
+  const principal: Principal = {
+    userId: actorId,
+    ...(caller.orgId ? { orgId: caller.orgId } : {}),
+    scopes: caller.scopes ?? ['write'],
+    // Edge-authorized MCP caller — NEVER `internal` (which would forge a trusted
+    // service identity in the sealed audit); the host already gated the call.
+    kind: 'apikey',
+    isAnonymous: false,
+    raw: null,
+  };
+  return { actorId, principal };
 }
 
 /** Coerce raw MCP args to a record without trusting the shape. */
@@ -131,20 +185,19 @@ export function buildGovernanceWriteTools(
 ): readonly McpToolRegistration[] {
   const selfGate = (
     action: GovernanceAction,
-    actorId: string,
+    principal: Principal,
     ctx: GateDecisionContext,
-  ): Promise<GateVerdict> => surface.gate().decide(action, servicePrincipal(actorId), ctx);
+  ): Promise<GateVerdict> => surface.gate().decide(action, principal, ctx);
 
   return [
     {
       name: 'governance_decide',
       description:
         'Run the governance write seam (decide→risk→audit) for a proposed action and return the sealed verdict. Fails closed (synthetic deny) on any kernel fault; never a fake allow.',
-      handler: async (raw: unknown) => {
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const body = asObject(raw);
-        const actorId = reqString(body, 'actorId');
+        const { principal } = resolveActor(body, caller);
         const action = reqString(body, 'action');
-        if (!actorId) return inputError('actorId is required');
         if (!action) return inputError('action is required');
         const target: GateTarget = {
           ...(optString(body, 'path') ? { path: optString(body, 'path')! } : {}),
@@ -152,7 +205,7 @@ export function buildGovernanceWriteTools(
           ...(optString(body, 'toolName') ? { toolName: optString(body, 'toolName')! } : {}),
           ...(optString(body, 'environment') ? { environment: optString(body, 'environment')! } : {}),
         };
-        const verdict = await selfGate(action, actorId, gateContext(body, target));
+        const verdict = await selfGate(action, principal, gateContext(body, target));
         return { ok: verdict.effect === 'allow', verdict };
       },
     },
@@ -160,18 +213,17 @@ export function buildGovernanceWriteTools(
       name: 'governance_request_approval',
       description:
         'Open a pending control-plane approval for a risky action (clears a needs_approval gate once granted). Self-gated: a blocked verdict refuses without opening a record.',
-      handler: async (raw: unknown) => {
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const body = asObject(raw);
-        const actorId = reqString(body, 'actorId');
+        const { actorId, principal } = resolveActor(body, caller);
         const action = reqString(body, 'action');
         const riskTier = optString(body, 'riskTier') as RiskTier | undefined;
-        if (!actorId) return inputError('actorId is required');
         if (!action) return inputError('action is required');
         if (!riskTier || !RISK_TIERS.includes(riskTier)) {
           return inputError(`riskTier must be one of: ${RISK_TIERS.join(', ')}`);
         }
         const ctx = gateContext(body, { toolName: 'governance_request_approval' });
-        const verdict = await selfGate('governance.approval.request', actorId, ctx);
+        const verdict = await selfGate('governance.approval.request', principal, ctx);
         if (isGated(verdict)) return refusal(verdict);
 
         const approval = await surface.approvals().request({
@@ -190,18 +242,17 @@ export function buildGovernanceWriteTools(
       name: 'governance_approval_decide',
       description:
         'Grant or deny a pending approval (decision: approved|denied). Self-gated: a blocked verdict refuses without deciding. Idempotent — an absent/resolved record surfaces as ok:false.',
-      handler: async (raw: unknown) => {
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const body = asObject(raw);
-        const actorId = reqString(body, 'actorId');
+        const { actorId, principal } = resolveActor(body, caller);
         const approvalId = reqString(body, 'approvalId');
         const decision = optString(body, 'decision');
-        if (!actorId) return inputError('actorId is required');
         if (!approvalId) return inputError('approvalId is required');
         if (decision !== 'approved' && decision !== 'denied') {
           return inputError("decision must be 'approved' or 'denied'");
         }
         const ctx = gateContext(body, { toolName: 'governance_approval_decide' });
-        const verdict = await selfGate('governance.approval.decide', actorId, ctx);
+        const verdict = await selfGate('governance.approval.decide', principal, ctx);
         if (isGated(verdict)) return refusal(verdict);
 
         try {
@@ -221,15 +272,14 @@ export function buildGovernanceWriteTools(
       name: 'governance_acquire_lock',
       description:
         'Acquire a path/work lock (conflict prevention before writes). Self-gated. A live conflict is a truthful ok:false with the holding lock, never a faked acquire.',
-      handler: async (raw: unknown) => {
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const body = asObject(raw);
-        const actorId = reqString(body, 'actorId');
+        const { actorId, principal } = resolveActor(body, caller);
         const resourcePath = reqString(body, 'resourcePath');
-        if (!actorId) return inputError('actorId is required');
         if (!resourcePath) return inputError('resourcePath is required');
         const mode = optString(body, 'mode') === 'shared' ? 'shared' : 'exclusive';
         const ctx = gateContext(body, { path: resourcePath });
-        const verdict = await selfGate('governance.worklock.acquire', actorId, ctx);
+        const verdict = await selfGate('governance.worklock.acquire', principal, ctx);
         if (isGated(verdict)) return refusal(verdict);
 
         const result = await surface.workLocks().acquire({
@@ -246,14 +296,13 @@ export function buildGovernanceWriteTools(
       name: 'governance_release_lock',
       description:
         'Release a held work lock by id. Holder-scoped: an absent/foreign/already-released lock is a truthful ok:false, never a fake release. Self-gated.',
-      handler: async (raw: unknown) => {
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const body = asObject(raw);
-        const actorId = reqString(body, 'actorId');
+        const { actorId, principal } = resolveActor(body, caller);
         const lockId = reqString(body, 'lockId');
-        if (!actorId) return inputError('actorId is required');
         if (!lockId) return inputError('lockId is required');
         const ctx = gateContext(body, { toolName: 'governance_release_lock' });
-        const verdict = await selfGate('governance.worklock.release', actorId, ctx);
+        const verdict = await selfGate('governance.worklock.release', principal, ctx);
         if (isGated(verdict)) return refusal(verdict);
 
         const released = await surface.workLocks().release(lockId, actorId);
@@ -264,16 +313,15 @@ export function buildGovernanceWriteTools(
       name: 'governance_secret_set',
       description:
         'Envelope-encrypt and store a secret for the actor (governance write). Self-gated. Fails safe (ok:false) when the vault master key is absent — never a plaintext store, never the value echoed back.',
-      handler: async (raw: unknown) => {
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const body = asObject(raw);
-        const actorId = reqString(body, 'actorId');
+        const { actorId, principal } = resolveActor(body, caller);
         const ref = reqString(body, 'ref');
         const value = typeof body.value === 'string' ? body.value : '';
-        if (!actorId) return inputError('actorId is required');
         if (!ref) return inputError('ref is required');
         if (value.length === 0) return inputError('value is required');
         const ctx = gateContext(body, { toolName: 'governance_secret_set', path: `secret:${ref}` });
-        const verdict = await selfGate('secret.set', actorId, ctx);
+        const verdict = await selfGate('secret.set', principal, ctx);
         if (isGated(verdict)) return refusal(verdict);
 
         try {

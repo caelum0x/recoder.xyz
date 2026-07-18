@@ -13,8 +13,10 @@
  */
 import type { Logger } from '../../../../shared/logger.js';
 import type { GovernanceKernelPort } from '../../../governance/ports/kernel.port.js';
-import type { McpToolRegistration } from '../../../../shared/module-base.js';
+import type { McpToolCaller, McpToolRegistration } from '../../../../shared/module-base.js';
+import { createError, ErrorCode } from '../../../../shared/errors.js';
 import type { EngineClientPort } from '../../ports/engine-client.port.js';
+import { callerFromInput } from '../../mcp/host-registrar.js';
 import type {
   InProcToolHandler,
   McpHostPort,
@@ -56,23 +58,133 @@ function toToolPayload(result: InvokeResult<unknown>): unknown {
   return result.ok ? result.value : { error: result.reason, ...(result.code ? { code: result.code } : {}) };
 }
 
-/** Build `McpToolRegistration[]` for one engine from its tool specs. */
-function buildTools(engine: NapiEngine, specs: readonly NapiToolSpec[]): McpToolRegistration[] {
+/**
+ * Bind an op's caller-supplied args to the host-authorized caller BEFORE the napi
+ * passthrough (may rewrite the args or throw an authz error). Returns the args to
+ * forward to `engine.invoke`. `undefined` ⇒ no binding (forward args unchanged).
+ */
+type ArgsBinder = (op: string, args: NapiArgs, caller: McpToolCaller | undefined) => NapiArgs;
+
+/**
+ * Build `McpToolRegistration[]` for one engine from its tool specs. Each handler
+ * receives the host-authorized {@link McpToolCaller} (2nd param) so a subject-bearing
+ * op can be bound to *who is calling*; `bindArgs` (when given) rewrites/authorizes
+ * the op args against that caller before the passthrough — covering BOTH the named
+ * tools and the generic `{ op, ...args }` passthrough so neither path can bypass it.
+ */
+function buildTools(
+  engine: NapiEngine,
+  specs: readonly NapiToolSpec[],
+  bindArgs?: ArgsBinder,
+): McpToolRegistration[] {
+  const bind = (op: string, args: NapiArgs, caller: McpToolCaller | undefined): NapiArgs =>
+    bindArgs ? bindArgs(op, args, caller) : args;
   return specs.map((spec) => ({
     name: spec.name,
     description: spec.description,
-    handler: async (raw: unknown): Promise<unknown> => {
+    handler: async (raw: unknown, caller?: McpToolCaller): Promise<unknown> => {
       const args = (raw ?? {}) as NapiArgs;
       if (spec.op) {
-        return toToolPayload(await engine.invoke({ op: spec.op, input: args }));
+        return toToolPayload(await engine.invoke({ op: spec.op, input: bind(spec.op, args, caller) }));
       }
       // Generic passthrough: `{ op, ...opArgs }` — exposes the full native surface.
       const op = typeof args.op === 'string' ? args.op : '';
       if (!op) return { error: 'op is required (the native method name)' };
       const { op: _op, ...rest } = args;
-      return toToolPayload(await engine.invoke({ op, input: rest as NapiArgs }));
+      return toToolPayload(await engine.invoke({ op, input: bind(op, rest as NapiArgs, caller) }));
     },
   }));
+}
+
+// ---------------------------------------------------------------------------
+// openfang tenant-subject binding (SECURITY)
+// ---------------------------------------------------------------------------
+//
+// openfang's per-agent surface (runAgent, memoryGet/Set/Delete/List, session +
+// agent-config writes) keys on `agentId` — a tenant-owned SUBJECT. `agentId` is
+// caller-controlled args, and the edge only binds `args.userId` (NOT `agentId`),
+// so a caller could pass `agentId=<another tenant's agent>` to read/overwrite its
+// KV memory or drive/kill it in the shared in-process kernel (cross-tenant).
+//
+// Fix (same durable pattern as the billing/inference subject fixes): the `agentId`
+// a call acts for is DERIVED from the host-authorized {@link McpToolCaller}, never
+// caller-selected. A NON-privileged caller may only address its OWN subject — an
+// args `agentId` must equal the caller's `userId`/`orgId`, else it is rejected
+// (403); absent, the caller's own subject (org scope wins) is used. Only an
+// `admin`/`internal` caller may name an arbitrary `agentId` (a service acting on
+// behalf of a tenant). Absent a caller, refuse (AUTH_REQUIRED) rather than guess.
+//
+// This binds BOTH the named tools (openfang.run_agent / memory_*) and the generic
+// `openfang.invoke` passthrough (which can reach EVERY agentId-keyed op).
+
+/** Ops whose `agentId` names a tenant-owned agent (a required subject: bound always). */
+const OPENFANG_AGENT_SUBJECT_OPS: ReadonlySet<string> = new Set([
+  'runAgent',
+  'activateAgent',
+  'stopAgentRun',
+  'killAgent',
+  'resetSession',
+  'clearAgentHistory',
+  'setAgentModel',
+  'setAgentSkills',
+  'sessionUsageCost',
+  'listAgentSessions',
+  'createSession',
+  'switchSession',
+  'compactSession',
+  'contextReport',
+  'setAgentMcpServers',
+  'setAgentToolFilters',
+  'registerTrigger',
+  'memoryGet',
+  'memorySet',
+  'memoryDelete',
+  'memoryList',
+]);
+
+/** Ops where `agentId` is an OPTIONAL filter: bind it only when the caller supplies one. */
+const OPENFANG_AGENT_FILTER_OPS: ReadonlySet<string> = new Set(['usageSummary', 'listTriggers']);
+
+/** Does the caller carry an elevated scope that may name an arbitrary subject? */
+function isPrivileged(caller: McpToolCaller): boolean {
+  const scopes = caller.scopes ?? [];
+  return scopes.includes('admin') || scopes.includes('internal');
+}
+
+/**
+ * Resolve the openfang `agentId` the call acts for, bound to the authorized caller.
+ * A NON-privileged caller may only target its own subject; a cross-tenant `agentId`
+ * (one the caller does not own) is rejected (403). Absent a caller, refuse.
+ */
+function resolveOpenfangAgentId(requested: string | undefined, caller: McpToolCaller | undefined): string {
+  const authUserId = caller?.userId?.trim();
+  if (!caller || !authUserId) {
+    throw createError(ErrorCode.AUTH_REQUIRED, 'openfang: no authorized caller identity');
+  }
+  const orgId = caller.orgId?.trim() || undefined;
+  if (!requested) return orgId ?? authUserId; // default to the caller's own subject (org scope wins)
+  if (isPrivileged(caller)) return requested; // a service acting on behalf of a tenant
+  if (requested === authUserId || (orgId !== undefined && requested === orgId)) return requested;
+  throw createError(
+    ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+    'openfang: caller may only address its own agent',
+  );
+}
+
+/**
+ * The {@link ArgsBinder} for openfang: rewrite/authorize a subject op's `agentId`
+ * against the caller so the caller-supplied value can never select another
+ * tenant's agent. Non-subject ops (health, listModels, launchRun, spawnAgent, …)
+ * pass through untouched.
+ */
+function bindOpenfangArgs(op: string, args: NapiArgs, caller: McpToolCaller | undefined): NapiArgs {
+  const isSubject = OPENFANG_AGENT_SUBJECT_OPS.has(op);
+  const isFilter = OPENFANG_AGENT_FILTER_OPS.has(op);
+  if (!isSubject && !isFilter) return args;
+  const raw = typeof args.agentId === 'string' && args.agentId.trim() ? args.agentId.trim() : undefined;
+  // A filter op with no agentId is a global read — nothing to bind.
+  if (isFilter && !raw) return args;
+  return { ...args, agentId: resolveOpenfangAgentId(raw, caller) };
 }
 
 // ---------------------------------------------------------------------------
@@ -138,9 +250,9 @@ export const governanceKernelMcpServer = serverFor(GOVERNANCE_KERNEL_MCP_SERVER_
 // Public MCP tool builders (module-base shape the composer's `mcp()` returns)
 // ---------------------------------------------------------------------------
 
-/** openfang agent-callable tools over a client. */
+/** openfang agent-callable tools over a client (agentId subjects bound to the caller). */
 export function buildOpenfangMcpTools(client: NapiEngine): McpToolRegistration[] {
-  return buildTools(client, OPENFANG_TOOL_SPECS);
+  return buildTools(client, OPENFANG_TOOL_SPECS, bindOpenfangArgs);
 }
 
 /** tensorzero inference/feedback/config/version tools over a client. */
@@ -216,7 +328,9 @@ export function napiEngineClientList(clients: NapiEngineClients): readonly Engin
 function asInProcHandler(handler: McpToolRegistration['handler']): InProcToolHandler {
   return async (input: McpToolCallInput): Promise<McpToolResult> => {
     try {
-      const content = await handler(input.args);
+      // Thread the EDGE-BOUND authorized caller (never the spoofable `actor.agentId`)
+      // so subject-bearing ops bind their tenant identity to who is calling.
+      const content = await handler(input.args, callerFromInput(input));
       return { content, metadata: { external: false } };
     } catch (err) {
       // The gate audits the outcome; a failed handler surfaces a truthful error

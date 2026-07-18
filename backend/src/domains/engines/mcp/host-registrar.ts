@@ -45,7 +45,7 @@ import type {
  * fall back to `actor.agentId`. An empty identity yields `undefined` so the
  * handler refuses rather than guesses.
  */
-function callerFromInput(input: McpToolCallInput): McpToolCaller | undefined {
+export function callerFromInput(input: McpToolCallInput): McpToolCaller | undefined {
   const bound = (input as EdgeBoundToolCallInput).caller;
   const boundUserId = typeof bound?.userId === 'string' ? bound.userId.trim() : '';
   if (boundUserId) {
