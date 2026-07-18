@@ -68,7 +68,20 @@ import { createRecoderGitService, type RecoderGitService } from './recodergit-se
 import { GithubModule, githubEngineBinder, repoEngineBinder } from './github/index.js';
 import { InteropHostBundle } from './mcp/mcp-host.js';
 import { buildEnginesMcpTools, enginesMcpServer } from './mcp/engines-engine.js';
-import { registerModuleToolsOnHost, type ModuleToolsRegistration } from './mcp/host-registrar.js';
+import {
+  registerModuleToolsOnHost,
+  callerFromInput,
+  type ModuleToolsRegistration,
+} from './mcp/host-registrar.js';
+import {
+  gitNexusEngineBinder,
+  workflowEngineBinder,
+  notifyEngineBinder,
+  createEnginesWorkflowEngine,
+} from './mcp/capability-binders.js';
+import { InProcLogStore, logsEngineBinder } from './mcp/logs-store.js';
+import { createNotifyEngine, type NotifyEngine, type NotifyFetch } from '@recoder/agent-notify';
+import type { WorkflowEngine } from '@recoder/workflow-engine';
 import {
   registerDomainToolsOnHost,
   type DomainToolsRegistration,
@@ -134,6 +147,10 @@ export class EnginesComposer implements EnginesModule {
   private readonly adapters: ReadonlyMap<EngineId, EngineClientPort>;
   private readonly recodergitService: RecoderGitService;
   private readonly githubModule: GithubModule;
+  /** The OWNED capability engines behind the previously-unbound catalog servers. */
+  private readonly logStore: InProcLogStore;
+  private readonly workflowEngine: WorkflowEngine;
+  private readonly notifyEngine: NotifyEngine;
   private readonly hostBundle: InteropHostBundle;
   private hostReady = false;
   private napiRegistration: NapiEngineRegistration | null = null;
@@ -175,6 +192,18 @@ export class EnginesComposer implements EnginesModule {
       recodergit: this.recodergitService,
     });
 
+    // The OWNED capability engines behind the catalog servers that were advertised
+    // but had NO in-proc handler ("No in-proc executor wired"): a bounded in-proc
+    // log ring, the workflow+hooks engine, and the notify webhook engine. Each is
+    // degrade-safe; the notify engine is injected by bootstrap (shared with
+    // observability) or built here with global fetch (truthful `not_configured`
+    // until a webhook is configured).
+    this.logStore = new InProcLogStore();
+    this.workflowEngine = createEnginesWorkflowEngine({ repoRoot: this.cfg.repoRoot ?? null });
+    this.notifyEngine =
+      deps.notifyEngine ??
+      createNotifyEngine({ fetch: globalThis.fetch as unknown as NotifyFetch });
+
     // The interop-gated MCP host, seeded with THIS domain's engine binders. The
     // wiring guard logs (does not throw) for servers agent-os/conductor still bind.
     this.hostBundle = new InteropHostBundle({
@@ -188,6 +217,13 @@ export class EnginesComposer implements EnginesModule {
         palPlanEngineBinder(),
         githubEngineBinder(this.githubModule),
         repoEngineBinder({ repoRoot: this.cfg.repoRoot ?? null }),
+        // The four previously-dead catalog servers, now bound over REAL engines:
+        // `recoder.git_nexus.*` (recodergit indexer), `recoder.logs.*` (in-proc
+        // ring), `recoder.workflow.*` (workflow+hooks), `recoder.notify.notify.send`.
+        gitNexusEngineBinder({ repoRoot: this.cfg.repoRoot ?? null }),
+        logsEngineBinder(this.logStore),
+        workflowEngineBinder(this.workflowEngine),
+        notifyEngineBinder(this.notifyEngine),
       ],
       // Surface an advertised-but-unbound engine server LOUDLY at boot (WARN),
       // not silently on first call: a server left in ENGINE_SERVERS without a
@@ -508,6 +544,13 @@ export class EnginesComposer implements EnginesModule {
     this.started = true;
     // Seed the `engines` server + bind the napi engine tools behind the gate.
     this.hostBundle.registerServer(enginesMcpServer);
+    // Bind THIS domain's own `engine.list` / `engine.health` / `engine.restart`
+    // handlers into the host. Bootstrap's `registerDomainTools` loop intentionally
+    // SKIPS the engines domain (it self-registers here), so without this the three
+    // tools sat in the gated catalog with no executor ("No in-proc executor wired
+    // for engines:…"). Registered as gated delegating handlers, not re-registering
+    // the (already-seeded) server descriptor.
+    this.bindEnginesMcpTools();
     this.napiRegistration = registerNapiEngineTools(this.hostBundle, this.napiClients);
     if (this.cfg.spawnOnBoot) this.spawnSupervisedOnBoot();
     const engines = await this.listHealth();
@@ -522,6 +565,25 @@ export class EnginesComposer implements EnginesModule {
       },
       'engines module started',
     );
+  }
+
+  /**
+   * Bind the engines-domain `mcp()` tools (`engine.list` / `engine.health` /
+   * `engine.restart`) as gated delegating in-proc handlers on the already-seeded
+   * `engines` server. Mirrors the host-registrar delegating shape (the host runs
+   * each ONLY after `authorize → risk`, then audits the outcome) without
+   * re-registering the server descriptor.
+   */
+  private bindEnginesMcpTools(): void {
+    for (const tool of this.mcp()) {
+      this.hostBundle.registerInProcTool(enginesMcpServer.serverId, tool.name, async (input) => {
+        const content = await tool.handler(input.args, callerFromInput(input));
+        return {
+          content,
+          metadata: { serverId: enginesMcpServer.serverId, toolName: tool.name, external: false },
+        };
+      });
+    }
   }
 
   /**

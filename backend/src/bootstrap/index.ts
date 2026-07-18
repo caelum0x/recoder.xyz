@@ -269,12 +269,26 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   //     (retires the Phase-0 engine-supervisor skeleton). Degrade-safe: without a
   //     built `.node`/daemon/venv each engine reports truthful `down`, never a faked
   //     `up`. Config folded from the `engines` AppConfig override slice — no env read. ---
+  // The human-notification delivery seam (webhook-backed, degrade-safe): a missing
+  // RECODER_NOTIFY_URL/SLACK_WEBHOOK_URL yields truthful `not_configured` results,
+  // never a fabricated send. Built HERE (bootstrap is the sanctioned env read) so
+  // the SAME instance backs BOTH the agent-callable `recoder.notify` MCP tool (via
+  // the engines module below) and observability's alert + needs-you board seams
+  // (Phase 11) — one notify engine, one webhook config.
+  const notifyEngine = createNotifyEngine({
+    fetch: globalThis.fetch as unknown as NotifyFetch,
+    env: {
+      ...(bootEnv.RECODER_NOTIFY_URL ? { RECODER_NOTIFY_URL: bootEnv.RECODER_NOTIFY_URL } : {}),
+      ...(bootEnv.SLACK_WEBHOOK_URL ? { SLACK_WEBHOOK_URL: bootEnv.SLACK_WEBHOOK_URL } : {}),
+    },
+  });
   const engines = await createEnginesModule({
     config,
     logger: childLogger('engines'),
     executor: persistence.executor(),
     middleware: identity.middleware(),
     kernel: governance.kernel(),
+    notifyEngine,
     overrides: config.engines,
   });
   container.registerValue(DOMAIN_TOKENS.engines, engines);
@@ -920,17 +934,9 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   //     observability` control edges; its telemetry tap is threaded into the ONE edge
   //     global chain below. Env-sourced ops values arrive via overrides (no env read
   //     in domain code). ---
-  // The human-notification delivery seam (webhook-backed, degrade-safe): a
-  // missing RECODER_NOTIFY_URL/SLACK_WEBHOOK_URL yields truthful
-  // `not_configured` results — never a fabricated send. Backs BOTH the alert
-  // notifier and the needs-you signal board.
-  const notifyEngine = createNotifyEngine({
-    fetch: globalThis.fetch as unknown as NotifyFetch,
-    env: {
-      ...(bootEnv.RECODER_NOTIFY_URL ? { RECODER_NOTIFY_URL: bootEnv.RECODER_NOTIFY_URL } : {}),
-      ...(bootEnv.SLACK_WEBHOOK_URL ? { SLACK_WEBHOOK_URL: bootEnv.SLACK_WEBHOOK_URL } : {}),
-    },
-  });
+  // The human-notification delivery seam (`notifyEngine`) is built ABOVE (before
+  // the engines module) so the SAME instance backs the agent-callable
+  // `recoder.notify` MCP tool AND observability's alert notifier + needs-you board.
   const observability = createObservabilityModule({
     config,
     logger: childLogger('observability'),
