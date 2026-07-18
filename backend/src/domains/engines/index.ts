@@ -34,6 +34,7 @@ import type { ModuleToolsRegistration } from './mcp/host-registrar.js';
 import type { DomainToolsRegistration } from './adapters/domain-tools-bridge.adapter.js';
 import type { EngineId, EngineHealth } from './types.js';
 import type { GithubModule } from './github/index.js';
+import type { NotifyEngine } from '@recoder/agent-notify';
 
 /** Dependencies injected by bootstrap (after persistence + identity + governance). */
 export interface EnginesModuleDeps {
@@ -48,6 +49,14 @@ export interface EnginesModuleDeps {
    * `governance` engine client re-exposes it — no second kernel is built here.
    */
   readonly kernel: GovernanceKernelPort;
+  /**
+   * The OWNED notify engine (webhook delivery) the `recoder.notify` MCP tool binds
+   * over. Injected by bootstrap so the SAME instance backs both the agent-callable
+   * `notify.send` tool and observability's alert/board seams. Absent (tests /
+   * standalone) ⇒ the composer builds a degrade-safe one (truthful `not_configured`
+   * until a webhook is configured).
+   */
+  readonly notifyEngine?: NotifyEngine;
   /** Not-yet-in-AppConfig engine values (paths / URLs / venvs / flags). */
   readonly overrides?: EnginesConfigOverrides;
 }

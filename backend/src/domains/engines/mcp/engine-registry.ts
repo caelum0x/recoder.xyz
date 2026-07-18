@@ -19,14 +19,8 @@ import {
   browserMcpServer,
   beadsMcpServer,
   gitNexusMcpServer,
-  previewMcpServer,
   logsMcpServer,
-  ossMcpServer,
-  deploymentMcpServer,
-  billingMcpServer,
-  retrievalMcpServer,
   browserEngineMcpServer,
-  coordinationMcpServer,
   workflowMcpServer,
   palPlanMcpServer,
   notifyMcpServer,
@@ -46,6 +40,19 @@ import type { McpServerRegistration } from '@recoder/interop';
  * by the agent-os + memory domains under their OWN serverIds (`agent-os`,
  * `memory`) via `registerDomainTools` at bootstrap — advertising the dead
  * `recoder.*` duplicates would be a false capability claim.
+ *
+ * ALSO NOT advertised (same false-capability reasoning): `recoder.billing`,
+ * `recoder.retrieval`, `recoder.coordination`, `recoder.preview`, `recoder.oss`,
+ * and `recoder.deploy`. Their advertised tools had NO in-proc engine binder here,
+ * so they were permanently uncallable (either failing "No in-proc executor wired"
+ * or short-circuited by the high-risk gate into a misleading `needs_approval`).
+ * The real, callable capability lives under a DOMAIN serverId via
+ * `registerDomainTools`: `billing` (`billing_plan_read`/`billing_usage_read`),
+ * `memory` (`retrieval_search`/`retrieval_ingest`), `governance`
+ * (`governance_acquire_lock`/`release_lock`/`locks_list`), and `cloud`
+ * (`cloud_preview_health`). `recoder.oss`, `recoder.deploy`, and the remaining
+ * `recoder.preview` tools (`issue_url`/`browser_check`/`attach_evidence`) have no
+ * engine anywhere yet, so advertising them would be a false capability claim.
  */
 export const IN_PROC_SERVERS: readonly McpServerRegistration[] = [
   githubMcpServer,
@@ -53,14 +60,8 @@ export const IN_PROC_SERVERS: readonly McpServerRegistration[] = [
   browserMcpServer,
   beadsMcpServer,
   gitNexusMcpServer,
-  previewMcpServer,
   logsMcpServer,
-  ossMcpServer,
-  deploymentMcpServer,
-  billingMcpServer,
-  retrievalMcpServer,
   browserEngineMcpServer,
-  coordinationMcpServer,
   workflowMcpServer,
   palPlanMcpServer,
   notifyMcpServer,

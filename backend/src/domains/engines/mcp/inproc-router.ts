@@ -24,12 +24,7 @@ import {
   browserMcpServer,
   githubMcpServer,
   logsMcpServer,
-  previewMcpServer,
-  deploymentMcpServer,
-  billingMcpServer,
-  retrievalMcpServer,
   browserEngineMcpServer,
-  coordinationMcpServer,
   workflowMcpServer,
   palPlanMcpServer,
   notifyMcpServer,
@@ -72,6 +67,13 @@ export function buildInProcEngineRouter(
  * the engines composer supplies no binder for them and their real capability is
  * exposed by the agent-os + memory domains under their own serverIds, so listing
  * them would keep advertising dead `recoder.*` tools that fail on call.
+ *
+ * `billing` / `retrieval` / `coordination` / `preview` / `deploy` are ALSO NOT
+ * here: no in-proc engine backs them, and their real capability (where any exists)
+ * is exposed by a DOMAIN server under its own serverId (`billing`, `memory`,
+ * `governance`, `cloud`) via `registerDomainTools`. Keeping them here would keep
+ * advertising uncallable `recoder.*` duplicates and force the wiring guard to warn
+ * about a gap the engines composer intentionally does not fill.
  */
 export const ENGINE_SERVERS: readonly McpServerRegistration[] = [
   gitNexusMcpServer,
@@ -80,12 +82,7 @@ export const ENGINE_SERVERS: readonly McpServerRegistration[] = [
   browserMcpServer,
   githubMcpServer,
   logsMcpServer,
-  previewMcpServer,
-  deploymentMcpServer,
-  billingMcpServer,
-  retrievalMcpServer,
   browserEngineMcpServer,
-  coordinationMcpServer,
   workflowMcpServer,
   palPlanMcpServer,
   notifyMcpServer,

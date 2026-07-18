@@ -8,6 +8,12 @@
  *    / `recoder.memory` were seeded into the gated catalog (`enabled: true`) with
  *    their write+read tools, yet the composer supplies NO binder for them, so a
  *    call returned `{ status: 'failed', reason: 'No MCP handler registered …' }`.
+ *  - `recoder.billing` / `recoder.retrieval` / `recoder.coordination` /
+ *    `recoder.preview` / `recoder.oss` / `recoder.deploy` were ALSO advertised with
+ *    no in-proc engine binder — permanently uncallable (either "No in-proc executor
+ *    wired" or masked by the high-risk gate as a misleading `needs_approval`). The
+ *    real, callable capability (where any exists) lives under a DOMAIN serverId
+ *    (`billing`, `memory`, `governance`, `cloud`) via `registerDomainTools`.
  *  - `bindInProcEngines` registered a delegating in-proc handler for EVERY
  *    `ENGINE_SERVERS` tool regardless of a real binder, so `assertWiringComplete`
  *    saw a handler for every tool and never fired — the gap only surfaced on call.
@@ -20,19 +26,27 @@ import { describe, it, expect } from 'vitest';
 import {
   McpToolRouter,
   notifyMcpServer,
-  coordinationMcpServer,
+  workflowMcpServer,
 } from '@recoder/agent-mcp';
 import { InteropHostBundle } from './mcp-host.js';
 import { IN_PROC_SERVERS } from './engine-registry.js';
 import { ENGINE_SERVERS } from './inproc-router.js';
 import type { McpServerRegistration, McpToolCallInput } from '../ports/mcp-host.port.js';
 
+/** Duplicate/dead `recoder.*` servers whose real capability lives elsewhere (or nowhere). */
 const DEAD_DUPLICATES = [
   'recoder.tasks',
   'recoder.runs',
   'recoder.artifacts',
   'recoder.approvals',
   'recoder.memory',
+  // De-advertised: real capability lives under a DOMAIN serverId, or nowhere yet.
+  'recoder.billing',
+  'recoder.retrieval',
+  'recoder.coordination',
+  'recoder.preview',
+  'recoder.oss',
+  'recoder.deploy',
 ] as const;
 
 /** A minimal permissive actor (mirrors the domain-tools bridge host tests). */
@@ -50,7 +64,7 @@ function gatedCall(
 }
 
 describe('engines MCP catalog — dead-duplicate servers de-advertised', () => {
-  it('IN_PROC_SERVERS + ENGINE_SERVERS no longer list tasks/runs/artifacts/approvals/memory', () => {
+  it('IN_PROC_SERVERS + ENGINE_SERVERS no longer list the dead/duplicate recoder.* servers', () => {
     const advertised = new Set(IN_PROC_SERVERS.map((server) => server.serverId));
     const engine = new Set(ENGINE_SERVERS.map((server) => server.serverId));
     for (const id of DEAD_DUPLICATES) {
@@ -63,6 +77,68 @@ describe('engines MCP catalog — dead-duplicate servers de-advertised', () => {
     const host = new InteropHostBundle({});
     for (const id of DEAD_DUPLICATES) {
       expect(host.getServer(id)).toBeNull();
+    }
+  });
+
+  it('every advertised in-proc server is a bindable ENGINE server (no orphan advertisement)', () => {
+    // Post-fix invariant: everything in the advertised catalog is backed by an
+    // engine binder path — there is no advertised server whose only "capability"
+    // is a dead `recoder.*` duplicate of a domain tool. This is the "every
+    // remaining advertised server is callable (when its binder is supplied)"
+    // contract: an advertised server MUST be in ENGINE_SERVERS so a binder can
+    // register a real handler for it.
+    const engineIds = new Set(ENGINE_SERVERS.map((server) => server.serverId));
+    for (const server of IN_PROC_SERVERS) {
+      expect(engineIds.has(server.serverId)).toBe(true);
+    }
+    // And symmetrically: every engine server is advertised (so its bound tools are
+    // reachable through the gated registry).
+    const advertisedIds = new Set(IN_PROC_SERVERS.map((server) => server.serverId));
+    for (const server of ENGINE_SERVERS) {
+      expect(advertisedIds.has(server.serverId)).toBe(true);
+    }
+  });
+});
+
+describe('engines MCP host — every remaining advertised server is callable when bound', () => {
+  /** Stub-register a real handler for every advertised ENGINE_SERVERS tool. */
+  const bindAllEngineTools = (router: McpToolRouter): void => {
+    for (const server of ENGINE_SERVERS) {
+      for (const toolName of server.toolNames) {
+        router.register(server, toolName, async () => ({ content: { ok: true } }));
+      }
+    }
+  };
+
+  it('when a binder covers every advertised server, the wiring guard is satisfied (no warnings)', () => {
+    const warnings: string[] = [];
+    const host = new InteropHostBundle({
+      engineBinders: [bindAllEngineTools],
+      onWiringWarning: (err) => warnings.push(err instanceof Error ? err.message : String(err)),
+    });
+    // No advertised server is a dead duplicate: binding every ENGINE_SERVERS tool
+    // makes the wiring-checklist guard pass with zero gaps.
+    expect(warnings).toHaveLength(0);
+    // Each advertised server resolves in the gated registry (nothing is orphaned).
+    for (const server of IN_PROC_SERVERS) {
+      expect(host.getServer(server.serverId)).not.toBeNull();
+    }
+  });
+
+  it('a call to every advertised server reaches its executor (never "No in-proc executor wired")', async () => {
+    const host = new InteropHostBundle({
+      engineBinders: [bindAllEngineTools],
+      onWiringWarning: () => undefined,
+    });
+    for (const server of ENGINE_SERVERS) {
+      const [toolName] = server.toolNames;
+      const outcome = await host.call(gatedCall(server, toolName, {}));
+      // The high-risk gate may short-circuit to `needs_approval`, and a handler may
+      // reject on missing args — but no advertised server may reach the executor's
+      // "No in-proc executor wired" branch, which is the dead-advertisement smell.
+      if (outcome.status === 'failed') {
+        expect(outcome.reason).not.toContain('No in-proc executor wired');
+      }
     }
   });
 });
@@ -81,8 +157,8 @@ describe('engines MCP host — bindInProcEngines binds only real handlers', () =
       onWiringWarning: (err) => warnings.push(err instanceof Error ? err.message : String(err)),
     });
     expect(warnings).toHaveLength(1);
-    // The unbound server IS named (previously the fake handler hid it).
-    expect(warnings[0]).toContain('recoder.coordination:coordination.acquire_lock');
+    // An unbound advertised server IS named (previously the fake handler hid it).
+    expect(warnings[0]).toContain('recoder.workflow:workflow.verify');
     // The bound server is NOT flagged.
     expect(warnings[0]).not.toContain('recoder.notify:notify.send');
   });
@@ -101,9 +177,7 @@ describe('engines MCP host — bindInProcEngines binds only real handlers', () =
     // Unbound-but-advertised server → NO delegating handler was registered, so
     // the executor surfaces a truthful "no executor wired" failure (NOT a silent
     // fake handler that then throws "No MCP handler registered").
-    const unbound = await host.call(
-      gatedCall(coordinationMcpServer, 'coordination.acquire_lock', {}),
-    );
+    const unbound = await host.call(gatedCall(workflowMcpServer, 'workflow.verify', {}));
     expect(unbound.status).toBe('failed');
     if (unbound.status === 'failed') {
       expect(unbound.reason).toContain('No in-proc executor wired');
