@@ -10,7 +10,7 @@
  * napi/CLI engine is NOT restartable and returns a truthful "not restartable"
  * instead of faking a restart.
  */
-import type { McpToolRegistration } from '../../../shared/module-base.js';
+import type { McpToolCaller, McpToolRegistration } from '../../../shared/module-base.js';
 import type { EngineDescriptor, EngineHealth, EngineId } from '../types.js';
 import { isEngineId } from '../constants.js';
 
@@ -24,8 +24,9 @@ export interface EnginesMcpDeps {
   engineHealth(id: EngineId): Promise<EngineHealth | null>;
   /**
    * Restart a supervised engine (governed write). `requestedBy` is the actor
-   * from the authorizing Session. Returns the truthful outcome — a napi/CLI
-   * engine yields `{ outcome: 'skipped', reason: 'not restartable' }`.
+   * DERIVED from the host-authorized caller (never a caller-supplied arg).
+   * Returns the truthful outcome — a napi/CLI engine yields
+   * `{ outcome: 'skipped', reason: 'not restartable' }`.
    */
   restart(id: EngineId, requestedBy: string, reason?: string): Promise<{
     readonly outcome: 'restarted' | 'skipped' | 'failed';
@@ -38,12 +39,36 @@ interface EngineIdInput {
   readonly engineId?: string;
 }
 interface RestartInput extends EngineIdInput {
-  readonly requestedBy?: string;
   readonly reason?: string;
 }
 
 /** The `engines` in-proc server id (matches the descriptor added to the catalog). */
 export const ENGINES_MCP_SERVER_ID = 'engines';
+
+/**
+ * Resolve the actor that a governed `engine.restart` is attributed to, gated to
+ * mirror the HTTP twin's `requireAdmin`.
+ *
+ * SECURITY: `engine.restart` is a governed GLOBAL infra op whose HTTP twin is
+ * `requireAdmin`-gated and derives the actor from the authenticated principal.
+ * The tool boundary MUST match: the acting identity is DERIVED from the
+ * host-authorized {@link McpToolCaller} (never a spoofable `requestedBy` arg),
+ * and only an `admin`/`internal` scope may drive it. An ABSENT caller is a
+ * TRUSTED non-edge in-proc path (there is no edge principal to spoof — an edge
+ * call always threads an authenticated caller), so it resolves to `internal`.
+ */
+function resolveRestartActor(
+  caller: McpToolCaller | undefined,
+): { readonly ok: true; readonly actor: string } | { readonly ok: false; readonly reason: string } {
+  if (!caller) return { ok: true, actor: 'internal' };
+  const scopes = caller.scopes ?? [];
+  const privileged = scopes.includes('admin') || scopes.includes('internal');
+  const userId = caller.userId?.trim();
+  if (!privileged || !userId) {
+    return { ok: false, reason: 'engine.restart requires an admin or internal caller' };
+  }
+  return { ok: true, actor: userId };
+}
 
 /** Build the engines-domain MCP tool registrations over the injected deps. */
 export function buildEnginesMcpTools(deps: EnginesMcpDeps): readonly McpToolRegistration[] {
@@ -82,15 +107,17 @@ export function buildEnginesMcpTools(deps: EnginesMcpDeps): readonly McpToolRegi
     {
       name: 'engine.restart',
       description:
-        'Restart a supervised daemon/sidecar engine (governed write; risk-gated). ' +
+        'Restart a supervised daemon/sidecar engine (governed write; admin/internal only). ' +
         'napi/CLI engines return a truthful "not restartable".',
-      handler: async (raw: unknown) => {
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const input = (raw ?? {}) as RestartInput;
         const id = input.engineId?.trim();
         if (!id || !isEngineId(id)) return { error: 'engineId must be a declared engine id' };
-        const requestedBy = input.requestedBy?.trim();
-        if (!requestedBy) return { error: 'requestedBy (the authorizing actor) is required' };
-        const result = await deps.restart(id, requestedBy, input.reason);
+        // SECURITY: admin/internal-gated and attributed to the AUTHORIZED caller,
+        // matching the HTTP twin's `requireAdmin` + principal-derived `requestedBy`.
+        const actor = resolveRestartActor(caller);
+        if (!actor.ok) return { error: actor.reason };
+        const result = await deps.restart(id, actor.actor, input.reason);
         return { engineId: id, ...result };
       },
     },
