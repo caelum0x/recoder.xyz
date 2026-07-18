@@ -187,8 +187,16 @@ export function createMultiDispatchService(deps: MultiDispatchDeps): MultiDispat
       }
 
       const ok = succeeded >= required && input.targets.length > 0;
-      // Advance the projection: working when the strategy is satisfied, else failed.
-      await safe(() => tasks.transition(taskId, input.userId, ok ? 'working' : 'failed'));
+      // Advance the projection. On success advance to `working`. On failure only
+      // terminally `fail` a task THIS dispatch CREATED (`!input.taskId`); a REUSED
+      // in-flight task (e.g. a handoff) is left in its prior non-terminal state so
+      // a transient/unwired transport can never destroy a live task the original
+      // owner still holds and could complete or retry.
+      if (ok) {
+        await safe(() => tasks.transition(taskId, input.userId, 'working'));
+      } else if (!input.taskId) {
+        await safe(() => tasks.transition(taskId, input.userId, 'failed'));
+      }
       return { taskId, legs, ok, strategy, satisfied: { succeeded, required } };
     },
   };

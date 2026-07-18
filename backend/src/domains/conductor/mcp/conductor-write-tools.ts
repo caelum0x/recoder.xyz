@@ -6,12 +6,21 @@
  * GOVERNANCE (the core posture): the MCP host authorizes the CALL at its boundary
  * (`authorize → risk → policy → audit`), and the conductor module's own write
  * methods ALSO self-gate (`guardConductorWrite → decide`, then `recordAudit`).
- * These tools are the thin binding between them: they synthesize a service
- * principal from the tool's `actorId` (the AUDIT SUBJECT — never an authority
- * grant; the host already gated the call) and delegate to the already-gated module
- * method. Whatever the module's governance verdict is flows straight back:
- * a `deny` / `needs_approval` verdict surfaces as `{ ok:false, gated:true, verdict }`
- * with NO state change — the tool never fakes a mutation the gate blocked.
+ * These tools are the thin binding between them: they act under the AUTHENTICATED
+ * caller and delegate to the already-gated module method. Whatever the module's
+ * governance verdict is flows straight back: a `deny` / `needs_approval` verdict
+ * surfaces as `{ ok:false, gated:true, verdict }` with NO state change — the tool
+ * never fakes a mutation the gate blocked.
+ *
+ * IDENTITY (SECURITY, non-negotiable): the acting identity is NEVER taken from a
+ * free-form tool arg. The MCP host edge OVERWRITES `args.userId` with the resolved,
+ * authenticated `principal.userId` before the host ever runs the handler (a caller
+ * that claims a DIFFERENT tenant is rejected 403 unless it holds an admin/internal
+ * scope). So `args.userId` here is the real authenticated tenant, and the tool acts
+ * as that NORMAL authenticated caller — it never mints a `kind:'internal'` principal
+ * (the service/runtime authority the governance gate trusts) from caller input.
+ * This is what stops any logged-in caller from steering/stopping another tenant's
+ * live agent session by naming an arbitrary `actorId`.
  *
  * Handlers stay thin, fail fast on bad input (`{ ok:false, error }`), and degrade
  * truthfully (a not-found / non-live workspace is a real `ok:false`, never faked).
@@ -45,12 +54,15 @@ interface ToolInputError {
 }
 
 /**
- * Synthesize the service principal a write tool acts + audits under. The host
- * already authorized the call; `actorId` is the audit subject, not an authority
- * grant. `kind:'internal'` — a runtime acting for itself.
+ * Synthesize the principal a write tool acts + audits under, from the
+ * edge-bound authenticated tenant id. SECURITY: `userId` is NOT a free-form
+ * caller value — the MCP host edge already overwrote it with the resolved
+ * `principal.userId` (a cross-tenant claim was rejected upstream). The kind is a
+ * NORMAL authenticated caller (`apikey`), NEVER `internal` — the governance gate
+ * must evaluate this identity on its own merits, not admit it as trusted runtime.
  */
-function servicePrincipal(actorId: string): Principal {
-  return { userId: actorId, scopes: ['write'], kind: 'internal', isAnonymous: false, raw: null };
+function callerPrincipal(userId: string): Principal {
+  return { userId, scopes: ['read', 'write'], kind: 'apikey', isAnonymous: false, raw: null };
 }
 
 /** Coerce raw MCP args to a record without trusting the shape. */
@@ -95,10 +107,10 @@ export function buildConductorWriteTools(
         'Steer a LIVE conductor workspace by injecting keys/text into its interactive agent session (send-keys). Governed: a blocked verdict refuses without delivery. A non-running / handle-less workspace is a truthful ok:false, never faked.',
       handler: async (raw: unknown) => {
         const body = asObject(raw);
-        const actorId = reqString(body, 'actorId');
+        const userId = reqString(body, 'userId');
         const workspaceId = reqString(body, 'workspaceId');
         const keys = typeof body.keys === 'string' ? body.keys : null;
-        if (!actorId) return inputError('actorId is required');
+        if (!userId) return inputError('authenticated userId is required');
         if (!workspaceId) return inputError('workspaceId is required');
         if (keys == null || keys.trim().length === 0) return inputError('keys is required');
         const input: SteerInput = {
@@ -106,7 +118,7 @@ export function buildConductorWriteTools(
           keys,
           ...(typeof body.submit === 'boolean' ? { submit: body.submit } : {}),
         };
-        const result = await surface.steerWorkspace(input, servicePrincipal(actorId));
+        const result = await surface.steerWorkspace(input, callerPrincipal(userId));
         return toResponse(result);
       },
     },
@@ -116,11 +128,11 @@ export function buildConductorWriteTools(
         'Gracefully STOP a running conductor workspace: kill the live session (worktree preserved for review) and transition it to cancelled. Governed: a blocked verdict refuses. A substrate-kill fault leaves the state UNCHANGED (ok:false), never a fake stop.',
       handler: async (raw: unknown) => {
         const body = asObject(raw);
-        const actorId = reqString(body, 'actorId');
+        const userId = reqString(body, 'userId');
         const workspaceId = reqString(body, 'workspaceId');
-        if (!actorId) return inputError('actorId is required');
+        if (!userId) return inputError('authenticated userId is required');
         if (!workspaceId) return inputError('workspaceId is required');
-        const result = await surface.stopWorkspace(workspaceId, servicePrincipal(actorId));
+        const result = await surface.stopWorkspace(workspaceId, callerPrincipal(userId));
         return toResponse(result);
       },
     },
@@ -130,16 +142,16 @@ export function buildConductorWriteTools(
         `Advance a conductor workspace one lifecycle step in the review→merge flow (allowed targets: ${ADVANCE_TARGET_STATES.join(', ')}). Governed + PURE: an illegal from→to step (or a delivery/archive/merge target) is a truthful refusal, never a forced write.`,
       handler: async (raw: unknown) => {
         const body = asObject(raw);
-        const actorId = reqString(body, 'actorId');
+        const userId = reqString(body, 'userId');
         const workspaceId = reqString(body, 'workspaceId');
         const to = reqString(body, 'to') as WorkspaceState | null;
-        if (!actorId) return inputError('actorId is required');
+        if (!userId) return inputError('authenticated userId is required');
         if (!workspaceId) return inputError('workspaceId is required');
         if (!to) return inputError('to (target state) is required');
         if (!ADVANCE_TARGET_STATES.includes(to)) {
           return inputError(`to must be one of: ${ADVANCE_TARGET_STATES.join(', ')}`);
         }
-        const result = await surface.advanceWorkspaceState(workspaceId, to, servicePrincipal(actorId));
+        const result = await surface.advanceWorkspaceState(workspaceId, to, callerPrincipal(userId));
         return toResponse(result);
       },
     },

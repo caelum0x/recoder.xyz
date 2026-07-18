@@ -209,7 +209,8 @@ describe('governed MCP edge (mocked host)', () => {
       expect.objectContaining({
         server: demoServer,
         toolName: 'demo.echo',
-        args: { msg: 'hi' },
+        // SECURITY: the edge binds the authenticated principal's userId into args.
+        args: { msg: 'hi', userId: 'tester' },
         actor: expect.objectContaining({ agentId: 'tester' }),
       }),
     );
@@ -273,7 +274,7 @@ describe('governed MCP edge (mocked host)', () => {
     expect(res.status).toBe(200);
     expect(res.json()).toMatchObject({ success: true, data: { status: 'completed' } });
     expect(callSpy).toHaveBeenLastCalledWith(
-      expect.objectContaining({ toolName: 'demo.echo', args: { n: 2 } }),
+      expect.objectContaining({ toolName: 'demo.echo', args: { n: 2, userId: 'tester' } }),
     );
   });
 
@@ -305,6 +306,116 @@ describe('governed MCP edge (mocked host)', () => {
     });
     expect(res.status).toBe(404);
     expect(res.json()).toMatchObject({ success: false, error: { code: 'NOT_FOUND' } });
+  });
+});
+
+// --- tenant identity binding (cross-tenant defense at the edge) ---
+
+describe('governed MCP edge — tenant identity binding (security)', () => {
+  function authWith(principal: Partial<Principal>): AuthMiddleware {
+    const mw: RequestHandler = (req, _res, next) => {
+      req.principal = principal as Principal;
+      next();
+    };
+    return {
+      authenticate: mw,
+      authenticateMutating: mw,
+      requireAdmin: mw,
+      requireInternal: mw,
+    } as unknown as AuthMiddleware;
+  }
+
+  async function withServer(
+    mw: AuthMiddleware,
+    fn: (base: string, callSpy: ReturnType<typeof vi.fn>) => Promise<void>,
+  ): Promise<void> {
+    const built = buildMockedDeps({ mw });
+    const { base, server } = await startServer(buildMcpEdgeRouter(built.deps));
+    try {
+      await fn(base, built.callSpy);
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+    }
+  }
+
+  it('binds the authenticated principal userId into args when the caller omits it', async () => {
+    await withServer(
+      authWith({ userId: 'tester', scopes: [], isAnonymous: false }),
+      async (base, callSpy) => {
+        const res = await request(base, '/tools/demo/demo.echo/call', {
+          method: 'POST',
+          body: { args: { query: 'x' } },
+        });
+        expect(res.status).toBe(200);
+        expect(callSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ args: { query: 'x', userId: 'tester' } }),
+        );
+      },
+    );
+  });
+
+  it('allows a call whose args.userId already matches the authenticated principal', async () => {
+    await withServer(
+      authWith({ userId: 'tester', scopes: [], isAnonymous: false }),
+      async (base, callSpy) => {
+        const res = await request(base, '/tools/demo/demo.echo/call', {
+          method: 'POST',
+          body: { args: { userId: 'tester', query: 'x' } },
+        });
+        expect(res.status).toBe(200);
+        expect(callSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ args: { userId: 'tester', query: 'x' } }),
+        );
+      },
+    );
+  });
+
+  it('REJECTS (403) a cross-tenant args.userId and never touches the host', async () => {
+    await withServer(
+      authWith({ userId: 'attacker', scopes: [], isAnonymous: false }),
+      async (base, callSpy) => {
+        const res = await request(base, '/tools/demo/demo.echo/call', {
+          method: 'POST',
+          body: { args: { userId: 'victim', query: 'api key' } },
+        });
+        expect(res.status).toBe(403);
+        expect(res.json()).toMatchObject({
+          success: false,
+          error: { code: 'AUTHZ_PROJECT_ACCESS_DENIED' },
+        });
+        expect(callSpy).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  it('also rejects a cross-tenant claim on the body-addressed /call variant', async () => {
+    await withServer(
+      authWith({ userId: 'attacker', scopes: [], isAnonymous: false }),
+      async (base, callSpy) => {
+        const res = await request(base, '/call', {
+          method: 'POST',
+          body: { server: 'demo', tool: 'demo.echo', args: { userId: 'victim' } },
+        });
+        expect(res.status).toBe(403);
+        expect(callSpy).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  it('lets an admin-scoped principal act on behalf of another userId', async () => {
+    await withServer(
+      authWith({ userId: 'admin_user', scopes: ['admin'], isAnonymous: false }),
+      async (base, callSpy) => {
+        const res = await request(base, '/tools/demo/demo.echo/call', {
+          method: 'POST',
+          body: { args: { userId: 'some_tenant', query: 'x' } },
+        });
+        expect(res.status).toBe(200);
+        expect(callSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ args: { userId: 'some_tenant', query: 'x' } }),
+        );
+      },
+    );
   });
 });
 

@@ -153,6 +153,16 @@ export {
   type DomainVerifierResult,
 } from './services/domains.service.js';
 
+// The REAL DNS/TLS ownership prober bootstrap injects as `domainVerifier` so
+// custom domains can actually be ACTIVATED (node:dns TXT + node:tls cert probe).
+export {
+  createDnsTlsVerifier,
+  type DnsTlsVerifierDeps,
+  type ResolveTxtFn,
+  type TlsProbeFn,
+  type TlsProbeResult,
+} from './adapters/dns-verifier.adapter.js';
+
 // Governance-gated WRITE MCP tools (sandbox provision/destroy + domain CRUD).
 export { buildCloudWriteMcpTools, type CloudWriteMcpDeps } from './mcp/cloud-write-engine.js';
 

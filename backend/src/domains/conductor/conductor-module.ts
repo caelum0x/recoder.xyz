@@ -227,7 +227,32 @@ export class ConductorComposer implements ConductorModule {
       getWorkspace: (id) => this.repository.getWorkspace(id),
       logger: this.log,
     });
-    this.tailer = createRunTailer({ sink, logger: this.log });
+    // Live streaming driver: the tailer drives `@recoder/substrate`
+    // `startRunTail` against the REGISTERED substrate's capture/alive/exitCode,
+    // and — when `tmuxControlMode` is on, the run is on `tmux_worktree`, and the
+    // injected tmux binary provably speaks control mode — `selectControlModeTail`
+    // wraps that substrate so real-time `%output` streams into `log` RunEvents
+    // (the poller stays the liveness/exit-code authority). Any gate failing ⇒
+    // the plain poll tailer, the truthful degrade. Substrate resolution is
+    // truthful: an unregistered id returns `undefined` (attach marker only, no
+    // fabricated stream).
+    this.tailer = createRunTailer({
+      sink,
+      logger: this.log,
+      live: {
+        resolveSubstrate: (id) => {
+          try {
+            return this.registry.getFull(id as SubstrateKind);
+          } catch {
+            return undefined;
+          }
+        },
+        config: this.cfg,
+        clock: systemClock,
+        id: uuidId,
+        logger: loggerPort,
+      },
+    });
 
     // The engine deps assembled behind the ports.
     this.engineDeps = {

@@ -106,5 +106,11 @@ describe('handoff verb', () => {
     expect(res.ok).toBe(false);
     expect(res.code).toBe('dispatch_failed');
     expect(res.leg?.code).toBe('no_remote_sender');
+
+    // A failed handoff must NOT terminally destroy the source task: the reused
+    // in-flight task is left in its prior non-terminal state so the original
+    // owner can still complete or retry it.
+    const still = await tasks.get('t2', OWNER);
+    expect(still?.state).toBe('working');
   });
 });

@@ -12,14 +12,20 @@
  * `{ ok: false, effect, reason }` (never throws a policy outcome); an ERRORING
  * gate fails CLOSED; an ABSENT gate degrades open with a warn log.
  *
- * The subject is resolved from explicit args (`orgId`/`tenantId` win over
- * `userId`); the governed actor is the resolved tenant owner. A missing subject
- * or an unresolvable tenant yields a truthful error, never a guessed identity or
- * a faked mutation.
+ * SECURITY — TENANT SUBJECT BINDING: the subject is derived from the
+ * HOST-AUTHORIZED {@link McpToolCaller} (`caller.userId`/`orgId`), NEVER from
+ * free-form `args`. A non-privileged caller is bound to its OWN tenant; an
+ * args-supplied subject (`userId`/`orgId`/`tenantId`) is honoured ONLY for a
+ * caller carrying an `admin`/`internal` scope. Before the governance `decide`,
+ * the caller is verified to own / belong to the resolved tenant — so a caller
+ * can never provision/destroy/attach against a tenant that is not theirs
+ * (cross-tenant resource + billing abuse). A missing caller, a cross-tenant
+ * subject, or an unresolvable tenant yields a truthful error, never a guessed
+ * identity or a faked mutation.
  */
-import type { McpToolRegistration } from '../../../shared/module-base.js';
+import type { McpToolRegistration, McpToolCaller } from '../../../shared/module-base.js';
 import type { Logger } from '../../../shared/logger.js';
-import type { AppError } from '../../../shared/errors.js';
+import { createError, ErrorCode, type AppError } from '../../../shared/errors.js';
 import type { Principal } from '../../identity/types.js';
 import type { Tenant } from '../types.js';
 import type { TenancyService, TenantRef } from '../services/tenancy.service.js';
@@ -41,20 +47,44 @@ function str(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
 }
 
-/** Resolve a tenant ref from tool args (org/tenant scope wins). Throws when absent. */
-function tenantRefFromArgs(raw: unknown): TenantRef & { ownerUserId: string } {
+/** Scopes that let a caller act on a subject OTHER than themselves (ops / service). */
+const PRIVILEGED_SCOPES: readonly string[] = ['admin', 'internal'];
+
+/** True when the authorized caller may target an args-named (cross-tenant) subject. */
+function isPrivileged(caller: McpToolCaller): boolean {
+  return (caller.scopes ?? []).some((scope) => PRIVILEGED_SCOPES.includes(scope));
+}
+
+/** The tenant ref for the caller's OWN tenant (resolve/ensure by their identity). */
+function callerRef(caller: McpToolCaller): TenantRef & { ownerUserId: string } {
+  return {
+    ownerUserId: caller.userId,
+    ...(caller.orgId ? { orgId: caller.orgId } : {}),
+  };
+}
+
+/**
+ * A tenant ref an admin/internal caller named in args (`orgId`/`tenantId` win over
+ * `userId`), or `null` when no subject was supplied. Only ever consulted for a
+ * privileged caller — a non-privileged caller is always bound to {@link callerRef}.
+ */
+function subjectRefFromArgs(raw: unknown): (TenantRef & { ownerUserId: string }) | null {
   const args = (raw ?? {}) as Record<string, unknown>;
   const tenantId = str(args.tenantId);
   const orgId = str(args.orgId);
   const userId = str(args.userId);
-  if (!userId && !orgId && !tenantId) {
-    throw new Error('no cloud subject: pass args.userId, args.orgId, or args.tenantId');
-  }
+  if (!userId && !orgId && !tenantId) return null;
   return {
     ownerUserId: userId ?? '',
     ...(orgId ? { orgId } : {}),
     ...(tenantId ? { tenantId } : {}),
   };
+}
+
+/** Does the authorized caller own / belong to the resolved tenant? */
+function callerOwnsTenant(caller: McpToolCaller, tenant: Tenant): boolean {
+  if (tenant.ownerUserId && tenant.ownerUserId === caller.userId) return true;
+  return Boolean(tenant.orgId && caller.orgId && tenant.orgId === caller.orgId);
 }
 
 /** The governed actor for an MCP write: the resolved tenant's owner. */
@@ -79,11 +109,15 @@ export function buildCloudWriteMcpTools(deps: CloudWriteMcpDeps): readonly McpTo
 
   /**
    * Resolve (optionally auto-provisioning) the tenant + a governance decision for
-   * an MCP write. Returns either the tenant+principal to proceed with, or the
-   * truthful error envelope to return from the tool.
+   * an MCP write. The tenant SUBJECT is bound to the host-authorized `caller`
+   * (never to free-form args): a non-privileged caller acts on its OWN tenant; an
+   * args-named subject is honoured only for an `admin`/`internal` caller, and the
+   * caller is verified to own the resolved tenant before `decide`. Returns either
+   * the tenant+principal to proceed with, or the truthful error envelope.
    */
   async function authorize(
     raw: unknown,
+    caller: McpToolCaller | undefined,
     action: GovernanceAction,
     metadata: Readonly<Record<string, unknown>>,
     opts: { ensure?: boolean } = {},
@@ -91,15 +125,43 @@ export function buildCloudWriteMcpTools(deps: CloudWriteMcpDeps): readonly McpTo
     | { ok: true; tenant: Tenant; principal: Principal; verdict: Awaited<ReturnType<CloudGovernanceGatePort['decide']>> | undefined }
     | { ok: false; envelope: Record<string, unknown> }
   > {
-    let ref: TenantRef & { ownerUserId: string };
-    try {
-      ref = tenantRefFromArgs(raw);
-    } catch (cause) {
-      return { ok: false, envelope: { ok: false, error: cause instanceof Error ? cause.message : 'invalid subject' } };
+    // 1. Require an authenticated caller — never guess an identity from args.
+    if (!caller || !str(caller.userId)) {
+      return {
+        ok: false,
+        envelope: errorEnvelope(
+          createError(ErrorCode.AUTH_REQUIRED, 'Cloud write requires an authenticated caller.'),
+        ),
+      };
     }
+    // 2. Derive the subject from the caller. Only a privileged (admin/internal)
+    //    caller may target an args-named subject; everyone else is bound to self.
+    const privileged = isPrivileged(caller);
+    const ref: TenantRef & { ownerUserId: string } = privileged
+      ? subjectRefFromArgs(raw) ?? callerRef(caller)
+      : callerRef(caller);
+
     const resolved = opts.ensure ? await tenancy.ensure(ref) : await tenancy.resolve(ref);
     if (!resolved.ok) return { ok: false, envelope: errorEnvelope(resolved.error) };
     const tenant = resolved.value;
+
+    // 3. Cross-tenant guard (defence in depth): a non-privileged caller may only
+    //    act on a tenant they own / belong to — never someone else's.
+    if (!privileged && !callerOwnsTenant(caller, tenant)) {
+      return {
+        ok: false,
+        envelope: {
+          ...errorEnvelope(
+            createError(
+              ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+              'Cross-tenant cloud write refused: caller is not a member of the target tenant.',
+            ),
+          ),
+          effect: 'blocked',
+        },
+      };
+    }
+
     const principal = principalOfTenant(tenant);
     const ctx: GateDecisionContext = { target: { environment: 'cloud' }, metadata };
     const guarded = await guardCloudWrite(gate, action, principal, ctx, logger);
@@ -112,10 +174,10 @@ export function buildCloudWriteMcpTools(deps: CloudWriteMcpDeps): readonly McpTo
   return [
     {
       name: 'cloud_sandbox_provision',
-      description: 'Provision a governed off-box sandbox for a subject (quota-gated, mutating).',
-      handler: async (raw: unknown) => {
+      description: 'Provision a governed off-box sandbox for the authorized caller (quota-gated, mutating).',
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const args = (raw ?? {}) as Record<string, unknown>;
-        const auth = await authorize(raw, 'cloud.sandbox.provision', {
+        const auth = await authorize(raw, caller, 'cloud.sandbox.provision', {
           via: 'mcp',
           image: str(args.image) ?? null,
           repo: str(args.repo) ?? null,
@@ -142,11 +204,11 @@ export function buildCloudWriteMcpTools(deps: CloudWriteMcpDeps): readonly McpTo
     },
     {
       name: 'cloud_sandbox_destroy',
-      description: "Destroy one of a subject's sandboxes (mutating, governed).",
-      handler: async (raw: unknown) => {
+      description: "Destroy one of the caller's sandboxes (mutating, governed).",
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const sandboxId = str((raw as { sandboxId?: unknown })?.sandboxId);
         if (!sandboxId) return { ok: false, error: 'sandboxId is required' };
-        const auth = await authorize(raw, 'cloud.sandbox.destroy', { via: 'mcp', sandboxId });
+        const auth = await authorize(raw, caller, 'cloud.sandbox.destroy', { via: 'mcp', sandboxId });
         if (!auth.ok) return auth.envelope;
         const result = await provisioner.destroy(sandboxId, auth.tenant.id);
         if (!result.ok) return errorEnvelope(result.error);
@@ -160,11 +222,11 @@ export function buildCloudWriteMcpTools(deps: CloudWriteMcpDeps): readonly McpTo
     },
     {
       name: 'cloud_domain_add',
-      description: 'Attach a custom domain to a subject (mints DNS challenge records; mutating, governed).',
-      handler: async (raw: unknown) => {
+      description: 'Attach a custom domain to the caller (mints DNS challenge records; mutating, governed).',
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const hostname = str((raw as { hostname?: unknown })?.hostname);
         if (!hostname) return { ok: false, error: 'hostname is required' };
-        const auth = await authorize(raw, 'cloud.domain.add', { via: 'mcp', hostname }, { ensure: true });
+        const auth = await authorize(raw, caller, 'cloud.domain.add', { via: 'mcp', hostname }, { ensure: true });
         if (!auth.ok) return auth.envelope;
         const result = await domains.add({ tenantId: auth.tenant.id, hostname });
         if (!result.ok) return errorEnvelope(result.error);
@@ -189,10 +251,10 @@ export function buildCloudWriteMcpTools(deps: CloudWriteMcpDeps): readonly McpTo
     {
       name: 'cloud_domain_verify',
       description: 'Re-check DNS/TLS ownership for a custom domain (mutating, governed; truthful when unconfigured).',
-      handler: async (raw: unknown) => {
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const domainId = str((raw as { domainId?: unknown })?.domainId);
         if (!domainId) return { ok: false, error: 'domainId is required' };
-        const auth = await authorize(raw, 'cloud.domain.verify', { via: 'mcp', domainId });
+        const auth = await authorize(raw, caller, 'cloud.domain.verify', { via: 'mcp', domainId });
         if (!auth.ok) return auth.envelope;
         const result = await domains.verify(domainId, auth.tenant.id);
         if (!result.ok) return errorEnvelope(result.error);
@@ -216,11 +278,11 @@ export function buildCloudWriteMcpTools(deps: CloudWriteMcpDeps): readonly McpTo
     },
     {
       name: 'cloud_domain_remove',
-      description: "Detach a subject's custom domain (mutating, governed).",
-      handler: async (raw: unknown) => {
+      description: "Detach the caller's custom domain (mutating, governed).",
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
         const domainId = str((raw as { domainId?: unknown })?.domainId);
         if (!domainId) return { ok: false, error: 'domainId is required' };
-        const auth = await authorize(raw, 'cloud.domain.remove', { via: 'mcp', domainId });
+        const auth = await authorize(raw, caller, 'cloud.domain.remove', { via: 'mcp', domainId });
         if (!auth.ok) return auth.envelope;
         const result = await domains.remove(domainId, auth.tenant.id);
         if (!result.ok) return errorEnvelope(result.error);

@@ -31,7 +31,7 @@ import { createContainer, Container } from './container.js';
 import { createHealthRegistry, HealthRegistry } from './health-registry.js';
 import { createLifecycle, Lifecycle } from './lifecycle.js';
 import { createPersistenceModule } from '../domains/persistence/index.js';
-import { createIdentityModule } from '../domains/identity/index.js';
+import { createIdentityModule, createBetterAuthPlanReader } from '../domains/identity/index.js';
 import { createDeviceFlow } from '../domains/identity/device-flow.service.js';
 import { buildDeviceRouter } from '../domains/identity/routes/device.routes.js';
 import { sliceIdentityConfig } from '../domains/identity/config.js';
@@ -51,9 +51,15 @@ import { createConductorCodeIntel } from '../domains/conductor/adapters/code-int
 import { createGithubStatusAdapter } from '../domains/conductor/adapters/github-status.adapter.js';
 import { createTmuxSteerTransport } from '../domains/conductor/adapters/steer-transport.adapter.js';
 import { createRecoderMcpInjector } from '../domains/conductor/adapters/mcp-inject.adapter.js';
+import { createCloudSandboxSubstrate } from '../domains/conductor/adapters/cloud-sandbox-substrate.adapter.js';
+import type { CloudSandboxGatewayPort } from '../domains/conductor/ports/cloud-sandbox.port.js';
 import { createEnginesModule } from '../domains/engines/index.js';
 import { createInferenceModule } from '../domains/inference/index.js';
-import { createBillingModule } from '../domains/billing/index.js';
+import {
+  createBillingModule,
+  type BillingSubject,
+  type PlanTier,
+} from '../domains/billing/index.js';
 import {
   createPolarBillingAdapter,
   createPlanCatalog as createDistributionPlanCatalog,
@@ -65,7 +71,12 @@ import {
   type EnvelopeFetch,
 } from './interop-wire-seams.js';
 import { createMemoryModule } from '../domains/memory/index.js';
-import { createCloudModule } from '../domains/cloud/index.js';
+import {
+  createCloudModule,
+  createDnsTlsVerifier,
+  type CloudModule,
+  type Tenant,
+} from '../domains/cloud/index.js';
 import {
   createInteropWireComposer,
   type InteropWireComposite,
@@ -432,6 +443,82 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     config: conductorSubstrateConfig,
     logger: childLogger('conductor-openfang'),
   });
+  // PATH (c) off-box: the `daytona` remote-sandbox substrate over the Phase-10
+  // cloud provisioner. The cloud module is built LATER (Phase-10, below), so the
+  // gateway resolves it LAZILY through `cloudRef` — set right after Phase-10
+  // builds `cloud`, mirroring the `socialRef` late-bind. Degrade-truthful: until
+  // `cloudRef` is set (and a provider key is present) the gateway reports
+  // unavailable and the selector falls back to the local substrates.
+  //
+  // Only `daytona` is wired. A true `ssh` host provider is NOT yet in the cloud
+  // PROVIDER_IDS, so an `ssh` substrate would silently ride the daytona/e2b
+  // provider and MIS-LABEL the run — that would fake success, so it stays unwired
+  // until a real ssh SandboxProvider lands.
+  let cloudRef: CloudModule | null = null;
+  // The system tenant conductor off-box runs execute under. `tenancy.ensure`
+  // auto-provisions a tenant keyed by this owner and assigns it a real id; we
+  // CACHE that resolved tenant so provision/exec/destroy all scope to the SAME
+  // tenant id (a fixed literal id would never match the auto-provisioned one).
+  const CLOUD_TENANT_OWNER = 'conductor';
+  let conductorTenant: Tenant | null = null;
+  const ensureConductorTenant = async (): Promise<Tenant> => {
+    if (!cloudRef) throw new Error('cloud module not wired');
+    if (conductorTenant) return conductorTenant;
+    const r = await cloudRef.tenancy().ensure({ ownerUserId: CLOUD_TENANT_OWNER });
+    if (!r.ok) throw new Error(r.error.message);
+    conductorTenant = r.value;
+    return conductorTenant;
+  };
+  const cloudSandboxGateway = (substrateId: 'daytona'): CloudSandboxGatewayPort => ({
+    substrateId,
+    // Enabled once the cloud module is wired; real reachability is the async probe.
+    isEnabled: () => cloudRef !== null,
+    isAvailable: async () => {
+      if (!cloudRef) return false;
+      const h = await cloudRef.provisioner().health();
+      return h.status !== 'down';
+    },
+    provision: async () => {
+      if (!cloudRef) throw new Error('cloud module not wired');
+      const tenant = await ensureConductorTenant();
+      const provisioned = await cloudRef
+        .provisioner()
+        .provision({ tenant, userId: CLOUD_TENANT_OWNER });
+      if (!provisioned.ok) throw new Error(provisioned.error.message);
+      return { id: provisioned.value.id };
+    },
+    getWorkDir: async (sandboxId) => {
+      if (!cloudRef) return '/';
+      const tenant = await ensureConductorTenant();
+      const r = await cloudRef
+        .provisioner()
+        .execInSandbox(sandboxId, tenant.id, { command: 'pwd' });
+      return r.ok ? r.value.stdout.trim() : '/';
+    },
+    exec: async (sandboxId, command, options) => {
+      if (!cloudRef) throw new Error('cloud module not wired');
+      const tenant = await ensureConductorTenant();
+      const r = await cloudRef.provisioner().execInSandbox(sandboxId, tenant.id, {
+        command,
+        ...(options?.cwd ? { cwd: options.cwd } : {}),
+        ...(options?.timeoutSecs ? { timeoutMs: options.timeoutSecs * 1000 } : {}),
+      });
+      if (!r.ok) throw new Error(r.error.message);
+      return {
+        output: `${r.value.stdout}${r.value.stderr}`,
+        ...(r.value.exitCode != null ? { exitCode: r.value.exitCode } : {}),
+      };
+    },
+    destroy: async (sandboxId) => {
+      if (!cloudRef) return;
+      const tenant = await ensureConductorTenant();
+      await cloudRef.provisioner().destroy(sandboxId, tenant.id);
+    },
+  });
+  const cloudDaytonaSub = createCloudSandboxSubstrate({
+    gateway: cloudSandboxGateway('daytona'),
+    logger: childLogger('conductor-daytona'),
+  });
   // The memory-backed brain: recall on launch (mem0 ∪ beads ∪ candidates → rerank)
   // + harvest on completion. Built over the memory module's PUBLIC seams only.
   const conductorBrain = createBrainMemoryAdapter({
@@ -487,7 +574,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     middleware: identity.middleware(),
     gate: governance.gate(),
     runEventSink: conductorRunSink,
-    substrates: [cliSub, openfangSub],
+    substrates: [cliSub, openfangSub, cloudDaytonaSub],
     brain: conductorBrain,
     codeIntel: conductorCodeIntel,
     githubStatus: conductorGithub,
@@ -496,10 +583,11 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     overrides: {
       tmuxBin: config.conductor.tmuxBin,
       worktreeRoot: config.conductor.worktreeRoot,
-      // Control-mode flag plumbed through; the conductor's own tail-attach path
-      // consumes it via `selectControlModeTail` once the composition root drives
-      // `@recoder/substrate` `startRunTail` with a live substrate here (today the
-      // module owns its degrade-safe tailer internally — no bootstrap seam yet).
+      // Control-mode flag plumbed through; the conductor module now DRIVES its own
+      // degrade-safe live tailer (`startRunTail` + `selectControlModeTail`) from its
+      // internal registry+config when this is true — no bootstrap seam is required
+      // (the module owns the tailer; the poll tailer stays the sole exit-code
+      // authority and falls back to the attach marker for unregistered substrates).
       tmuxControlMode: config.conductor.tmuxControlMode,
       caps: config.conductor.caps,
     },
@@ -578,11 +666,21 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
         planCatalog: createDistributionPlanCatalog(polarPlanEntries),
       })
     : undefined;
-  // NOTE: `resolveAuthPlan` (the recoder.xyz auth-DB plan — the other half of
-  // `max(...)`) stays unwired: neither the identity domain nor @recoder/auth
-  // exposes a plan read today (the plan lives in the website's Prisma DB).
-  // Absent ⇒ the webhook-confirmed subscription projection + distribution
-  // grants alone decide — truthful, never a guessed plan.
+  // `resolveAuthPlan` — the recoder.xyz auth-DB plan (the other half of the
+  // entitlement `max(authPlan, webhookPlan, distributionGrant)`). The website plan
+  // is per-USER (Better Auth `users.subscriptionPlan`), so an ORG subject resolves
+  // null (website plans never apply to orgs). The reader lazily binds @recoder/auth
+  // and reads with a parameterized query; a missing client / DB fault ⇒ null (the
+  // webhook projection + distribution grants alone decide — never a guessed plan).
+  // The catalog `normalize()` coerces any unknown plan string to `free`.
+  // CAVEAT: `subjectId` is the principal userId (web Better Auth `user.id`). If a
+  // subject's web id diverges from the legacy `users.id` in prod the lookup misses
+  // and returns null — truthful non-elevation (never over-grants).
+  const authPlanReader = createBetterAuthPlanReader(childLogger('identity-authplan'));
+  const resolveAuthPlan = async (subject: BillingSubject): Promise<PlanTier | null> => {
+    if (subject.kind !== 'user') return null;
+    return (await authPlanReader.readPlan(subject.subjectId)) as PlanTier | null;
+  };
   const billing = createBillingModule({
     config,
     logger: childLogger('billing'),
@@ -590,6 +688,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     middleware: identity.middleware(),
     overrides: config.billing,
     resolveByok: billingResolveByok,
+    resolveAuthPlan,
     ...(billingDistributionPort ? { billingPort: billingDistributionPort } : {}),
   });
   // Wire the governance write gate into billing so checkout/cancel MUTATIONS pass
@@ -637,9 +736,17 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     middleware: identity.middleware(),
     overrides: config.cloud,
     governanceGate: governance.gate(),
+    // The REAL DNS TXT + TLS-cert ownership prober, so custom domains can actually
+    // be ACTIVATED (node:dns + node:tls). Absent it, `verify` stays truthfully
+    // pending; the prober itself degrades truthfully on a resolve/probe fault.
+    domainVerifier: createDnsTlsVerifier({ logger: childLogger('cloud-domain-verify') }),
   });
   container.registerValue(DOMAIN_TOKENS.cloud, cloud);
   healthRegistry.register(cloud);
+  // Late-bind the conductor's off-box sandbox gateway to the now-built cloud module
+  // (Phase-5b conductor was constructed BEFORE Phase-10 cloud; the gateway resolved
+  // it lazily). From here the `daytona` remote substrate can provision + exec.
+  cloudRef = cloud;
 
   // --- Phase 7a: Interop-wire — the A2A WIRE slice (envelope build/seal/validate,
   //     agent-card, signed-ingress gate, registry/task projection) PLUS the dispatch/

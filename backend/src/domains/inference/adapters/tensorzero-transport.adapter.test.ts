@@ -292,6 +292,69 @@ describe('TensorzeroTransportAdapter.completeStream', () => {
     expect(deltas.filter((d) => d.content).map((d) => d.content)).toEqual(['from-', 'loopback']);
   });
 
+  it('discards napi partial deltas on a mid-stream decline so loopback SSE owns the sink cleanly (no duplicated output)', async () => {
+    // The napi tier emits real content ("Hello wor") and THEN the embedded
+    // engine fails mid-stream, so `completeStream` resolves null. The ladder must
+    // fall through to loopback SSE WITHOUT the client having seen the napi
+    // partials — otherwise the sink carries "Hello wor" + "Hello world".
+    const adapter = new TensorzeroTransportAdapter({
+      logger: log,
+      config: config(), // napiFirst true
+      loopback: fakeLoopback({ configured: true }),
+      streamFetch: sseFetch(['Hello ', 'world']),
+      napi: fakeNapiStream(null, {
+        async completeStream(_req: InferenceRequest, onDelta: StreamSink): Promise<InferenceStreamResult | null> {
+          onDelta({ role: 'assistant' });
+          onDelta({ content: 'Hello ' });
+          onDelta({ content: 'wor' }); // partial emit ...
+          return null; //             ... then decline (ENGINE_DOWN mid-stream)
+        },
+      }),
+    });
+    const deltas: StreamDelta[] = [];
+    const result = await adapter.completeStream(REQ, (d) => deltas.push(d));
+    expect(result.routed).toBe(true);
+    expect(result.tier).toBe('loopback');
+    expect(result.content).toBe('Hello world');
+    // ONLY the loopback deltas reach the client — the napi partials were buffered
+    // and discarded, so no "wor" and no duplicated framing.
+    expect(deltas.filter((d) => d.content).map((d) => d.content)).toEqual(['Hello ', 'world']);
+    expect(deltas.filter((d) => d.role).length).toBe(1);
+  });
+
+  it('refuses to re-emit a buffered completion after the loopback SSE tier partial-emits then fails', async () => {
+    // The loopback SSE tier streams live and cannot be buffered: it emits "Hel"
+    // and then the stream is interrupted. Degrading to a buffered completion and
+    // re-emitting the full content would concatenate/duplicate the streamed
+    // output, so the ladder must finalize truthfully instead.
+    const sseThenThrow: StreamFetchLike = () => {
+      const body = {
+        async *[Symbol.asyncIterator]() {
+          yield `data: ${JSON.stringify({ choices: [{ delta: { content: 'Hel' } }] })}\n\n`;
+          throw new Error('stream interrupted');
+        },
+      };
+      return Promise.resolve({ ok: true, status: 200, text: async () => '', body } as StreamResponse);
+    };
+    const adapter = new TensorzeroTransportAdapter({
+      logger: log,
+      config: config(),
+      // loopback.complete WOULD route a buffered result — the guard must still
+      // refuse to re-emit it because partial deltas already reached the client.
+      loopback: fakeLoopback({ configured: true, complete: { configured: true, routed: true, content: 'Hello world buffered' } }),
+      streamFetch: sseThenThrow,
+      napi: fakeNapi(false, null),
+    });
+    const deltas: StreamDelta[] = [];
+    const result = await adapter.completeStream(REQ, (d) => deltas.push(d));
+    expect(result.routed).toBe(false);
+    expect(result.reason).toContain('partial deltas');
+    // The client keeps only the partial loopback delta; the buffered completion
+    // is NOT re-emitted (no duplicated / concatenated content).
+    expect(deltas.filter((d) => d.content).map((d) => d.content)).toEqual(['Hel']);
+    expect(deltas.some((d) => d.content === 'Hello world buffered')).toBe(false);
+  });
+
   it('tries the napi stream tier as the fallback rung when napi is not preferred', async () => {
     const adapter = new TensorzeroTransportAdapter({
       logger: log,
