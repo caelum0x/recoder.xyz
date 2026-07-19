@@ -22,11 +22,13 @@ import { useState } from 'preact/hooks';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { ApprovalActions } from './ApprovalActions';
+import { CheckpointsPanel } from './CheckpointsPanel';
 import { DiffView } from './DiffView';
 import { FileTree } from './FileTree';
 import { RunPanel } from './RunPanel';
 import { ConversationView } from './ConversationView';
 import { OpenInTerminalButton } from './OpenInTerminalButton';
+import { PrStatusChip } from './PrStatusChip';
 import {
   deliveryGateFromError,
   deliveryGateReason,
@@ -294,6 +296,15 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
   const palPlan = palPlanFromMetadata(workspace.metadata);
   const pr = prNumber(prMeta?.url);
   const readyToMerge = canMerge(workspace.state);
+  // The live PR/checks chip is meaningful once a PR exists (recorded on the
+  // workspace) or the workspace is in a review/merge/merged state — i.e. after
+  // an Open PR / Merge. We only mount the poller then, so we never probe `gh`
+  // for a workspace that could not possibly have a PR yet.
+  const showPrStatus =
+    Boolean(prMeta?.url) ||
+    workspace.state === 'awaiting_review' ||
+    workspace.state === 'merging' ||
+    workspace.state === 'merged';
 
   async function runAction(
     name: string,
@@ -407,6 +418,15 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
         <ApprovalActions workspace={workspace} onChanged={onChanged} />
       )}
 
+      {workspace.state !== 'archived' && (
+        <CheckpointsPanel workspace={workspace} onChanged={onChanged} />
+      )}
+
+      {/* Live PR + checks status (GET /workspaces/:id/pr-status via gh). Mounted
+          only once a PR could exist (after Open PR / Merge) so we never probe gh
+          speculatively. Degrade-truthful: unavailable / no-PR is stated, never
+          faked. Presentation only — the Merge button stays state-gated above. */}
+      {showPrStatus && <PrStatusChip workspace={workspace} />}
       {prMeta?.url && (
         <a class="pr-link" href={prMeta.url} target="_blank" rel="noreferrer">PR: {prMeta.url}</a>
       )}

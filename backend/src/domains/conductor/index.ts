@@ -54,6 +54,12 @@ import type {
 } from './review/workspace-continue.ops.js';
 import type { DevCommandView } from './adapters/dev-command.adapter.js';
 import type { ConductorRuntimeView } from './adapters/runtime-listing.adapter.js';
+import type { WorkspaceQueryFilters } from './services/workspace-query.service.js';
+import type { CompareView } from './services/compare.service.js';
+import type { CheckpointRecord, CheckpointStorePort } from './ports/checkpoint-store.port.js';
+import type { BranchResultView, RestoreResultView } from './services/checkpoint.service.js';
+import type { RepoSetupStorePort } from './ports/repo-setup-store.port.js';
+import type { RepoSetupExec } from './services/repo-setup.service.js';
 
 /** Dependencies injected by bootstrap (after persistence + identity + governance). */
 export interface ConductorModuleDeps {
@@ -121,6 +127,26 @@ export interface ConductorModuleDeps {
    * Recoder toolbelt, never a fabricated write). See `adapters/mcp-inject.adapter.ts`.
    */
   readonly mcpInject?: McpInjectPort;
+  /**
+   * Optional durable checkpoint metadata store. Absent ⇒ the module uses a
+   * bounded, degrade-truthful in-process store (`isDurable():false`) — the git
+   * objects a checkpoint points at stay durable in the repo, but the metadata is
+   * lost on restart and the store never pretends otherwise.
+   */
+  readonly checkpointStore?: CheckpointStorePort;
+  /**
+   * Optional durable per-repo setup-script store. Absent ⇒ the module uses a
+   * bounded, degrade-truthful in-process store (survives the process, not a
+   * restart) — mirroring the checkpoint store's posture. The script the store
+   * holds is run inside every fresh worktree by the createWorkspace hook.
+   */
+  readonly repoSetupStore?: RepoSetupStorePort;
+  /**
+   * Optional child-process exec seam the repo-setup RUN hook shells the configured
+   * script through (`bash -lc <script>` in the new worktree). Test-injectable;
+   * absent ⇒ the real bounded `execFileSafe`.
+   */
+  readonly repoSetupExec?: RepoSetupExec;
 }
 
 /** The public surface bootstrap registers and the edge/interop consume. */
@@ -128,6 +154,10 @@ export interface ConductorModule {
   readonly name: 'conductor';
   /** List every workspace record (state of record). */
   listWorkspaces(): Promise<Workspace[]>;
+  /** Board search/filter over the record list (read-only; empty match ⇒ truthful `[]`). */
+  queryWorkspaces(filters: WorkspaceQueryFilters): Promise<Workspace[]>;
+  /** Archived history — every archived workspace, most-recent-first (read-only). */
+  listArchivedWorkspaces(): Promise<Workspace[]>;
   /** Fetch one workspace by id, or null. */
   getWorkspace(workspaceId: string): Promise<Workspace | null>;
   /** Create + launch a workspace — GATED (`workspace.create`) then engine-driven. */
@@ -157,6 +187,17 @@ export interface ConductorModule {
   workspaceView(workspaceId: string): Promise<WorkspaceView | null>;
   /** Attention-enriched views of every workspace (the cockpit list's badges). */
   listWorkspaceViews(): Promise<WorkspaceView[]>;
+  /**
+   * Side-by-side compare of a parallel-run group (F3): aggregate every sibling
+   * workspace sharing `taskGroup` — each row's agent, diffStat, outcome, runId.
+   * Read-only + degrade-safe (a missing/blank group is a truthful empty view).
+   */
+  compareTaskGroup(taskGroup: string): Promise<CompareView>;
+  /**
+   * The compare view for the group a single workspace belongs to (its own
+   * singleton set when ungrouped). Null when the workspace does not exist.
+   */
+  workspaceSiblings(workspaceId: string): Promise<CompareView | null>;
   /** RunEvents for a workspace's run — the conversation + lifecycle log. */
   listWorkspaceEvents(workspaceId: string): Promise<RunEvent[]>;
   /** Captured pane text (the stream client's poll fallback). */
@@ -203,6 +244,27 @@ export interface ConductorModule {
   ): Promise<ConductorWriteResult<ContinueWorkspaceResult>>;
   /** Reconcile persisted workspaces against the live substrate (never kills live work). */
   reconcile(principal: Principal): Promise<ConductorWriteResult<ReconcileReport>>;
+  /** Capture a git checkpoint of a workspace — GATED (`workspace.checkpoint`). */
+  checkpointWorkspace(
+    workspaceId: string,
+    input: { label?: string; description?: string },
+    principal: Principal,
+  ): Promise<ConductorWriteResult<CheckpointRecord>>;
+  /** List a workspace's checkpoints (newest-first). Read-only. */
+  listWorkspaceCheckpoints(workspaceId: string): Promise<readonly CheckpointRecord[]>;
+  /** Restore a workspace's worktree to a checkpoint — GATED (`workspace.restore`). */
+  restoreCheckpoint(
+    workspaceId: string,
+    checkpointId: string,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<RestoreResultView>>;
+  /** Branch a NEW workspace from a checkpoint — GATED (`workspace.branch`). */
+  branchFromCheckpoint(
+    workspaceId: string,
+    checkpointId: string,
+    input: { branch?: string; runtimeId?: string; taskId?: string; prompt?: string },
+    principal: Principal,
+  ): Promise<ConductorWriteResult<BranchResultView>>;
   /**
    * Inject the OPTIONAL billing entitlement gate consulted as a pre-dispatch quota
    * check before launching a run (`workspace.create`). Set post-construction by

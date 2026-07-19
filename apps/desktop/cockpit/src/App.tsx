@@ -34,9 +34,19 @@ import {
 // engine dashboards were stripped so the engines stay invisible behind the run
 // flow. All Board-view components are eagerly imported (always needed at startup).
 import { Board } from './components/Board';
+import { BoardSearch } from './components/BoardSearch';
+import { ArchivedHistory } from './components/ArchivedHistory';
+import { useBoardQuery } from './lib/useBoardQuery';
+import { workspaceFacets } from './lib/workspace-facets';
+import { filterWorkspaces, hasActiveFilters, type WorkspaceFilters } from './lib/workspace-filter';
+import { CompareGroupsBar } from './components/CompareGroupsBar';
+import { ComparePanel } from './components/ComparePanel';
+import type { ParallelRunGroup } from './lib/compare-groups';
+import type { Workspace } from './types';
 import { HealthStrip } from './components/HealthStrip';
 import { PermissionCoach } from './components/PermissionCoach';
 import { NewWorkspaceForm } from './components/NewWorkspaceForm';
+import { RepoSettings } from './components/RepoSettings';
 import { WorkspaceDetail } from './components/WorkspaceDetail';
 import { WorkspaceSidebar } from './components/WorkspaceSidebar';
 import { WorkspaceCenter } from './components/WorkspaceCenter';
@@ -47,6 +57,7 @@ import { PANEL_REGISTRY, PRIMARY_PANEL_IDS, getPanelById } from './panels/regist
 const WORKSPACE_POLL_MS = 2000;
 const HEALTH_POLL_MS = 15_000;
 const RUNTIMES_POLL_MS = 30_000;
+const ARCHIVED_POLL_MS = 8000;
 
 /**
  * Derive the nav label for a given view id from the registry.
@@ -76,6 +87,15 @@ export function App() {
   const [view, setView] = useState<CockpitView>(() => readInitialView() || 'board');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  // Settings live behind the avatar (RECODER-PRODUCT-DESIGN §3C) — a tucked-away
+  // pane, never a primary tab. Today it hosts per-repo setup scripts.
+  const [showSettings, setShowSettings] = useState(false);
+  // The parallel-run group whose side-by-side compare is open (F3), or null.
+  const [compareGroup, setCompareGroup] = useState<ParallelRunGroup | null>(null);
+  // Board search / filter chips (repo/agent/state/q) and the Archived history
+  // toggle. The live board narrows to these; the endpoints they drive are real.
+  const [filters, setFilters] = useState<WorkspaceFilters>({});
+  const [showArchived, setShowArchived] = useState(false);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   // True once we have observed a working authenticated session this run. Used to
@@ -125,9 +145,39 @@ export function App() {
   const github = usePoll(() => api.githubStatus(), RUNTIMES_POLL_MS);
   const githubConnected = github.data?.connected === true;
 
+  // Board search / filter: the debounced, server-authoritative narrowing feed
+  // (GET /workspaces?q=&repo=&agent=&state=). It fetches only when a filter is
+  // active; the unfiltered `board` poll above stays the source when it is not.
+  const filteredPoll = useBoardQuery(filters, WORKSPACE_POLL_MS);
+  const filtersActive = hasActiveFilters(filters);
+  // Filter-chip options come only from real board records (never a hardcoded
+  // set), so a user never picks a repo/agent/state that would match nothing.
+  const facets = useMemo(() => workspaceFacets(workspaces), [workspaces]);
+  // The workspaces the board renders: the authoritative server result once it
+  // lands, with an INSTANT client-side filter of the already-loaded list while
+  // that debounced request is in flight, so typing feels immediate but the
+  // endpoint stays the source of truth.
+  const boardWorkspaces = !filtersActive
+    ? workspaces
+    : (filteredPoll.data ?? filterWorkspaces(workspaces, filters));
+
+  // Archived history: fetched only while the Archived view is open (gated
+  // fetcher → no request when hidden). Read-only; degrades to an empty list.
+  const archived = usePoll<Workspace[] | null>(
+    () => (showArchived ? api.listArchivedWorkspaces() : Promise.resolve(null)),
+    ARCHIVED_POLL_MS,
+    [showArchived],
+  );
+  const archivedWorkspaces = archived.data ?? [];
+
+  // Resolve the selected workspace from the live board first, then the archived
+  // history — so opening an archived run from the history view still renders.
   const selected = useMemo(
-    () => workspaces.find((w) => w.workspaceId === selectedId) || null,
-    [workspaces, selectedId],
+    () =>
+      workspaces.find((w) => w.workspaceId === selectedId) ||
+      archivedWorkspaces.find((w) => w.workspaceId === selectedId) ||
+      null,
+    [workspaces, archivedWorkspaces, selectedId],
   );
 
   // Let the desktop shell switch the cockpit view live (without a reload) when a
@@ -304,6 +354,18 @@ export function App() {
               GitHub · {githubConnected ? github.data.account?.login || 'connected' : 'not connected'}
             </span>
           )}
+          {/* Settings, tucked behind the avatar (never a primary tab). A calm
+              gear that opens the repo-setup pane. Shown on the board only. */}
+          {view === 'board' && (
+            <button
+              class="icon-btn settings-btn"
+              onClick={() => setShowSettings(true)}
+              title="Settings — per-repo setup scripts"
+              aria-label="Settings"
+            >
+              ⚙
+            </button>
+          )}
           {hasDesktopSignOut() && !unauthenticated && wasAuthed && (
             <div class="account">
               {config.identity?.avatarUrl && (
@@ -379,9 +441,32 @@ export function App() {
               below. With nothing selected the board is the at-a-glance view. */}
           <section class={`center-pane ${selected ? 'center-pane-thread' : ''}`}>
             {selected && <WorkspaceCenter workspace={selected} />}
-            {board.loading && !board.data ? (
+            {/* Board search + filter chips + Archived toggle — only when the
+                board is the focus (a thread hides the board). */}
+            {!selected && (
+              <BoardSearch
+                filters={filters}
+                onFiltersChange={setFilters}
+                repos={facets.repos}
+                agents={facets.agents}
+                states={facets.states}
+                archivedActive={showArchived}
+                onToggleArchived={() => setShowArchived((v) => !v)}
+                resultCount={boardWorkspaces.length}
+                totalCount={workspaces.length}
+              />
+            )}
+            {!selected && showArchived ? (
+              <ArchivedHistory
+                workspaces={archivedWorkspaces}
+                loading={archived.loading}
+                error={archived.error}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+              />
+            ) : board.loading && !board.data ? (
               !selected && <div class="board-loading">Loading workspaces…</div>
-            ) : workspaces.length === 0 && !board.error ? (
+            ) : !filtersActive && workspaces.length === 0 && !board.error ? (
               !selected && (
                 <div class="board-empty">
                   <img class="board-empty-logo" src="./logo.png" alt="" width={40} height={40} />
@@ -409,7 +494,20 @@ export function App() {
                  stays mounted so the pipeline keeps updating, but the center is
                  the thread alone. */
               <div class={`board-area ${selected ? 'board-area-hidden' : ''}`}>
-                <Board workspaces={workspaces} selectedId={selectedId} onSelect={setSelectedId} waits={waits} />
+                {/* Multi-agent compare entry point (F3): a calm chip per
+                    parallel-run group, opening the side-by-side ComparePanel.
+                    Renders nothing when there are no parallel runs. */}
+                <CompareGroupsBar workspaces={workspaces} onCompare={setCompareGroup} />
+                {filtersActive && boardWorkspaces.length === 0 ? (
+                  <div class="board-empty-filtered">No workspaces match your filters.</div>
+                ) : (
+                  <Board
+                    workspaces={boardWorkspaces}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                    waits={waits}
+                  />
+                )}
               </div>
             )}
           </section>
@@ -432,6 +530,19 @@ export function App() {
 
       {showCreate && (
         <NewWorkspaceForm onCreated={() => board.refresh()} onClose={() => setShowCreate(false)} />
+      )}
+
+      {showSettings && (
+        <RepoSettings workspaces={workspaces} onClose={() => setShowSettings(false)} />
+      )}
+
+      {compareGroup && (
+        <ComparePanel
+          taskGroup={compareGroup.taskGroup}
+          goal={compareGroup.goal}
+          onClose={() => setCompareGroup(null)}
+          onChanged={() => board.refresh()}
+        />
       )}
 
       <PermissionCoach />

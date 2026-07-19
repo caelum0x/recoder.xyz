@@ -78,6 +78,9 @@ describe('parallel agent launch', () => {
     expect(agents).toEqual(['claude', 'opencode']);
     const [a, b] = stub.workspaces();
     expect(a.taskId).not.toBe(b.taskId); // own task/worktree each
+    // ...but ONE shared taskGroup binds the siblings for the compare board (F3).
+    expect(a.metadata?.taskGroup).toBeTruthy();
+    expect(a.metadata?.taskGroup).toBe(b.metadata?.taskGroup);
   });
 
   it('launches exactly one workspace when nothing extra is ticked', async () => {
@@ -93,5 +96,7 @@ describe('parallel agent launch', () => {
     });
     await waitFor(() => stub.workspaces().length === 1);
     expect(stub.workspaces()[0].runtimeId).toBe('claude');
+    // A solo launch stays ungrouped — no taskGroup tag (nothing to compare against).
+    expect(stub.workspaces()[0].metadata?.taskGroup).toBeUndefined();
   });
 });

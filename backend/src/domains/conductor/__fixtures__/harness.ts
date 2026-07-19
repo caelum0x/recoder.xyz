@@ -314,6 +314,12 @@ export interface ComposeOptions {
   steerTransport?: ConductorModuleDeps['steerTransport'];
   /** OPTIONAL per-worktree `.mcp.json` injector (absent ⇒ injection is a truthful skip). */
   mcpInject?: ConductorModuleDeps['mcpInject'];
+  /** OPTIONAL checkpoint metadata store (absent ⇒ the module's in-process store). */
+  checkpointStore?: ConductorModuleDeps['checkpointStore'];
+  /** OPTIONAL per-repo setup-script store (absent ⇒ the module's in-process store). */
+  repoSetupStore?: ConductorModuleDeps['repoSetupStore'];
+  /** OPTIONAL repo-setup run-hook exec seam (absent ⇒ the real `execFileSafe`). */
+  repoSetupExec?: ConductorModuleDeps['repoSetupExec'];
 }
 
 /** Compose a conductor module over the in-memory harness. Returns the module + its gate. */
@@ -334,6 +340,9 @@ export function composeConductor(options: ComposeOptions = {}): {
     ...(options.codeIntel ? { codeIntel: options.codeIntel } : {}),
     ...(options.steerTransport ? { steerTransport: options.steerTransport } : {}),
     ...(options.mcpInject ? { mcpInject: options.mcpInject } : {}),
+    ...(options.checkpointStore ? { checkpointStore: options.checkpointStore } : {}),
+    ...(options.repoSetupStore ? { repoSetupStore: options.repoSetupStore } : {}),
+    ...(options.repoSetupExec ? { repoSetupExec: options.repoSetupExec } : {}),
   });
   return { module, gate };
 }

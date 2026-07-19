@@ -47,6 +47,10 @@ import type {
   ApprovalRecord,
   ApprovalStatus,
   BrainStats,
+  Checkpoint,
+  CheckpointBranchResult,
+  CheckpointRestoreResult,
+  CompareView,
   ConductorHealth,
   ConductorSession,
   ConnectorsHealth,
@@ -74,7 +78,9 @@ import type {
   OpenfangHealth,
   PolicyDecision,
   PolicyEvaluateBody,
+  PrStatusView,
   ProposeMemoryCandidateBody,
+  RepoSetupConfig,
   RetrievalHealth,
   RetrievalSearchBody,
   RetrievalSearchResult,
@@ -344,6 +350,38 @@ export const api = {
     request<GovernanceAuditTrail>('GET', `/governance/audit?limit=${limit}`),
   listWorkspaces: () =>
     request<unknown>('GET', '/workspaces').then((d) => pickList<Workspace>(d, 'workspaces')),
+  /**
+   * Board search / filter — the query-aware read behind the board's search bar
+   * and filter chips. Hits GET /workspaces?q=&repo=&agent=&state=&archived=
+   * (backend/src/domains/conductor/routes/workspaces-query.routes.ts), which
+   * narrows the state-of-record list server-side and returns the SAME keyed
+   * `{ workspaces }` payload as the plain list. With no filters the backend
+   * returns every record (behavior-identical to {@link listWorkspaces}); an
+   * empty match is a truthful empty list, never a fabricated set.
+   */
+  queryWorkspaces: (
+    filters: { q?: string; repo?: string; agent?: string; state?: string; archived?: boolean } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (filters.q && filters.q.trim()) params.set('q', filters.q.trim());
+    if (filters.repo && filters.repo.trim()) params.set('repo', filters.repo.trim());
+    if (filters.agent && filters.agent.trim()) params.set('agent', filters.agent.trim());
+    if (filters.state) params.set('state', filters.state);
+    if (filters.archived !== undefined) params.set('archived', String(filters.archived));
+    const qs = params.toString();
+    return request<unknown>('GET', `/workspaces${qs ? `?${qs}` : ''}`).then((d) =>
+      pickList<Workspace>(d, 'workspaces'),
+    );
+  },
+  /**
+   * Archived history — the "Archived" board view. Hits GET /workspaces/archived
+   * (most-recent-first) so the operator can browse closed/merged/cancelled work
+   * without cluttering the live board. Read-only; degrades to an empty list.
+   */
+  listArchivedWorkspaces: () =>
+    request<unknown>('GET', '/workspaces/archived').then((d) =>
+      pickList<Workspace>(d, 'workspaces'),
+    ),
   getWorkspace: (id: string) =>
     request<unknown>('GET', `/workspaces/${encodeURIComponent(id)}`).then((d) =>
       pick<Workspace>(d, 'workspace'),
@@ -408,6 +446,92 @@ export const api = {
     request<unknown>('POST', `/workspaces/${encodeURIComponent(id)}/archive`).then((d) =>
       pick<Workspace>(d, 'workspace'),
     ),
+
+  // --- per-repo setup script + PR status (repo-config sub-router) ---
+
+  /**
+   * Read a repo's configured setup script (GET /repo-setup-script?repoKey=…).
+   * Resolves to `null` when no script is configured — never fabricated. The
+   * repoKey is the same stable key the backend runs setup under (projectId,
+   * falling back to a normalized repoPath); see lib/repo-key.ts.
+   */
+  repoSetupScript: (repoKey: string) =>
+    request<unknown>(
+      'GET',
+      `/repo-setup-script?repoKey=${encodeURIComponent(repoKey)}`,
+    ).then((d) => pick<RepoSetupConfig | null>(d, 'config')),
+
+  /**
+   * Upsert a repo's setup script (PUT /repo-setup-script) — GOVERNED. An empty
+   * string clears the script. A governance deny is a truthful 403
+   * (AuthzProjectAccessDenied) surfaced as an ApiError, never a faked success.
+   * Returns the persisted config the backend echoes under `config`.
+   */
+  saveRepoSetupScript: (repoKey: string, script: string) =>
+    request<unknown>('PUT', '/repo-setup-script', { repoKey, script }).then((d) =>
+      pick<RepoSetupConfig>(d, 'config'),
+    ),
+
+  /**
+   * The workspace's pull-request status via `gh` (GET /workspaces/:id/pr-status).
+   * Degrade-truthful: `available:false` means gh could not be consulted (no gh /
+   * no worktree / gh error), NOT a fabricated "no PR". A missing workspace is a
+   * real 404 (surfaced as an ApiError). Returns the truthful PrStatusView.
+   */
+  prStatus: (id: string) =>
+    request<PrStatusView>('GET', `/workspaces/${encodeURIComponent(id)}/pr-status`),
+
+  // --- checkpoints & restore (git snapshot capability) ---
+  /** List a workspace's checkpoints (newest-first). */
+  listCheckpoints: (id: string) =>
+    request<unknown>('GET', `/workspaces/${encodeURIComponent(id)}/checkpoints`).then((d) =>
+      pickList<Checkpoint>(d, 'checkpoints'),
+    ),
+  /** Capture a checkpoint (GATED). Returns the persisted record. */
+  createCheckpoint: (id: string, body: { label?: string; description?: string } = {}) =>
+    request<unknown>('POST', `/workspaces/${encodeURIComponent(id)}/checkpoints`, body).then((d) =>
+      pick<Checkpoint>(d, 'checkpoint'),
+    ),
+  /** Restore a workspace to a checkpoint (GATED). Returns the truthful restore result. */
+  restoreCheckpoint: (id: string, checkpointId: string) =>
+    request<unknown>(
+      'POST',
+      `/workspaces/${encodeURIComponent(id)}/checkpoints/${encodeURIComponent(checkpointId)}/restore`,
+    ).then((d) => pick<CheckpointRestoreResult>(d, 'restore')),
+  /** Branch a NEW workspace from a checkpoint (GATED). Returns the new workspace. */
+  branchCheckpoint: (
+    id: string,
+    checkpointId: string,
+    body: { branch?: string; runtimeId?: string; taskId?: string; prompt?: string } = {},
+  ) =>
+    request<unknown>(
+      'POST',
+      `/workspaces/${encodeURIComponent(id)}/checkpoints/${encodeURIComponent(checkpointId)}/branch`,
+      body,
+    ).then((d) => pick<CheckpointBranchResult>(d, 'workspace')),
+
+  // --- multi-agent compare (product F3) — READ-ONLY, no governance gate ---
+  /**
+   * Aggregate every sibling of a parallel-run group for side-by-side review
+   * (GET /workspaces/compare?taskGroup=). Read-only by contract: an unknown or
+   * blank group is a truthful EMPTY view (count 0), never an error. The payload
+   * is keyed (`data: { compare }`).
+   */
+  compareTaskGroup: (taskGroup: string) =>
+    request<unknown>(
+      'GET',
+      `/workspaces/compare?taskGroup=${encodeURIComponent(taskGroup)}`,
+    ).then((d) => pick<CompareView>(d, 'compare')),
+  /**
+   * The compare view for the group a single workspace belongs to
+   * (GET /workspaces/:id/siblings). An ungrouped workspace is its own singleton
+   * set; a missing workspace 404s. Keyed (`data: { compare }`).
+   */
+  workspaceSiblings: (id: string) =>
+    request<unknown>('GET', `/workspaces/${encodeURIComponent(id)}/siblings`).then((d) =>
+      pick<CompareView>(d, 'compare'),
+    ),
+
   reconcile: () => request<unknown>('POST', '/reconcile'),
   runtimes: () =>
     request<unknown>('GET', '/runtimes').then((d) => pickList<RuntimeAvailability>(d, 'runtimes')),

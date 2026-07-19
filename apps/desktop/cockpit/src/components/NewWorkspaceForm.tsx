@@ -25,6 +25,10 @@ function genTaskId(): string {
   return `task_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
+function genTaskGroupId(): string {
+  return `grp_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
 export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) {
   const defaults = readConfig().defaults || {};
   // The signed-in plan — used only to hint (never block) when a chosen remote
@@ -113,6 +117,11 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
     // workspace (own worktree, own taskId) per agent, same folder + task.
     const agents = [runtimeId, ...alsoRun.filter((id) => id !== runtimeId)];
 
+    // Multi-agent parallelism (F3): when launching the SAME task across 2+ agents,
+    // stamp every sibling with ONE shared taskGroup so the compare board can
+    // aggregate them side-by-side. A solo launch stays ungrouped (no tag).
+    const taskGroup = agents.length > 1 ? genTaskGroupId() : undefined;
+
     const bodyFor = (agent: string): CreateWorkspaceBody => {
       const body: CreateWorkspaceBody = {
         spaceId: spaceId.trim() || 'default',
@@ -122,6 +131,7 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
         runtimeId: agent,
         createdBy: createdBy.trim() || 'cockpit',
       };
+      if (taskGroup) body.taskGroup = taskGroup;
       // Only send a prompt when the operator actually wrote one.
       if (prompt.trim()) body.prompt = prompt.trim();
       if (substrate) body.substrate = substrate;

@@ -264,6 +264,81 @@ body {
 .board-area-compact { padding: 0 16px 16px; }
 .board-area-compact .board { grid-template-columns: repeat(4, 1fr); }
 
+/* Board search + filter chips — a single calm control row above the board.
+   Quiet hairline inputs, compact chip selects, no loud fills. */
+.board-search {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 14px 24px 0;
+}
+.board-search-input {
+  flex: 1; min-width: 160px;
+  background: var(--bg-inset); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  padding: 6px 11px; font-size: 12.5px; font-family: inherit;
+  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
+}
+.board-search-input::placeholder { color: var(--text-faint); }
+.board-search-input:hover { border-color: #3c3c45; }
+.board-search-input:focus {
+  outline: none; border-color: var(--accent); background: var(--bg);
+  box-shadow: var(--focus-ring);
+}
+.board-chip {
+  appearance: none; -webkit-appearance: none; cursor: pointer;
+  background: var(--bg-inset); color: var(--text-dim);
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 5px 26px 5px 11px; font-size: 11.5px; font-family: var(--mono);
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+                    linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+  background-position: calc(100% - 13px) calc(50% - 1px), calc(100% - 9px) calc(50% - 1px);
+  background-size: 4px 4px, 4px 4px; background-repeat: no-repeat;
+}
+.board-chip:hover { border-color: var(--border-strong); color: var(--text); }
+.board-chip:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
+.board-chip option { background: var(--bg-elev); color: var(--text); }
+.board-search-count { color: var(--text-faint); font-size: 11px; font-family: var(--mono); }
+.board-search-clear { margin-left: 2px; }
+.board-archived-toggle { margin-left: auto; }
+.board-archived-toggle-on {
+  border-color: var(--accent); color: var(--text);
+  box-shadow: inset 0 0 0 1px rgba(122, 162, 160, 0.2);
+}
+.board-empty-filtered { color: var(--text-faint); text-align: center; padding: 40px 14px; font-size: 13px; }
+
+/* Archived history — a quiet, most-recent-first list of closed runs. Rows read
+   like calm log lines, not loud cards. */
+.archived-history { flex: 1; overflow: auto; padding: 16px 24px 24px; }
+.archived-history-head { display: flex; align-items: center; gap: 8px; padding: 4px 2px 12px; }
+.archived-history-title {
+  font-family: var(--mono); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim);
+}
+.archived-history-count { color: var(--text-faint); font-family: var(--mono); font-size: 11px; }
+.archived-history-error { color: var(--bad); font-size: 12px; padding: 8px 2px; }
+.archived-history-empty { color: var(--text-faint); font-size: 13px; padding: 24px 2px; }
+.archived-history-rows { display: flex; flex-direction: column; gap: 6px; }
+.archived-row {
+  text-align: left; width: 100%;
+  display: flex; flex-direction: column; gap: 5px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 12px; cursor: pointer; color: var(--text);
+  transition: border-color 0.12s, background 0.12s;
+}
+.archived-row:hover { border-color: var(--border-strong); background: var(--bg-elev); }
+.archived-row-selected { border-color: var(--border-strong); box-shadow: inset 2px 0 0 var(--accent); }
+.archived-row-main { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.archived-row-goal {
+  font-size: 12.5px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.archived-row-codename { font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); }
+.archived-row-meta {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-size: 11px; color: var(--text-faint); font-family: var(--mono);
+}
+.archived-row-repo { color: var(--text-dim); }
+
 /* LEFT — workspaces sidebar grouped by repo. ~272px to match the reference's
    narrow workspace rail. */
 .ws-sidebar {
@@ -1187,6 +1262,80 @@ body {
 .approval-decided-note { font-size: 12px; color: var(--text-dim); }
 .approval-row-decided { flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; }
 
+/* Checkpoints: the workspace git-snapshot surface in the detail panel. Neutral
+   (not a warning state) — a plain tool the operator reaches for, terminal-flat. */
+.checkpoints-panel {
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; margin: 4px 16px;
+}
+.checkpoints-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.checkpoints-title { font-weight: 600; font-size: 12px; color: var(--text); }
+.checkpoints-note { margin: 0; font-size: 12px; color: var(--text-dim); }
+.checkpoints-error { margin: 0; font-size: 12px; color: var(--bad); word-break: break-word; }
+.checkpoint-row { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+.checkpoint-row-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.checkpoint-row-label { font-family: var(--mono); font-size: 12px; color: var(--text); }
+.checkpoint-row-meta { font-size: 11px; color: var(--text-faint); }
+.checkpoint-row-desc { margin: 0; font-size: 12px; color: var(--text-dim); word-break: break-word; }
+.checkpoint-row-actions { display: flex; gap: 8px; }
+.checkpoint-row-note { margin: 0; font-size: 12px; color: var(--good); word-break: break-word; }
+.checkpoint-row-error { margin: 0; font-size: 12px; color: var(--bad); word-break: break-word; }
+
+/* Multi-agent compare (F3): the board's parallel-run bar + side-by-side panel. */
+.compare-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 0 0 14px; padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-inset);
+}
+.compare-bar-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-faint); font-weight: 600; margin-right: 2px;
+}
+.compare-bar-chip {
+  display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 5px 12px; border: 1px solid var(--border-strong); border-radius: 999px;
+  background: var(--bg-card); color: var(--text-dim); cursor: pointer;
+  font-family: inherit; text-align: left; transition: border-color 0.12s, color 0.12s;
+}
+.compare-bar-chip:hover { border-color: var(--accent); color: var(--text); }
+.compare-bar-chip-count { font-size: 12px; font-weight: 600; }
+.compare-bar-chip-goal {
+  font-size: 10.5px; color: var(--text-faint);
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.compare-modal { width: min(1040px, 94vw); }
+.compare-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.compare-subtitle {
+  font-size: 12px; color: var(--text-faint);
+  max-width: 60ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.compare-note { margin: 8px 0; font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+.compare-error { margin: 8px 0; font-size: 13px; color: var(--bad); word-break: break-word; }
+.compare-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px; margin-top: 6px;
+}
+.compare-col {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--bg-card);
+}
+.compare-col-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.compare-col-agent { font-weight: 600; font-size: 13px; color: var(--text); }
+.compare-col-handle { font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
+.compare-col-attention { align-self: flex-start; }
+.compare-col-diffstat {
+  display: inline-flex; gap: 8px; font-family: var(--mono); font-size: 12px;
+  padding: 4px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
+.compare-diffstat-files { color: var(--text-dim); }
+.compare-col-diffstat-absent { color: var(--text-faint); font-size: 11px; word-break: break-word; }
+.compare-col-actions { display: flex; gap: 8px; margin-top: auto; }
+.compare-col-note { margin: 0; font-size: 12px; color: var(--good); }
+.compare-col-gated { margin: 0; font-size: 11.5px; color: var(--warn); line-height: 1.4; word-break: break-word; }
+.compare-col-error { margin: 0; font-size: 11.5px; color: var(--bad); line-height: 1.4; word-break: break-word; }
+
 /* Connectors: per-status summary header (truthful counts over the 7 channels). */
 .connector-summary { display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 0 4px; }
 
@@ -1203,3 +1352,28 @@ body {
 .brain-metric { font-size: 16px; font-weight: 600; color: var(--text); }
 .brain-idle-note { line-height: 1.5; margin: 0; }
 .brain-tiphash { white-space: normal; word-break: break-all; }
+
+/* Settings gear — a calm, tucked control near the avatar (not a primary tab).
+   Slightly smaller than the row icon-btns so it reads as chrome, not an action. */
+.settings-btn { font-size: 15px; padding: 0 2px; }
+
+/* Inline PR + checks status chip in the workspace detail. Calm badges on one
+   row; degrade-truthful copy (unavailable / no-PR) stays muted, never alarmist. */
+.pr-status-chip {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  padding: 4px 16px 8px; font-size: 11px;
+}
+.pr-status-checking, .pr-status-none { color: var(--text-dim); }
+.pr-status-unavailable { color: var(--text-faint); }
+.pr-status-link { color: var(--accent); text-decoration: none; }
+.pr-status-link:hover { text-decoration: underline; }
+
+/* A calm success note (mirrors .action-note) for governed writes that succeed. */
+.form-note { color: var(--good); font-size: 12px; margin: 4px 0; }
+
+/* Repo-setup pane (behind the avatar). Reuses the modal + field shells; only the
+   script-specific chrome is bespoke. */
+.repo-settings-intro { color: var(--text-dim); font-size: 12px; line-height: 1.5; margin: 0 0 14px; }
+.repo-settings-empty, .repo-settings-note { color: var(--text-dim); font-size: 12px; margin: 8px 0; }
+.repo-settings-meta { color: var(--text-faint); font-size: 11px; margin: 4px 0; }
+.repo-settings-script { font-family: var(--mono); font-size: 12px; }
