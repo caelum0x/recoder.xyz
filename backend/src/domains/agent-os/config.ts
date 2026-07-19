@@ -49,6 +49,12 @@ export const agentOsConfigSchema = z.object({
   squadsEnabled: z.boolean(),
   /** Feature flag: the squad autopilot loop (cron→beads→conductor). Opt-in. */
   squadAutopilotEnabled: z.boolean(),
+  /**
+   * The squad every autopilot dispatch routes through (leader-first / weighted
+   * via {@link SquadService.route}). `null` ⇒ no squad configured, so the
+   * autopilot uses the flat default dispatch (degrade-truthful pass-through).
+   */
+  squadId: z.string().nullable(),
   /** Autopilot tick cadence (ms). */
   squadAutopilotIntervalMs: z.number().int().positive(),
   /** Max conductor dispatches per autopilot tick (bounds burst launches). */
@@ -73,6 +79,7 @@ export interface AgentOsConfigOverrides {
   readonly squadAutopilotEnabled?: boolean;
   readonly squadAutopilotIntervalMs?: number;
   readonly squadAutopilotMaxPerTick?: number;
+  readonly squadId?: string | null;
 }
 
 const DEFAULT_NATS_SUBJECT_PREFIX = 'recoder.agent-os';
@@ -119,6 +126,7 @@ export function sliceAgentOsConfig(
       overrides.squadAutopilotIntervalMs ?? DEFAULT_SQUAD_AUTOPILOT_INTERVAL_MS,
     squadAutopilotMaxPerTick:
       overrides.squadAutopilotMaxPerTick ?? DEFAULT_SQUAD_AUTOPILOT_MAX_PER_TICK,
+    squadId: overrides.squadId ?? null,
     isProduction: app.runtime.isProduction,
   });
 }

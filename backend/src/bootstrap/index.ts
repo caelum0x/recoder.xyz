@@ -70,6 +70,7 @@ import {
   createRemoteEnvelopeSender,
   type EnvelopeFetch,
 } from './interop-wire-seams.js';
+import { createCliInferenceEnvResolver } from './conductor-inference-seam.js';
 import { createMemoryModule } from '../domains/memory/index.js';
 import {
   createCloudModule,
@@ -377,6 +378,10 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       squadsEnabled: config.agentOs.squadsEnabled,
       squadAutopilotEnabled:
         config.agentOs.squadsEnabled && bootEnv.RECODER_SQUAD_AUTOPILOT === '1',
+      // The squad the autopilot routes every dispatch through (leader-first /
+      // weighted via multica's SquadService). Unset ⇒ null ⇒ flat default
+      // dispatch (degrade-truthful; the loop still runs, just un-routed).
+      squadId: bootEnv.RECODER_SQUAD_ID ?? null,
     },
   });
   container.registerValue(DOMAIN_TOKENS['agent-os'], agentOs);
@@ -445,18 +450,53 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // TWO execution-path substrates share the SAME engine capability seams (the
   // difference is only WHERE the agent runs):
   //  - PATH (a) CLI: the `tmux_worktree` substrate (external coding-agent CLI in an
-  //    isolated tmux+git-worktree). It wraps the proven tmux mechanics and adds the
-  //    optional last-mile inference-metering env hook (unwired here ⇒ BYOK, no
-  //    metering — a truthful skip; the composer-level path (e) can inject env too).
+  //    isolated tmux+git-worktree). It wraps the proven tmux mechanics and NOW
+  //    carries the last-mile inference-metering env hook: `cliInferenceEnvResolver`
+  //    points the launched CLI's OpenAI-compatible client at THIS backend's gateway
+  //    edge (napi → loopback → BYOK) with a Recoder-minted `sk_` credential, so the
+  //    BULK of real agent LLM spend flows through the usage ledger + entitlement
+  //    token-quota + delivery-outcome audit — the gateway is the UNIVERSAL inference
+  //    spine, not just backend calls. Degrade-truthful: gateway down / key unmintable
+  //    ⇒ the resolver returns `{}` and the CLI runs on its own BYOK keys, honestly
+  //    UNMETERED — never blocked. The composer-level path (e) can still inject
+  //    principal/runtimeId-aware env OVER this base (caller wins on any collision).
   //  - PATH (b) openfang: the `in_process` substrate (native openfang `.node` agent
   //    turn against the worktree). Its kernel routes inference through the SAME
   //    shared tensorzero `.node`, so metering/BYOK apply without a loopback URL.
   // Both degrade-safe + truthful: git/tmux absent ⇒ CLI `available:false`; the
   // openfang addon absent/boot-failed ⇒ in_process `available:false` + `launch()`
   // refuses (never a fabricated session). The module + `/api/conductor` still boot.
+  //
+  // The CLI inference-metering seam: probe the gateway health per launch + mint ONE
+  // memoized conductor `sk_` gateway credential (attempted lazily on first metered
+  // launch). The base URL is the loopback OpenAI-compatible gateway edge
+  // (`<inference mountBase>/gateway/v1`). The mint owner is a stable conductor
+  // service subject (substrate-level metering is subject-attributed; per-principal
+  // attribution is the composer path (e)'s job). Key store / DB down ⇒ mint yields
+  // null ⇒ truthful unmetered skip.
+  const cliGatewayBaseUrl = `http://127.0.0.1:${config.server.port}${DOMAIN_REGISTRY.inference.mountBase}/gateway/v1`;
+  const cliInferenceEnvResolver = createCliInferenceEnvResolver({
+    gateway: inference.gateway(),
+    baseUrl: cliGatewayBaseUrl,
+    logger: childLogger('conductor-cli-inference'),
+    mintGatewayKey: async () => {
+      try {
+        const minted = await apiKeyService.mint({
+          userId: 'conductor',
+          name: 'conductor-cli-inference-gateway',
+          scopes: ['inference'],
+        });
+        return minted.rawKey;
+      } catch {
+        // No DB / key store down / gate refuse ⇒ truthful null (CLI runs unmetered).
+        return null;
+      }
+    },
+  });
   const cliSub = createCliRuntimeSubstrate({
     config: conductorSubstrateConfig,
     logger: childLogger('conductor-cli'),
+    resolveInferenceEnv: cliInferenceEnvResolver,
   });
   const openfangSub = createOpenfangRuntimeSubstrate({
     config: conductorSubstrateConfig,
@@ -656,6 +696,13 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
           repoPath: squadAutopilotRepoRoot,
           runtimeId: 'claude_code',
           prompt: req.prompt,
+          // Carry the squad-routed agent (multica's leader-first / weighted
+          // selection) onto the workspace record so the launch reflects WHICH
+          // squad member the work was routed to. Absent (no squad configured)
+          // ⇒ omitted; the flat default dispatch is unchanged.
+          ...(req.routedAgentId
+            ? { metadata: { routedAgentId: req.routedAgentId } }
+            : {}),
         },
         squadAutopilotPrincipal,
       );

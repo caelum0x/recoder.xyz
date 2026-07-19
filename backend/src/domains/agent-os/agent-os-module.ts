@@ -151,6 +151,10 @@ export class AgentOsComposer implements AgentOsModule {
             beads: deps.beadsEngine ?? null,
             conductor: deps.conductorDispatch ?? null,
             squads: this.squads,
+            // The configured squad every dispatch routes through (leader-first /
+            // weighted). Absent ⇒ the autopilot falls back to the flat default
+            // dispatch (degrade-truthful pass-through in `routeThroughSquad`).
+            ...(cfg.squadId ? { squadId: cfg.squadId } : {}),
             logger: this.log,
             intervalMs: cfg.squadAutopilotIntervalMs,
             maxDispatchesPerTick: cfg.squadAutopilotMaxPerTick,
