@@ -110,7 +110,7 @@ describe('PATCH /api/projects/[projectId]', () => {
     // Attacker is a fully authenticated user.
     authAs(ATTACKER_ID);
     // The project already exists and is owned by the victim.
-    mockGetOwnerId.mockResolvedValue(VICTIM_ID);
+    mockGetOwnerId.mockResolvedValue({ exists: true, ownerId: VICTIM_ID });
     // The attacker does NOT own it (nor via any legacy counterpart id).
     mockGetWithFallback.mockResolvedValue(null);
 
@@ -127,9 +127,28 @@ describe('PATCH /api/projects/[projectId]', () => {
     expect(mockPatch).not.toHaveBeenCalled();
   });
 
+  it('blocks takeover of a present-but-unowned project (NULL/blank user_id row)', async () => {
+    // The row exists but carries no owner. A truthiness check on the owner id
+    // would treat this as a fresh create and let any caller re-own it; the guard
+    // must gate on `exists` and still require ownership (which resolves to none).
+    authAs(ATTACKER_ID);
+    mockGetOwnerId.mockResolvedValue({ exists: true, ownerId: null });
+    // No candidate id owns an unowned row, so the ownership lookup returns null.
+    mockGetWithFallback.mockResolvedValue(null);
+
+    const res = await PATCH(
+      buildPatchRequest('orphan-project', { files: { 'index.html': '<pwned>' } }),
+      params('orphan-project'),
+    );
+
+    expect(res.status).toBe(404);
+    expect(mockGetWithFallback).toHaveBeenCalled();
+    expect(mockPatch).not.toHaveBeenCalled();
+  });
+
   it('lets the legitimate owner patch their own existing project', async () => {
     authAs(VICTIM_ID);
-    mockGetOwnerId.mockResolvedValue(VICTIM_ID);
+    mockGetOwnerId.mockResolvedValue({ exists: true, ownerId: VICTIM_ID });
     mockGetWithFallback.mockResolvedValue({ projectId: 'victim-project', userId: VICTIM_ID } as any);
 
     const res = await PATCH(
@@ -149,7 +168,7 @@ describe('PATCH /api/projects/[projectId]', () => {
   it('allows creating a brand-new (non-existent) project', async () => {
     authAs(ATTACKER_ID);
     // No snapshot exists for this id yet — a genuine create, allowed to fall through.
-    mockGetOwnerId.mockResolvedValue(null);
+    mockGetOwnerId.mockResolvedValue({ exists: false, ownerId: null });
 
     const res = await PATCH(
       buildPatchRequest('fresh-project', { files: { 'index.html': 'new' } }),
@@ -169,7 +188,7 @@ describe('PATCH /api/projects/[projectId]', () => {
     // No web session; the caller authenticates via a valid internal signature.
     mockGetSession.mockResolvedValue(null as any);
     mockVerifyInternal.mockReturnValue({ ok: true } as any);
-    mockGetOwnerId.mockResolvedValue(null);
+    mockGetOwnerId.mockResolvedValue({ exists: false, ownerId: null });
 
     const res = await PATCH(
       buildPatchRequest(

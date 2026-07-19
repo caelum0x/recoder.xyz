@@ -117,11 +117,14 @@ export async function PATCH(
     // Ownership guard: the snapshot upsert conflicts on `project_id` alone, so
     // without this check any authenticated caller could PATCH an arbitrary
     // projectId and overwrite its files AND reassign ownership to themselves.
-    // If a snapshot already exists for this id, the caller MUST own it (directly
+    // If a snapshot already EXISTS for this id, the caller MUST own it (directly
     // or via a legacy cross-model counterpart). A non-existent id is a genuine
-    // create and is allowed to fall through.
-    const existingOwnerId = await getProjectSnapshotOwnerId(projectId);
-    if (existingOwnerId) {
+    // create and is allowed to fall through. We gate on `exists`, not on the
+    // truthiness of the owner id: a present-but-unowned row (NULL/blank user_id)
+    // must still be protected, otherwise it would be treated as a fresh create
+    // and taken over by an arbitrary caller.
+    const existing = await getProjectSnapshotOwnerId(projectId);
+    if (existing.exists) {
       const owned = await getProjectSnapshotWithLegacyFallback(
         projectId,
         effectiveUserId,
