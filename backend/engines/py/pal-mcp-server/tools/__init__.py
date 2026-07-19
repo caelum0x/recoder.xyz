@@ -2,6 +2,7 @@
 Tool implementations for PAL MCP Server
 """
 
+from .agentcomms import AgentCommsTool
 from .analyze import AnalyzeTool
 from .apilookup import LookupTool
 from .challenge import ChallengeTool
@@ -22,6 +23,7 @@ from .tracer import TracerTool
 from .version import VersionTool
 
 __all__ = [
+    "AgentCommsTool",
     "ThinkDeepTool",
     "CodeReviewTool",
     "DebugIssueTool",

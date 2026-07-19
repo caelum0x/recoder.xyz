@@ -37,6 +37,14 @@ import { EngineClientBase } from '../../ports/engine-client.port.js';
 import type { EngineCall } from '../../ports/engine-client.port.js';
 import type { SidecarSpec, SidecarSupervisorPort } from '../../ports/sidecar-supervisor.port.js';
 import { down, fail, ok, up, type EngineHealth, type InvokeResult } from '../../types.js';
+import { BrowserExtClient } from './browser-ext.client.js';
+import type {
+  BrowserExtPort,
+  ExtractStructuredInput,
+  FillFormInput,
+  RunTaskInput,
+  ScreenshotAnnotateInput,
+} from './browser-ext.client.js';
 
 /** The browser agent-loop ops the adapter maps onto the engine. */
 export type BrowserUseOp = 'navigate' | 'extract' | 'screenshot';
@@ -53,15 +61,23 @@ export interface BrowserUseAdapterDeps {
   readonly env?: BrowserEnv;
 }
 
-export class BrowserUseAdapter extends EngineClientBase<unknown, unknown> {
+export class BrowserUseAdapter extends EngineClientBase<unknown, unknown> implements BrowserExtPort {
   private readonly deps: BrowserUseAdapterDeps;
   private engine: BrowserEngine | null = null;
   /** The live URL the cached engine was built against (null = default driver). */
   private engineUrl: string | null = null;
+  /** The deep-op HTTP client (schema extract / task run / annotate / form-fill). */
+  private readonly extClient: BrowserExtClient;
 
   constructor(deps: BrowserUseAdapterDeps) {
     super('browser-use', 'sidecar');
     this.deps = deps;
+    // The deep ops speak to the SAME live sidecar URL the adapter resolves per
+    // call — re-resolved each time so a post-boot sidecar is picked up.
+    this.extClient = new BrowserExtClient({
+      resolveUrl: () => this.resolveLiveUrl(),
+      ...(this.deps.fetch ? { fetch: this.deps.fetch } : {}),
+    });
   }
 
   /** Idempotent: build the engine once and (best-effort) start an HTTP sidecar. */
@@ -133,6 +149,50 @@ export class BrowserUseAdapter extends EngineClientBase<unknown, unknown> {
       'sidecar',
       'no BROWSER_USE_URL sidecar and puppeteer not installed — browser agent unavailable',
     );
+  }
+
+  // --- DEEP browsing ops (sidecar-native; over the live Chrome/CDP) ---------
+  //
+  // Each is config-gated (a disabled engine is a truthful `disabled`) and then
+  // delegates to the deep-op HTTP client, which itself degrades to `unavailable`
+  // when no live sidecar URL is reachable. These have NO puppeteer fallback — the
+  // capabilities require the Python engine's live Chrome/CDP.
+
+  /** Schema-guided structured extraction over live CDP (no LLM). */
+  async extractStructured(input: ExtractStructuredInput): Promise<InvokeResult<unknown>> {
+    if (!isEngineEnabled(this.deps.config, 'browser-use')) {
+      return fail('browser-use engine disabled by config', 'disabled');
+    }
+    return this.extClient.extractStructured(input);
+  }
+
+  /** LLM-driven multi-step task run (`browser_use.Agent`). */
+  async runTask(input: RunTaskInput): Promise<InvokeResult<unknown>> {
+    if (!isEngineEnabled(this.deps.config, 'browser-use')) {
+      return fail('browser-use engine disabled by config', 'disabled');
+    }
+    return this.extClient.runTask(input);
+  }
+
+  /** Annotated screenshot: labeled boxes over the interactive elements. */
+  async screenshotAnnotate(input: ScreenshotAnnotateInput): Promise<InvokeResult<unknown>> {
+    if (!isEngineEnabled(this.deps.config, 'browser-use')) {
+      return fail('browser-use engine disabled by config', 'disabled');
+    }
+    return this.extClient.screenshotAnnotate(input);
+  }
+
+  /** Interactive form-fill over live CDP, with optional submit. */
+  async fillForm(input: FillFormInput): Promise<InvokeResult<unknown>> {
+    if (!isEngineEnabled(this.deps.config, 'browser-use')) {
+      return fail('browser-use engine disabled by config', 'disabled');
+    }
+    return this.extClient.fillForm(input);
+  }
+
+  /** The deep-op port the MCP binder registers `browser.*` handlers over. */
+  ext(): BrowserExtPort {
+    return this;
   }
 
   /**

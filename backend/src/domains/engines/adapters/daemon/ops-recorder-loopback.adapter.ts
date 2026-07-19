@@ -50,7 +50,29 @@ const OPS_RECORDER_ID: EngineId = 'ops-recorder';
 /** The header the FastAPI `require_api_key` dependency validates. */
 const API_KEY_HEADER = 'X-API-Key';
 
-/** A work-signals op payload — a signal id, an ingest body, or a batch. */
+/**
+ * A conjunctive (AND) filter set for the `signals.query` / `signals.stats` ops.
+ * Maps 1:1 onto the Python service's `/work-signals/query` query params (the
+ * adapter snake_cases `itemType` → `item_type` on the wire).
+ */
+export interface OpsRecorderSignalFilters {
+  /** Filter by source (`github` | `linear`). */
+  readonly source?: string;
+  /** Filter by item type (`pull_request` | `issue`). */
+  readonly itemType?: string;
+  /** Filter by priority (`high` | `medium` | `low`). */
+  readonly priority?: string;
+  /** Filter by resolution state. */
+  readonly resolved?: boolean;
+  /** Only signals detected at or after this ISO-8601 time. */
+  readonly since?: string;
+  /** Only signals detected at or before this ISO-8601 time. */
+  readonly until?: string;
+  /** Cap the number of results (`query` only; ignored by `stats`). */
+  readonly limit?: number;
+}
+
+/** A work-signals op payload — a signal id, an ingest body, a batch, or filters. */
 export interface OpsRecorderRequest {
   /** For `get` / `handoff` / `status`: the signal id. */
   readonly signalId?: string;
@@ -60,6 +82,8 @@ export interface OpsRecorderRequest {
   readonly signals?: readonly OpsRecorderIngestShape[];
   /** For `status`: mark resolved (true) or re-open (false). */
   readonly resolved?: boolean;
+  /** For `signals.query` / `signals.stats`: the filter set. */
+  readonly filters?: OpsRecorderSignalFilters;
 }
 
 const FORWARD_TIMEOUT_MS = 10_000;
@@ -117,6 +141,10 @@ export class OpsRecorderLoopbackAdapter extends DaemonEngineAdapter<OpsRecorderR
       case 'list':
       case 'query':
         return this.list(base, timeoutMs);
+      case 'signals.query':
+        return this.querySignals(base, input.filters, timeoutMs);
+      case 'signals.stats':
+        return this.signalStats(base, input.filters, timeoutMs);
       case 'get':
         return this.get(base, input.signalId, timeoutMs);
       case 'sync.github':
@@ -130,7 +158,7 @@ export class OpsRecorderLoopbackAdapter extends DaemonEngineAdapter<OpsRecorderR
       default:
         return fail(
           `ops-recorder: unknown op '${call.op}' ` +
-            `(expected ingest|ingest.batch|list|get|sync.github|sync.linear|handoff|status)`,
+            `(expected ingest|ingest.batch|list|signals.query|signals.stats|get|sync.github|sync.linear|handoff|status)`,
           'unknown_op',
         );
     }
@@ -180,6 +208,59 @@ export class OpsRecorderLoopbackAdapter extends DaemonEngineAdapter<OpsRecorderR
 
   private list(base: string, timeoutMs?: number): Promise<InvokeResult<unknown>> {
     return daemonFetch(`${base}/work-signals`, {
+      headers: this.headers(),
+      timeoutMs: timeoutMs ?? FORWARD_TIMEOUT_MS,
+    });
+  }
+
+  /**
+   * Serialise the filter set into the `/work-signals/query` query string,
+   * snake-casing `itemType` → `item_type` to match the Python route. Unset
+   * fields are omitted; the leading `?` is included only when non-empty. Empty
+   * / whitespace-only strings and non-finite `limit` are dropped so the wire
+   * carries only meaningful filters.
+   */
+  private buildSignalQuery(filters?: OpsRecorderSignalFilters): string {
+    if (!filters) return '';
+    const params = new URLSearchParams();
+    const put = (key: string, value?: string) => {
+      const trimmed = value?.trim();
+      if (trimmed) params.set(key, trimmed);
+    };
+    put('source', filters.source);
+    put('item_type', filters.itemType);
+    put('priority', filters.priority);
+    put('since', filters.since);
+    put('until', filters.until);
+    if (typeof filters.resolved === 'boolean') params.set('resolved', String(filters.resolved));
+    if (typeof filters.limit === 'number' && Number.isFinite(filters.limit)) {
+      params.set('limit', String(Math.trunc(filters.limit)));
+    }
+    const qs = params.toString();
+    return qs ? `?${qs}` : '';
+  }
+
+  /** Filtered, sorted view over recorded signals (`GET /work-signals/query`). */
+  private querySignals(
+    base: string,
+    filters: OpsRecorderSignalFilters | undefined,
+    timeoutMs?: number,
+  ): Promise<InvokeResult<unknown>> {
+    return daemonFetch(`${base}/work-signals/query${this.buildSignalQuery(filters)}`, {
+      headers: this.headers(),
+      timeoutMs: timeoutMs ?? FORWARD_TIMEOUT_MS,
+    });
+  }
+
+  /** Aggregation roll-up over the (optionally filtered) signal set (`GET /work-signals/stats`). */
+  private signalStats(
+    base: string,
+    filters: OpsRecorderSignalFilters | undefined,
+    timeoutMs?: number,
+  ): Promise<InvokeResult<unknown>> {
+    // `stats` ignores `limit`; drop it so it never leaks onto the wire.
+    const scoped = filters ? { ...filters, limit: undefined } : undefined;
+    return daemonFetch(`${base}/work-signals/stats${this.buildSignalQuery(scoped)}`, {
       headers: this.headers(),
       timeoutMs: timeoutMs ?? FORWARD_TIMEOUT_MS,
     });

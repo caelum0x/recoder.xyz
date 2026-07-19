@@ -11,9 +11,10 @@ Mount this router in main.py:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from datetime import datetime
+from typing import Any, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from api.ingest import WorkSignalIngest, ingest_to_signal
@@ -23,6 +24,12 @@ from handoff.handoffPromptGenerator import generate_handoff
 from integrations.githubClient import GitHubClient
 from integrations.linearClient import LinearClient
 from normalizers import githubNormalizer, linearNormalizer
+from query.signalQuery import (
+    SignalAggregation,
+    SignalFilters,
+    aggregate_signals,
+    filter_signals,
+)
 from storage.workSignalStore import store
 from models.workSignal import WorkSignal
 
@@ -173,6 +180,105 @@ async def _sync_linear() -> None:
 async def get_all_signals() -> list[WorkSignal]:
     """Return all detected WorkSignals, sorted by priority then detection time."""
     return await store.get_all()
+
+
+def _build_filters(
+    source: Optional[str],
+    item_type: Optional[str],
+    priority: Optional[str],
+    resolved: Optional[bool],
+    since: Optional[datetime],
+    until: Optional[datetime],
+    limit: Optional[int],
+) -> SignalFilters:
+    """Assemble a validated ``SignalFilters`` from raw query params.
+
+    ``source`` / ``item_type`` / ``priority`` are validated against the known
+    vocabularies so a typo (``?source=gihtub``) fails fast with 422 instead of
+    silently returning an empty set the caller might read as "nothing stuck".
+    A negative ``limit`` is rejected for the same reason.
+    """
+    if source is not None and source not in {"github", "linear"}:
+        raise HTTPException(status_code=422, detail="source must be 'github' or 'linear'.")
+    if item_type is not None and item_type not in {"pull_request", "issue"}:
+        raise HTTPException(
+            status_code=422, detail="item_type must be 'pull_request' or 'issue'."
+        )
+    if priority is not None and priority not in {"high", "medium", "low"}:
+        raise HTTPException(
+            status_code=422, detail="priority must be 'high', 'medium', or 'low'."
+        )
+    if limit is not None and limit < 0:
+        raise HTTPException(status_code=422, detail="limit must be >= 0.")
+    return SignalFilters(
+        source=source,
+        item_type=item_type,
+        priority=priority,
+        resolved=resolved,
+        since=since,
+        until=until,
+        limit=limit,
+    )
+
+
+# NOTE: `/query` and `/stats` are declared BEFORE `/{signal_id}` so the static
+# paths win over the dynamic segment (otherwise `signal_id="query"` would swallow
+# them). Keep any new static sub-paths above the `/{signal_id}` route.
+
+
+@router.get("/query", response_model=list[WorkSignal])
+async def query_signals(
+    source: Optional[str] = Query(None, description="Filter by source: github | linear."),
+    item_type: Optional[str] = Query(
+        None, description="Filter by item type: pull_request | issue."
+    ),
+    priority: Optional[str] = Query(None, description="Filter by priority: high | medium | low."),
+    resolved: Optional[bool] = Query(None, description="Filter by resolution state."),
+    since: Optional[datetime] = Query(
+        None, description="Only signals detected at or after this ISO-8601 time."
+    ),
+    until: Optional[datetime] = Query(
+        None, description="Only signals detected at or before this ISO-8601 time."
+    ),
+    limit: Optional[int] = Query(None, description="Cap the number of results (>= 0)."),
+) -> list[WorkSignal]:
+    """Filtered, sorted view over the recorded signals.
+
+    Applies the conjunctive (AND) filters to every stored signal, returns the
+    matches in the canonical (priority, detection-time) order, and truncates to
+    ``limit`` when given. An empty result is a truthful "nothing matched".
+    """
+    filters = _build_filters(source, item_type, priority, resolved, since, until, limit)
+    all_signals = await store.get_all()
+    return filter_signals(all_signals, filters)
+
+
+@router.get("/stats", response_model=SignalAggregation)
+async def signal_stats(
+    source: Optional[str] = Query(None, description="Filter by source: github | linear."),
+    item_type: Optional[str] = Query(
+        None, description="Filter by item type: pull_request | issue."
+    ),
+    priority: Optional[str] = Query(None, description="Filter by priority: high | medium | low."),
+    resolved: Optional[bool] = Query(None, description="Filter by resolution state."),
+    since: Optional[datetime] = Query(
+        None, description="Only signals detected at or after this ISO-8601 time."
+    ),
+    until: Optional[datetime] = Query(
+        None, description="Only signals detected at or before this ISO-8601 time."
+    ),
+) -> SignalAggregation:
+    """Aggregate roll-up (counts by source/type/priority/status + time window).
+
+    Accepts the same filters as ``/query`` (minus ``limit``) so a caller can
+    scope the aggregation — e.g. "how many stuck GitHub PRs since Monday". The
+    aggregation runs over the FILTERED set, so it stays consistent with the
+    list ``/query`` would return for the same filters.
+    """
+    filters = _build_filters(source, item_type, priority, resolved, since, until, None)
+    all_signals = await store.get_all()
+    scoped = filter_signals(all_signals, filters)
+    return aggregate_signals(scoped)
 
 
 @router.get("/{signal_id}", response_model=WorkSignal)

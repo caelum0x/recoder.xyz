@@ -14,6 +14,13 @@
  * `GET /memories/{id}/history`, `PUT /memories/{id}`. So BOTH real surfaces are
  * exercised: the in-proc OSS store and the REST sidecar.
  *
+ * The DEEPER insight ops — `recall` (filtered recall by scope/time/metadata),
+ * `relations` (an entity co-occurrence graph read), and `stats` (aggregate
+ * counts) — are served ONLY by the mem0 FastAPI sidecar's `/insights/*` surface
+ * (`POST /insights/recall`, `GET /insights/graph`, `GET /insights/stats`) since
+ * they aggregate over the whole store and the in-proc client does not expose
+ * them. With no sidecar configured they degrade truthfully to `unavailable`.
+ *
  * DEGRADE-SAFE LAW: no `MEM0_API_KEY` + no self-hostable LLM/embedder and no
  * sidecar URL ⇒ `health()` is a truthful `down` and every `invoke` returns
  * `{ ok:false, reason }`. It NEVER fabricates a memory and NEVER throws the seam.
@@ -41,7 +48,19 @@ import type { SidecarSpec, SidecarSupervisorPort } from '../../ports/sidecar-sup
 import { down, fail, ok, up, type EngineHealth, type InvokeResult } from '../../types.js';
 
 /** The mem0 engine ops the adapter maps onto the real surfaces. */
-export type Mem0Op = 'add' | 'search' | 'getAll' | 'get' | 'history' | 'update' | 'delete' | 'health';
+export type Mem0Op =
+  | 'add'
+  | 'search'
+  | 'getAll'
+  | 'get'
+  | 'history'
+  | 'update'
+  | 'delete'
+  | 'health'
+  // --- deep insight ops (served by the mem0 FastAPI `/insights/*` surface) ---
+  | 'recall'
+  | 'relations'
+  | 'stats';
 
 /** The bound in-proc mem0-client functions (injectable so tests need no Qdrant). */
 export interface Mem0ClientFns {
@@ -134,6 +153,12 @@ export class Mem0Adapter extends EngineClientBase<unknown, unknown> {
           return await this.opRestHistory(input);
         case 'update':
           return await this.opRestUpdate(input);
+        case 'recall':
+          return await this.opRestRecall(input);
+        case 'relations':
+          return await this.opRestRelations(input);
+        case 'stats':
+          return await this.opRestStats(input);
         case 'health': {
           const h = await this.client.health();
           return ok(h);
@@ -231,6 +256,68 @@ export class Mem0Adapter extends EngineClientBase<unknown, unknown> {
     const text = typeof input.text === 'string' ? input.text : typeof input.memory === 'string' ? input.memory : null;
     if (text === null) return fail('mem0 update requires a text/memory field', 'bad_input');
     return this.rest('PUT', `/memories/${encodeURIComponent(id)}`, { text });
+  }
+
+  // --- deep insight ops (mem0 FastAPI `/insights/*` — aggregate/filter surface) ---
+
+  /**
+   * Filtered recall by scope (`userId`/`agentId`/`runId`), an optional created_at
+   * window (`createdAfter`/`createdBefore`), metadata equality filters, and an
+   * optional semantic `query`. Requires at least one entity id (the store rejects
+   * an unscoped list). Maps to `POST /insights/recall`.
+   */
+  private async opRestRecall(input: Record<string, unknown>): Promise<InvokeResult<unknown>> {
+    const body: Record<string, unknown> = {};
+    const userId = trimStr(input.userId);
+    const agentId = trimStr(input.agentId);
+    const runId = trimStr(input.runId);
+    if (userId) body.user_id = userId;
+    if (agentId) body.agent_id = agentId;
+    if (runId) body.run_id = runId;
+    if (!userId && !agentId && !runId) {
+      return fail('mem0 recall requires at least one of userId/agentId/runId', 'bad_input');
+    }
+    const query = trimStr(input.query);
+    if (query) body.query = query;
+    const createdAfter = trimStr(input.createdAfter);
+    const createdBefore = trimStr(input.createdBefore);
+    if (createdAfter) body.created_after = createdAfter;
+    if (createdBefore) body.created_before = createdBefore;
+    if (input.metadata && typeof input.metadata === 'object') body.metadata = input.metadata;
+    if (input.limit !== undefined) body.limit = numberOr(input.limit, 50);
+    return this.rest('POST', '/insights/recall', body);
+  }
+
+  /**
+   * Entity co-occurrence relations graph. Optional scope (`userId`/`agentId`/
+   * `runId`) restricts aggregation; `focus`/`entityType` center a neighborhood.
+   * Maps to `GET /insights/graph`.
+   */
+  private async opRestRelations(input: Record<string, unknown>): Promise<InvokeResult<unknown>> {
+    const params = new URLSearchParams();
+    appendIf(params, 'user_id', trimStr(input.userId));
+    appendIf(params, 'agent_id', trimStr(input.agentId));
+    appendIf(params, 'run_id', trimStr(input.runId));
+    appendIf(params, 'focus', trimStr(input.focus));
+    const entityType = trimStr(input.entityType);
+    if (entityType === 'user' || entityType === 'agent' || entityType === 'run') {
+      params.set('entity_type', entityType);
+    }
+    if (input.limit !== undefined) params.set('limit', String(numberOr(input.limit, 10000, 10000)));
+    return this.rest('GET', withQuery('/insights/graph', params));
+  }
+
+  /**
+   * Aggregate memory stats (totals, per-entity-type counts, created_at span).
+   * Optional scope (`userId`/`agentId`/`runId`) restricts the aggregation to one
+   * tenant. Maps to `GET /insights/stats`.
+   */
+  private async opRestStats(input: Record<string, unknown>): Promise<InvokeResult<unknown>> {
+    const params = new URLSearchParams();
+    appendIf(params, 'user_id', trimStr(input.userId));
+    appendIf(params, 'agent_id', trimStr(input.agentId));
+    appendIf(params, 'run_id', trimStr(input.runId));
+    return this.rest('GET', withQuery('/insights/stats', params));
   }
 
   private async resolveRestBase(): Promise<string | null> {
@@ -344,9 +431,25 @@ function normalizeScope(input: Record<string, unknown>): Mem0Scope | null {
   return scope;
 }
 
-function numberOr(value: unknown, fallback: number): number {
+function numberOr(value: unknown, fallback: number, max = 100): number {
   const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 100) : fallback;
+  return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), max) : fallback;
+}
+
+/** Trim a value to a non-empty string, or null. */
+function trimStr(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+/** Set a query param only when the value is a non-empty string. */
+function appendIf(params: URLSearchParams, key: string, value: string | null): void {
+  if (value) params.set(key, value);
+}
+
+/** Append an encoded query string to a path (no `?` when empty). */
+function withQuery(path: string, params: URLSearchParams): string {
+  const qs = params.toString();
+  return qs ? `${path}?${qs}` : path;
 }
 
 function trimSlash(url: string): string {

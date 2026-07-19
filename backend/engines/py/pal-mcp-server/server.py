@@ -48,6 +48,7 @@ from config import (  # noqa: E402
     __version__,
 )
 from tools import (  # noqa: E402
+    AgentCommsTool,
     AnalyzeTool,
     ChallengeTool,
     ChatTool,
@@ -259,6 +260,7 @@ def filter_disabled_tools(all_tools: dict[str, Any]) -> dict[str, Any]:
 # Each tool provides specialized functionality for different development tasks
 # Tools are instantiated once and reused across requests (stateless design)
 TOOLS = {
+    "agentcomms": AgentCommsTool(),  # Single-call multi-model orchestration (route/consensus/debate) + threading
     "chat": ChatTool(),  # Interactive development chat and brainstorming
     "clink": CLinkTool(),  # Bridge requests to configured AI CLIs
     "thinkdeep": ThinkDeepTool(),  # Step-by-step deep thinking workflow with expert analysis

@@ -20,10 +20,20 @@ export {
   type ColbertRerankRequest,
   type ColbertSearchRequest,
   type ColbertRerankResult,
+  type ColbertBatchRerankItem,
+  type ColbertBatchRerankRequest,
+  type ColbertBatchRerankResult,
+  type ColbertBatchRerankItemResult,
+  type ColbertCreateCollectionRequest,
+  type ColbertCollectionNameRequest,
+  type ColbertListCollectionsRequest,
+  type ColbertCollectionSummary,
+  type ColbertCollectionsList,
 } from './colbert-loopback.adapter.js';
 export {
   OpsRecorderLoopbackAdapter,
   type OpsRecorderRequest,
+  type OpsRecorderSignalFilters,
 } from './ops-recorder-loopback.adapter.js';
 export {
   MulticaLoopbackAdapter,
@@ -38,10 +48,20 @@ export {
   COLBERT_MCP_SERVER_ID,
 } from './mcp/colbert-mcp.js';
 export {
+  colbertIndexMcpServer,
+  buildColbertIndexMcpTools,
+  COLBERT_INDEX_MCP_SERVER_ID,
+} from './mcp/colbert-index-mcp.js';
+export {
   opsRecorderMcpServer,
   buildOpsRecorderMcpTools,
   OPS_RECORDER_MCP_SERVER_ID,
 } from './mcp/ops-recorder-mcp.js';
+export {
+  opsRecorderSignalsMcpServer,
+  buildOpsRecorderSignalsMcpTools,
+  OPS_RECORDER_SIGNALS_MCP_SERVER_ID,
+} from './mcp/ops-recorder-signals-mcp.js';
 export {
   multicaMcpServer,
   buildMulticaMcpTools,
