@@ -306,6 +306,33 @@ export async function getProjectSnapshot(projectIdOrUrlId: string, userId: strin
   return rows.length > 0 ? mapSnapshotRow(rows[0]) : null;
 }
 
+/**
+ * Return the current owner `user_id` of the snapshot keyed by `projectId`
+ * (or its `urlId`), ignoring the caller — or `null` when no row exists yet.
+ *
+ * This is deliberately NOT user-scoped: it exists so write paths can tell the
+ * difference between "this project does not exist yet" (safe to create) and
+ * "this project exists but belongs to someone else" (must be rejected). The
+ * snapshot upsert conflicts on `project_id` alone, so without this guard a
+ * caller could clobber and re-own an arbitrary existing project by id.
+ */
+export async function getProjectSnapshotOwnerId(projectIdOrUrlId: string): Promise<string | null> {
+  await ensureProjectSnapshotsTable();
+
+  const rows = await prisma.$queryRawUnsafe(
+    `
+      SELECT user_id
+      FROM project_snapshots
+      WHERE (project_id = $1 OR url_id = $1)
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `,
+    projectIdOrUrlId,
+  ) as Array<{ user_id: string }>;
+
+  return rows.length > 0 ? rows[0].user_id : null;
+}
+
 export async function userOwnsProjectSnapshot(userId: string, projectIdOrUrlId: string): Promise<boolean> {
   await ensureProjectSnapshotsTable();
 

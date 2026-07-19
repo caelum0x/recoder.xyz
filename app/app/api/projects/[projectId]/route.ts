@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 import { ensureAppUserFromAuthUser } from '@/lib/auth-helpers';
 import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
-import { getProjectMessageCount, getProjectMessages, getProjectSnapshotWithLegacyFallback, patchProjectSnapshotFiles } from '@/lib/project-snapshots';
+import { getProjectMessageCount, getProjectMessages, getProjectSnapshotOwnerId, getProjectSnapshotWithLegacyFallback, patchProjectSnapshotFiles } from '@/lib/project-snapshots';
 
 async function resolveEffectiveUserId(request: NextRequest): Promise<{ effectiveUserId: string | null; fallbackUserId: string | null }> {
   const hasInternalHeaders = Boolean(
@@ -104,7 +104,7 @@ export async function PATCH(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const { effectiveUserId } = await resolveEffectiveUserId(request);
+    const { effectiveUserId, fallbackUserId } = await resolveEffectiveUserId(request);
     if (!effectiveUserId) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
@@ -112,6 +112,25 @@ export async function PATCH(
     const { projectId } = await params;
     if (!projectId) {
       return NextResponse.json({ success: false, error: 'projectId is required' }, { status: 400 });
+    }
+
+    // Ownership guard: the snapshot upsert conflicts on `project_id` alone, so
+    // without this check any authenticated caller could PATCH an arbitrary
+    // projectId and overwrite its files AND reassign ownership to themselves.
+    // If a snapshot already exists for this id, the caller MUST own it (directly
+    // or via a legacy cross-model counterpart). A non-existent id is a genuine
+    // create and is allowed to fall through.
+    const existingOwnerId = await getProjectSnapshotOwnerId(projectId);
+    if (existingOwnerId) {
+      const owned = await getProjectSnapshotWithLegacyFallback(
+        projectId,
+        effectiveUserId,
+        fallbackUserId ? [fallbackUserId] : [],
+      );
+      if (!owned) {
+        // Do not disclose existence of another user's project.
+        return NextResponse.json({ success: false, error: 'Project not found' }, { status: 404 });
+      }
     }
 
     const body = await request.json().catch(() => null) as {
