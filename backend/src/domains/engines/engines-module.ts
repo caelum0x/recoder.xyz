@@ -39,6 +39,7 @@ import { PgEngineHealthRepository } from './adapters/engine-health.repository.js
 import {
   createNapiEngineClients,
   registerNapiEngineTools,
+  TensorzeroNapiAdapter,
   type NapiEngineClients,
   type NapiEngineRegistration,
 } from './adapters/napi/index.js';
@@ -75,6 +76,7 @@ import { InteropHostBundle } from './mcp/mcp-host.js';
 import { buildEnginesMcpTools, enginesMcpServer } from './mcp/engines-engine.js';
 import { buildMem0MemoryMcpTools, mem0MemoryMcpServer } from './mcp/mem0-memory.mcp.js';
 import { browserExtEngineBinder } from './mcp/browser-ext-engine.js';
+import { tensorzeroInferenceEngineBinder } from './mcp/tensorzero-inference-engine.js';
 import {
   registerModuleToolsOnHost,
   callerFromInput,
@@ -225,6 +227,12 @@ export class EnginesComposer implements EnginesModule {
         // fill_form) over the DEEP browser-use capability surface (`adapter.ext()`).
         browserExtEngineBinder(
           (this.adapters.get('browser-use') as BrowserUseAdapter | undefined)?.ext() ?? null,
+        ),
+        // `recoder.tensorzero` (model_catalog/batch_inference) over the DEEP
+        // TensorZero inference surface (`adapter.inference()`) — the two NEW
+        // capabilities on top of the existing single-inference napi tools.
+        tensorzeroInferenceEngineBinder(
+          (this.adapters.get('tensorzero') as TensorzeroNapiAdapter | undefined)?.inference() ?? null,
         ),
         palPlanEngineBinder(),
         // `recoder.pal-comms` (route/consensus/debate/models) over the pal adapter.

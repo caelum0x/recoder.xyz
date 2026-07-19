@@ -141,6 +141,57 @@ describe('OpenfangNapiAdapter (degrade-safe)', () => {
     if (!result.ok) expect(result.code).toBe('BAD_INPUT');
   });
 
+  it('introspectHands composes listHandDefinitions + listActiveHands over the existing surface', async () => {
+    const engine = stubEngine({
+      listHandDefinitions: () =>
+        JSON.stringify({ ok: true, hands: [{ id: 'clip', name: 'Clip', description: 'x', tools: ['fs.read'] }] }),
+      listActiveHands: () =>
+        JSON.stringify({ ok: true, hands: [{ instance_id: 'i1', hand_id: 'clip', status: 'Active' }] }),
+    });
+    const result = await present(engine).invoke({ op: 'introspectHands', input: {} });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toMatchObject({
+        ok: true,
+        totals: { definitions: 1, activeInstances: 1, distinctTools: 1 },
+      });
+    }
+  });
+
+  it('agentRunStatus folds the per-agent reads and requires agentId', async () => {
+    const engine = stubEngine({
+      listAgents: () => JSON.stringify({ ok: true, agents: [{ id: 'agent_1', name: 'demo', state: 'idle' }] }),
+      contextReport: () => JSON.stringify({ ok: true, report: { tokens: 5 } }),
+      sessionUsageCost: () => JSON.stringify({ ok: true, input_tokens: 1, output_tokens: 2, cost: 0.1 }),
+      listAgentSessions: () => JSON.stringify({ ok: true, sessions: [{ id: 's1' }] }),
+    });
+    const adapter = present(engine);
+
+    const missing = await adapter.invoke({ op: 'agentRunStatus', input: {} });
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.code).toBe('BAD_INPUT');
+
+    const result = await adapter.invoke({ op: 'agentRunStatus', input: { agentId: 'agent_1' } });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toMatchObject({
+        ok: true,
+        agentId: 'agent_1',
+        name: 'demo',
+        state: 'idle',
+        usage: { available: true, cost: 0.1 },
+        sessions: { available: true, count: 1 },
+      });
+    }
+  });
+
+  it('a composite op degrades to ENGINE_DOWN when the .node is absent', async () => {
+    const adapter = new OpenfangNapiAdapter(fakeLoader(null, null), log);
+    const result = await adapter.invoke({ op: 'introspectHands', input: {} });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('ENGINE_DOWN');
+  });
+
   it('reports disabled as down without binding', async () => {
     const adapter = new OpenfangNapiAdapter(fakeLoader(null, '/tmp/x.node'), log, { enabled: false });
     const health = await adapter.health();

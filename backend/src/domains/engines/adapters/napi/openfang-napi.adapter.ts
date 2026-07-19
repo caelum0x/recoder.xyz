@@ -45,6 +45,12 @@ import {
   strArr,
   type NapiArgs,
 } from './napi-util.js';
+import {
+  composeAgentRunStatus,
+  composeHandIntrospection,
+  type AgentRunStatus,
+  type HandIntrospection,
+} from './openfang-introspect.js';
 
 /** The napi load spec for the openfang addon (resolved via the injected loader). */
 const OPENFANG_SPEC: NapiLoadSpec<OpenfangNativeAddon> = {
@@ -135,12 +141,20 @@ const ENGINE_OPS: Readonly<Record<string, (engine: OpenfangEngineInstance, args:
   memoryList: (e, a) => e.memoryList(str(a, 'agentId')),
 };
 
-/** Every op name this adapter accepts (engine methods + addon reads + runtime driver). */
+/**
+ * Composed agent-runtime introspection ops. Unlike {@link ENGINE_OPS} (one native
+ * method each), these call SEVERAL existing napi reads and fold them into a richer
+ * view — delivered entirely over the existing surface (no new native export).
+ */
+export const OPENFANG_COMPOSITE_OPS: readonly string[] = ['introspectHands', 'agentRunStatus'];
+
+/** Every op name this adapter accepts (engine methods + addon reads + runtime driver + composites). */
 export const OPENFANG_OPS: readonly string[] = [
   'ping',
   'nativeVersion',
   'bundledHands',
   'launchRun',
+  ...OPENFANG_COMPOSITE_OPS,
   ...Object.keys(ENGINE_OPS),
 ];
 
@@ -207,6 +221,10 @@ export class OpenfangNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
 
     // Conductor runtime driver: one in-process agent turn with honest RunEvents.
     if (op === 'launchRun') return this.launchRun(input);
+
+    // Composed agent-runtime introspection (several native reads folded into one).
+    if (op === 'introspectHands') return this.introspectHands();
+    if (op === 'agentRunStatus') return this.agentRunStatus(input);
 
     const fn = ENGINE_OPS[op];
     if (!fn) return fail(`unknown openfang op "${op}"`, 'UNKNOWN_OP');
@@ -303,6 +321,48 @@ export class OpenfangNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
       ...(this.options.now ? { now: this.options.now } : {}),
     });
     return ok(result);
+  }
+
+  /**
+   * Call one engine read, returning its parsed reply or a truthful `{ok:false}`
+   * marker when the napi boundary throws — so a composite never aborts on a single
+   * failed sub-read.
+   */
+  private callRead(engine: OpenfangEngineInstance, read: (e: OpenfangEngineInstance) => string): unknown {
+    try {
+      return parseJson(read(engine));
+    } catch (err) {
+      return { ok: false, error: msg(err) };
+    }
+  }
+
+  /**
+   * Composed hand+tool introspection: join `listHandDefinitions` (tools/skills/MCP)
+   * with `listActiveHands` (live instances) into one view. Requires a booted kernel.
+   */
+  private introspectHands(): InvokeResult<HandIntrospection> {
+    const engine = this.ensureEngine();
+    if (!engine) return fail(KERNEL_DOWN, 'ENGINE_DOWN');
+    const defs = this.callRead(engine, (e) => e.listHandDefinitions());
+    const active = this.callRead(engine, (e) => e.listActiveHands());
+    return ok(composeHandIntrospection(defs, active));
+  }
+
+  /**
+   * Composed run-status snapshot for one agent: fold `listAgents` (state) +
+   * `contextReport` + `sessionUsageCost` + `listAgentSessions`, degrading each
+   * per-agent read independently.
+   */
+  private agentRunStatus(input: NapiArgs): InvokeResult<AgentRunStatus> {
+    const agentId = str(input, 'agentId');
+    if (!agentId) return fail('agentRunStatus requires agentId', 'BAD_INPUT');
+    const engine = this.ensureEngine();
+    if (!engine) return fail(KERNEL_DOWN, 'ENGINE_DOWN');
+    const agents = this.callRead(engine, (e) => e.listAgents());
+    const context = this.callRead(engine, (e) => e.contextReport(agentId));
+    const usage = this.callRead(engine, (e) => e.sessionUsageCost(agentId));
+    const sessions = this.callRead(engine, (e) => e.listAgentSessions(agentId));
+    return ok(composeAgentRunStatus(agentId, agents, context, usage, sessions));
   }
 }
 

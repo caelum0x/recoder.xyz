@@ -24,6 +24,7 @@ import { ok, up, type InvokeResult } from '../../types.js';
 import type { NapiArgs } from './napi-util.js';
 import {
   buildOpenfangMcpTools,
+  buildGovernanceKernelMcpTools,
   createNapiEngineClients,
   napiEngineClientList,
   registerNapiEngineTools,
@@ -102,6 +103,14 @@ describe('napi engine group composer', () => {
     // Every reported tool has a bound in-proc handler.
     for (const key of result.tools) expect(host.handlers.has(key)).toBe(true);
     expect(result.tools).toContain('governance-kernel:governance.status');
+    // The agent-runtime introspection tools are advertised on the openfang server
+    // AND bound in-proc (no rebuild — composed over the existing napi surface).
+    const openfang = host.servers.find((s) => s.serverId === 'openfang')!;
+    expect(openfang.toolNames).toEqual(
+      expect.arrayContaining(['openfang.introspect_hands', 'openfang.agent_run_status']),
+    );
+    expect(result.tools).toContain('openfang:openfang.introspect_hands');
+    expect(result.tools).toContain('openfang:openfang.agent_run_status');
   });
 
   it('a bound in-proc handler returns an McpToolResult wrapping the live engine value', async () => {
@@ -157,6 +166,8 @@ describe('openfang agentId subject binding (SECURITY)', () => {
     { tool: 'openfang.memory_set', args: { agentId: 'victim', key: 'k', value: 'v' } },
     { tool: 'openfang.memory_list', args: { agentId: 'victim' } },
     { tool: 'openfang.run_agent', args: { agentId: 'victim', message: 'hi' } },
+    // Composed agent-runtime introspection tool — agentId is a tenant subject too.
+    { tool: 'openfang.agent_run_status', args: { agentId: 'victim' } },
   ];
 
   for (const { tool, args } of subjectTools) {
@@ -170,6 +181,24 @@ describe('openfang agentId subject binding (SECURITY)', () => {
       expect(spy.calls).toHaveLength(0);
     });
   }
+
+  it('openfang.introspect_hands is a GLOBAL read — no agentId subject binding', async () => {
+    const spy = spyOpenfang();
+    const tool = buildOpenfangMcpTools(spy.engine).find((t) => t.name === 'openfang.introspect_hands');
+    expect(tool).toBeDefined();
+    // No caller identity required; args pass through untouched to the composite op.
+    await tool!.handler({}, undefined);
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0]).toMatchObject({ op: 'introspectHands' });
+  });
+
+  it('openfang.agent_run_status binds the caller subject (agentId defaults to caller)', async () => {
+    const spy = spyOpenfang();
+    const tool = buildOpenfangMcpTools(spy.engine).find((t) => t.name === 'openfang.agent_run_status');
+    expect(tool).toBeDefined();
+    await tool!.handler({}, alice);
+    expect(spy.calls[0]).toMatchObject({ op: 'agentRunStatus', input: { agentId: 'alice' } });
+  });
 
   it('the generic openfang.invoke passthrough cannot bypass the binding', async () => {
     const spy = spyOpenfang();
@@ -238,5 +267,83 @@ describe('openfang agentId subject binding (SECURITY)', () => {
     // Truthful error surfaced (never throws across the seam); victim never reached invoke.
     expect(result.content).toMatchObject({ error: expect.stringMatching(/own agent/) });
     expect(spy.calls).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SECURITY: governance actorId subject binding (cross-tenant policy-posture read)
+// ---------------------------------------------------------------------------
+
+/** A spy governance client that records the `actorId` that reaches the engine seam. */
+function spyGovernance(): {
+  engine: EngineClientPort<NapiArgs, unknown>;
+  calls: Array<{ op: string; input: NapiArgs }>;
+} {
+  const calls: Array<{ op: string; input: NapiArgs }> = [];
+  const engine: EngineClientPort<NapiArgs, unknown> = {
+    id: 'governance',
+    transport: 'napi',
+    start: async () => {},
+    stop: async () => {},
+    invoke: async (call: EngineCall<NapiArgs>): Promise<InvokeResult<unknown>> => {
+      calls.push({ op: call.op, input: call.input });
+      return ok({ echoed: call.input });
+    },
+    health: async () => up('governance', 'napi'),
+  };
+  return { engine, calls };
+}
+
+describe('governance actorId subject binding (SECURITY)', () => {
+  const alice: McpToolCaller = { userId: 'alice', scopes: ['read', 'write'] };
+
+  // Every governance tool that names an actor subject via `args.actorId`.
+  const subjectTools: Array<{ tool: string; args: NapiArgs }> = [
+    { tool: 'governance.decide', args: { actorId: 'victim', action: 'tool.call', target: {} } },
+    { tool: 'governance.explain_decision', args: { actorId: 'victim', action: 'tool.call', target: {} } },
+  ];
+
+  for (const { tool, args } of subjectTools) {
+    it(`${tool}: a non-privileged caller cannot evaluate a decision for another actor — victim id never reaches the seam`, async () => {
+      const spy = spyGovernance();
+      const reg = buildGovernanceKernelMcpTools(spy.engine).find((t) => t.name === tool);
+      expect(reg).toBeDefined();
+      await expect(reg!.handler(args, alice)).rejects.toThrow(/own actor/);
+      expect(spy.calls).toHaveLength(0);
+    });
+  }
+
+  it('governance.explain_decision binds the caller subject (actorId defaults to caller)', async () => {
+    const spy = spyGovernance();
+    const tool = buildGovernanceKernelMcpTools(spy.engine).find((t) => t.name === 'governance.explain_decision');
+    expect(tool).toBeDefined();
+    await tool!.handler({ action: 'tool.call', target: {} }, alice);
+    expect(spy.calls[0]).toMatchObject({ op: 'explain', input: { actorId: 'alice' } });
+  });
+
+  it('governance.status is a GLOBAL read — no actorId subject binding, no caller required', async () => {
+    const spy = spyGovernance();
+    const tool = buildGovernanceKernelMcpTools(spy.engine).find((t) => t.name === 'governance.status');
+    expect(tool).toBeDefined();
+    await tool!.handler({}, undefined);
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0]).toMatchObject({ op: 'status' });
+  });
+
+  it('refuses (AUTH_REQUIRED) when a subject tool has no authorized caller', async () => {
+    const spy = spyGovernance();
+    const explain = buildGovernanceKernelMcpTools(spy.engine).find((t) => t.name === 'governance.explain_decision');
+    await expect(explain!.handler({ actorId: 'alice', action: 'tool.call', target: {} }, undefined)).rejects.toThrow(
+      /no authorized caller/,
+    );
+    expect(spy.calls).toHaveLength(0);
+  });
+
+  it('an admin/internal caller MAY evaluate a decision for an arbitrary actor', async () => {
+    const spy = spyGovernance();
+    const explain = buildGovernanceKernelMcpTools(spy.engine).find((t) => t.name === 'governance.explain_decision');
+    const svc: McpToolCaller = { userId: 'svc', scopes: ['internal'] };
+    await explain!.handler({ actorId: 'tenant_actor', action: 'tool.call', target: {} }, svc);
+    expect(spy.calls[0]?.input).toMatchObject({ actorId: 'tenant_actor' });
   });
 });

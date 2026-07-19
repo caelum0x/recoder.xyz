@@ -27,6 +27,7 @@ import {
 } from '@recoder/agent-mcp';
 import type { McpServerRegistration } from '@recoder/interop';
 import { browserExtMcpServer } from './browser-ext-engine.js';
+import { tensorzeroInferenceMcpServer } from './tensorzero-inference-engine.js';
 import { recoderPalCommsServer } from '../adapters/sidecar/index.js';
 
 /**
@@ -69,6 +70,8 @@ export const IN_PROC_SERVERS: readonly McpServerRegistration[] = [
   notifyMcpServer,
   // Deep browser-use capability surface (extract_structured/run_task/annotate/fill).
   browserExtMcpServer,
+  // Deep TensorZero inference surface (model_catalog/feedback/batch_inference).
+  tensorzeroInferenceMcpServer,
   // Pal multi-model comms (route/consensus/debate/models) over the pal adapter.
   recoderPalCommsServer,
 ];

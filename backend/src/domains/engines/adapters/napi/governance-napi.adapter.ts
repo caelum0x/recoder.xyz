@@ -15,10 +15,142 @@
  */
 import type { Logger } from '../../../../shared/logger.js';
 import type { GovernanceKernelPort } from '../../../governance/ports/kernel.port.js';
-import type { KernelRequest } from '../../../governance/types.js';
+import type {
+  GateTarget,
+  GovernanceEffect,
+  KernelEngine,
+  KernelRequest,
+  KernelVerdict,
+  RiskTier,
+  RoutingHint,
+} from '../../../governance/types.js';
+import { riskTierRank } from '../../../governance/types.js';
 import { EngineClientBase, type EngineCall } from '../../ports/engine-client.port.js';
 import { type EngineHealth, type InvokeResult, fail, ok } from '../../types.js';
 import { msg, str, type NapiArgs } from './napi-util.js';
+
+/** One ordered contributing factor in a decision explanation (the "why"). */
+export interface ExplanationFactor {
+  /** Machine slug of the factor (`effect` | `risk_tier` | `confidence` | `routing` | `approval` | `audit`). */
+  readonly factor: string;
+  /** Human-readable statement of how this factor shaped the verdict. */
+  readonly detail: string;
+}
+
+/**
+ * The composed "why allow/deny" answer — a richer view than the raw
+ * {@link KernelVerdict}. Folds the decision verdict + the routing hint into an
+ * ordered factor list, a one-line summary, and concrete next steps, WITHOUT any
+ * new native export (composed over the existing `decide()` + `route()` port ops).
+ */
+export interface GovernanceDecisionExplanation {
+  readonly effect: GovernanceEffect;
+  readonly tier: RiskTier;
+  /** `effect === 'allow'`. */
+  readonly allowed: boolean;
+  /** `effect === 'needs_approval'`. */
+  readonly requiresApproval: boolean;
+  /** One-line human "why" (ALLOW/DENY/NEEDS APPROVAL + tier + reason). */
+  readonly summary: string;
+  /** Ordered contributing factors — the explanation body. */
+  readonly factors: readonly ExplanationFactor[];
+  /** The planner routing view for the same request (unroutable when denied). */
+  readonly routing: { readonly routable: boolean; readonly tier: RiskTier; readonly target: string | null };
+  /** True whenever the verdict used any path other than the in-proc napi kernel. */
+  readonly degraded: boolean;
+  readonly engine: KernelEngine;
+  /** `authoritative` on the native rung; `degraded` (deny-biased) otherwise. */
+  readonly confidence: 'authoritative' | 'degraded';
+  /** The Merkle audit tip that sealed the decision (when audit is on). */
+  readonly auditHash: string | null;
+  /** The approval gate id when `effect === 'needs_approval'`. */
+  readonly approvalId: string | null;
+  /** Concrete, deny-biased next steps for the caller. */
+  readonly nextSteps: readonly string[];
+}
+
+/** Render a {@link GateTarget} to a short, secret-free descriptor for the explanation. */
+function describeTarget(target: GateTarget | undefined): string {
+  if (!target) return '(unspecified)';
+  return target.path ?? target.command ?? target.toolName ?? target.environment ?? '(unspecified)';
+}
+
+/**
+ * Compose a rich decision explanation from the kernel verdict + routing hint.
+ * Pure + deterministic (exported so the tool binder and unit tests share it) —
+ * no I/O, no kernel access, deny-biased in its next-steps.
+ */
+export function buildDecisionExplanation(
+  req: KernelRequest,
+  verdict: KernelVerdict,
+  routing: RoutingHint,
+): GovernanceDecisionExplanation {
+  const allowed = verdict.effect === 'allow';
+  const requiresApproval = verdict.effect === 'needs_approval';
+
+  const factors: ExplanationFactor[] = [
+    {
+      factor: 'effect',
+      detail: `Kernel returned '${verdict.effect}' for action '${req.action}' on target '${describeTarget(req.target)}': ${verdict.reason}`,
+    },
+    {
+      factor: 'risk_tier',
+      detail: `Classified risk tier '${verdict.tier}' (rank ${riskTierRank(verdict.tier)}/3); higher tiers subsume lower approval/enforcement requirements.`,
+    },
+    {
+      factor: 'confidence',
+      detail: verdict.degraded
+        ? `Verdict produced on the '${verdict.engine}' rung (native kernel absent) — degraded and deny-biased.`
+        : `Verdict produced on the in-proc native '${verdict.engine}' kernel — authoritative.`,
+    },
+    {
+      factor: 'routing',
+      detail: routing.routable
+        ? `Action is routable (tier '${routing.tier}'${routing.target ? `, suggested target '${routing.target}'` : ''}): ${routing.reason}`
+        : `Action is not routable: ${routing.reason}`,
+    },
+  ];
+
+  if (requiresApproval) {
+    factors.push({
+      factor: 'approval',
+      detail: verdict.approvalGateId
+        ? `Requires human approval — approval gate '${verdict.approvalGateId}'.`
+        : 'Requires human approval before proceeding.',
+    });
+  }
+  if (verdict.auditHash) {
+    factors.push({ factor: 'audit', detail: `Sealed into the Merkle audit chain at tip '${verdict.auditHash}'.` });
+  }
+
+  const summary = allowed
+    ? `ALLOW: '${req.action}' permitted at '${verdict.tier}' risk — ${verdict.reason}`
+    : requiresApproval
+      ? `NEEDS APPROVAL: '${req.action}' is a '${verdict.tier}'-risk action requiring human sign-off — ${verdict.reason}`
+      : `DENY: '${req.action}' blocked at '${verdict.tier}' risk — ${verdict.reason}`;
+
+  const nextSteps = allowed
+    ? ['Proceed with the action.']
+    : requiresApproval
+      ? ['Request an approval record for this action.', 'Wait for a human/policy decision before proceeding.']
+      : ['Do not proceed.', 'If this looks wrong, adjust the target/policy and re-check — never bypass the gate.'];
+
+  return {
+    effect: verdict.effect,
+    tier: verdict.tier,
+    allowed,
+    requiresApproval,
+    summary,
+    factors,
+    routing: { routable: routing.routable, tier: routing.tier, target: routing.target ?? null },
+    degraded: verdict.degraded,
+    engine: verdict.engine,
+    confidence: verdict.degraded ? 'degraded' : 'authoritative',
+    auditHash: verdict.auditHash ?? null,
+    approvalId: verdict.approvalGateId ?? null,
+    nextSteps,
+  };
+}
 
 /** Build a degrade-safe `KernelRequest` from loose (untrusted) MCP/invoke input. */
 function toKernelRequest(args: NapiArgs): KernelRequest {
@@ -64,6 +196,8 @@ export class GovernanceNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
         }
         case 'route':
           return ok(await this.kernel.route(toKernelRequest(input)));
+        case 'explain':
+          return ok(await this.explainDecision(toKernelRequest(input)));
         case 'auditTip':
           return ok({ tipHash: await this.kernel.auditTip() });
         case 'verifyAudit':
@@ -78,6 +212,26 @@ export class GovernanceNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
       // fabricated allow. Callers treat {ok:false} as "not allowed".
       return fail(`governance ${op} threw: ${msg(err)}`, 'KERNEL_THREW');
     }
+  }
+
+  /**
+   * The `explain` capability: run a real governance decision and fold it with the
+   * routing hint into a rich "why allow/deny" explanation. Composed over the
+   * EXISTING `decide()` + `route()` port ops (no new native export). Deny-biased:
+   * a throwing `decide()` propagates to `invoke`'s `KERNEL_THREW` fail (never a
+   * fabricated allow); a routing fault degrades ONLY the routing view, keeping the
+   * decision explanation truthful.
+   */
+  private async explainDecision(req: KernelRequest): Promise<GovernanceDecisionExplanation> {
+    const verdict = await this.kernel.decide(req);
+    let routing: RoutingHint;
+    try {
+      routing = await this.kernel.route(req);
+    } catch (err) {
+      // A routing fault must not lose the (already-computed) decision explanation.
+      routing = { routable: false, tier: verdict.tier, reason: `routing unavailable: ${msg(err)}` };
+    }
+    return buildDecisionExplanation(req, verdict, routing);
   }
 
   async health(): Promise<EngineHealth> {

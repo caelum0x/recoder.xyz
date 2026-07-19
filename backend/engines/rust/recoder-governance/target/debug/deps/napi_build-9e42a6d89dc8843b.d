@@ -1,0 +1,10 @@
+/Users/arhansubasi/recoder.xyz/backend/engines/rust/recoder-governance/target/debug/deps/napi_build-9e42a6d89dc8843b.d: /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/lib.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/android.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/wasi.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/windows.rs
+
+/Users/arhansubasi/recoder.xyz/backend/engines/rust/recoder-governance/target/debug/deps/libnapi_build-9e42a6d89dc8843b.rlib: /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/lib.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/android.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/wasi.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/windows.rs
+
+/Users/arhansubasi/recoder.xyz/backend/engines/rust/recoder-governance/target/debug/deps/libnapi_build-9e42a6d89dc8843b.rmeta: /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/lib.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/android.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/wasi.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/windows.rs
+
+/Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/lib.rs:
+/Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/android.rs:
+/Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/wasi.rs:
+/Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/napi-build-2.3.2/src/windows.rs:

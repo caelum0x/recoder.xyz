@@ -14,7 +14,8 @@ import type {
   RoutingHint,
   ToolEnforcement,
 } from '../../../governance/types.js';
-import { GovernanceNapiAdapter } from './governance-napi.adapter.js';
+import type { KernelRequest } from '../../../governance/types.js';
+import { GovernanceNapiAdapter, buildDecisionExplanation } from './governance-napi.adapter.js';
 
 const log = { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() } as unknown as Logger;
 
@@ -78,6 +79,86 @@ describe('GovernanceNapiAdapter (thin re-expose)', () => {
     const result = await adapter.invoke({ op: 'enforceTool', input: {} });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe('BAD_INPUT');
+  });
+
+  it('explain composes decide + route into a rich "why" explanation', async () => {
+    const adapter = new GovernanceNapiAdapter(fakeKernel({ engine: 'napi', status: 'up', degraded: false }), log);
+    const result = await adapter.invoke({
+      op: 'explain',
+      input: { actorId: 'u1', action: 'tool.call', target: { toolName: 'shell' } },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toMatchObject({
+        effect: 'allow',
+        allowed: true,
+        requiresApproval: false,
+        tier: 'low',
+        confidence: 'authoritative',
+        routing: { routable: true, tier: 'low' },
+      });
+      const explanation = result.value as { factors: Array<{ factor: string }>; summary: string; nextSteps: string[] };
+      expect(explanation.summary).toMatch(/^ALLOW/);
+      expect(explanation.factors.map((f) => f.factor)).toEqual(
+        expect.arrayContaining(['effect', 'risk_tier', 'confidence', 'routing']),
+      );
+      expect(explanation.nextSteps.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('explain keeps the decision truthful even when routing throws (degrades only routing)', async () => {
+    const adapter = new GovernanceNapiAdapter(
+      fakeKernel({ engine: 'napi', status: 'up', degraded: false }, {
+        route: async () => { throw new Error('router down'); },
+      }),
+      log,
+    );
+    const result = await adapter.invoke({ op: 'explain', input: { actorId: 'u1', action: 'tool.call', target: {} } });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const explanation = result.value as { effect: string; routing: { routable: boolean } };
+      expect(explanation.effect).toBe('allow');
+      expect(explanation.routing.routable).toBe(false);
+    }
+  });
+
+  it('explain is deny-biased: a throwing decide yields {ok:false}, never a fabricated explanation', async () => {
+    const adapter = new GovernanceNapiAdapter(
+      fakeKernel({ engine: 'napi', status: 'up', degraded: false }, {
+        decide: async () => { throw new Error('kernel exploded'); },
+      }),
+      log,
+    );
+    const result = await adapter.invoke({ op: 'explain', input: { actorId: 'u1', action: 'tool.call', target: {} } });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('KERNEL_THREW');
+  });
+
+  it('buildDecisionExplanation surfaces the approval gate + deny-biased next steps for needs_approval', () => {
+    const req: KernelRequest = { actorId: 'u1', action: 'deploy', target: { environment: 'prod' } };
+    const explanation = buildDecisionExplanation(
+      req,
+      { effect: 'needs_approval', tier: 'critical', reason: 'prod deploy', degraded: false, engine: 'napi', approvalGateId: 'apr-1' },
+      { routable: true, tier: 'critical', reason: 'gated' },
+    );
+    expect(explanation.requiresApproval).toBe(true);
+    expect(explanation.approvalId).toBe('apr-1');
+    expect(explanation.summary).toMatch(/^NEEDS APPROVAL/);
+    expect(explanation.factors.map((f) => f.factor)).toContain('approval');
+    expect(explanation.nextSteps.join(' ')).toMatch(/approval/i);
+  });
+
+  it('buildDecisionExplanation marks a non-napi verdict as degraded/deny-biased confidence', () => {
+    const req: KernelRequest = { actorId: 'u1', action: 'file.write', target: { path: 'src/x.ts' } };
+    const explanation = buildDecisionExplanation(
+      req,
+      { effect: 'deny', tier: 'high', reason: 'forbidden path', degraded: true, engine: 'ts' },
+      { routable: false, tier: 'high', reason: 'unroutable' },
+    );
+    expect(explanation.allowed).toBe(false);
+    expect(explanation.confidence).toBe('degraded');
+    expect(explanation.summary).toMatch(/^DENY/);
+    expect(explanation.nextSteps.join(' ')).toMatch(/Do not proceed/);
   });
 
   it('is deny-biased: a throwing kernel yields {ok:false}, never a fabricated allow', async () => {

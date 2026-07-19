@@ -90,6 +90,94 @@ const GATEWAY_DOWN =
 const NO_STREAM_BINDING =
   'tensorzero gateway napi addon lacks the inferenceStream binding — rebuild backend/engines/rust/tensorzero/crates -p tensorzero-gateway-napi';
 
+// ---------------------------------------------------------------------------
+// Inference-capability port — the DEEP surface the MCP binder consumes
+// ---------------------------------------------------------------------------
+
+/** One routable model in the generated catalog (env registry → gateway config). */
+export interface TensorzeroCatalogModel {
+  /** Recoder model id (`<provider>/<model>`). */
+  readonly id: string;
+  /** Recoder provider name (mirrors llm-router). */
+  readonly provider: string;
+  /** Provider-native model id. */
+  readonly modelName: string;
+  /** The TensorZero function name that routes to this model (`<provider>_<model>`). */
+  readonly functionName: string;
+  /** Env var NAME holding the key (never a value); `null` for keyless providers. */
+  readonly keyEnv: string | null;
+  /** OpenAI-compatible base URL override, when set. */
+  readonly baseUrl?: string;
+}
+
+/** The introspected model/function catalog the embedded gateway would route. */
+export interface TensorzeroModelCatalog {
+  /** The Rust crate version, or `null` when the `.node` is absent. */
+  readonly gatewayVersion: string | null;
+  /** The routable models resolved from the Recoder registry (env). */
+  readonly models: readonly TensorzeroCatalogModel[];
+  /** Every TensorZero function name the config defines (includes the default alias). */
+  readonly functions: readonly string[];
+  /** The stable default function name, or `null` when no models are configured. */
+  readonly defaultFunction: string | null;
+  /** Registry entries excluded from the catalog, each with a truthful reason. */
+  readonly skipped: readonly { readonly id: string; readonly reason: string }[];
+}
+
+/** One request in a batch — the same JSON body as `POST /inference`. */
+export type TensorzeroInferenceRequest = Record<string, unknown>;
+
+/** Options controlling a batch inference run. */
+export interface TensorzeroBatchInput {
+  /** The inference requests to run (each a `POST /inference`-shaped body). */
+  readonly requests: readonly TensorzeroInferenceRequest[];
+  /** Max in-flight inferences (clamped 1..16; default 4). */
+  readonly concurrency?: number;
+  /** Stop scheduling new requests after the first failure (already in-flight finish). */
+  readonly stopOnError?: boolean;
+}
+
+/** The per-request outcome inside a batch (index-aligned to the input). */
+export interface TensorzeroBatchItem {
+  readonly index: number;
+  readonly ok: boolean;
+  /** The parsed inference response (present when `ok`). */
+  readonly value?: unknown;
+  /** The truthful failure reason (present when `!ok`). */
+  readonly error?: string;
+  /** `true` when the request was skipped by `stopOnError` after an earlier failure. */
+  readonly skipped?: boolean;
+}
+
+/** The aggregated batch result — the batch op itself succeeds; item failures are reported. */
+export interface TensorzeroBatchResult {
+  readonly total: number;
+  readonly succeeded: number;
+  readonly failed: number;
+  readonly skipped: number;
+  readonly concurrency: number;
+  readonly results: readonly TensorzeroBatchItem[];
+}
+
+/**
+ * The DEEP inference capability surface the `recoder.tensorzero` MCP binder
+ * consumes (mirrors `BrowserUseAdapter.ext()`). Every method is degrade-safe:
+ * an absent `.node` / unbooted gateway is a truthful `{ ok:false, ENGINE_DOWN }`,
+ * never a throw across the seam. `modelCatalog` needs no gateway boot at all —
+ * it introspects the Recoder registry (env → config) so it stays truthful even
+ * when the native addon is absent.
+ */
+export interface TensorzeroInferencePort {
+  /** Introspect the model/function catalog the embedded gateway would route. */
+  modelCatalog(): Promise<InvokeResult<TensorzeroModelCatalog>>;
+  /** Run many inferences with bounded concurrency, aggregating per-item outcomes. */
+  batchInference(input: TensorzeroBatchInput): Promise<InvokeResult<TensorzeroBatchResult>>;
+}
+
+const DEFAULT_BATCH_CONCURRENCY = 4;
+const MAX_BATCH_CONCURRENCY = 16;
+const MAX_BATCH_REQUESTS = 128;
+
 export interface TensorzeroNapiOptions {
   /** When `false`, the engine is never bound and reports `down` with reason "disabled". */
   readonly enabled?: boolean;
@@ -167,6 +255,20 @@ export class TensorzeroNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
       }
     }
 
+    if (op === 'modelCatalog') {
+      return this.runModelCatalog();
+    }
+
+    if (op === 'batchInference') {
+      const requests = Array.isArray(input.requests) ? (input.requests as TensorzeroInferenceRequest[]) : undefined;
+      if (!requests) return fail('batchInference requires a non-empty requests array', 'BAD_INPUT');
+      return this.runBatchInference({
+        requests,
+        ...(typeof input.concurrency === 'number' ? { concurrency: input.concurrency } : {}),
+        ...(input.stopOnError === true ? { stopOnError: true } : {}),
+      });
+    }
+
     if (op === 'inferenceStream') {
       const gateway = await this.ensureGateway();
       if (!gateway) return fail(GATEWAY_DOWN, 'ENGINE_DOWN');
@@ -221,7 +323,117 @@ export class TensorzeroNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
     return up('tensorzero', 'napi', { bindingPath, ...(version ? { version } : {}) });
   }
 
+  /**
+   * The DEEP inference-capability port the `recoder.tensorzero` MCP binder holds
+   * (mirrors `BrowserUseAdapter.ext()`). Bound over THIS adapter so it shares the
+   * one embedded-gateway boot; every method is degrade-safe.
+   */
+  inference(): TensorzeroInferencePort {
+    return {
+      modelCatalog: () => this.runModelCatalog(),
+      batchInference: (batchInput) => this.runBatchInference(batchInput),
+    };
+  }
+
   // --- internals ---
+
+  /**
+   * Introspect the model/function catalog from the Recoder registry (env →
+   * config). Needs no gateway boot — this is exactly the registry the embedded
+   * gateway boots from, so it is truthful even when the `.node` is absent (the
+   * gateway version is then reported as `null`). Never throws across the seam.
+   */
+  private async runModelCatalog(): Promise<InvokeResult<TensorzeroModelCatalog>> {
+    if (this.options.enabled === false) return fail('tensorzero engine disabled by config', 'DISABLED');
+    try {
+      const { registryFromEnv, buildTensorzeroConfig, tensorzeroFunctionName, TENSORZERO_DEFAULT_FUNCTION } =
+        await import('../../../inference/tensorzero-config.js');
+      const registry = registryFromEnv();
+      const built = buildTensorzeroConfig(registry);
+      const models: TensorzeroCatalogModel[] = registry.models.map((entry) => ({
+        id: `${entry.provider}/${entry.modelName}`,
+        provider: entry.provider,
+        modelName: entry.modelName,
+        functionName: tensorzeroFunctionName(entry.provider, entry.modelName),
+        keyEnv: entry.keyEnv ?? null,
+        ...(entry.baseUrl ? { baseUrl: entry.baseUrl } : {}),
+      }));
+      const catalog: TensorzeroModelCatalog = {
+        gatewayVersion: this.probeVersion(),
+        models,
+        functions: built.functions,
+        defaultFunction: built.functions.includes(TENSORZERO_DEFAULT_FUNCTION)
+          ? TENSORZERO_DEFAULT_FUNCTION
+          : null,
+        skipped: built.skipped,
+      };
+      return ok(catalog);
+    } catch (err) {
+      return fail(`tensorzero modelCatalog failed: ${msg(err)}`, 'ENGINE_THREW');
+    }
+  }
+
+  /**
+   * Run many inferences over the EXISTING single-inference napi with bounded
+   * concurrency. The batch OP itself succeeds (`ok`) and reports per-item
+   * outcomes — one provider failure never fails the whole batch (unless
+   * `stopOnError`, which skips not-yet-scheduled requests truthfully). An absent
+   * gateway is a truthful `ENGINE_DOWN` for the whole batch.
+   */
+  private async runBatchInference(input: TensorzeroBatchInput): Promise<InvokeResult<TensorzeroBatchResult>> {
+    const requests = input.requests;
+    if (!Array.isArray(requests) || requests.length === 0) {
+      return fail('batchInference requires a non-empty requests array', 'BAD_INPUT');
+    }
+    if (requests.length > MAX_BATCH_REQUESTS) {
+      return fail(`batchInference accepts at most ${MAX_BATCH_REQUESTS} requests (got ${requests.length})`, 'BAD_INPUT');
+    }
+    const gateway = await this.ensureGateway();
+    if (!gateway) return fail(GATEWAY_DOWN, 'ENGINE_DOWN');
+
+    const concurrency = clampConcurrency(input.concurrency);
+    const stopOnError = input.stopOnError === true;
+    const results: TensorzeroBatchItem[] = new Array(requests.length);
+    let nextIndex = 0;
+    let aborted = false;
+
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const index = nextIndex++;
+        if (index >= requests.length) return;
+        if (aborted) {
+          results[index] = { index, ok: false, skipped: true, error: 'skipped after an earlier failure (stopOnError)' };
+          continue;
+        }
+        try {
+          const raw = await gateway.inference(JSON.stringify(requests[index]));
+          results[index] = { index, ok: true, value: parseJson(raw) };
+        } catch (err) {
+          results[index] = { index, ok: false, error: msg(err) };
+          if (stopOnError) aborted = true;
+        }
+      }
+    };
+
+    await Promise.all(Array.from({ length: Math.min(concurrency, requests.length) }, () => worker()));
+
+    const succeeded = results.filter((item) => item.ok).length;
+    const skipped = results.filter((item) => item.skipped).length;
+    const failed = results.length - succeeded - skipped;
+    return ok({ total: requests.length, succeeded, failed, skipped, concurrency, results });
+  }
+
+  /** The gateway crate version, or `null` when the `.node` is absent / throws. */
+  private probeVersion(): string | null {
+    const mod = this.ensureModule();
+    if (!mod) return null;
+    try {
+      return mod.gatewayVersion();
+    } catch {
+      return null;
+    }
+  }
+
 
   /**
    * Drive one native streamed inference. Chunk events are forwarded to
@@ -332,6 +544,12 @@ export class TensorzeroNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
       return null;
     }
   }
+}
+
+/** Clamp a requested batch concurrency into `1..MAX_BATCH_CONCURRENCY` (default when absent/invalid). */
+function clampConcurrency(requested: number | undefined): number {
+  if (typeof requested !== 'number' || !Number.isFinite(requested)) return DEFAULT_BATCH_CONCURRENCY;
+  return Math.max(1, Math.min(MAX_BATCH_CONCURRENCY, Math.floor(requested)));
 }
 
 /** Factory for the tensorzero napi engine client (the seam consumers hold). */
