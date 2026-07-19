@@ -13,6 +13,19 @@ export type { BeadsOp, BeadsAdapterDeps } from './beads.adapter.js';
 export { TmuxAdapter } from './tmux.adapter.js';
 export type { TmuxOp, TmuxAdapterDeps } from './tmux.adapter.js';
 
+export { createTmuxIntrospect } from './tmux-introspect.adapter.js';
+export type {
+  TmuxIntrospectPort,
+  TmuxIntrospectDeps,
+  TmuxRun,
+  TmuxSession,
+  TmuxWindow,
+  TmuxPane,
+  TmuxCapture,
+  TmuxServerInfo,
+  CapturePaneInput,
+} from './tmux-introspect.adapter.js';
+
 export { DmuxAdapter } from './dmux.adapter.js';
 export type { DmuxOp, DmuxAdapterDeps } from './dmux.adapter.js';
 

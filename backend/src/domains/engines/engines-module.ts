@@ -26,11 +26,32 @@ import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
 import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
 import type { Logger } from '../../shared/logger.js';
-import { sliceEnginesConfig, isEngineEnabled, daemonEnvFor, type EnginesConfig } from './config.js';
-import { ENGINE_IDS, ENGINE_TRANSPORTS, DEFAULT_LOOPBACK, isRestartable, isEngineId } from './constants.js';
-import { down, fail, type EngineDescriptor, type EngineHealth, type EngineId } from './types.js';
+import {
+  sliceEnginesConfig,
+  isEngineEnabled,
+  daemonEnvFor,
+  type EnginesConfig,
+} from './config.js';
+import {
+  ENGINE_IDS,
+  ENGINE_TRANSPORTS,
+  DEFAULT_LOOPBACK,
+  isRestartable,
+  isEngineId,
+} from './constants.js';
+import {
+  down,
+  fail,
+  type EngineDescriptor,
+  type EngineHealth,
+  type EngineId,
+} from './types.js';
 import type { EngineClientPort } from './ports/engine-client.port.js';
-import type { EngineRegistryPort, EngineHealthRepository, McpHostPort } from './ports/index.js';
+import type {
+  EngineRegistryPort,
+  EngineHealthRepository,
+  McpHostPort,
+} from './ports/index.js';
 import { NapiLoader } from './supervisor/napi-loader.js';
 import { ProcessRegistry } from './supervisor/process-registry.js';
 import { DaemonSupervisor } from './supervisor/daemon-supervisor.js';
@@ -70,13 +91,40 @@ import {
   RecodergitAdapter,
   beadsEngineBinder,
 } from './adapters/cli/index.js';
-import { createRecoderGitService, type RecoderGitService } from './recodergit-service.js';
-import { GithubModule, githubEngineBinder, repoEngineBinder } from './github/index.js';
+import {
+  createRecoderGitService,
+  type RecoderGitService,
+} from './recodergit-service.js';
+import {
+  GithubModule,
+  githubEngineBinder,
+  repoEngineBinder,
+} from './github/index.js';
 import { InteropHostBundle } from './mcp/mcp-host.js';
-import { buildEnginesMcpTools, enginesMcpServer } from './mcp/engines-engine.js';
-import { buildMem0MemoryMcpTools, mem0MemoryMcpServer } from './mcp/mem0-memory.mcp.js';
+import {
+  buildEnginesMcpTools,
+  enginesMcpServer,
+} from './mcp/engines-engine.js';
+import {
+  buildMem0MemoryMcpTools,
+  mem0MemoryMcpServer,
+} from './mcp/mem0-memory.mcp.js';
+import {
+  buildRecodergitIntelMcpTools,
+  recodergitIntelMcpServer,
+  type RecodergitIntelOp,
+} from './mcp/recodergit-intel.mcp.js';
+import {
+  buildTmuxIntrospectMcpTools,
+  tmuxIntrospectMcpServer,
+} from './mcp/tmux-introspect.mcp.js';
+import {
+  buildBeadsGraphMcpTools,
+  beadsGraphMcpServer,
+} from './mcp/beads-graph.mcp.js';
 import { browserExtEngineBinder } from './mcp/browser-ext-engine.js';
 import { tensorzeroInferenceEngineBinder } from './mcp/tensorzero-inference-engine.js';
+import { dmuxLayoutEngineBinder } from './mcp/dmux-layout-engine.js';
 import {
   registerModuleToolsOnHost,
   callerFromInput,
@@ -89,7 +137,11 @@ import {
   createEnginesWorkflowEngine,
 } from './mcp/capability-binders.js';
 import { InProcLogStore, logsEngineBinder } from './mcp/logs-store.js';
-import { createNotifyEngine, type NotifyEngine, type NotifyFetch } from '@recoder/agent-notify';
+import {
+  createNotifyEngine,
+  type NotifyEngine,
+  type NotifyFetch,
+} from '@recoder/agent-notify';
 import type { WorkflowEngine } from '@recoder/workflow-engine';
 import {
   registerDomainToolsOnHost,
@@ -105,7 +157,7 @@ import type { EnginesModule, EnginesModuleDeps } from './index.js';
 
 /** Build the static declared-engine descriptors from the closed engine catalog. */
 function buildDescriptors(): readonly EngineDescriptor[] {
-  return ENGINE_IDS.map((id) => {
+  return ENGINE_IDS.map(id => {
     const transport = ENGINE_TRANSPORTS[id];
     return {
       id,
@@ -125,7 +177,9 @@ class InMemoryEngineRegistry implements EngineRegistryPort {
 
   constructor(descriptors: readonly EngineDescriptor[]) {
     this.descriptors = descriptors;
-    this.byId = new Map(descriptors.map((descriptor) => [descriptor.id, descriptor]));
+    this.byId = new Map(
+      descriptors.map(descriptor => [descriptor.id, descriptor])
+    );
   }
 
   list(): readonly EngineDescriptor[] {
@@ -136,8 +190,12 @@ class InMemoryEngineRegistry implements EngineRegistryPort {
     return this.byId.get(id) ?? null;
   }
 
-  byTransport(transport: EngineDescriptor['transport']): readonly EngineDescriptor[] {
-    return this.descriptors.filter((descriptor) => descriptor.transport === transport);
+  byTransport(
+    transport: EngineDescriptor['transport']
+  ): readonly EngineDescriptor[] {
+    return this.descriptors.filter(
+      descriptor => descriptor.transport === transport
+    );
   }
 }
 
@@ -208,7 +266,9 @@ export class EnginesComposer implements EnginesModule {
     // observability) or built here with global fetch (truthful `not_configured`
     // until a webhook is configured).
     this.logStore = new InProcLogStore();
-    this.workflowEngine = createEnginesWorkflowEngine({ repoRoot: this.cfg.repoRoot ?? null });
+    this.workflowEngine = createEnginesWorkflowEngine({
+      repoRoot: this.cfg.repoRoot ?? null,
+    });
     this.notifyEngine =
       deps.notifyEngine ??
       createNotifyEngine({ fetch: globalThis.fetch as unknown as NotifyFetch });
@@ -226,13 +286,24 @@ export class EnginesComposer implements EnginesModule {
         // `recoder.browser-use.ext` (extract_structured/run_task/screenshot_annotate/
         // fill_form) over the DEEP browser-use capability surface (`adapter.ext()`).
         browserExtEngineBinder(
-          (this.adapters.get('browser-use') as BrowserUseAdapter | undefined)?.ext() ?? null,
+          (
+            this.adapters.get('browser-use') as BrowserUseAdapter | undefined
+          )?.ext() ?? null
         ),
         // `recoder.tensorzero` (model_catalog/batch_inference) over the DEEP
         // TensorZero inference surface (`adapter.inference()`) — the two NEW
         // capabilities on top of the existing single-inference napi tools.
         tensorzeroInferenceEngineBinder(
-          (this.adapters.get('tensorzero') as TensorzeroNapiAdapter | undefined)?.inference() ?? null,
+          (
+            this.adapters.get('tensorzero') as TensorzeroNapiAdapter | undefined
+          )?.inference() ?? null
+        ),
+        // `recoder.dmux` (layout_presets/panes_list/panes_create/layout_apply) over
+        // the DEEP dmux pane/layout surface (`adapter.layout()`) — programmatic
+        // arrangement of a multi-agent workspace view on the shared tmux substrate.
+        dmuxLayoutEngineBinder(
+          (this.adapters.get('dmux') as DmuxAdapter | undefined)?.layout() ??
+            null
         ),
         palPlanEngineBinder(),
         // `recoder.pal-comms` (route/consensus/debate/models) over the pal adapter.
@@ -252,10 +323,10 @@ export class EnginesComposer implements EnginesModule {
       // supplied binder has no in-proc handler, so its tools fail truthfully.
       // Not a hard `enforceWiring` throw — boot stays resilient — but the gap is
       // now visible in logs instead of only when an agent calls the dead tool.
-      onWiringWarning: (err) =>
+      onWiringWarning: err =>
         this.log.warn(
           { err: err instanceof Error ? err.message : String(err) },
-          'engines MCP host: advertised engine server(s) have no bound handler — their tools will fail on call until a binder is supplied',
+          'engines MCP host: advertised engine server(s) have no bound handler — their tools will fail on call until a binder is supplied'
         ),
     });
     this.hostReady = true;
@@ -273,26 +344,46 @@ export class EnginesComposer implements EnginesModule {
     // --- daemon (supervised loopback HTTP) ---
     map.set(
       'colbert',
-      new ColbertLoopbackAdapter(this.daemonSupervisor, this.daemonCfg('colbert'), this.log),
+      new ColbertLoopbackAdapter(
+        this.daemonSupervisor,
+        this.daemonCfg('colbert'),
+        this.log
+      )
     );
     map.set(
       'ops-recorder',
-      new OpsRecorderLoopbackAdapter(this.daemonSupervisor, this.daemonCfg('ops-recorder'), this.log),
+      new OpsRecorderLoopbackAdapter(
+        this.daemonSupervisor,
+        this.daemonCfg('ops-recorder'),
+        this.log
+      )
     );
     map.set(
       'multica',
-      new MulticaLoopbackAdapter(this.daemonSupervisor, this.daemonCfg('multica'), this.log),
+      new MulticaLoopbackAdapter(
+        this.daemonSupervisor,
+        this.daemonCfg('multica'),
+        this.log
+      )
     );
     map.set('ziti', new ZitiRestAdapter(this.daemonCfg('ziti'), this.log));
 
     // --- sidecar (uv venv; stdio-MCP / loopback HTTP) ---
     map.set(
       'mem0',
-      new Mem0Adapter({ supervisor: this.sidecarSupervisor, config: this.cfg, log: this.log }),
+      new Mem0Adapter({
+        supervisor: this.sidecarSupervisor,
+        config: this.cfg,
+        log: this.log,
+      })
     );
     map.set(
       'browser-use',
-      new BrowserUseAdapter({ supervisor: this.sidecarSupervisor, config: this.cfg, log: this.log }),
+      new BrowserUseAdapter({
+        supervisor: this.sidecarSupervisor,
+        config: this.cfg,
+        log: this.log,
+      })
     );
     map.set(
       'pal-mcp',
@@ -300,8 +391,10 @@ export class EnginesComposer implements EnginesModule {
         supervisor: this.sidecarSupervisor,
         config: this.cfg,
         log: this.log,
-        ...(Object.keys(this.cfg.palEnv).length > 0 ? { palEnv: this.cfg.palEnv } : {}),
-      }),
+        ...(Object.keys(this.cfg.palEnv).length > 0
+          ? { palEnv: this.cfg.palEnv }
+          : {}),
+      })
     );
 
     // --- cli (one-shot subprocess) ---
@@ -310,14 +403,20 @@ export class EnginesComposer implements EnginesModule {
     map.set('dmux', new DmuxAdapter({ config: this.cfg, log: this.log }));
     map.set(
       'recodergit',
-      new RecodergitAdapter({ config: this.cfg, log: this.log, service: this.recodergitService }),
+      new RecodergitAdapter({
+        config: this.cfg,
+        log: this.log,
+        service: this.recodergitService,
+      })
     );
 
     return map;
   }
 
   /** Project the narrowed daemon-adapter config for one daemon engine (no env reads). */
-  private daemonCfg(id: 'colbert' | 'ops-recorder' | 'multica' | 'ziti'): DaemonAdapterConfig {
+  private daemonCfg(
+    id: 'colbert' | 'ops-recorder' | 'multica' | 'ziti'
+  ): DaemonAdapterConfig {
     const listenAddr = DEFAULT_LOOPBACK[id];
     // The MINIMAL child env overlay (colbert PATH/ninja, ops-recorder auth flag,
     // multica keys) — bootstrap-injected, secret-minimal, NEVER `process.env`.
@@ -348,7 +447,9 @@ export class EnginesComposer implements EnginesModule {
     if (daemon?.baseUrl) return daemon.baseUrl;
     const sidecar = this.sidecarSupervisor.handle(id);
     if (sidecar?.baseUrl) return sidecar.baseUrl;
-    const external = (this.cfg.externalUrls as Record<string, string | null>)[id];
+    const external = (this.cfg.externalUrls as Record<string, string | null>)[
+      id
+    ];
     return external ?? null;
   }
 
@@ -381,13 +482,13 @@ export class EnginesComposer implements EnginesModule {
    */
   registerModuleTools(
     serverId: string,
-    tools: readonly McpToolRegistration[],
+    tools: readonly McpToolRegistration[]
   ): ModuleToolsRegistration {
     return registerModuleToolsOnHost(
       this.hostReady ? this.hostBundle : null,
       serverId,
       tools,
-      this.log,
+      this.log
     );
   }
 
@@ -401,12 +502,12 @@ export class EnginesComposer implements EnginesModule {
    */
   registerDomainTools(
     serverId: string,
-    tools: readonly McpToolRegistration[],
+    tools: readonly McpToolRegistration[]
   ): DomainToolsRegistration {
     const results = registerDomainToolsOnHost(
       this.hostReady ? this.hostBundle : null,
       [{ serverId, tools }],
-      this.log,
+      this.log
     );
     return (
       results[0] ?? {
@@ -427,7 +528,11 @@ export class EnginesComposer implements EnginesModule {
         if (!adapter) {
           // Declared but not constructed here (e.g. tensorzero-loopback lives in
           // the inference module). Truthful `down`, never a faked `up`.
-          return down(id, ENGINE_TRANSPORTS[id], 'no adapter bound in engines composer');
+          return down(
+            id,
+            ENGINE_TRANSPORTS[id],
+            'no adapter bound in engines composer'
+          );
         }
         try {
           return await adapter.health();
@@ -435,10 +540,10 @@ export class EnginesComposer implements EnginesModule {
           return down(
             id,
             ENGINE_TRANSPORTS[id],
-            `health probe error: ${err instanceof Error ? err.message : String(err)}`,
+            `health probe error: ${err instanceof Error ? err.message : String(err)}`
           );
         }
-      }),
+      })
     );
     // Best-effort durable snapshot; no-ops without a pool.
     void this.recordHealth(readings);
@@ -448,13 +553,13 @@ export class EnginesComposer implements EnginesModule {
   private async recordHealth(readings: readonly EngineHealth[]): Promise<void> {
     if (!this.healthRepo.isDurable()) return;
     await Promise.all(
-      readings.map(async (reading) => {
+      readings.map(async reading => {
         try {
           await this.healthRepo.recordHealth(reading);
         } catch {
           /* degrade-safe: durable snapshot is best-effort */
         }
-      }),
+      })
     );
   }
 
@@ -473,7 +578,7 @@ export class EnginesComposer implements EnginesModule {
       res.json({ engines: this.registryImpl.list() });
     });
     router.get('/engines/health', this.middleware.authenticate, (_req, res) => {
-      void this.listHealth().then((engines) => res.json({ engines }));
+      void this.listHealth().then(engines => res.json({ engines }));
     });
     // The governed MCP HTTP edge — every tool call traverses the interop gate
     // via `host.call()`; this router never executes a handler itself.
@@ -484,7 +589,7 @@ export class EnginesComposer implements EnginesModule {
         log: this.log,
         restartEngine: (id, requestedBy, reason) =>
           this.restartEngineById(id, requestedBy, reason),
-      }),
+      })
     );
     return router;
   }
@@ -505,7 +610,7 @@ export class EnginesComposer implements EnginesModule {
   private async restartEngineById(
     id: EngineId,
     requestedBy: string,
-    reason?: string,
+    reason?: string
   ): Promise<RestartOutcome> {
     const descriptor = this.registryImpl.get(id);
     if (!descriptor || !descriptor.restartable) {
@@ -525,20 +630,24 @@ export class EnginesComposer implements EnginesModule {
       void this.healthRepo.recordRestart(record).catch(() => undefined);
       return { outcome: 'restarted' };
     } catch (err) {
-      return { outcome: 'failed', reason: err instanceof Error ? err.message : String(err) };
+      return {
+        outcome: 'failed',
+        reason: err instanceof Error ? err.message : String(err),
+      };
     }
   }
 
   mcp(): readonly McpToolRegistration[] {
     return buildEnginesMcpTools({
       listDescriptors: () => this.registryImpl.list(),
-      listHealth: () => this.listHealth().then((readings) => readings),
-      engineHealth: async (id) => {
+      listHealth: () => this.listHealth().then(readings => readings),
+      engineHealth: async id => {
         const adapter = this.adapters.get(id);
         if (!adapter) return null;
         return adapter.health();
       },
-      restart: (id, requestedBy, reason) => this.restartEngineById(id, requestedBy, reason),
+      restart: (id, requestedBy, reason) =>
+        this.restartEngineById(id, requestedBy, reason),
     });
   }
 
@@ -578,6 +687,9 @@ export class EnginesComposer implements EnginesModule {
     // ops-recorder signals query/stats, and the colbert base + index-management
     // servers. Each is gated (authorize → risk → execute → audit) and degrade-safe.
     this.bindMem0MemoryMcpTools();
+    this.bindRecodergitIntelMcpTools();
+    this.bindTmuxIntrospectMcpTools();
+    this.bindBeadsGraphMcpTools();
     this.bindOpsRecorderSignalsMcpTools();
     const colbert = this.adapters.get('colbert');
     if (colbert) {
@@ -586,21 +698,27 @@ export class EnginesComposer implements EnginesModule {
       // the create/drop identity-gating fires). base colbert (rerank/search) +
       // the batch/index-management server were both previously unwired.
       this.registerDomainTools('colbert', buildColbertMcpTools(colbert));
-      this.registerDomainTools('colbert-index', buildColbertIndexMcpTools(colbert));
+      this.registerDomainTools(
+        'colbert-index',
+        buildColbertIndexMcpTools(colbert)
+      );
     }
-    this.napiRegistration = registerNapiEngineTools(this.hostBundle, this.napiClients);
+    this.napiRegistration = registerNapiEngineTools(
+      this.hostBundle,
+      this.napiClients
+    );
     if (this.cfg.spawnOnBoot) this.spawnSupervisedOnBoot();
     const engines = await this.listHealth();
     this.log.info(
       {
         declared: ENGINE_IDS.length,
         bound: this.adapters.size,
-        up: engines.filter((engine) => engine.status === 'up').length,
+        up: engines.filter(engine => engine.status === 'up').length,
         napiServers: this.napiRegistration.servers,
         hostReady: this.hostReady,
         spawnOnBoot: this.cfg.spawnOnBoot,
       },
-      'engines module started',
+      'engines module started'
     );
   }
 
@@ -613,13 +731,24 @@ export class EnginesComposer implements EnginesModule {
    */
   private bindEnginesMcpTools(): void {
     for (const tool of this.mcp()) {
-      this.hostBundle.registerInProcTool(enginesMcpServer.serverId, tool.name, async (input) => {
-        const content = await tool.handler(input.args, callerFromInput(input));
-        return {
-          content,
-          metadata: { serverId: enginesMcpServer.serverId, toolName: tool.name, external: false },
-        };
-      });
+      this.hostBundle.registerInProcTool(
+        enginesMcpServer.serverId,
+        tool.name,
+        async input => {
+          const content = await tool.handler(
+            input.args,
+            callerFromInput(input)
+          );
+          return {
+            content,
+            metadata: {
+              serverId: enginesMcpServer.serverId,
+              toolName: tool.name,
+              external: false,
+            },
+          };
+        }
+      );
     }
   }
 
@@ -642,13 +771,125 @@ export class EnginesComposer implements EnginesModule {
     });
     this.hostBundle.registerServer(mem0MemoryMcpServer);
     for (const tool of tools) {
-      this.hostBundle.registerInProcTool(mem0MemoryMcpServer.serverId, tool.name, async (input) => {
-        const content = await tool.handler(input.args, callerFromInput(input));
-        return {
-          content,
-          metadata: { serverId: mem0MemoryMcpServer.serverId, toolName: tool.name, external: false },
-        };
-      });
+      this.hostBundle.registerInProcTool(
+        mem0MemoryMcpServer.serverId,
+        tool.name,
+        async input => {
+          const content = await tool.handler(
+            input.args,
+            callerFromInput(input)
+          );
+          return {
+            content,
+            metadata: {
+              serverId: mem0MemoryMcpServer.serverId,
+              toolName: tool.name,
+              external: false,
+            },
+          };
+        }
+      );
+    }
+  }
+
+  /**
+   * Bind the DEEP recodergit code-intelligence tools (`recodergit.symbol_search` /
+   * `recodergit.find_references` / `recodergit.call_graph` / `recodergit.definition`)
+   * directly on the host over the recodergit CLI adapter seam. Same gated
+   * delegating shape as `bindMem0MemoryMcpTools`: `registerServer` + one gated
+   * `registerInProcTool` per tool (the host runs each ONLY after `authorize → risk`,
+   * then audits). These are READ-ONLY queries over a SHARED per-repo code graph
+   * (no per-tenant subject), but the host-authorized caller is threaded via
+   * `callerFromInput` and the tools REFUSE an anonymous call — the cross-tenant
+   * class stays CLOSED. Truthful skip when the recodergit adapter is absent;
+   * degrade-safe `{ available:false, reason }` when the repo is not indexed or the
+   * in-process engine lib is absent (the adapter/service return a typed result,
+   * never throw across the seam).
+   */
+  private bindRecodergitIntelMcpTools(): void {
+    const adapter = this.adapters.get('recodergit');
+    if (!adapter) return; // truthful skip when the recodergit adapter is absent
+    const tools = buildRecodergitIntelMcpTools({
+      invoke: (op: RecodergitIntelOp, input) => adapter.invoke({ op, input }),
+    });
+    this.hostBundle.registerServer(recodergitIntelMcpServer);
+    for (const tool of tools) {
+      this.hostBundle.registerInProcTool(
+        recodergitIntelMcpServer.serverId,
+        tool.name,
+        async input => ({
+          content: await tool.handler(input.args, callerFromInput(input)),
+          metadata: {
+            serverId: recodergitIntelMcpServer.serverId,
+            toolName: tool.name,
+            external: false,
+          },
+        })
+      );
+    }
+  }
+
+  /**
+   * Bind the DEEP tmux introspection tools (`tmux.list_sessions` /
+   * `tmux.list_windows` / `tmux.list_panes` / `tmux.capture_pane` /
+   * `tmux.server_info`) directly on the host over the tmux adapter's read-only
+   * {@link TmuxIntrospectPort}. Same gated delegating shape as
+   * `bindMem0MemoryMcpTools`: `registerServer` + one gated `registerInProcTool` per
+   * tool (the host runs each ONLY after `authorize → risk`, then audits). The
+   * host-authorized caller is threaded via `callerFromInput`; the tools require an
+   * admin/internal principal (the shared multiplexer has no per-tenant partition —
+   * the cross-tenant class stays CLOSED). Truthful skip when the tmux adapter is
+   * absent; degrade-safe `{ available:false, reason }` when the tmux binary is
+   * missing (the port's methods return a typed `fail`, never throw).
+   */
+  private bindTmuxIntrospectMcpTools(): void {
+    const tmux = this.adapters.get('tmux') as TmuxAdapter | undefined;
+    if (!tmux) return; // truthful skip when the tmux adapter is absent
+    this.hostBundle.registerServer(tmuxIntrospectMcpServer);
+    for (const tool of buildTmuxIntrospectMcpTools({
+      port: tmux.introspect(),
+    })) {
+      this.hostBundle.registerInProcTool(
+        tmuxIntrospectMcpServer.serverId,
+        tool.name,
+        async input => ({
+          content: await tool.handler(input.args, callerFromInput(input)),
+          metadata: {
+            serverId: tmuxIntrospectMcpServer.serverId,
+            toolName: tool.name,
+            external: false,
+          },
+        })
+      );
+    }
+  }
+
+  /**
+   * Bind the DEEPER beads issue-graph query tools (`beads.blocked` / `beads.graph`
+   * / `beads.deps` / `beads.search` / `beads.stats`) directly on the host over the
+   * beads CLI adapter seam. Same gated delegating shape as `bindEnginesMcpTools`.
+   * These are READ-ONLY over the SHARED repo issue graph — no per-tenant subject —
+   * so they add no cross-tenant surface (the closed class stays closed). Truthful
+   * skip when the beads adapter is absent; degrade-safe `{ error }` when `bd` is
+   * not installed (the adapter's `invoke` returns a typed `fail`, never throws).
+   */
+  private bindBeadsGraphMcpTools(): void {
+    const beads = this.adapters.get('beads');
+    if (!beads) return; // truthful skip when the beads adapter is absent
+    this.hostBundle.registerServer(beadsGraphMcpServer);
+    for (const tool of buildBeadsGraphMcpTools(beads)) {
+      this.hostBundle.registerInProcTool(
+        beadsGraphMcpServer.serverId,
+        tool.name,
+        async input => ({
+          content: await tool.handler(input.args, callerFromInput(input)),
+          metadata: {
+            serverId: beadsGraphMcpServer.serverId,
+            toolName: tool.name,
+            external: false,
+          },
+        })
+      );
     }
   }
 
@@ -666,10 +907,14 @@ export class EnginesComposer implements EnginesModule {
       this.hostBundle.registerInProcTool(
         opsRecorderSignalsMcpServer.serverId,
         tool.name,
-        async (input) => ({
+        async input => ({
           content: await tool.handler(input.args, callerFromInput(input)),
-          metadata: { serverId: opsRecorderSignalsMcpServer.serverId, toolName: tool.name, external: false },
-        }),
+          metadata: {
+            serverId: opsRecorderSignalsMcpServer.serverId,
+            toolName: tool.name,
+            external: false,
+          },
+        })
       );
     }
   }
@@ -683,23 +928,27 @@ export class EnginesComposer implements EnginesModule {
    */
   private spawnSupervisedOnBoot(): void {
     const supervised = [...this.adapters.values()].filter(
-      (adapter) => adapter.transport === 'daemon' || adapter.transport === 'sidecar',
+      adapter =>
+        adapter.transport === 'daemon' || adapter.transport === 'sidecar'
     );
     void Promise.allSettled(
-      supervised.map(async (adapter) => {
+      supervised.map(async adapter => {
         try {
           await adapter.start();
         } catch (err) {
           this.log.warn(
-            { engineId: adapter.id, err: err instanceof Error ? err.message : String(err) },
-            'engine spawn-on-boot degraded (truthful down)',
+            {
+              engineId: adapter.id,
+              err: err instanceof Error ? err.message : String(err),
+            },
+            'engine spawn-on-boot degraded (truthful down)'
           );
         }
-      }),
+      })
     ).then(() => {
       this.log.info(
-        { attempted: supervised.map((adapter) => adapter.id) },
-        'engines: supervised spawn-on-boot dispatched (health surfaces as each comes up)',
+        { attempted: supervised.map(adapter => adapter.id) },
+        'engines: supervised spawn-on-boot dispatched (health surfaces as each comes up)'
       );
     });
   }
@@ -707,13 +956,13 @@ export class EnginesComposer implements EnginesModule {
   /** Shutdown: stop supervised daemons/sidecars. Idempotent, degrade-safe. */
   async stop(): Promise<void> {
     await Promise.all(
-      [...this.adapters.values()].map(async (adapter) => {
+      [...this.adapters.values()].map(async adapter => {
         try {
           await adapter.stop();
         } catch {
           /* idempotent, degrade-safe */
         }
-      }),
+      })
     );
   }
 }

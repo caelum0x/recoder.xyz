@@ -6,11 +6,13 @@
  * random PATH binary.
  *
  * `invoke` maps ops onto real `bd` subcommands (`ready`, `show`, `create`,
- * `update`, `close`, `claim`, `note`, `search`, `vc status`) through the bounded,
- * degrade-safe `runCli` primitive; the issue graph is the raw transport the seam
- * owns (conflict #8). The exported binder reuses `registerBeadsMcpTools`
+ * `update`, `close`, `claim`, `note`, `search`, `vc status`) plus the DEEPER
+ * issue-graph reads (`blocked`, `dep tree`, `dep list`, `count`) through the
+ * bounded, degrade-safe `runCli` primitive; the issue graph is the raw transport
+ * the seam owns (conflict #8). The exported binder reuses `registerBeadsMcpTools`
  * (agent-os/mcp/beads-engine.ts) so the full `beads.*` agent-callable surface is
- * registered behind the interop gate.
+ * registered behind the interop gate; the graph-query reads are exposed as a
+ * SECOND server via `buildBeadsGraphMcpTools` over this same adapter seam.
  *
  * DEGRADE-SAFE LAW: `bd` not resolvable ⇒ `health()` is a truthful `down` and
  * every `invoke` returns `{ ok:false, reason }`. Never fabricates issue data.
@@ -37,7 +39,25 @@ export type BeadsOp =
   | 'note'
   | 'search'
   | 'sync'
+  // Deeper issue-graph reads (the `beads-graph` MCP server binds these):
+  | 'blocked' // `bd blocked` — issues with open blockers + their blocked-by ids
+  | 'graph' //   `bd dep tree` — the dependency tree rooted at an issue
+  | 'deps' //    `bd dep list` — the flat dependency/dependent records for an issue
+  | 'stats' //   `bd count`    — issue counts, optionally grouped by an attribute
   | 'raw';
+
+/** Dependency-tree directions accepted by `bd dep tree`. */
+const GRAPH_DIRECTIONS = new Set(['down', 'up', 'both']);
+/** Dependency-list directions accepted by `bd dep list`. */
+const DEPS_DIRECTIONS = new Set(['down', 'up']);
+/** `bd count --by-*` group attributes → the concrete flag. */
+const STATS_GROUP_FLAGS: Readonly<Record<string, string>> = {
+  status: '--by-status',
+  priority: '--by-priority',
+  type: '--by-type',
+  assignee: '--by-assignee',
+  label: '--by-label',
+};
 
 export interface BeadsAdapterDeps {
   readonly config: EnginesConfig;
@@ -151,6 +171,46 @@ export class BeadsAdapter extends EngineClientBase<unknown, unknown> {
         if (status) args.push('--status', status);
         const limit = Number(input.limit);
         if (Number.isFinite(limit) && limit > 0) args.push('-n', String(Math.min(limit, 50)));
+        return args;
+      }
+      case 'blocked': {
+        const args = ['blocked', '--json'];
+        const parent = str(input.parent) ?? str(input.parentId);
+        if (parent) args.push('--parent', parent);
+        return args;
+      }
+      case 'graph': {
+        if (!id) return null;
+        const args = ['dep', 'tree', id, '--json'];
+        const direction = str(input.direction);
+        if (direction && GRAPH_DIRECTIONS.has(direction)) args.push('--direction', direction);
+        else if (direction) return null; // an unknown direction is bad input, not a silent default
+        const maxDepth = Number(input.maxDepth);
+        if (Number.isFinite(maxDepth) && maxDepth >= 1) args.push('--max-depth', String(Math.trunc(maxDepth)));
+        const status = str(input.status);
+        if (status) args.push('--status', status);
+        return args;
+      }
+      case 'deps': {
+        if (!id) return null;
+        const args = ['dep', 'list', id, '--json'];
+        const direction = str(input.direction);
+        if (direction && DEPS_DIRECTIONS.has(direction)) args.push('--direction', direction);
+        else if (direction) return null;
+        const type = str(input.type);
+        if (type) args.push('--type', type);
+        return args;
+      }
+      case 'stats': {
+        const args = ['count', '--json'];
+        const groupBy = str(input.groupBy);
+        if (groupBy) {
+          const flag = STATS_GROUP_FLAGS[groupBy];
+          if (!flag) return null; // an unknown group attribute is bad input
+          args.push(flag);
+        }
+        const status = str(input.status);
+        if (status) args.push('--status', status);
         return args;
       }
       case 'raw': {

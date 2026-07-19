@@ -85,6 +85,21 @@ describe('BeadsAdapter', () => {
     const res = await adapter.invoke({ op: 'create', input: {} }); // missing title
     expect(res.ok).toBe(false);
   });
+
+  it('rejects the new graph ops with missing/invalid args (bad_input, no throw)', async () => {
+    const adapter = new BeadsAdapter({ config: config(), log, resolveBin: () => process.execPath });
+    // graph/deps require an id
+    const noId = await adapter.invoke({ op: 'graph', input: {} });
+    expect(noId.ok).toBe(false);
+    if (!noId.ok) expect(noId.code).toBe('bad_input');
+    // an unknown dep-tree direction is bad input, not a silent default
+    const badDir = await adapter.invoke({ op: 'graph', input: { id: 'rc-1', direction: 'sideways' } });
+    expect(badDir.ok).toBe(false);
+    // an unknown stats group attribute is bad input
+    const badGroup = await adapter.invoke({ op: 'stats', input: { groupBy: 'phase' } });
+    expect(badGroup.ok).toBe(false);
+    if (!badGroup.ok) expect(badGroup.code).toBe('bad_input');
+  });
 });
 
 describe('TmuxAdapter', () => {
@@ -128,6 +143,54 @@ describe('DmuxAdapter (optional engine)', () => {
     expect(res.ok).toBe(true);
     const health = await adapter.health();
     expect(health.status).toBe('up');
+  });
+
+  it('maps the pane/layout ops onto the injected layout port', async () => {
+    const seen: Record<string, unknown> = {};
+    const adapter = new DmuxAdapter({
+      config: config(),
+      log,
+      layout: {
+        async presets() {
+          seen.presets = true;
+          return { ok: true, value: { presets: [], sidebarWidth: 40 } };
+        },
+        async listPanes(input) {
+          seen.listPanes = input;
+          return { ok: true, value: { panes: [] } };
+        },
+        async createPanes(input) {
+          seen.createPanes = input;
+          return { ok: true, value: { target: input.target, created: [], panes: [], layout: input.layout ?? null } };
+        },
+        async applyLayout(input) {
+          seen.applyLayout = input;
+          return { ok: true, value: { target: input.target, preset: input.preset, tmuxLayout: 'tiled', panes: [] } };
+        },
+      },
+    });
+
+    expect((await adapter.invoke({ op: 'layout-presets', input: {} })).ok).toBe(true);
+    expect(seen.presets).toBe(true);
+
+    await adapter.invoke({ op: 'panes-list', input: { target: 'recoder-x' } });
+    expect(seen.listPanes).toEqual({ target: 'recoder-x' });
+
+    await adapter.invoke({ op: 'panes-create', input: { target: 'recoder-x', count: 3, layout: 'agent-grid' } });
+    expect(seen.createPanes).toMatchObject({ target: 'recoder-x', count: 3, layout: 'agent-grid' });
+
+    await adapter.invoke({ op: 'layout-apply', input: { target: 'recoder-x', preset: 'tiled' } });
+    expect(seen.applyLayout).toEqual({ target: 'recoder-x', preset: 'tiled' });
+  });
+
+  it('rejects panes-create / layout-apply without a target (bad_input, no throw)', async () => {
+    const adapter = new DmuxAdapter({ config: config(), log });
+    const create = await adapter.invoke({ op: 'panes-create', input: { count: 2 } });
+    expect(create.ok).toBe(false);
+    if (!create.ok) expect(create.code).toBe('bad_input');
+    const apply = await adapter.invoke({ op: 'layout-apply', input: { preset: 'tiled' } });
+    expect(apply.ok).toBe(false);
+    if (!apply.ok) expect(apply.code).toBe('bad_input');
   });
 });
 

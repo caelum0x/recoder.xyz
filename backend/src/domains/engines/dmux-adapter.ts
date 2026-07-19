@@ -23,6 +23,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { createLogger } from '../../shared/logger.js';
 import { TMUX_BIN, TMUX_IS_VENDORED } from './tmux-path.js';
+import { fail, ok, type InvokeResult } from './types.js';
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor:dmux');
@@ -186,4 +187,284 @@ export async function dmuxVisibleSessions(): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+// ---------------------------------------------------------------------------
+// Programmatic pane/layout capability for a multi-agent workspace view.
+//
+// dmux is an interactive Ink TUI that arranges worktree-backed agent panes over
+// ONE project-scoped tmux session (apps/desktop/engines/dmux/src/utils/layoutManager.ts +
+// tmux.ts). The Conductor and dmux share a single tmux server (pinned via
+// tmux-path.ts / DMUX_TMUX_BIN), so the SAME `select-layout` / `split-window`
+// primitives dmux drives are drivable headlessly from the backend against a
+// target session. This section exposes that substrate as a small, real
+// capability: list panes, create a workspace grid, and apply a layout preset —
+// including a dmux-flavored `agent-grid` preset that mirrors dmux's operator
+// model (a fixed sidebar column + agent panes).
+//
+// Every op runs the shared tmux binary directly (execFile, arg-array — never a
+// shell, so a caller-supplied target cannot inject). tmux absent / target session
+// missing ⇒ the underlying tmux call rejects with the real reason and the port
+// returns a truthful `{ ok:false }`. Nothing is fabricated.
+// ---------------------------------------------------------------------------
+
+/**
+ * The sidebar column width dmux pins for its operator view — mirrored from
+ * apps/desktop/engines/dmux/src/utils/tmux.ts `SIDEBAR_WIDTH`. The `agent-grid`
+ * preset sets tmux `main-pane-width` to this before a `main-vertical` layout so
+ * the headless arrangement matches what the dmux TUI renders.
+ */
+export const DMUX_SIDEBAR_WIDTH = 40;
+
+/** The layout presets the capability can apply to a target tmux window. */
+export type DmuxLayoutPreset =
+  | 'agent-grid'
+  | 'tiled'
+  | 'even-horizontal'
+  | 'even-vertical'
+  | 'main-vertical'
+  | 'main-horizontal';
+
+export interface DmuxLayoutPresetInfo {
+  /** The preset name callers pass to `applyLayout`. */
+  readonly name: DmuxLayoutPreset;
+  /** The native tmux `select-layout` name it maps onto. */
+  readonly tmuxLayout: string;
+  /** Human-facing description of the resulting arrangement. */
+  readonly description: string;
+}
+
+/** The catalog of supported presets (static — always truthful, even sans tmux). */
+export const DMUX_LAYOUT_PRESETS: readonly DmuxLayoutPresetInfo[] = [
+  {
+    name: 'agent-grid',
+    tmuxLayout: 'main-vertical',
+    description:
+      'dmux operator view: a fixed sidebar column (main-pane-width pinned to the dmux sidebar width) with the agent panes stacked alongside.',
+  },
+  { name: 'tiled', tmuxLayout: 'tiled', description: 'Even grid of all panes.' },
+  { name: 'even-horizontal', tmuxLayout: 'even-horizontal', description: 'Panes side by side in one row.' },
+  { name: 'even-vertical', tmuxLayout: 'even-vertical', description: 'Panes stacked in one column.' },
+  { name: 'main-vertical', tmuxLayout: 'main-vertical', description: 'One large pane on the left, the rest stacked on the right.' },
+  { name: 'main-horizontal', tmuxLayout: 'main-horizontal', description: 'One large pane on top, the rest in a row below.' },
+];
+
+/** A pane in the shared tmux server, as the capability reports it. */
+export interface DmuxPaneInfo {
+  /** The owning session (present only for the all-sessions listing). */
+  readonly session?: string;
+  readonly paneId: string;
+  readonly index: number;
+  readonly active: boolean;
+  readonly width: number;
+  readonly height: number;
+  readonly left: number;
+  readonly top: number;
+  /** The foreground command running in the pane (e.g. `claude`, `zsh`). */
+  readonly command: string;
+  readonly title: string;
+}
+
+export interface DmuxCreatePanesInput {
+  /** The tmux target (session or `session:window`) to build the workspace in. */
+  readonly target: string;
+  /** Total panes the workspace should hold (1–16); existing panes are kept. */
+  readonly count: number;
+  /** Optional working directory for the newly-split panes. */
+  readonly cwd?: string;
+  /** Optional layout preset to apply once the panes exist. */
+  readonly layout?: DmuxLayoutPreset;
+}
+
+export interface DmuxCreatePanesResult {
+  readonly target: string;
+  /** The pane ids created by this call (empty when the target already had enough). */
+  readonly created: readonly string[];
+  /** The full pane set after the operation. */
+  readonly panes: readonly DmuxPaneInfo[];
+  readonly layout: DmuxLayoutPreset | null;
+}
+
+export interface DmuxApplyLayoutInput {
+  readonly target: string;
+  readonly preset: DmuxLayoutPreset;
+}
+
+export interface DmuxApplyLayoutResult {
+  readonly target: string;
+  readonly preset: DmuxLayoutPreset;
+  readonly tmuxLayout: string;
+  /** The sidebar width pinned for `agent-grid` (omitted for other presets). */
+  readonly sidebarWidth?: number;
+  readonly panes: readonly DmuxPaneInfo[];
+}
+
+const PANE_FORMAT =
+  '#{pane_id}|#{pane_index}|#{pane_active}|#{pane_width}|#{pane_height}|#{pane_left}|#{pane_top}|#{pane_current_command}|#{pane_title}';
+
+const MAX_WORKSPACE_PANES = 16;
+
+/**
+ * List panes in the shared tmux server. With a `target` (session/window) it lists
+ * that window's panes; without one it lists ALL panes across sessions (each
+ * carrying its `session`). Throws the real tmux error when tmux is absent.
+ */
+export async function dmuxListPanes(target?: string): Promise<DmuxPaneInfo[]> {
+  const args = target
+    ? ['list-panes', '-t', target, '-F', PANE_FORMAT]
+    : ['list-panes', '-a', '-F', `#{session_name}|${PANE_FORMAT}`];
+  const { stdout } = await exec(TMUX_BIN, args);
+  return stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => parsePaneLine(line, !target));
+}
+
+/**
+ * Build a multi-agent workspace grid in `target`: split the window until it holds
+ * `count` panes, rebalancing to `tiled` between splits so each split has room,
+ * then apply the requested preset. Idempotent-ish: an existing target with enough
+ * panes creates nothing. Throws the real tmux error (missing session, no tmux).
+ */
+export async function dmuxCreateWorkspacePanes(input: DmuxCreatePanesInput): Promise<DmuxCreatePanesResult> {
+  const count = clampCount(input.count);
+  const existing = await dmuxListPanes(input.target);
+  const created: string[] = [];
+  let splitFrom = input.target;
+  for (let i = existing.length; i < count; i++) {
+    const args = ['split-window', '-h', '-P', '-F', '#{pane_id}', '-t', splitFrom];
+    if (input.cwd) args.push('-c', input.cwd);
+    const { stdout } = await exec(TMUX_BIN, args);
+    const paneId = stdout.trim();
+    created.push(paneId);
+    splitFrom = paneId;
+    // Rebalance so the next split (and the final layout) has usable space.
+    await exec(TMUX_BIN, ['select-layout', '-t', input.target, 'tiled']).catch(() => undefined);
+  }
+  const layout = input.layout ?? null;
+  if (layout) {
+    await applyLayoutCommands(input.target, layout);
+  }
+  const panes = await dmuxListPanes(input.target);
+  return { target: input.target, created, panes, layout };
+}
+
+/**
+ * Apply a layout preset to `target`. `agent-grid` first pins tmux
+ * `main-pane-width` to {@link DMUX_SIDEBAR_WIDTH} (dmux's sidebar column) before a
+ * `main-vertical` layout; the rest map straight onto native tmux `select-layout`.
+ * Throws the real tmux error on a missing target / absent tmux.
+ */
+export async function dmuxApplyLayout(input: DmuxApplyLayoutInput): Promise<DmuxApplyLayoutResult> {
+  const info = DMUX_LAYOUT_PRESETS.find((p) => p.name === input.preset);
+  if (!info) {
+    throw new Error(`unknown dmux layout preset '${input.preset}'`);
+  }
+  const sidebarWidth = await applyLayoutCommands(input.target, input.preset);
+  const panes = await dmuxListPanes(input.target);
+  return {
+    target: input.target,
+    preset: input.preset,
+    tmuxLayout: info.tmuxLayout,
+    ...(sidebarWidth != null ? { sidebarWidth } : {}),
+    panes,
+  };
+}
+
+/**
+ * The layout capability as a port the MCP binder consumes. Every method wraps the
+ * pure tmux functions in a truthful {@link InvokeResult} — a rejected tmux call
+ * (no tmux, missing session, bad target) becomes `{ ok:false, reason }`, never a
+ * throw across the seam and never a fabricated arrangement.
+ */
+export interface DmuxLayoutPort {
+  presets(): Promise<InvokeResult<{ presets: readonly DmuxLayoutPresetInfo[]; sidebarWidth: number }>>;
+  listPanes(input: { target?: string }): Promise<InvokeResult<{ panes: readonly DmuxPaneInfo[] }>>;
+  createPanes(input: DmuxCreatePanesInput): Promise<InvokeResult<DmuxCreatePanesResult>>;
+  applyLayout(input: DmuxApplyLayoutInput): Promise<InvokeResult<DmuxApplyLayoutResult>>;
+}
+
+/** Build the {@link DmuxLayoutPort} over the shared tmux server. */
+export function createDmuxLayoutPort(): DmuxLayoutPort {
+  return {
+    async presets() {
+      return ok({ presets: DMUX_LAYOUT_PRESETS, sidebarWidth: DMUX_SIDEBAR_WIDTH });
+    },
+    async listPanes(input) {
+      try {
+        return ok({ panes: await dmuxListPanes(input.target) });
+      } catch (err) {
+        return fail(`dmux list-panes failed: ${message(err)}`, 'tmux_error');
+      }
+    },
+    async createPanes(input) {
+      if (!input.target?.trim()) return fail('dmux panes-create requires a target session', 'bad_input');
+      if (!Number.isFinite(input.count) || input.count < 1) {
+        return fail('dmux panes-create requires a positive count', 'bad_input');
+      }
+      try {
+        return ok(await dmuxCreateWorkspacePanes(input));
+      } catch (err) {
+        return fail(`dmux panes-create failed: ${message(err)}`, 'tmux_error');
+      }
+    },
+    async applyLayout(input) {
+      if (!input.target?.trim()) return fail('dmux layout-apply requires a target session', 'bad_input');
+      if (!DMUX_LAYOUT_PRESETS.some((p) => p.name === input.preset)) {
+        return fail(`unknown dmux layout preset '${input.preset}'`, 'bad_input');
+      }
+      try {
+        return ok(await dmuxApplyLayout(input));
+      } catch (err) {
+        return fail(`dmux layout-apply failed: ${message(err)}`, 'tmux_error');
+      }
+    },
+  };
+}
+
+/** Run the tmux commands for a preset; returns the pinned sidebar width when set. */
+async function applyLayoutCommands(target: string, preset: DmuxLayoutPreset): Promise<number | undefined> {
+  const info = DMUX_LAYOUT_PRESETS.find((p) => p.name === preset);
+  if (!info) throw new Error(`unknown dmux layout preset '${preset}'`);
+  let sidebarWidth: number | undefined;
+  if (preset === 'agent-grid') {
+    sidebarWidth = DMUX_SIDEBAR_WIDTH;
+    await exec(TMUX_BIN, ['set-window-option', '-t', target, 'main-pane-width', String(DMUX_SIDEBAR_WIDTH)]);
+  }
+  await exec(TMUX_BIN, ['select-layout', '-t', target, info.tmuxLayout]);
+  return sidebarWidth;
+}
+
+function parsePaneLine(line: string, withSession: boolean): DmuxPaneInfo {
+  const parts = line.split('|');
+  const session = withSession ? parts.shift() : undefined;
+  const [paneId, index, active, width, height, left, top, command, ...titleParts] = parts;
+  return {
+    ...(session ? { session } : {}),
+    paneId: paneId ?? '',
+    index: toInt(index),
+    active: active === '1',
+    width: toInt(width),
+    height: toInt(height),
+    left: toInt(left),
+    top: toInt(top),
+    command: command ?? '',
+    title: titleParts.join('|'),
+  };
+}
+
+function clampCount(value: number): number {
+  const n = Math.floor(value);
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(n, MAX_WORKSPACE_PANES);
+}
+
+function toInt(value: string | undefined): number {
+  const n = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function message(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }

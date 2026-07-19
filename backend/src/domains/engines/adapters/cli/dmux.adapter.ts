@@ -16,12 +16,15 @@
  * expected, non-fault degrade (it is optional).
  */
 import {
+  createDmuxLayoutPort,
   dmuxAttachCommand,
   dmuxAvailability,
   dmuxVisibleSessions,
   launchDmuxConsole,
   resolveDmuxBin,
   type DmuxAvailability,
+  type DmuxLayoutPort,
+  type DmuxLayoutPreset,
 } from '../../dmux-adapter.js';
 import type { Logger } from '../../../../shared/logger.js';
 import type { EnginesConfig } from '../../config.js';
@@ -30,24 +33,53 @@ import { EngineClientBase } from '../../ports/engine-client.port.js';
 import type { EngineCall } from '../../ports/engine-client.port.js';
 import { down, fail, ok, up, type EngineHealth, type InvokeResult } from '../../types.js';
 
-/** The operator-console ops the adapter maps onto the reused dmux surface. */
-export type DmuxOp = 'availability' | 'sessions' | 'attach-command' | 'launch';
+/**
+ * The operator-console ops the adapter maps onto the reused dmux surface. The
+ * last four are the programmatic pane/layout capability over the shared tmux
+ * substrate (the same tmux server the dmux TUI arranges): enumerate presets,
+ * list panes, build a multi-agent workspace grid, and apply a layout preset.
+ */
+export type DmuxOp =
+  | 'availability'
+  | 'sessions'
+  | 'attach-command'
+  | 'launch'
+  | 'layout-presets'
+  | 'panes-list'
+  | 'panes-create'
+  | 'layout-apply';
 
 export interface DmuxAdapterDeps {
   readonly config: EnginesConfig;
   readonly log: Logger;
   /** Override the availability probe (defaults to the conductor `dmuxAvailability`). */
   readonly availability?: () => Promise<DmuxAvailability>;
+  /** Override the pane/layout port (defaults to the real tmux-backed port). */
+  readonly layout?: DmuxLayoutPort;
 }
 
 export class DmuxAdapter extends EngineClientBase<unknown, unknown> {
   private readonly deps: DmuxAdapterDeps;
   private readonly probe: () => Promise<DmuxAvailability>;
+  private readonly layoutPort: DmuxLayoutPort;
 
   constructor(deps: DmuxAdapterDeps) {
     super('dmux', 'cli');
     this.deps = deps;
     this.probe = deps.availability ?? dmuxAvailability;
+    this.layoutPort = deps.layout ?? createDmuxLayoutPort();
+  }
+
+  /**
+   * The programmatic pane/layout capability as a port for the MCP binder
+   * (`recoder.dmux`). It drives the shared tmux server directly, so it is
+   * usable whenever tmux is reachable — independent of whether the dmux TUI
+   * binary is installed (the TUI is the optional operator viewer of the same
+   * layout). Truthful degrade lives in the port: a rejected tmux call is a
+   * `{ ok:false }`, never a throw or a fabricated arrangement.
+   */
+  layout(): DmuxLayoutPort {
+    return this.layoutPort;
   }
 
   async invoke(call: EngineCall<unknown>): Promise<InvokeResult<unknown>> {
@@ -79,6 +111,28 @@ export class DmuxAdapter extends EngineClientBase<unknown, unknown> {
             : undefined;
           const launched = launchDmuxConsole({ repoPath, ...(extraArgs ? { extraArgs } : {}) });
           return ok(launched);
+        }
+        case 'layout-presets':
+          return this.layoutPort.presets();
+        case 'panes-list':
+          return this.layoutPort.listPanes({ ...(str(input.target) ? { target: str(input.target) } : {}) });
+        case 'panes-create': {
+          const target = str(input.target);
+          if (!target) return fail('dmux panes-create requires a target', 'bad_input');
+          const count = Number(input.count);
+          return this.layoutPort.createPanes({
+            target,
+            count: Number.isFinite(count) ? count : 0,
+            ...(str(input.cwd) ? { cwd: str(input.cwd) } : {}),
+            ...(str(input.layout) ? { layout: str(input.layout) as DmuxLayoutPreset } : {}),
+          });
+        }
+        case 'layout-apply': {
+          const target = str(input.target);
+          if (!target) return fail('dmux layout-apply requires a target', 'bad_input');
+          const preset = str(input.preset);
+          if (!preset) return fail('dmux layout-apply requires a preset', 'bad_input');
+          return this.layoutPort.applyLayout({ target, preset: preset as DmuxLayoutPreset });
         }
         default:
           return fail(`unknown dmux op '${call.op}'`, 'bad_op');
