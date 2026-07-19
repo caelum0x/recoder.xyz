@@ -41,12 +41,22 @@ import {
   createGovernanceKernelClient,
   type GovernanceNapiAdapter,
 } from './governance-napi.adapter.js';
+import {
+  buildOpenfangRuntimeMcpTools,
+  OPENFANG_RUNTIME_SUBJECT_OPS,
+  OPENFANG_RUNTIME_TOOL_SPECS,
+} from './openfang-runtime-tools.js';
+import {
+  buildGovernanceExplainMcpTools,
+  GOVERNANCE_EXPLAIN_SUBJECT_OPS,
+  GOVERNANCE_EXPLAIN_TOOL_SPECS,
+} from './governance-explain-tools.js';
 
 /** A napi engine used behind an MCP tool — the narrow slice the tools call. */
 type NapiEngine = EngineClientPort<NapiArgs, unknown>;
 
 /** One agent-callable MCP tool bound to a fixed engine op (or the generic passthrough). */
-interface NapiToolSpec {
+export interface NapiToolSpec {
   readonly name: string;
   readonly description: string;
   /** The engine op this tool invokes. `undefined` → the generic `{ op, ...args }` passthrough. */
@@ -140,6 +150,10 @@ const OPENFANG_AGENT_SUBJECT_OPS: ReadonlySet<string> = new Set([
   'memorySet',
   'memoryDelete',
   'memoryList',
+  // Composed agent-runtime introspection ops that key on a tenant-owned agentId
+  // (contributed by ./openfang-runtime-tools.ts) — bound on BOTH the named tool
+  // and the generic `openfang.invoke` passthrough so neither can go cross-tenant.
+  ...OPENFANG_RUNTIME_SUBJECT_OPS,
 ]);
 
 /** Ops where `agentId` is an OPTIONAL filter: bind it only when the caller supplies one. */
@@ -188,6 +202,62 @@ function bindOpenfangArgs(op: string, args: NapiArgs, caller: McpToolCaller | un
 }
 
 // ---------------------------------------------------------------------------
+// governance tenant-subject binding (SECURITY)
+// ---------------------------------------------------------------------------
+//
+// The governance-kernel tools that carry an `actorId` (the identity a decision is
+// evaluated FOR) are `decide` and the composed `explain` — a tenant-owned SUBJECT.
+// `actorId` is caller-controlled args, and the edge only binds `args.userId` (NOT
+// `actorId`), so an unbound handler would let a caller probe "what would ANOTHER
+// actor be allowed to do" (a cross-tenant read of the policy posture). Same durable
+// pattern as the openfang/billing/inference subject fixes: the `actorId` a call
+// acts for is DERIVED from the host-authorized {@link McpToolCaller}, never
+// caller-selected. A NON-privileged caller may only address its OWN subject; an
+// args `actorId` naming a different owner is rejected (403); absent, the caller's
+// own subject (org scope wins) is used. Only `admin`/`internal` may name an
+// arbitrary `actorId`. Absent a caller, refuse (AUTH_REQUIRED) rather than leak.
+
+/** governance-kernel ops whose `actorId` names a tenant-owned subject (bound always). */
+const GOVERNANCE_ACTOR_SUBJECT_OPS: ReadonlySet<string> = new Set([
+  'decide',
+  // The composed decision-explanation op (contributed by ./governance-explain-tools.ts),
+  // bound on the named tool so it can never explain a decision for another tenant's actor.
+  ...GOVERNANCE_EXPLAIN_SUBJECT_OPS,
+]);
+
+/**
+ * Resolve the governance `actorId` the call acts for, bound to the authorized
+ * caller. A NON-privileged caller may only target its own subject; a cross-tenant
+ * `actorId` (one the caller does not own) is rejected (403). Absent a caller, refuse.
+ */
+function resolveGovernanceActorId(requested: string | undefined, caller: McpToolCaller | undefined): string {
+  const authUserId = caller?.userId?.trim();
+  if (!caller || !authUserId) {
+    throw createError(ErrorCode.AUTH_REQUIRED, 'governance: no authorized caller identity');
+  }
+  const orgId = caller.orgId?.trim() || undefined;
+  if (!requested) return orgId ?? authUserId; // default to the caller's own subject (org scope wins)
+  if (isPrivileged(caller)) return requested; // a service acting on behalf of a tenant
+  if (requested === authUserId || (orgId !== undefined && requested === orgId)) return requested;
+  throw createError(
+    ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+    'governance: caller may only evaluate decisions for its own actor',
+  );
+}
+
+/**
+ * The {@link ArgsBinder} for governance-kernel tools: rewrite/authorize a subject
+ * op's `actorId` against the caller so the caller-supplied value can never select
+ * another tenant's actor. Non-subject ops (status, auditTip, verifyAudit, route,
+ * enforceTool) pass through untouched.
+ */
+function bindGovernanceArgs(op: string, args: NapiArgs, caller: McpToolCaller | undefined): NapiArgs {
+  if (!GOVERNANCE_ACTOR_SUBJECT_OPS.has(op)) return args;
+  const raw = typeof args.actorId === 'string' && args.actorId.trim() ? args.actorId.trim() : undefined;
+  return { ...args, actorId: resolveGovernanceActorId(raw, caller) };
+}
+
+// ---------------------------------------------------------------------------
 // Tool catalogs (agent-facing names → engine ops)
 // ---------------------------------------------------------------------------
 
@@ -207,6 +277,13 @@ const OPENFANG_TOOL_SPECS: readonly NapiToolSpec[] = [
   { name: 'openfang.invoke', description: 'Generic passthrough to any openfang napi op. Args: { op, ...opArgs }.' },
 ];
 
+/**
+ * The full openfang tool catalog the server advertises = the base specs + the
+ * agent-runtime introspection tools contributed by `./openfang-runtime-tools.ts`.
+ * (The registration below advertises these names; the builder binds the handlers.)
+ */
+const OPENFANG_ALL_TOOL_SPECS: readonly NapiToolSpec[] = [...OPENFANG_TOOL_SPECS, ...OPENFANG_RUNTIME_TOOL_SPECS];
+
 const TENSORZERO_TOOL_SPECS: readonly NapiToolSpec[] = [
   { name: 'tensorzero.inference', description: 'Route an inference through the embedded TensorZero gateway (governed). Args: TZ inference params { function_name, input, ... }.', op: 'inference' },
   { name: 'tensorzero.feedback', description: 'Record TensorZero feedback (metric/comment). Args: TZ feedback params.', op: 'feedback' },
@@ -219,6 +296,16 @@ const GOVERNANCE_TOOL_SPECS: readonly NapiToolSpec[] = [
   { name: 'governance.decide', description: 'Preview a governance decision (deny-biased). Args: { actorId, action, target }.', op: 'decide' },
   { name: 'governance.audit_tip', description: "The governance kernel's current Merkle audit tip hash.", op: 'auditTip' },
   { name: 'governance.audit_verify', description: "Verify the governance kernel's audit chain integrity.", op: 'verifyAudit' },
+];
+
+/**
+ * The full governance-kernel tool catalog the server advertises = the base specs +
+ * the decision-explanation tool contributed by `./governance-explain-tools.ts`.
+ * (The registration below advertises these names; the builder binds the handlers.)
+ */
+const GOVERNANCE_ALL_TOOL_SPECS: readonly NapiToolSpec[] = [
+  ...GOVERNANCE_TOOL_SPECS,
+  ...GOVERNANCE_EXPLAIN_TOOL_SPECS,
 ];
 
 // ---------------------------------------------------------------------------
@@ -242,9 +329,9 @@ export const OPENFANG_MCP_SERVER_ID = 'openfang';
 export const TENSORZERO_MCP_SERVER_ID = 'tensorzero';
 export const GOVERNANCE_KERNEL_MCP_SERVER_ID = 'governance-kernel';
 
-export const openfangMcpServer = serverFor(OPENFANG_MCP_SERVER_ID, 'Openfang (native agent kernel)', OPENFANG_TOOL_SPECS);
+export const openfangMcpServer = serverFor(OPENFANG_MCP_SERVER_ID, 'Openfang (native agent kernel)', OPENFANG_ALL_TOOL_SPECS);
 export const tensorzeroMcpServer = serverFor(TENSORZERO_MCP_SERVER_ID, 'TensorZero (embedded LLM gateway)', TENSORZERO_TOOL_SPECS);
-export const governanceKernelMcpServer = serverFor(GOVERNANCE_KERNEL_MCP_SERVER_ID, 'Governance kernel', GOVERNANCE_TOOL_SPECS);
+export const governanceKernelMcpServer = serverFor(GOVERNANCE_KERNEL_MCP_SERVER_ID, 'Governance kernel', GOVERNANCE_ALL_TOOL_SPECS);
 
 // ---------------------------------------------------------------------------
 // Public MCP tool builders (module-base shape the composer's `mcp()` returns)
@@ -252,7 +339,12 @@ export const governanceKernelMcpServer = serverFor(GOVERNANCE_KERNEL_MCP_SERVER_
 
 /** openfang agent-callable tools over a client (agentId subjects bound to the caller). */
 export function buildOpenfangMcpTools(client: NapiEngine): McpToolRegistration[] {
-  return buildTools(client, OPENFANG_TOOL_SPECS, bindOpenfangArgs);
+  return [
+    ...buildTools(client, OPENFANG_TOOL_SPECS, bindOpenfangArgs),
+    // The agent-runtime introspection tools (own binder file) — bound through the
+    // SAME caller-scoped subject binder so `agent_run_status` stays cross-tenant CLOSED.
+    ...buildOpenfangRuntimeMcpTools(client, bindOpenfangArgs),
+  ];
 }
 
 /** tensorzero inference/feedback/config/version tools over a client. */
@@ -260,9 +352,16 @@ export function buildTensorzeroMcpTools(client: NapiEngine): McpToolRegistration
   return buildTools(client, TENSORZERO_TOOL_SPECS);
 }
 
-/** governance kernel read/decide tools over a client (thin — no duplicate of the governance module's tools). */
+/** governance kernel read/decide/explain tools over a client (thin — no duplicate of the governance module's tools). */
 export function buildGovernanceKernelMcpTools(client: NapiEngine): McpToolRegistration[] {
-  return buildTools(client, GOVERNANCE_TOOL_SPECS);
+  return [
+    // Base status/decide/audit tools — `decide` carries an `actorId` subject, so the
+    // whole set is built through the governance binder (a no-op for the non-subject ops).
+    ...buildTools(client, GOVERNANCE_TOOL_SPECS, bindGovernanceArgs),
+    // The composed decision-explanation tool (own binder file) — bound through the
+    // SAME caller-scoped subject binder so `explain_decision` stays cross-tenant CLOSED.
+    ...buildGovernanceExplainMcpTools(client, bindGovernanceArgs),
+  ];
 }
 
 /** Every napi-group MCP tool (the composer merges these into `EnginesModule.mcp()`). */

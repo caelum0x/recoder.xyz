@@ -11,8 +11,25 @@ export {
   OpenfangNapiAdapter,
   createOpenfangClient,
   OPENFANG_OPS,
+  OPENFANG_COMPOSITE_OPS,
   type OpenfangNapiOptions,
 } from './openfang-napi.adapter.js';
+
+export {
+  buildOpenfangRuntimeMcpTools,
+  OPENFANG_RUNTIME_TOOL_SPECS,
+  OPENFANG_RUNTIME_SUBJECT_OPS,
+  type OpenfangRuntimeToolSpec,
+} from './openfang-runtime-tools.js';
+
+export {
+  composeHandIntrospection,
+  composeAgentRunStatus,
+  type HandIntrospection,
+  type HandToolView,
+  type HandInstanceView,
+  type AgentRunStatus,
+} from './openfang-introspect.js';
 
 export {
   TensorzeroNapiAdapter,
@@ -23,7 +40,17 @@ export {
 export {
   GovernanceNapiAdapter,
   createGovernanceKernelClient,
+  buildDecisionExplanation,
+  type GovernanceDecisionExplanation,
+  type ExplanationFactor,
 } from './governance-napi.adapter.js';
+
+export {
+  buildGovernanceExplainMcpTools,
+  GOVERNANCE_EXPLAIN_TOOL_SPECS,
+  GOVERNANCE_EXPLAIN_SUBJECT_OPS,
+  type GovernanceExplainToolSpec,
+} from './governance-explain-tools.js';
 
 export {
   createNapiEngineClients,

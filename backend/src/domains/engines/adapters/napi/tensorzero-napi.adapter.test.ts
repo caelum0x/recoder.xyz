@@ -12,7 +12,7 @@
  * `configFile: null` is passed so the adapter never imports the env-reading config
  * generator during the test (keeps the boot pure + deterministic).
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Logger } from '../../../../shared/logger.js';
 import type { NapiLoaderPort, NapiModule } from '../../ports/napi-loader.port.js';
 import { TensorzeroNapiAdapter } from './tensorzero-napi.adapter.js';
@@ -207,5 +207,130 @@ describe('TensorzeroNapiAdapter (degrade-safe)', () => {
     const result = await adapter.invoke({ op: 'notAnOp', input: {} });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe('UNKNOWN_OP');
+  });
+});
+
+describe('TensorzeroNapiAdapter deep inference port (catalog + batch)', () => {
+  const OLD_MODELS = process.env.TENSORZERO_MODELS;
+  const OLD_KEY = process.env.OPENAI_API_KEY;
+  afterEach(() => {
+    if (OLD_MODELS === undefined) delete process.env.TENSORZERO_MODELS;
+    else process.env.TENSORZERO_MODELS = OLD_MODELS;
+    if (OLD_KEY === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = OLD_KEY;
+  });
+
+  it('modelCatalog introspects the Recoder registry from env (truthful even with .node absent)', async () => {
+    process.env.TENSORZERO_MODELS = 'openai/gpt-4o-mini';
+    process.env.OPENAI_API_KEY = 'sk-test';
+    // .node absent → gatewayVersion is null, but the catalog is still resolved.
+    const adapter = new TensorzeroNapiAdapter(fakeLoader(null, null), log, { configFile: null });
+    const result = await adapter.invoke({ op: 'modelCatalog', input: {} });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const catalog = result.value as {
+        gatewayVersion: string | null;
+        models: { id: string; functionName: string }[];
+        functions: string[];
+        defaultFunction: string | null;
+      };
+      expect(catalog.gatewayVersion).toBeNull();
+      expect(catalog.models).toHaveLength(1);
+      expect(catalog.models[0]).toMatchObject({ id: 'openai/gpt-4o-mini' });
+      expect(catalog.defaultFunction).toBe('recoder_default');
+      expect(catalog.functions).toContain('recoder_default');
+    }
+  });
+
+  it('modelCatalog reports the gateway version when the .node is present', async () => {
+    process.env.TENSORZERO_MODELS = '';
+    const adapter = new TensorzeroNapiAdapter(fakeLoader(withEmbedded(), '/tmp/tz.node'), log, { configFile: null });
+    const result = await adapter.invoke({ op: 'modelCatalog', input: {} });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const catalog = result.value as { gatewayVersion: string | null; models: unknown[]; defaultFunction: string | null };
+      expect(catalog.gatewayVersion).toBe('2.0.0');
+      expect(catalog.models).toHaveLength(0);
+      expect(catalog.defaultFunction).toBeNull();
+    }
+  });
+
+  it('batchInference runs every request over the single-inference napi and aggregates outcomes', async () => {
+    let seen = 0;
+    const module = withEmbedded({
+      inference: async (p: string) => {
+        seen++;
+        return JSON.stringify({ inference_id: `inf_${seen}`, echo: JSON.parse(p) });
+      },
+    });
+    const adapter = new TensorzeroNapiAdapter(fakeLoader(module, '/tmp/tz.node'), log, { configFile: null });
+    const result = await adapter.invoke({
+      op: 'batchInference',
+      input: { requests: [{ function_name: 'f', input: {} }, { function_name: 'g', input: {} }], concurrency: 2 },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const batch = result.value as { total: number; succeeded: number; failed: number; results: { index: number; ok: boolean }[] };
+      expect(batch).toMatchObject({ total: 2, succeeded: 2, failed: 0 });
+      expect(batch.results.map((r) => r.index)).toEqual([0, 1]);
+    }
+    expect(seen).toBe(2);
+  });
+
+  it('batchInference reports a per-item failure without failing the whole batch', async () => {
+    const module = withEmbedded({
+      inference: async (p: string) => {
+        const body = JSON.parse(p) as { function_name?: string };
+        if (body.function_name === 'boom') throw new Error('provider rejected');
+        return JSON.stringify({ inference_id: 'ok' });
+      },
+    });
+    const adapter = new TensorzeroNapiAdapter(fakeLoader(module, '/tmp/tz.node'), log, { configFile: null });
+    const result = await adapter.invoke({
+      op: 'batchInference',
+      input: { requests: [{ function_name: 'ok' }, { function_name: 'boom' }], concurrency: 1 },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const batch = result.value as { succeeded: number; failed: number; results: { ok: boolean; error?: string }[] };
+      expect(batch).toMatchObject({ succeeded: 1, failed: 1 });
+      expect(batch.results[1]).toMatchObject({ ok: false });
+      expect(batch.results[1].error).toMatch(/provider rejected/);
+    }
+  });
+
+  it('batchInference stopOnError skips not-yet-scheduled requests truthfully', async () => {
+    const module = withEmbedded({
+      inference: async (p: string) => {
+        const body = JSON.parse(p) as { function_name?: string };
+        if (body.function_name === 'boom') throw new Error('provider rejected');
+        return JSON.stringify({ inference_id: 'ok' });
+      },
+    });
+    const adapter = new TensorzeroNapiAdapter(fakeLoader(module, '/tmp/tz.node'), log, { configFile: null });
+    const result = await adapter.invoke({
+      op: 'batchInference',
+      // concurrency 1 so ordering is deterministic: boom fails, the rest are skipped.
+      input: { requests: [{ function_name: 'boom' }, { function_name: 'ok' }, { function_name: 'ok' }], concurrency: 1, stopOnError: true },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const batch = result.value as { failed: number; skipped: number };
+      expect(batch).toMatchObject({ failed: 1, skipped: 2 });
+    }
+  });
+
+  it('batchInference fails truthfully (ENGINE_DOWN) when the gateway is absent', async () => {
+    const adapter = new TensorzeroNapiAdapter(fakeLoader(null, null), log, { configFile: null });
+    const result = await adapter.invoke({ op: 'batchInference', input: { requests: [{ function_name: 'f' }] } });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('ENGINE_DOWN');
+  });
+
+  it('batchInference rejects an empty requests array (BAD_INPUT)', async () => {
+    const adapter = new TensorzeroNapiAdapter(fakeLoader(withEmbedded(), '/tmp/tz.node'), log, { configFile: null });
+    const result = await adapter.invoke({ op: 'batchInference', input: { requests: [] } });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('BAD_INPUT');
   });
 });
