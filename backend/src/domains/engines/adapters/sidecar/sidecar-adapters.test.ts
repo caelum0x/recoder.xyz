@@ -112,7 +112,86 @@ describe('Mem0Adapter', () => {
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.code).toBe('disabled');
   });
+
+  // --- deep insight ops (recall / relations / stats) over the REST sidecar ---
+
+  it('degrades insight ops (recall/relations/stats) truthfully with no sidecar base', async () => {
+    const adapter = new Mem0Adapter({ supervisor: deadSupervisor, config: config(), log, client: unavailableMem0 });
+    for (const op of ['recall', 'relations', 'stats'] as const) {
+      const input = op === 'recall' ? { userId: 'u1' } : {};
+      const res = await adapter.invoke({ op, input });
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.code).toBe('unavailable');
+    }
+  });
+
+  it('validates recall requires at least one entity id (bad_input)', async () => {
+    const adapter = new Mem0Adapter({ supervisor: deadSupervisor, config: config(), log, client: unavailableMem0 });
+    const res = await adapter.invoke({ op: 'recall', input: { query: 'x' } });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe('bad_input');
+  });
+
+  it('routes recall as POST /insights/recall with the snake_case body', async () => {
+    const calls: { url: string; method: string; body?: string }[] = [];
+    const fetchImpl = (async (url: string, init: { method?: string; body?: string }) => {
+      calls.push({ url, method: init.method ?? 'GET', body: init.body });
+      return { ok: true, status: 200, async json() { return { results: [{ id: 'm1' }], count: 1 }; }, async text() { return ''; } };
+    }) as unknown as Parameters<typeof makeMem0Adapter>[0]['fetch'];
+    const adapter = makeMem0Adapter({ fetch: fetchImpl });
+    const res = await adapter.invoke({
+      op: 'recall',
+      input: { userId: 'u1', agentId: 'a1', query: 'plans', createdAfter: '2026-01-01T00:00:00Z', limit: 5 },
+    });
+    expect(res.ok).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.method).toBe('POST');
+    expect(calls[0]?.url).toBe('http://mem0.local/insights/recall');
+    expect(JSON.parse(calls[0]?.body ?? '{}')).toEqual({
+      user_id: 'u1',
+      agent_id: 'a1',
+      query: 'plans',
+      created_after: '2026-01-01T00:00:00Z',
+      limit: 5,
+    });
+  });
+
+  it('routes relations as GET /insights/graph with scope + focus query params', async () => {
+    const calls: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      calls.push(url);
+      return { ok: true, status: 200, async json() { return { nodes: [], edges: [] }; }, async text() { return ''; } };
+    }) as unknown as Parameters<typeof makeMem0Adapter>[0]['fetch'];
+    const adapter = makeMem0Adapter({ fetch: fetchImpl });
+    const res = await adapter.invoke({ op: 'relations', input: { userId: 'u1', focus: 'a1', entityType: 'agent' } });
+    expect(res.ok).toBe(true);
+    expect(calls[0]).toBe('http://mem0.local/insights/graph?user_id=u1&focus=a1&entity_type=agent');
+  });
+
+  it('routes stats as GET /insights/stats (unscoped when no userId)', async () => {
+    const calls: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      calls.push(url);
+      return { ok: true, status: 200, async json() { return { total_memories: 0 }; }, async text() { return ''; } };
+    }) as unknown as Parameters<typeof makeMem0Adapter>[0]['fetch'];
+    const adapter = makeMem0Adapter({ fetch: fetchImpl });
+    const res = await adapter.invoke({ op: 'stats', input: {} });
+    expect(res.ok).toBe(true);
+    expect(calls[0]).toBe('http://mem0.local/insights/stats');
+  });
 });
+
+/** A mem0 adapter wired to a fixed REST base + injected fetch (the sidecar path). */
+function makeMem0Adapter(deps: { fetch: import('./mem0.adapter.js').Mem0Fetch }): Mem0Adapter {
+  return new Mem0Adapter({
+    supervisor: deadSupervisor,
+    config: config(),
+    log,
+    client: unavailableMem0,
+    fetch: deps.fetch,
+    baseUrl: () => 'http://mem0.local',
+  });
+}
 
 /** A supervisor with a LIVE loopback-http handle (the supervised sidecar is up). */
 function liveSupervisor(baseUrl: string): { port: SidecarSupervisorPort; setHandle(h: SidecarHandle | null): void } {

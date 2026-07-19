@@ -30,6 +30,8 @@ import {
   notifyMcpServer,
 } from '@recoder/agent-mcp';
 import type { McpServerRegistration } from '@recoder/interop';
+import { browserExtMcpServer } from './browser-ext-engine.js';
+import { recoderPalCommsServer } from '../adapters/sidecar/index.js';
 
 /**
  * A binder registers one server's REAL tool handlers onto the shared router,
@@ -86,6 +88,10 @@ export const ENGINE_SERVERS: readonly McpServerRegistration[] = [
   workflowMcpServer,
   palPlanMcpServer,
   notifyMcpServer,
+  // Deep browser-use capability surface (extract_structured/run_task/annotate/fill).
+  browserExtMcpServer,
+  // Pal multi-model comms (route/consensus/debate/models) over the pal adapter.
+  recoderPalCommsServer,
 ];
 
 /**

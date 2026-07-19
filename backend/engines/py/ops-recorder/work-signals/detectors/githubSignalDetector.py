@@ -140,6 +140,37 @@ def _pr_approved_not_merged(pr: dict) -> Optional[Tuple[str, str]]:
     return None
 
 
+def _pr_merge_conflict(pr: dict) -> Optional[Tuple[str, str]]:
+    """PR cannot be merged because of conflicts with the base branch.
+
+    GitHub reports this two ways depending on the endpoint: ``mergeable`` is
+    ``False`` (single-PR view) or ``mergeable_state`` is ``"dirty"`` (list
+    view). Either means the author must resolve conflicts before anything can
+    proceed — highly actionable, so it is a ``high`` priority signal.
+    """
+    if pr.get("mergeable") is False or pr.get("mergeable_state") == "dirty":
+        return ("PR has merge conflicts with the base branch — needs a rebase/resolve.", "high")
+    return None
+
+
+def _pr_draft_open_too_long(pr: dict) -> Optional[Tuple[str, str]]:
+    """A draft PR has been open longer than STALE_PR_DAYS.
+
+    A long-lived draft is a classic silent stall: it never enters review, so
+    the review-oriented rules never fire on it. Surfaced at ``medium`` (it may
+    be intentional WIP), escalating to ``high`` past twice the threshold.
+    """
+    if pr.get("draft") is not True:
+        return None
+    days = _days_since(pr.get("created_at"))
+    if days is not None and days > STALE_PR_DAYS:
+        return (
+            f"Draft PR open for {days} days — never moved to review.",
+            "high" if days > STALE_PR_DAYS * 2 else "medium",
+        )
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Issue rules
 # ---------------------------------------------------------------------------
@@ -176,8 +207,10 @@ def _high_priority_issue_no_assignee(issue: dict) -> Optional[Tuple[str, str]]:
 # "pr" rules only run on PR dicts; "issue" rules only run on issue dicts.
 PR_RULES = [
     _pr_failing_checks,          # check CI first — most actionable
+    _pr_merge_conflict,          # a dirty merge blocks everything downstream
     _pr_approved_not_merged,
     _pr_changes_requested_no_update,
+    _pr_draft_open_too_long,     # long-lived drafts never reach the review rules
     _pr_open_too_long,
 ]
 

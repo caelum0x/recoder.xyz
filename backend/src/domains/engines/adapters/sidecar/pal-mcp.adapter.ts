@@ -38,6 +38,12 @@ import { EngineClientBase } from '../../ports/engine-client.port.js';
 import type { EngineCall } from '../../ports/engine-client.port.js';
 import type { SidecarSpec, SidecarSupervisorPort } from '../../ports/sidecar-supervisor.port.js';
 import { down, fail, ok, up, type EngineHealth, type InvokeResult } from '../../types.js';
+import {
+  PAL_AGENTCOMMS_OP,
+  buildAgentCommsArgs,
+  type PalRouteRequest,
+  type PalConsensusRequest,
+} from './pal-comms.binder.js';
 
 /** The host's interop `tools/call` transport into the supervised stdio server. */
 export type PalExternalCall = (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
@@ -114,6 +120,31 @@ export class PalMcpAdapter extends EngineClientBase<unknown, unknown> {
     } catch (err) {
       return fail(`pal-mcp ${tool} failed: ${message(err)}`);
     }
+  }
+
+  /**
+   * Agentic-communications: route a prompt to one model (explicit `model`, else
+   * the pal server's first available). Thin typed wrapper over the `agentcomms`
+   * pal tool — builds the tool arg envelope and routes through `invoke`, so it is
+   * degrade-safe (venv/host absent ⇒ `{ ok:false }`, never a fabricated answer).
+   */
+  route(request: PalRouteRequest): Promise<InvokeResult<unknown>> {
+    return this.invoke({ op: PAL_AGENTCOMMS_OP, input: buildAgentCommsArgs('route', request) });
+  }
+
+  /** Query N models with the same prompt in parallel and return every answer. */
+  consensus(request: PalConsensusRequest): Promise<InvokeResult<unknown>> {
+    return this.invoke({ op: PAL_AGENTCOMMS_OP, input: buildAgentCommsArgs('consensus', request) });
+  }
+
+  /** Stance-based cross-model debate (consensus with per-model stances). */
+  debate(request: PalConsensusRequest): Promise<InvokeResult<unknown>> {
+    return this.invoke({ op: PAL_AGENTCOMMS_OP, input: buildAgentCommsArgs('debate', request) });
+  }
+
+  /** List configured providers + available model names (no model call). */
+  listModels(): Promise<InvokeResult<unknown>> {
+    return this.invoke({ op: PAL_AGENTCOMMS_OP, input: buildAgentCommsArgs('models', {}) });
   }
 
   async health(): Promise<EngineHealth> {

@@ -28,7 +28,7 @@ import type { AuthMiddleware } from '../identity/middleware/authenticate.middlew
 import type { Logger } from '../../shared/logger.js';
 import { sliceEnginesConfig, isEngineEnabled, daemonEnvFor, type EnginesConfig } from './config.js';
 import { ENGINE_IDS, ENGINE_TRANSPORTS, DEFAULT_LOOPBACK, isRestartable, isEngineId } from './constants.js';
-import { down, type EngineDescriptor, type EngineHealth, type EngineId } from './types.js';
+import { down, fail, type EngineDescriptor, type EngineHealth, type EngineId } from './types.js';
 import type { EngineClientPort } from './ports/engine-client.port.js';
 import type { EngineRegistryPort, EngineHealthRepository, McpHostPort } from './ports/index.js';
 import { NapiLoader } from './supervisor/napi-loader.js';
@@ -47,6 +47,10 @@ import {
   OpsRecorderLoopbackAdapter,
   MulticaLoopbackAdapter,
   ZitiRestAdapter,
+  buildColbertMcpTools,
+  buildColbertIndexMcpTools,
+  opsRecorderSignalsMcpServer,
+  buildOpsRecorderSignalsMcpTools,
   type DaemonAdapterConfig,
 } from './adapters/daemon/index.js';
 import {
@@ -56,6 +60,7 @@ import {
   browserUseEngineBinder,
   browserSessionEngineBinder,
   palPlanEngineBinder,
+  palCommsEngineBinder,
 } from './adapters/sidecar/index.js';
 import {
   BeadsAdapter,
@@ -68,6 +73,8 @@ import { createRecoderGitService, type RecoderGitService } from './recodergit-se
 import { GithubModule, githubEngineBinder, repoEngineBinder } from './github/index.js';
 import { InteropHostBundle } from './mcp/mcp-host.js';
 import { buildEnginesMcpTools, enginesMcpServer } from './mcp/engines-engine.js';
+import { buildMem0MemoryMcpTools, mem0MemoryMcpServer } from './mcp/mem0-memory.mcp.js';
+import { browserExtEngineBinder } from './mcp/browser-ext-engine.js';
 import {
   registerModuleToolsOnHost,
   callerFromInput,
@@ -214,7 +221,14 @@ export class EnginesComposer implements EnginesModule {
         // `recoder.browser` (open/snapshot/verify) over the SUPERVISED sidecar
         // adapter — the fix for the "advertised but 404 on call" gap.
         browserSessionEngineBinder(this.adapters.get('browser-use') ?? null),
+        // `recoder.browser-use.ext` (extract_structured/run_task/screenshot_annotate/
+        // fill_form) over the DEEP browser-use capability surface (`adapter.ext()`).
+        browserExtEngineBinder(
+          (this.adapters.get('browser-use') as BrowserUseAdapter | undefined)?.ext() ?? null,
+        ),
         palPlanEngineBinder(),
+        // `recoder.pal-comms` (route/consensus/debate/models) over the pal adapter.
+        palCommsEngineBinder(this.adapters.get('pal-mcp') ?? null),
         githubEngineBinder(this.githubModule),
         repoEngineBinder({ repoRoot: this.cfg.repoRoot ?? null }),
         // The four previously-dead catalog servers, now bound over REAL engines:
@@ -551,6 +565,21 @@ export class EnginesComposer implements EnginesModule {
     // for engines:…"). Registered as gated delegating handlers, not re-registering
     // the (already-seeded) server descriptor.
     this.bindEnginesMcpTools();
+    // Bind the DEEP daemon/sidecar MCP servers that self-register directly on the
+    // host (not via IN_PROC_SERVERS/ENGINE_SERVERS binders): mem0 memory insights,
+    // ops-recorder signals query/stats, and the colbert base + index-management
+    // servers. Each is gated (authorize → risk → execute → audit) and degrade-safe.
+    this.bindMem0MemoryMcpTools();
+    this.bindOpsRecorderSignalsMcpTools();
+    const colbert = this.adapters.get('colbert');
+    if (colbert) {
+      // The collision-safe bridge registers the server descriptor from the tool
+      // names AND binds delegating gated handlers (threading `callerFromInput` so
+      // the create/drop identity-gating fires). base colbert (rerank/search) +
+      // the batch/index-management server were both previously unwired.
+      this.registerDomainTools('colbert', buildColbertMcpTools(colbert));
+      this.registerDomainTools('colbert-index', buildColbertIndexMcpTools(colbert));
+    }
     this.napiRegistration = registerNapiEngineTools(this.hostBundle, this.napiClients);
     if (this.cfg.spawnOnBoot) this.spawnSupervisedOnBoot();
     const engines = await this.listHealth();
@@ -583,6 +612,57 @@ export class EnginesComposer implements EnginesModule {
           metadata: { serverId: enginesMcpServer.serverId, toolName: tool.name, external: false },
         };
       });
+    }
+  }
+
+  /**
+   * Bind the mem0 deep-insight tools (`mem0.recall` / `mem0.relations` /
+   * `mem0.stats`) directly on the host over the mem0 adapter seam. Mirrors
+   * `bindEnginesMcpTools`: `registerServer` + one gated delegating
+   * `registerInProcTool` per tool (the host runs each ONLY after
+   * `authorize → risk`, then audits). The subject is BOUND to the host-authorized
+   * caller (`callerFromInput`), never to the spoofable `args.userId`. Degrade-safe:
+   * an absent mem0 adapter yields a truthful `fail(...)` from `deps.invoke`.
+   */
+  private bindMem0MemoryMcpTools(): void {
+    const adapter = this.adapters.get('mem0');
+    const tools = buildMem0MemoryMcpTools({
+      invoke: (op, input) =>
+        adapter
+          ? adapter.invoke({ op, input })
+          : Promise.resolve(fail('mem0 adapter not bound', 'unavailable')),
+    });
+    this.hostBundle.registerServer(mem0MemoryMcpServer);
+    for (const tool of tools) {
+      this.hostBundle.registerInProcTool(mem0MemoryMcpServer.serverId, tool.name, async (input) => {
+        const content = await tool.handler(input.args, callerFromInput(input));
+        return {
+          content,
+          metadata: { serverId: mem0MemoryMcpServer.serverId, toolName: tool.name, external: false },
+        };
+      });
+    }
+  }
+
+  /**
+   * Bind the ops-recorder signals tools (`ops-recorder.query` /
+   * `ops-recorder.stats`) directly on the host over the ops-recorder adapter seam.
+   * Same gated delegating shape as `bindEnginesMcpTools`. Truthful skip when the
+   * ops-recorder adapter is absent (never a faked registration).
+   */
+  private bindOpsRecorderSignalsMcpTools(): void {
+    const engine = this.adapters.get('ops-recorder');
+    if (!engine) return; // truthful skip when the ops-recorder adapter is absent
+    this.hostBundle.registerServer(opsRecorderSignalsMcpServer);
+    for (const tool of buildOpsRecorderSignalsMcpTools(engine)) {
+      this.hostBundle.registerInProcTool(
+        opsRecorderSignalsMcpServer.serverId,
+        tool.name,
+        async (input) => ({
+          content: await tool.handler(input.args, callerFromInput(input)),
+          metadata: { serverId: opsRecorderSignalsMcpServer.serverId, toolName: tool.name, external: false },
+        }),
+      );
     }
   }
 

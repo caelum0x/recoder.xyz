@@ -87,6 +87,66 @@ describe('OpsRecorderLoopbackAdapter (real work-signals wire)', () => {
     if (res.ok) expect(Array.isArray(res.value)).toBe(true);
   });
 
+  it('queries signals with snake-cased filter params + X-API-Key', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify([{ id: 'sig-1' }]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    const adapter = new OpsRecorderLoopbackAdapter(bound, authed, silentLog);
+    const res = await adapter.invoke({
+      op: 'signals.query',
+      input: {
+        filters: {
+          source: 'github',
+          itemType: 'pull_request',
+          resolved: false,
+          since: '2026-01-01T00:00:00Z',
+          limit: 5,
+        },
+      },
+    });
+    expect(res.ok).toBe(true);
+    const [url, init] = spy.mock.calls[0] as [string, RequestInit];
+    const parsed = new URL(url);
+    expect(parsed.pathname).toBe('/work-signals/query');
+    expect(parsed.searchParams.get('source')).toBe('github');
+    expect(parsed.searchParams.get('item_type')).toBe('pull_request');
+    expect(parsed.searchParams.get('resolved')).toBe('false');
+    expect(parsed.searchParams.get('since')).toBe('2026-01-01T00:00:00Z');
+    expect(parsed.searchParams.get('limit')).toBe('5');
+    expect((init.headers as Record<string, string>)['X-API-Key']).toBe('test-key');
+  });
+
+  it('queries with no filters and emits no query string', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify([]), { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
+    const adapter = new OpsRecorderLoopbackAdapter(bound, authed, silentLog);
+    await adapter.invoke({ op: 'signals.query', input: {} });
+    expect((spy.mock.calls[0] as [string])[0]).toBe('http://127.0.0.1:8894/work-signals/query');
+  });
+
+  it('aggregates stats and drops the limit filter from the wire', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ total: 0 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    const adapter = new OpsRecorderLoopbackAdapter(bound, authed, silentLog);
+    const res = await adapter.invoke({
+      op: 'signals.stats',
+      input: { filters: { source: 'linear', limit: 99 } },
+    });
+    expect(res.ok).toBe(true);
+    const parsed = new URL((spy.mock.calls[0] as [string])[0]);
+    expect(parsed.pathname).toBe('/work-signals/stats');
+    expect(parsed.searchParams.get('source')).toBe('linear');
+    expect(parsed.searchParams.has('limit')).toBe(false);
+  });
+
   it('rejects an unknown op truthfully', async () => {
     const adapter = new OpsRecorderLoopbackAdapter(bound, authed, silentLog);
     const res = await adapter.invoke({ op: 'nope', input: {} });
