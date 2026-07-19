@@ -11,7 +11,14 @@
  * degrade-safe — no provider anywhere → `search → []`, `health → available:false`.
  */
 import { mem0Add, mem0Health, mem0Search } from '../../engines/mem0-client.js';
-import type { Mem0Availability, Mem0Message, Mem0Port, Mem0Result, Mem0Scope } from '../ports/mem0.port.js';
+import type {
+  Mem0Availability,
+  Mem0ConsolidateResult,
+  Mem0Message,
+  Mem0Port,
+  Mem0Result,
+  Mem0Scope,
+} from '../ports/mem0.port.js';
 import type { Mem0SidecarClient } from './mem0-sidecar.client.js';
 
 export interface Mem0AdapterDeps {
@@ -20,14 +27,30 @@ export interface Mem0AdapterDeps {
 }
 
 /** Narrow a legacy mem0 record `{ id, memory, [k]:unknown }` to `Mem0Result`. */
-function toResult(row: { id: string; memory: string; [k: string]: unknown }): Mem0Result | null {
+function toResult(row: {
+  id: string;
+  memory: string;
+  [k: string]: unknown;
+}): Mem0Result | null {
   if (!row?.id || typeof row.memory !== 'string' || !row.memory) return null;
   const score = row.score;
-  return typeof score === 'number' ? { id: row.id, memory: row.memory, score } : { id: row.id, memory: row.memory };
+  return typeof score === 'number'
+    ? { id: row.id, memory: row.memory, score }
+    : { id: row.id, memory: row.memory };
 }
 
-function scopeArg(scope: Mem0Scope): { userId: string; agentId?: string; runId?: string; metadata?: Record<string, unknown> } {
-  const out: { userId: string; agentId?: string; runId?: string; metadata?: Record<string, unknown> } = {
+function scopeArg(scope: Mem0Scope): {
+  userId: string;
+  agentId?: string;
+  runId?: string;
+  metadata?: Record<string, unknown>;
+} {
+  const out: {
+    userId: string;
+    agentId?: string;
+    runId?: string;
+    metadata?: Record<string, unknown>;
+  } = {
     userId: scope.userId,
   };
   if (scope.agentId) out.agentId = scope.agentId;
@@ -47,7 +70,9 @@ export function createMem0Adapter(deps: Mem0AdapterDeps = {}): Mem0Port {
     async search(query, scope, limit = 10): Promise<readonly Mem0Result[]> {
       const res = await mem0Search(query, scopeArg(scope), limit);
       if (res.available) {
-        return res.results.map(toResult).filter((r): r is Mem0Result => r !== null);
+        return res.results
+          .map(toResult)
+          .filter((r): r is Mem0Result => r !== null);
       }
       // In-lib client unconfigured → try the self-hosted sidecar if wired.
       if (sidecar) return sidecar.search(query, scope, limit);
@@ -56,9 +81,27 @@ export function createMem0Adapter(deps: Mem0AdapterDeps = {}): Mem0Port {
 
     async add(messages, scope): Promise<{ ok: boolean; reason?: string }> {
       const res = await mem0Add(messages as Mem0Message[], scopeArg(scope));
-      if (res.available) return res.reason ? { ok: false, reason: res.reason } : { ok: true };
+      if (res.available)
+        return res.reason ? { ok: false, reason: res.reason } : { ok: true };
       if (sidecar) return sidecar.add(messages, scope);
       return { ok: false, reason: res.reason ?? 'mem0 unavailable' };
+    },
+
+    async consolidate(scope?: Mem0Scope): Promise<Mem0ConsolidateResult> {
+      // The in-lib `@recoder/mem0` client has NO batch consolidate: mem0's
+      // fact-merge / dedup / decay runs INLINE on every `add` (closed by the
+      // lifecycle write-half). Only a self-hosted sidecar exposes a batch pass,
+      // so a driver-triggered sweep is a truthful no-op unless one is wired.
+      const h = await mem0Health();
+      if (h.available) {
+        return {
+          ok: false,
+          reason:
+            'mem0 consolidation runs inline on add (no batch trigger in-lib)',
+        };
+      }
+      if (sidecar) return sidecar.consolidate(scope);
+      return { ok: false, reason: h.reason ?? 'mem0 unavailable' };
     },
 
     async health(): Promise<Mem0Availability> {
@@ -72,7 +115,12 @@ export function createMem0Adapter(deps: Mem0AdapterDeps = {}): Mem0Port {
       }
       if (sidecar) {
         const s = await sidecar.health();
-        if (s.available) return { available: true, mode: 'platform', detail: { transport: 'sidecar', host: sidecar.baseUrl } };
+        if (s.available)
+          return {
+            available: true,
+            mode: 'platform',
+            detail: { transport: 'sidecar', host: sidecar.baseUrl },
+          };
         return { available: false, mode: h.mode, reason: s.reason ?? h.reason };
       }
       return { available: false, mode: h.mode, reason: h.reason };

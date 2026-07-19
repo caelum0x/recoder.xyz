@@ -28,20 +28,53 @@ import type { CloudGovernanceGatePort } from './ports/governance-gate.port.js';
 import type { CloudRepositories } from './ports/cloud-repository.port.js';
 import type { SandboxProvider } from './ports/sandbox-provider.port.js';
 import { createCloudRepositories } from './repositories/cloud.repository.js';
-import { createTenancyService, type TenancyService, type TenantBillingQuotaPort } from './services/tenancy.service.js';
+import {
+  createTenancyService,
+  type TenancyService,
+  type TenantBillingQuotaPort,
+} from './services/tenancy.service.js';
 import { createDaytonaAdapter } from './adapters/daytona.adapter.js';
 import { createE2bAdapter } from './adapters/e2b.adapter.js';
-import { createLocalContainerAdapter, type LocalContainerRuntime } from './adapters/local-container.adapter.js';
+import {
+  createLocalContainerAdapter,
+  type LocalContainerRuntime,
+} from './adapters/local-container.adapter.js';
 import { createPreviewUrlSigner } from './services/preview-url-signer.js';
 import { createPreviewTarget } from './adapters/preview-target.adapter.js';
-import { createPreviewDeployService, type PreviewDeployService } from './services/preview-deploy.service.js';
-import { createSandboxProvisionerService, type SandboxProvisionerService, type CloudRunEventSink } from './services/sandbox-provisioner.service.js';
-import { createFleetSupervisorService, type FleetSupervisorService } from './services/fleet-supervisor.service.js';
-import { createZitiMeshAdapter, type ZitiMeshAdapter } from './adapters/ziti-mesh.adapter.js';
+import {
+  createPreviewDeployService,
+  type PreviewDeployService,
+} from './services/preview-deploy.service.js';
+import {
+  createSandboxProvisionerService,
+  type SandboxProvisionerService,
+  type CloudRunEventSink,
+} from './services/sandbox-provisioner.service.js';
+import {
+  createFleetSupervisorService,
+  type FleetSupervisorService,
+} from './services/fleet-supervisor.service.js';
+import {
+  createZitiMeshAdapter,
+  type ZitiMeshAdapter,
+} from './adapters/ziti-mesh.adapter.js';
 import { createXdsEnvoyAdapter } from './adapters/xds-envoy.adapter.js';
-import { createMeshDiagnosticsService, type MeshDiagnosticsService } from './services/mesh-diagnostics.service.js';
-import { createDomainsService, type DomainsService, type DomainVerifierPort } from './services/domains.service.js';
+import { createXdsControlPlaneWriter } from './adapters/xds-control-plane.adapter.js';
+import {
+  createMeshDiagnosticsService,
+  type MeshDiagnosticsService,
+} from './services/mesh-diagnostics.service.js';
+import {
+  createMeshFabricService,
+  type MeshFabricService,
+} from './services/mesh-fabric.service.js';
+import {
+  createDomainsService,
+  type DomainsService,
+  type DomainVerifierPort,
+} from './services/domains.service.js';
 import { buildCloudRouter } from './routes/cloud.routes.js';
+import { buildInternalCloudRouter } from './routes/internal-cloud.routes.js';
 import { buildCloudMcpTools } from './mcp/cloud-engine.js';
 import { buildCloudWriteMcpTools } from './mcp/cloud-write-engine.js';
 import { buildCloudMeshMcpTools } from './mcp/cloud-mesh-engine.js';
@@ -61,17 +94,25 @@ export class CloudComposer implements CloudModule {
 
   private readonly repos: CloudRepositories;
   private readonly tenancyService: TenancyService;
-  private readonly providers: Readonly<Partial<Record<ProviderId, SandboxProvider>>>;
+  private readonly providers: Readonly<
+    Partial<Record<ProviderId, SandboxProvider>>
+  >;
   private readonly provisionerService: SandboxProvisionerService;
   private readonly previewService: PreviewDeployService;
   private readonly fleetService: FleetSupervisorService;
   private readonly meshService: MeshDiagnosticsService;
   /** The ziti overlay adapter, retained so the governed mesh enroll WRITE tool can transport it. */
   private readonly zitiAdapter: ZitiMeshAdapter;
+  /** The GOVERNED mesh-fabric write seam (ziti enroll + xds snapshot bump). */
+  private readonly meshFabricService: MeshFabricService;
   private readonly domainsService: DomainsService;
   private started = false;
 
-  constructor(deps: CloudModuleDeps, cfg: CloudConfig, executor: QueryExecutor) {
+  constructor(
+    deps: CloudModuleDeps,
+    cfg: CloudConfig,
+    executor: QueryExecutor
+  ) {
     this.log = deps.logger;
     this.cfg = cfg;
     this.middleware = deps.middleware;
@@ -90,7 +131,10 @@ export class CloudComposer implements CloudModule {
 
     // Sandbox provider adapters (degrade-safe — absent key ⇒ `down`).
     this.providers = {
-      daytona: createDaytonaAdapter({ credential: cfg.daytona, logger: this.log }),
+      daytona: createDaytonaAdapter({
+        credential: cfg.daytona,
+        logger: this.log,
+      }),
       e2b: createE2bAdapter({ credential: cfg.e2b, logger: this.log }),
       local: createLocalContainerAdapter({
         enabled: cfg.localEnabled,
@@ -99,16 +143,52 @@ export class CloudComposer implements CloudModule {
       }),
     };
 
+    // Read-only mesh diagnostics over the ziti + xDS engine adapters. Built
+    // BEFORE the provisioner + preview so the governed mesh-fabric WRITE seam can
+    // be fused into both flows. The ziti adapter is retained so the mesh-enroll
+    // MCP tool can transport it.
+    this.zitiAdapter = createZitiMeshAdapter({
+      endpoint: cfg.zitiEndpoint,
+      logger: this.log,
+    });
+    this.meshService = createMeshDiagnosticsService({
+      ziti: this.zitiAdapter,
+      xds: createXdsEnvoyAdapter({
+        endpoint: cfg.xdsEndpoint,
+        logger: this.log,
+      }),
+      logger: this.log,
+    });
+
+    // The GOVERNED mesh-fabric write seam: ziti enroll (per sandbox) + the
+    // recoder-xds control-plane snapshot bump (per preview edge). The xds writer
+    // drives the engine's `POST /network-config`; absent endpoint ⇒ truthful skip.
+    this.meshFabricService = createMeshFabricService({
+      enroller: this.zitiAdapter,
+      xds: createXdsControlPlaneWriter({
+        endpoint: cfg.xdsEndpoint,
+        logger: this.log,
+      }),
+      mesh: this.repos.mesh,
+      logger: this.log,
+      ...(this.gate ? { gate: this.gate } : {}),
+    });
+
     // Provisioner (quota → select → persist → launch → RunEvent + reaper/reconcile).
+    // On a successful provision it FUSES the sandbox onto the ziti mesh (governed,
+    // best-effort — a mesh miss never blocks the sandbox).
     this.provisionerService = createSandboxProvisionerService({
       repo: this.repos.sandboxes,
       tenancy: this.tenancyService,
       providers: this.providers,
       logger: this.log,
+      meshFabric: this.meshFabricService,
       ...(deps.runEvents ? { runEvents: deps.runEvents } : {}),
     });
 
-    // Preview: signer + target + service (real health probe + token ledger).
+    // Preview: signer + target + service (real health probe + token ledger). On a
+    // successful deploy it FUSES the preview edge onto the mesh (mesh upsert + xds
+    // snapshot bump so Envoy fronts it) and can resolve preview-over-overlay.
     const signer = createPreviewUrlSigner(cfg);
     const target = createPreviewTarget({ config: cfg, logger: this.log });
     this.previewService = createPreviewDeployService({
@@ -117,17 +197,15 @@ export class CloudComposer implements CloudModule {
       target,
       signer,
       logger: this.log,
+      meshFabric: this.meshFabricService,
+      mesh: this.repos.mesh,
+      overlay: this.meshService,
+      tenantOf: (tenantId: string) => this.repos.tenants.getById(tenantId),
     });
 
     // Fleet capacity supervisor.
-    this.fleetService = createFleetSupervisorService({ repo: this.repos.fleet, logger: this.log });
-
-    // Read-only mesh diagnostics over the ziti + xDS engine adapters. The ziti
-    // adapter is retained so the governed mesh-enroll WRITE tool can transport it.
-    this.zitiAdapter = createZitiMeshAdapter({ endpoint: cfg.zitiEndpoint, logger: this.log });
-    this.meshService = createMeshDiagnosticsService({
-      ziti: this.zitiAdapter,
-      xds: createXdsEnvoyAdapter({ endpoint: cfg.xdsEndpoint, logger: this.log }),
+    this.fleetService = createFleetSupervisorService({
+      repo: this.repos.fleet,
       logger: this.log,
     });
 
@@ -189,9 +267,24 @@ export class CloudComposer implements CloudModule {
           if (!this.repos.deployments.isAvailable()) return Number.NaN;
           return this.repos.deployments.countActiveByTenant(tenantId);
         },
-      }),
+      })
     );
     return router;
+  }
+
+  /** The `/internal/cloud/*` router (INTERNAL_SERVICE_KEY-gated network-config view). */
+  internalRoutes(): Router {
+    return buildInternalCloudRouter({
+      mesh: this.repos.mesh,
+      meshDiagnostics: this.meshService,
+      middleware: this.middleware,
+      logger: this.log,
+    });
+  }
+
+  /** The GOVERNED mesh-fabric write seam (ziti enroll + xds snapshot bump). */
+  meshFabric(): MeshFabricService {
+    return this.meshFabricService;
   }
 
   mcp(): readonly McpToolRegistration[] {
@@ -246,7 +339,7 @@ export class CloudComposer implements CloudModule {
         zitiConfigured: this.cfg.zitiEndpoint !== null,
         xdsConfigured: this.cfg.xdsEndpoint !== null,
       },
-      'cloud module started',
+      'cloud module started'
     );
   }
 
@@ -259,4 +352,9 @@ export class CloudComposer implements CloudModule {
 }
 
 // Re-export the local runtime + run-event seams so bootstrap can type its bridges.
-export type { LocalContainerRuntime, CloudRunEventSink, TenantBillingQuotaPort, DomainVerifierPort };
+export type {
+  LocalContainerRuntime,
+  CloudRunEventSink,
+  TenantBillingQuotaPort,
+  DomainVerifierPort,
+};

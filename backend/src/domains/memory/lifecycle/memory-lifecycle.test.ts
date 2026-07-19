@@ -9,11 +9,26 @@ import type { GovernanceGate } from '../../governance/ports/gate.port.js';
 import type { GateVerdict, GovernanceEffect } from '../../governance/types.js';
 import type { MemoryRepository } from '../ports/memory-repository.port.js';
 import type { BeadsMemoryPort } from '../ports/beads-memory.port.js';
+import type { Mem0Message, Mem0Port, Mem0Scope } from '../ports/mem0.port.js';
 import { createMemoryLifecycle } from './memory-lifecycle.js';
 
-const silentLogger = { info() {}, warn() {}, error() {}, debug() {}, child() { return silentLogger; } } as never;
+const silentLogger = {
+  info() {},
+  warn() {},
+  error() {},
+  debug() {},
+  child() {
+    return silentLogger;
+  },
+} as never;
 
-const principal: Principal = { userId: 'u1', scopes: [], kind: 'session', isAnonymous: false, raw: {} } as unknown as Principal;
+const principal: Principal = {
+  userId: 'u1',
+  scopes: [],
+  kind: 'session',
+  isAnonymous: false,
+  raw: {},
+} as unknown as Principal;
 
 function verdict(effect: GovernanceEffect): GateVerdict {
   return {
@@ -34,7 +49,12 @@ function fakeGate(effect: GovernanceEffect): GovernanceGate {
       return verdict(effect);
     },
     async enforceTool() {
-      return { outcome: 'allowed', reason: 'ok', degraded: false, engine: 'ts' } as never;
+      return {
+        outcome: 'allowed',
+        reason: 'ok',
+        degraded: false,
+        engine: 'ts',
+      } as never;
     },
     async route() {
       return { routable: true, tier: 'low', reason: 'ok' } as never;
@@ -55,6 +75,27 @@ const beadsDown: BeadsMemoryPort = {
   promote: () => false,
   note: () => false,
 };
+
+/** A live fake mem0 port that records every add(messages, scope). */
+function mem0Up(): {
+  port: Mem0Port;
+  added: { messages: readonly Mem0Message[]; scope: Mem0Scope }[];
+} {
+  const added: { messages: readonly Mem0Message[]; scope: Mem0Scope }[] = [];
+  const port: Mem0Port = {
+    async search() {
+      return [];
+    },
+    async add(messages, scope) {
+      added.push({ messages, scope });
+      return { ok: true };
+    },
+    async health() {
+      return { available: true, mode: 'oss' };
+    },
+  };
+  return { port, added };
+}
 
 function candidate(overrides: Partial<MemoryCandidate> = {}): MemoryCandidate {
   return {
@@ -77,7 +118,7 @@ function beadsUp(): { port: BeadsMemoryPort; promoted: string[] } {
     available: () => true,
     remember: () => 'bd-unused',
     recall: () => [],
-    promote: (id) => {
+    promote: id => {
       promoted.push(id);
       return true;
     },
@@ -86,7 +127,11 @@ function beadsUp(): { port: BeadsMemoryPort; promoted: string[] } {
   return { port, promoted };
 }
 
-function fakeRepo(seed: MemoryCandidate = candidate()): { repo: MemoryRepository; items: MemoryItem[]; candidates: MemoryCandidate[] } {
+function fakeRepo(seed: MemoryCandidate = candidate()): {
+  repo: MemoryRepository;
+  items: MemoryItem[];
+  candidates: MemoryCandidate[];
+} {
   const items: MemoryItem[] = [];
   const candidates: MemoryCandidate[] = [seed];
   const repo: MemoryRepository = {
@@ -104,10 +149,10 @@ function fakeRepo(seed: MemoryCandidate = candidate()): { repo: MemoryRepository
       return candidates;
     },
     async getCandidate(_u, id) {
-      return candidates.find((c) => c.candidateId === id) ?? null;
+      return candidates.find(c => c.candidateId === id) ?? null;
     },
     async upsertCandidate(_u, c) {
-      const idx = candidates.findIndex((x) => x.candidateId === c.candidateId);
+      const idx = candidates.findIndex(x => x.candidateId === c.candidateId);
       if (idx >= 0) candidates[idx] = c;
       else candidates.push(c);
       return c;
@@ -137,7 +182,11 @@ describe('createMemoryLifecycle.accept', () => {
       newId: () => 'mi_1',
     });
 
-    const result = await lifecycle.accept({ userId: 'u1', candidateId: 'c1', principal });
+    const result = await lifecycle.accept({
+      userId: 'u1',
+      candidateId: 'c1',
+      principal,
+    });
     expect(result.promoted).toBe(true);
     expect(result.memory?.memoryId).toBe('mi_1');
     expect(result.memory?.status).toBe('active');
@@ -155,7 +204,11 @@ describe('createMemoryLifecycle.accept', () => {
       logger: silentLogger,
     });
 
-    const result = await lifecycle.accept({ userId: 'u1', candidateId: 'c1', principal });
+    const result = await lifecycle.accept({
+      userId: 'u1',
+      candidateId: 'c1',
+      principal,
+    });
     expect(result.promoted).toBe(false);
     expect(result.memory).toBeUndefined();
     expect(items).toHaveLength(0);
@@ -173,7 +226,11 @@ describe('createMemoryLifecycle.accept', () => {
       logger: silentLogger,
     });
 
-    const result = await lifecycle.accept({ userId: 'u1', candidateId: 'c1', principal });
+    const result = await lifecycle.accept({
+      userId: 'u1',
+      candidateId: 'c1',
+      principal,
+    });
     expect(result.promoted).toBe(false);
     expect(items).toHaveLength(0);
     expect(result.verdict.effect).toBe('needs_approval');
@@ -189,7 +246,11 @@ describe('createMemoryLifecycle.accept', () => {
       logger: silentLogger,
     });
 
-    const result = await lifecycle.accept({ userId: 'u1', candidateId: 'c1', principal });
+    const result = await lifecycle.accept({
+      userId: 'u1',
+      candidateId: 'c1',
+      principal,
+    });
     expect(result.promoted).toBe(true);
     // The bd id captured at propose time — NOT the locally-minted 'c1'/'mc_' id.
     expect(beads.promoted).toEqual(['bd-42']);
@@ -205,7 +266,11 @@ describe('createMemoryLifecycle.accept', () => {
       logger: silentLogger,
     });
 
-    const result = await lifecycle.accept({ userId: 'u1', candidateId: 'c1', principal });
+    const result = await lifecycle.accept({
+      userId: 'u1',
+      candidateId: 'c1',
+      principal,
+    });
     // Durable store-of-record promotion still happens; no bogus bd promote issued.
     expect(result.promoted).toBe(true);
     expect(items).toHaveLength(1);
@@ -214,16 +279,133 @@ describe('createMemoryLifecycle.accept', () => {
 
   it('throws NOT_FOUND for an unknown candidate', async () => {
     const { repo } = fakeRepo();
-    const lifecycle = createMemoryLifecycle({ repository: repo, gate: fakeGate('allow'), beads: beadsDown, logger: silentLogger });
-    await expect(lifecycle.accept({ userId: 'u1', candidateId: 'nope', principal })).rejects.toThrow(/not found/i);
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: fakeGate('allow'),
+      beads: beadsDown,
+      logger: silentLogger,
+    });
+    await expect(
+      lifecycle.accept({ userId: 'u1', candidateId: 'nope', principal })
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it('mirrors the accepted durable fact into mem0 (closes the write-half loop)', async () => {
+    const { repo, items } = fakeRepo();
+    const mem0 = mem0Up();
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: fakeGate('allow'),
+      beads: beadsDown,
+      mem0: mem0.port,
+      logger: silentLogger,
+      newId: () => 'mi_1',
+    });
+
+    const result = await lifecycle.accept({
+      userId: 'u1',
+      candidateId: 'c1',
+      principal,
+    });
+    expect(result.promoted).toBe(true);
+    // The fusion FIRED: mem0.add got the tenant-scoped fact from the accepted candidate.
+    expect(mem0.added).toHaveLength(1);
+    expect(mem0.added[0]?.scope.userId).toBe('u1');
+    expect(mem0.added[0]?.scope.metadata?.memoryId).toBe('mi_1');
+    expect(mem0.added[0]?.messages.map(m => m.content)).toContain(
+      'the box is 16GB'
+    );
+  });
+
+  it('mirrors the supersedes link into the mem0 add scope metadata', async () => {
+    const { repo } = fakeRepo();
+    // addRelation throws in fakeRepo; the mem0 mirror must still fire (best-effort edge).
+    const mem0 = mem0Up();
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: fakeGate('allow'),
+      beads: beadsDown,
+      mem0: mem0.port,
+      logger: silentLogger,
+      newId: () => 'mi_1',
+    });
+
+    const result = await lifecycle.accept({
+      userId: 'u1',
+      candidateId: 'c1',
+      principal,
+      supersedesMemoryId: 'mi_old',
+    });
+    expect(result.promoted).toBe(true);
+    expect(mem0.added[0]?.scope.metadata?.supersedesMemoryId).toBe('mi_old');
+  });
+
+  it('still promotes when the mem0 mirror throws (best-effort, never blocks)', async () => {
+    const { repo, items } = fakeRepo();
+    const throwingMem0: Mem0Port = {
+      async search() {
+        return [];
+      },
+      async add() {
+        throw new Error('mem0 exploded');
+      },
+      async health() {
+        return { available: true, mode: 'oss' };
+      },
+    };
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: fakeGate('allow'),
+      beads: beadsDown,
+      mem0: throwingMem0,
+      logger: silentLogger,
+    });
+
+    const result = await lifecycle.accept({
+      userId: 'u1',
+      candidateId: 'c1',
+      principal,
+    });
+    expect(result.promoted).toBe(true);
+    expect(items).toHaveLength(1);
+  });
+
+  it('does NOT write mem0 on a denied promotion (no durable fact to mirror)', async () => {
+    const { repo } = fakeRepo();
+    const mem0 = mem0Up();
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: fakeGate('deny'),
+      beads: beadsDown,
+      mem0: mem0.port,
+      logger: silentLogger,
+    });
+
+    const result = await lifecycle.accept({
+      userId: 'u1',
+      candidateId: 'c1',
+      principal,
+    });
+    expect(result.promoted).toBe(false);
+    expect(mem0.added).toHaveLength(0);
   });
 });
 
 describe('createMemoryLifecycle.reject', () => {
   it('marks the candidate rejected with a reason', async () => {
     const { repo, candidates } = fakeRepo();
-    const lifecycle = createMemoryLifecycle({ repository: repo, gate: fakeGate('allow'), beads: beadsDown, logger: silentLogger });
-    const result = await lifecycle.reject({ userId: 'u1', candidateId: 'c1', principal, reason: 'stale' });
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: fakeGate('allow'),
+      beads: beadsDown,
+      logger: silentLogger,
+    });
+    const result = await lifecycle.reject({
+      userId: 'u1',
+      candidateId: 'c1',
+      principal,
+      reason: 'stale',
+    });
     expect(result.candidate.status).toBe('rejected');
     expect(result.candidate.reviewReason).toBe('stale');
     expect(candidates[0]?.status).toBe('rejected');
@@ -231,7 +413,19 @@ describe('createMemoryLifecycle.reject', () => {
 
   it('requires a reason', async () => {
     const { repo } = fakeRepo();
-    const lifecycle = createMemoryLifecycle({ repository: repo, gate: fakeGate('allow'), beads: beadsDown, logger: silentLogger });
-    await expect(lifecycle.reject({ userId: 'u1', candidateId: 'c1', principal, reason: '  ' })).rejects.toThrow();
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: fakeGate('allow'),
+      beads: beadsDown,
+      logger: silentLogger,
+    });
+    await expect(
+      lifecycle.reject({
+        userId: 'u1',
+        candidateId: 'c1',
+        principal,
+        reason: '  ',
+      })
+    ).rejects.toThrow();
   });
 });

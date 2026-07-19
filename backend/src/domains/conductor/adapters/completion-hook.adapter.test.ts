@@ -57,10 +57,16 @@ describe('conductor completion hook', () => {
     const inner = { append: vi.fn(async () => {}) };
     const harvestOnCompletion = vi.fn(async () => ({ harvested: true as const }));
     const completeWork = vi.fn(async () => {});
+    const reindexRepo = vi.fn(async () => {});
     const sink = createCompletionHookSink({
       inner,
       brain: { enrichPrompt: vi.fn(), harvestOnCompletion },
-      codeIntel: { indexRepo: vi.fn(async () => {}), trackWork: vi.fn(async () => {}), completeWork },
+      codeIntel: {
+        indexRepo: vi.fn(async () => {}),
+        reindexRepo,
+        trackWork: vi.fn(async () => {}),
+        completeWork,
+      },
       getWorkspace: async () => ws(),
       logger: makeLogger(),
     });
@@ -78,6 +84,92 @@ describe('conductor completion hook', () => {
     expect(harvestArg.outcome).toBe('completed');
     // bd issue closed on success.
     expect(completeWork).toHaveBeenCalledWith('task_1', 'completed');
+    // (k) code-graph reindex fired for the workspace repo (deterministic repoId
+    // derived from projectId), so the graph reflects the code this run committed.
+    expect(reindexRepo).toHaveBeenCalledTimes(1);
+    expect(reindexRepo).toHaveBeenCalledWith('project_1');
+  });
+
+  it('reindexes the code-graph on a failed run too (committed code may exist even on failure)', async () => {
+    const reindexRepo = vi.fn(async () => {});
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      codeIntel: {
+        indexRepo: vi.fn(async () => {}),
+        reindexRepo,
+        trackWork: vi.fn(async () => {}),
+        completeWork: vi.fn(async () => {}),
+      },
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('failed'));
+    await flush();
+
+    expect(reindexRepo).toHaveBeenCalledWith('project_1');
+  });
+
+  it('reindex derives the repoId from worktreePath when projectId is empty', async () => {
+    const reindexRepo = vi.fn(async () => {});
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      codeIntel: {
+        indexRepo: vi.fn(async () => {}),
+        reindexRepo,
+        trackWork: vi.fn(async () => {}),
+        completeWork: vi.fn(async () => {}),
+      },
+      getWorkspace: async () => ws({ projectId: '', worktreePath: '/tmp/Repos/Acme-App' }),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('completed'));
+    await flush();
+
+    // Same normalization conductor-module applies: lowercase + non [a-z0-9_-] → __.
+    expect(reindexRepo).toHaveBeenCalledWith('__tmp__repos__acme-app');
+  });
+
+  it('does NOT reindex when the owning workspace is unresolvable (no repo anchor)', async () => {
+    const reindexRepo = vi.fn(async () => {});
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      codeIntel: {
+        indexRepo: vi.fn(async () => {}),
+        reindexRepo,
+        trackWork: vi.fn(async () => {}),
+        completeWork: vi.fn(async () => {}),
+      },
+      getWorkspace: async () => null,
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('completed'));
+    await flush();
+
+    expect(reindexRepo).not.toHaveBeenCalled();
+  });
+
+  it('degrade-safe: a reindex throw never rejects append (terminal event unaffected)', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const sink = createCompletionHookSink({
+      inner,
+      codeIntel: {
+        indexRepo: vi.fn(async () => {}),
+        reindexRepo: vi.fn(async () => {
+          throw new Error('code-graph down');
+        }),
+        trackWork: vi.fn(async () => {}),
+        completeWork: vi.fn(async () => {}),
+      },
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await expect(sink.append(event('completed'))).resolves.toBeUndefined();
+    await flush();
+    expect(inner.append).toHaveBeenCalledTimes(1);
   });
 
   it('fires the hooks on a failed event too (issue kept open by the adapter)', async () => {
@@ -87,7 +179,12 @@ describe('conductor completion hook', () => {
     const sink = createCompletionHookSink({
       inner,
       brain: { enrichPrompt: vi.fn(), harvestOnCompletion },
-      codeIntel: { indexRepo: vi.fn(async () => {}), trackWork: vi.fn(async () => {}), completeWork },
+      codeIntel: {
+        indexRepo: vi.fn(async () => {}),
+        reindexRepo: vi.fn(async () => {}),
+        trackWork: vi.fn(async () => {}),
+        completeWork,
+      },
       getWorkspace: async () => ws(),
       logger: makeLogger(),
     });

@@ -129,6 +129,7 @@ export class ObservabilityComposer implements ObservabilityModule {
   private readonly sloRepo: ReturnType<typeof createSloRepository>;
   private readonly log: Logger;
   private alertTimer: ReturnType<typeof setInterval> | null = null;
+  private signalsTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(deps: ObservabilityModuleDeps) {
     this.log = deps.logger;
@@ -205,6 +206,10 @@ export class ObservabilityComposer implements ObservabilityModule {
             ? 'supervised (live endpoint)'
             : 'absent',
         alerting: this.cfg.alertingEnabled,
+        signalsPoll:
+          this.cfg.signalsPollEnabled && this.cfg.signalsPollIntervalMs > 0
+            ? `every ${this.cfg.signalsPollIntervalMs}ms`
+            : 'disabled',
       },
       'observability composed',
     );
@@ -311,6 +316,49 @@ export class ObservabilityComposer implements ObservabilityModule {
       // Do not keep the process alive solely for the alert loop.
       this.alertTimer.unref?.();
     }
+    // Autonomous work-signals feed: a scheduled tick pulls the ops-recorder
+    // sidecar's detected stuck/needs-you signals and pushes them onto the notify
+    // board + RunEvent bus — so a stalled PR/issue reaches a human WITHOUT anyone
+    // opening the board. Degrade-truthful: a poll against an absent sidecar is an
+    // empty, degraded batch (no fabricated signal), never a blocked boot.
+    if (this.cfg.signalsPollEnabled && this.cfg.signalsPollIntervalMs > 0 && !this.signalsTimer) {
+      this.signalsTimer = setInterval(() => {
+        void this.pollSignalsOnce();
+      }, this.cfg.signalsPollIntervalMs);
+      // Do not keep the process alive solely for the signals loop.
+      this.signalsTimer.unref?.();
+      // Fire an immediate first pass so signals surface without waiting a full
+      // interval on boot (still degrade-safe when the sidecar is down).
+      void this.pollSignalsOnce();
+    }
+  }
+
+  /**
+   * One work-signals poll pass (degrade-safe). Delegates to the service's
+   * `refresh()`, which normalizes each raw sidecar signal to a `RunEvent`, emits
+   * it to the bus, and surfaces needs-you signals to the board. A `down` sidecar
+   * yields an empty, `degraded` batch — logged truthfully, never fabricated.
+   */
+  private async pollSignalsOnce(): Promise<void> {
+    try {
+      const result = await this.workSignals.refresh();
+      if (result.degraded) {
+        this.log.debug(
+          { reason: result.reason },
+          'work-signals poll degraded (ops-recorder sidecar down; no signals fabricated)',
+        );
+      } else if (result.signals.length > 0) {
+        this.log.info(
+          { count: result.signals.length },
+          'work-signals poll emitted signals to notify board + RunEvent bus',
+        );
+      }
+    } catch (err) {
+      this.log.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'work-signals poll pass failed',
+      );
+    }
   }
 
   /** One alert-evaluation pass over the current fused health (degrade-safe). */
@@ -331,6 +379,10 @@ export class ObservabilityComposer implements ObservabilityModule {
     if (this.alertTimer) {
       clearInterval(this.alertTimer);
       this.alertTimer = null;
+    }
+    if (this.signalsTimer) {
+      clearInterval(this.signalsTimer);
+      this.signalsTimer = null;
     }
     this.otelTracer.shutdown();
     this.ring.clear();

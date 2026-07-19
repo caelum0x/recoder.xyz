@@ -173,6 +173,93 @@ describe('InferenceRoutingService token metering', () => {
   });
 });
 
+describe('InferenceRoutingService pal routing brain', () => {
+  function gatewayCapturing(captured: { model?: string; preferDirect?: boolean }): InferenceGatewayPort {
+    return {
+      complete: async (req) => {
+        captured.model = req.model;
+        captured.preferDirect = req.preferDirect;
+        return { routed: true, tier: 'napi', model: req.model, content: 'ok' };
+      },
+      completeStream: async (req) => {
+        captured.model = req.model;
+        captured.preferDirect = req.preferDirect;
+        return { routed: true, tier: 'napi', model: req.model, content: 'ok', streamed: true, tokenGranular: true };
+      },
+      embed: async () => ({ routed: false, tier: 'none', model: 'm', embeddings: null }),
+      feedback: async (req) => ({ routed: false, tier: 'none', inferenceId: req.inferenceId, metricName: req.metricName }),
+      health: async () => ({ tier: 'napi', available: true, napiBound: true, loopbackConfigured: false }),
+    };
+  }
+
+  function serviceWithGateway(gateway: InferenceGatewayPort) {
+    const ledger = { append: vi.fn(async () => null), recentForUser: vi.fn(), totalsForUser: vi.fn(), isDurable: () => true } as unknown as UsageLedgerRepository;
+    const outcomes = { append: vi.fn(async () => null), recentForUser: vi.fn(), isDurable: () => true } as unknown as DeliveryOutcomeRepository;
+    return new InferenceRoutingService({ logger: log, gateway, catalog: catalog(ENTRY), ledger, outcomes });
+  }
+
+  it('applies the pal-chosen model + rung to the dispatched request when a routingHint is present', async () => {
+    const captured: { model?: string; preferDirect?: boolean } = {};
+    const service = serviceWithGateway(gatewayCapturing(captured));
+    const plan = vi.fn(() => ({
+      model: 'anthropic/claude-sonnet-4',
+      preferDirect: true,
+      intent: 'bugfix' as const,
+      category: 'extended_reasoning' as const,
+      risk: 'high' as const,
+      source: 'pal' as const,
+      reason: 'test',
+    }));
+    service.setPalRouter({ plan });
+
+    await service.complete({
+      model: 'openai/gpt-4o-mini',
+      messages: [{ role: 'user', content: 'fix the crash' }],
+      userId: 'u1',
+      routingHint: { intent: 'bugfix' },
+    });
+
+    expect(plan).toHaveBeenCalledTimes(1);
+    // pal was consulted with the requested model as the degrade target.
+    expect(plan).toHaveBeenCalledWith({ intent: 'bugfix' }, [ENTRY], 'openai/gpt-4o-mini');
+    // The gateway received the PAL-CHOSEN route, not the caller's model.
+    expect(captured.model).toBe('anthropic/claude-sonnet-4');
+    expect(captured.preferDirect).toBe(true);
+  });
+
+  it('does NOT consult pal (routes as supplied) when no routingHint is attached', async () => {
+    const captured: { model?: string } = {};
+    const service = serviceWithGateway(gatewayCapturing(captured));
+    const plan = vi.fn();
+    service.setPalRouter({ plan: plan as never });
+
+    await service.complete({ model: 'openai/gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }], userId: 'u1' });
+
+    expect(plan).not.toHaveBeenCalled();
+    expect(captured.model).toBe('openai/gpt-4o-mini');
+  });
+
+  it('degrades to the supplied request when the pal planner throws (never blocks delivery)', async () => {
+    const captured: { model?: string } = {};
+    const service = serviceWithGateway(gatewayCapturing(captured));
+    service.setPalRouter({
+      plan: () => {
+        throw new Error('pal exploded');
+      },
+    });
+
+    const result = await service.complete({
+      model: 'openai/gpt-4o-mini',
+      messages: [{ role: 'user', content: 'hi' }],
+      userId: 'u1',
+      routingHint: { intent: 'bugfix' },
+    });
+
+    expect(result.routed).toBe(true);
+    expect(captured.model).toBe('openai/gpt-4o-mini');
+  });
+});
+
 describe('InferenceRoutingService.feedback', () => {
   function serviceWith(gateway: InferenceGatewayPort, outcomes: DeliveryOutcomeRepository) {
     const ledger = { append: vi.fn(async () => null), recentForUser: vi.fn(), totalsForUser: vi.fn(), isDurable: () => true } as unknown as UsageLedgerRepository;

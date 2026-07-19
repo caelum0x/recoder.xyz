@@ -6,9 +6,13 @@
  * (`completed` / `failed`) the conductor run flow fires the two completion
  * capabilities the AGENTS policy describes:
  *  - (h) memory HARVEST — an evidence-backed candidate wisp distilled from the
- *    finished run (`ConductorBrainMemory.harvestOnCompletion`), and
+ *    finished run (`ConductorBrainMemory.harvestOnCompletion`),
  *  - (i) issue-graph CLOSE/NOTE — the bd issue the workspace served is noted and,
- *    on success, closed (`CodeIntelPort.completeWork`).
+ *    on success, closed (`CodeIntelPort.completeWork`), and
+ *  - (k) code-graph REINDEX — the recodergit code-knowledge-graph is refreshed for
+ *    the workspace's repo (`CodeIntelPort.reindexRepo`) so the graph the next
+ *    agent queries reflects the code THIS run just committed, instead of the
+ *    launch-time snapshot that goes stale as the workspace advances.
  *
  * SEAM LAW (degrade-safe, truthful): the wrapped `inner.append` (durable audit +
  * live `/sync`) runs FIRST and is always awaited — the terminal event is never
@@ -45,6 +49,17 @@ export interface CompletionHookDeps {
 /** True for the two terminal RunEvent types the completion hooks fire on. */
 function isTerminal(type: RunEvent['type']): type is 'completed' | 'failed' {
   return type === 'completed' || type === 'failed';
+}
+
+/**
+ * Derive the deterministic, path-safe recodergit repoId from a repo full-name or
+ * absolute path (lowercase; every non `[a-z0-9_-]` run → `__`). MUST stay in sync
+ * with `conductor-module.ts` `repoIdFromRepoRef`, which derives the SAME id at
+ * launch-time index; matching ids let this completion-time reindex refresh the
+ * exact graph that launch built. Returns '' for an empty ref (⇒ reindex skipped).
+ */
+function repoIdFromRepoRef(ref: string | undefined): string {
+  return (ref ?? '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '__');
 }
 
 /**
@@ -91,6 +106,23 @@ export function createCompletionHookSink(deps: CompletionHookDeps): RunEventSink
             .catch((err) =>
               logger.warn({ err, taskId }, 'conductor beads completeWork hook faulted'),
             );
+        }
+
+        // (k) code-graph reindex — refresh the recodergit graph for the repo the
+        // agent just committed into, keyed by the SAME deterministic repoId the
+        // launch-time index used (derived from projectId, worktreePath fallback).
+        // Fires on BOTH terminal outcomes (a failed run may still have committed
+        // code, and the engine truthfully skips when nothing was indexed). Fire-
+        // and-forget + degrade-safe: a reindex fault NEVER stalls the terminal event.
+        if (codeIntel && workspace) {
+          const repoId = repoIdFromRepoRef(workspace.projectId || workspace.worktreePath);
+          if (repoId) {
+            void codeIntel
+              .reindexRepo(repoId)
+              .catch((err) =>
+                logger.warn({ err, repoId }, 'conductor recodergit reindex hook faulted'),
+              );
+          }
         }
 
         // (j) billing metering — the run consumed one `agent_run`; meter it durably

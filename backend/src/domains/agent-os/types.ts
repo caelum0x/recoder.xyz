@@ -50,6 +50,15 @@ export interface AgentOsDeps {
    */
   readonly beadsEngine?: EngineClientPort | null;
   /**
+   * The browser-use `EngineClientPort` (`engines.client('browser-use')`) that
+   * backs the workflow `browser-check` node handler (navigate → assert →
+   * screenshot → summary artifact). Absent ⇒ `browser-check` nodes degrade to a
+   * truthful `skipped` (browsing is evidence-gathering — never a faked verdict,
+   * never a blocked run). Only consulted when no explicit `workflowDriver` is
+   * injected (the default `AgentOsWorkflowRunnerDriver` wires the handler).
+   */
+  readonly browserEngine?: EngineClientPort | null;
+  /**
    * The narrow conductor dispatch seam the autopilot launches workspaces
    * through. Bootstrap builds the conductor AFTER agent-os, so this is usually
    * attached late via `attachSquadAutopilotConductor` instead.

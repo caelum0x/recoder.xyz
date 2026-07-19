@@ -26,13 +26,22 @@ export type Mem0Fetch = (
     headers: Record<string, string>;
     body?: string;
     signal?: AbortSignal;
-  },
+  }
 ) => Promise<Mem0HttpResponse>;
 
 export interface Mem0SidecarClient {
   readonly baseUrl: string;
-  search(query: string, scope: Mem0Scope, limit: number): Promise<readonly Mem0Result[]>;
-  add(messages: readonly Mem0Message[], scope: Mem0Scope): Promise<{ ok: boolean; reason?: string }>;
+  search(
+    query: string,
+    scope: Mem0Scope,
+    limit: number
+  ): Promise<readonly Mem0Result[]>;
+  add(
+    messages: readonly Mem0Message[],
+    scope: Mem0Scope
+  ): Promise<{ ok: boolean; reason?: string }>;
+  /** Drive the sidecar's batch consolidation/decay pass. `{ ok:false }` when unreachable/absent. */
+  consolidate(scope?: Mem0Scope): Promise<{ ok: boolean; reason?: string }>;
   health(): Promise<{ available: boolean; reason?: string }>;
 }
 
@@ -41,7 +50,9 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 /** Best-effort abort signal; absent in some runtimes, so guard it. */
 function timeoutSignal(ms: number): AbortSignal | undefined {
   try {
-    const ctor = (AbortSignal as unknown as { timeout?: (n: number) => AbortSignal }).timeout;
+    const ctor = (
+      AbortSignal as unknown as { timeout?: (n: number) => AbortSignal }
+    ).timeout;
     return typeof ctor === 'function' ? ctor(ms) : undefined;
   } catch {
     return undefined;
@@ -66,9 +77,18 @@ function parseResults(body: unknown): Mem0Result[] {
     if (typeof row !== 'object' || row === null) continue;
     const r = row as Record<string, unknown>;
     const id = typeof r.id === 'string' ? r.id : '';
-    const memory = typeof r.memory === 'string' ? r.memory : typeof r.text === 'string' ? r.text : '';
+    const memory =
+      typeof r.memory === 'string'
+        ? r.memory
+        : typeof r.text === 'string'
+          ? r.text
+          : '';
     if (!id || !memory) continue;
-    out.push(typeof r.score === 'number' ? { id, memory, score: r.score } : { id, memory });
+    out.push(
+      typeof r.score === 'number'
+        ? { id, memory, score: r.score }
+        : { id, memory }
+    );
   }
   return out;
 }
@@ -80,11 +100,14 @@ function parseResults(body: unknown): Mem0Result[] {
 export function createMem0SidecarClient(
   baseUrl: string,
   doFetch: Mem0Fetch = fetch as unknown as Mem0Fetch,
-  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Mem0SidecarClient {
   const base = baseUrl.trim().replace(/\/+$/, '');
 
-  async function req(path: string, body: unknown): Promise<Mem0HttpResponse | null> {
+  async function req(
+    path: string,
+    body: unknown
+  ): Promise<Mem0HttpResponse | null> {
     if (!base || typeof doFetch !== 'function') return null;
     try {
       return await doFetch(`${base}${path}`, {
@@ -102,7 +125,11 @@ export function createMem0SidecarClient(
     baseUrl: base,
 
     async search(query, scope, limit) {
-      const res = await req('/search', { query, filters: filtersFor(scope), topK: limit });
+      const res = await req('/search', {
+        query,
+        filters: filtersFor(scope),
+        topK: limit,
+      });
       if (!res?.ok) return [];
       try {
         return parseResults(await res.json());
@@ -113,8 +140,26 @@ export function createMem0SidecarClient(
 
     async add(messages, scope) {
       const res = await req('/memories', { messages, ...filtersFor(scope) });
-      if (res === null) return { ok: false, reason: 'mem0 sidecar unreachable or unconfigured' };
-      return res.ok ? { ok: true } : { ok: false, reason: `mem0 sidecar HTTP ${res.status}` };
+      if (res === null)
+        return {
+          ok: false,
+          reason: 'mem0 sidecar unreachable or unconfigured',
+        };
+      return res.ok
+        ? { ok: true }
+        : { ok: false, reason: `mem0 sidecar HTTP ${res.status}` };
+    },
+
+    async consolidate(scope) {
+      const res = await req('/consolidate', scope ? filtersFor(scope) : {});
+      if (res === null)
+        return {
+          ok: false,
+          reason: 'mem0 sidecar unreachable or unconfigured',
+        };
+      return res.ok
+        ? { ok: true }
+        : { ok: false, reason: `mem0 sidecar HTTP ${res.status}` };
     },
 
     async health() {
@@ -127,9 +172,15 @@ export function createMem0SidecarClient(
           headers: { 'content-type': 'application/json' },
           signal: timeoutSignal(timeoutMs),
         });
-        return res.ok ? { available: true } : { available: false, reason: `mem0 sidecar HTTP ${res.status}` };
+        return res.ok
+          ? { available: true }
+          : { available: false, reason: `mem0 sidecar HTTP ${res.status}` };
       } catch (err) {
-        return { available: false, reason: err instanceof Error ? err.message : 'mem0 sidecar health failed' };
+        return {
+          available: false,
+          reason:
+            err instanceof Error ? err.message : 'mem0 sidecar health failed',
+        };
       }
     },
   };

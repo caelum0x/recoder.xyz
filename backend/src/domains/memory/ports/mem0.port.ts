@@ -41,12 +41,37 @@ export interface Mem0Availability {
   readonly detail?: Readonly<Record<string, unknown>>;
 }
 
+/** The truthful outcome of a maintenance consolidation/decay sweep. */
+export interface Mem0ConsolidateResult {
+  /** True only when a real batch consolidate ran (never a faked success). */
+  readonly ok: boolean;
+  /** Truthful reason when the sweep was a no-op or skipped (e.g. inline mode). */
+  readonly reason?: string;
+}
+
 /** The semantic per-user memory port. */
 export interface Mem0Port {
   /** Search distilled memories for `query` within `scope`. `[]` when down. */
-  search(query: string, scope: Mem0Scope, limit?: number): Promise<readonly Mem0Result[]>;
+  search(
+    query: string,
+    scope: Mem0Scope,
+    limit?: number
+  ): Promise<readonly Mem0Result[]>;
   /** Distil + store facts from `messages`. No-op (best-effort) when down. */
-  add(messages: readonly Mem0Message[], scope: Mem0Scope): Promise<{ ok: boolean; reason?: string }>;
+  add(
+    messages: readonly Mem0Message[],
+    scope: Mem0Scope
+  ): Promise<{ ok: boolean; reason?: string }>;
   /** Truthful readiness (mode + reason), never a faked `up`. */
   health(): Promise<Mem0Availability>;
+  /**
+   * OPTIONAL periodic decay/consolidation sweep (maintenance driver only).
+   *
+   * mem0's real consolidation (LLM fact-merge / dedup / decay) runs INLINE on
+   * every `add`, so the in-lib client has no separate batch trigger and this
+   * returns a truthful no-op. When a self-hosted sidecar is wired it drives the
+   * sidecar's batch consolidate endpoint. Degrade-safe: absent/unreachable →
+   * `{ ok:false, reason }`, never a faked success.
+   */
+  consolidate?(scope?: Mem0Scope): Promise<Mem0ConsolidateResult>;
 }

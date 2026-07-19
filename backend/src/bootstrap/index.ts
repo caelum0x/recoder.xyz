@@ -365,6 +365,11 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     middleware: identity.middleware(),
     gate: governance.gate(),
     beadsEngine: engines.client('beads'),
+    // browser-use EngineClientPort (a supervised sidecar): the workflow
+    // `browser-check` node handler auto-resolves its `.ext()` deep-op port and
+    // runs `run_task` against the LIVE sidecar. Absent/down ⇒ the node degrades
+    // to a truthful `skipped` (never a fake pass, never a blocked run).
+    browserEngine: engines.client('browser-use'),
     overrides: {
       natsUrl: config.agentOs.natsUrl,
       brainEnabled: config.agentOs.brainEnabled,
@@ -594,6 +599,25 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     githubStatus: conductorGithub,
     steerTransport: conductorSteer,
     mcpInject: conductorMcpInject,
+    // Delivery-feedback seam: a MERGED workspace fires the inference routing
+    // feedback sink (`task_success` on the run's persisted inference_id) so the
+    // BYOK LLM gateway learns from real deliveries. Degrade-truthful: the merge
+    // flow only fires when an inference_id was persisted onto the workspace
+    // record — until that persistence lands the sink is a silent no-op and
+    // feedback still reaches the gateway via the `/inference/feedback` route.
+    onDeliveryFeedback: (inferenceId, userId, success) => {
+      void inference
+        .routing()
+        .feedback({
+          inferenceId,
+          metricName: 'task_success',
+          value: success,
+          ...(userId ? { userId } : {}),
+        })
+        .catch(() => {
+          /* accounting must never throw into the merge path */
+        });
+    },
     overrides: {
       tmuxBin: config.conductor.tmuxBin,
       worktreeRoot: config.conductor.worktreeRoot,
@@ -1120,6 +1144,11 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     routerProvider('memory-internal', '/internal/agent-os/memory', memory.internalRoutes()),
     // Cloud edges: tenancy/sandboxes/preview/mesh (self-gated; degrade-safe).
     routerProvider('cloud', DOMAIN_REGISTRY.cloud.mountBase, cloud.routes()),
+    // Internal cloud worker surface (INTERNAL_SERVICE_KEY-gated internally): the
+    // mesh/xds writer + tenant provisioning edges workers drive. Degrade-truthful:
+    // no xds/ziti endpoint configured (XDS_ENDPOINT/ZITI_ENDPOINT) ⇒ the writer
+    // reports unconfigured, never a fabricated push.
+    routerProvider('cloud-internal', '/internal/cloud', cloud.internalRoutes()),
     // Social edges: connectors/bindings read models + the hostile-by-default webhook
     // ingress (`POST /api/social/webhooks/:channel`, RAW-body HMAC over req.rawBody).
     routerProvider('social', DOMAIN_REGISTRY.social.mountBase, social.routes()),

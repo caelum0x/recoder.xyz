@@ -10,13 +10,19 @@
  */
 import {
   appendMemoryNote,
+  commitMemoryGraph,
   promoteMemory,
   recallMemories,
   rememberCandidate,
   type MemoryEntry,
 } from './beads-memory.js';
 import { beadsAvailability } from '../../engines/beads-bin.js';
-import type { BeadsMemoryEntry, BeadsMemoryPort, BeadsRememberInput } from '../ports/beads-memory.port.js';
+import type {
+  BeadsFlushResult,
+  BeadsMemoryEntry,
+  BeadsMemoryPort,
+  BeadsRememberInput,
+} from '../ports/beads-memory.port.js';
 
 function toEntry(e: MemoryEntry): BeadsMemoryEntry {
   return {
@@ -46,14 +52,19 @@ export function createBeadsMemoryAdapter(): BeadsMemoryPort {
           title: input.title,
           body: input.body,
           ...(input.scope ? { scope: input.scope } : {}),
-          ...(input.discoveredFrom ? { discoveredFrom: input.discoveredFrom } : {}),
+          ...(input.discoveredFrom
+            ? { discoveredFrom: input.discoveredFrom }
+            : {}),
         });
       } catch {
         return undefined;
       }
     },
 
-    recall(query: string, options: { scope?: string; limit?: number } = {}): readonly BeadsMemoryEntry[] {
+    recall(
+      query: string,
+      options: { scope?: string; limit?: number } = {}
+    ): readonly BeadsMemoryEntry[] {
       try {
         return recallMemories(query, options).map(toEntry);
       } catch {
@@ -74,6 +85,17 @@ export function createBeadsMemoryAdapter(): BeadsMemoryPort {
         return appendMemoryNote(id, text);
       } catch {
         return false;
+      }
+    },
+
+    flush(message?: string): BeadsFlushResult {
+      try {
+        return commitMemoryGraph(message);
+      } catch (err) {
+        return {
+          committed: false,
+          reason: err instanceof Error ? err.message : 'bd vc commit failed',
+        };
       }
     },
   };

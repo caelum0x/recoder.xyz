@@ -24,8 +24,10 @@ import type { AuthMiddleware } from '../identity/middleware/authenticate.middlew
 import type { GovernanceConfig } from './config.js';
 import type { GovernanceKernelPort } from './ports/kernel.port.js';
 import type { GovernanceGate } from './ports/gate.port.js';
+import type { ReloadPoliciesResult } from './ports/approval-store.port.js';
 import type { SecretsPort } from './ports/secrets.port.js';
 import { createVaultAdapter, type VaultAdapter } from './adapters/vault.adapter.js';
+import { createNapiApprovalStore } from './adapters/napi-approval-store.adapter.js';
 import { createAuditRepository } from './repositories/audit.repository.js';
 import {
   createApprovalRepository,
@@ -79,11 +81,17 @@ export class GovernanceComposer implements GovernanceModule {
     // The tamper-evident chain writer/verifier (cross-checks the kernel tip).
     this.auditChain = new AuditChainService(auditRepo, kernel, this.log);
 
+    // The Rust kernel's OWN in-proc ApprovalManager store (submit/resolve/list/
+    // count + reloadPolicies). Degrade-truthful: absent native handle → an
+    // `available:false` store, and the gate falls back to the durable repo below.
+    const approvalStore = createNapiApprovalStore(deps.napiApprovalHandle, this.log);
+
     // THE write seam: decide → risk → audit. Fail-closed on any kernel fault.
     this.gateService = new GovernanceGateService({
       kernel,
       audit: this.auditChain,
       approvals: approvalRepo,
+      approvalStore,
       logger: this.log,
     });
 
@@ -127,6 +135,13 @@ export class GovernanceComposer implements GovernanceModule {
 
   kernel(): GovernanceKernelPort {
     return this.kernelPort;
+  }
+
+  /** Hot-swap the kernel's live policy bundle (agent-os policy-update hook). */
+  async reloadPolicies(configJson: string): Promise<ReloadPoliciesResult> {
+    const result = await this.gateService.reloadPolicies(configJson);
+    this.log.info({ reloaded: result.reloaded, reason: result.reason }, 'governance policy reload');
+    return result;
   }
 
   /** The `/api/agent-os` router: approvals + work-locks + secrets edges. */

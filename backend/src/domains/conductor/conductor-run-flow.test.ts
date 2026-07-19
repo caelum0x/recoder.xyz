@@ -41,20 +41,26 @@ function makeBrain(): RecordingBrain {
 
 interface RecordingCodeIntel extends CodeIntelPort {
   readonly index: Array<{ repoPath: string; repoId: string }>;
+  readonly reindex: Array<{ repoId: string }>;
   readonly track: Array<{ taskId: string; workspaceId: string }>;
   readonly complete: Array<{ taskId: string; outcome: string }>;
 }
 
 function makeCodeIntel(): RecordingCodeIntel {
   const index: RecordingCodeIntel['index'] = [];
+  const reindex: RecordingCodeIntel['reindex'] = [];
   const track: RecordingCodeIntel['track'] = [];
   const complete: RecordingCodeIntel['complete'] = [];
   return {
     index,
+    reindex,
     track,
     complete,
     async indexRepo(repoPath, repoId) {
       index.push({ repoPath, repoId });
+    },
+    async reindexRepo(repoId) {
+      reindex.push({ repoId });
     },
     async trackWork(taskId, workspaceId) {
       track.push({ taskId, workspaceId });

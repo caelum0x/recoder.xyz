@@ -46,6 +46,7 @@ import {
 } from './services/workflow.service.js';
 import { PostgresWorkflowDefinitionStore } from './adapters/postgres-workflow-definition.store.js';
 import { AgentOsWorkflowRunnerDriver } from './adapters/agent-os-workflow-runner.driver.js';
+import { createBrowserCheckWorkflowHandler } from './adapters/browser-check-workflow.handler.js';
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
 import { buildSquadBoardRouter } from './routes/squad-board.routes.js';
 import { buildSquadReadRouter } from './routes/squad-read.routes.js';
@@ -170,9 +171,20 @@ export class AgentOsComposer implements AgentOsModule {
       this.effectiveDriver === 'postgres' && this.executor
         ? new PostgresWorkflowDefinitionStore(this.executor)
         : new InMemoryWorkflowDefinitionStore();
+    // The default driver wires the LIVE `browser-check` node handler over the
+    // injected browser-use engine (navigate → assert → screenshot → summary
+    // artifact + optional autonomous `run_task`). Absent engine ⇒ the handler
+    // degrades to a truthful `skipped` per node — browsing never fakes a verdict
+    // and never blocks the run. An explicitly injected `workflowDriver` wins
+    // (tests / richer bootstrap composition) behind the same seam.
+    const defaultDriver = new AgentOsWorkflowRunnerDriver({
+      ports: {
+        runBrowserCheck: createBrowserCheckWorkflowHandler({ client: deps.browserEngine ?? null }),
+      },
+    });
     this.workflows = new WorkflowService({
       store: workflowStore,
-      driver: deps.workflowDriver ?? new AgentOsWorkflowRunnerDriver(),
+      driver: deps.workflowDriver ?? defaultDriver,
     });
 
     const inner = buildAgentOsRouter({
