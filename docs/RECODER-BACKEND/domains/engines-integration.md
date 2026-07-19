@@ -209,6 +209,41 @@ engines/
 > `adapters/daemon/mcp/` per-daemon tool bindings, and more co-located tests (see the §2 note).
 > This is the production surface, not a skeleton.
 
+### 3.1 Shipped engine MCP tools — this program (~54 new, all real-bound)
+
+> **Status: SHIPPED** (branch `feat/enterprise-s0-p0`). Each tool below is **real-bound**
+> (backed by its engine adapter / daemon / CLI, never a stub), **degrade-truthful** (an absent
+> `.node`/binary/venv yields a truthful `down`, not a faked result), and — for the
+> subject-bearing tools — **caller-bound**: the acting principal/tenant is derived from the
+> authenticated `Principal` on the edge, never from `args`/`body.actor` (see §5
+> subject-binding). WRITE-capable tools are flagged **(gated)** and pass the full interop
+> `authorize→risk→execute→audit` chain. These extend the ~30 registrations enumerated by
+> `mcp/inproc-router.ts` (`ENGINE_SERVERS` / `forEachInProcEngineTool`) — the total in-proc
+> tool surface is now ~54 larger.
+
+| engine | transport | new shipped MCP tools | notes |
+|---|---|---|---|
+| **mem0** | sidecar | `mem0.recall`, `mem0.relations`, `mem0.stats` | Read-side memory recall + relation graph + store stats; subject-bound to the caller's tenant. |
+| **colbert** | daemon | `colbert.rerank_batch`, `colbert.collections.list`, `colbert.collections.stats`, `colbert.collections.create` (gated), `colbert.collections.drop` (gated) | Batched rerank + late-interaction collection lifecycle; create/drop are governed writes. |
+| **browser-use** | sidecar | `browser.extract_structured`, `browser.run_task`, `browser.screenshot_annotate`, `browser.fill_form` (gated) | Structured extraction, autonomous task run, annotated screenshots, form fill; `run_task`/`fill_form` are gated writes. |
+| **ops-recorder** | daemon | `ops-recorder.query`, `ops-recorder.stats` | Query recorded signal events + aggregate detection stats. |
+| **pal** | sidecar (stdio-MCP) | `pal.route`, `pal.consensus`, `pal.debate`, `pal.models` | Model routing decision, multi-model consensus, debate orchestration, catalog of routable models. |
+| **openfang** | napi | `openfang.introspect_hands`, `openfang.agent_run_status` | Introspect the kernel's registered hands + read agent-run status. |
+| **tensorzero** | napi | `tensorzero.model_catalog`, `tensorzero.batch_inference` (gated) | Embedded-gateway model catalog + batched inference; `batch_inference` is a gated write. |
+| **governance** | napi | `governance.explain_decision` | Read-side explanation of a governance-kernel decision (byte-interop with the audit chain). |
+| **beads** | cli | `beads.blocked`, `beads.graph`, `beads.deps`, `beads.search`, `beads.stats` | Blocked-issue view, issue graph, dependency edges, search, and graph stats over the `bd` layer. |
+| **recodergit** | cli | `recodergit.symbol_search`, `recodergit.find_references`, `recodergit.call_graph`, `recodergit.definition` | Code-intel: symbol search, references, call graph, go-to-definition over the code-graph index. |
+| **dmux** | cli | `dmux.layout_presets`, `dmux.panes_list`, `dmux.panes_create` (gated), `dmux.layout_apply` (gated) | Terminal-mux layout presets + pane introspection; create/apply are gated writes. |
+| **tmux** | cli | `tmux.list_sessions`, `tmux.list_windows`, `tmux.list_panes`, `tmux.capture_pane`, `tmux.server_info` | Read-side session/window/pane inventory + pane capture + server info. |
+| **ziti** (cloud) | daemon | `cloud_mesh_services_list`, `cloud_mesh_enrollment_status`, `cloud_mesh_topology`, `cloud_mesh_enroll` (gated) | OpenZiti mesh service list, enrollment status, topology; `enroll` is a governed write. |
+| **recoder-xds** (cloud) | daemon | `cloud_xds_snapshot`, `cloud_xds_clusters`, `cloud_xds_routes`, `cloud_xds_listeners`, `cloud_xds_endpoints` | xDS control-plane read surface: full snapshot + per-resource clusters/routes/listeners/endpoints. |
+| **multica** (agent-os) | daemon | `coordination_squad_routing`, `coordination_status`, `coordination_conflicts`, `coordination_request_reroute` (gated) | Squad routing view, coordination status, conflict detection; `request_reroute` is a gated write. |
+
+> The **cloud** (ziti / recoder-xds) and **agent-os** (multica) tools are registered from their
+> owning domains but reach their engine through this domain's daemon adapters
+> (`adapters/daemon/{ziti-rest,multica-loopback}.adapter.ts` + the recoder-xds daemon), and are
+> governed through the same MCP host — they are listed here because the engine binding lives here.
+
 ---
 
 ## 4. Database schema

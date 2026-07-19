@@ -82,7 +82,8 @@ backend/src/domains/agent-os/
 │   ├── workflow.routes.ts                # /api/agent-os/workflows/* CRUD + dispatch
 │   └── workflow.schemas.ts               # zod schemas for the workflow edge
 ├── mcp/
-│   └── agent-os-engine.ts                # READ-ONLY MCP tools: agent_os_summary/list_tasks/list_runs
+│   ├── agent-os-engine.ts                # READ-ONLY MCP tools: agent_os_summary/list_tasks/list_runs
+│   └── coordination-engine.ts            # SHIPPED: multica-bound squad-coordination MCP tools (routing/status/conflicts + gated reroute)
 ├── migrations/                           # canonical SQL (mirrored to backend/migrations; runner in persistence)
 │   ├── 0001-agent-os-schema.sql          # tasks/runs/approvals/artifacts/instructions/policies/spaces/events/outbox
 │   ├── 0003-squads.sql                   # squads + squad_members + squad_activity
@@ -142,6 +143,7 @@ backend/src/domains/agent-os/
 | `routes/workflow.routes.ts` | ts | route | `/api/agent-os/workflows/*` definitions CRUD + `POST /workflows/:workflowId/dispatch` | `buildWorkflowRouter(deps)` |
 | `routes/workflow.schemas.ts` | ts | schema | Zod schemas for the workflow edge | (schema exports) |
 | `mcp/agent-os-engine.ts` | ts | client | READ-ONLY MCP introspection tools (`agent_os_summary`, `agent_os_list_tasks`, `agent_os_list_runs`) | `buildAgentOsMcpTools(repository)` |
+| `mcp/coordination-engine.ts` | ts | client | **SHIPPED** squad-coordination MCP tools real-bound to multica leader-routing (`services/squad.service.ts`); degrade-truthful, subject-tools caller-bound: READ `coordination_squad_routing` (leader/capability route), `coordination_status` (squad roster/autopilot roll-up), `coordination_conflicts` (competing-claim detection) + governance-**gated** WRITE `coordination_request_reroute` (propose a member/leader reroute) | `buildCoordinationMcpTools(squadService)` |
 | `migrations/0001-agent-os-schema.sql` | sql | migration | Core tables (see §4); vector ext | (DDL) |
 | `migrations/0003-squads.sql` | sql | migration | `squads`, `squad_members`, `squad_activity` | (DDL) |
 | `migrations/0004-state-of-record.sql` | sql | migration | Lossless jsonb document store the `PostgresAgentOsRepository` binds to | (DDL) |
@@ -271,6 +273,7 @@ Reads sit behind `middleware.authenticate`; writes behind `middleware.authentica
 - `adapters/agent-os-workflow-runner.driver.ts` + `adapters/postgres-workflow-definition.store.ts`.
 - `routes/agent-os-crud.routes.ts` (+ schemas), `routes/workflow.routes.ts` (+ schemas), `routes/squad-read.routes.ts`, `routes/squad-board.routes.ts`.
 - `mcp/agent-os-engine.ts` (READ-ONLY MCP introspection tools — summary/list-tasks/list-runs).
+- **SHIPPED** `mcp/coordination-engine.ts` — multica-bound squad-coordination MCP tools: `coordination_squad_routing`, `coordination_status`, `coordination_conflicts` (READ) + `coordination_request_reroute` (governance-gated WRITE); real-bound to `SquadService` leader-routing, degrade-truthful, subject-tools caller-bound.
 - `migrations/0003-squads.sql`, `0004-state-of-record.sql`, `0005-workflow-definitions.sql`.
 - tests in `__tests__/`.
 

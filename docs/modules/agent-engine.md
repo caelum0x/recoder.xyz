@@ -19,3 +19,15 @@ to `undefined` when absent (no fake success). Still **planned**: `asRuntime` dis
 driver exists as `IN_PROCESS_RUNTIME_SPECS`, but `ConductorRuntimeId` is a closed union so
 it is not yet dispatchable) and the bidirectional `onEvent` openfang-event-bus ↔ RunEvent
 bridge (the RunEvent sink is one-way and its bootstrap DI wiring is still a TODO).
+
+**Shipped (2026-07-19) — openfang MCP read tools.** Two real-bound, degrade-truthful
+engine tools expose the booted kernel's introspection surface to governed agent callers
+(subject-tools are caller-bound):
+
+- `openfang.introspect_hands` — lists the kernel's registered hands + their active state
+  (over `listActiveHands`), so an agent can see which capability hands are live before
+  invoking `activateHand`. When the `.node` addon is absent, it degrades to a truthful
+  down report rather than faking a hand list.
+- `openfang.agent_run_status` — reports the status of an in-process openfang agent run
+  (from `launchOpenfangRun`'s honest RunEvent stream), so a caller can poll run progress
+  without inferring success. Degrades truthfully when the kernel is not booted.
