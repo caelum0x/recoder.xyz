@@ -99,18 +99,37 @@ export function rememberCandidate(input: RememberInput): string | undefined {
   if (!title || !body) return undefined;
   const labels = ['memory'];
   if (input.scope?.trim()) labels.push(`memory-scope:${input.scope.trim()}`);
-  const args = ['create', title, '--ephemeral', '-l', labels.join(','), '-d', body, '--json'];
-  if (input.discoveredFrom?.trim()) args.push('--deps', `discovered-from:${input.discoveredFrom.trim()}`);
+  const args = [
+    'create',
+    title,
+    '--ephemeral',
+    '-l',
+    labels.join(','),
+    '-d',
+    body,
+    '--json',
+  ];
+  if (input.discoveredFrom?.trim())
+    args.push('--deps', `discovered-from:${input.discoveredFrom.trim()}`);
   try {
     const created = parseJson(run(args));
     const id =
-      typeof created === 'object' && created != null && typeof (created as Record<string, unknown>).id === 'string'
+      typeof created === 'object' &&
+      created != null &&
+      typeof (created as Record<string, unknown>).id === 'string'
         ? ((created as Record<string, unknown>).id as string)
         : undefined;
-    if (id) logger.info({ id, scope: input.scope }, 'memory candidate persisted to beads (wisp)');
+    if (id)
+      logger.info(
+        { id, scope: input.scope },
+        'memory candidate persisted to beads (wisp)'
+      );
     return id;
   } catch (err) {
-    logger.warn({ err: String(err).slice(0, 200) }, 'beads remember unavailable — candidate not persisted to graph');
+    logger.warn(
+      { err: String(err).slice(0, 200) },
+      'beads remember unavailable — candidate not persisted to graph'
+    );
     return undefined;
   }
 }
@@ -119,18 +138,37 @@ export function rememberCandidate(input: RememberInput): string | undefined {
  * Recall memories (candidates + promoted) matching a text query. Empty array on
  * any failure — recall must never block or break a launch.
  */
-export function recallMemories(query: string, options: { scope?: string; limit?: number } = {}): MemoryEntry[] {
+export function recallMemories(
+  query: string,
+  options: { scope?: string; limit?: number } = {}
+): MemoryEntry[] {
   const q = query.trim();
   if (!q) return [];
   const limit = Math.min(Math.max(options.limit ?? 5, 1), 50);
-  const args = ['search', q, '--label', 'memory', '--status', 'all', '--json', '-n', String(limit)];
-  if (options.scope?.trim()) args.push('--label', `memory-scope:${options.scope.trim()}`);
+  const args = [
+    'search',
+    q,
+    '--label',
+    'memory',
+    '--status',
+    'all',
+    '--json',
+    '-n',
+    String(limit),
+  ];
+  if (options.scope?.trim())
+    args.push('--label', `memory-scope:${options.scope.trim()}`);
   try {
     const found = parseJson(run(args));
     if (!Array.isArray(found)) return [];
-    return found.map(normalizeEntry).filter((e): e is MemoryEntry => e !== undefined);
+    return found
+      .map(normalizeEntry)
+      .filter((e): e is MemoryEntry => e !== undefined);
   } catch (err) {
-    logger.warn({ err: String(err).slice(0, 200) }, 'beads recall unavailable — continuing without graph memory');
+    logger.warn(
+      { err: String(err).slice(0, 200) },
+      'beads recall unavailable — continuing without graph memory'
+    );
     return [];
   }
 }
@@ -147,8 +185,61 @@ export function promoteMemory(id: string): boolean {
     logger.info({ id: trimmed }, 'memory candidate promoted to durable bead');
     return true;
   } catch (err) {
-    logger.warn({ id: trimmed, err: String(err).slice(0, 200) }, 'beads promote failed');
+    logger.warn(
+      { id: trimmed, err: String(err).slice(0, 200) },
+      'beads promote failed'
+    );
     return false;
+  }
+}
+
+export interface BeadsCommitResult {
+  committed: boolean;
+  hash?: string;
+  reason?: string;
+}
+
+/**
+ * Durability flush: commit the working-set of the Dolt-versioned issue graph
+ * (`bd vc commit`) so note/update/close mutations become a durable, versioned
+ * checkpoint. `bd` normally auto-commits per command, but a periodic explicit
+ * flush guarantees any coalesced/deferred working-set is sealed.
+ *
+ * Degrade-safe: a clean graph yields `{ committed:false, reason:'nothing to
+ * commit' }` (the `bd vc commit --json` "committed:false" contract); `bd` down
+ * yields `{ committed:false, reason }`. Never throws, never fabricates a commit.
+ */
+export function commitMemoryGraph(
+  message = 'bd: memory durability flush'
+): BeadsCommitResult {
+  const msg = message.trim() || 'bd: memory durability flush';
+  try {
+    const parsed = parseJson(run(['vc', 'commit', '-m', msg, '--json']));
+    if (typeof parsed === 'object' && parsed != null) {
+      const rec = parsed as Record<string, unknown>;
+      const committed = rec.committed === true;
+      const hash = typeof rec.hash === 'string' ? rec.hash : undefined;
+      if (committed) {
+        logger.info(
+          { hash },
+          'beads durability flush committed the versioned graph'
+        );
+        return hash ? { committed: true, hash } : { committed: true };
+      }
+      const reason =
+        typeof rec.message === 'string' ? rec.message : 'nothing to commit';
+      return { committed: false, reason };
+    }
+    return { committed: false, reason: 'nothing to commit' };
+  } catch (err) {
+    logger.warn(
+      { err: String(err).slice(0, 200) },
+      'beads durability flush failed — graph not committed'
+    );
+    return {
+      committed: false,
+      reason: err instanceof Error ? err.message : 'bd vc commit failed',
+    };
   }
 }
 
@@ -161,12 +252,17 @@ export function appendMemoryNote(id: string, text: string): boolean {
     run(['note', trimmed, note, '--json']);
     return true;
   } catch (err) {
-    logger.warn({ id: trimmed, err: String(err).slice(0, 200) }, 'beads note failed');
+    logger.warn(
+      { id: trimmed, err: String(err).slice(0, 200) },
+      'beads note failed'
+    );
     return false;
   }
 }
 
 /** Test seam: inject a fake runner. Pass undefined to restore the real one. */
-export function __setBeadsMemoryRunnerForTest(runner: BeadsMemoryRunner | undefined): void {
+export function __setBeadsMemoryRunnerForTest(
+  runner: BeadsMemoryRunner | undefined
+): void {
   runnerOverride = runner;
 }

@@ -32,6 +32,14 @@ import type { Principal } from '../../identity/types.js';
 import type { GovernanceGate } from '../ports/gate.port.js';
 import type { GovernanceKernelPort } from '../ports/kernel.port.js';
 import type { ApprovalRepository } from '../ports/approval-repo.port.js';
+import type {
+  ApprovalStorePort,
+  ApprovalSubmitInput,
+  ApprovalSubmitResult,
+  ApprovalResolveResult,
+  PendingApproval,
+  ReloadPoliciesResult,
+} from '../ports/approval-store.port.js';
 import type { AuditChainService } from './audit-chain.service.js';
 import {
   type AuditEntryInput,
@@ -50,6 +58,14 @@ export interface GovernanceGateDeps {
   readonly kernel: GovernanceKernelPort;
   readonly audit: AuditChainService;
   readonly approvals?: ApprovalRepository;
+  /**
+   * The Rust kernel's own in-proc `ApprovalManager` store (submit/resolve/list/
+   * count + reloadPolicies). When present + `available`, it is the PRIMARY store
+   * the gate uses to clear a `needs_approval` verdict (the SAME kernel that ran
+   * `decide()` saw the approval) and to hot-swap policy. Absent / unavailable →
+   * the gate degrades truthfully to the durable {@link ApprovalRepository}.
+   */
+  readonly approvalStore?: ApprovalStorePort;
   readonly logger?: Logger;
 }
 
@@ -57,12 +73,14 @@ export class GovernanceGateService implements GovernanceGate {
   private readonly kernel: GovernanceKernelPort;
   private readonly audit: AuditChainService;
   private readonly approvals?: ApprovalRepository;
+  private readonly approvalStore?: ApprovalStorePort;
   private readonly log?: Logger;
 
   constructor(deps: GovernanceGateDeps) {
     this.kernel = deps.kernel;
     this.audit = deps.audit;
     this.approvals = deps.approvals;
+    this.approvalStore = deps.approvalStore;
     this.log = deps.logger;
   }
 
@@ -119,6 +137,19 @@ export class GovernanceGateService implements GovernanceGate {
     };
   }
 
+  /**
+   * The PER-TOOL teeth: enforce a single tool invocation against the kernel's
+   * fine-grained forbidden-path / secret-path / risk classifier BEFORE a running
+   * agent's tool executes. Unlike {@link decide} (coarse workspace-op risk), this
+   * is the check that catches the agent's real `rm -rf` / secret read / forbidden
+   * write. Deny-biased and fail-closed:
+   *   - the kernel port is deny-biased on fault, but if it still throws the
+   *     enforcement is treated as a synthetic DENY (never a fabricated allow);
+   *   - the outcome is SEALED into the same durable Merkle chain `decide` writes
+   *     to. An `allowed` that cannot be sealed is downgraded to a synthetic deny
+   *     (an un-audited allow cannot be trusted); a `denied` passes through even if
+   *     the seal fails (it already blocks) with the failure logged.
+   */
   async enforceTool(
     toolName: string,
     input: string,
@@ -128,7 +159,39 @@ export class GovernanceGateService implements GovernanceGate {
     const req = ctx
       ? this.buildRequest('tool.call', principal, ctx, new Date().toISOString())
       : { actorId: principal.userId, action: 'tool.call', target: { toolName } };
-    return this.kernel.enforceTool(toolName, input, req);
+
+    let result: ToolEnforcement;
+    try {
+      result = await this.kernel.enforceTool(toolName, input, req);
+    } catch (err) {
+      // The port is deny-biased on fault; a thrown seam still fails CLOSED.
+      this.log?.error({ err, toolName, actor: principal.userId }, 'governance enforceTool threw — failing closed (deny)');
+      result = {
+        outcome: 'denied',
+        reason: 'Governance kernel fault during tool enforcement — failing closed (deny).',
+        degraded: true,
+        engine: 'synthetic',
+      };
+    }
+
+    // Seal the enforcement decision into the durable audit chain.
+    try {
+      await this.audit.append(this.toToolAuditEntry(toolName, input, principal, result, ctx));
+    } catch (sealErr) {
+      this.log?.error({ err: sealErr, toolName, actor: principal.userId }, 'governance tool-enforcement audit seal failed');
+      if (result.outcome === 'allowed') {
+        // An un-recorded allow cannot be trusted — refuse it (fail-closed).
+        return {
+          outcome: 'denied',
+          reason: 'Audit chain unavailable — refusing to allow an un-recorded tool call.',
+          degraded: true,
+          engine: 'synthetic',
+        };
+      }
+      // A denied verdict already blocks; pass it through with the seal failure logged.
+    }
+
+    return result;
   }
 
   async route(action: GovernanceAction, principal: Principal, ctx: GateDecisionContext): Promise<RoutingHint> {
@@ -176,7 +239,25 @@ export class GovernanceGateService implements GovernanceGate {
     ctx: GateDecisionContext,
   ): Promise<string | undefined> {
     if (verdict.effect !== 'needs_approval') return undefined;
-    if (!this.approvals || !ctx.taskId) return undefined;
+    if (!ctx.taskId) return undefined;
+
+    // PRIMARY: the Rust kernel's own ApprovalManager store — the SAME kernel that
+    // ran `decide()` saw the approval, so its grant is the authoritative clearance.
+    if (this.approvalStore?.available) {
+      try {
+        const granted = await this.approvalStore.findApproval(ctx.taskId, action);
+        if (granted) return granted.requestId;
+      } catch (err) {
+        this.log?.warn(
+          { err, action, taskId: ctx.taskId },
+          'governance kernel approval store lookup failed — falling back to the durable repo',
+        );
+      }
+    }
+
+    // FALLBACK (degrade-truthful): the durable Postgres approval repository (the
+    // "shadow store"). Used when the native kernel store is absent/unavailable.
+    if (!this.approvals) return undefined;
     try {
       const approved = await this.approvals.hasApproval(ctx.taskId, action);
       if (!approved) return undefined;
@@ -191,6 +272,57 @@ export class GovernanceGateService implements GovernanceGate {
       );
       return undefined;
     }
+  }
+
+  // --- kernel-backed approval store passthrough (submit/resolve/list/count) ----
+  // These drive the Rust kernel's own ApprovalManager. Degrade-truthful: when the
+  // native store is absent every op returns a truthful "unavailable" result — the
+  // gate never fabricates an approval.
+
+  /** Submit an approval request into the kernel's own approval gate. */
+  async submitApproval(input: ApprovalSubmitInput): Promise<ApprovalSubmitResult> {
+    if (!this.approvalStore) {
+      return { outcome: 'denied', requestId: input.id, stored: false, reason: 'kernel approval store not wired' };
+    }
+    return this.approvalStore.submit(input);
+  }
+
+  /** Resolve a pending approval on the kernel gate with a human decision. */
+  async resolveApproval(
+    requestId: string,
+    decision: 'approved' | 'denied',
+    decidedBy: string,
+  ): Promise<ApprovalResolveResult> {
+    if (!this.approvalStore) {
+      return { requestId, decision, stored: false, reason: 'kernel approval store not wired' };
+    }
+    return this.approvalStore.resolve(requestId, decision, decidedBy);
+  }
+
+  /** The kernel's currently pending approval requests (empty when unavailable). */
+  async listPendingApprovals(): Promise<readonly PendingApproval[]> {
+    if (!this.approvalStore) return [];
+    return this.approvalStore.listPending();
+  }
+
+  /** Count of pending approvals on the kernel gate (0 when unavailable). */
+  async pendingApprovalCount(): Promise<number> {
+    if (!this.approvalStore) return 0;
+    return this.approvalStore.count();
+  }
+
+  /**
+   * Hot-swap the kernel's live policy bundle. Invoked from the agent-os
+   * policy-update hook so an edited forbidden/secret-path or approval policy takes
+   * effect for subsequent `decide()`/`enforceTool` calls without a restart. The
+   * kernel is fail-closed: a rejected config leaves the OLD policy live.
+   * Degrade-truthful: no native store → `{ reloaded:false }` (policy is static).
+   */
+  async reloadPolicies(configJson: string): Promise<ReloadPoliciesResult> {
+    if (!this.approvalStore) {
+      return { reloaded: false, reason: 'kernel approval store not wired (policy is static)' };
+    }
+    return this.approvalStore.reloadPolicies(configJson);
   }
 
   private toAuditEntry(
@@ -219,6 +351,38 @@ export class GovernanceGateService implements GovernanceGate {
         ...(clearedByApprovalId ? { clearedByApprovalId } : {}),
         // Sanitized metadata only — never secret values.
         metadata: ctx.metadata ?? {},
+      },
+    };
+  }
+
+  /**
+   * Build the audit row for a per-tool enforcement decision. Secret-free: the
+   * tool NAME is recorded (never the raw input, which may embed a secret value).
+   */
+  private toToolAuditEntry(
+    toolName: string,
+    input: string,
+    principal: Principal,
+    result: ToolEnforcement,
+    ctx?: GateDecisionContext,
+  ): AuditEntryInput {
+    return {
+      actorId: principal.userId,
+      action: 'tool.call',
+      resource: toolName,
+      effect: result.outcome === 'allowed' ? 'allow' : 'deny',
+      // Enforcement is a hard allow/deny gate; a block is treated as high-risk.
+      riskTier: result.outcome === 'allowed' ? 'low' : 'high',
+      degraded: result.degraded,
+      payload: {
+        engine: result.engine,
+        reason: result.reason,
+        toolName,
+        principalKind: principal.kind,
+        taskId: ctx?.taskId,
+        runId: ctx?.runId,
+        // Length only — NEVER the raw tool input (it may carry a secret value).
+        inputLength: input.length,
       },
     };
   }

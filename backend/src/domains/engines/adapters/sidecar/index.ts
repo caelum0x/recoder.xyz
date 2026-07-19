@@ -31,6 +31,17 @@ export { PalMcpAdapter, palPlanEngineBinder } from './pal-mcp.adapter.js';
 export type { PalMcpAdapterDeps, PalExternalCall } from './pal-mcp.adapter.js';
 
 export {
+  GovernedSidecarAdapter,
+  governSidecar,
+  bindSidecarEnforcement,
+} from './governed-sidecar.adapter.js';
+export type {
+  SidecarEnforcement,
+  SidecarToolEnforcer,
+  GovernedSidecarOptions,
+} from './governed-sidecar.adapter.js';
+
+export {
   palCommsEngineBinder,
   recoderPalCommsServer,
   buildAgentCommsArgs,

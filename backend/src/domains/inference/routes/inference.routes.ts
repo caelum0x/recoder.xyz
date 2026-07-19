@@ -53,6 +53,19 @@ export interface InferenceRoutesDeps {
 }
 
 const roleSchema = z.enum(['system', 'user', 'assistant', 'tool']);
+
+// OPTIONAL task-intent context the pal routing brain uses to pick provider/model/
+// rung. Bounded strings; `taskSpec` is passed through (pal coerces + validates it).
+const routingHintSchema = z
+  .object({
+    taskId: z.string().trim().min(1).max(256).optional(),
+    intent: z.string().trim().min(1).max(64).optional(),
+    title: z.string().max(512).optional(),
+    goal: z.string().max(4096).optional(),
+    taskSpec: z.record(z.string(), z.unknown()).optional(),
+  })
+  .optional();
+
 const completeBodySchema = z.object({
   model: z.string().trim().min(1),
   messages: z
@@ -60,6 +73,7 @@ const completeBodySchema = z.object({
     .min(1),
   temperature: z.number().optional(),
   maxTokens: z.number().int().positive().optional(),
+  routingHint: routingHintSchema,
 });
 
 const feedbackBodySchema = z.object({
@@ -126,6 +140,8 @@ export function buildInferenceRouter(deps: InferenceRoutesDeps): Router {
         ...(parsed.data.temperature !== undefined ? { temperature: parsed.data.temperature } : {}),
         ...(parsed.data.maxTokens !== undefined ? { maxTokens: parsed.data.maxTokens } : {}),
         ...(req.principal?.userId ? { userId: req.principal.userId } : {}),
+        // pal routing brain fires when the caller supplies task-intent context.
+        ...(parsed.data.routingHint ? { routingHint: parsed.data.routingHint } : {}),
       });
       if (!result.routed) {
         // Pre-dispatch entitlement refusal: a truthful 429 (QUOTA_EXCEEDED),

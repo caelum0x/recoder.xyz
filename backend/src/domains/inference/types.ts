@@ -19,6 +19,27 @@ export interface InferenceMessage {
   readonly content: string;
 }
 
+/**
+ * OPTIONAL task-intent context a caller (conductor / agent-os / an HTTP client)
+ * attaches so the pal routing brain can pick the provider/model/rung by INTENT
+ * instead of taking the caller's `model` verbatim. Deliberately pal-agnostic:
+ * the planner (`pal-route-planner.ts`) coerces it into pal's `TaskSpec` shape.
+ * Absent ⇒ the request routes exactly as supplied (the current default).
+ */
+export interface RoutingHint {
+  /** Stable task id (pal requires a task identity; a synthetic id is used when absent). */
+  readonly taskId?: string;
+  /** A `TaskIntent` string (e.g. `bugfix`, `code_review`); unknown ⇒ classified from text. */
+  readonly intent?: string;
+  readonly title?: string;
+  readonly goal?: string;
+  /**
+   * A full task spec passed straight to pal's `computePalPlanDecision` (preferred
+   * when the caller already holds one). When present it wins over the loose fields.
+   */
+  readonly taskSpec?: unknown;
+}
+
 /** A typed chat-completion request the delivery ladder routes. */
 export interface InferenceRequest {
   /** Recoder model id (e.g. `openai/gpt-4o-mini`) understood by the gateway. */
@@ -34,6 +55,11 @@ export interface InferenceRequest {
    * ladder still degrades truthfully when the direct rung declines.
    */
   readonly preferDirect?: boolean;
+  /**
+   * OPTIONAL task-intent context that lets the pal routing brain override the
+   * `model`/`preferDirect` by intent (see `RoutingHint`). Absent ⇒ routed as-is.
+   */
+  readonly routingHint?: RoutingHint;
 }
 
 /** A typed embedding request. */

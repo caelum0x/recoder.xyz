@@ -92,7 +92,11 @@ export type {
 export { createCloudRepositories } from './repositories/cloud.repository.js';
 
 // Governance write seam (guard BEFORE a cloud mutation; seal the audit AFTER).
-export { guardCloudWrite, recordCloudAudit, type GuardedCloudWrite } from './services/cloud-write-gate.js';
+export {
+  guardCloudWrite,
+  recordCloudAudit,
+  type GuardedCloudWrite,
+} from './services/cloud-write-gate.js';
 
 // Tenancy (the WORKING isolation + quota + placement gate).
 export {
@@ -105,14 +109,25 @@ export {
 } from './services/tenancy.service.js';
 
 // Sandbox provider adapters (degrade-safe wrappers over the LOCAL port).
-export { createDaytonaAdapter, type DaytonaAdapterDeps } from './adapters/daytona.adapter.js';
-export { createE2bAdapter, type E2bAdapterDeps } from './adapters/e2b.adapter.js';
+export {
+  createDaytonaAdapter,
+  type DaytonaAdapterDeps,
+} from './adapters/daytona.adapter.js';
+export {
+  createE2bAdapter,
+  type E2bAdapterDeps,
+} from './adapters/e2b.adapter.js';
 export {
   createLocalContainerAdapter,
   type LocalContainerAdapterDeps,
   type LocalContainerRuntime,
 } from './adapters/local-container.adapter.js';
-export { type FetchLike, type HttpResponse, globalFetch, probe } from './adapters/http.js';
+export {
+  type FetchLike,
+  type HttpResponse,
+  globalFetch,
+  probe,
+} from './adapters/http.js';
 
 // Sandbox provisioner (quota → select → persist → launch → RunEvent + reaper).
 export {
@@ -125,12 +140,20 @@ export {
 } from './services/sandbox-provisioner.service.js';
 
 // Preview: HMAC signer + deploy target + the deploy service (real health probe).
-export { createPreviewUrlSigner, type PreviewUrlSigner } from './services/preview-url-signer.js';
-export { createPreviewTarget, type PreviewTargetDeps } from './adapters/preview-target.adapter.js';
+export {
+  createPreviewUrlSigner,
+  type PreviewUrlSigner,
+} from './services/preview-url-signer.js';
+export {
+  createPreviewTarget,
+  type PreviewTargetDeps,
+} from './adapters/preview-target.adapter.js';
 export {
   createPreviewDeployService,
   type PreviewDeployService,
   type PreviewDeployServiceDeps,
+  type PreviewOverlayResolution,
+  type PreviewOverlayReader,
 } from './services/preview-deploy.service.js';
 
 // Fleet supervisor (capacity manifest + heartbeat staleness sweep).
@@ -141,7 +164,11 @@ export {
 } from './services/fleet-supervisor.service.js';
 
 // Mesh: read-only ziti + xDS adapters + the merged diagnostics service.
-export { createZitiMeshAdapter, type ZitiMeshAdapter, type ZitiMeshEnroller } from './adapters/ziti-mesh.adapter.js';
+export {
+  createZitiMeshAdapter,
+  type ZitiMeshAdapter,
+  type ZitiMeshEnroller,
+} from './adapters/ziti-mesh.adapter.js';
 export {
   createXdsEnvoyAdapter,
   type XdsEnvoyAdapter,
@@ -157,6 +184,32 @@ export {
   type MeshDiagnosticsService,
   type MeshDiagnosticsDeps,
 } from './services/mesh-diagnostics.service.js';
+
+// Mesh WRITE: the xDS control-plane writer adapter + the governed mesh-fabric
+// service (ziti enroll on provision + xds snapshot bump on deploy).
+export {
+  createXdsControlPlaneWriter,
+  type XdsControlPlaneWriterDeps,
+} from './adapters/xds-control-plane.adapter.js';
+export {
+  createMeshFabricService,
+  previewEdgeTarget,
+  type MeshFabricService,
+  type MeshFabricServiceDeps,
+  type MeshEnrollOutcome,
+  type MeshEdgeOutcome,
+  type PreviewEdgeTarget,
+} from './services/mesh-fabric.service.js';
+export type {
+  MeshWritePort,
+  XdsControlPlaneWriter,
+  XdsUpstreamSpec,
+  XdsSnapshotBumpOutcome,
+} from './ports/mesh-write.port.js';
+export {
+  buildInternalCloudRouter,
+  type InternalCloudRoutesDeps,
+} from './routes/internal-cloud.routes.js';
 
 // Custom domains: CRUD + DNS/TLS verification (verifier is an injected seam).
 export {
@@ -178,10 +231,16 @@ export {
 } from './adapters/dns-verifier.adapter.js';
 
 // Governance-gated WRITE MCP tools (sandbox provision/destroy + domain CRUD).
-export { buildCloudWriteMcpTools, type CloudWriteMcpDeps } from './mcp/cloud-write-engine.js';
+export {
+  buildCloudWriteMcpTools,
+  type CloudWriteMcpDeps,
+} from './mcp/cloud-write-engine.js';
 
 // Ziti mesh introspection reads + the governance-gated enrollment WRITE tool.
-export { buildCloudMeshMcpTools, type CloudMeshMcpDeps } from './mcp/cloud-mesh-engine.js';
+export {
+  buildCloudMeshMcpTools,
+  type CloudMeshMcpDeps,
+} from './mcp/cloud-mesh-engine.js';
 export { buildCloudXdsMcpTools } from './mcp/cloud-xds-engine.js';
 
 // Composed health.
@@ -198,13 +257,23 @@ import type { QueryExecutor } from '../persistence/ports/query-executor.port.js'
 import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
 import type { CloudConfigOverrides } from './config.js';
 import type { CloudRepositories } from './ports/cloud-repository.port.js';
-import type { TenancyService as TenancyServiceType, TenantBillingQuotaPort as TenantBillingQuotaPortType } from './services/tenancy.service.js';
-import type { SandboxProvisionerService as SandboxProvisionerServiceType, CloudRunEventSink as CloudRunEventSinkType } from './services/sandbox-provisioner.service.js';
+import type {
+  TenancyService as TenancyServiceType,
+  TenantBillingQuotaPort as TenantBillingQuotaPortType,
+} from './services/tenancy.service.js';
+import type {
+  SandboxProvisionerService as SandboxProvisionerServiceType,
+  CloudRunEventSink as CloudRunEventSinkType,
+} from './services/sandbox-provisioner.service.js';
 import type { PreviewDeployService as PreviewDeployServiceType } from './services/preview-deploy.service.js';
 import type { FleetSupervisorService as FleetSupervisorServiceType } from './services/fleet-supervisor.service.js';
 import type { MeshDiagnosticsService as MeshDiagnosticsServiceType } from './services/mesh-diagnostics.service.js';
+import type { MeshFabricService as MeshFabricServiceType } from './services/mesh-fabric.service.js';
 import type { LocalContainerRuntime as LocalContainerRuntimeType } from './adapters/local-container.adapter.js';
-import type { DomainsService as DomainsServiceType, DomainVerifierPort as DomainVerifierPortType } from './services/domains.service.js';
+import type {
+  DomainsService as DomainsServiceType,
+  DomainVerifierPort as DomainVerifierPortType,
+} from './services/domains.service.js';
 import type { CloudGovernanceGatePort as CloudGovernanceGatePortType } from './ports/governance-gate.port.js';
 
 /**
@@ -258,6 +327,10 @@ export interface CloudModule {
   repositories(): CloudRepositories;
   /** The `/api/agent-os/cloud` router. */
   routes(): Router;
+  /** The `/internal/cloud/*` router (INTERNAL_SERVICE_KEY-gated network-config view). */
+  internalRoutes(): Router;
+  /** The GOVERNED mesh-fabric write seam (ziti enroll + xds snapshot bump). */
+  meshFabric(): MeshFabricServiceType;
   /** Read-only MCP introspection tools (tenant/sandboxes/preview/mesh/fleet). */
   mcp(): readonly McpToolRegistration[];
   /** Truthful component health (degrade-safe — never a faked `up`). */

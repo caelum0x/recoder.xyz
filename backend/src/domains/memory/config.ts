@@ -88,6 +88,11 @@ export const memoryConfigSchema = z.object({
   recallLimit: z.number().int().positive(),
   /** TTL (days) applied to ephemeral candidate wisps. */
   candidateTtlDays: z.number().int().positive(),
+  /**
+   * Interval (ms) of the maintenance sweep (beads durability flush + mem0
+   * consolidation). `0` disables the driver (degrade-safe). Default 5 min.
+   */
+  maintenanceIntervalMs: z.number().int().min(0).default(300_000),
 });
 
 export type MemoryConfig = z.infer<typeof memoryConfigSchema>;
@@ -112,6 +117,7 @@ export interface MemoryConfigOverrides {
   readonly dedupeThreshold?: number;
   readonly recallLimit?: number;
   readonly candidateTtlDays?: number;
+  readonly maintenanceIntervalMs?: number;
 }
 
 /** Normalize an allowlist override: trim, drop blanks, de-duplicate. */
@@ -151,7 +157,7 @@ function normPath(v: string | null | undefined): string | null {
  */
 export function sliceMemoryConfig(
   app: AppConfig,
-  overrides: MemoryConfigOverrides = {},
+  overrides: MemoryConfigOverrides = {}
 ): MemoryConfig {
   const qdrantApiKey = normSecret(overrides.qdrantApiKey);
   const tensorzeroApiKey = normSecret(overrides.embedTensorzeroApiKey);
@@ -169,7 +175,8 @@ export function sliceMemoryConfig(
     lanceNativeDir: normPath(overrides.lanceNativeDir),
 
     mem0Collection: overrides.mem0Collection?.trim() || DEFAULT_MEM0_COLLECTION,
-    retrievalCollection: overrides.retrievalCollection?.trim() || DEFAULT_RETRIEVAL_COLLECTION,
+    retrievalCollection:
+      overrides.retrievalCollection?.trim() || DEFAULT_RETRIEVAL_COLLECTION,
 
     colbertRerankUrl: normUrl(overrides.colbertRerankUrl),
     mem0SidecarUrl: normUrl(overrides.mem0SidecarUrl),
@@ -188,5 +195,6 @@ export function sliceMemoryConfig(
     dedupeThreshold: overrides.dedupeThreshold ?? 0.9,
     recallLimit: overrides.recallLimit ?? 8,
     candidateTtlDays: overrides.candidateTtlDays ?? 30,
+    maintenanceIntervalMs: overrides.maintenanceIntervalMs ?? 300_000,
   });
 }

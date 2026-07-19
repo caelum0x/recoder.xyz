@@ -40,4 +40,15 @@ export interface CodeIntelPort extends IssueGraphPort {
    * empty. Never throws.
    */
   indexRepo(repoPath: string, repoId: string): Promise<void>;
+  /**
+   * Incrementally REFRESH the recodergit code-knowledge-graph after the agent has
+   * committed new code (fired on run completion, so the graph does not go stale
+   * as the workspace advances). Keyed by the SAME deterministic `repoId` the
+   * launch-time `indexRepo` used; the engine re-analyzes that repo's recorded
+   * root at current HEAD (`RecoderGitService.reindexOnPush`). No-op + log when the
+   * code-graph engine is disabled/absent, the repo was never indexed, or `repoId`
+   * is empty. Best-effort + degrade-safe: NEVER throws into the terminal-event
+   * path and NEVER fabricates an index.
+   */
+  reindexRepo(repoId: string): Promise<void>;
 }

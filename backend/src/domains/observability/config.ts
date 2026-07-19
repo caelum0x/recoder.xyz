@@ -54,6 +54,15 @@ export const observabilityConfigSchema = z.object({
   alertingEnabled: z.boolean(),
   /** Alert evaluation cadence (ms); `0` disables the loop. */
   alertEvalIntervalMs: z.number().int().nonnegative(),
+  /**
+   * Enable the autonomous work-signals poller: a scheduled tick that calls
+   * `WorkSignalsService.refresh()` so needs-you/stuck signals reach the notify +
+   * RunEvent bus WITHOUT a human opening the board. Degrade-truthful — a poll
+   * against an absent sidecar yields an empty batch, never a fabricated signal.
+   */
+  signalsPollEnabled: z.boolean(),
+  /** Work-signals poll cadence (ms); `0` disables the loop (default off outside prod). */
+  signalsPollIntervalMs: z.number().int().nonnegative(),
   /** Bounded in-memory log ring buffer size for the ops surface. */
   logRingSize: z.number().int().positive(),
   /** Default space id for un-scoped internal reads/writes. */
@@ -74,6 +83,8 @@ export interface ObservabilityConfigOverrides {
   readonly opsRecorderAuthDisabled?: boolean;
   readonly alertingEnabled?: boolean;
   readonly alertEvalIntervalMs?: number;
+  readonly signalsPollEnabled?: boolean;
+  readonly signalsPollIntervalMs?: number;
   readonly logRingSize?: number;
   readonly defaultSpaceId?: string;
 }
@@ -118,6 +129,11 @@ export function sliceObservabilityConfig(
     opsRecorderAuthDisabled: overrides.opsRecorderAuthDisabled ?? false,
     alertingEnabled: overrides.alertingEnabled ?? false,
     alertEvalIntervalMs: overrides.alertEvalIntervalMs ?? (isProduction ? 30_000 : 0),
+    // The signals poller is autonomous by default (needs-you/stuck signals must
+    // reach a human even when nobody opens the board). Off outside production —
+    // a `0` interval disables the loop so tests/dev never spin a background timer.
+    signalsPollEnabled: overrides.signalsPollEnabled ?? true,
+    signalsPollIntervalMs: overrides.signalsPollIntervalMs ?? (isProduction ? 60_000 : 0),
     logRingSize: overrides.logRingSize ?? 1_000,
     defaultSpaceId: overrides.defaultSpaceId ?? 'default',
     isProduction,

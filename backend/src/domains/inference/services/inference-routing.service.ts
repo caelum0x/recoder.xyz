@@ -31,6 +31,7 @@ import type {
 import { computeCostMicroUsd, resolveUsage } from '../adapters/token-accounting.js';
 import type { EntitlementGate, BillingSubject } from '../ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from '../ports/usage-meter.port.js';
+import type { PalRoutePlannerPort } from './pal-route-planner.js';
 
 export interface InferenceRoutingDeps {
   readonly logger: Logger;
@@ -53,6 +54,8 @@ export class InferenceRoutingService {
   private entitlementGate?: EntitlementGate;
   /** OPTIONAL usage meter (set by the composer; absent ⇒ no token metering). */
   private usageMeter?: UsageMeterPort;
+  /** OPTIONAL pal routing brain (set by the composer; absent ⇒ route as supplied). */
+  private palRouter?: PalRoutePlannerPort;
 
   constructor(deps: InferenceRoutingDeps) {
     this.log = deps.logger;
@@ -71,6 +74,45 @@ export class InferenceRoutingService {
   /** Inject the optional billing usage meter (per-completion `token` metering). */
   setUsageMeter(meter: UsageMeterPort): void {
     this.usageMeter = meter;
+  }
+
+  /**
+   * Inject the optional pal routing brain. Once set, a request carrying a
+   * `routingHint` has its provider/model/rung chosen by task INTENT before
+   * dispatch; a request without a hint (or when this is unset) routes exactly as
+   * supplied — the current default. NEVER blocks or changes delivery semantics.
+   */
+  setPalRouter(planner: PalRoutePlannerPort): void {
+    this.palRouter = planner;
+  }
+
+  /**
+   * Consult the pal routing brain when a `routingHint` is present, returning a
+   * NEW request with the pal-chosen `model`/`preferDirect` applied (immutable —
+   * the caller's request is never mutated). Degrades to the request UNCHANGED
+   * when no pal router is wired, no hint is attached, pal keeps the requested
+   * model, or the catalog read/planner throws. A pal consultation never blocks
+   * delivery: any fault falls through to the request as supplied.
+   */
+  private async resolveRoute(req: InferenceRequest): Promise<InferenceRequest> {
+    const planner = this.palRouter;
+    if (!planner || !req.routingHint) return req;
+    try {
+      const models = await this.catalog.list({ enabledOnly: true });
+      const decision = planner.plan(req.routingHint, models, req.model);
+      if (decision.source !== 'pal') {
+        this.log.debug({ reason: decision.reason }, 'pal routing brain kept the requested model');
+        return req;
+      }
+      this.log.debug(
+        { from: req.model, to: decision.model, intent: decision.intent, risk: decision.risk, reason: decision.reason },
+        'pal routing brain selected the route',
+      );
+      return { ...req, model: decision.model, preferDirect: decision.preferDirect };
+    } catch (err) {
+      this.log.warn({ err: message(err) }, 'pal route resolution errored — routing the request as supplied');
+      return req;
+    }
   }
 
   /**
@@ -96,7 +138,9 @@ export class InferenceRoutingService {
   }
 
   /** Route a buffered completion + account it. */
-  async complete(req: InferenceRequest): Promise<InferenceResult> {
+  async complete(request: InferenceRequest): Promise<InferenceResult> {
+    // pal routing brain FIRST: pick provider/model/rung by intent (degrade-safe).
+    const req = await this.resolveRoute(request);
     const denyReason = await this.entitlementDeny(req);
     if (denyReason) {
       return {
@@ -126,7 +170,9 @@ export class InferenceRoutingService {
   }
 
   /** Route a streamed completion (real SSE when available) + account it. */
-  async completeStream(req: InferenceRequest, onDelta: StreamSink): Promise<InferenceStreamResult> {
+  async completeStream(request: InferenceRequest, onDelta: StreamSink): Promise<InferenceStreamResult> {
+    // pal routing brain FIRST: pick provider/model/rung by intent (degrade-safe).
+    const req = await this.resolveRoute(request);
     const denyReason = await this.entitlementDeny(req);
     if (denyReason) {
       return {

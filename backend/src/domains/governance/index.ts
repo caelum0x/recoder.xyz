@@ -25,6 +25,7 @@ import type { GovernanceKernelPort } from './ports/kernel.port.js';
 import type { WorkLockService } from './services/work-lock.service.js';
 import type { ApprovalService } from './services/approval.service.js';
 import type { AuditChainService } from './services/audit-chain.service.js';
+import type { ReloadPoliciesResult } from './ports/approval-store.port.js';
 import type { GovernanceConfigOverrides } from './config.js';
 
 /** Dependencies injected by bootstrap (after persistence + identity are built). */
@@ -37,6 +38,14 @@ export interface GovernanceModuleDeps {
   readonly middleware: AuthMiddleware;
   /** Not-yet-in-AppConfig governance values (vault key, daemon socket, napi toggle). */
   readonly overrides?: GovernanceConfigOverrides;
+  /**
+   * The raw `recoder-governance-napi` `NapiGovernanceKernel` handle, when the
+   * native addon is loaded for this arch/platform. Injected by bootstrap; used to
+   * back the gate's `needs_approval` clearance + policy hot-swap with the kernel's
+   * OWN `ApprovalManager` store. Absent → the gate degrades truthfully to the
+   * durable Postgres approval repository (no behavior change).
+   */
+  readonly napiApprovalHandle?: unknown;
 }
 
 /** The public surface every other domain consumes. */
@@ -54,6 +63,14 @@ export interface GovernanceModule {
   audit(): AuditChainService;
   /** The assembled kernel ladder (truthful `status()` reports which rung answers). */
   kernel(): GovernanceKernelPort;
+  /**
+   * Hot-swap the kernel's live policy bundle — the agent-os policy-update hook
+   * calls this after a forbidden/secret-path or approval-policy edit so it takes
+   * effect for subsequent `decide()`/`enforceTool` without a restart. Fail-closed
+   * inside the kernel; degrade-truthful (`reloaded:false`) when the napi kernel is
+   * absent (policy is static in that build).
+   */
+  reloadPolicies(configJson: string): Promise<ReloadPoliciesResult>;
   /** The `/api/agent-os` router: approvals + locks + secrets edges. */
   routes(): Router;
   /** Read-only MCP introspection tools (kernel status / audit verify / locks). */

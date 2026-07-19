@@ -147,6 +147,21 @@ export interface ConductorModuleDeps {
    * absent ⇒ the real bounded `execFileSafe`.
    */
   readonly repoSetupExec?: RepoSetupExec;
+  /**
+   * Optional delivery-feedback sink (the inference routing feedback seam, adapted
+   * at the composition root). A MERGED workspace is THE positive delivery outcome:
+   * when the run's routed `inference_id` was persisted onto the workspace record
+   * (`metadata.inferenceId`), the merge flow fires this sink so the LLM gateway
+   * learns `task_success` from real deliveries (TensorZero feedback). Absent, or
+   * no persisted inference_id (not tracked today) ⇒ a truthful silent skip — the
+   * feedback still reaches the gateway through the `/inference/feedback` route +
+   * MCP tool, never fabricated.
+   */
+  readonly onDeliveryFeedback?: (
+    inferenceId: string,
+    userId: string | undefined,
+    success: boolean,
+  ) => void;
 }
 
 /** The public surface bootstrap registers and the edge/interop consume. */

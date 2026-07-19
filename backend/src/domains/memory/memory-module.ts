@@ -42,8 +42,12 @@ import { createRetrievalService } from './retrieval/retrieval-service.js';
 import { createRecallService } from './recall/recall-fusion.js';
 import { createCandidateService } from './lifecycle/candidate-service.js';
 import { createMemoryLifecycle } from './lifecycle/memory-lifecycle.js';
+import { MemoryMaintenanceService } from './lifecycle/memory-maintenance.service.js';
 import { createForgetService } from './lifecycle/forget.js';
-import { createHarvestService, type HarvestService } from './lifecycle/harvest.js';
+import {
+  createHarvestService,
+  type HarvestService,
+} from './lifecycle/harvest.js';
 import { createRelateService } from './lifecycle/relate.js';
 import { createMemoryWriteAllowlist } from './lifecycle/write-allowlist.js';
 import { buildMemoryRouter } from './routes/memory.routes.js';
@@ -73,6 +77,7 @@ export class MemoryComposer implements MemoryModule {
   private readonly harvestService: HarvestService;
   private readonly relateService: RelateService;
   private readonly writeAllowlist: MemoryWriteAllowlist;
+  private readonly maintenance: MemoryMaintenanceService;
   private readonly executorAvailable: () => boolean;
   private started = false;
 
@@ -84,7 +89,9 @@ export class MemoryComposer implements MemoryModule {
 
     // Engine adapters (each self-degrades). mem0 gets a self-hosted sidecar only
     // when the platform client is unconfigured AND a sidecar URL is present.
-    const sidecar = cfg.mem0SidecarUrl ? createMem0SidecarClient(cfg.mem0SidecarUrl) : null;
+    const sidecar = cfg.mem0SidecarUrl
+      ? createMem0SidecarClient(cfg.mem0SidecarUrl)
+      : null;
     this.mem0 = createMem0Adapter({ sidecar });
     this.beads = createBeadsMemoryAdapter();
     this.colbert = createColbertAdapter(cfg, deps.colbertFetch);
@@ -98,10 +105,15 @@ export class MemoryComposer implements MemoryModule {
 
     // Repository: relations over the executor; items/candidates delegate to the
     // agent-os store (conflict #3 — agent-os owns those tables).
-    this.repo = createMemoryRepository({ query: deps.executor, store: deps.candidateStore });
+    this.repo = createMemoryRepository({
+      query: deps.executor,
+      store: deps.candidateStore,
+    });
 
     // Retrieval (RAG) facade over the shared vector foundation.
-    this.retrievalService = createRetrievalService({ foundation: this.foundation });
+    this.retrievalService = createRetrievalService({
+      foundation: this.foundation,
+    });
 
     // Recall fusion — the highest-value operation.
     this.recallService = createRecallService({
@@ -114,7 +126,9 @@ export class MemoryComposer implements MemoryModule {
     });
 
     // Governance allowlist on memory writes (empty ⇒ allow-all, degrade-safe).
-    this.writeAllowlist = createMemoryWriteAllowlist({ scopes: cfg.writeScopeAllowlist });
+    this.writeAllowlist = createMemoryWriteAllowlist({
+      scopes: cfg.writeScopeAllowlist,
+    });
 
     // Lifecycle: candidate proposal → governed promotion → forget → harvest, + relations.
     this.candidateService = createCandidateService({
@@ -127,6 +141,9 @@ export class MemoryComposer implements MemoryModule {
       repository: this.repo,
       gate: deps.gate,
       beads: this.beads,
+      // Close the semantic-memory loop: an accepted durable fact is mirrored into
+      // mem0's vector store so its consolidation/relations/decay run on real data.
+      mem0: this.mem0,
       logger: this.log,
     });
     this.forgetService = createForgetService({
@@ -134,8 +151,21 @@ export class MemoryComposer implements MemoryModule {
       gate: deps.gate,
       logger: this.log,
     });
-    this.harvestService = createHarvestService({ candidates: this.candidateService, logger: this.log });
+    this.harvestService = createHarvestService({
+      candidates: this.candidateService,
+      logger: this.log,
+    });
     this.relateService = createRelateService({ repository: this.repo });
+
+    // Maintenance loop: beads durability flush (`bd vc commit`) + mem0
+    // consolidation sweep. Degrade-safe; the driver self-skips when bd/mem0 are
+    // down. `maintenanceIntervalMs === 0` disables it entirely.
+    this.maintenance = new MemoryMaintenanceService({
+      beads: this.beads,
+      mem0: this.mem0,
+      logger: this.log,
+      intervalMs: cfg.maintenanceIntervalMs,
+    });
   }
 
   recall(): RecallService {
@@ -181,13 +211,13 @@ export class MemoryComposer implements MemoryModule {
         forget: this.forgetService,
         relations: this.relateService,
         middleware: this.middleware,
-      }),
+      })
     );
     router.use(
       buildRetrievalRouter({
         retrieval: this.retrievalService,
         middleware: this.middleware,
-      }),
+      })
     );
     return router;
   }
@@ -218,23 +248,45 @@ export class MemoryComposer implements MemoryModule {
       readiness.push(
         h.available
           ? { name: 'mem0', available: true, detail: { mode: h.mode } }
-          : { name: 'mem0', available: false, reason: h.reason ?? 'mem0 unavailable' },
+          : {
+              name: 'mem0',
+              available: false,
+              reason: h.reason ?? 'mem0 unavailable',
+            }
       );
     } catch (err) {
-      readiness.push({ name: 'mem0', available: false, reason: err instanceof Error ? err.message : String(err) });
+      readiness.push({
+        name: 'mem0',
+        available: false,
+        reason: err instanceof Error ? err.message : String(err),
+      });
     }
 
     // beads (mirror).
     const beadsUp = this.beads.available();
     readiness.push(
-      beadsUp ? { name: 'beads', available: true } : { name: 'beads', available: false, reason: 'bd binary/DB unavailable' },
+      beadsUp
+        ? { name: 'beads', available: true }
+        : {
+            name: 'beads',
+            available: false,
+            reason: 'bd binary/DB unavailable',
+          }
     );
 
     // colbert (mirror) — configured iff a rerank URL is set.
     readiness.push(
       this.cfg.colbertRerankUrl
-        ? { name: 'colbert', available: true, detail: { url: hostOf(this.cfg.colbertRerankUrl) } }
-        : { name: 'colbert', available: false, reason: 'COLBERT_RERANK_URL not set' },
+        ? {
+            name: 'colbert',
+            available: true,
+            detail: { url: hostOf(this.cfg.colbertRerankUrl) },
+          }
+        : {
+            name: 'colbert',
+            available: false,
+            reason: 'COLBERT_RERANK_URL not set',
+          }
     );
 
     // vector store (mirror) — truthful async probe: qdrant does a real liveness
@@ -244,13 +296,19 @@ export class MemoryComposer implements MemoryModule {
       const storeProbe = await this.foundation.probeStore();
       readiness.push(
         storeProbe.available
-          ? { name: 'vector', available: true, detail: { backend: storeProbe.backend } }
+          ? {
+              name: 'vector',
+              available: true,
+              detail: { backend: storeProbe.backend },
+            }
           : {
               name: 'vector',
               available: false,
-              reason: storeProbe.reason ?? `${storeProbe.backend} vector store unavailable`,
+              reason:
+                storeProbe.reason ??
+                `${storeProbe.backend} vector store unavailable`,
               detail: { backend: storeProbe.backend },
-            },
+            }
       );
     } catch (err) {
       readiness.push({
@@ -264,8 +322,16 @@ export class MemoryComposer implements MemoryModule {
     const embedProvider = this.foundation.embedder.provider ?? 'none';
     readiness.push(
       embedProvider !== 'none'
-        ? { name: 'embedding', available: true, detail: { provider: embedProvider } }
-        : { name: 'embedding', available: false, reason: 'no embedding provider configured' },
+        ? {
+            name: 'embedding',
+            available: true,
+            detail: { provider: embedProvider },
+          }
+        : {
+            name: 'embedding',
+            available: false,
+            reason: 'no embedding provider configured',
+          }
     );
 
     // candidates (store-of-record) — the ONE hard dependency (persistence pool).
@@ -273,32 +339,41 @@ export class MemoryComposer implements MemoryModule {
     readiness.push(
       poolUp
         ? { name: 'candidates', available: true }
-        : { name: 'candidates', available: false, reason: 'persistence pool unavailable' },
+        : {
+            name: 'candidates',
+            available: false,
+            reason: 'persistence pool unavailable',
+          }
     );
 
     return memoryHealth(readiness);
   }
 
-  /** Boot: log the truthful engine posture. Idempotent, never throws. */
+  /** Boot: log the truthful engine posture + start the maintenance loop. Idempotent. */
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
+    // Beads durability flush + mem0 consolidation sweep (self-skips when down).
+    this.maintenance.start();
     this.log.info(
       {
-        mem0Sidecar: this.cfg.mem0SidecarUrl ? hostOf(this.cfg.mem0SidecarUrl) : null,
+        mem0Sidecar: this.cfg.mem0SidecarUrl
+          ? hostOf(this.cfg.mem0SidecarUrl)
+          : null,
         colbert: Boolean(this.cfg.colbertRerankUrl),
         vector: this.foundation.store.configured,
         vectorBackend: this.foundation.storeBackend,
         retrievalConfigured: this.foundation.configured,
         beads: this.beads.available(),
+        maintenanceIntervalMs: this.cfg.maintenanceIntervalMs,
       },
-      'memory module started',
+      'memory module started'
     );
   }
 
-  /** Shutdown: adapters are stateless/GC-owned. Idempotent no-op. */
+  /** Shutdown: stop the maintenance loop. Idempotent, degrade-safe. */
   async stop(): Promise<void> {
-    // Nothing owned here to drain.
+    this.maintenance.stop();
   }
 }
 

@@ -21,6 +21,7 @@ import type { GovernanceGate } from '../../governance/ports/gate.port.js';
 import type { GateVerdict } from '../../governance/types.js';
 import type { MemoryRepository } from '../ports/memory-repository.port.js';
 import type { BeadsMemoryPort } from '../ports/beads-memory.port.js';
+import type { Mem0Message, Mem0Port } from '../ports/mem0.port.js';
 
 /** The governed action key the gate classifies (durable memory promotion). */
 export const MEMORY_PROMOTE_ACTION = 'memory.promote';
@@ -77,6 +78,13 @@ export interface MemoryLifecycleDeps {
   readonly repository: MemoryRepository;
   readonly gate: GovernanceGate;
   readonly beads: BeadsMemoryPort;
+  /**
+   * OPTIONAL semantic-memory write seam. On an allowed promotion the accepted
+   * durable fact is best-effort written into mem0's vector store so mem0's LLM
+   * fact-extraction / consolidation / graph run on REAL tenant data. Absent or
+   * down → truthful skip; NEVER blocks the promotion.
+   */
+  readonly mem0?: Mem0Port;
   readonly logger: Logger;
   readonly now?: () => string;
   readonly newId?: () => string;
@@ -94,7 +102,7 @@ function materialize(
   memoryId: string,
   acceptedBy: string,
   createdAt: string,
-  supersedesMemoryId?: string,
+  supersedesMemoryId?: string
 ): MemoryItem {
   return {
     memoryId,
@@ -102,46 +110,69 @@ function materialize(
     title: candidate.title,
     body: candidate.body,
     status: 'active',
-    evidence: { taskId: candidate.evidence.taskId, artifactId: candidate.evidence.artifactId },
+    evidence: {
+      taskId: candidate.evidence.taskId,
+      artifactId: candidate.evidence.artifactId,
+    },
     createdAt,
     acceptedBy,
-    ...(candidate.expiresAt !== undefined ? { expiresAt: candidate.expiresAt } : {}),
+    ...(candidate.expiresAt !== undefined
+      ? { expiresAt: candidate.expiresAt }
+      : {}),
     ...(supersedesMemoryId ? { supersedesMemoryId } : {}),
   };
 }
 
 /** Build the governed memory lifecycle. */
-export function createMemoryLifecycle(deps: MemoryLifecycleDeps): MemoryLifecycle {
-  const { repository, gate, beads, logger } = deps;
+export function createMemoryLifecycle(
+  deps: MemoryLifecycleDeps
+): MemoryLifecycle {
+  const { repository, gate, beads, mem0, logger } = deps;
   const now = deps.now ?? (() => new Date().toISOString());
   const newId = deps.newId ?? defaultId;
 
   return {
     async accept(input: AcceptCandidateInput): Promise<AcceptResult> {
-      const candidate = await repository.getCandidate(input.userId, input.candidateId);
+      const candidate = await repository.getCandidate(
+        input.userId,
+        input.candidateId
+      );
       if (!candidate) {
-        throw createError(ErrorCode.NOT_FOUND, `memory candidate not found: ${input.candidateId}`);
+        throw createError(
+          ErrorCode.NOT_FOUND,
+          `memory candidate not found: ${input.candidateId}`
+        );
       }
 
       // THE write seam. A durable memory promotion is a governed mutation; the
       // verdict's `effect` is the sole authority for whether we materialize.
-      const verdict = await gate.decide(MEMORY_PROMOTE_ACTION, input.principal, {
-        target: { toolName: 'memory.promote' },
-        ...(input.taskId ? { taskId: input.taskId } : {}),
-        ...(input.runId ? { runId: input.runId } : {}),
-        metadata: {
-          candidateId: candidate.candidateId,
-          scope: String(candidate.scope),
-          ...(input.supersedesMemoryId ? { supersedesMemoryId: input.supersedesMemoryId } : {}),
-        },
-      });
+      const verdict = await gate.decide(
+        MEMORY_PROMOTE_ACTION,
+        input.principal,
+        {
+          target: { toolName: 'memory.promote' },
+          ...(input.taskId ? { taskId: input.taskId } : {}),
+          ...(input.runId ? { runId: input.runId } : {}),
+          metadata: {
+            candidateId: candidate.candidateId,
+            scope: String(candidate.scope),
+            ...(input.supersedesMemoryId
+              ? { supersedesMemoryId: input.supersedesMemoryId }
+              : {}),
+          },
+        }
+      );
 
       if (verdict.effect !== 'allow') {
         // Truthful: not promoted. The candidate is untouched (or marked reviewed
         // when the gate wants a human) — never silently written to durable memory.
         logger.info(
-          { candidateId: candidate.candidateId, effect: verdict.effect, approvalId: verdict.approvalId ?? null },
-          'memory promotion gated (not allowed)',
+          {
+            candidateId: candidate.candidateId,
+            effect: verdict.effect,
+            approvalId: verdict.approvalId ?? null,
+          },
+          'memory promotion gated (not allowed)'
         );
         return { promoted: false, candidate, verdict };
       }
@@ -152,7 +183,7 @@ export function createMemoryLifecycle(deps: MemoryLifecycleDeps): MemoryLifecycl
         newId(),
         input.principal.userId,
         timestamp,
-        input.supersedesMemoryId,
+        input.supersedesMemoryId
       );
       const storedMemory = await repository.upsertItem(input.userId, memory);
 
@@ -163,7 +194,10 @@ export function createMemoryLifecycle(deps: MemoryLifecycleDeps): MemoryLifecycl
         reviewedBy: input.principal.userId,
         reviewedAt: timestamp,
       };
-      const storedCandidate = await repository.upsertCandidate(input.userId, acceptedCandidate);
+      const storedCandidate = await repository.upsertCandidate(
+        input.userId,
+        acceptedCandidate
+      );
 
       // Record the supersedes edge (memory-owned relations) when this replaces one.
       if (input.supersedesMemoryId) {
@@ -177,7 +211,45 @@ export function createMemoryLifecycle(deps: MemoryLifecycleDeps): MemoryLifecycl
         } catch (err) {
           logger.warn(
             { err: err instanceof Error ? err.message : String(err) },
-            'supersedes relation write failed (item promoted, edge not recorded)',
+            'supersedes relation write failed (item promoted, edge not recorded)'
+          );
+        }
+      }
+
+      // Close the semantic-memory loop: mirror the accepted durable fact into
+      // mem0's vector store so its LLM fact-extraction / consolidation / graph
+      // run on REAL tenant data (mem0 is READ on launch but was never WRITTEN,
+      // leaving its consolidation/relations/decay dead). Best-effort like the
+      // supersedes edge above: mem0 absent/down → truthful skip, NEVER blocks
+      // the promotion. The supersedes link is mirrored into the scope metadata
+      // so mem0's own consolidation can supersede the prior memory.
+      if (mem0) {
+        try {
+          const messages: readonly Mem0Message[] = [
+            { role: 'user', content: candidate.title },
+            { role: 'assistant', content: candidate.body },
+          ];
+          const res = await mem0.add(messages, {
+            userId: input.userId,
+            metadata: {
+              memoryId: storedMemory.memoryId,
+              scope: String(candidate.scope),
+              source: 'memory.promote',
+              ...(input.supersedesMemoryId
+                ? { supersedesMemoryId: input.supersedesMemoryId }
+                : {}),
+            },
+          });
+          if (!res.ok) {
+            logger.info(
+              { memoryId: storedMemory.memoryId, reason: res.reason ?? null },
+              'mem0 mirror skipped (semantic store unavailable) — durable item promoted'
+            );
+          }
+        } catch (err) {
+          logger.warn(
+            { err: err instanceof Error ? err.message : String(err) },
+            'mem0 mirror write failed (item promoted, semantic memory not updated)'
           );
         }
       }
@@ -192,31 +264,51 @@ export function createMemoryLifecycle(deps: MemoryLifecycleDeps): MemoryLifecycl
           try {
             beads.promote(candidate.beadsRef);
           } catch (err) {
-            logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'beads promote failed');
+            logger.warn(
+              { err: err instanceof Error ? err.message : String(err) },
+              'beads promote failed'
+            );
           }
         } else {
           logger.warn(
-            { candidateId: candidate.candidateId, beadsRef: candidate.beadsRef },
-            'beads unavailable — wisp not promoted to durable Dolt memory',
+            {
+              candidateId: candidate.candidateId,
+              beadsRef: candidate.beadsRef,
+            },
+            'beads unavailable — wisp not promoted to durable Dolt memory'
           );
         }
       } else {
         logger.info(
           { candidateId: candidate.candidateId },
-          'candidate has no beads wisp ref (bd was down at propose) — beads promote skipped',
+          'candidate has no beads wisp ref (bd was down at propose) — beads promote skipped'
         );
       }
 
-      return { promoted: true, memory: storedMemory, candidate: storedCandidate, verdict };
+      return {
+        promoted: true,
+        memory: storedMemory,
+        candidate: storedCandidate,
+        verdict,
+      };
     },
 
     async reject(input: RejectCandidateInput): Promise<RejectResult> {
-      const candidate = await repository.getCandidate(input.userId, input.candidateId);
+      const candidate = await repository.getCandidate(
+        input.userId,
+        input.candidateId
+      );
       if (!candidate) {
-        throw createError(ErrorCode.NOT_FOUND, `memory candidate not found: ${input.candidateId}`);
+        throw createError(
+          ErrorCode.NOT_FOUND,
+          `memory candidate not found: ${input.candidateId}`
+        );
       }
       if (!input.reason?.trim()) {
-        throw createError(ErrorCode.MISSING_REQUIRED_FIELD, 'a rejection requires a reason');
+        throw createError(
+          ErrorCode.MISSING_REQUIRED_FIELD,
+          'a rejection requires a reason'
+        );
       }
 
       // Audit the rejection through the gate (best-effort; never blocks the state
@@ -232,7 +324,10 @@ export function createMemoryLifecycle(deps: MemoryLifecycleDeps): MemoryLifecycl
           payload: { candidateId: candidate.candidateId, reason: input.reason },
         });
       } catch (err) {
-        logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'reject audit seal failed');
+        logger.warn(
+          { err: err instanceof Error ? err.message : String(err) },
+          'reject audit seal failed'
+        );
       }
 
       const rejected: MemoryCandidate = {

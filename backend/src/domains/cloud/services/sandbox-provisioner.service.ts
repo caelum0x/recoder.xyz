@@ -18,7 +18,11 @@ import { randomUUID } from 'node:crypto';
 import type { Logger } from '../../../shared/logger.js';
 import type { ComponentHealth } from '../../../shared/health-types.js';
 import { degraded, healthy, unhealthy } from '../../../shared/health-types.js';
-import { createError, ErrorCode, type AppError } from '../../../shared/errors.js';
+import {
+  createError,
+  ErrorCode,
+  type AppError,
+} from '../../../shared/errors.js';
 import { err, ok, type Result } from '../../../shared/result.js';
 import type { SandboxRepository } from '../ports/cloud-repository.port.js';
 import type {
@@ -26,6 +30,7 @@ import type {
   SandboxProvider,
 } from '../ports/sandbox-provider.port.js';
 import { quotaDeniedError, type TenancyService } from './tenancy.service.js';
+import type { MeshFabricService } from './mesh-fabric.service.js';
 import {
   PROVIDER_IDS,
   type ProviderId,
@@ -38,7 +43,12 @@ import {
 const SERVICE_NAME = 'cloud.provisioner';
 
 /** Non-reaped states that count against the `maxSandboxes` ceiling. */
-const HELD_STATES: readonly SandboxStatus[] = ['pending', 'running', 'stopped', 'error'];
+const HELD_STATES: readonly SandboxStatus[] = [
+  'pending',
+  'running',
+  'stopped',
+  'error',
+];
 /** States that count against the `maxConcurrent` ceiling. */
 const RUNNING_STATES: readonly SandboxStatus[] = ['pending', 'running'];
 
@@ -49,7 +59,12 @@ const RUNNING_STATES: readonly SandboxStatus[] = ['pending', 'running'];
  * to the agent-os run-event emitter. Absent ⇒ events are dropped, never faked.
  */
 export interface CloudRunEvent {
-  readonly type: 'sandbox.provisioning' | 'sandbox.running' | 'sandbox.error' | 'sandbox.destroyed' | 'sandbox.reaped';
+  readonly type:
+    | 'sandbox.provisioning'
+    | 'sandbox.running'
+    | 'sandbox.error'
+    | 'sandbox.destroyed'
+    | 'sandbox.reaped';
   readonly sandboxId: string;
   readonly tenantId: string;
   readonly runId: string | null;
@@ -87,6 +102,13 @@ export interface SandboxProvisionerDeps {
   readonly now?: () => Date;
   /** TTL reaper sweep interval (ms). `0` disables the loop (default 60_000). */
   readonly reaperIntervalMs?: number;
+  /**
+   * The GOVERNED mesh-fabric write seam. When present, a SUCCESSFUL provision
+   * enrols a per-sandbox ziti zero-trust identity + registers the mesh endpoint
+   * (the sandbox joins the overlay). Best-effort + degrade-truthful: a mesh miss
+   * NEVER fails or blocks the provision — the sandbox is live regardless.
+   */
+  readonly meshFabric?: Pick<MeshFabricService, 'enrollSandbox'>;
 }
 
 /** A tenant-scoped in-sandbox command execution request. */
@@ -111,7 +133,7 @@ export interface SandboxProvisionerService {
   execInSandbox(
     sandboxId: string,
     tenantId: string,
-    input: SandboxExecRequest,
+    input: SandboxExecRequest
   ): Promise<Result<ProviderExecResult, AppError>>;
   /** Reap every expired sandbox; returns how many were reaped. Never throws. */
   reapExpired(): Promise<number>;
@@ -122,8 +144,10 @@ export interface SandboxProvisionerService {
   health(): Promise<ComponentHealth>;
 }
 
-export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): SandboxProvisionerService {
-  const { repo, tenancy, providers, logger, runEvents } = deps;
+export function createSandboxProvisionerService(
+  deps: SandboxProvisionerDeps
+): SandboxProvisionerService {
+  const { repo, tenancy, providers, logger, runEvents, meshFabric } = deps;
   const now = deps.now ?? (() => new Date());
   const reaperIntervalMs = deps.reaperIntervalMs ?? 60_000;
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -134,11 +158,17 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
       await runEvents.emit(event);
     } catch (cause) {
       // Event emission is best-effort; a sink fault never blocks provisioning.
-      logger.warn({ err: cause, type: event.type }, 'cloud run-event emit failed');
+      logger.warn(
+        { err: cause, type: event.type },
+        'cloud run-event emit failed'
+      );
     }
   }
 
-  function clampResources(tenant: Tenant, requested?: Partial<SandboxResources>): SandboxResources {
+  function clampResources(
+    tenant: Tenant,
+    requested?: Partial<SandboxResources>
+  ): SandboxResources {
     const capCpu = tenant.quota.cpuMillis;
     const capMem = tenant.quota.memMb;
     const cpu = requested?.cpuMillis ?? capCpu;
@@ -150,7 +180,9 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
   }
 
   /** Pick the first placement candidate whose adapter reports availability up. */
-  async function selectProvider(tenant: Tenant): Promise<Result<SandboxProvider, AppError>> {
+  async function selectProvider(
+    tenant: Tenant
+  ): Promise<Result<SandboxProvider, AppError>> {
     const placement = tenancy.placement(tenant);
     for (const id of placement.providerCandidates) {
       const provider = providers[id];
@@ -162,14 +194,21 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
       createError(
         ErrorCode.SERVICE_UNAVAILABLE,
         'No sandbox provider is currently available for this tenant tier.',
-        { details: { candidates: placement.providerCandidates } },
-      ),
+        { details: { candidates: placement.providerCandidates } }
+      )
     );
   }
 
-  async function provision(req: ProvisionRequest): Promise<Result<Sandbox, AppError>> {
+  async function provision(
+    req: ProvisionRequest
+  ): Promise<Result<Sandbox, AppError>> {
     if (!repo.isAvailable()) {
-      return err(createError(ErrorCode.SERVICE_UNAVAILABLE, 'Sandbox store is unavailable.'));
+      return err(
+        createError(
+          ErrorCode.SERVICE_UNAVAILABLE,
+          'Sandbox store is unavailable.'
+        )
+      );
     }
     const { tenant } = req;
     const quota = await tenancy.effectiveQuota(tenant);
@@ -184,12 +223,23 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
       ]);
     } catch (cause) {
       logger.error({ err: cause }, 'provisioner quota count failed');
-      return err(createError(ErrorCode.SERVICE_UNAVAILABLE, 'Quota usage is temporarily unreadable.', { cause }));
+      return err(
+        createError(
+          ErrorCode.SERVICE_UNAVAILABLE,
+          'Quota usage is temporarily unreadable.',
+          { cause }
+        )
+      );
     }
     const sandboxDecision = tenancy.checkQuota(quota, 'sandbox', heldUsed);
     if (!sandboxDecision.allowed) return err(quotaDeniedError(sandboxDecision));
-    const concurrentDecision = tenancy.checkQuota(quota, 'concurrent', runningUsed);
-    if (!concurrentDecision.allowed) return err(quotaDeniedError(concurrentDecision));
+    const concurrentDecision = tenancy.checkQuota(
+      quota,
+      'concurrent',
+      runningUsed
+    );
+    if (!concurrentDecision.allowed)
+      return err(quotaDeniedError(concurrentDecision));
 
     // Provider selection (placement + availability).
     const selected = await selectProvider(tenant);
@@ -221,7 +271,13 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
       });
     } catch (cause) {
       logger.error({ err: cause }, 'provisioner persist failed');
-      return err(createError(ErrorCode.SERVICE_UNAVAILABLE, 'Could not persist the sandbox record.', { cause }));
+      return err(
+        createError(
+          ErrorCode.SERVICE_UNAVAILABLE,
+          'Could not persist the sandbox record.',
+          { cause }
+        )
+      );
     }
 
     await emit({
@@ -265,7 +321,10 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
     }
 
     const nowIso = now().toISOString();
-    await safeUpdate(id, 'running', { externalId: result.value.externalId, lastHeartbeat: nowIso });
+    await safeUpdate(id, 'running', {
+      externalId: result.value.externalId,
+      lastHeartbeat: nowIso,
+    });
     await emit({
       type: 'sandbox.running',
       sandboxId: id,
@@ -277,30 +336,90 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
       detail: { externalId: result.value.externalId },
     });
 
-    const updated = await repo.getById(id, tenant.id);
-    return ok(updated ?? { ...row, status: 'running', externalId: result.value.externalId, lastHeartbeat: nowIso });
+    const finalRow: Sandbox =
+      (await repo.getById(id, tenant.id)) ??
+      ({
+        ...row,
+        status: 'running',
+        externalId: result.value.externalId,
+        lastHeartbeat: nowIso,
+      } as Sandbox);
+
+    // FUSE the live sandbox onto the zero-trust mesh (best-effort, governed).
+    await enrollOnMesh(tenant, finalRow);
+
+    return ok(finalRow);
+  }
+
+  /**
+   * Enrol a freshly-running sandbox onto the ziti overlay + register its mesh
+   * endpoint. Degrade-truthful: no mesh-fabric wired, or an absent controller, is
+   * a silent skip — a mesh miss NEVER unwinds a live sandbox. Never throws.
+   */
+  async function enrollOnMesh(tenant: Tenant, sandbox: Sandbox): Promise<void> {
+    if (!meshFabric) return;
+    try {
+      const outcome = await meshFabric.enrollSandbox(tenant, sandbox);
+      if (outcome.enrolled) {
+        logger.info(
+          { sandboxId: sandbox.id, identityId: outcome.identityId },
+          'sandbox enrolled onto ziti mesh'
+        );
+      } else {
+        logger.debug(
+          {
+            sandboxId: sandbox.id,
+            reason: outcome.reason,
+            degraded: outcome.degraded,
+          },
+          'sandbox mesh enrollment skipped'
+        );
+      }
+    } catch (cause) {
+      logger.warn(
+        { err: cause, sandboxId: sandbox.id },
+        'sandbox mesh enrollment errored (non-blocking)'
+      );
+    }
   }
 
   async function safeUpdate(
     id: string,
     status: SandboxStatus,
-    patch?: { externalId?: string | null; lastHeartbeat?: string | null },
+    patch?: { externalId?: string | null; lastHeartbeat?: string | null }
   ): Promise<void> {
     try {
       await repo.updateStatus(id, status, patch);
     } catch (cause) {
-      logger.error({ err: cause, id, status }, 'provisioner status update failed');
+      logger.error(
+        { err: cause, id, status },
+        'provisioner status update failed'
+      );
     }
   }
 
-  async function get(sandboxId: string, tenantId: string): Promise<Result<Sandbox, AppError>> {
-    if (!repo.isAvailable()) return err(createError(ErrorCode.SERVICE_UNAVAILABLE, 'Sandbox store is unavailable.'));
+  async function get(
+    sandboxId: string,
+    tenantId: string
+  ): Promise<Result<Sandbox, AppError>> {
+    if (!repo.isAvailable())
+      return err(
+        createError(
+          ErrorCode.SERVICE_UNAVAILABLE,
+          'Sandbox store is unavailable.'
+        )
+      );
     try {
       const row = await repo.getById(sandboxId, tenantId);
-      if (!row) return err(createError(ErrorCode.NOT_FOUND, 'Sandbox not found.'));
+      if (!row)
+        return err(createError(ErrorCode.NOT_FOUND, 'Sandbox not found.'));
       return ok(row);
     } catch (cause) {
-      return err(createError(ErrorCode.SERVICE_UNAVAILABLE, 'Sandbox lookup failed.', { cause }));
+      return err(
+        createError(ErrorCode.SERVICE_UNAVAILABLE, 'Sandbox lookup failed.', {
+          cause,
+        })
+      );
     }
   }
 
@@ -314,7 +433,10 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
     }
   }
 
-  async function destroy(sandboxId: string, tenantId: string): Promise<Result<void, AppError>> {
+  async function destroy(
+    sandboxId: string,
+    tenantId: string
+  ): Promise<Result<void, AppError>> {
     const loaded = await get(sandboxId, tenantId);
     if (!loaded.ok) return err(loaded.error);
     const sandbox = loaded.value;
@@ -342,7 +464,7 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
   async function execInSandbox(
     sandboxId: string,
     tenantId: string,
-    input: SandboxExecRequest,
+    input: SandboxExecRequest
   ): Promise<Result<ProviderExecResult, AppError>> {
     // Tenant ownership is enforced by `get` (WHERE tenant_id = :tenantId).
     const loaded = await get(sandboxId, tenantId);
@@ -350,9 +472,13 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
     const sandbox = loaded.value;
     if (sandbox.status !== 'running' || !sandbox.externalId) {
       return err(
-        createError(ErrorCode.SERVICE_UNAVAILABLE, 'Sandbox is not running — cannot exec.', {
-          details: { status: sandbox.status },
-        }),
+        createError(
+          ErrorCode.SERVICE_UNAVAILABLE,
+          'Sandbox is not running — cannot exec.',
+          {
+            details: { status: sandbox.status },
+          }
+        )
       );
     }
     const provider = providers[sandbox.provider];
@@ -360,8 +486,8 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
       return err(
         createError(
           ErrorCode.SERVICE_UNAVAILABLE,
-          `Provider '${sandbox.provider}' cannot execute commands in a sandbox.`,
-        ),
+          `Provider '${sandbox.provider}' cannot execute commands in a sandbox.`
+        )
       );
     }
     return provider.exec({
@@ -388,7 +514,10 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
       if (provider && sandbox.externalId) {
         const r = await provider.destroy(sandbox.externalId);
         if (!r.ok) {
-          logger.warn({ id: sandbox.id, err: r.error.message }, 'reaper provider destroy failed; marking reaped anyway');
+          logger.warn(
+            { id: sandbox.id, err: r.error.message },
+            'reaper provider destroy failed; marking reaped anyway'
+          );
         }
       }
       await safeUpdate(sandbox.id, 'reaped');
@@ -417,7 +546,8 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
     }
     let corrected = 0;
     for (const sandbox of rows) {
-      if (!RUNNING_STATES.includes(sandbox.status) || !sandbox.externalId) continue;
+      if (!RUNNING_STATES.includes(sandbox.status) || !sandbox.externalId)
+        continue;
       const provider = providers[sandbox.provider];
       if (!provider) continue;
       const r = await provider.get(sandbox.externalId);
@@ -429,7 +559,9 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
         continue;
       }
       if (r.value.status !== sandbox.status) {
-        await safeUpdate(sandbox.id, r.value.status, { lastHeartbeat: now().toISOString() });
+        await safeUpdate(sandbox.id, r.value.status, {
+          lastHeartbeat: now().toISOString(),
+        });
         corrected += 1;
       }
     }
@@ -453,28 +585,54 @@ export function createSandboxProvisionerService(deps: SandboxProvisionerDeps): S
 
   async function health(): Promise<ComponentHealth> {
     if (!repo.isAvailable()) {
-      return unhealthy(SERVICE_NAME, 'Sandbox store (Postgres) unavailable — provisioning denies (fail safe).');
+      return unhealthy(
+        SERVICE_NAME,
+        'Sandbox store (Postgres) unavailable — provisioning denies (fail safe).'
+      );
     }
     const statuses = await Promise.all(
-      PROVIDER_IDS.map(async (id) => {
+      PROVIDER_IDS.map(async id => {
         const provider = providers[id];
-        if (!provider) return { id, status: 'down' as const, reason: 'adapter not wired' };
+        if (!provider)
+          return { id, status: 'down' as const, reason: 'adapter not wired' };
         const a = await provider.availability();
-        return { id, status: a.status, ...(a.reason ? { reason: a.reason } : {}) };
-      }),
+        return {
+          id,
+          status: a.status,
+          ...(a.reason ? { reason: a.reason } : {}),
+        };
+      })
     );
-    const anyUp = statuses.some((s) => s.status === 'up');
+    const anyUp = statuses.some(s => s.status === 'up');
     if (!anyUp) {
-      return degraded(SERVICE_NAME, 'No sandbox provider is currently up.', statuses.map((s) => ({
-        name: `provider:${s.id}`,
-        status: s.status,
-        ...(s.reason ? { reason: s.reason } : {}),
-      })));
+      return degraded(
+        SERVICE_NAME,
+        'No sandbox provider is currently up.',
+        statuses.map(s => ({
+          name: `provider:${s.id}`,
+          status: s.status,
+          ...(s.reason ? { reason: s.reason } : {}),
+        }))
+      );
     }
     return healthy(SERVICE_NAME, {
-      providers: statuses.reduce<Record<string, string>>((acc, s) => ((acc[s.id] = s.status), acc), {}),
+      providers: statuses.reduce<Record<string, string>>(
+        (acc, s) => ((acc[s.id] = s.status), acc),
+        {}
+      ),
     });
   }
 
-  return { provision, get, list, destroy, execInSandbox, reapExpired, reconcile, startReaper, stop, health };
+  return {
+    provision,
+    get,
+    list,
+    destroy,
+    execInSandbox,
+    reapExpired,
+    reconcile,
+    startReaper,
+    stop,
+    health,
+  };
 }

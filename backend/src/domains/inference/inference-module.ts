@@ -52,6 +52,7 @@ import type { ByokKeyResolver, InferenceKeyWriteGate } from './ports/byok-resolv
 import { generateTzConfig, type GeneratedTzConfig } from './adapters/tz-config-generator.js';
 import type { StreamFetchLike } from './adapters/gateway-stream.js';
 import { InferenceRoutingService } from './services/inference-routing.service.js';
+import { createPalRoutePlanner } from './services/pal-route-planner.js';
 import { buildInferenceRouter } from './routes/inference.routes.js';
 import { createOpenAiCompatRouter } from './routes/openai-compat.routes.js';
 import { createOpenAiEmbeddingsRouter } from './routes/openai-embeddings.routes.js';
@@ -161,6 +162,10 @@ export class InferenceComposer implements InferenceModule {
       ledger: this.ledgerRepo,
       outcomes: this.outcomeRepo,
     });
+    // FUSION: the pal routing brain is wired by DEFAULT. It only fires when a
+    // request carries a `routingHint` (task intent); requests without one route
+    // exactly as supplied, so the hot path is unchanged for legacy callers.
+    this.routingService.setPalRouter(createPalRoutePlanner({ logger: this.log }));
   }
 
   gateway(): InferenceGatewayPort {

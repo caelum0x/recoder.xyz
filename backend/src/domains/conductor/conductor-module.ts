@@ -199,6 +199,8 @@ export class ConductorComposer implements ConductorModule {
   private readonly steerTransport?: SteerTransportPort;
   /** OPTIONAL per-worktree `.mcp.json` injector (Recoder toolbelt); absent ⇒ truthful skip. */
   private readonly mcpInject?: McpInjectPort;
+  /** OPTIONAL delivery-feedback sink (inference routing feedback); absent ⇒ truthful skip. */
+  private readonly onDeliveryFeedback?: ConductorModuleDeps['onDeliveryFeedback'];
   /** OPTIONAL pre-dispatch quota gate (set by bootstrap; absent ⇒ degrade OPEN). */
   private entitlementGate?: EntitlementGate;
   /** OPTIONAL usage-meter emitter (set by bootstrap; absent ⇒ no per-run metering). */
@@ -221,6 +223,7 @@ export class ConductorComposer implements ConductorModule {
     this.github = deps.githubStatus;
     this.steerTransport = deps.steerTransport;
     this.mcpInject = deps.mcpInject;
+    this.onDeliveryFeedback = deps.onDeliveryFeedback;
     this.checkpointStore = deps.checkpointStore ?? createInMemoryCheckpointStore();
 
     // Per-repo setup script: config seam (governed setScript/getScript) + the
@@ -1258,6 +1261,17 @@ export class ConductorComposer implements ConductorModule {
         this.gate,
         conductorAuditEntry(action, principal, verdict, { workspaceId, merged: result.merged }),
       );
+      // Delivery-feedback fusion: a MERGED workspace is THE positive delivery
+      // outcome. When the run's routed inference_id was persisted onto the record
+      // (`metadata.inferenceId`), fire the inference routing feedback seam so the
+      // LLM gateway learns `task_success` from real deliveries. Degrade-truthful:
+      // no persisted inference_id (not tracked today) ⇒ a silent skip, never faked.
+      if (result.merged && this.onDeliveryFeedback) {
+        const inferenceId = workspace?.metadata?.inferenceId;
+        if (typeof inferenceId === 'string' && inferenceId.length > 0) {
+          this.onDeliveryFeedback(inferenceId, principal.userId, true);
+        }
+      }
       return { ok: true, verdict, value: result };
     } catch (err) {
       return { ok: false, verdict, reason: err instanceof Error ? err.message : 'merge failed' };
