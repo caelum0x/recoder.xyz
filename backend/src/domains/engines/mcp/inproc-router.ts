@@ -32,6 +32,7 @@ import {
 import type { McpServerRegistration } from '@recoder/interop';
 import { browserExtMcpServer } from './browser-ext-engine.js';
 import { tensorzeroInferenceMcpServer } from './tensorzero-inference-engine.js';
+import { dmuxLayoutMcpServer } from './dmux-layout-engine.js';
 import { recoderPalCommsServer } from '../adapters/sidecar/index.js';
 
 /**
@@ -93,6 +94,8 @@ export const ENGINE_SERVERS: readonly McpServerRegistration[] = [
   browserExtMcpServer,
   // Deep TensorZero inference surface (model_catalog/feedback/batch_inference).
   tensorzeroInferenceMcpServer,
+  // Deep dmux pane/layout surface (presets/panes_list/panes_create/layout_apply).
+  dmuxLayoutMcpServer,
   // Pal multi-model comms (route/consensus/debate/models) over the pal adapter.
   recoderPalCommsServer,
 ];

@@ -52,9 +52,12 @@ const MCP_HOST = '127.0.0.1';
 
 // Vendored engine entrypoints, relative to backend/ (this file lives at
 // backend/src/agent-os/recodergit-service.ts -> ../../.. = repo root).
-const VENDORED_BIN_RELATIVE = '../apps/desktop/engines/recodergit/recodergit/dist/cli/index.js';
-const VENDORED_CORE_RELATIVE = '../apps/desktop/engines/recodergit/recodergit/dist/core/run-analyze.js';
-const VENDORED_LOCAL_BACKEND_RELATIVE = '../apps/desktop/engines/recodergit/recodergit/dist/mcp/local/local-backend.js';
+const VENDORED_BIN_RELATIVE =
+  '../apps/desktop/engines/recodergit/recodergit/dist/cli/index.js';
+const VENDORED_CORE_RELATIVE =
+  '../apps/desktop/engines/recodergit/recodergit/dist/core/run-analyze.js';
+const VENDORED_LOCAL_BACKEND_RELATIVE =
+  '../apps/desktop/engines/recodergit/recodergit/dist/mcp/local/local-backend.js';
 
 export type IndexStatus = 'indexed' | 'stale' | 'not_indexed' | 'unavailable';
 
@@ -118,13 +121,64 @@ export interface DomainMap {
 }
 
 /**
+ * The read-only code-intelligence QUERIES over an already-indexed repo graph.
+ * Each maps onto a real vendored-engine `LocalBackend.callTool` method:
+ *   - 'symbol_search'   → `query`   (hybrid BM25 + vector symbol/flow search)
+ *   - 'find_references' → `impact`  (direction:'upstream' — callers / dependents)
+ *   - 'call_graph'      → `impact`  (direction:'downstream' — callees / dependencies)
+ *   - 'definition'      → `context` (360° view: definition, callers, callees, flows)
+ * The engine's file/route graph is already exposed by `domainMap` (route_map).
+ */
+export type CodeIntelOp =
+  'symbol_search' | 'find_references' | 'call_graph' | 'definition';
+
+/**
+ * Union of the caller-supplied inputs across every {@link CodeIntelOp}. Only the
+ * fields an op needs are read; the rest are ignored. Kept flat + optional so the
+ * adapter/tool layer can forward a single validated bag without op-specific types.
+ */
+export interface CodeIntelParams {
+  /** Explicit repo root/path override (else resolved from the indexed state). */
+  repo?: string;
+  /** `symbol_search`: the search query (concept / name / phrase). */
+  query?: string;
+  /** `find_references` / `call_graph` / `definition`: the target symbol name. */
+  symbol?: string;
+  /** Zero-ambiguity symbol uid (definition). */
+  uid?: string;
+  /** Disambiguation hints for a common symbol name. */
+  filePath?: string;
+  kind?: string;
+  /** Result bounds. */
+  limit?: number;
+  maxSymbols?: number;
+  maxDepth?: number;
+  includeContent?: boolean;
+}
+
+/**
+ * Truthful outcome of a code-intel query. `available:false` carries a `reason`
+ * (not indexed / lib absent / engine error) — NEVER a fabricated graph. On
+ * success `result` is the raw, structured engine payload (passed through
+ * untouched so the consumer reads the engine's own typed shape).
+ */
+export interface CodeIntelResult {
+  op: CodeIntelOp;
+  repoId: string;
+  available: boolean;
+  result?: unknown;
+  reason?: string;
+}
+
+/**
  * Truthful supervision state of the `recodergit mcp --http` process.
  * - 'disabled'    : flag off — nothing is (or should be) running.
  * - 'starting'    : a spawn is in flight (transient).
  * - 'ready'       : a live child holds a pid and has not exited/errored.
  * - 'unavailable' : flag on but bin missing / spawn failed / process exited.
  */
-export type ServerHealthStatus = 'disabled' | 'starting' | 'ready' | 'unavailable';
+export type ServerHealthStatus =
+  'disabled' | 'starting' | 'ready' | 'unavailable';
 
 export interface ServerHealth {
   status: ServerHealthStatus;
@@ -146,7 +200,10 @@ export interface ServerProcessHandle {
 }
 
 /** Spawns `node <bin> <...args>` as a long-lived server. Injected in tests. */
-export type ServerSpawner = (bin: string, args: string[]) => ServerProcessHandle;
+export type ServerSpawner = (
+  bin: string,
+  args: string[]
+) => ServerProcessHandle;
 
 /** Result envelope: `{ enabled:false }` when the flag is off (no-op). */
 export type DisabledResult = { enabled: false };
@@ -160,7 +217,10 @@ export interface ExecResult {
 }
 
 /** Runs the engine. `args` are the CLI args after the bin (e.g. ['analyze', root]). */
-export type EngineExec = (args: string[], opts: { cwd: string }) => Promise<ExecResult>;
+export type EngineExec = (
+  args: string[],
+  opts: { cwd: string }
+) => Promise<ExecResult>;
 
 /** Resolves git facts without shelling out in tests. */
 export interface GitProvider {
@@ -228,7 +288,9 @@ const FALSY = new Set(['0', 'false', 'no', 'off']);
  * ⇒ ON (new workspaces index by default); an explicit falsy value is the only
  * way to force OFF. Exported so the default-on decision is directly testable.
  */
-export function readCodeGraphFlag(env: NodeJS.ProcessEnv = process.env): boolean {
+export function readCodeGraphFlag(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
   const raw = env[CODE_GRAPH_FLAG_ENV]?.trim().toLowerCase();
   if (raw === undefined || raw === '') return true; // default-on
   return !FALSY.has(raw); // only an explicit falsy token forces OFF
@@ -265,12 +327,16 @@ export function assertSafeRepoId(repoId: string): void {
  * -> `owner__repo`), guaranteeing no separators or parent refs survive.
  */
 export function repoIdFromFullName(fullName: string): string {
-  return fullName.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '__');
+  return fullName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '__');
 }
 
 /** Default clone workdir root: `<DATA_DIR or cwd/data>/code-graph`. */
 export function defaultWorkdirRoot(): string {
-  const dataDir = process.env.DATA_DIR?.trim() || path.join(process.cwd(), 'data');
+  const dataDir =
+    process.env.DATA_DIR?.trim() || path.join(process.cwd(), 'data');
   return path.join(dataDir, 'code-graph');
 }
 
@@ -315,9 +381,12 @@ export interface EngineLib {
     callbacks: {
       onProgress: (phase: string, percent: number, message: string) => void;
       onLog?: (message: string) => void;
-    },
+    }
   ) => Promise<EngineAnalyzeResult>;
-  callTool?: (method: string, params: Record<string, unknown>) => Promise<unknown>;
+  callTool?: (
+    method: string,
+    params: Record<string, unknown>
+  ) => Promise<unknown>;
 }
 
 /**
@@ -335,7 +404,7 @@ export type EngineLibLoader = () => Promise<EngineLib | null>;
  */
 // eslint-disable-next-line @typescript-eslint/no-implied-eval
 const dynamicImport = new Function('specifier', 'return import(specifier)') as (
-  specifier: string,
+  specifier: string
 ) => Promise<Record<string, unknown>>;
 
 /**
@@ -361,7 +430,12 @@ export async function defaultLoadEngineLib(): Promise<EngineLib | null> {
   }
 
   let callTool: EngineLib['callTool'];
-  const backendEntry = path.resolve(__dirname, '..', '..', VENDORED_LOCAL_BACKEND_RELATIVE);
+  const backendEntry = path.resolve(
+    __dirname,
+    '..',
+    '..',
+    VENDORED_LOCAL_BACKEND_RELATIVE
+  );
   if (existsSync(backendEntry)) {
     try {
       const mod = await dynamicImport(pathToFileURL(backendEntry).href);
@@ -369,21 +443,29 @@ export async function defaultLoadEngineLib(): Promise<EngineLib | null> {
       if (typeof LocalBackendCtor === 'function') {
         // Lazy singleton backend: constructed + init()'d on first tool call so
         // merely loading the lib never touches the registry or LadybugDB.
-        let backendPromise: Promise<{ callTool: (method: string, params: unknown) => Promise<unknown> }> | null = null;
+        let backendPromise: Promise<{
+          callTool: (method: string, params: unknown) => Promise<unknown>;
+        }> | null = null;
         const getBackend = () => {
           if (!backendPromise) {
             backendPromise = (async () => {
-              const backend = new (LocalBackendCtor as new () => {
-                init: () => Promise<boolean>;
-                callTool: (method: string, params: unknown) => Promise<unknown>;
-              })();
+              const backend = new (
+                LocalBackendCtor as new () => {
+                  init: () => Promise<boolean>;
+                  callTool: (
+                    method: string,
+                    params: unknown
+                  ) => Promise<unknown>;
+                }
+              )();
               await backend.init();
               return backend;
             })();
           }
           return backendPromise;
         };
-        callTool = async (method, params) => (await getBackend()).callTool(method, params);
+        callTool = async (method, params) =>
+          (await getBackend()).callTool(method, params);
       }
     } catch {
       // Analyze-only lib; tool calls fall back to the CLI spawn.
@@ -397,19 +479,26 @@ export async function defaultLoadEngineLib(): Promise<EngineLib | null> {
   };
 }
 
-function spawnCapture(command: string, args: string[], cwd: string): Promise<ExecResult> {
+function spawnCapture(
+  command: string,
+  args: string[],
+  cwd: string
+): Promise<ExecResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, args, {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (chunk) => {
+    child.stdout.on('data', chunk => {
       stdout += chunk.toString();
     });
-    child.stderr.on('data', (chunk) => {
+    child.stderr.on('data', chunk => {
       stderr += chunk.toString();
     });
     child.on('error', reject);
-    child.on('close', (code) => resolve({ stdout, stderr, code: code ?? 0 }));
+    child.on('close', code => resolve({ stdout, stderr, code: code ?? 0 }));
   });
 }
 
@@ -418,7 +507,9 @@ function makeDefaultExec(resolveBin: () => string | null): EngineExec {
   return async (args, opts) => {
     const bin = resolveBin();
     if (!bin) {
-      throw new Error('recodergit engine bin not found (set RECODERGIT_BIN or build the vendored engine)');
+      throw new Error(
+        'recodergit engine bin not found (set RECODERGIT_BIN or build the vendored engine)'
+      );
     }
     return spawnCapture(process.execPath, [bin, ...args], opts.cwd);
   };
@@ -452,11 +543,11 @@ function makeDefaultServerSpawner(): ServerSpawner {
       kill: () => {
         child.kill('SIGTERM');
       },
-      onExit: (cb) => {
-        child.on('exit', (code) => cb(code));
+      onExit: cb => {
+        child.on('exit', code => cb(code));
       },
-      onError: (cb) => {
-        child.on('error', (error) => cb(error));
+      onError: cb => {
+        child.on('error', error => cb(error));
       },
     };
   };
@@ -475,8 +566,9 @@ function makeDefaultGit(): GitProvider {
     }
   };
   return {
-    headSha: (repoRoot) => run(['rev-parse', 'HEAD'], repoRoot),
-    currentBranch: (repoRoot) => run(['rev-parse', '--abbrev-ref', 'HEAD'], repoRoot),
+    headSha: repoRoot => run(['rev-parse', 'HEAD'], repoRoot),
+    currentBranch: repoRoot =>
+      run(['rev-parse', '--abbrev-ref', 'HEAD'], repoRoot),
     clone: async (cloneUrl, dest, ref) => {
       mkdirSync(path.dirname(dest), { recursive: true });
       const args = ['clone', '--depth', '1'];
@@ -486,7 +578,9 @@ function makeDefaultGit(): GitProvider {
       args.push(cloneUrl, dest);
       const result = await spawnCapture('git', args, path.dirname(dest));
       if (result.code !== 0) {
-        throw new Error(`git clone failed (${result.code}): ${result.stderr.trim().slice(0, 200)}`);
+        throw new Error(
+          `git clone failed (${result.code}): ${result.stderr.trim().slice(0, 200)}`
+        );
       }
     },
   };
@@ -541,12 +635,19 @@ export function projectDomainMap(repoId: string, raw: unknown): DomainMap {
   for (const entry of rawGroups) {
     if (!entry || typeof entry !== 'object') continue;
     const e = entry as Record<string, unknown>;
-    const name = typeof e.name === 'string' ? e.name : typeof e.id === 'string' ? e.id : undefined;
+    const name =
+      typeof e.name === 'string'
+        ? e.name
+        : typeof e.id === 'string'
+          ? e.id
+          : undefined;
     if (!name) continue;
     domains.push({
       name,
       files: toStringArray(e.files),
-      entryPoints: toStringArray(e.entryPoints ?? e.entrypoints ?? e.entry_points),
+      entryPoints: toStringArray(
+        e.entryPoints ?? e.entrypoints ?? e.entry_points
+      ),
       dependsOn: toStringArray(e.dependsOn ?? e.depends_on ?? e.dependencies),
     });
   }
@@ -561,7 +662,10 @@ export function projectDomainMap(repoId: string, raw: unknown): DomainMap {
     if (!edge || typeof edge !== 'object') continue;
     const ed = edge as Record<string, unknown>;
     if (typeof ed.from !== 'string' || typeof ed.to !== 'string') continue;
-    const mapped: { from: string; to: string; kind?: string } = { from: ed.from, to: ed.to };
+    const mapped: { from: string; to: string; kind?: string } = {
+      from: ed.from,
+      to: ed.to,
+    };
     if (typeof ed.kind === 'string') mapped.kind = ed.kind;
     crossEdges.push(mapped);
   }
@@ -602,11 +706,15 @@ export class RecoderGitService {
     this.exec = deps.exec ?? makeDefaultExec(this.resolveBin);
     // In-process lib is the default path; an injected exec (without an explicit
     // loader) disables it so the injected CLI seam stays authoritative.
-    this.loadEngineLib = deps.loadEngineLib ?? (deps.exec ? async () => null : defaultLoadEngineLib);
+    this.loadEngineLib =
+      deps.loadEngineLib ??
+      (deps.exec ? async () => null : defaultLoadEngineLib);
     this.git = deps.git ?? makeDefaultGit();
     this.store = deps.store ?? new InMemoryIndexStateStore();
     this.now = deps.now ?? (() => new Date().toISOString());
-    this.logger = deps.logger ?? { error: (message, error) => console.error(message, error) };
+    this.logger = deps.logger ?? {
+      error: (message, error) => console.error(message, error),
+    };
     this.workdirRoot = deps.workdirRoot ?? defaultWorkdirRoot;
     this.spawnServer = deps.spawnServer ?? makeDefaultServerSpawner();
     this.serverPortFn = deps.serverPort ?? defaultServerPort;
@@ -641,7 +749,7 @@ export class RecoderGitService {
       this.serverStatus = 'unavailable';
       this.logger.error(
         '[recodergit-service] ensureServer: engine bin not found (set RECODERGIT_BIN or build the vendored engine)',
-        null,
+        null
       );
       return this.healthSnapshot();
     }
@@ -660,24 +768,33 @@ export class RecoderGitService {
       if (!handle || handle.pid === null || handle.pid === undefined) {
         this.serverHandle = null;
         this.serverStatus = 'unavailable';
-        this.logger.error('[recodergit-service] ensureServer: spawn returned no pid (degrading to unavailable)', null);
+        this.logger.error(
+          '[recodergit-service] ensureServer: spawn returned no pid (degrading to unavailable)',
+          null
+        );
         return this.healthSnapshot();
       }
 
-      handle.onExit((code) => {
+      handle.onExit(code => {
         // Only react if this is still the tracked child.
         if (this.serverHandle === handle) {
           this.serverHandle = null;
           this.serverStatus = 'unavailable';
-          this.logger.error(`[recodergit-service] mcp server exited (code=${code ?? 'null'})`, null);
+          this.logger.error(
+            `[recodergit-service] mcp server exited (code=${code ?? 'null'})`,
+            null
+          );
         }
       });
-      handle.onError((error) => {
+      handle.onError(error => {
         if (this.serverHandle === handle) {
           this.serverHandle = null;
           this.serverStatus = 'unavailable';
         }
-        this.logger.error('[recodergit-service] mcp server process error', error);
+        this.logger.error(
+          '[recodergit-service] mcp server process error',
+          error
+        );
       });
 
       this.serverHandle = handle;
@@ -687,7 +804,10 @@ export class RecoderGitService {
     } catch (error: unknown) {
       this.serverHandle = null;
       this.serverStatus = 'unavailable';
-      this.logger.error('[recodergit-service] ensureServer spawn failed (degrading to unavailable)', error);
+      this.logger.error(
+        '[recodergit-service] ensureServer spawn failed (degrading to unavailable)',
+        error
+      );
       return this.healthSnapshot();
     }
   }
@@ -722,7 +842,7 @@ export class RecoderGitService {
       status,
       baseUrl: ready && port !== null ? `http://${MCP_HOST}:${port}/mcp` : null,
       port,
-      pid: ready ? this.serverHandle?.pid ?? null : null,
+      pid: ready ? (this.serverHandle?.pid ?? null) : null,
     };
   }
 
@@ -735,7 +855,10 @@ export class RecoderGitService {
       this.engineLibPromise = Promise.resolve()
         .then(() => this.loadEngineLib())
         .catch((error: unknown) => {
-          this.logger.error('[recodergit-service] engine lib import failed (falling back to CLI spawn)', error);
+          this.logger.error(
+            '[recodergit-service] engine lib import failed (falling back to CLI spawn)',
+            error
+          );
           return null;
         });
     }
@@ -757,21 +880,36 @@ export class RecoderGitService {
     const lib = await this.engineLib();
     if (lib) {
       try {
-        const result = await lib.runFullAnalysis(repoRoot, { skipGit: true }, { onProgress: () => undefined });
+        const result = await lib.runFullAnalysis(
+          repoRoot,
+          { skipGit: true },
+          { onProgress: () => undefined }
+        );
         const stats = result?.stats ?? {};
         return {
           nodes: typeof stats.nodes === 'number' ? stats.nodes : 0,
           edges: typeof stats.edges === 'number' ? stats.edges : 0,
-          clusters: typeof stats.communities === 'number' ? stats.communities : undefined,
-          flows: typeof stats.processes === 'number' ? stats.processes : undefined,
+          clusters:
+            typeof stats.communities === 'number'
+              ? stats.communities
+              : undefined,
+          flows:
+            typeof stats.processes === 'number' ? stats.processes : undefined,
         };
       } catch (error: unknown) {
-        this.logger.error('[recodergit-service] in-process analyze failed (falling back to CLI spawn)', error);
+        this.logger.error(
+          '[recodergit-service] in-process analyze failed (falling back to CLI spawn)',
+          error
+        );
       }
     }
-    const result = await this.exec(['analyze', repoRoot, '--skip-git'], { cwd: repoRoot });
+    const result = await this.exec(['analyze', repoRoot, '--skip-git'], {
+      cwd: repoRoot,
+    });
     if (result.code !== 0) {
-      throw new Error(`analyze exited with code ${result.code}: ${result.stderr.trim().slice(0, 200)}`);
+      throw new Error(
+        `analyze exited with code ${result.code}: ${result.stderr.trim().slice(0, 200)}`
+      );
     }
     return parseAnalyzeStats(result.stdout);
   }
@@ -782,7 +920,9 @@ export class RecoderGitService {
    * Fail-safe -> status:'unavailable' (logged, never thrown). No-op when the
    * flag is off.
    */
-  async indexRepo(input: IndexRepoInput): Promise<ServiceResult<{ state: IndexState }>> {
+  async indexRepo(
+    input: IndexRepoInput
+  ): Promise<ServiceResult<{ state: IndexState }>> {
     if (!this.isEnabled()) return { enabled: false };
 
     const { repoRoot, repoId } = input;
@@ -807,7 +947,10 @@ export class RecoderGitService {
       await this.store.set(repoId, state);
       return { enabled: true, state };
     } catch (error: unknown) {
-      this.logger.error('[recodergit-service] indexRepo failed (degrading to unavailable)', error);
+      this.logger.error(
+        '[recodergit-service] indexRepo failed (degrading to unavailable)',
+        error
+      );
       const state: IndexState = {
         repoId,
         repoRoot,
@@ -831,7 +974,7 @@ export class RecoderGitService {
    * truthful 'unavailable' state — this NEVER throws into a request path.
    */
   async connectRepo(
-    input: ConnectRepoInput,
+    input: ConnectRepoInput
   ): Promise<ServiceResult<{ state: IndexState; status: IndexStatus }>> {
     if (!this.isEnabled()) return { enabled: false };
 
@@ -843,8 +986,15 @@ export class RecoderGitService {
       repoRoot = path.join(this.workdirRoot(), repoId);
     } catch (error: unknown) {
       // Reject path-traversal repoIds WITHOUT cloning, persisting, or spawning.
-      this.logger.error('[recodergit-service] connectRepo rejected unsafe repoId', error);
-      return { enabled: true, state: this.unavailableState(repoId, '', cloneUrl), status: 'unavailable' };
+      this.logger.error(
+        '[recodergit-service] connectRepo rejected unsafe repoId',
+        error
+      );
+      return {
+        enabled: true,
+        state: this.unavailableState(repoId, '', cloneUrl),
+        status: 'unavailable',
+      };
     }
 
     try {
@@ -860,18 +1010,28 @@ export class RecoderGitService {
         return { enabled: true, state, status: 'unavailable' };
       }
       // Record the cloneUrl alongside the freshly-indexed state (immutable copy).
-      const state: IndexState = { ...indexed.state, cloneUrl: cloneUrl ?? null };
+      const state: IndexState = {
+        ...indexed.state,
+        cloneUrl: cloneUrl ?? null,
+      };
       await this.store.set(repoId, state);
       return { enabled: true, state, status: state.status };
     } catch (error: unknown) {
-      this.logger.error('[recodergit-service] connectRepo clone/index failed (degrading to unavailable)', error);
+      this.logger.error(
+        '[recodergit-service] connectRepo clone/index failed (degrading to unavailable)',
+        error
+      );
       const state = this.unavailableState(repoId, repoRoot, cloneUrl);
       await this.store.set(repoId, state);
       return { enabled: true, state, status: 'unavailable' };
     }
   }
 
-  private unavailableState(repoId: string, repoRoot: string, cloneUrl?: string): IndexState {
+  private unavailableState(
+    repoId: string,
+    repoRoot: string,
+    cloneUrl?: string
+  ): IndexState {
     return {
       repoId,
       repoRoot,
@@ -895,22 +1055,42 @@ export class RecoderGitService {
 
     const state = await this.store.get(repoId);
     if (!state) {
-      return { enabled: true, repoId, status: 'not_indexed', fresh: false, state: null, currentSha: null };
+      return {
+        enabled: true,
+        repoId,
+        status: 'not_indexed',
+        fresh: false,
+        state: null,
+        currentSha: null,
+      };
     }
     if (state.status === 'unavailable') {
-      return { enabled: true, repoId, status: 'unavailable', fresh: false, state, currentSha: null };
+      return {
+        enabled: true,
+        repoId,
+        status: 'unavailable',
+        fresh: false,
+        state,
+        currentSha: null,
+      };
     }
 
     let currentSha: string | null = null;
     try {
       currentSha = await this.git.headSha(state.repoRoot);
     } catch (error: unknown) {
-      this.logger.error('[recodergit-service] status headSha failed (treating as unknown)', error);
+      this.logger.error(
+        '[recodergit-service] status headSha failed (treating as unknown)',
+        error
+      );
       currentSha = null;
     }
 
     // Truthful staleness: only "fresh" when we can confirm shas match.
-    const fresh = currentSha !== null && state.lastIndexedSha !== null && currentSha === state.lastIndexedSha;
+    const fresh =
+      currentSha !== null &&
+      state.lastIndexedSha !== null &&
+      currentSha === state.lastIndexedSha;
     const status: IndexStatus = fresh ? 'indexed' : 'stale';
     return { enabled: true, repoId, status, fresh, state, currentSha };
   }
@@ -920,7 +1100,9 @@ export class RecoderGitService {
    * Updates state on success. Fail-safe -> unavailable. No-op when flag off; returns
    * not_indexed status when there is no prior index to refresh.
    */
-  async reindexOnPush(input: ReindexInput): Promise<ServiceResult<{ state: IndexState | null; status: IndexStatus }>> {
+  async reindexOnPush(
+    input: ReindexInput
+  ): Promise<ServiceResult<{ state: IndexState | null; status: IndexStatus }>> {
     if (!this.isEnabled()) return { enabled: false };
 
     const existing = await this.store.get(input.repoId);
@@ -933,17 +1115,31 @@ export class RecoderGitService {
       // In-process detect_changes when the lib exposes callTool, else the CLI.
       const lib = await this.engineLib();
       if (lib?.callTool) {
-        await lib.callTool('detect_changes', { repo: existing.repoRoot }).catch(() => undefined);
+        await lib
+          .callTool('detect_changes', { repo: existing.repoRoot })
+          .catch(() => undefined);
       } else {
-        await this.exec(['detect-changes'], { cwd: existing.repoRoot }).catch(() => undefined);
+        await this.exec(['detect-changes'], { cwd: existing.repoRoot }).catch(
+          () => undefined
+        );
       }
-      const reindexed = await this.indexRepo({ repoRoot: existing.repoRoot, repoId: input.repoId });
+      const reindexed = await this.indexRepo({
+        repoRoot: existing.repoRoot,
+        repoId: input.repoId,
+      });
       if (reindexed.enabled) {
-        return { enabled: true, state: reindexed.state, status: reindexed.state.status };
+        return {
+          enabled: true,
+          state: reindexed.state,
+          status: reindexed.state.status,
+        };
       }
       return { enabled: true, state: existing, status: existing.status };
     } catch (error: unknown) {
-      this.logger.error('[recodergit-service] reindexOnPush failed (degrading to unavailable)', error);
+      this.logger.error(
+        '[recodergit-service] reindexOnPush failed (degrading to unavailable)',
+        error
+      );
       return { enabled: true, state: existing, status: 'unavailable' };
     }
   }
@@ -967,7 +1163,10 @@ export class RecoderGitService {
         const raw = await lib.callTool('route_map', { repo: cwd });
         return { enabled: true, map: projectDomainMap(repoId, raw) };
       } catch (error: unknown) {
-        this.logger.error('[recodergit-service] in-process route_map failed (falling back to CLI spawn)', error);
+        this.logger.error(
+          '[recodergit-service] in-process route_map failed (falling back to CLI spawn)',
+          error
+        );
       }
     }
 
@@ -982,9 +1181,142 @@ export class RecoderGitService {
       }
       return { enabled: true, map: projectDomainMap(repoId, parsed) };
     } catch (error: unknown) {
-      this.logger.error('[recodergit-service] domainMap failed (degrading to empty map)', error);
+      this.logger.error(
+        '[recodergit-service] domainMap failed (degrading to empty map)',
+        error
+      );
       return { enabled: true, map: emptyMap };
     }
+  }
+
+  /**
+   * Run a read-only code-intel QUERY over an indexed repo's graph via the
+   * in-process engine `LocalBackend.callTool`. Fail-safe at every boundary:
+   *   - flag off              → `{ enabled:false }` (pure no-op),
+   *   - no indexed repoRoot    → `available:false` ('not indexed', truthful),
+   *   - lib/callTool absent    → `available:false` ('needs the in-process lib';
+   *     the CLI has no JSON code-intel surface, so we degrade rather than parse
+   *     human-readable text into a fabricated shape),
+   *   - engine call throws     → `available:false` with the real reason.
+   * On success the raw engine payload is returned untouched. NEVER throws into a
+   * request path; NEVER fabricates a symbol, reference, or edge.
+   */
+  async codeIntel(
+    op: CodeIntelOp,
+    repoId: string,
+    params: CodeIntelParams = {}
+  ): Promise<ServiceResult<CodeIntelResult>> {
+    if (!this.isEnabled()) return { enabled: false };
+
+    const repoRoot = await this.resolveCodeIntelRepoRoot(repoId, params.repo);
+    if (!repoRoot) {
+      return {
+        enabled: true,
+        ...unavailableCodeIntel(
+          op,
+          repoId,
+          'repo not indexed (call index/connect first, or pass an explicit repo path)'
+        ),
+      };
+    }
+
+    const lib = await this.engineLib();
+    if (!lib?.callTool) {
+      return {
+        enabled: true,
+        ...unavailableCodeIntel(
+          op,
+          repoId,
+          'code-intel needs the in-process engine lib (build the vendored recodergit dist; ' +
+            'RECODERGIT_BIN CLI-only mode exposes no structured code-intel surface)'
+        ),
+      };
+    }
+
+    const { method, callParams } = buildCodeIntelCall(op, repoRoot, params);
+    try {
+      const result = await lib.callTool(method, callParams);
+      return { enabled: true, op, repoId, available: true, result };
+    } catch (error: unknown) {
+      this.logger.error(
+        `[recodergit-service] codeIntel ${op} failed (degrading to unavailable)`,
+        error
+      );
+      return {
+        enabled: true,
+        ...unavailableCodeIntel(
+          op,
+          repoId,
+          error instanceof Error ? error.message : String(error)
+        ),
+      };
+    }
+  }
+
+  /**
+   * Resolve the on-disk repo root a code-intel query runs against: an explicit
+   * caller path wins; otherwise the last recorded index state's `repoRoot` (any
+   * state — a stale index is still queryable). null ⇒ truthful 'not indexed'.
+   */
+  private async resolveCodeIntelRepoRoot(
+    repoId: string,
+    explicit?: string
+  ): Promise<string | null> {
+    const override = explicit?.trim();
+    if (override) return override;
+    const state = await this.store.get(repoId);
+    const root = state?.repoRoot?.trim();
+    return root ? root : null;
+  }
+}
+
+/** Truthful unavailable code-intel result (never a fabricated payload). */
+function unavailableCodeIntel(
+  op: CodeIntelOp,
+  repoId: string,
+  reason: string
+): CodeIntelResult {
+  return { op, repoId, available: false, reason };
+}
+
+/**
+ * Map a {@link CodeIntelOp} to the vendored engine `callTool` method + params.
+ * Only defined params are forwarded (the engine applies its own defaults); the
+ * resolved `repo` path is always included so `resolveRepo` targets that index.
+ */
+function buildCodeIntelCall(
+  op: CodeIntelOp,
+  repo: string,
+  params: CodeIntelParams
+): { method: string; callParams: Record<string, unknown> } {
+  const base: Record<string, unknown> = { repo };
+  const put = (key: string, value: unknown): void => {
+    if (value !== undefined && value !== null && value !== '')
+      base[key] = value;
+  };
+  switch (op) {
+    case 'symbol_search':
+      put('search_query', params.query);
+      put('limit', params.limit);
+      put('max_symbols', params.maxSymbols);
+      put('include_content', params.includeContent);
+      return { method: 'query', callParams: base };
+    case 'find_references':
+    case 'call_graph':
+      put('target', params.symbol);
+      base.direction = op === 'find_references' ? 'upstream' : 'downstream';
+      put('file_path', params.filePath);
+      put('kind', params.kind);
+      put('maxDepth', params.maxDepth);
+      put('limit', params.limit);
+      return { method: 'impact', callParams: base };
+    case 'definition':
+      put('name', params.symbol);
+      put('uid', params.uid);
+      put('file_path', params.filePath);
+      put('kind', params.kind);
+      put('include_content', params.includeContent);
+      return { method: 'context', callParams: base };
   }
 }
 
@@ -999,7 +1331,9 @@ export function extractJson(stdout: string): unknown {
   const candidates = [trimmed];
   const braceIdx = trimmed.indexOf('{');
   const bracketIdx = trimmed.indexOf('[');
-  const start = [braceIdx, bracketIdx].filter((i) => i >= 0).sort((a, b) => a - b)[0];
+  const start = [braceIdx, bracketIdx]
+    .filter(i => i >= 0)
+    .sort((a, b) => a - b)[0];
   if (start !== undefined && start > 0) {
     candidates.push(trimmed.slice(start));
   }
@@ -1013,6 +1347,8 @@ export function extractJson(stdout: string): unknown {
   return undefined;
 }
 
-export function createRecoderGitService(deps?: RecoderGitServiceDeps): RecoderGitService {
+export function createRecoderGitService(
+  deps?: RecoderGitServiceDeps
+): RecoderGitService {
   return new RecoderGitService(deps);
 }

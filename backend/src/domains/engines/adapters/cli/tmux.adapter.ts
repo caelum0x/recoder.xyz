@@ -23,6 +23,7 @@ import { EngineClientBase } from '../../ports/engine-client.port.js';
 import type { EngineCall } from '../../ports/engine-client.port.js';
 import { down, fail, ok, up, type EngineHealth, type InvokeResult } from '../../types.js';
 import { runCli } from './cli-exec.js';
+import { createTmuxIntrospect, type TmuxIntrospectPort } from './tmux-introspect.adapter.js';
 
 /** The multiplexer ops the adapter maps onto tmux CLI verbs. */
 export type TmuxOp =
@@ -69,6 +70,20 @@ export class TmuxAdapter extends EngineClientBase<unknown, unknown> {
     // tmux prints newline-delimited records; return raw + a split convenience view.
     const lines = result.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
     return ok({ stdout: result.stdout, lines });
+  }
+
+  /**
+   * The DEEP, read-only introspection surface over the same pinned tmux binary:
+   * typed `list-sessions` / `list-windows` / `list-panes` / `capture-pane` /
+   * `serverInfo`. The MCP `tmux.*` tools bind over this port. Observation only —
+   * mutation stays with the conductor's gated steer/stop path.
+   */
+  introspect(): TmuxIntrospectPort {
+    return createTmuxIntrospect({
+      bin: this.bin,
+      enabled: () => isEngineEnabled(this.deps.config, 'tmux'),
+      vendored: TMUX_IS_VENDORED,
+    });
   }
 
   async health(): Promise<EngineHealth> {
