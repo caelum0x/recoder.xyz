@@ -307,16 +307,28 @@ export async function getProjectSnapshot(projectIdOrUrlId: string, userId: strin
 }
 
 /**
- * Return the current owner `user_id` of the snapshot keyed by `projectId`
- * (or its `urlId`), ignoring the caller — or `null` when no row exists yet.
+ * Discriminated ownership lookup for the snapshot keyed by `projectId` (or its
+ * `urlId`), ignoring the caller.
  *
  * This is deliberately NOT user-scoped: it exists so write paths can tell the
  * difference between "this project does not exist yet" (safe to create) and
- * "this project exists but belongs to someone else" (must be rejected). The
- * snapshot upsert conflicts on `project_id` alone, so without this guard a
+ * "this project exists but belongs to someone else / no one" (must be rejected).
+ * The snapshot upsert conflicts on `project_id` alone, so without this guard a
  * caller could clobber and re-own an arbitrary existing project by id.
+ *
+ * We return `{ exists, ownerId }` rather than a bare `string | null` on purpose:
+ * a row can legitimately carry a NULL/empty `user_id` (the column is nullable),
+ * and collapsing that to `null` would make an unowned-but-present row
+ * indistinguishable from an absent one. Callers must gate on `exists`, never on
+ * the truthiness of `ownerId` — otherwise an unowned row would be treated as a
+ * fresh create and any authenticated caller could take it over via the
+ * `ON CONFLICT (project_id) DO UPDATE SET user_id = EXCLUDED.user_id` upsert.
+ * `ownerId` is normalized to `null` for a blank/whitespace owner so downstream
+ * code never mistakes an empty string for a real owner id.
  */
-export async function getProjectSnapshotOwnerId(projectIdOrUrlId: string): Promise<string | null> {
+export async function getProjectSnapshotOwnerId(
+  projectIdOrUrlId: string,
+): Promise<{ exists: boolean; ownerId: string | null }> {
   await ensureProjectSnapshotsTable();
 
   const rows = await prisma.$queryRawUnsafe(
@@ -328,9 +340,15 @@ export async function getProjectSnapshotOwnerId(projectIdOrUrlId: string): Promi
       LIMIT 1
     `,
     projectIdOrUrlId,
-  ) as Array<{ user_id: string }>;
+  ) as Array<{ user_id: string | null }>;
 
-  return rows.length > 0 ? rows[0].user_id : null;
+  if (rows.length === 0) {
+    return { exists: false, ownerId: null };
+  }
+
+  const rawOwner = rows[0].user_id;
+  const ownerId = typeof rawOwner === 'string' && rawOwner.trim().length > 0 ? rawOwner : null;
+  return { exists: true, ownerId };
 }
 
 export async function userOwnsProjectSnapshot(userId: string, projectIdOrUrlId: string): Promise<boolean> {
