@@ -30,6 +30,30 @@ interface ReadyIssue {
   readonly description?: string;
 }
 
+/** One accumulated NOTE (bd comment) another agent wrote onto the issue. */
+interface IssueNote {
+  readonly author?: string;
+  readonly text: string;
+}
+
+/** One dependency edge in the issue's lineage (discovered-from / blocks / …). */
+interface IssueDependency {
+  readonly id: string;
+  readonly title?: string;
+  readonly type?: string;
+  readonly status?: string;
+}
+
+/**
+ * The shared-memory context read back off the issue graph (`bd show --long`):
+ * the NOTE evidence + dependency lineage prior agents wrote onto this very
+ * issue. Woven into the conductor launch prompt so the new agent inherits it.
+ */
+interface IssueLineage {
+  readonly notes: readonly IssueNote[];
+  readonly dependencies: readonly IssueDependency[];
+}
+
 /** One board row — the truthful record of what the autopilot did with an issue. */
 export interface AutopilotBoardEntry {
   readonly issueId: string;
@@ -85,6 +109,8 @@ export interface SquadAutopilotDeps {
 
 /** Per-call deadline for the `bd ready` pull (a slow CLI never stalls the loop). */
 const BEADS_READY_TIMEOUT_MS = 15_000;
+/** Per-call deadline for the per-issue `bd show --long` lineage read. */
+const BEADS_SHOW_TIMEOUT_MS = 10_000;
 /** Board retention: oldest entries evicted beyond this many issues. */
 const MAX_BOARD_ENTRIES = 200;
 
@@ -253,6 +279,38 @@ export class SquadAutopilotService {
     }
   }
 
+  /**
+   * Read the issue's shared-memory context (`bd show <id> --long`) back off the
+   * graph: the accumulated NOTE evidence + dependency lineage. Degrade-truthful
+   * — any fault (seam down, unrecognized payload, throw) returns `null` and the
+   * dispatch proceeds on the flat title+description; the loop is never blocked.
+   */
+  private async pullLineage(issueId: string): Promise<IssueLineage | null> {
+    try {
+      const result = await this.beads!.invoke({
+        op: 'show',
+        input: { id: issueId, long: true },
+        timeoutMs: BEADS_SHOW_TIMEOUT_MS,
+      });
+      if (!result.ok) {
+        this.logger.debug?.(
+          { issueId, reason: result.reason },
+          'squad-autopilot: beads show unavailable (dispatching without lineage)',
+        );
+        return null;
+      }
+      return parseIssueLineage(result.value);
+    } catch (err) {
+      // Defensive: the seam should not throw, but a lineage read must never
+      // fail a dispatch.
+      this.logger.debug?.(
+        { issueId, err: err instanceof Error ? err.message : String(err) },
+        'squad-autopilot: beads show threw (dispatching without lineage)',
+      );
+      return null;
+    }
+  }
+
   /** Route through the configured squad; no squad configured ⇒ pass-through. */
   private async routeThroughSquad(
     issue: ReadyIssue,
@@ -272,9 +330,13 @@ export class SquadAutopilotService {
     issue: ReadyIssue,
     routedAgentId: string | undefined,
   ): Promise<{ ok: boolean; workspaceId?: string; runId?: string; reason?: string }> {
-    const prompt = [`Work the beads issue ${issue.id}: ${issue.title}`, issue.description ?? '']
-      .filter(Boolean)
-      .join('\n\n');
+    // FUSION: read the issue's accumulated NOTE evidence + dependency lineage
+    // back off the shared issue graph and weave it into the launch prompt so the
+    // dispatched agent inherits what prior agents wrote onto this issue — not
+    // just the flat title+description. Degrade-truthful: a failed `show` skips
+    // the section, it never blocks the dispatch.
+    const lineage = await this.pullLineage(issue.id);
+    const prompt = composeLaunchPrompt(issue, lineage);
     try {
       return await this.conductor!.dispatch({
         taskId: issue.id,
@@ -305,6 +367,90 @@ export class SquadAutopilotService {
     }
     return result;
   }
+}
+
+/**
+ * Compose the conductor launch prompt for an issue. The base is the flat
+ * `id + title + description`; when the issue graph yielded lineage (`bd show
+ * --long`), a "Shared memory" block is appended carrying the dependency lineage
+ * and the accumulated NOTE evidence prior agents wrote onto the issue. Empty
+ * sections are omitted — a lineage-less issue reads exactly as before.
+ */
+export function composeLaunchPrompt(issue: ReadyIssue, lineage: IssueLineage | null): string {
+  const parts = [`Work the beads issue ${issue.id}: ${issue.title}`];
+  if (issue.description) parts.push(issue.description);
+
+  const memory: string[] = [];
+  if (lineage && lineage.dependencies.length > 0) {
+    memory.push('Dependency lineage (from the issue graph):');
+    for (const dep of lineage.dependencies) {
+      const rel = dep.type ? `${dep.type} ` : 'depends-on ';
+      const title = dep.title ? ` (${dep.title})` : '';
+      const status = dep.status ? ` [${dep.status}]` : '';
+      memory.push(`- ${rel}${dep.id}${title}${status}`);
+    }
+  }
+  if (lineage && lineage.notes.length > 0) {
+    if (memory.length > 0) memory.push('');
+    memory.push('Accumulated notes / evidence prior agents recorded on this issue:');
+    for (const note of lineage.notes) {
+      memory.push(`- ${note.author ? `[${note.author}] ` : ''}${note.text}`);
+    }
+  }
+  if (memory.length > 0) {
+    parts.push(
+      ['--- Shared memory from the beads issue graph ---', ...memory].join('\n'),
+    );
+  }
+  return parts.join('\n\n');
+}
+
+/**
+ * Narrow a `bd show <id> --long --json` payload into the issue's lineage. `bd`
+ * returns a one-element array (`[issue]`) or a bare object; either is accepted.
+ * `comments` become notes (text required), `dependencies` become the lineage
+ * (id required, `dependency_type` → `type`). A malformed payload ⇒ `null`
+ * (truthful degrade — the dispatch proceeds without a lineage block).
+ */
+export function parseIssueLineage(payload: unknown): IssueLineage | null {
+  const issue = Array.isArray(payload)
+    ? payload[0]
+    : payload !== null && typeof payload === 'object'
+      ? payload
+      : null;
+  if (issue === null || typeof issue !== 'object') return null;
+  const rec = issue as Record<string, unknown>;
+
+  const notes: IssueNote[] = [];
+  if (Array.isArray(rec.comments)) {
+    for (const item of rec.comments) {
+      if (item === null || typeof item !== 'object') continue;
+      const c = item as Record<string, unknown>;
+      const text = typeof c.text === 'string' && c.text.trim() ? c.text.trim() : undefined;
+      if (!text) continue;
+      const author = typeof c.author === 'string' && c.author.trim() ? c.author.trim() : undefined;
+      notes.push({ text, ...(author ? { author } : {}) });
+    }
+  }
+
+  const dependencies: IssueDependency[] = [];
+  if (Array.isArray(rec.dependencies)) {
+    for (const item of rec.dependencies) {
+      if (item === null || typeof item !== 'object') continue;
+      const d = item as Record<string, unknown>;
+      const id = typeof d.id === 'string' && d.id.trim() ? d.id.trim() : undefined;
+      if (!id) continue;
+      const title = typeof d.title === 'string' && d.title.trim() ? d.title.trim() : undefined;
+      const type =
+        typeof d.dependency_type === 'string' && d.dependency_type.trim()
+          ? d.dependency_type.trim()
+          : undefined;
+      const status = typeof d.status === 'string' && d.status.trim() ? d.status.trim() : undefined;
+      dependencies.push({ id, ...(title ? { title } : {}), ...(type ? { type } : {}), ...(status ? { status } : {}) });
+    }
+  }
+
+  return { notes, dependencies };
 }
 
 /**

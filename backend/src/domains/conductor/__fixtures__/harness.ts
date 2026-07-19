@@ -310,6 +310,8 @@ export interface ComposeOptions {
   brain?: ConductorModuleDeps['brain'];
   /** OPTIONAL code-intel seam (recodergit index + beads track/close). */
   codeIntel?: ConductorModuleDeps['codeIntel'];
+  /** OPTIONAL ColBERT PLAID index seam (absent ⇒ no per-repo index build). */
+  colbertIndex?: ConductorModuleDeps['colbertIndex'];
   /** OPTIONAL live send-keys transport (absent ⇒ steering refuses truthfully). */
   steerTransport?: ConductorModuleDeps['steerTransport'];
   /** OPTIONAL per-worktree `.mcp.json` injector (absent ⇒ injection is a truthful skip). */
@@ -338,6 +340,7 @@ export function composeConductor(options: ComposeOptions = {}): {
     ...(options.repository ? { repository: options.repository } : {}),
     ...(options.brain ? { brain: options.brain } : {}),
     ...(options.codeIntel ? { codeIntel: options.codeIntel } : {}),
+    ...(options.colbertIndex ? { colbertIndex: options.colbertIndex } : {}),
     ...(options.steerTransport ? { steerTransport: options.steerTransport } : {}),
     ...(options.mcpInject ? { mcpInject: options.mcpInject } : {}),
     ...(options.checkpointStore ? { checkpointStore: options.checkpointStore } : {}),

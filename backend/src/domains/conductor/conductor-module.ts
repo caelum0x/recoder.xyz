@@ -52,6 +52,7 @@ import {
   isOpenfangRuntime,
 } from './adapters/runtime-substrate-selector.js';
 import { createCompletionHookSink } from './adapters/completion-hook.adapter.js';
+import { readRepoPassages } from './adapters/repo-passages.adapter.js';
 import { toLoggerPort } from './adapters/logger.adapter.js';
 import { createConductorRegistry, type ConductorRegistry } from './adapters/substrate-registry.adapter.js';
 import { listConductorRuntimes, type ConductorRuntimeView } from './adapters/runtime-listing.adapter.js';
@@ -193,6 +194,8 @@ export class ConductorComposer implements ConductorModule {
   private readonly brain?: ConductorBrainMemory;
   /** OPTIONAL code-intel seam (recodergit index + beads issue-graph track/close). */
   private readonly codeIntel?: CodeIntelPort;
+  /** OPTIONAL ColBERT PLAID index seam (per-repo late-interaction index build). */
+  private readonly colbertIndex?: ConductorModuleDeps['colbertIndex'];
   /** OPTIONAL GitHub identity seam (`GET /github/status`); absent ⇒ truthful not-connected. */
   private readonly github?: GithubStatusPort;
   /** OPTIONAL live send-keys transport; absent ⇒ steering refuses truthfully. */
@@ -220,6 +223,7 @@ export class ConductorComposer implements ConductorModule {
     this.middleware = deps.middleware;
     this.brain = deps.brain;
     this.codeIntel = deps.codeIntel;
+    this.colbertIndex = deps.colbertIndex;
     this.github = deps.githubStatus;
     this.steerTransport = deps.steerTransport;
     this.mcpInject = deps.mcpInject;
@@ -286,6 +290,19 @@ export class ConductorComposer implements ConductorModule {
       getWorkspace: (id) => this.repository.getWorkspace(id),
       logger: this.log,
     });
+    // Path (b) token accounting: late-bind the completion-hook sink into the
+    // native openfang (`in_process`) substrate so its terminal event (workspaceId
+    // + real input/outputTokens) meters REAL `token` usage (the sink does not exist
+    // when the substrate is built in bootstrap). Degrade-safe: the substrate absent
+    // / not shaped ⇒ a truthful no-op (tokens stay unmetered).
+    try {
+      const inProc = this.registry.getFull('in_process' as SubstrateKind) as Partial<{
+        setRunSink(s: typeof sink): void;
+      }>;
+      inProc.setRunSink?.(sink);
+    } catch {
+      /* in_process not registered in this composition — nothing to wire */
+    }
     // Live streaming driver: the tailer drives `@recoder/substrate`
     // `startRunTail` against the REGISTERED substrate's capture/alive/exitCode,
     // and — when `tmuxControlMode` is on, the run is on `tmux_worktree`, and the
@@ -372,13 +389,28 @@ export class ConductorComposer implements ConductorModule {
 
   /**
    * Fire-and-forget code-intel on workspace create: recodergit repo index + beads
-   * issue-graph claim. Never awaited (a slow/absent engine must not block launch);
-   * both calls are `void` + self-logging + degrade-safe inside the adapter.
+   * issue-graph claim + ColBERT PLAID index build. Never awaited (a slow/absent
+   * engine must not block launch); every call is `void` + self-logging +
+   * degrade-safe inside the adapter (or guarded by a truthful `configured()` probe).
    */
   private startCodeIntel(input: CreateConductorWorkspaceInput, workspace: Workspace): void {
+    const repoId = repoIdFromRepoRef(input.projectId || input.repoPath);
+    // ColBERT per-repo late-interaction index: chunk the repo's text files and
+    // build/refresh the PLAID collection so retrieval can surface passages the
+    // single-vector Qdrant top-K misses. Degrade-truthful: no daemon configured, an
+    // empty passage set, or a build fault is a logged skip — never blocks a launch.
+    if (this.colbertIndex?.configured() && input.repoPath) {
+      const collection = `repo_${repoId}`;
+      void readRepoPassages(input.repoPath)
+        .then((passages) =>
+          passages.length > 0
+            ? this.colbertIndex!.ensureIndex(collection, passages, { overwrite: true })
+            : undefined,
+        )
+        .catch((err) => this.log.warn({ err, repoId }, 'conductor colbert index hook faulted'));
+    }
     if (!this.codeIntel) return;
     const codeIntel = this.codeIntel;
-    const repoId = repoIdFromRepoRef(input.projectId || input.repoPath);
     void codeIntel
       .indexRepo(input.repoPath, repoId)
       .catch((err) => this.log.warn({ err, repoId }, 'conductor recodergit index hook faulted'));

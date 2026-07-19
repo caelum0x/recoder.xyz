@@ -24,6 +24,7 @@ import type { Logger } from '../../../shared/logger.js';
 import type { MemoryConfig } from '../config.js';
 import type { Mem0Port } from '../ports/mem0.port.js';
 import type { BeadsMemoryPort } from '../ports/beads-memory.port.js';
+import type { ColbertSearchPort } from '../ports/colbert-search.port.js';
 import type { MemoryRepository } from '../ports/memory-repository.port.js';
 import type {
   FusionResult,
@@ -49,6 +50,15 @@ export interface RecallServiceDeps {
   readonly reranker: PassageReranker;
   readonly config: MemoryConfig;
   readonly logger: Logger;
+  /**
+   * OPTIONAL FIRST-STAGE ColBERT retriever over a memory index. When present +
+   * configured, its late-interaction hits become a parallel recall source (with
+   * `colbert` provenance). Absent / unconfigured / unbuilt index → the `colbert`
+   * source reports `down` and contributes ZERO memories (degrade-truthful).
+   */
+  readonly colbertSearch?: ColbertSearchPort;
+  /** The ColBERT collection recall searches; defaults to `config.mem0Collection`. */
+  readonly colbertCollection?: string;
 }
 
 /** A per-source gather outcome: the memories it produced + its truthful availability. */
@@ -84,7 +94,8 @@ function provenance(source: MemorySource, ref: string, score: number, scope?: st
  * degrades that source only (reported in `sources`), never the whole recall.
  */
 export function createRecallService(deps: RecallServiceDeps): RecallService {
-  const { mem0, beads, repository, reranker, config, logger } = deps;
+  const { mem0, beads, repository, reranker, config, logger, colbertSearch } = deps;
+  const colbertCollection = deps.colbertCollection?.trim() || config.mem0Collection;
 
   const perSourceLimit = (query: RecallQuery): number => query.limit ?? config.recallLimit;
 
@@ -178,6 +189,41 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
     }
   }
 
+  /**
+   * ColBERT late-interaction memory search — a FIRST-STAGE recall source that
+   * finds facts the lexical/vector sources miss. Only attempted when a configured
+   * search port is wired; an unbuilt index or absent torch degrades that source
+   * only (reported `down`, ZERO memories — never a fabricated recall). Raw MaxSim
+   * scores are normalized against the best hit into a truthful `[0,1]` confidence.
+   */
+  async function gatherColbert(query: RecallQuery): Promise<SourceHarvest> {
+    if (!colbertSearch || !colbertSearch.configured()) {
+      return { memories: [], availability: down('colbert', 'colbert search not configured') };
+    }
+    try {
+      const result = await colbertSearch.search(colbertCollection, query.query, perSourceLimit(query));
+      if (!result.available) {
+        return { memories: [], availability: down('colbert', result.reason ?? 'colbert search unavailable') };
+      }
+      const topScore = result.hits[0]?.score ?? 0;
+      const memories = result.hits.map<RecalledMemory>((hit, i) => {
+        // Best-first hits → a relative, truthful confidence (never fabricated):
+        // normalize against the top MaxSim; degrade to rank order if it is ≤ 0.
+        const rel = topScore > 0 ? hit.score / topScore : 1 - i / Math.max(result.hits.length, 1);
+        const ref = hit.pid !== undefined ? `pid:${hit.pid}` : `rank:${i}`;
+        return {
+          id: `colbert:${colbertCollection}:${ref}`,
+          body: hit.text,
+          provenance: provenance('colbert', ref, clampScore(rel, 0.5), query.scope),
+        };
+      });
+      return { memories, availability: up('colbert') };
+    } catch (err) {
+      logger.warn({ err: errText(err) }, 'recall: colbert source faulted');
+      return { memories: [], availability: down('colbert', errText(err)) };
+    }
+  }
+
   return {
     async recall(query: RecallQuery): Promise<FusionResult> {
       const trimmed = query.query?.trim() ?? '';
@@ -185,15 +231,22 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
         // Fail fast, truthful: nothing to recall for an empty query.
         return {
           memories: [],
-          sources: [down('mem0', 'empty query'), down('beads', 'empty query'), down('candidates', 'empty query'), down('items', 'empty query')],
+          sources: [
+            down('mem0', 'empty query'),
+            down('beads', 'empty query'),
+            down('candidates', 'empty query'),
+            down('items', 'empty query'),
+            down('colbert', 'empty query'),
+          ],
           reranker: 'identity',
         };
       }
 
-      const [mem0Harvest, candidateHarvest, itemHarvest] = await Promise.all([
+      const [mem0Harvest, candidateHarvest, itemHarvest, colbertHarvest] = await Promise.all([
         gatherMem0(query),
         gatherCandidates(query),
         gatherItems(query),
+        gatherColbert(query),
       ]);
       const beadsHarvest = gatherBeads(query);
 
@@ -202,6 +255,7 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
         beadsHarvest.availability,
         candidateHarvest.availability,
         itemHarvest.availability,
+        colbertHarvest.availability,
       ];
 
       const pooled: RecalledMemory[] = [
@@ -209,6 +263,7 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
         ...beadsHarvest.memories,
         ...candidateHarvest.memories,
         ...itemHarvest.memories,
+        ...colbertHarvest.memories,
       ];
 
       if (pooled.length === 0) {

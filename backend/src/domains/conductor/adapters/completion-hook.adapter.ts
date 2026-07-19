@@ -52,6 +52,17 @@ function isTerminal(type: RunEvent['type']): type is 'completed' | 'failed' {
 }
 
 /**
+ * Sum the REAL token usage a terminal RunEvent carries (`data.inputTokens` +
+ * `data.outputTokens`), each counted only when a finite non-negative number.
+ * Returns 0 when the event carries no usage (⇒ no `token` meter, just `agent_run`).
+ */
+function totalTokens(event: RunEvent): number {
+  const read = (v: unknown): number =>
+    typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0;
+  return read(event.data?.inputTokens) + read(event.data?.outputTokens);
+}
+
+/**
  * Derive the deterministic, path-safe recodergit repoId from a repo full-name or
  * absolute path (lowercase; every non `[a-z0-9_-]` run → `__`). MUST stay in sync
  * with `conductor-module.ts` `repoIdFromRepoRef`, which derives the SAME id at
@@ -59,14 +70,19 @@ function isTerminal(type: RunEvent['type']): type is 'completed' | 'failed' {
  * exact graph that launch built. Returns '' for an empty ref (⇒ reindex skipped).
  */
 function repoIdFromRepoRef(ref: string | undefined): string {
-  return (ref ?? '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '__');
+  return (ref ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '__');
 }
 
 /**
  * Wrap `inner` so terminal events fire memory harvest + beads completion. Returns
  * `inner` unchanged when neither capability is wired (zero overhead).
  */
-export function createCompletionHookSink(deps: CompletionHookDeps): RunEventSinkPort {
+export function createCompletionHookSink(
+  deps: CompletionHookDeps
+): RunEventSinkPort {
   const { inner, brain, codeIntel, getMeter, getWorkspace, logger } = deps;
   if (!brain && !codeIntel && !getMeter) return inner;
 
@@ -79,7 +95,9 @@ export function createCompletionHookSink(deps: CompletionHookDeps): RunEventSink
 
       try {
         const workspaceId =
-          typeof event.data?.workspaceId === 'string' ? event.data.workspaceId : undefined;
+          typeof event.data?.workspaceId === 'string'
+            ? event.data.workspaceId
+            : undefined;
         const workspace = workspaceId ? await getWorkspace(workspaceId) : null;
         const taskId = workspace?.taskId ?? event.taskId;
         const userId = workspace?.createdBy;
@@ -96,15 +114,20 @@ export function createCompletionHookSink(deps: CompletionHookDeps): RunEventSink
               scope: 'task-type',
               proposedBy: 'conductor',
             })
-            .catch((err) => logger.warn({ err, taskId }, 'conductor harvest hook faulted'));
+            .catch(err =>
+              logger.warn({ err, taskId }, 'conductor harvest hook faulted')
+            );
         }
 
         // (i) issue-graph close/note — best-effort; a failed run keeps the issue open.
         if (codeIntel && taskId) {
           void codeIntel
             .completeWork(taskId, outcome)
-            .catch((err) =>
-              logger.warn({ err, taskId }, 'conductor beads completeWork hook faulted'),
+            .catch(err =>
+              logger.warn(
+                { err, taskId },
+                'conductor beads completeWork hook faulted'
+              )
             );
         }
 
@@ -115,12 +138,17 @@ export function createCompletionHookSink(deps: CompletionHookDeps): RunEventSink
         // code, and the engine truthfully skips when nothing was indexed). Fire-
         // and-forget + degrade-safe: a reindex fault NEVER stalls the terminal event.
         if (codeIntel && workspace) {
-          const repoId = repoIdFromRepoRef(workspace.projectId || workspace.worktreePath);
+          const repoId = repoIdFromRepoRef(
+            workspace.projectId || workspace.worktreePath
+          );
           if (repoId) {
             void codeIntel
               .reindexRepo(repoId)
-              .catch((err) =>
-                logger.warn({ err, repoId }, 'conductor recodergit reindex hook faulted'),
+              .catch(err =>
+                logger.warn(
+                  { err, repoId },
+                  'conductor recodergit reindex hook faulted'
+                )
               );
           }
         }
@@ -130,6 +158,13 @@ export function createCompletionHookSink(deps: CompletionHookDeps): RunEventSink
         // workspace/run anchor, so a re-emitted terminal event is a no-op). Needs a
         // resolvable owning subject (`createdBy`) — else a truthful skip. Fire-and-
         // forget + degrade-safe: a metering fault NEVER stalls the terminal event.
+        //
+        // When the terminal event carries the engine's REAL token usage
+        // (`data.inputTokens`/`data.outputTokens` — the native openfang path
+        // forwards its token-carrying terminal event here), ALSO meter the real
+        // `token` usage. The `agent_run` count stays (the pre-dispatch entitlement
+        // gate reads `agent_run`); the `token` meter adds real usage on top of the
+        // flat run count. Both are idempotent by anchor, so a re-emit is a no-op.
         const meter = getMeter?.();
         if (meter && userId) {
           const anchor = workspaceId ?? event.runId ?? taskId ?? event.eventId;
@@ -141,12 +176,39 @@ export function createCompletionHookSink(deps: CompletionHookDeps): RunEventSink
               ...(event.runId ? { runId: event.runId } : {}),
               idempotencyKey: `agent_run:${anchor}`,
             })
-            .catch((err) => logger.warn({ err, taskId }, 'conductor agent_run meter hook faulted'));
+            .catch(err =>
+              logger.warn(
+                { err, taskId },
+                'conductor agent_run meter hook faulted'
+              )
+            );
+
+          const tokens = totalTokens(event);
+          if (tokens > 0) {
+            void meter
+              .record({
+                subjectId: userId,
+                kind: 'token',
+                quantity: tokens,
+                engine:
+                  typeof event.data?.engine === 'string'
+                    ? event.data.engine
+                    : null,
+                ...(event.runId ? { runId: event.runId } : {}),
+                idempotencyKey: `token:${anchor}`,
+              })
+              .catch(err =>
+                logger.warn(
+                  { err, taskId },
+                  'conductor token meter hook faulted'
+                )
+              );
+          }
         }
       } catch (err) {
         logger.warn(
           { err, eventId: event.eventId },
-          'conductor completion hook faulted — terminal event unaffected',
+          'conductor completion hook faulted — terminal event unaffected'
         );
       }
     },

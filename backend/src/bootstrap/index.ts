@@ -636,6 +636,9 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     substrates: [cliSub, openfangSub, cloudDaytonaSub],
     brain: conductorBrain,
     codeIntel: conductorCodeIntel,
+    // Per-repo ColBERT PLAID index build on workspace create (late-interaction
+    // retrieval): degrade-truthful — the daemon unconfigured ⇒ a truthful skip.
+    colbertIndex: memory.colbertSearch(),
     githubStatus: conductorGithub,
     steerTransport: conductorSteer,
     mcpInject: conductorMcpInject,
