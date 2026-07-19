@@ -216,7 +216,12 @@ describe('SquadAutopilotService — squad routing', () => {
 
     const result = await svc.tickOnce();
     expect(result.dispatched).toBe(1);
+    // route() selected the leader AND the dispatch carried it to the conductor.
     expect(conductor.calls[0].routedAgentId).toBe('lead');
+    // …and the routed agent is recorded on the board audit trail (the same
+    // routedAgentId bootstrap threads onto the workspace record).
+    const board = await svc.board();
+    expect(board.entries[0]).toMatchObject({ issueId: 'bd-1', status: 'dispatched', routedAgentId: 'lead' });
   });
 
   it('skips (fail-closed) when the squad has no eligible member', async () => {
