@@ -17,6 +17,30 @@
 
 **Interface:** `ingest · query · onSignal · health`
 
+> **SHIPPED — agent-callable signal read-side (MCP).** The `query` facet is now
+> exposed to agents as **two real-bound, degrade-truthful in-proc MCP tools**,
+> bound in the `engines` domain over the ops-recorder adapter seam
+> (`engines/engines-module.ts` binds them on the host;
+> `engines/adapters/daemon/mcp/ops-recorder-signals-mcp.ts` is the binder, own
+> `serverId` = `ops-recorder-signals`):
+>
+> - **`ops-recorder.query`** — filtered, sorted view of recorded work-signals.
+>   Optional AND filters: `source` (github|linear), `item_type`
+>   (pull_request|issue), `priority` (high|medium|low), `resolved` (bool),
+>   `since`/`until` (ISO-8601 detection-time window), `limit` (int ≥ 0). No
+>   filters returns every signal, priority-then-detection-time ordered.
+> - **`ops-recorder.stats`** — aggregation roll-up: total plus counts by source,
+>   item_type, priority, and status (open/resolved), and oldest/newest detection
+>   timestamps. Takes the same filters as `ops-recorder.query` (minus `limit`) to
+>   scope the aggregation.
+>
+> Both are **READ-ONLY over the engine's GLOBAL signal store** — no per-tenant
+> subject, so they are **not** in the cross-tenant mutation class and bind no
+> `McpToolCaller` subject (the closed class stays closed). They still traverse
+> interop's `authorize → risk → execute → audit` gate at the host boundary, and
+> degrade truthfully: engine down → the tool surfaces the failure, never fakes a
+> signal.
+
 **Rule:** this module drives the real engine(s) directly and exposes ONE cohesive,
 governed, health-truthful interface to the backend. Depth lives in the engine dirs;
 this folder owns the composition + interface. Degrade-safe: any engine down → that

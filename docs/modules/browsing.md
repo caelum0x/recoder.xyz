@@ -15,7 +15,13 @@ under the **ENGINES domain**. The live functional path is TS-first:
 `@recoder/agent-browser` over a degrade-safe driver — puppeteer (dynamic import) OR
 the HTTP `browser-use` sidecar when `BROWSER_USE_URL` is set — and registers the real
 `browser.navigate / browser.extract / browser.screenshot` handlers behind the interop
-gate. With neither driver present, tools return a truthful `not_configured` (the
+gate. **Shipped (feat/enterprise-s0-p0):** four higher-level browser-use tools are now
+real-bound and degrade-truthful alongside the base handlers —
+`browser.extract_structured` (schema-guided structured extraction),
+`browser.run_task` (natural-language agent task drive-to-completion),
+`browser.screenshot_annotate` (screenshot with element/region annotations), and
+`browser.fill_form` (multi-field form fill). Each reports `not_configured` when no
+driver is present rather than faking success. With neither driver present, tools return a truthful `not_configured` (the
 desktop still boots). The Python `backend/engines/py/browser-use` agent is a
 **supervised sidecar** (`BrowserUseAdapter` at
 `backend/src/domains/engines/adapters/sidecar/browser-use.adapter.ts`, health `up`

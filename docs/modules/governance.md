@@ -38,7 +38,13 @@ facet reports down, never fakes success. See ../RECODER-MODULES.md §GOVERNANCE.
   the same chain.
 - **Edges:** approvals + locks + secrets routers mount under `/api/agent-os`
   (`routes/`). MCP surfaces both read-only introspection
-  (`governance_kernel_status` / `governance_audit_verify` / `governance_locks_list`)
+  (`governance_kernel_status` / `governance_audit_verify` / `governance_locks_list`,
+  plus **`governance.explain_decision`** — *shipped* on `feat/enterprise-s0-p0`:
+  replays a would-be gate verdict for an action/principal/context and returns the
+  human-readable decision trace — which kernel rung answered, the risk score, the
+  policy path taken, and whether the result was `degraded` / fail-closed — without
+  mutating anything, so agents and reviewers can see *why* a decision would land
+  before committing to it)
   and governed write tools (`governance_decide`, `governance_request_approval`,
   `governance_approval_decide`, `governance_acquire_lock` / `_release_lock`,
   `governance_secret_set`). The governed MCP HTTP edge

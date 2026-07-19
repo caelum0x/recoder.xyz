@@ -2,7 +2,33 @@
 
 > Living status of the comprehensive-backend build. Read this first to resume.
 > Design: [ARCHITECTURE.md](./ARCHITECTURE.md) · plan: [BUILD-ORDER.md](./BUILD-ORDER.md) ·
-> tree: [FILE-TREE.md](./FILE-TREE.md). **Last updated: 2026-07-18.**
+> tree: [FILE-TREE.md](./FILE-TREE.md). **Last updated: 2026-07-19.**
+
+## 2026-07-19 — feature + engine-deepening program (branch `feat/enterprise-s0-p0`)
+
+Built on the 2026-07-18 gap-closure base with a feature + engine-depth + website
+program. **Total commit count on `feat/enterprise-s0-p0` grew to ~30; backend
+tsc 0; full test suites green.**
+
+**End-to-end product features (4).** Each is wired conductor API → cockpit UI:
+- **Checkpoints** — capture/list/restore worktree checkpoints.
+- **Compare** — side-by-side diff/compare across agent runs.
+- **Board search + history** — searchable task board with run history.
+- **Repo setup + PR** — guided repo onboarding through to PR creation.
+
+**Engine MCP deepening (~54 new tools across all 15 engines).** All real-bound,
+degrade-truthful (honest health when a substrate/provider is missing), and the
+cross-tenant authorization class stays closed — every subject-bearing tool stays
+bound to the host-authorized `McpToolCaller` at the MCP edge. Grouped as:
+- **A — Python** engines
+- **B — Rust** engines
+- **C — desktop** engines
+- **D — mesh-coordination** engines
+
+**Website.** Dependency-free CSS-3D visuals + polish, plus access-control fixes:
+- **CRITICAL** project-takeover + authz-bypass closed.
+- Team role assignment + member removal.
+- Cross-org-join prevention.
 
 ## 2026-07-18 — doc-gap closure + security hardening (branch `feat/enterprise-s0-p0`)
 

@@ -73,6 +73,14 @@ Small on purpose. Roughly three screens.
 - Each card: codename, repo/branch, the agent, a glanceable state — no engine chatter.
 - **New workspace** = one action: pick repo (auto-listed from your GitHub) + agent (preselected) +
   a task prompt. That's it — the backend does recall/index/gate/track invisibly.
+- **Board search / history** ✅ — a terse filter bar (`BoardSearch`) over the board: free-text `q`
+  plus repo / agent / state filters and an archived toggle, so a busy board stays findable and old
+  runs stay reachable. Live from `GET /workspaces?q=&repo=&agent=&state=&archived=` +
+  `GET /workspaces/archived`.
+- **Multi-agent compare** ✅ — when you fan a task out across agents (F3), the board shows them
+  side-by-side (`ComparePanel` + `CompareGroupsBar`): pick a run's parallel siblings and diff their
+  results at a glance before you review each one. Live from `GET /workspaces/compare?taskGroup=` +
+  `GET /workspaces/:id/siblings`.
 
 ### B. Workspace detail — the agent run
 - **Terminal** — the live agent working in its tmux worktree (the real session).
@@ -80,6 +88,14 @@ Small on purpose. Roughly three screens.
 - **Conversation** — the agent's turns (`ConversationView`), clean.
 - **Inline approval** — when the governance gate blocks a risky write, a single inline approve/reject
   appears in-context (not a separate "Approvals" tab). Approve → the run continues.
+- **Checkpoints** ✅ — snapshot the workspace (git state + agent context) at any point, then restore
+  it or branch a fresh workspace off it — safe experimentation without losing a good run
+  (`CheckpointsPanel`). Live from `POST/GET /workspaces/:id/checkpoints` +
+  `POST /workspaces/:id/checkpoints/:cid/{restore,branch}`.
+- **Repo setup + PR status** ✅ — a per-repo setup script runs automatically on worktree create so
+  each agent starts from a ready environment (`RepoSettings`), and a live PR chip surfaces the
+  workspace's pull-request state (`gh`). Live from the worktree-create setup hook +
+  `GET /workspaces/:id/pr-status`.
 - **Review + merge** — review the diff, merge/PR. Done.
 
 ### C. Minimal chrome
@@ -136,7 +152,24 @@ truthful partial results — compare on the board, review each on its own schedu
 run-header note ("recalled N things from past runs") from the backend's truthful
 `metadata.knowledgeSources` provenance — never an engine name; nothing shown when nothing recalled.
 
-**All five frontend phases (F0–F4) are done.** Remaining product polish rides on real usage
+**Phase F5 — Run-management surfaces (checkpoints, compare, search, repo/PR).** ✅ **DONE**. Four
+product features on the proven conductor seams, all governed and truthful-degrading: (1)
+**Checkpoints** — snapshot git + agent context, restore, or branch a new workspace off a snapshot
+(`POST/GET /workspaces/:id/checkpoints` + `/:cid/{restore,branch}`; cockpit `CheckpointsPanel`). (2)
+**Multi-agent compare** — side-by-side parallel siblings for a fanned-out task
+(`GET /workspaces/compare?taskGroup=` + `/workspaces/:id/siblings`; cockpit `ComparePanel` +
+`CompareGroupsBar`). (3) **Board search / history** — free-text + repo/agent/state filters and an
+archived view (`GET /workspaces?q=&repo=&agent=&state=&archived=` + `/workspaces/archived`; cockpit
+`BoardSearch`). (4) **Repo setup + PR status** — per-repo setup script on worktree create + live PR
+chip (`GET /workspaces/:id/pr-status` via `gh`; cockpit `RepoSettings` + PR chip). All four stay
+inside the workspace/board mental model — no engine surfaces.
+
+**Website 3D touch.** ✅ **DONE**. The marketing home gets a dependency-free CSS-3D `HeroCube` (the
+Recoder cube, live) and `TiltCard` depth on the feature cards — Core-Web-Vitals-safe, reduced-motion
+aware, and `aria-hidden` for assistive tech. Zero JS libraries, no layout shift; the cube reinforces
+the logo, not a wordmark.
+
+**All six frontend phases (F0–F5) are done.** Remaining product polish rides on real usage
 feedback; the backend follow-ups live in [RECODER-BACKEND/BUILD-STATUS.md](./RECODER-BACKEND/BUILD-STATUS.md).
 
 Verification each phase: `cd apps/desktop/cockpit && pnpm build && pnpm exec vitest run`; the wave

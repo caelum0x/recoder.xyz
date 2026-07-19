@@ -305,9 +305,12 @@ WRITES additionally pass `gate.decide`. `/internal/*` (if any) is
 ### HTTP `/api/conductor/*`
 | Method | Path | Purpose | Write? |
 |---|---|---|---|
-| POST | `/workspaces` | Create workspace (persist → admit → launch) | ✅ gated |
-| GET | `/workspaces` | List (scoped to caller's spaces) | |
+| POST | `/workspaces` | Create workspace (persist → admit → launch; per-repo setup-script run on worktree create — **shipped**) | ✅ gated |
+| GET | `/workspaces` | List (scoped to caller's spaces); board search/filter `?q=&repo=&agent=&state=&archived=` — **shipped** | |
+| GET | `/workspaces/archived` | Archived-workspace history (board search/history) — **shipped** | |
+| GET | `/workspaces/compare` | Side-by-side compare of parallel agents in a task group `?taskGroup=` (multi-agent compare) — **shipped** | |
 | GET | `/workspaces/:id` | Get one workspace view | |
+| GET | `/workspaces/:id/siblings` | Sibling workspaces (same task group) for parallel-agent compare — **shipped** | |
 | GET | `/workspaces/:id/events` | RunEvent history | |
 | GET | `/workspaces/:id/view` | Attention-enriched read model of one workspace | |
 | GET | `/views` | Attention-enriched views of every workspace | |
@@ -316,6 +319,11 @@ WRITES additionally pass `gate.decide`. `/internal/*` (if any) is
 | GET | `/workspaces/:id/dev-command` | Detected dev-server command | |
 | GET | `/workspaces/:id/output` | Captured pane text (poll fallback) | |
 | GET | `/workspaces/:id/status` | Live agent status: alive + exit code + recent output | |
+| GET | `/workspaces/:id/pr-status` | PR state for the workspace branch (via `gh`; degrades truthfully) — **shipped** | |
+| GET | `/workspaces/:id/checkpoints` | List checkpoints (git + context snapshots) for a workspace — **shipped** | |
+| POST | `/workspaces/:id/checkpoints` | Create a checkpoint (snapshot git state + context) — **shipped** | ✅ gated |
+| POST | `/workspaces/:id/checkpoints/:cid/restore` | Restore the workspace to a checkpoint — **shipped** | ✅ gated |
+| POST | `/workspaces/:id/checkpoints/:cid/branch` | Branch a new workspace from a checkpoint — **shipped** | ✅ gated |
 | POST | `/workspaces/:id/steer` | Send prompt/keys to the live agent | ✅ gated |
 | POST | `/workspaces/:id/stop` | Stop the agent (session kill, worktree preserved) | ✅ gated |
 | POST | `/workspaces/:id/advance` | Advance lifecycle state | ✅ gated |
@@ -334,6 +342,17 @@ WRITES additionally pass `gate.decide`. `/internal/*` (if any) is
 
 > Note: the `/continue` edge shipped as `/workspaces/:id/message`; cancellation
 > flows only through `/stop` (not `/advance`).
+
+> **Shipped product features (cockpit UI + this domain's API):** (1) **Checkpoints**
+> — snapshot git + context, restore, or branch a new workspace from a checkpoint
+> (`/workspaces/:id/checkpoints[/…]`); cockpit `CheckpointsPanel`. (2) **Multi-agent
+> compare** — parallel agents in a task group shown side-by-side
+> (`/workspaces/compare?taskGroup=` + `/workspaces/:id/siblings`); cockpit
+> `ComparePanel` + `CompareGroupsBar`. (3) **Board search/history** — search + filter
+> the board by query/repo/agent/state/archived (`/workspaces?q=&repo=&agent=&state=&archived=`
+> + `/workspaces/archived`); cockpit `BoardSearch`. (4) **Repo setup + PR status** —
+> a per-repo setup script runs on worktree create, and `/workspaces/:id/pr-status`
+> reports branch PR state via `gh`; cockpit `RepoSettings` + PR chip.
 
 ### WebSocket
 | Path | Purpose |
