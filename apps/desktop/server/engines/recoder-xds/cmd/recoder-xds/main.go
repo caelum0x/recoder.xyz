@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/recoder-xyz/recoder-xds/internal/config"
+	"github.com/recoder-xyz/recoder-xds/internal/introspect"
 	"github.com/recoder-xyz/recoder-xds/internal/server"
 )
 
@@ -61,7 +63,7 @@ func run() error {
 	}
 
 	ready := newReadiness()
-	healthSrv := startHealthServer(ctx, *healthAddr, ready, cp.Version, logger)
+	healthSrv := startHealthServer(ctx, *healthAddr, ready, cp, logger)
 
 	ready.set(true)
 	logger.Info("recoder-xds ready", slog.String("xds_addr", *xdsAddr))
@@ -103,13 +105,20 @@ func loadConfig(file, url string) (config.NetworkConfig, string, error) {
 	}
 }
 
-func startHealthServer(ctx context.Context, addr string, ready *readiness, version func() uint64, logger *slog.Logger) *http.Server {
+// introspector is the read side of the control plane the health/introspection
+// HTTP surface reads. *server.ControlPlane satisfies it.
+type introspector interface {
+	Version() uint64
+	Introspect() (introspect.Report, bool)
+}
+
+func startHealthServer(ctx context.Context, addr string, ready *readiness, cp introspector, logger *slog.Logger) *http.Server {
 	mux := http.NewServeMux()
 	// /healthz: liveness/readiness. Reports the version of the snapshot the
 	// control plane is actually serving so a probe shows real state, not a bare
 	// "ok". 503 until the first snapshot is installed and ready is set.
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		v := version()
+		v := cp.Version()
 		if ready.get() && v > 0 {
 			w.WriteHeader(http.StatusOK)
 			_, _ = fmt.Fprintf(w, "ok serving config v%d", v)
@@ -118,6 +127,55 @@ func startHealthServer(ctx context.Context, addr string, ready *readiness, versi
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = fmt.Fprintf(w, "not ready (config v%d)", v)
 	})
+
+	// report resolves the live snapshot introspection with the readiness flag
+	// stamped on. It is the single source the JSON introspection routes serialize.
+	report := func() (introspect.Report, bool) {
+		rep, ok := cp.Introspect()
+		rep.Ready = ready.get() && cp.Version() > 0
+		return rep, ok && rep.Ready
+	}
+
+	// The READ-ONLY JSON introspection surface: the config the control plane is
+	// actually serving over ADS. Every route degrades truthfully — a not-yet-ready
+	// control plane answers 503 with an empty-but-well-formed body, never a fake.
+	writeJSON := func(w http.ResponseWriter, code int, v any) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		_ = json.NewEncoder(w).Encode(v)
+	}
+	introspectRoute := func(project func(introspect.Report) any) http.HandlerFunc {
+		return func(w http.ResponseWriter, _ *http.Request) {
+			rep, ready := report()
+			code := http.StatusOK
+			if !ready {
+				code = http.StatusServiceUnavailable
+			}
+			writeJSON(w, code, project(rep))
+		}
+	}
+	// /health: JSON liveness the TS xds adapter probes (200 when serving).
+	mux.HandleFunc("/health", introspectRoute(func(r introspect.Report) any {
+		return map[string]any{"engine": "xds", "ready": r.Ready, "nodeId": r.NodeID, "version": r.Version, "counts": r.Counts}
+	}))
+	// /snapshot: snapshot version + status + resource counts.
+	mux.HandleFunc("/snapshot", introspectRoute(func(r introspect.Report) any {
+		return map[string]any{"nodeId": r.NodeID, "version": r.Version, "ready": r.Ready, "counts": r.Counts}
+	}))
+	// /clusters, /routes, /listeners, /endpoints: config introspection.
+	mux.HandleFunc("/clusters", introspectRoute(func(r introspect.Report) any {
+		return map[string]any{"clusters": r.Clusters}
+	}))
+	mux.HandleFunc("/routes", introspectRoute(func(r introspect.Report) any {
+		return map[string]any{"routes": r.Routes}
+	}))
+	mux.HandleFunc("/listeners", introspectRoute(func(r introspect.Report) any {
+		return map[string]any{"listeners": r.Listeners}
+	}))
+	mux.HandleFunc("/endpoints", introspectRoute(func(r introspect.Report) any {
+		return map[string]any{"endpoints": r.Endpoints}
+	}))
+
 	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		logger.Info("health server listening", slog.String("addr", addr))

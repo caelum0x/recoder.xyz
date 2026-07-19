@@ -37,13 +37,15 @@ import { createPreviewTarget } from './adapters/preview-target.adapter.js';
 import { createPreviewDeployService, type PreviewDeployService } from './services/preview-deploy.service.js';
 import { createSandboxProvisionerService, type SandboxProvisionerService, type CloudRunEventSink } from './services/sandbox-provisioner.service.js';
 import { createFleetSupervisorService, type FleetSupervisorService } from './services/fleet-supervisor.service.js';
-import { createZitiMeshAdapter } from './adapters/ziti-mesh.adapter.js';
+import { createZitiMeshAdapter, type ZitiMeshAdapter } from './adapters/ziti-mesh.adapter.js';
 import { createXdsEnvoyAdapter } from './adapters/xds-envoy.adapter.js';
 import { createMeshDiagnosticsService, type MeshDiagnosticsService } from './services/mesh-diagnostics.service.js';
 import { createDomainsService, type DomainsService, type DomainVerifierPort } from './services/domains.service.js';
 import { buildCloudRouter } from './routes/cloud.routes.js';
 import { buildCloudMcpTools } from './mcp/cloud-engine.js';
 import { buildCloudWriteMcpTools } from './mcp/cloud-write-engine.js';
+import { buildCloudMeshMcpTools } from './mcp/cloud-mesh-engine.js';
+import { buildCloudXdsMcpTools } from './mcp/cloud-xds-engine.js';
 import { buildCloudHealth } from './health.js';
 import type { ProviderId } from './types.js';
 import type { CloudModule, CloudModuleDeps } from './index.js';
@@ -64,6 +66,8 @@ export class CloudComposer implements CloudModule {
   private readonly previewService: PreviewDeployService;
   private readonly fleetService: FleetSupervisorService;
   private readonly meshService: MeshDiagnosticsService;
+  /** The ziti overlay adapter, retained so the governed mesh enroll WRITE tool can transport it. */
+  private readonly zitiAdapter: ZitiMeshAdapter;
   private readonly domainsService: DomainsService;
   private started = false;
 
@@ -118,9 +122,11 @@ export class CloudComposer implements CloudModule {
     // Fleet capacity supervisor.
     this.fleetService = createFleetSupervisorService({ repo: this.repos.fleet, logger: this.log });
 
-    // Read-only mesh diagnostics over the ziti + xDS engine adapters.
+    // Read-only mesh diagnostics over the ziti + xDS engine adapters. The ziti
+    // adapter is retained so the governed mesh-enroll WRITE tool can transport it.
+    this.zitiAdapter = createZitiMeshAdapter({ endpoint: cfg.zitiEndpoint, logger: this.log });
     this.meshService = createMeshDiagnosticsService({
-      ziti: createZitiMeshAdapter({ endpoint: cfg.zitiEndpoint, logger: this.log }),
+      ziti: this.zitiAdapter,
       xds: createXdsEnvoyAdapter({ endpoint: cfg.xdsEndpoint, logger: this.log }),
       logger: this.log,
     });
@@ -200,6 +206,17 @@ export class CloudComposer implements CloudModule {
         logger: this.log,
         ...(this.gate ? { gate: this.gate } : {}),
       }),
+      // Ziti mesh introspection reads + the ONE governance-gated enrollment WRITE.
+      ...buildCloudMeshMcpTools({
+        mesh: this.meshService,
+        tenancy: this.tenancyService,
+        enroller: this.zitiAdapter,
+        logger: this.log,
+        ...(this.gate ? { gate: this.gate } : {}),
+      }),
+      // xDS control-plane introspection reads (snapshot/clusters/routes/listeners/
+      // endpoints) over the recoder-xds engine — read-only, degrade-safe.
+      ...buildCloudXdsMcpTools(this),
     ];
   }
 

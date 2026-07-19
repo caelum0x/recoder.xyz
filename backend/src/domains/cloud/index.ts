@@ -56,7 +56,12 @@ export type {
   MeshDiagnostics,
   MeshSnapshot,
   MeshEngineStatus,
+  MeshTopology,
   ZitiIdentity,
+  ZitiService,
+  ZitiEnrollment,
+  ZitiEnrollSpec,
+  ZitiEnrollOutcome,
   XdsCluster,
 } from './ports/mesh.port.js';
 export type {
@@ -136,8 +141,17 @@ export {
 } from './services/fleet-supervisor.service.js';
 
 // Mesh: read-only ziti + xDS adapters + the merged diagnostics service.
-export { createZitiMeshAdapter, type ZitiMeshAdapter } from './adapters/ziti-mesh.adapter.js';
-export { createXdsEnvoyAdapter, type XdsEnvoyAdapter } from './adapters/xds-envoy.adapter.js';
+export { createZitiMeshAdapter, type ZitiMeshAdapter, type ZitiMeshEnroller } from './adapters/ziti-mesh.adapter.js';
+export {
+  createXdsEnvoyAdapter,
+  type XdsEnvoyAdapter,
+  type XdsEndpoint,
+  type XdsRoute,
+  type XdsVirtualHost,
+  type XdsRouteConfig,
+  type XdsListener,
+  type XdsSnapshotInfo,
+} from './adapters/xds-envoy.adapter.js';
 export {
   createMeshDiagnosticsService,
   type MeshDiagnosticsService,
@@ -165,6 +179,10 @@ export {
 
 // Governance-gated WRITE MCP tools (sandbox provision/destroy + domain CRUD).
 export { buildCloudWriteMcpTools, type CloudWriteMcpDeps } from './mcp/cloud-write-engine.js';
+
+// Ziti mesh introspection reads + the governance-gated enrollment WRITE tool.
+export { buildCloudMeshMcpTools, type CloudMeshMcpDeps } from './mcp/cloud-mesh-engine.js';
+export { buildCloudXdsMcpTools } from './mcp/cloud-xds-engine.js';
 
 // Composed health.
 export { buildCloudHealth, type CloudHealthDeps } from './health.js';

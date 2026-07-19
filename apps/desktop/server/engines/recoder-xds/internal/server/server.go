@@ -25,6 +25,7 @@ import (
 
 	"github.com/recoder-xyz/recoder-xds/internal/config"
 	"github.com/recoder-xyz/recoder-xds/internal/contract"
+	"github.com/recoder-xyz/recoder-xds/internal/introspect"
 	"github.com/recoder-xyz/recoder-xds/internal/snapshot"
 )
 
@@ -105,6 +106,21 @@ func (cp *ControlPlane) UpdateConfig(ctx context.Context, cfg config.NetworkConf
 // report "serving config vN" instead of an opaque ok.
 func (cp *ControlPlane) Version() uint64 {
 	return cp.version.Load()
+}
+
+// Introspect returns a READ-ONLY report of the LIVE snapshot served for NodeID:
+// clusters, listeners, routes, and endpoints Envoy would receive, plus the
+// snapshot version. It reads the same object served over ADS, so the report can
+// never drift from what the data plane is actually told. Before the first
+// snapshot is installed (or if the cache has no entry for NodeID) it returns an
+// empty-but-well-formed report and false — the caller answers truthfully rather
+// than 500ing while the control plane warms up.
+func (cp *ControlPlane) Introspect() (introspect.Report, bool) {
+	snap, err := cp.cache.GetSnapshot(NodeID)
+	if err != nil {
+		return introspect.Build(NodeID, nil), false
+	}
+	return introspect.Build(NodeID, snap), true
 }
 
 // Register wires the ADS service onto a gRPC server. It also registers the

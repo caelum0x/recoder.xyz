@@ -15,6 +15,7 @@ import type { InstructionCompilerPort } from './ports/instruction-compiler.port.
 import type { OutboxPublisherPort } from './ports/outbox-publisher.port.js';
 import type { AgentOsRepositoryPort } from './ports/agent-os-repository.port.js';
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
+import type { CoordinationEnginePort } from './ports/coordination-engine.port.js';
 import type { EngineClientPort } from '../engines/ports/engine-client.port.js';
 import type { WorkflowDriver } from '@recoder/agent-workflows';
 import type { AgentOsConfigOverrides } from './config.js';
@@ -62,6 +63,13 @@ export interface AgentOsDeps {
    * seams are built.
    */
   readonly workflowDriver?: WorkflowDriver | null;
+  /**
+   * The Multica coordination introspection seam (squad routing / work-locks /
+   * conflict detection). Absent ⇒ the composer builds the default
+   * `MulticaCoordinationAdapter` over `MULTICA_URL`; when THAT is unset the
+   * coordination MCP tools degrade truthfully (`available:false`).
+   */
+  readonly coordinationEngine?: CoordinationEnginePort;
 }
 
 /**
