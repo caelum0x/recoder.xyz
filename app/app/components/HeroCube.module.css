@@ -1,0 +1,104 @@
+/*
+ * HeroCube — dependency-free CSS-3D brand accent.
+ *
+ * Brand identity: a dark geometric cube with white negative space. The look is
+ * dark, precise, engineered, terminal-adjacent — NOT a gratuitous spinning demo.
+ *
+ * Perf/A11y contract:
+ *  - transform/opacity only (GPU-composited), `will-change` used on the one
+ *    animated element.
+ *  - fixed-size + absolutely positioned by the consumer => zero layout shift.
+ *  - prefers-reduced-motion freezes the spin to a static, tasteful angle.
+ *  - parallax offset arrives via the `--cube-parallax` custom property, written
+ *    off a throttled scroll handler (no layout-thrashing rAF loop).
+ */
+
+/* ---- fixed-size stage (reserves its own box; never reflows) ---- */
+.scene {
+  /* size is driven by the inline `--cube-size` the component sets */
+  width: var(--cube-size, 320px);
+  height: var(--cube-size, 320px);
+  perspective: 1100px;
+  perspective-origin: 50% 45%;
+  /* purely decorative — kept out of the a11y tree by the component's aria-hidden */
+  pointer-events: none;
+  /* parallax lives on the stage so it never touches the spin transform */
+  transform: translate3d(0, var(--cube-parallax, 0px), 0);
+  /* soft edge so it reads as an accent, not a hard object */
+  -webkit-mask-image: radial-gradient(circle at 50% 45%, #000 55%, transparent 100%);
+  mask-image: radial-gradient(circle at 50% 45%, #000 55%, transparent 100%);
+}
+
+/* ---- the rotating cube ---- */
+.cube {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 62%;
+  height: 62%;
+  transform-style: preserve-3d;
+  /* only element that animates -> only element that hints the compositor */
+  will-change: transform;
+  animation: heroCubeSpin 34s linear infinite;
+  /* base pose the animation starts/ends on */
+  transform: rotateX(-24deg) rotateY(-32deg);
+}
+
+/* ---- the six faces ---- */
+.face {
+  position: absolute;
+  inset: 0;
+  /* dark, engineered surface */
+  background:
+    linear-gradient(145deg, rgba(20, 20, 22, 0.94), rgba(8, 8, 9, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 0 42px rgba(0, 0, 0, 0.7);
+  backface-visibility: hidden;
+}
+
+/* precise white "negative space" mark, echoing the brand logomark */
+.face::before {
+  content: '';
+  position: absolute;
+  inset: 30%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 70%);
+}
+
+/* a single whisper of brand warmth on one axis — restrained, not neon */
+.face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, rgba(249, 115, 22, 0.06), transparent 55%);
+  mix-blend-mode: screen;
+}
+
+/* face placement: translateZ = half the cube edge (~ 0.31 * 320 = ~99px).
+   expressed relative to the stage size so it scales with --cube-size. */
+.front  { transform: translateZ(calc(var(--cube-size, 320px) * 0.31)); }
+.back   { transform: rotateY(180deg) translateZ(calc(var(--cube-size, 320px) * 0.31)); }
+.right  { transform: rotateY(90deg)  translateZ(calc(var(--cube-size, 320px) * 0.31)); }
+.left   { transform: rotateY(-90deg) translateZ(calc(var(--cube-size, 320px) * 0.31)); }
+.top    { transform: rotateX(90deg)  translateZ(calc(var(--cube-size, 320px) * 0.31)); }
+.bottom { transform: rotateX(-90deg) translateZ(calc(var(--cube-size, 320px) * 0.31)); }
+
+@keyframes heroCubeSpin {
+  from { transform: rotateX(-24deg) rotateY(-32deg); }
+  to   { transform: rotateX(-24deg) rotateY(328deg); }
+}
+
+/* ---- reduced motion: freeze to a still, deliberate pose ---- */
+@media (prefers-reduced-motion: reduce) {
+  .cube {
+    animation: none;
+    will-change: auto;
+    transform: rotateX(-22deg) rotateY(-28deg);
+  }
+  .scene {
+    /* ignore any parallax the JS may have written */
+    transform: none;
+  }
+}
