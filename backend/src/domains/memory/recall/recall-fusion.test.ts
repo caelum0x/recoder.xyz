@@ -8,6 +8,7 @@ import { createRecallService, type RecallServiceDeps } from './recall-fusion.js'
 import type { Mem0Port } from '../ports/mem0.port.js';
 import type { BeadsMemoryPort } from '../ports/beads-memory.port.js';
 import type { MemoryRepository } from '../ports/memory-repository.port.js';
+import type { ColbertSearchPort, ColbertSearchHit } from '../ports/colbert-search.port.js';
 import type { PassageReranker } from './rank.js';
 import type { MemoryConfig } from '../config.js';
 
@@ -100,6 +101,19 @@ function fakeRepo(over: { candidates?: MemoryCandidate[]; items?: MemoryItem[] }
   };
 }
 
+/** A colbert search port that returns fixed hits and reports itself configured. */
+function fakeColbertSearch(hits: ColbertSearchHit[], available = true, configured = true): ColbertSearchPort {
+  return {
+    configured: () => configured,
+    async search() {
+      return available ? { available: true, hits } : { available: false, hits: [], reason: 'index not built' };
+    },
+    async ensureIndex(collection, passages) {
+      return { built: true, collection, documents: passages.length };
+    },
+  };
+}
+
 /** Identity reranker (sidecar down). */
 const identityReranker: PassageReranker = {
   async rerankPassages(_q, passages) {
@@ -148,9 +162,56 @@ describe('createRecallService.recall', () => {
     expect(bySource.get('beads')?.provenance.ref).toBe('bd-1');
     expect(bySource.get('candidates')?.provenance.ref).toBe('c1');
     expect(bySource.get('items')?.provenance.ref).toBe('i1');
-    // Every source reported available.
-    expect(result.sources.every((s) => s.available)).toBe(true);
+    // The four legacy sources reported available; colbert is truthfully down when
+    // no search port is wired (degrade-truthful, contributes zero).
+    const avail = new Map(result.sources.map((s) => [s.source, s.available]));
+    expect(avail.get('mem0')).toBe(true);
+    expect(avail.get('beads')).toBe(true);
+    expect(avail.get('candidates')).toBe(true);
+    expect(avail.get('items')).toBe(true);
+    expect(avail.get('colbert')).toBe(false);
     expect(result.reranker).toBe('identity');
+  });
+
+  it('adds the colbert late-interaction source: its hits enter the fused recall', async () => {
+    const svc = createRecallService(
+      deps({
+        // All legacy sources empty — only colbert can contribute.
+        colbertSearch: fakeColbertSearch([
+          { text: 'the ci runner uses buildkite on the box', score: 22.5, pid: 7, rank: 1 },
+          { text: 'secrets live in the vault sidecar', score: 18.0, pid: 3, rank: 2 },
+        ]),
+      }),
+    );
+
+    const result = await svc.recall({ query: 'ci runner secrets', userId: 'u1' });
+
+    const colbert = result.sources.find((s) => s.source === 'colbert');
+    expect(colbert?.available).toBe(true);
+    // The colbert-only hits are present in the fused recall with colbert provenance.
+    const colbertMems = result.memories.filter((m) => m.provenance.source === 'colbert');
+    expect(colbertMems.length).toBe(2);
+    expect(colbertMems.map((m) => m.body)).toContain('the ci runner uses buildkite on the box');
+    // Truthful relative confidence: the top hit normalizes to 1, the next is lower.
+    const top = colbertMems.find((m) => m.body.startsWith('the ci runner'));
+    expect(top?.provenance.score).toBeCloseTo(1, 5);
+  });
+
+  it('reports colbert down truthfully when its index is not built (zero fabricated memories)', async () => {
+    const svc = createRecallService(
+      deps({
+        mem0: fakeMem0([{ id: 'm1', memory: 'a real memory about deploys', score: 0.7 }]),
+        colbertSearch: fakeColbertSearch([], false), // configured but index missing
+      }),
+    );
+
+    const result = await svc.recall({ query: 'deploys', userId: 'u1' });
+    const colbert = result.sources.find((s) => s.source === 'colbert');
+    expect(colbert?.available).toBe(false);
+    expect(colbert?.reason).toBe('index not built');
+    expect(result.memories.some((m) => m.provenance.source === 'colbert')).toBe(false);
+    // The other source still contributed.
+    expect(result.memories.some((m) => m.provenance.source === 'mem0')).toBe(true);
   });
 
   it('reports a down source truthfully and contributes ZERO memories from it', async () => {

@@ -26,6 +26,7 @@ import type { MemoryEngineReadiness } from './types.js';
 import type { MemoryModule, MemoryModuleDeps } from './index.js';
 import type { RecallService } from './recall/recall-fusion.js';
 import type { RetrievalPort } from './ports/retrieval.port.js';
+import type { ColbertSearchPort } from './ports/colbert-search.port.js';
 import type { MemoryRepository } from './ports/memory-repository.port.js';
 import type { CandidateService } from './lifecycle/candidate-service.js';
 import type { MemoryLifecycle } from './lifecycle/memory-lifecycle.js';
@@ -36,6 +37,7 @@ import { createMem0Adapter } from './adapters/mem0.adapter.js';
 import { createMem0SidecarClient } from './adapters/mem0-sidecar.client.js';
 import { createBeadsMemoryAdapter } from './adapters/beads-memory.adapter.js';
 import { createColbertAdapter } from './adapters/colbert.adapter.js';
+import { createColbertSearchClient } from './adapters/colbert-search.client.js';
 import { createMemoryRepository } from './adapters/candidate-repository.adapter.js';
 import { createVectorFoundation } from './retrieval/vector-foundation.js';
 import { createRetrievalService } from './retrieval/retrieval-service.js';
@@ -67,6 +69,7 @@ export class MemoryComposer implements MemoryModule {
   private readonly mem0: ReturnType<typeof createMem0Adapter>;
   private readonly beads: ReturnType<typeof createBeadsMemoryAdapter>;
   private readonly colbert: ReturnType<typeof createColbertAdapter>;
+  private readonly colbertSearchClient: ReturnType<typeof createColbertSearchClient>;
   private readonly foundation: ReturnType<typeof createVectorFoundation>;
   private readonly repo: MemoryRepository;
   private readonly recallService: RecallService;
@@ -95,6 +98,12 @@ export class MemoryComposer implements MemoryModule {
     this.mem0 = createMem0Adapter({ sidecar });
     this.beads = createBeadsMemoryAdapter();
     this.colbert = createColbertAdapter(cfg, deps.colbertFetch);
+    // FIRST-STAGE ColBERT retriever over the SAME daemon (`colbertRerankUrl`):
+    // late-interaction index search + per-collection index build. Degrade-safe.
+    this.colbertSearchClient = createColbertSearchClient(
+      cfg,
+      ...(deps.colbertFetch ? ([deps.colbertFetch] as const) : []),
+    );
     this.foundation = createVectorFoundation({
       config: cfg,
       ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
@@ -110,17 +119,22 @@ export class MemoryComposer implements MemoryModule {
       store: deps.candidateStore,
     });
 
-    // Retrieval (RAG) facade over the shared vector foundation.
+    // Retrieval (RAG) facade over the shared vector foundation, with the ColBERT
+    // first-stage retriever UNIONed alongside Qdrant (degrade-safe when absent).
     this.retrievalService = createRetrievalService({
       foundation: this.foundation,
+      colbertSearch: this.colbertSearchClient,
     });
 
-    // Recall fusion — the highest-value operation.
+    // Recall fusion — the highest-value operation. ColBERT late-interaction search
+    // is a parallel recall source (over the mem0 collection), degrade-truthful.
     this.recallService = createRecallService({
       mem0: this.mem0,
       beads: this.beads,
       repository: this.repo,
       reranker: this.colbert,
+      colbertSearch: this.colbertSearchClient,
+      colbertCollection: cfg.mem0Collection,
       config: cfg,
       logger: this.log,
     });
@@ -174,6 +188,10 @@ export class MemoryComposer implements MemoryModule {
 
   retrieval(): RetrievalPort {
     return this.retrievalService;
+  }
+
+  colbertSearch(): ColbertSearchPort {
+    return this.colbertSearchClient;
   }
 
   candidates(): CandidateService {

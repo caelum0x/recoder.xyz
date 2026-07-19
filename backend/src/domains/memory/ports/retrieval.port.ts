@@ -40,6 +40,23 @@ export interface RetrievalPassage {
   readonly payload?: Readonly<Record<string, unknown>>;
 }
 
+/** Which first-stage candidate generator this stat describes. */
+export type RetrievalCandidateSourceName = 'qdrant' | 'colbert';
+
+/**
+ * Truthful per-generator stats for one search. `qdrant` is the single-vector
+ * top-K; `colbert` is the late-interaction PLAID index. `contributed` counts the
+ * DISTINCT passages that generator added to the union (colbert's is net-new over
+ * qdrant), and `available:false` + a reason means the generator was skipped
+ * (degrade-truthful — never a fabricated hit).
+ */
+export interface RetrievalCandidateSource {
+  readonly source: RetrievalCandidateSourceName;
+  readonly available: boolean;
+  readonly contributed: number;
+  readonly reason?: string;
+}
+
 /** Outcome of a retrieval search. */
 export interface SearchResult {
   readonly status: SearchStatus;
@@ -47,6 +64,8 @@ export interface SearchResult {
   readonly passages: readonly RetrievalPassage[];
   /** Which reranker actually ran (`colbert` | `identity`). */
   readonly reranker: 'colbert' | 'identity';
+  /** Per-generator candidate stats (qdrant + colbert), when a search ran. */
+  readonly sources?: readonly RetrievalCandidateSource[];
   readonly reason?: string;
 }
 

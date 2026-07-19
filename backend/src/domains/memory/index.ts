@@ -30,6 +30,7 @@ import type { MemoryConfigOverrides } from './config.js';
 import type { MemoryCandidateItemStore } from './ports/memory-repository.port.js';
 import type { RecallService } from './recall/recall-fusion.js';
 import type { RetrievalPort } from './ports/retrieval.port.js';
+import type { ColbertSearchPort } from './ports/colbert-search.port.js';
 import type { MemoryRepository } from './ports/memory-repository.port.js';
 import type { CandidateService } from './lifecycle/candidate-service.js';
 import type { MemoryLifecycle } from './lifecycle/memory-lifecycle.js';
@@ -76,6 +77,12 @@ export interface MemoryModule {
   recall(): RecallService;
   /** The RAG ingest/search facade (brain/pal/rag/code-intel consume this). */
   retrieval(): RetrievalPort;
+  /**
+   * The FIRST-STAGE ColBERT late-interaction retriever + per-collection index
+   * build seam. The conductor per-repo index-build path (startCodeIntel) calls
+   * `ensureIndex` so a repo's passages get a real PLAID index; degrade-safe.
+   */
+  colbertSearch(): ColbertSearchPort;
   /** Candidate wisp proposal + read. */
   candidates(): CandidateService;
   /** The GOVERNED candidate → durable-item promotion lifecycle. */

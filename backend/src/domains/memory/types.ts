@@ -40,11 +40,17 @@ export interface MemoryRelation {
 
 // ── Recall + fusion projections ───────────────────────────────────────────────
 
-/** Which legacy memory source a recalled item came from. */
-export type MemorySource = 'mem0' | 'beads' | 'candidates' | 'items';
+/** Which memory source a recalled item came from. */
+export type MemorySource = 'mem0' | 'beads' | 'candidates' | 'items' | 'colbert';
 
 /** The immutable set of fusible recall sources. */
-export const MEMORY_SOURCES: readonly MemorySource[] = ['mem0', 'beads', 'candidates', 'items'] as const;
+export const MEMORY_SOURCES: readonly MemorySource[] = [
+  'mem0',
+  'beads',
+  'candidates',
+  'items',
+  'colbert',
+] as const;
 
 /** Provenance tag attached to every recalled memory (truthful attribution). */
 export interface Provenance {

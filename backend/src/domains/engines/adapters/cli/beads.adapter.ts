@@ -126,8 +126,13 @@ export class BeadsAdapter extends EngineClientBase<unknown, unknown> {
         return ['ready', '--json'];
       case 'sync':
         return ['vc', 'status'];
-      case 'show':
-        return id ? ['show', id, '--json'] : null;
+      case 'show': {
+        if (!id) return null;
+        // `--long` surfaces the extended fields (accumulated `comments` = NOTE
+        // evidence and the full `dependencies` lineage) that a bare `show` omits
+        // — the shared-memory context a launcher weaves into an agent prompt.
+        return input.long === true ? ['show', id, '--long', '--json'] : ['show', id, '--json'];
+      }
       case 'claim':
         return id ? ['update', id, '--claim', '--json'] : null;
       case 'create': {

@@ -40,7 +40,7 @@ function event(type: RunEvent['type'], over: Partial<RunEvent> = {}): RunEvent {
   };
 }
 
-const flush = () => new Promise((r) => setTimeout(r, 0));
+const flush = () => new Promise(r => setTimeout(r, 0));
 
 describe('conductor completion hook', () => {
   it('returns the inner sink unchanged when neither capability is wired', () => {
@@ -55,7 +55,9 @@ describe('conductor completion hook', () => {
 
   it('harvests memory + closes the bd issue on a completed event (evidence anchored to the workspace)', async () => {
     const inner = { append: vi.fn(async () => {}) };
-    const harvestOnCompletion = vi.fn(async () => ({ harvested: true as const }));
+    const harvestOnCompletion = vi.fn(async () => ({
+      harvested: true as const,
+    }));
     const completeWork = vi.fn(async () => {});
     const reindexRepo = vi.fn(async () => {});
     const sink = createCompletionHookSink({
@@ -120,7 +122,8 @@ describe('conductor completion hook', () => {
         trackWork: vi.fn(async () => {}),
         completeWork: vi.fn(async () => {}),
       },
-      getWorkspace: async () => ws({ projectId: '', worktreePath: '/tmp/Repos/Acme-App' }),
+      getWorkspace: async () =>
+        ws({ projectId: '', worktreePath: '/tmp/Repos/Acme-App' }),
       logger: makeLogger(),
     });
 
@@ -174,7 +177,9 @@ describe('conductor completion hook', () => {
 
   it('fires the hooks on a failed event too (issue kept open by the adapter)', async () => {
     const inner = { append: vi.fn(async () => {}) };
-    const harvestOnCompletion = vi.fn(async () => ({ harvested: true as const }));
+    const harvestOnCompletion = vi.fn(async () => ({
+      harvested: true as const,
+    }));
     const completeWork = vi.fn(async () => {});
     const sink = createCompletionHookSink({
       inner,
@@ -198,7 +203,9 @@ describe('conductor completion hook', () => {
 
   it('does NOT fire on non-terminal events (log/started)', async () => {
     const inner = { append: vi.fn(async () => {}) };
-    const harvestOnCompletion = vi.fn(async () => ({ harvested: true as const }));
+    const harvestOnCompletion = vi.fn(async () => ({
+      harvested: true as const,
+    }));
     const sink = createCompletionHookSink({
       inner,
       brain: { enrichPrompt: vi.fn(), harvestOnCompletion },
@@ -236,7 +243,74 @@ describe('conductor completion hook', () => {
         quantity: 1,
         runId: 'run_ws_1',
         idempotencyKey: 'agent_run:ws_1',
-      }),
+      })
+    );
+  });
+
+  it('meters REAL token usage when the terminal event carries inputTokens/outputTokens (native openfang path)', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const record = vi.fn(async () => ({ inserted: true as const }));
+    const sink = createCompletionHookSink({
+      inner,
+      getMeter: () => ({ record }),
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    // The token-carrying terminal event the openfang substrate forwards.
+    await sink.append(
+      event('completed', {
+        data: {
+          workspaceId: 'ws_1',
+          engine: 'openfang',
+          inputTokens: 1200,
+          outputTokens: 340,
+          iterations: 3,
+        },
+      })
+    );
+    await flush();
+
+    // agent_run stays (the pre-dispatch quota gate reads it) …
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'agent_run',
+        quantity: 1,
+        idempotencyKey: 'agent_run:ws_1',
+      })
+    );
+    // … and the REAL token usage is metered on top (1200 + 340 = 1540).
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subjectId: 'user_alice',
+        kind: 'token',
+        quantity: 1540,
+        engine: 'openfang',
+        runId: 'run_ws_1',
+        idempotencyKey: 'token:ws_1',
+      })
+    );
+    expect(record).toHaveBeenCalledTimes(2);
+  });
+
+  it('does NOT meter a token line when the terminal event carries no usage (flat agent_run only)', async () => {
+    const record = vi.fn(async () => ({ inserted: true as const }));
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      getMeter: () => ({ record }),
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('completed')); // no inputTokens/outputTokens
+    await flush();
+
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'agent_run' })
+    );
+    expect(record).not.toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'token' })
     );
   });
 
@@ -252,7 +326,9 @@ describe('conductor completion hook', () => {
     await sink.append(event('failed'));
     await flush();
 
-    expect(record).toHaveBeenCalledWith(expect.objectContaining({ kind: 'agent_run', subjectId: 'user_alice' }));
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'agent_run', subjectId: 'user_alice' })
+    );
   });
 
   it('does NOT meter when the subject is unresolvable (no createdBy) — a truthful skip', async () => {

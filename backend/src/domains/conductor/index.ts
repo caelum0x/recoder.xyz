@@ -31,6 +31,7 @@ import type { McpInjectPort } from './ports/mcp-inject.port.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
+import type { ColbertSearchPort } from '../memory/ports/colbert-search.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type { WorkspaceRepositoryPort } from './ports/workspace-repository.port.js';
@@ -105,6 +106,14 @@ export interface ConductorModuleDeps {
    * launch, never fabricated). See `adapters/code-intel.adapter.ts`.
    */
   readonly codeIntel?: CodeIntelPort;
+  /**
+   * Optional ColBERT PLAID index seam (`memory.colbertSearch()`). On a workspace
+   * create the run flow chunks the repo's text files and builds/refreshes the
+   * per-repo late-interaction collection, so retrieval can surface passages the
+   * single-vector Qdrant top-K misses. Absent, or the daemon unconfigured, ⇒ a
+   * truthful skip (`configured():false`) — never blocks a launch, never fabricated.
+   */
+  readonly colbertIndex?: ColbertSearchPort;
   /**
    * Optional GitHub identity seam (`GET /github/status`): forwarded token env +
    * `gh` login + git identity, detected for zero-config onboarding. Absent ⇒ the

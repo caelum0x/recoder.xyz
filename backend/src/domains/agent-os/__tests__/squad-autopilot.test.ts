@@ -13,18 +13,32 @@ import { SquadService, InMemorySquadStore } from '../services/squad.service.js';
 const silentLogger = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never;
 const now = () => '2026-07-17T00:00:00.000Z';
 
-/** A fake beads EngineClientPort whose `ready` op returns the given payload. */
-function fakeBeads(ready: () => unknown): EngineClientPort {
+/**
+ * A fake beads EngineClientPort whose `ready` op returns the given payload. An
+ * optional `show` handler answers the per-issue `bd show --long` lineage read
+ * the autopilot now performs before composing each launch prompt; when omitted,
+ * `show` degrades (`ok:false`) so the dispatch proceeds on title+description.
+ */
+function fakeBeads(ready: () => unknown, show?: (id: string) => unknown): EngineClientPort {
   return {
     id: 'beads',
     transport: 'cli',
     start: async () => {},
     stop: async () => {},
     invoke: vi.fn(async (call) => {
-      if (call.op !== 'ready') return { ok: false as const, reason: `unexpected op ${call.op}` };
-      const payload = ready();
-      if (payload instanceof Error) return { ok: false as const, reason: payload.message };
-      return { ok: true as const, value: payload };
+      if (call.op === 'ready') {
+        const payload = ready();
+        if (payload instanceof Error) return { ok: false as const, reason: payload.message };
+        return { ok: true as const, value: payload };
+      }
+      if (call.op === 'show') {
+        if (!show) return { ok: false as const, reason: 'show not stubbed' };
+        const id = String((call.input as { id?: unknown }).id ?? '');
+        const payload = show(id);
+        if (payload instanceof Error) return { ok: false as const, reason: payload.message };
+        return { ok: true as const, value: payload };
+      }
+      return { ok: false as const, reason: `unexpected op ${call.op}` };
     }),
     health: async () => ({ engineId: 'beads', transport: 'cli', status: 'up', checkedAt: now() }),
   };
@@ -76,6 +90,64 @@ describe('SquadAutopilotService — tick', () => {
     expect(board.entries).toHaveLength(1);
     expect(board.entries[0]).toMatchObject({ issueId: 'bd-1', status: 'dispatched', workspaceId: 'ws-1' });
     expect(board.lastTick).toEqual(result);
+  });
+
+  it('weaves the issue-graph lineage + notes (bd show) into the launch prompt', async () => {
+    // The `bd show --long --json` shape: a one-element array carrying the
+    // accumulated NOTE evidence (comments) + the dependency lineage prior
+    // agents wrote onto this very issue.
+    const show = (id: string) => [
+      {
+        id,
+        title: 'Fix login',
+        description: 'Users cannot log in',
+        comments: [
+          { id: 1, author: 'agent-a', text: 'evidence: the session cookie is dropped on subdomain' },
+          { id: 2, author: 'agent-b', text: 'gotcha: Better Auth verify path is HTTP-delegated' },
+        ],
+        dependencies: [
+          { id: 'bd-0', title: 'Auth spine', status: 'closed', dependency_type: 'discovered-from' },
+          { id: 'bd-9', title: 'Cookie domain', status: 'open', dependency_type: 'blocked-by' },
+        ],
+      },
+    ];
+    const beadsRef = fakeBeads(() => [{ id: 'bd-1', title: 'Fix login', description: 'Users cannot log in' }], show);
+    const conductor = fakeConductor();
+    const svc = autopilot({ beads: beadsRef, conductor: conductor.port });
+
+    const result = await svc.tickOnce();
+    expect(result.dispatched).toBe(1);
+
+    // The fusion FIRED: `show` was invoked for the issue before dispatch…
+    const showCalls = (beadsRef.invoke as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([c]) => c.op === 'show',
+    );
+    expect(showCalls).toHaveLength(1);
+    expect(showCalls[0][0]).toMatchObject({ op: 'show', input: { id: 'bd-1', long: true } });
+
+    // …and its evidence + lineage are woven into the dispatched prompt.
+    const prompt = conductor.calls[0].prompt;
+    expect(prompt).toContain('Fix login');
+    expect(prompt).toContain('Shared memory from the beads issue graph');
+    expect(prompt).toContain('the session cookie is dropped on subdomain');
+    expect(prompt).toContain('[agent-b]');
+    expect(prompt).toContain('discovered-from bd-0');
+    expect(prompt).toContain('blocked-by bd-9');
+  });
+
+  it('dispatches without a lineage block when bd show degrades (never blocks the run)', async () => {
+    // No `show` stub ⇒ the per-issue lineage read returns ok:false; the dispatch
+    // still fires on the flat title+description (degrade-truthful).
+    const beads = fakeBeads(() => [{ id: 'bd-1', title: 'Fix login', description: 'Users cannot log in' }]);
+    const conductor = fakeConductor();
+    const svc = autopilot({ beads, conductor: conductor.port });
+
+    const result = await svc.tickOnce();
+    expect(result.dispatched).toBe(1);
+    const prompt = conductor.calls[0].prompt;
+    expect(prompt).toContain('Fix login');
+    expect(prompt).toContain('Users cannot log in');
+    expect(prompt).not.toContain('Shared memory from the beads issue graph');
   });
 
   it('is a no-op when there is no ready work', async () => {
