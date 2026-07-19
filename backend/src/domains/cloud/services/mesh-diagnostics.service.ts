@@ -17,8 +17,11 @@ import type {
   MeshDiagnostics,
   MeshEngineStatus,
   MeshSnapshot,
+  MeshTopology,
   XdsCluster,
+  ZitiEnrollment,
   ZitiIdentity,
+  ZitiService,
 } from '../ports/mesh.port.js';
 import type { HealthStatus } from '../../../shared/health-types.js';
 import type { ZitiMeshAdapter } from '../adapters/ziti-mesh.adapter.js';
@@ -33,9 +36,27 @@ export interface MeshDiagnosticsDeps {
   readonly now?: () => Date;
 }
 
-/** The mesh diagnostics surface + a module-health rollup. */
+/**
+ * The mesh diagnostics surface + a module-health rollup + the deeper ziti
+ * introspection reads (services / enrollment posture / topology). All read-only
+ * and degrade-safe (never throw). The ziti enrollment WRITE is NOT here — it is a
+ * governed mutation exposed only through the mesh MCP write tool + the gate.
+ */
 export interface MeshDiagnosticsService extends MeshDiagnostics {
   moduleHealth(): Promise<ComponentHealth>;
+  /** Registered ziti services (empty when the overlay is absent). */
+  zitiServices(): Promise<readonly ZitiService[]>;
+  /** Enrollment posture per ziti identity/endpoint (empty when absent). */
+  zitiEnrollments(): Promise<readonly ZitiEnrollment[]>;
+  /** The read-only ziti topology/health snapshot (engine + registrations). */
+  meshTopology(): Promise<MeshTopology>;
+  /**
+   * The READ-ONLY xDS introspection adapter (clusters/routes/listeners/endpoints
+   * + served-snapshot version). Exposed so the cloud xDS MCP tools can read the
+   * live control-plane config without re-plumbing the endpoint. Degrade-safe:
+   * absent engine ⇒ empty results / `down` status, never a throw.
+   */
+  xds(): XdsEnvoyAdapter;
 }
 
 /** Roll two engine statuses into one merged status (deny-biased). */
@@ -65,6 +86,39 @@ export function createMeshDiagnosticsService(deps: MeshDiagnosticsDeps): MeshDia
     } catch (cause) {
       logger.warn({ err: cause }, 'mesh xds clusters failed');
       return [];
+    }
+  }
+
+  async function zitiServices(): Promise<readonly ZitiService[]> {
+    try {
+      return await ziti.services();
+    } catch (cause) {
+      logger.warn({ err: cause }, 'mesh ziti services failed');
+      return [];
+    }
+  }
+
+  async function zitiEnrollments(): Promise<readonly ZitiEnrollment[]> {
+    try {
+      return await ziti.enrollments();
+    } catch (cause) {
+      logger.warn({ err: cause }, 'mesh ziti enrollments failed');
+      return [];
+    }
+  }
+
+  async function meshTopology(): Promise<MeshTopology> {
+    try {
+      return await ziti.topology();
+    } catch (cause) {
+      logger.warn({ err: cause }, 'mesh ziti topology failed');
+      return {
+        engine: { engine: 'ziti', status: 'unknown', reason: 'topology probe failed' },
+        identities: [],
+        services: [],
+        enrollments: [],
+        checkedAt: now().toISOString(),
+      };
     }
   }
 
@@ -104,5 +158,5 @@ export function createMeshDiagnosticsService(deps: MeshDiagnosticsDeps): MeshDia
     return degraded(SERVICE_NAME, `Mesh status: ${snapshot.status}.`, engines);
   }
 
-  return { zitiIdentities, xdsClusters, status, moduleHealth };
+  return { zitiIdentities, xdsClusters, status, moduleHealth, zitiServices, zitiEnrollments, meshTopology, xds: () => xds };
 }

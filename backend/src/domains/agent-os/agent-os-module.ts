@@ -30,7 +30,9 @@ import type { InstructionCompilerPort } from './ports/instruction-compiler.port.
 import { InMemoryAgentOsRepository } from './adapters/in-memory-agent-os.repository.js';
 import { PostgresAgentOsRepository } from './adapters/postgres-agent-os.repository.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
-import { createGovernanceGateAdapter } from './adapters/governance-gate.adapter.js';
+import { createGovernanceGateAdapter, type AgentOsGovernanceGate } from './adapters/governance-gate.adapter.js';
+import { MulticaCoordinationAdapter } from './adapters/multica-coordination.adapter.js';
+import type { CoordinationEnginePort } from './ports/coordination-engine.port.js';
 import { createInstructionCompilerAdapter } from './adapters/instruction-compiler.adapter.js';
 import { createNatsOutboxPublisher } from './adapters/nats-outbox-publisher.adapter.js';
 import { RunEventIngestService } from './services/run-event-ingest.service.js';
@@ -51,6 +53,7 @@ import { buildWorkflowRouter } from './routes/workflow.routes.js';
 import { buildAgentOsRouter } from './routes/agent-os.routes.js';
 import { buildInternalAgentOsRouter } from './routes/internal-agent-os.routes.js';
 import { buildAgentOsMcpTools } from './mcp/agent-os-engine.js';
+import { buildCoordinationMcpTools } from './mcp/coordination-engine.js';
 import { buildAgentOsHealth } from './health.js';
 
 export class AgentOsComposer implements AgentOsModule {
@@ -63,6 +66,8 @@ export class AgentOsComposer implements AgentOsModule {
   private readonly executor: QueryExecutor | null;
   private readonly outboxPublisher: OutboxPublisherPort & { close?(): Promise<void> };
   private readonly instructionCompiler: InstructionCompilerPort;
+  private readonly governanceGate: AgentOsGovernanceGate;
+  private readonly coordination: CoordinationEnginePort;
   private readonly ingest: RunEventIngestService;
   private readonly drain: OutboxDrainService;
   private readonly squads: SquadService | null;
@@ -107,7 +112,23 @@ export class AgentOsComposer implements AgentOsModule {
     this.instructionCompiler = deps.instructionCompiler ?? createInstructionCompilerAdapter(this.log);
 
     const gate = createGovernanceGateAdapter(deps.gate);
+    this.governanceGate = gate;
     this.ingest = new RunEventIngestService({ repository: this.repo, gate, logger: this.log });
+
+    // Multica coordination introspection seam (squad routing / work-locks /
+    // conflict detection). An injected seam wins (tests / explicit composition);
+    // else the default adapter over `MULTICA_URL` (external mode). When neither
+    // MULTICA_URL nor a live engine is present the reads degrade truthfully —
+    // Multica (the Go squads server needs PG15) is an OPTIONAL enrichment over
+    // the local `squad.service.ts`, never the source of truth.
+    this.coordination =
+      deps.coordinationEngine ??
+      new MulticaCoordinationAdapter({
+        baseUrlResolver: () => process.env['MULTICA_URL']?.trim() || null,
+        ...(process.env['MULTICA_API_KEY'] ? { apiKey: process.env['MULTICA_API_KEY'] } : {}),
+        ...(process.env['MULTICA_WORKSPACE_ID'] ? { workspaceId: process.env['MULTICA_WORKSPACE_ID'] } : {}),
+        logger: this.log,
+      });
 
     this.drain = new OutboxDrainService({
       repository: this.repo,
@@ -234,7 +255,14 @@ export class AgentOsComposer implements AgentOsModule {
   }
 
   mcp(): readonly McpToolRegistration[] {
-    return buildAgentOsMcpTools(this.repo);
+    return [
+      ...buildAgentOsMcpTools(this.repo),
+      ...buildCoordinationMcpTools({
+        engine: this.coordination,
+        gate: this.governanceGate,
+        logger: this.log,
+      }),
+    ];
   }
 
   async health(): Promise<ComponentHealth> {
