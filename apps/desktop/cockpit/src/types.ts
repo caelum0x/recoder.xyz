@@ -275,6 +275,12 @@ export interface CreateWorkspaceBody {
   interactive?: boolean;
   branch?: string;
   baseRef?: string;
+  /**
+   * Shared parallel-run group tag (product F3): when the SAME task is launched
+   * across multiple agents, every sibling workspace carries the same `taskGroup`
+   * so the compare board can aggregate them side-by-side. Absent on a solo run.
+   */
+  taskGroup?: string;
 }
 
 export interface CreatePrResult {
@@ -288,6 +294,162 @@ export interface MergeResult {
   workspaceId: string;
   branch: string;
   merged: boolean;
+}
+
+/**
+ * GET /repo-setup-script — one repo's persisted setup script (the shell the
+ * conductor runs in every fresh worktree of that repo). `config` is null when
+ * no script is configured. Source of truth:
+ * backend/src/domains/conductor/ports/repo-setup-store.port.ts (RepoSetupConfig).
+ */
+export interface RepoSetupConfig {
+  repoKey: string;
+  script: string;
+  /** The principal userId that last wrote this config (display/audit). */
+  updatedBy: string;
+  /** ISO timestamp of the last write. */
+  updatedAt: string;
+}
+
+/**
+ * The governance verdict view the backend attaches to a governed write's
+ * success envelope (`{ config, verdict }` on the repo-setup PUT). Display only —
+ * the server already enforced the decision; this just lets the UI stay truthful
+ * about how the write was governed. A deny never reaches here (it is a 403).
+ */
+export interface WriteVerdictView {
+  effect: string;
+  tier?: string;
+  degraded?: boolean;
+  engine?: string;
+}
+
+/** Aggregate rollup of a PR's status checks (worst-wins). */
+export interface PrCheckSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  pending: number;
+  /** `'none'` when there are no checks; else the truthful worst-wins rollup. */
+  rollup: 'passing' | 'failing' | 'pending' | 'none';
+}
+
+/**
+ * GET /workspaces/:id/pr-status — the workspace's pull-request status via `gh`.
+ * Degrade-truthful: `available:false` means gh could not be consulted (no gh /
+ * no worktree / gh error) — never a fabricated "no PR". Source of truth:
+ * backend/src/domains/conductor/services/pr-status.service.ts (PrStatusView).
+ */
+export interface PrStatusView {
+  /** Whether `gh` could be consulted at all. */
+  available: boolean;
+  /** Whether a pull request exists for the workspace branch. */
+  hasPr: boolean;
+  number?: number;
+  state?: 'open' | 'closed' | 'merged';
+  draft?: boolean;
+  mergeable?: 'mergeable' | 'conflicting' | 'unknown';
+  url?: string;
+  checks?: PrCheckSummary;
+  /** Truthful reason when unavailable / no PR (never a fabricated success). */
+  reason?: string;
+}
+
+/**
+ * Multi-agent compare (product F3) — mirror the REAL conductor compare surface.
+ *
+ * Source of truth:
+ *  - backend/src/domains/conductor/services/compare.service.ts
+ *    (DiffStat, SiblingCompareEntry, CompareView)
+ *  - backend/src/domains/conductor/types.ts (AttentionState)
+ *
+ * Served read-only (no governance gate) by:
+ *   GET /api/conductor/workspaces/compare?taskGroup=<id>
+ *   GET /api/conductor/workspaces/:id/siblings
+ */
+
+/**
+ * Live attention classification a running agent surfaces. `'unknown'` means NO
+ * truthful signal (never guessed) — the cockpit renders it as a muted "—".
+ */
+export type AttentionState =
+  | 'awaiting_approval'
+  | 'agent_idle_prompt'
+  | 'error'
+  | 'review_ready'
+  | 'working'
+  | 'unknown';
+
+/** A sibling's change footprint vs its base ref (files / +lines / -lines). */
+export interface DiffStat {
+  files: number;
+  additions: number;
+  deletions: number;
+}
+
+/** One agent's row in the side-by-side compare of a parallel-run group. */
+export interface SiblingCompareEntry {
+  workspaceId: string;
+  /** The agent that ran this sibling (the workspace runtimeId) — the compare key. */
+  agent: string;
+  /** Alias of {@link agent} kept for callers that speak the canonical field name. */
+  runtimeId: string;
+  runId?: string;
+  branch: string;
+  state: WorkspaceState;
+  attention?: AttentionState;
+  attentionReason?: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Change footprint vs base — ABSENT (with a reason) when it can't be computed. */
+  diffStat?: DiffStat;
+  /** Truthful reason `diffStat` is absent (no worktree, substrate fault, …). */
+  diffStatReason?: string;
+}
+
+/**
+ * GET /workspaces/compare — the aggregate of one parallel-run group. A blank or
+ * unknown group is a truthful empty view (`taskGroup: null`/count 0), never an
+ * error and never invented rows.
+ */
+export interface CompareView {
+  /** The shared group key, or `null` when the subject workspace is ungrouped. */
+  taskGroup: string | null;
+  count: number;
+  siblings: SiblingCompareEntry[];
+}
+
+/** A checkpoint record (GET/POST /workspaces/:id/checkpoints). */
+export interface Checkpoint {
+  checkpointId: string;
+  workspaceId: string;
+  label?: string;
+  description?: string;
+  kind: 'commit' | 'stash';
+  ref: string;
+  headSha: string;
+  snapshotSha: string;
+  dirty: boolean;
+  branch: string;
+  baseRef: string;
+  runtimeId: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+/** POST /workspaces/:id/checkpoints/:cid/restore result. */
+export interface CheckpointRestoreResult {
+  workspaceId: string;
+  checkpointId: string;
+  restoredTo: string;
+  safetyRef?: string;
+}
+
+/** POST /workspaces/:id/checkpoints/:cid/branch result. */
+export interface CheckpointBranchResult {
+  checkpointId: string;
+  sourceWorkspaceId: string;
+  workspace: Workspace;
 }
 
 /** GET /sessions — a live tmux+worktree agent session (tmux-orchestrator.ts ConductorSession). */

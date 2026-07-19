@@ -109,7 +109,9 @@ function makeWorkspace(body: CreateWorkspaceBody): Workspace {
     createdBy: body.createdBy,
     createdAt: nowIso(),
     updatedAt: nowIso(),
-    metadata: {},
+    // Mirror the backend: a shared parallel-run group tag persists into metadata
+    // so the compare board can aggregate siblings (product F3).
+    metadata: body.taskGroup ? { taskGroup: body.taskGroup } : {},
   };
 }
 
@@ -213,12 +215,42 @@ function handle(state: StubState, req: IncomingMessage, res: ServerResponse): vo
     });
   }
 
-  // --- board ---
+  // --- archived history (literal path — resolve before the /:id matcher) ---
+  if (method === 'GET' && path === '/api/conductor/workspaces/archived') {
+    if (state.unauthorized) {
+      return sendJson(res, 401, { success: false, error: 'device token expired' });
+    }
+    const archived = [...state.workspaces.values()]
+      .filter((w) => w.state === 'archived' || Boolean(w.archivedAt))
+      .sort((a, b) => (b.archivedAt ?? b.updatedAt).localeCompare(a.archivedAt ?? a.updatedAt));
+    return sendJson(res, 200, { success: true, data: { workspaces: archived } });
+  }
+
+  // --- board (query-aware: mirrors the backend query edge's filter semantics) ---
   if (method === 'GET' && path === '/api/conductor/workspaces') {
     if (state.unauthorized) {
       return sendJson(res, 401, { success: false, error: 'device token expired' });
     }
-    return sendJson(res, 200, { success: true, data: { workspaces: [...state.workspaces.values()] } });
+    const all = [...state.workspaces.values()];
+    const q = (url.searchParams.get('q') || '').trim().toLowerCase();
+    const repo = (url.searchParams.get('repo') || '').trim().toLowerCase();
+    const agent = (url.searchParams.get('agent') || '').trim().toLowerCase();
+    const wantState = url.searchParams.get('state') || '';
+    const archivedRaw = url.searchParams.get('archived');
+    const filtered = all.filter((w) => {
+      const isArchived = w.state === 'archived' || Boolean(w.archivedAt);
+      if (archivedRaw === 'true' && !isArchived) return false;
+      if (archivedRaw === 'false' && isArchived) return false;
+      if (wantState && w.state !== wantState) return false;
+      if (repo && !w.projectId.toLowerCase().includes(repo)) return false;
+      if (agent && !w.runtimeId.toLowerCase().includes(agent)) return false;
+      if (q) {
+        const hay = `${w.projectId} ${w.branch} ${w.runtimeId} ${w.workspaceId}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+    return sendJson(res, 200, { success: true, data: { workspaces: filtered } });
   }
   if (method === 'POST' && path === '/api/conductor/workspaces') {
     void readBody(req).then((body) => {

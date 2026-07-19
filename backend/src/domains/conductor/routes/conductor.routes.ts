@@ -382,6 +382,11 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
         ...(typeof body.branch === 'string' ? { branch: body.branch } : {}),
         ...(typeof body.baseRef === 'string' ? { baseRef: body.baseRef } : {}),
         ...(typeof body.interactive === 'boolean' ? { interactive: body.interactive } : {}),
+        // F3 parallel-run tag: persist the shared group id into metadata so the
+        // compare board can aggregate siblings. Only a non-empty string is forwarded.
+        ...(typeof body.taskGroup === 'string' && body.taskGroup.trim()
+          ? { metadata: { taskGroup: body.taskGroup.trim() } }
+          : {}),
       };
       const result = await module.createWorkspace(input, req.principal!);
       finishWrite(res, result, { statusCode: 201, key: 'workspace' });

@@ -95,6 +95,39 @@ import {
 } from './review/workspace-continue.ops.js';
 import { normalizeLocalPreviewUrl } from './review/preview-url-guard.js';
 import { detectDevCommand, type DevCommandView } from './adapters/dev-command.adapter.js';
+import type { CheckpointRecord, CheckpointStorePort } from './ports/checkpoint-store.port.js';
+import { createInMemoryCheckpointStore } from './adapters/checkpoint-store.adapter.js';
+import {
+  branchFromCheckpoint as branchFromCheckpointOp,
+  createCheckpoint as createCheckpointOp,
+  listCheckpoints as listCheckpointsOp,
+  restoreCheckpoint as restoreCheckpointOp,
+  type BranchFromCheckpointInput,
+  type BranchOpsDeps,
+  type BranchResultView,
+  type CheckpointOpsDeps,
+  type CreateCheckpointInput,
+  type RestoreResultView,
+} from './services/checkpoint.service.js';
+import {
+  filterWorkspaces,
+  sortByRecencyDesc,
+  type WorkspaceQueryFilters,
+} from './services/workspace-query.service.js';
+import { buildCompareRoutes } from './routes/compare.routes.js';
+import { buildCheckpointRoutes } from './routes/checkpoint.routes.js';
+import { buildWorkspaceQueryRoutes } from './routes/workspaces-query.routes.js';
+import { buildRepoConfigRoutes } from './routes/repo-config.routes.js';
+import { RepoSetupService, repoKeyFor } from './services/repo-setup.service.js';
+import { PrStatusService } from './services/pr-status.service.js';
+import { createInMemoryRepoSetupStore } from './adapters/repo-setup-store.adapter.js';
+import {
+  compareTaskGroup as compareTaskGroupOp,
+  workspaceSiblings as workspaceSiblingsOp,
+  parseDiffStat,
+  type CompareDeps,
+  type CompareView,
+} from './services/compare.service.js';
 
 /** The create request the routes/callers build (createdBy is stamped from the principal). */
 export type CreateConductorWorkspaceInput = Omit<CreateWorkspaceInput, 'createdBy'>;
@@ -170,6 +203,12 @@ export class ConductorComposer implements ConductorModule {
   private entitlementGate?: EntitlementGate;
   /** OPTIONAL usage-meter emitter (set by bootstrap; absent ⇒ no per-run metering). */
   private usageMeter?: UsageMeterPort;
+  /** Checkpoint metadata store (degrade-truthful in-process by default). */
+  private readonly checkpointStore: CheckpointStorePort;
+  /** Per-repo setup-script config + the worktree-create run hook (governed writes). */
+  private readonly repoSetup: RepoSetupService;
+  /** Workspace pull-request status via the `gh` CLI (degrade-truthful, read-only). */
+  private readonly prStatus: PrStatusService;
   private started = false;
 
   constructor(deps: ConductorModuleDeps) {
@@ -182,6 +221,20 @@ export class ConductorComposer implements ConductorModule {
     this.github = deps.githubStatus;
     this.steerTransport = deps.steerTransport;
     this.mcpInject = deps.mcpInject;
+    this.checkpointStore = deps.checkpointStore ?? createInMemoryCheckpointStore();
+
+    // Per-repo setup script: config seam (governed setScript/getScript) + the
+    // fire-and-forget run hook shelled into every fresh worktree. Degrade-safe
+    // in-process store by default (durable store injectable at the root).
+    this.repoSetup = new RepoSetupService({
+      store: deps.repoSetupStore ?? createInMemoryRepoSetupStore(),
+      gate: this.gate,
+      logger: this.log,
+      ...(deps.repoSetupExec ? { exec: deps.repoSetupExec } : {}),
+    });
+    // Workspace PR status over the shared `gh` CLI seam (never throws; truthful
+    // `available:false` when gh/worktree/branch is absent).
+    this.prStatus = new PrStatusService({ logger: this.log });
 
     const loggerPort = toLoggerPort(this.log);
 
@@ -357,8 +410,62 @@ export class ConductorComposer implements ConductorModule {
       );
   }
 
+  /**
+   * Run the repo's configured setup script inside the freshly-created worktree
+   * (fire-and-forget). Truthful degrade: no worktree on the record, or no script
+   * configured for the repo, is a logged skip — the service NEVER throws and a
+   * failing script is a captured (non-blocking) failure, so an allowed launch is
+   * never aborted by setup. The repo key is derived from the projectId (preferred)
+   * falling back to the repoPath, matching the config write key.
+   */
+  private runRepoSetup(input: CreateConductorWorkspaceInput, workspace: Workspace): void {
+    if (!workspace.worktreePath) {
+      this.log.debug(
+        { workspaceId: workspace.workspaceId, substrate: workspace.substrate },
+        'conductor repo-setup skipped (no worktree path)',
+      );
+      return;
+    }
+    const repoKey = repoKeyFor(input.projectId, input.repoPath);
+    void this.repoSetup
+      .runSetup({ repoKey, worktreePath: workspace.worktreePath, workspaceId: workspace.workspaceId })
+      .then((result) => {
+        if (result.ran && result.ok === false) {
+          this.log.warn(
+            { workspaceId: workspace.workspaceId, repoKey, exitCode: result.exitCode },
+            'conductor repo-setup script failed (non-blocking)',
+          );
+        }
+      })
+      .catch((err) =>
+        this.log.warn({ err, workspaceId: workspace.workspaceId, repoKey }, 'conductor repo-setup hook faulted'),
+      );
+  }
+
   async listWorkspaces(): Promise<Workspace[]> {
     return this.engine.listWorkspaces();
+  }
+
+  /**
+   * Board search/filter — the state-of-record list narrowed by the query filters
+   * (free-text `q` over codename/repo/branch/task/goal/agent, plus exact `state`,
+   * substring `repo`/`agent`, and the tri-state `archived`). Read-only: it fetches
+   * the canonical list and applies the pure {@link filterWorkspaces}, never gating,
+   * auditing, or mutating. An empty match is a truthful empty list.
+   */
+  async queryWorkspaces(filters: WorkspaceQueryFilters): Promise<Workspace[]> {
+    const workspaces = await this.engine.listWorkspaces();
+    return filterWorkspaces(workspaces, filters);
+  }
+
+  /**
+   * Archived history — every archived workspace, most-recent-first. A convenience
+   * over {@link queryWorkspaces} with `archived: true`; read-only and degrade-safe
+   * (no archived records ⇒ a truthful empty list).
+   */
+  async listArchivedWorkspaces(): Promise<Workspace[]> {
+    const workspaces = await this.engine.listWorkspaces();
+    return sortByRecencyDesc(filterWorkspaces(workspaces, { archived: true }));
   }
 
   async getWorkspace(workspaceId: string): Promise<Workspace | null> {
@@ -440,6 +547,11 @@ export class ConductorComposer implements ConductorModule {
       // git-excluded). Fire-and-forget + degrade-safe — no injector wired, or no
       // worktree yet, is a truthful skip that NEVER fails an allowed launch.
       this.injectWorktreeMcp(workspace);
+
+      // Ready the checkout for the agent: run the repo's configured setup script
+      // inside the new worktree (fire-and-forget + non-blocking + degrade-safe —
+      // no script / a failing script never aborts the allowed launch).
+      this.runRepoSetup(input, workspace);
 
       await recordConductorAudit(
         this.gate,
@@ -659,6 +771,146 @@ export class ConductorComposer implements ConductorModule {
     return { ok: true, verdict, value: report };
   }
 
+  // --- checkpoints & restore (git snapshot capability) -------------------------
+
+  /** The narrow deps slice the checkpoint ops run over (git seams + store). */
+  private checkpointDeps(): CheckpointOpsDeps {
+    return {
+      getWorkspace: (id) => this.engine.getWorkspace(id),
+      store: this.checkpointStore,
+      logger: this.log,
+      newId: () => uuidId.newId(),
+      now: () => systemClock.now(),
+    };
+  }
+
+  /**
+   * Capture a CHECKPOINT of the workspace's git state — GATED
+   * (`workspace.checkpoint`). Non-destructive: tags the committed HEAD plus any
+   * captured uncommitted work. A missing worktree refuses truthfully.
+   */
+  async checkpointWorkspace(
+    workspaceId: string,
+    input: { label?: string; description?: string },
+    principal: Principal,
+  ): Promise<ConductorWriteResult<CheckpointRecord>> {
+    const action = 'workspace.checkpoint';
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
+      target: { environment: 'conductor' },
+      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+      metadata: { workspaceId },
+    });
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    try {
+      const opInput: CreateCheckpointInput = {
+        ...(input.label ? { label: input.label } : {}),
+        ...(input.description ? { description: input.description } : {}),
+        createdBy: principal.userId,
+      };
+      const record = await createCheckpointOp(this.checkpointDeps(), workspaceId, opInput);
+      await recordConductorAudit(
+        this.gate,
+        conductorAuditEntry(action, principal, verdict, {
+          workspaceId,
+          checkpointId: record.checkpointId,
+          ref: record.ref,
+        }),
+      );
+      return { ok: true, verdict, value: record };
+    } catch (err) {
+      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'checkpoint failed' };
+    }
+  }
+
+  /** List a workspace's checkpoints (newest-first). Read-only. */
+  async listWorkspaceCheckpoints(workspaceId: string): Promise<readonly CheckpointRecord[]> {
+    return listCheckpointsOp({ store: this.checkpointStore }, workspaceId);
+  }
+
+  /**
+   * RESTORE a workspace's worktree to a checkpoint — GATED (`workspace.restore`).
+   * Takes an automatic safety snapshot first, then reproduces the checkpoint's
+   * file state. A missing worktree / unknown checkpoint refuses truthfully.
+   */
+  async restoreCheckpoint(
+    workspaceId: string,
+    checkpointId: string,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<RestoreResultView>> {
+    const action = 'workspace.restore';
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
+      target: { environment: 'conductor' },
+      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+      metadata: { workspaceId, checkpointId },
+    });
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    try {
+      const result = await restoreCheckpointOp(this.checkpointDeps(), workspaceId, checkpointId);
+      await recordConductorAudit(
+        this.gate,
+        conductorAuditEntry(action, principal, verdict, {
+          workspaceId,
+          checkpointId,
+          restoredTo: result.restoredTo,
+        }),
+      );
+      return { ok: true, verdict, value: result };
+    } catch (err) {
+      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'restore failed' };
+    }
+  }
+
+  /**
+   * BRANCH a NEW workspace from a checkpoint — GATED (`workspace.branch`): launch
+   * a fresh workspace whose base ref is the checkpoint tag. The launched workspace
+   * runs the same capability seams as a normal create (`.mcp.json` injection).
+   */
+  async branchFromCheckpoint(
+    workspaceId: string,
+    checkpointId: string,
+    input: { branch?: string; runtimeId?: string; taskId?: string; prompt?: string },
+    principal: Principal,
+  ): Promise<ConductorWriteResult<BranchResultView>> {
+    const action = 'workspace.branch';
+    const source = await this.engine.getWorkspace(workspaceId);
+    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
+      target: { environment: 'conductor' },
+      ...(source?.taskId ? { taskId: source.taskId } : {}),
+      metadata: { workspaceId, checkpointId },
+    });
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    try {
+      const branchInput: BranchFromCheckpointInput = {
+        ...(input.branch ? { branch: input.branch } : {}),
+        ...(input.runtimeId ? { runtimeId: input.runtimeId } : {}),
+        ...(input.taskId ? { taskId: input.taskId } : {}),
+        ...(input.prompt ? { prompt: input.prompt } : {}),
+        createdBy: principal.userId,
+      };
+      const deps: BranchOpsDeps = {
+        ...this.checkpointDeps(),
+        createWorkspace: (createInput) => this.engine.createWorkspace(createInput),
+      };
+      const result = await branchFromCheckpointOp(deps, workspaceId, checkpointId, branchInput);
+      // Same post-launch seam as createWorkspace: point the branched agent at the
+      // governed backend MCP host (fire-and-forget + degrade-safe).
+      this.injectWorktreeMcp(result.workspace);
+      await recordConductorAudit(
+        this.gate,
+        conductorAuditEntry(action, principal, verdict, {
+          workspaceId,
+          checkpointId,
+          newWorkspaceId: result.workspace.workspaceId,
+        }),
+      );
+      return { ok: true, verdict, value: result };
+    } catch (err) {
+      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'branch failed' };
+    }
+  }
+
   substrates(): readonly SubstrateAvailabilityView[] {
     return this.registry.availability();
   }
@@ -831,6 +1083,55 @@ export class ConductorComposer implements ConductorModule {
       attentionReason: attention.reason,
       ...(live !== undefined ? { live } : {}),
     };
+  }
+
+  // --- multi-agent compare (F3 parallel-run groups): read-only ------------------
+
+  /** The narrow read seams the compare service groups + projects over. */
+  private compareDeps(): CompareDeps {
+    return {
+      listWorkspaces: () => this.engine.listWorkspaces(),
+      getWorkspace: (id) => this.engine.getWorkspace(id),
+      buildView: (workspace) => this.buildWorkspaceView(workspace),
+      diffStat: (workspace) => this.computeDiffStat(workspace),
+    };
+  }
+
+  /**
+   * A READ-ONLY diff footprint (files / +lines / -lines) for one workspace — the
+   * compare row's `diffStat`. Unlike `workspaceDiff`, this NEVER transitions the
+   * workspace (no running → awaiting_review side effect). Degrade-safe: a record
+   * with no worktree, or a substrate diff fault, yields a truthful reason and NO
+   * stat (never a fabricated `0/0/0`).
+   */
+  private async computeDiffStat(
+    workspace: Workspace,
+  ): Promise<{ stat?: ReturnType<typeof parseDiffStat>; reason?: string }> {
+    if (!workspace.worktreePath) {
+      return { reason: 'no worktree (never launched or already torn down)' };
+    }
+    try {
+      const substrate = this.registry.getFull(workspace.substrate);
+      const diff = await substrate.diff(
+        {
+          ref: workspace.workspaceId,
+          sessionName: workspace.sessionName,
+          worktreePath: workspace.worktreePath,
+        },
+        workspace.baseRef || 'HEAD',
+      );
+      return { stat: parseDiffStat(diff.stat, diff.changedFiles) };
+    } catch (err) {
+      return { reason: err instanceof Error ? err.message : 'diff failed' };
+    }
+  }
+
+  async compareTaskGroup(taskGroup: string): Promise<CompareView> {
+    return compareTaskGroupOp(this.compareDeps(), taskGroup);
+  }
+
+  async workspaceSiblings(workspaceId: string): Promise<CompareView | null> {
+    return workspaceSiblingsOp(this.compareDeps(), workspaceId);
   }
 
   async workspaceDiff(workspaceId: string): Promise<WorkspaceDiffView> {
@@ -1008,7 +1309,30 @@ export class ConductorComposer implements ConductorModule {
   }
 
   routes(): Router {
-    return buildConductorRoutes({ module: this, middleware: this.middleware });
+    const router = Router();
+    // Compare routes FIRST: `/workspaces/compare` must resolve before the main
+    // router's `/workspaces/:id` (else "compare" is read as a workspace id).
+    router.use(buildCompareRoutes({ module: this, middleware: this.middleware }));
+    // Checkpoint routes: static `/checkpoints` segment after `:id`, no collision
+    // with the main `/workspaces/:id/*` edges; register before the main router.
+    router.use(buildCheckpointRoutes({ module: this, middleware: this.middleware }));
+    // Board query routes: the literal `/workspaces/archived` + the query-aware
+    // `GET /workspaces` MUST precede the main router so the filtered list shadows
+    // the plain list and `/workspaces/archived` resolves before `/workspaces/:id`.
+    router.use(buildWorkspaceQueryRoutes({ module: this, middleware: this.middleware }));
+    // Repo-config + PR-status: `/repo-setup-script` (GET/PUT) + the workspace's
+    // `/workspaces/:id/pr-status` read. The setup-script PUT is governed inside
+    // the injected RepoSetupService (deny ⇒ truthful 403, never a faked 200).
+    router.use(
+      buildRepoConfigRoutes({
+        module: this,
+        middleware: this.middleware,
+        repoSetup: this.repoSetup,
+        prStatus: this.prStatus,
+      }),
+    );
+    router.use(buildConductorRoutes({ module: this, middleware: this.middleware }));
+    return router;
   }
 
   mcp(): readonly McpToolRegistration[] {
