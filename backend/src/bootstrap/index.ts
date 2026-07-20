@@ -420,6 +420,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     middleware: identity.middleware(),
     gate: governance.gate(),
     candidateStore: agentOs.repository(),
+    beadsEngine: engines.client('beads'),
     overrides: config.memory,
     embedFallback: memoryEmbedFallback,
   });

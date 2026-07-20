@@ -3,8 +3,9 @@
  * one module. It:
  *  - slices `MemoryConfig` from the injected `AppConfig` + bootstrap overrides
  *    (NO `process.env` here — every env read is folded in bootstrap),
- *  - builds the degrade-safe engine adapters (mem0 [+ optional sidecar], beads,
- *    ColBERT, the shared vector foundation → retrieval service),
+ *  - builds the degrade-safe engine adapters (mem0 [+ optional sidecar], the
+ *    beads issue-graph facet over the injected engines transport, ColBERT, the
+ *    shared vector foundation → retrieval service),
  *  - binds the `MemoryRepository` over the persistence executor (relations) +
  *    the agent-os candidate/item store (conflict #3: agent-os owns those tables),
  *  - composes the recall fusion service, the candidate + governed lifecycle +
@@ -33,9 +34,10 @@ import type { MemoryLifecycle } from './lifecycle/memory-lifecycle.js';
 import type { ForgetService } from './lifecycle/forget.js';
 import type { RelateService } from './lifecycle/relate.js';
 import type { MemoryWriteAllowlist } from './lifecycle/write-allowlist.js';
+import type { IssueGraphService } from './ports/issue-graph.port.js';
 import { createMem0Adapter } from './adapters/mem0.adapter.js';
 import { createMem0SidecarClient } from './adapters/mem0-sidecar.client.js';
-import { createBeadsMemoryAdapter } from './adapters/beads-memory.adapter.js';
+import { createIssueGraphService } from './issue-graph/issue-graph.service.js';
 import { createColbertAdapter } from './adapters/colbert.adapter.js';
 import { createColbertSearchClient } from './adapters/colbert-search.client.js';
 import { createMemoryRepository } from './adapters/candidate-repository.adapter.js';
@@ -67,7 +69,7 @@ export class MemoryComposer implements MemoryModule {
   private readonly middleware: MemoryModuleDeps['middleware'];
 
   private readonly mem0: ReturnType<typeof createMem0Adapter>;
-  private readonly beads: ReturnType<typeof createBeadsMemoryAdapter>;
+  private readonly issueGraphSvc: IssueGraphService;
   private readonly colbert: ReturnType<typeof createColbertAdapter>;
   private readonly colbertSearchClient: ReturnType<typeof createColbertSearchClient>;
   private readonly foundation: ReturnType<typeof createVectorFoundation>;
@@ -96,7 +98,12 @@ export class MemoryComposer implements MemoryModule {
       ? createMem0SidecarClient(cfg.mem0SidecarUrl)
       : null;
     this.mem0 = createMem0Adapter({ sidecar });
-    this.beads = createBeadsMemoryAdapter();
+    // The beads module facet over the INJECTED engines transport (the one `bd`
+    // spawner) — memory never spawns `bd` or resolves the binary itself.
+    this.issueGraphSvc = createIssueGraphService({
+      engine: deps.beadsEngine,
+      logger: this.log,
+    });
     this.colbert = createColbertAdapter(cfg, deps.colbertFetch);
     // FIRST-STAGE ColBERT retriever over the SAME daemon (`colbertRerankUrl`):
     // late-interaction index search + per-collection index build. Degrade-safe.
@@ -130,7 +137,7 @@ export class MemoryComposer implements MemoryModule {
     // is a parallel recall source (over the mem0 collection), degrade-truthful.
     this.recallService = createRecallService({
       mem0: this.mem0,
-      beads: this.beads,
+      beads: this.issueGraphSvc,
       repository: this.repo,
       reranker: this.colbert,
       colbertSearch: this.colbertSearchClient,
@@ -147,14 +154,14 @@ export class MemoryComposer implements MemoryModule {
     // Lifecycle: candidate proposal → governed promotion → forget → harvest, + relations.
     this.candidateService = createCandidateService({
       repository: this.repo,
-      beads: this.beads,
+      beads: this.issueGraphSvc,
       allowlist: this.writeAllowlist,
       logger: this.log,
     });
     this.lifecycleService = createMemoryLifecycle({
       repository: this.repo,
       gate: deps.gate,
-      beads: this.beads,
+      beads: this.issueGraphSvc,
       // Close the semantic-memory loop: an accepted durable fact is mirrored into
       // mem0's vector store so its consolidation/relations/decay run on real data.
       mem0: this.mem0,
@@ -175,7 +182,7 @@ export class MemoryComposer implements MemoryModule {
     // consolidation sweep. Degrade-safe; the driver self-skips when bd/mem0 are
     // down. `maintenanceIntervalMs === 0` disables it entirely.
     this.maintenance = new MemoryMaintenanceService({
-      beads: this.beads,
+      beads: this.issueGraphSvc,
       mem0: this.mem0,
       logger: this.log,
       intervalMs: cfg.maintenanceIntervalMs,
@@ -212,6 +219,11 @@ export class MemoryComposer implements MemoryModule {
 
   relations(): RelateService {
     return this.relateService;
+  }
+
+  /** The cohesive beads module facet (issue graph + memory verbs + durability). */
+  issueGraph(): IssueGraphService {
+    return this.issueGraphSvc;
   }
 
   repository(): MemoryRepository {
@@ -280,17 +292,31 @@ export class MemoryComposer implements MemoryModule {
       });
     }
 
-    // beads (mirror).
-    const beadsUp = this.beads.available();
-    readiness.push(
-      beadsUp
-        ? { name: 'beads', available: true }
-        : {
-            name: 'beads',
-            available: false,
-            reason: 'bd binary/DB unavailable',
-          }
-    );
+    // beads (mirror) — a REAL probe through the one engine seam, never a guess.
+    try {
+      const beadsHealth = await this.issueGraphSvc.health();
+      readiness.push(
+        beadsHealth.available
+          ? {
+              name: 'beads',
+              available: true,
+              ...(beadsHealth.version
+                ? { detail: { version: beadsHealth.version } }
+                : {}),
+            }
+          : {
+              name: 'beads',
+              available: false,
+              reason: beadsHealth.reason ?? 'bd binary/DB unavailable',
+            }
+      );
+    } catch (err) {
+      readiness.push({
+        name: 'beads',
+        available: false,
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    }
 
     // colbert (mirror) — configured iff a rerank URL is set.
     readiness.push(
@@ -373,6 +399,7 @@ export class MemoryComposer implements MemoryModule {
     this.started = true;
     // Beads durability flush + mem0 consolidation sweep (self-skips when down).
     this.maintenance.start();
+    const beadsHealth = await this.issueGraphSvc.health();
     this.log.info(
       {
         mem0Sidecar: this.cfg.mem0SidecarUrl
@@ -382,7 +409,7 @@ export class MemoryComposer implements MemoryModule {
         vector: this.foundation.store.configured,
         vectorBackend: this.foundation.storeBackend,
         retrievalConfigured: this.foundation.configured,
-        beads: this.beads.available(),
+        beads: beadsHealth.available,
         maintenanceIntervalMs: this.cfg.maintenanceIntervalMs,
       },
       'memory module started'

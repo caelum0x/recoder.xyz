@@ -17,7 +17,7 @@ import type { MemoryCandidate } from '@recoder/agent-os';
 import type { Logger } from '../../../shared/logger.js';
 import { ErrorCode, createError } from '../../../shared/errors.js';
 import type { MemoryRepository } from '../ports/memory-repository.port.js';
-import type { BeadsMemoryPort } from '../ports/beads-memory.port.js';
+import type { IssueGraphService } from '../ports/issue-graph.port.js';
 import type { MemoryWriteAllowlist } from './write-allowlist.js';
 
 /** The scope vocabulary a candidate may be filed under (mirrors agent-os). */
@@ -55,7 +55,8 @@ export interface CandidateService {
 
 export interface CandidateServiceDeps {
   readonly repository: MemoryRepository;
-  readonly beads: BeadsMemoryPort;
+  /** The beads module facet (wisp mirror); degrade-truthful, never throws. */
+  readonly beads: IssueGraphService;
   readonly logger: Logger;
   /**
    * OPTIONAL governance write allowlist — a deterministic scope filter enforced
@@ -111,20 +112,22 @@ export function createCandidateService(deps: CandidateServiceDeps): CandidateSer
 
       // Best-effort mirror into the beads issue-graph shared memory FIRST so the
       // bd-issued wisp id can be persisted on the candidate — it is the ONLY id
-      // `bd promote` accepts later (memory-lifecycle.accept). Never fatal: a
-      // bd-down environment stores the candidate without a beadsRef.
+      // `bd promote` accepts later (memory-lifecycle.accept). Never fatal: the
+      // facet degrades to `undefined` when bd is down, and the candidate is
+      // stored without a beadsRef. The proposer is the bd audit-trail actor.
       let beadsRef: string | undefined;
-      if (beads.available()) {
-        try {
-          beadsRef = beads.remember({
+      try {
+        beadsRef = await beads.remember(
+          {
             title,
             body,
             scope: String(input.scope),
             ...(input.discoveredFrom ? { discoveredFrom: input.discoveredFrom } : {}),
-          });
-        } catch (err) {
-          logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'candidate beads mirror failed');
-        }
+          },
+          input.proposedBy,
+        );
+      } catch (err) {
+        logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'candidate beads mirror failed');
       }
 
       const candidate: MemoryCandidate = {

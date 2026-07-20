@@ -5,7 +5,8 @@
 import { describe, it, expect } from 'vitest';
 import type { MemoryCandidate } from '@recoder/agent-os';
 import type { MemoryRepository } from '../ports/memory-repository.port.js';
-import type { BeadsMemoryPort } from '../ports/beads-memory.port.js';
+import type { BeadsRememberInput, IssueGraphService } from '../ports/issue-graph.port.js';
+import { fakeIssueGraph } from '../__fixtures__/issue-graph.fixture.js';
 import type { MemoryRelation } from '../types.js';
 import { createCandidateService } from './candidate-service.js';
 import { createHarvestService } from './harvest.js';
@@ -13,27 +14,22 @@ import { createRelateService } from './relate.js';
 
 const silentLogger = { info() {}, warn() {}, error() {}, debug() {}, child() { return silentLogger; } } as never;
 
-const beadsDown: BeadsMemoryPort = {
-  available: () => false,
-  remember: () => undefined,
-  recall: () => [],
-  promote: () => false,
-  note: () => false,
-};
+const beadsDown: IssueGraphService = fakeIssueGraph();
 
-/** A live fake beads port that issues a bd id and records remember calls. */
-function beadsUp(bdId: string): { port: BeadsMemoryPort; remembered: Parameters<BeadsMemoryPort['remember']>[0][] } {
-  const remembered: Parameters<BeadsMemoryPort['remember']>[0][] = [];
-  const port: BeadsMemoryPort = {
-    available: () => true,
-    remember: (input) => {
-      remembered.push(input);
+/** A live fake issue-graph facet that issues a bd id and records remember calls. */
+function beadsUp(bdId: string): {
+  port: IssueGraphService;
+  remembered: { input: BeadsRememberInput; actor: string }[];
+} {
+  const remembered: { input: BeadsRememberInput; actor: string }[] = [];
+  const port = fakeIssueGraph({
+    health: async () => ({ available: true }),
+    remember: async (input, actor) => {
+      remembered.push({ input, actor });
       return bdId;
     },
-    recall: () => [],
-    promote: () => true,
-    note: () => false,
-  };
+    promote: async () => true,
+  });
   return { port, remembered };
 }
 
@@ -115,7 +111,9 @@ describe('candidate-service.propose', () => {
     expect(candidate.beadsRef).toBe('bd-42');
     expect(stored[0]?.beadsRef).toBe('bd-42');
     expect(beads.remembered).toHaveLength(1);
-    expect(beads.remembered[0]?.title).toBe('fact');
+    expect(beads.remembered[0]?.input.title).toBe('fact');
+    // The proposer is threaded as the bd audit-trail actor.
+    expect(beads.remembered[0]?.actor).toBe('agent:1');
   });
 
   it('stores the candidate WITHOUT beadsRef when bd is down (truthful degrade)', async () => {
@@ -135,15 +133,12 @@ describe('candidate-service.propose', () => {
 
   it('still stores the candidate when beads.remember throws (mirror is best-effort)', async () => {
     const { repo, stored } = repoWithCapture();
-    const throwingBeads: BeadsMemoryPort = {
-      available: () => true,
-      remember: () => {
+    const throwingBeads: IssueGraphService = fakeIssueGraph({
+      health: async () => ({ available: true }),
+      remember: async () => {
         throw new Error('bd exploded');
       },
-      recall: () => [],
-      promote: () => false,
-      note: () => false,
-    };
+    });
     const svc = createCandidateService({ repository: repo, beads: throwingBeads, logger: silentLogger, newId: () => 'mc_1' });
     const candidate = await svc.propose({
       userId: 'u1',
