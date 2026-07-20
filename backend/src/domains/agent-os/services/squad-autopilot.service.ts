@@ -22,7 +22,11 @@
  * timer, overlapping passes skipped.
  */
 import type { Logger } from '../../../shared/logger.js';
-import type { SquadIssuePort, SquadReadyIssue } from '../ports/squad-issue.port.js';
+import type {
+  SquadIssuePort,
+  SquadReadyIssue,
+  SquadStaleIssue,
+} from '../ports/squad-issue.port.js';
 import type { SquadConductorPort } from '../ports/squad-autopilot.port.js';
 import type { SquadService } from './squad.service.js';
 
@@ -89,6 +93,12 @@ export interface AutopilotBoardView {
   readonly conductor: { readonly wired: boolean };
   readonly lastTick: AutopilotTickResult | null;
   readonly entries: readonly AutopilotBoardEntry[];
+  /**
+   * Stalled in-flight work (`bd stale` via the issue-graph port) — explicit
+   * control-plane state, never a generic "working". `[]` when the seam is
+   * unattached or down (the `beads` section carries the truthful reason).
+   */
+  readonly staleIssues: readonly SquadStaleIssue[];
 }
 
 export interface SquadAutopilotDeps {
@@ -214,6 +224,7 @@ export class SquadAutopilotService {
   /** The truthful board read model. Non-throwing; probes the issue-graph seam's health. */
   async board(): Promise<AutopilotBoardView> {
     let beads: AutopilotBoardView['beads'] = { wired: false };
+    let staleIssues: readonly SquadStaleIssue[] = [];
     if (this.issueGraph) {
       try {
         const health = await this.issueGraph.health();
@@ -225,6 +236,17 @@ export class SquadAutopilotService {
       } catch (err) {
         beads = { wired: true, status: 'down', reason: err instanceof Error ? err.message : 'issue-graph health probe failed' };
       }
+      try {
+        // Stalled in-flight work surfaced as board state; the port's degrade
+        // law makes a down graph read as `[]` (the health above tells why).
+        staleIssues = await this.issueGraph.stale();
+      } catch (err) {
+        // Defensive: the port should not throw — a stale read never breaks the board.
+        this.logger.debug?.(
+          { err: err instanceof Error ? err.message : String(err) },
+          'squad-autopilot: issue-graph stale read threw (board serves without it)',
+        );
+      }
     }
     return {
       running: this.timer !== null,
@@ -232,6 +254,7 @@ export class SquadAutopilotService {
       conductor: { wired: this.conductor !== null },
       lastTick: this.lastTick,
       entries: [...this.entries.values()].reverse(), // newest first
+      staleIssues,
     };
   }
 

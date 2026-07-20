@@ -178,7 +178,8 @@ export class MemoryComposer implements MemoryModule {
     });
     this.relateService = createRelateService({ repository: this.repo });
 
-    // Maintenance loop: beads durability flush (`bd vc commit`) + mem0
+    // Maintenance loop: beads durability flush (`bd vc commit`) + config-gated
+    // beads gc (`bd gc` every `gcEverySweeps` sweeps; 0 = off) + mem0
     // consolidation sweep. Degrade-safe; the driver self-skips when bd/mem0 are
     // down. `maintenanceIntervalMs === 0` disables it entirely.
     this.maintenance = new MemoryMaintenanceService({
@@ -186,6 +187,7 @@ export class MemoryComposer implements MemoryModule {
       mem0: this.mem0,
       logger: this.log,
       intervalMs: cfg.maintenanceIntervalMs,
+      gcEverySweeps: cfg.gcEverySweeps,
     });
   }
 
@@ -411,6 +413,7 @@ export class MemoryComposer implements MemoryModule {
         retrievalConfigured: this.foundation.configured,
         beads: beadsHealth.available,
         maintenanceIntervalMs: this.cfg.maintenanceIntervalMs,
+        gcEverySweeps: this.cfg.gcEverySweeps,
       },
       'memory module started'
     );

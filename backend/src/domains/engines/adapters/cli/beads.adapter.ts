@@ -278,14 +278,16 @@ export function buildBeadsArgs(op: BeadsOp, input: Record<string, unknown>): str
       return id ? withActor(['promote', id, '--json'], input) : null;
     case 'flush': {
       // Durability flush: seal any coalesced/deferred working-set as a versioned
-      // checkpoint. A clean graph yields bd's truthful `committed:false`.
+      // checkpoint. A clean graph yields bd's truthful `committed:false`. The
+      // optional actor attributes the Dolt commit (`--actor` is a bd global flag).
       const message = str(input.message) ?? 'bd: memory durability flush';
-      return ['vc', 'commit', '-m', message, '--json'];
+      return withActor(['vc', 'commit', '-m', message, '--json'], input);
     }
     case 'gc':
       // Lifecycle GC (decay closed/expired wisps + compact + Dolt GC). `--force`
-      // skips the interactive confirmation — this is a non-interactive seam.
-      return ['gc', '--force', '--json'];
+      // skips the interactive confirmation — this is a non-interactive seam. The
+      // optional actor attributes the compaction in bd's audit trail.
+      return withActor(['gc', '--force', '--json'], input);
     case 'raw': {
       const raw = Array.isArray(input.args) ? input.args.filter((a): a is string => typeof a === 'string') : null;
       return raw && raw.length > 0 ? raw : null;

@@ -379,10 +379,11 @@ export function createIssueGraphService(deps: IssueGraphServiceDeps): IssueGraph
       return result.value ?? null;
     },
 
-    async flush(message?: string): Promise<BeadsFlushResult> {
-      const result = await invoke('flush', {
-        ...(message?.trim() ? { message: message.trim() } : {}),
-      });
+    async flush(message?: string, actor?: string): Promise<BeadsFlushResult> {
+      const result = await invoke(
+        'flush',
+        withActor({ ...(message?.trim() ? { message: message.trim() } : {}) }, actor ?? ''),
+      );
       if (!result.ok) {
         return writeDown<BeadsFlushResult>('flush', result.reason, {
           committed: false,
@@ -400,8 +401,8 @@ export function createIssueGraphService(deps: IssueGraphServiceDeps): IssueGraph
       return { committed: false, reason };
     },
 
-    async gc(): Promise<{ ran: boolean; reason?: string }> {
-      const result = await invoke('gc', {});
+    async gc(actor?: string): Promise<{ ran: boolean; reason?: string }> {
+      const result = await invoke('gc', withActor({}, actor ?? ''));
       if (!result.ok) {
         return writeDown<{ ran: boolean; reason?: string }>('gc', result.reason, {
           ran: false,

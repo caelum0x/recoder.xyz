@@ -12,6 +12,7 @@ import type {
   SquadIssuePort,
   SquadIssueDetail,
   SquadReadyIssue,
+  SquadStaleIssue,
 } from '../ports/squad-issue.port.js';
 import type { SquadConductorPort, SquadDispatchRequest } from '../ports/squad-autopilot.port.js';
 import { SquadAutopilotService, type SquadAutopilotDeps } from '../services/squad-autopilot.service.js';
@@ -27,6 +28,8 @@ interface FakeIssueGraphOptions {
   readonly show?: (id: string) => SquadIssueDetail | null;
   /** The truthful liveness probe; defaults to available. */
   readonly health?: () => { available: boolean; reason?: string };
+  /** The `bd stale` board read; omitted ⇒ `[]` (the facet's degrade value). */
+  readonly stale?: () => readonly SquadStaleIssue[];
 }
 
 /**
@@ -43,7 +46,7 @@ function fakeIssueGraph(opts: FakeIssueGraphOptions = {}) {
       showCalls.push({ id, long: o.long });
       return opts.show?.(id) ?? null;
     },
-    stale: async () => [],
+    stale: async () => opts.stale?.() ?? [],
   };
   return { port, showCalls };
 }
@@ -299,6 +302,9 @@ describe('SquadAutopilotService — truthful degrade', () => {
     expect(board.beads.wired).toBe(false);
     expect(board.conductor.wired).toBe(false);
     expect(board.running).toBe(false);
+    // Unattached seam ⇒ no stale read is even possible; the board says so via
+    // `beads.wired:false` and serves an empty (never fabricated) section.
+    expect(board.staleIssues).toEqual([]);
     expect(svc.seams()).toEqual({ beadsWired: false, conductorWired: false });
   });
 
@@ -310,6 +316,29 @@ describe('SquadAutopilotService — truthful degrade', () => {
       issueGraph: fakeIssueGraph({ health: () => ({ available: false, reason: 'bd down' }) }).port,
     });
     expect((await down.board()).beads).toEqual({ wired: true, status: 'down', reason: 'bd down' });
+  });
+
+  it('board surfaces stalled in-flight work (`bd stale`) as explicit control-plane state', async () => {
+    const stale: SquadStaleIssue[] = [
+      { id: 'bd-7', title: 'Stuck migration', status: 'in_progress' },
+      { id: 'bd-8', title: 'Silent worktree', status: 'in_progress' },
+    ];
+    const svc = autopilot({ issueGraph: fakeIssueGraph({ stale: () => stale }).port });
+
+    const board = await svc.board();
+    expect(board.staleIssues).toEqual(stale);
+  });
+
+  it('board serves without the stale section on a (contract-violating) port throw', async () => {
+    const graph = fakeIssueGraph();
+    graph.port.stale = async () => {
+      throw new Error('stale read bug');
+    };
+    const svc = autopilot({ issueGraph: graph.port });
+
+    const board = await svc.board();
+    expect(board.beads).toEqual({ wired: true, status: 'up' });
+    expect(board.staleIssues).toEqual([]);
   });
 });
 

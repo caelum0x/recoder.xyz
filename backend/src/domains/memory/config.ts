@@ -93,6 +93,12 @@ export const memoryConfigSchema = z.object({
    * consolidation). `0` disables the driver (degrade-safe). Default 5 min.
    */
   maintenanceIntervalMs: z.number().int().min(0).default(300_000),
+  /**
+   * Run `bd gc` (decay closed/expired memory wisps + compact the Dolt graph)
+   * every Nth maintenance sweep. `0` disables the gc step entirely (default —
+   * graph compaction is opt-in; the flush-only sweep behavior is unchanged).
+   */
+  gcEverySweeps: z.number().int().min(0).default(0),
 });
 
 export type MemoryConfig = z.infer<typeof memoryConfigSchema>;
@@ -118,6 +124,7 @@ export interface MemoryConfigOverrides {
   readonly recallLimit?: number;
   readonly candidateTtlDays?: number;
   readonly maintenanceIntervalMs?: number;
+  readonly gcEverySweeps?: number;
 }
 
 /** Normalize an allowlist override: trim, drop blanks, de-duplicate. */
@@ -196,5 +203,6 @@ export function sliceMemoryConfig(
     recallLimit: overrides.recallLimit ?? 8,
     candidateTtlDays: overrides.candidateTtlDays ?? 30,
     maintenanceIntervalMs: overrides.maintenanceIntervalMs ?? 300_000,
+    gcEverySweeps: overrides.gcEverySweeps ?? 0,
   });
 }

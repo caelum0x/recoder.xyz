@@ -1,7 +1,9 @@
 /**
  * memory-maintenance.service tests — proves the maintenance driver FIRES the
- * engines it fuses: the beads durability flush (`bd vc commit`) and the mem0
- * consolidation sweep, both degrade-truthful (never throw, never fake).
+ * engines it fuses: the beads durability flush (`bd vc commit`), the
+ * config-gated beads gc (`bd gc` every Nth sweep, 0=off), and the mem0
+ * consolidation sweep — all degrade-truthful (never throw, never fake), with
+ * every beads write attributed to the `memory-maintenance` audit actor.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type {
@@ -10,7 +12,7 @@ import type {
 } from '../ports/issue-graph.port.js';
 import { fakeIssueGraph } from '../__fixtures__/issue-graph.fixture.js';
 import type { Mem0Port, Mem0ConsolidateResult } from '../ports/mem0.port.js';
-import { MemoryMaintenanceService } from './memory-maintenance.service.js';
+import { MAINTENANCE_ACTOR, MemoryMaintenanceService } from './memory-maintenance.service.js';
 
 const silentLogger = {
   info() {},
@@ -63,6 +65,8 @@ describe('MemoryMaintenanceService.sweepOnce', () => {
 
     const stats = await svc.sweepOnce();
     expect(flush).toHaveBeenCalledTimes(1);
+    // The durability commit is attributed to the maintenance loop, not $USER.
+    expect(flush).toHaveBeenCalledWith('bd: memory durability flush', MAINTENANCE_ACTOR);
     expect(stats.beads.attempted).toBe(true);
     expect(stats.beads.committed).toBe(true);
     expect(stats.beads.hash).toBe('deadbeef');
@@ -149,6 +153,89 @@ describe('MemoryMaintenanceService.sweepOnce', () => {
     const stats = await svc.sweepOnce();
     expect(stats.mem0.attempted).toBe(false);
     expect(stats.mem0.ok).toBe(false);
+  });
+});
+
+describe('MemoryMaintenanceService gc sweep (config-gated, off by default)', () => {
+  it('never runs bd gc when gcEverySweeps is unset/0 (truthful disabled reason)', async () => {
+    const gc = vi.fn(async () => ({ ran: true }));
+    const svc = new MemoryMaintenanceService({
+      beads: beads({ gc }),
+      mem0: mem0(),
+      logger: silentLogger,
+      intervalMs: 0,
+    });
+
+    const stats = await svc.sweepOnce();
+    expect(gc).not.toHaveBeenCalled();
+    expect(stats.gc).toEqual({
+      attempted: false,
+      ran: false,
+      reason: 'gc disabled (gcEverySweeps=0)',
+    });
+  });
+
+  it('runs bd gc on every Nth sweep, attributed to memory-maintenance', async () => {
+    const gc = vi.fn(async () => ({ ran: true }));
+    const svc = new MemoryMaintenanceService({
+      beads: beads({ gc }),
+      mem0: mem0(),
+      logger: silentLogger,
+      intervalMs: 0,
+      gcEverySweeps: 2,
+    });
+
+    const first = await svc.sweepOnce();
+    expect(gc).not.toHaveBeenCalled();
+    expect(first.gc.attempted).toBe(false);
+    expect(first.gc.reason).toContain('not due');
+
+    const second = await svc.sweepOnce();
+    expect(gc).toHaveBeenCalledTimes(1);
+    // The graph compaction is stamped with the maintenance audit actor.
+    expect(gc).toHaveBeenCalledWith(MAINTENANCE_ACTOR);
+    expect(second.gc).toEqual({ attempted: true, ran: true });
+
+    await svc.sweepOnce();
+    const fourth = await svc.sweepOnce();
+    expect(gc).toHaveBeenCalledTimes(2);
+    expect(fourth.gc.ran).toBe(true);
+  });
+
+  it('reports a truthful {ran:false, reason} when bd is down (never fakes a gc)', async () => {
+    const svc = new MemoryMaintenanceService({
+      beads: beads({ gc: async () => ({ ran: false, reason: 'bd binary not found' }) }),
+      mem0: mem0(),
+      logger: silentLogger,
+      intervalMs: 0,
+      gcEverySweeps: 1,
+    });
+
+    const stats = await svc.sweepOnce();
+    expect(stats.gc).toEqual({
+      attempted: true,
+      ran: false,
+      reason: 'bd binary not found',
+    });
+  });
+
+  it('never throws when the gc faults (degrade-safe)', async () => {
+    const svc = new MemoryMaintenanceService({
+      beads: beads({
+        gc: async () => {
+          throw new Error('bd gc exploded');
+        },
+      }),
+      mem0: mem0(),
+      logger: silentLogger,
+      intervalMs: 0,
+      gcEverySweeps: 1,
+    });
+
+    const stats = await svc.sweepOnce();
+    expect(stats.gc.attempted).toBe(true);
+    expect(stats.gc.ran).toBe(false);
+    expect(stats.gc.reason).toMatch(/exploded/i);
   });
 });
 
