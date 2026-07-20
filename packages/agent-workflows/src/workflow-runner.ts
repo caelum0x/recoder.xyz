@@ -75,6 +75,14 @@ export type AgentOsWorkflowRunnerPorts = {
   executeTool?: (node: WorkflowNode, context: WorkflowExecutionContext) => Promise<WorkflowNodeHandlerResult>;
   requestApproval?: (node: WorkflowNode, context: WorkflowExecutionContext) => Promise<WorkflowNodeHandlerResult>;
   runVerification?: (node: WorkflowNode, context: WorkflowExecutionContext) => Promise<WorkflowNodeHandlerResult>;
+  /**
+   * Handler for a `browser-check` node — a live browser verification step
+   * (navigate → assert → screenshot → summary artifact) driven by the browser
+   * engine. Absent ⇒ the node degrades to a truthful `skipped` (browsing is
+   * evidence-gathering, so an unwired handler never blocks the run — see
+   * {@link AgentOsWorkflowRunner.executeNode}).
+   */
+  runBrowserCheck?: (node: WorkflowNode, context: WorkflowExecutionContext) => Promise<WorkflowNodeHandlerResult>;
   openPullRequest?: (node: WorkflowNode, context: WorkflowExecutionContext) => Promise<WorkflowNodeHandlerResult>;
   runDeploy?: (node: WorkflowNode, context: WorkflowExecutionContext) => Promise<WorkflowNodeHandlerResult>;
   executeNode?: (node: WorkflowNode, context: WorkflowExecutionContext) => Promise<WorkflowNodeHandlerResult>;
@@ -235,6 +243,23 @@ export class AgentOsWorkflowRunner {
           status: 'waiting',
           output: {
             reason: 'Approval-wait node is parked until an approval decision arrives.',
+          },
+        };
+    }
+
+    // Browser-check is a LIVE verification step (navigate → assert → screenshot →
+    // summary artifact). When a handler is wired it drives the browser engine and
+    // attaches evidence; when it is absent the node degrades to a truthful
+    // `skipped` — browsing is evidence-gathering, so an unwired handler must never
+    // hard-fail the workflow (a real assertion failure inside the handler still
+    // returns `failed`).
+    if (node.kind === 'browser-check') {
+      return this.ports.runBrowserCheck
+        ? this.ports.runBrowserCheck(node, context)
+        : {
+          status: 'skipped',
+          output: {
+            reason: 'No browser-check handler configured — browser verification skipped.',
           },
         };
     }

@@ -171,6 +171,87 @@ export interface CodeIntelResult {
 }
 
 /**
+ * A per-seed-term `symbol_search` hit set. `result` is the raw engine payload
+ * (passed through untouched — never a fabricated symbol list).
+ */
+export interface CodeContextSymbolMatch {
+  /** The seed term this match set was searched for. */
+  term: string;
+  /** Raw `symbol_search` (engine `query`) payload. */
+  result: unknown;
+}
+
+/**
+ * A per-seed-term `definition` (engine `context`) 360° lookup. `result` is the
+ * raw engine payload (definition + callers + callees + flows) untouched.
+ */
+export interface CodeContextDefinition {
+  /** The seed term resolved as a symbol name. */
+  symbol: string;
+  /** Raw `definition` (engine `context`) payload. */
+  result: unknown;
+}
+
+/**
+ * The composed CODE-AWARE launch context for a repo: the projected DomainMap
+ * (repo overview) plus per-seed-term `symbol_search` matches and `definition`
+ * lookups over the already-indexed graph. This is what makes an agent run
+ * code-aware AT LAUNCH — the conductor folds it into the agent's launch prompt.
+ *
+ * TRUTHFUL DEGRADE: `available:false` + a `reason` when the repo is not indexed,
+ * the in-process lib is absent, or the graph returned nothing for the seeds —
+ * NEVER a fabricated domain/symbol/definition. `symbols`/`definitions` are always
+ * arrays (possibly empty); `domainMap` is present only when it carries domains.
+ */
+export interface CodeContext {
+  repoId: string;
+  /** True only when domainMap OR at least one symbol/definition carries content. */
+  available: boolean;
+  /** Truthful reason when `available:false` (not indexed / lib absent / empty). */
+  reason?: string;
+  /** The repo's projected DomainMap (overview) — present only when non-empty. */
+  domainMap?: DomainMap;
+  /** Per-seed-term `symbol_search` matches (real engine payloads). */
+  symbols: CodeContextSymbolMatch[];
+  /** Per-seed-term `definition` (context) lookups (real engine payloads). */
+  definitions: CodeContextDefinition[];
+}
+
+/** Default cap on seed terms actually queried (bounds fan-out at launch). */
+const DEFAULT_MAX_SEED_TERMS = 6;
+/** Default `symbol_search` result cap per seed term. */
+const DEFAULT_CONTEXT_SYMBOL_LIMIT = 5;
+
+/**
+ * Trim, dedupe (case-insensitive, first spelling wins), drop empties, and bound
+ * caller-supplied seed terms to `max`. Pure + exported so the launch-time
+ * fan-out is directly testable and deterministic.
+ */
+export function normalizeSeedTerms(
+  seedTerms: readonly string[],
+  max: number = DEFAULT_MAX_SEED_TERMS
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of seedTerms) {
+    if (typeof raw !== 'string') continue;
+    const term = raw.trim();
+    if (term.length === 0) continue;
+    const key = term.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(term);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+/** Truthful empty code-context (never a fabricated graph). */
+function emptyCodeContext(repoId: string, reason: string): CodeContext {
+  return { repoId, available: false, reason, symbols: [], definitions: [] };
+}
+
+/**
  * Truthful supervision state of the `recodergit mcp --http` process.
  * - 'disabled'    : flag off — nothing is (or should be) running.
  * - 'starting'    : a spawn is in flight (transient).
@@ -1251,6 +1332,104 @@ export class RecoderGitService {
         ),
       };
     }
+  }
+
+  /**
+   * Compose a CODE-AWARE launch context over an already-indexed repo graph:
+   * the projected DomainMap (overview) + a bounded `symbol_search` and
+   * `definition` lookup per seed term. This is the launch-time fusion the
+   * conductor folds into an agent's prompt so the run starts code-aware instead
+   * of grepping blind.
+   *
+   * Every layer is DEGRADE-TRUTHFUL, mirroring {@link codeIntel}:
+   *   - flag off            → `{ enabled:false }` (pure no-op),
+   *   - repo not indexed     → `available:false` ('not indexed', truthful),
+   *   - in-process lib absent → `available:false` ('needs the in-process lib'),
+   *   - a per-query fault     → that query is silently dropped (best-effort),
+   *   - nothing came back     → `available:false` (indexed but empty for seeds).
+   * On success `domainMap`/`symbols`/`definitions` carry the RAW engine payloads
+   * untouched. NEVER throws into a request path; NEVER fabricates context.
+   */
+  async queryContext(
+    repoId: string,
+    seedTerms: readonly string[] = [],
+    opts: { maxTerms?: number; symbolLimit?: number } = {}
+  ): Promise<ServiceResult<CodeContext>> {
+    if (!this.isEnabled()) return { enabled: false };
+
+    // Truthful "not indexed": no recorded repo root ⇒ no graph to make aware of.
+    const repoRoot = await this.resolveCodeIntelRepoRoot(repoId);
+    if (!repoRoot) {
+      return {
+        enabled: true,
+        ...emptyCodeContext(
+          repoId,
+          'repo not indexed (call index/connect first — no code-graph to make the run code-aware)'
+        ),
+      };
+    }
+
+    // The structured code-intel surface needs the in-process engine lib; the
+    // CLI-only bin exposes no JSON code-intel, so we degrade rather than fake.
+    const lib = await this.engineLib();
+    if (!lib?.callTool) {
+      return {
+        enabled: true,
+        ...emptyCodeContext(
+          repoId,
+          'code-intel needs the in-process engine lib (build the vendored recodergit dist; ' +
+            'RECODERGIT_BIN CLI-only mode exposes no structured code-intel surface)'
+        ),
+      };
+    }
+
+    const terms = normalizeSeedTerms(
+      seedTerms,
+      opts.maxTerms ?? DEFAULT_MAX_SEED_TERMS
+    );
+    const symbolLimit = opts.symbolLimit ?? DEFAULT_CONTEXT_SYMBOL_LIMIT;
+
+    // DomainMap overview (best-effort; empty/faulted ⇒ simply omitted).
+    let domainMap: DomainMap | undefined;
+    const mapRes = await this.domainMap(repoId);
+    if (mapRes.enabled && mapRes.map.domains.length > 0) {
+      domainMap = mapRes.map;
+    }
+
+    // symbol_search + definition per seed term, bounded + best-effort. A failed
+    // or unavailable single query is dropped (never aborts the whole context).
+    const symbols: CodeContextSymbolMatch[] = [];
+    const definitions: CodeContextDefinition[] = [];
+    for (const term of terms) {
+      const search = await this.codeIntel('symbol_search', repoId, {
+        query: term,
+        limit: symbolLimit,
+      });
+      if (search.enabled && search.available && search.result !== undefined) {
+        symbols.push({ term, result: search.result });
+      }
+      const def = await this.codeIntel('definition', repoId, { symbol: term });
+      if (def.enabled && def.available && def.result !== undefined) {
+        definitions.push({ symbol: term, result: def.result });
+      }
+    }
+
+    const available =
+      domainMap !== undefined || symbols.length > 0 || definitions.length > 0;
+    return {
+      enabled: true,
+      repoId,
+      available,
+      ...(domainMap ? { domainMap } : {}),
+      symbols,
+      definitions,
+      ...(available
+        ? {}
+        : {
+            reason:
+              'code graph is indexed but returned no context for the given seed terms',
+          }),
+    };
   }
 
   /**

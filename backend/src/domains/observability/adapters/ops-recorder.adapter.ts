@@ -23,6 +23,12 @@ import type {
   SignalsAvailability,
   WorkSignalsPort,
 } from '../ports/signals.port.js';
+import type {
+  OpsRecorderPushPort,
+  OpsRecorderPushResult,
+  OpsRecorderSyncResult,
+  RunSignalPush,
+} from '../ports/ops-recorder-push.port.js';
 
 export interface OpsRecorderClientDeps {
   readonly logger: Logger;
@@ -48,7 +54,7 @@ export interface OpsRecorderClientDeps {
 
 const DEFAULT_TIMEOUT_MS = 3_000;
 
-export class OpsRecorderClient implements WorkSignalsPort {
+export class OpsRecorderClient implements WorkSignalsPort, OpsRecorderPushPort {
   private readonly logger: Logger;
   private readonly staticBaseUrl: string | null;
   private readonly urlProvider: (() => string | null) | undefined;
@@ -127,15 +133,96 @@ export class OpsRecorderClient implements WorkSignalsPort {
     }
   }
 
-  /** One authenticated GET with a bounded timeout; null on transport failure. */
-  private async request(path: string, method = 'GET'): Promise<Response | null> {
+  /**
+   * REVERSE-PUSH: forward a single already-detected run signal to the sidecar's
+   * `POST /work-signals/ingest`. Degrade-truthful — an absent/unreachable sidecar,
+   * or an auth preflight that would fail, is a `degraded` no-op (NEVER throws into
+   * the run flow, never fabricates a stored id). A non-2xx sidecar response is
+   * `forwarded:false` with the status, not a silent success.
+   */
+  async forwardToOpsRecorder(signal: RunSignalPush): Promise<OpsRecorderPushResult> {
+    const skip = this.pushPreflight();
+    if (skip) return { forwarded: false, degraded: true, reason: skip };
+
+    const body = {
+      source: signal.source ?? 'github',
+      item_type: signal.itemType ?? 'pull_request',
+      title: signal.title,
+      source_url: signal.sourceUrl,
+      detected_reason: signal.reason,
+      priority: signal.priority ?? 'high',
+      ...(signal.assignee ? { assignee: signal.assignee } : {}),
+      // Fold run provenance into `status` so the stored signal stays correlatable
+      // to the Recoder run without extending the frozen sidecar schema.
+      status: `recoder-run:${signal.runId ?? signal.workspaceId ?? signal.taskId ?? 'unknown'} (${signal.outcome})`,
+      why_it_matters: `A Recoder run reached ${signal.outcome} and needs a human — ${signal.reason}`,
+    };
+
+    const res = await this.request('/work-signals/ingest', 'POST', body);
+    if (!res) {
+      return { forwarded: false, degraded: true, reason: 'ops-recorder sidecar unreachable' };
+    }
+    if (res.status === 401 || res.status === 403) {
+      return { forwarded: false, degraded: true, reason: 'ops-recorder auth preflight rejected' };
+    }
+    if (res.status < 200 || res.status >= 300) {
+      return { forwarded: false, degraded: res.status >= 500, reason: `ops-recorder ingest returned ${res.status}` };
+    }
+    try {
+      const stored = (await res.json()) as { id?: string };
+      return { forwarded: true, degraded: false, ...(stored?.id ? { signalId: stored.id } : {}) };
+    } catch {
+      // Accepted (2xx) but body unreadable — still a truthful forward, no id.
+      return { forwarded: true, degraded: false };
+    }
+  }
+
+  /**
+   * Trigger the sidecar's `POST /work-signals/sync/github` detector. Degrade-
+   * truthful — absent/unreachable/unauthorized ⇒ `triggered:false, degraded:true`,
+   * never throws. A 2xx is a truthful accept (the sidecar syncs in the background).
+   */
+  async syncGithub(): Promise<OpsRecorderSyncResult> {
+    const skip = this.pushPreflight();
+    if (skip) return { triggered: false, degraded: true, reason: skip };
+
+    const res = await this.request('/work-signals/sync/github', 'POST');
+    if (!res) return { triggered: false, degraded: true, reason: 'ops-recorder sidecar unreachable' };
+    if (res.status === 401 || res.status === 403) {
+      return { triggered: false, degraded: true, reason: 'ops-recorder auth preflight rejected' };
+    }
+    if (res.status < 200 || res.status >= 300) {
+      return { triggered: false, degraded: res.status >= 500, reason: `ops-recorder sync/github returned ${res.status}` };
+    }
+    return { triggered: true, degraded: false };
+  }
+
+  /**
+   * Shared write-preflight for the reverse-push edge: returns a truthful skip
+   * reason (⇒ degraded no-op) when there is no URL or the token would be rejected;
+   * `null` means it is safe to attempt the write.
+   */
+  private pushPreflight(): string | null {
+    if (!this.baseUrl) return 'ops-recorder sidecar not configured (no URL)';
+    if (!this.token && !this.authDisabled) return 'ops-recorder auth token absent (preflight would fail)';
+    return null;
+  }
+
+  /**
+   * One authenticated request with a bounded timeout; null on transport failure.
+   * A JSON `body` (POST ingest/sync) is serialized with a `Content-Type` header.
+   */
+  private async request(path: string, method = 'GET', body?: unknown): Promise<Response | null> {
     if (!this.baseUrl) return null;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
+      const headers: Record<string, string> = this.token ? { 'X-API-Key': this.token } : {};
+      if (body !== undefined) headers['Content-Type'] = 'application/json';
       return await fetch(`${this.baseUrl}${path}`, {
         method,
-        headers: this.token ? { 'X-API-Key': this.token } : {},
+        headers,
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
         signal: controller.signal,
       });
     } catch (err) {

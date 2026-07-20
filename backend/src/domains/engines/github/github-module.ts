@@ -93,6 +93,41 @@ export interface GithubCommentInput {
 export interface GithubReviewPrInput {
   readonly pr: string | number;
   readonly repoRoot?: string;
+  /**
+   * Optional label for the code-graph impact query (only used to tag the
+   * result). The blast-radius always runs against the on-disk `repoRoot`
+   * checkout, so this is NOT required for the fusion to fire.
+   */
+  readonly repoId?: string;
+}
+
+/**
+ * One changed symbol's blast radius, read from the recodergit code-graph:
+ *   - `references` = upstream callers/dependents (`find_references`),
+ *   - `callGraph`  = downstream callees/dependencies (`call_graph`).
+ * Either facet is `null` when its query degraded (never a fabricated graph);
+ * `reason` carries the truthful cause when BOTH facets are null.
+ */
+export interface PrSymbolImpact {
+  readonly symbol: string;
+  readonly references: unknown | null;
+  readonly callGraph: unknown | null;
+  readonly reason?: string;
+}
+
+/**
+ * The blast-radius annotation folded into a PR review. `available` is true only
+ * when the engine produced at least one real reading; otherwise `reason` states
+ * the truthful cause (code-graph disabled / repo not indexed / lib absent / no
+ * changed symbols) and the review still returns — impact NEVER blocks a review.
+ */
+export interface PrImpactAnnotation {
+  readonly available: boolean;
+  readonly reason?: string;
+  /** Symbols extracted from the diff (bounded). */
+  readonly changedSymbols: readonly string[];
+  /** Per-symbol blast radius (callers + callees). Empty when unavailable. */
+  readonly symbols: readonly PrSymbolImpact[];
 }
 
 export interface GithubAnalyzeRepoInput {
@@ -106,6 +141,8 @@ const SEARCH_TIMEOUT_MS = 10_000;
 const PR_TIMEOUT_MS = 15_000;
 const MAX_DIFF_CHARS = 200_000;
 const MAX_SEARCH_LIMIT = 50;
+/** Cap the blast-radius fan-out so a huge PR can't spawn hundreds of engine calls. */
+const MAX_IMPACT_SYMBOLS = 12;
 
 export class GithubModule {
   private readonly log: Logger;
@@ -170,13 +207,27 @@ export class GithubModule {
   }
 
   /**
-   * Review context for a PR: `gh pr view --json …` + `gh pr diff` (bounded).
-   * The diff is best-effort — its failure degrades to `diff: null` with the
-   * truthful `diffUnavailable` reason, never a fabricated diff.
+   * Review context for a PR: `gh pr view --json …` + `gh pr diff` (bounded),
+   * ANNOTATED with a recodergit code-graph BLAST RADIUS. After the diff, the
+   * changed symbols are extracted and each is scored for impact via the
+   * recodergit engine — `find_references` (upstream callers/dependents) +
+   * `call_graph` (downstream callees/dependencies) — so a reviewer sees what a
+   * change ripples into, not just the raw hunks.
+   *
+   * Both seams degrade TRUTHFULLY and independently: a failed diff -> `diff:null`
+   * with `diffUnavailable`; a disabled / unindexed / unbuilt code-graph ->
+   * `impact.available:false` with a truthful reason. Impact NEVER blocks a
+   * review and NEVER fabricates a graph.
    */
-  async reviewPR(
-    input: GithubReviewPrInput,
-  ): Promise<InvokeResult<{ pr: unknown; diff: string | null; diffTruncated: boolean; diffUnavailable?: string }>> {
+  async reviewPR(input: GithubReviewPrInput): Promise<
+    InvokeResult<{
+      pr: unknown;
+      diff: string | null;
+      diffTruncated: boolean;
+      diffUnavailable?: string;
+      impact: PrImpactAnnotation;
+    }>
+  > {
     const pr = prRef(input.pr);
     if (!pr) return fail('github.pr_review requires a pr number/url', 'bad_input');
     const cwd = str(input.repoRoot) ?? this.repoRoot;
@@ -189,12 +240,93 @@ export class GithubModule {
     const parsed = safeJson(view.stdout);
     const diffResult = await this.gh(['pr', 'diff', pr], { cwd, timeoutMs: PR_TIMEOUT_MS });
     const diff = diffResult.ok ? diffResult.stdout.slice(0, MAX_DIFF_CHARS) : null;
+    const impact = await this.annotateImpact(cwd, diff, input.repoId);
     return ok({
       pr: parsed,
       diff,
       diffTruncated: diffResult.ok && diffResult.stdout.length > MAX_DIFF_CHARS,
       ...(diffResult.ok ? {} : { diffUnavailable: diffResult.reason ?? 'gh pr diff failed' }),
+      impact,
     });
+  }
+
+  /**
+   * Fire the recodergit blast-radius over a PR diff. Truthful, non-blocking:
+   * no diff / disabled code-graph / no changed symbols each short-circuit to an
+   * `available:false` annotation with a real reason. Per-symbol it runs BOTH
+   * impact directions and keeps whatever the engine could produce.
+   */
+  private async annotateImpact(
+    cwd: string,
+    diff: string | null,
+    repoIdInput?: string,
+  ): Promise<PrImpactAnnotation> {
+    if (diff === null) {
+      return skippedImpact('no diff to analyze (gh pr diff unavailable)');
+    }
+    // Truthful skip when the code-graph is opted out — NEVER blocks the review.
+    if (!this.recodergit.isEnabled()) {
+      return skippedImpact('recodergit code-graph disabled (RECODER_CODE_GRAPH_ENABLED off)');
+    }
+    const changedSymbols = extractChangedSymbols(diff).slice(0, MAX_IMPACT_SYMBOLS);
+    if (changedSymbols.length === 0) {
+      return skippedImpact('no changed symbols detected in the diff');
+    }
+
+    const repoId = str(repoIdInput) ?? repoIdFromRepoRoot(cwd);
+    const symbols: PrSymbolImpact[] = [];
+    let anyAvailable = false;
+    let firstReason: string | undefined;
+
+    for (const symbol of changedSymbols) {
+      // Both directions in parallel; the on-disk checkout (cwd) is the target.
+      const [refs, calls] = await Promise.all([
+        this.safeCodeIntel('find_references', repoId, { symbol, repo: cwd }),
+        this.safeCodeIntel('call_graph', repoId, { symbol, repo: cwd }),
+      ]);
+      const references = refs.available ? (refs.result ?? null) : null;
+      const callGraph = calls.available ? (calls.result ?? null) : null;
+      if (references !== null || callGraph !== null) anyAvailable = true;
+      const reason = references === null && callGraph === null ? refs.reason ?? calls.reason : undefined;
+      if (reason && !firstReason) firstReason = reason;
+      symbols.push({ symbol, references, callGraph, ...(reason ? { reason } : {}) });
+    }
+
+    return {
+      available: anyAvailable,
+      ...(anyAvailable
+        ? {}
+        : { reason: firstReason ?? 'code-graph produced no impact (repo not indexed?)' }),
+      changedSymbols,
+      symbols,
+    };
+  }
+
+  /**
+   * One code-intel query normalized to a flat, non-throwing result. A flag-off
+   * `{ enabled:false }`, an `available:false` degrade, or any thrown error all
+   * collapse to `{ available:false, reason }` so the review is never blocked.
+   */
+  private async safeCodeIntel(
+    op: 'find_references' | 'call_graph',
+    repoId: string,
+    params: { symbol: string; repo: string },
+  ): Promise<{ available: boolean; result?: unknown; reason?: string }> {
+    try {
+      const res = await this.recodergit.codeIntel(op, repoId, params);
+      if (!res.enabled) {
+        return { available: false, reason: 'recodergit code-graph disabled' };
+      }
+      if (!res.available) {
+        return { available: false, reason: res.reason ?? 'code-graph unavailable' };
+      }
+      return { available: true, result: res.result };
+    } catch (err) {
+      // codeIntel is contracted never to throw, but stay defensive: impact must
+      // never take down a PR review.
+      this.log.warn({ op, reason: message(err) }, 'github pr_review impact query degraded');
+      return { available: false, reason: message(err) };
+    }
   }
 
   /** Build/refresh the repo code graph via the existing `RecoderGitService`. */
@@ -317,4 +449,74 @@ function safeJson(stdout: string): unknown {
 
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** A truthful "no blast radius" annotation (never a fabricated graph). */
+function skippedImpact(reason: string): PrImpactAnnotation {
+  return { available: false, reason, changedSymbols: [], symbols: [] };
+}
+
+/** Derive a stable, path-safe code-graph label from a repo root's last segment. */
+function repoIdFromRepoRoot(cwd: string): string {
+  const segment = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? 'repo';
+  const safe = segment.toLowerCase().replace(/[^a-z0-9_-]+/g, '__');
+  return safe.length > 0 ? safe : 'repo';
+}
+
+/** Identifiers that a declaration regex can capture but which are never symbols. */
+const SYMBOL_STOPWORDS = new Set([
+  'if', 'for', 'while', 'switch', 'return', 'function', 'class', 'const', 'let',
+  'var', 'async', 'await', 'new', 'typeof', 'interface', 'type', 'enum', 'def',
+  'func', 'fn', 'public', 'private', 'protected', 'static', 'export', 'default',
+  'import', 'from', 'catch', 'else', 'try', 'do', 'in', 'of', 'as',
+]);
+
+/**
+ * Per-declaration-kind regexes run against added/removed diff lines and hunk
+ * headers. Each captures the DECLARED symbol name (group 1) across the common
+ * languages in this repo (TS/JS, Python, Go, Rust, Java/C-like).
+ */
+const DECL_PATTERNS: readonly RegExp[] = [
+  /\bfunction\s+([A-Za-z_$][\w$]*)/, // function foo
+  /\bclass\s+([A-Za-z_$][\w$]*)/, // class Foo
+  /\b(?:interface|type|enum)\s+([A-Za-z_$][\w$]*)/, // interface/type/enum Foo
+  /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/, // const foo = () =>
+  /\bdef\s+([A-Za-z_][\w]*)/, // python def foo
+  /\bfunc\s+(?:\([^)]*\)\s*)?([A-Za-z_][\w]*)/, // go func foo / func (r) foo
+  /\bfn\s+([A-Za-z_][\w]*)/, // rust fn foo
+  /^\s*(?:public|private|protected|static|async|readonly|override|\s)*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::[^={]+)?[{]/, // method foo(...) {
+];
+
+/**
+ * Extract the changed symbols from a unified git diff. Scans hunk-header context
+ * (`@@ … @@ <context>` — usually the enclosing declaration) and every added or
+ * removed content line with the language-aware {@link DECL_PATTERNS}. Returns a
+ * de-duplicated, order-preserving list of plausible symbol names (stopwords and
+ * <2-char names dropped). Exported so the fusion's symbol step is unit-testable.
+ */
+export function extractChangedSymbols(diff: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const consider = (text: string): void => {
+    for (const pattern of DECL_PATTERNS) {
+      const match = pattern.exec(text);
+      const name = match?.[1];
+      if (!name || name.length < 2 || SYMBOL_STOPWORDS.has(name) || seen.has(name)) continue;
+      seen.add(name);
+      out.push(name);
+    }
+  };
+
+  for (const raw of diff.split('\n')) {
+    if (raw.startsWith('@@')) {
+      // Hunk header: the context trails the second `@@`.
+      const context = raw.slice(raw.indexOf('@@', 2) + 2);
+      if (context.trim()) consider(context);
+      continue;
+    }
+    // Only added/removed content lines (skip the +++/--- file headers).
+    if (raw.startsWith('+++') || raw.startsWith('---')) continue;
+    if (raw.startsWith('+') || raw.startsWith('-')) consider(raw.slice(1));
+  }
+  return out;
 }

@@ -212,3 +212,69 @@ func TestHealthServiceReportsServing(t *testing.T) {
 		}
 	}
 }
+
+// TestRegisterUpstreamBumpsSnapshot proves the incremental control-plane WRITE:
+// registering a new preview edge appends it as an upstream, bumps the served
+// snapshot version monotonically, and surfaces the edge in the live introspection
+// report — the same object streamed over ADS. Re-registering the same cluster
+// name REPLACES rather than duplicates, and an invalid edge is rejected with the
+// live version untouched (fail safe).
+func TestRegisterUpstreamBumpsSnapshot(t *testing.T) {
+	cfg := config.Default(func(string) string { return "" })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cp, err := New(ctx, cfg, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	v0 := cp.Version()
+	if v0 == 0 {
+		t.Fatalf("initial version = 0, want the boot snapshot installed")
+	}
+
+	edge := config.Upstream{Name: "preview-dep_1", Host: "10.0.0.5", Port: 8080}
+	v1, err := cp.RegisterUpstream(ctx, edge)
+	if err != nil {
+		t.Fatalf("RegisterUpstream: %v", err)
+	}
+	if v1 != v0+1 {
+		t.Fatalf("version after register = %d, want %d", v1, v0+1)
+	}
+
+	rep, ok := cp.Introspect()
+	if !ok {
+		t.Fatalf("Introspect not ready after register")
+	}
+	found := false
+	for _, c := range rep.Clusters {
+		if c.Name == edge.Name {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("registered edge %q not present in served clusters %v", edge.Name, rep.Clusters)
+	}
+
+	// Re-register the same name → replace (no duplicate), still bumps.
+	before := len(cp.CurrentConfig().Upstreams)
+	v2, err := cp.RegisterUpstream(ctx, config.Upstream{Name: "preview-dep_1", Host: "10.0.0.6", Port: 9090})
+	if err != nil {
+		t.Fatalf("RegisterUpstream replace: %v", err)
+	}
+	if v2 != v1+1 {
+		t.Fatalf("version after replace = %d, want %d", v2, v1+1)
+	}
+	if got := len(cp.CurrentConfig().Upstreams); got != before {
+		t.Fatalf("upstream count after replace = %d, want %d (no duplicate)", got, before)
+	}
+
+	// An invalid edge is rejected and the live version is untouched.
+	if _, err := cp.RegisterUpstream(ctx, config.Upstream{Name: "", Host: "", Port: 0}); err == nil {
+		t.Fatalf("RegisterUpstream(invalid) = nil error, want validation failure")
+	}
+	if cp.Version() != v2 {
+		t.Fatalf("version after rejected edge = %d, want %d (untouched)", cp.Version(), v2)
+	}
+}

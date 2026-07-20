@@ -44,6 +44,11 @@ Endpoints:
     POST   /collections                 -> body {"name","passages":[str],"overwrite"?}
                                            builds a REAL ColBERT index; 503 w/o torch
     GET    /collections/<name>/stats    -> index summary (documents/embeddings/bytes)
+    POST   /collections/<name>/search   -> body {"query": str, "k"?: int}
+                                           REAL PLAID late-interaction search over the
+                                           built index; returns {"query","topk":[{text,
+                                           pid,rank,score,prob}, ...]}. 404 if the index
+                                           is not built; 503 w/o torch/colbert.
     DELETE /collections/<name>          -> {"name","dropped":bool,"removed_files":int}
 
 Environment:
@@ -463,6 +468,77 @@ def create_collection():
     summary["index_path"] = index_path
     summary["created"] = True
     return jsonify(summary)
+
+
+@lru_cache(maxsize=8)
+def _get_searcher(name, index_root):
+    """Construct and cache a ColBERT ``Searcher`` for one built collection.
+
+    Keyed by ``(name, index_root)`` so each per-repo collection gets its own
+    cached searcher. Only reached after ``_probe_capability`` confirmed torch +
+    colbert import AND the on-disk index exists, so the heavy imports here are
+    guaranteed to succeed. Runs single-rank and fork-free so it is safe inside
+    the Flask process.
+    """
+    from colbert import Searcher
+    from colbert.infra import Run, RunConfig
+
+    with Run().context(RunConfig(nranks=1, avoid_fork_if_possible=True)):
+        return Searcher(index=name, index_root=index_root)
+
+
+@app.route("/collections/<name>/search", methods=["POST"])
+def search_collection(name):
+    """REAL PLAID late-interaction search over a built ColBERT index.
+
+    Body: ``{"query": str, "k"?: int}``. Returns
+    ``{"query", "topk": [{"text","pid","rank","score","prob"}, ...]}`` ranked
+    best-first — the FIRST-STAGE retriever surface (unlike ``/rerank``, this does
+    NOT need the caller to supply candidates; it searches the prebuilt index).
+
+    Degrade-truthful: an unbuilt/invalid collection is a 404 (the caller falls
+    back to its other candidate generators), and a missing torch/colbert stack is
+    a 503 — never a fabricated hit. Pure-filesystem existence is checked BEFORE
+    the heavy capability probe so "index not built" is distinguishable from
+    "engine unavailable".
+    """
+    directory = _index_dir(name)
+    if directory is None:
+        return jsonify({"error": "invalid collection name"}), 400
+
+    payload = request.get_json(silent=True) or {}
+    query = payload.get("query")
+    if not isinstance(query, str) or not query.strip():
+        return jsonify({"error": "expected JSON body {query: str, k?: int}"}), 400
+    raw_k = payload.get("k", 10)
+    try:
+        k = min(max(int(raw_k), 1), 100)
+    except (TypeError, ValueError):
+        k = 10
+
+    if not (os.path.isdir(directory) and _is_built_index(directory)):
+        return jsonify({"error": "collection not built: %s" % name, "exists": False}), 404
+
+    available, _torch_version, reason = _probe_capability()
+    if not available:
+        return jsonify({"error": "search unavailable: %s" % reason}), 503
+
+    index_root = os.path.abspath(_index_root())
+    try:
+        searcher = _get_searcher(name, index_root)
+        pids, ranks, scores = searcher.search(query, k=k)
+    except Exception as exc:  # pragma: no cover - heavy runtime path
+        return jsonify({"error": "search failed: %s" % exc}), 500
+
+    topk = []
+    for pid, rank, score in zip(pids, ranks, scores):
+        try:
+            text = searcher.collection[pid]
+        except Exception:  # pragma: no cover - defensive: pid out of collection
+            text = ""
+        topk.append({"text": text, "pid": pid, "rank": rank, "score": float(score)})
+    topk.sort(key=lambda p: (-p["score"], p["pid"]))
+    return jsonify({"query": query, "topk": topk})
 
 
 @app.route("/health", methods=["GET"])

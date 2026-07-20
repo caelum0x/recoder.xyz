@@ -12,6 +12,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -105,11 +106,13 @@ func loadConfig(file, url string) (config.NetworkConfig, string, error) {
 	}
 }
 
-// introspector is the read side of the control plane the health/introspection
-// HTTP surface reads. *server.ControlPlane satisfies it.
+// introspector is the read side + the incremental control-plane WRITE the
+// health/introspection HTTP surface exposes. *server.ControlPlane satisfies it.
 type introspector interface {
 	Version() uint64
 	Introspect() (introspect.Report, bool)
+	RegisterUpstream(ctx context.Context, u config.Upstream) (uint64, error)
+	CurrentConfig() config.NetworkConfig
 }
 
 func startHealthServer(ctx context.Context, addr string, ready *readiness, cp introspector, logger *slog.Logger) *http.Server {
@@ -175,6 +178,42 @@ func startHealthServer(ctx context.Context, addr string, ready *readiness, cp in
 	mux.HandleFunc("/endpoints", introspectRoute(func(r introspect.Report) any {
 		return map[string]any{"endpoints": r.Endpoints}
 	}))
+
+	// /network-config: the incremental control-plane WRITE (POST) + the live
+	// config read (GET). POST registers/refreshes ONE upstream (a preview / mesh
+	// edge) and bumps the served snapshot version so a running Envoy fronts it
+	// without a restart. This is the loopback seam the Recoder cloud domain's
+	// PreviewDeployService drives on deploy; the returned version is the governed
+	// evidence the backend seals into its audit chain. A body that fails Envoy
+	// config validation is rejected 422 with the live version untouched (fail safe).
+	mux.HandleFunc("/network-config", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			writeJSON(w, http.StatusOK, cp.CurrentConfig())
+		case http.MethodPost:
+			var u config.Upstream
+			if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&u); err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid upstream JSON"})
+				return
+			}
+			version, err := cp.RegisterUpstream(r.Context(), u)
+			if err != nil {
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+					"error":   err.Error(),
+					"version": fmt.Sprintf("v%d", version),
+				})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{
+				"version":  fmt.Sprintf("v%d", version),
+				"clusters": len(cp.CurrentConfig().Upstreams) + 1,
+				"cluster":  u.Name,
+			})
+		default:
+			w.Header().Set("Allow", "GET, POST")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})
 
 	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {

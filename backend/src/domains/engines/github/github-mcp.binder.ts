@@ -69,6 +69,9 @@ export function githubEngineBinder(module: GithubModule): (router: McpToolRouter
         ...(optionalString(input.args.repoRoot)
           ? { repoRoot: optionalString(input.args.repoRoot) as string }
           : {}),
+        ...(optionalString(input.args.repoId)
+          ? { repoId: optionalString(input.args.repoId) as string }
+          : {}),
       });
       return unwrap(result, 'github.pr_review');
     });

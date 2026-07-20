@@ -52,7 +52,9 @@ export type RecodergitOp =
   | 'symbol-search'
   | 'find-references'
   | 'call-graph'
-  | 'definition';
+  | 'definition'
+  // Composed CODE-AWARE launch context (domainMap + symbol_search + definition).
+  | 'query-context';
 
 /** The code-intel adapter ops → the service's {@link CodeIntelOp}. */
 const CODE_INTEL_OPS: Readonly<Record<string, CodeIntelOp>> = {
@@ -164,6 +166,31 @@ export class RecodergitAdapter extends EngineClientBase<unknown, unknown> {
             ? ok(res.map)
             : fail('recodergit disabled', 'disabled');
         }
+        case 'query-context': {
+          const repoId = str(input.repoId);
+          if (!repoId)
+            return fail(
+              'recodergit query-context requires repoId',
+              'bad_input'
+            );
+          const res = await this.service.queryContext(
+            repoId,
+            strArray(input.seedTerms),
+            {
+              ...(num(input.maxTerms) !== undefined
+                ? { maxTerms: num(input.maxTerms) as number }
+                : {}),
+              ...(num(input.symbolLimit) !== undefined
+                ? { symbolLimit: num(input.symbolLimit) as number }
+                : {}),
+            }
+          );
+          if (!res.enabled) return fail('recodergit disabled', 'disabled');
+          const { enabled, ...payload } = res;
+          return enabled
+            ? ok(payload)
+            : fail('recodergit disabled', 'disabled');
+        }
         case 'ensure-server':
           return ok(await this.service.ensureServer());
         case 'server-health':
@@ -182,7 +209,9 @@ export class RecodergitAdapter extends EngineClientBase<unknown, unknown> {
           );
           if (!res.enabled) return fail('recodergit disabled', 'disabled');
           const { enabled, ...payload } = res;
-          return enabled ? ok(payload) : fail('recodergit disabled', 'disabled');
+          return enabled
+            ? ok(payload)
+            : fail('recodergit disabled', 'disabled');
         }
         default:
           return fail(`unknown recodergit op '${call.op}'`, 'bad_op');
@@ -233,6 +262,12 @@ export class RecodergitAdapter extends EngineClientBase<unknown, unknown> {
 
 function str(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+}
+
+/** Coerce a raw input into a clean `string[]` (non-string entries dropped). */
+function strArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter((item): item is string => typeof item === 'string');
 }
 
 function num(v: unknown): number | undefined {
