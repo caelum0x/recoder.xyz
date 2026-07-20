@@ -9,6 +9,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { RequestHandler } from 'express';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
+import type { SquadIssuePort } from '../ports/squad-issue.port.js';
 import { buildSquadBoardRouter } from '../routes/squad-board.routes.js';
 import { SquadAutopilotService } from '../services/squad-autopilot.service.js';
 import { SquadService, InMemorySquadStore } from '../services/squad.service.js';
@@ -117,6 +118,37 @@ describe('GET /api/agent-os/squads/board', () => {
       expect(board.beads).toMatchObject({ wired: false });
       expect(board.conductor).toEqual({ wired: false });
       expect((board.lastTick as { status: string }).status).toBe('degraded');
+      // No seam ⇒ no stale read; the section is empty, never fabricated.
+      expect(board.staleIssues).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('surfaces stalled in-flight work (`bd stale`) on the board read model', async () => {
+    const squads = new SquadService({ store: new InMemorySquadStore() });
+    // The bootstrap seam shape: a SquadIssuePort over `memory.issueGraph()`.
+    const issueGraph: SquadIssuePort = {
+      health: async () => ({ available: true }),
+      ready: async () => [],
+      show: async () => null,
+      stale: async () => [{ id: 'bd-7', title: 'Stuck migration', status: 'in_progress' }],
+    };
+    const autopilot = new SquadAutopilotService({
+      issueGraph,
+      logger: silentLogger,
+      intervalMs: 60_000,
+      maxDispatchesPerTick: 3,
+    });
+    const harness = await serve(buildSquadBoardRouter({ squads, autopilot, middleware }));
+    try {
+      const res = await get(harness.base, '/api/agent-os/squads/board');
+      expect(res.status).toBe(200);
+      const data = (res.body() as { data: { autopilot: Record<string, unknown> } }).data;
+      expect(data.autopilot.beads).toMatchObject({ wired: true, status: 'up' });
+      expect(data.autopilot.staleIssues).toEqual([
+        { id: 'bd-7', title: 'Stuck migration', status: 'in_progress' },
+      ]);
     } finally {
       await harness.close();
     }

@@ -156,9 +156,13 @@ export interface IssueGraphService {
   /**
    * `bd vc commit -m … --json` — seal the working-set as a durable, versioned
    * checkpoint. A clean graph yields bd's truthful `committed:false`; `bd` down
-   * yields `{ committed:false, reason }`. Never fabricates a commit.
+   * yields `{ committed:false, reason }`. Never fabricates a commit. `actor`
+   * (optional) stamps bd's global `--actor` audit flag on the Dolt commit.
    */
-  flush(message?: string): Promise<BeadsFlushResult>;
-  /** `bd gc` — decay closed/expired wisps + compact. Truthful `{ran:false}` when down. */
-  gc(): Promise<{ ran: boolean; reason?: string }>;
+  flush(message?: string, actor?: string): Promise<BeadsFlushResult>;
+  /**
+   * `bd gc` — decay closed/expired wisps + compact. Truthful `{ran:false}` when
+   * down. `actor` (optional) attributes the compaction in bd's audit trail.
+   */
+  gc(actor?: string): Promise<{ ran: boolean; reason?: string }>;
 }

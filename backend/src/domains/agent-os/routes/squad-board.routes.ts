@@ -3,7 +3,8 @@
  * squads.md `board`; the cockpit board feed). Truthful throughout:
  *  - squads feature off      ⇒ `enabled:false` with the reason (no faked board);
  *  - autopilot not composed  ⇒ `autopilot:null` with the reason, squads still listed;
- *  - autopilot composed      ⇒ the live board (seam health, last tick, entries).
+ *  - autopilot composed      ⇒ the live board (seam health, last tick, entries,
+ *    and the `bd stale` stalled-work read — explicit control-plane state).
  * Read-only; the owner decision keeps squad mutations OFF the MCP surface and
  * this board is likewise a pure read model.
  */

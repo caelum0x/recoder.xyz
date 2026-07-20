@@ -264,6 +264,18 @@ describe('issue-graph durability', () => {
     const { engine: downEngine } = failEngine('bd not installed');
     expect(await svcOver(downEngine).gc()).toEqual({ ran: false, reason: 'bd not installed' });
   });
+
+  it('flush / gc thread the maintenance audit actor when the caller supplies one', async () => {
+    const { engine, calls } = okEngine({ committed: true });
+    const svc = svcOver(engine);
+    await svc.flush('bd: sweep', 'memory-maintenance');
+    await svc.gc('memory-maintenance');
+    expect(calls[0]).toMatchObject({
+      op: 'flush',
+      input: { message: 'bd: sweep', actor: 'memory-maintenance' },
+    });
+    expect(calls[1]).toMatchObject({ op: 'gc', input: { actor: 'memory-maintenance' } });
+  });
 });
 
 describe('issue-graph degrade law', () => {

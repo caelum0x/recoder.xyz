@@ -78,12 +78,13 @@ absorbed into their domains — `src/` is now `bootstrap/ domains/ http/ shared/
 ```ts
 interface MemoryModule {
   recall(query: string, scope?: MemoryScope, opts?: { limit?: number; agentId?: string }): Promise<RecalledMemory[]>
-  // fuses mem0 + beads(SQL) + agent-os candidates → colbert-reranked → deduped → provenance-tagged
+  // fuses mem0 + beads (bd CLI via the engines BeadsAdapter) + agent-os candidates → colbert-reranked → deduped → provenance-tagged
   remember(fact: MemoryDraft): Promise<{ id: string; store: 'beads' | 'mem0' }>   // candidate, evidence-required
   promote(id: string, review: ReviewRef): Promise<void>                            // the durable gate
   forget(id: string): Promise<void>
   relate(fromId: string, toId: string, kind: RelationKind): Promise<void>          // beads dep edges
-  health(): MemoryHealth   // {mem0: up|down, beadsSql: up|down, colbert: up|down}
+  issueGraph(): IssueGraphService  // the cohesive beads facet (work reads/writes + memory verbs + durability)
+  health(): MemoryHealth   // {mem0: up|down, beads: up|down, colbert: up|down}
 }
 ```
 **Superseded (was scattered pre-build):** the recall logic that lived in `bundle.ts`, `beads-memory.ts`,
@@ -104,8 +105,11 @@ recall/remember/forget/harvest.
   per owner decision 2).
 **Shipped behavior:** one `MemoryModule` OWNS recall fusion (mem0∪beads∪candidates → colbert rank →
 dedupe → provenance), routes `remember` to the right store by scope, and is the memory entry point
-(enrichPrompt, completion-watcher, the MCP memory tools call it). beads reads go SQL-direct, writes via
-bd; colbert reranks when up; `forget`/`harvest` wired.
+(enrichPrompt, completion-watcher, the MCP memory tools call it). beads reads AND writes go through
+`memory.issueGraph()` — the module facet over the engines `BeadsAdapter` (`bd` CLI, the single
+spawner/argv owner in `backend/src`). There is NO SQL-direct beads path in `backend/src`
+(`beads-sql.ts` lives only under `apps/desktop/server/engines/beads` and is not consumed by the
+backend). colbert reranks when up; `forget`/`harvest` wired.
 
 ---
 

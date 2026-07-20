@@ -21,7 +21,7 @@
 
 | Engine | Level | Capability actually consumed (service call site) | The gap |
 |---|---|---|---|
-| **beads** (issue-graph / cross-agent memory) | deeply-fused | recall/remember/promote (`memory/recall/recall-fusion.ts:127`, `memory/lifecycle/candidate-service.ts:119`, `memory-lifecycle.ts:193`); track/close (`conductor/adapters/issue-graph.adapter.ts:52/56/73/79`); ready→dispatch (`agent-os/services/squad-autopilot.service.ts:245`) | Dep-graph **read** (`show`/`sync`) has **no service consumer**. Autopilot dispatch (`squad-autopilot.service.ts:274`) builds the prompt from the flat `ready` title only — never pulls the issue's accumulated `note` evidence + discovered-from/blocked-by lineage. `sync`/`bd vc` is a health probe only; no lifecycle hook commits the Dolt graph after mutations. |
+| **beads** (issue-graph / cross-agent memory) | **fully-fused** | ONE module facet — `memory.issueGraph()` (`memory/issue-graph/issue-graph.service.ts`) over the single `bd` spawner/argv owner (`engines/adapters/cli/beads.adapter.ts`). Consumers: recall/remember/promote (`memory/recall/recall-fusion.ts`, `memory/lifecycle/candidate-service.ts`, `memory-lifecycle.ts`); track/close with `--actor` audit stamps (`conductor/adapters/issue-graph.adapter.ts` — `conductor:<workspaceId>`); ready→lineage(`show --long`)→dispatch (`agent-os/services/squad-autopilot.service.ts` via `SquadIssuePort`); `stale` board read (`squads/board` route); `vc commit` durability flush + config-gated `bd gc` wisp-decay sweep, both stamped `memory-maintenance` (`memory/lifecycle/memory-maintenance.service.ts`) | — (items 1–2 below **shipped in Wave 3**, `52079d0e8`). The 2026-07 beads refactor (`refactor(beads)` series on `feat/enterprise-s0-p0`) collapsed the three independent `bd` spawners in `backend/src` onto the one `BeadsAdapter`, moved the cohesive facet into MEMORY, and **removed** the agent-exposed `beads.memory_promote` MCP tool (promotion is governed-lifecycle-only). |
 | **openfang** (native Rust NAPI agentic runtime) | deeply-fused | single-shot run substrate (`conductor/conductor-module.ts:514/516/524-526/528`; substrate `bootstrap/index.ts:456/591`) | ~3/4 of the 45-method kernel is dark. (1) Real token counts from the kernel (`openfang-runtime.ts:277-289`) dropped by the buffer-only sink (`openfang-runtime.adapter.ts:224-263`) → billed flat `agent_run`, not tokens. (2) No `continueRun` → `steerWorkspace`/`sendWorkspaceMessage` refuse for path b (native = one blocking turn). (3) Workflow/trigger/event engine + `verifySignedManifest` unmerged. |
 | **mem0** (LLM fact-extract + consolidation) | partially-fused | `mem0.search` **read only** (`memory/recall/recall-fusion.ts:96`, reached via `conductor/adapters/brain-memory.adapter.ts:150`) | `mem0.add` has **no product-flow consumer** — read on every launch, never written. Harvest writes only the ephemeral candidate + beads; governed promotion (`memory-lifecycle.ts:157`) writes Postgres + beads.promote but **never mem0.add**. Consolidation/relations/decay never run on tenant data. Loop is not closed. |
 | **colbert** (late-interaction rerank + PLAID) | deeply-fused | MaxSim **rerank** of fused pool (`recall-fusion.ts:218`, `rank.ts:78`) and Qdrant top-K (`retrieval-service.ts:75`) — live on every launch/continue | Consumed only as a **post-hoc reranker**. First-stage retriever (`colbert.collections.create` + `colbert.search`) has **no service consumer** — ColBERT never *generates* candidates, so passages single-vector search misses can never be reranked in. |
@@ -48,10 +48,10 @@ included at their real (lower) priority.
 
 ### P0 — memory-for-all-agents & agentic-backend (thesis core)
 
-1. **beads · `show` (dep-graph neighborhood) → autopilot dispatch.**
-   Hook: `agent-os/services/squad-autopilot.service.ts:266` `dispatch()` — before composing `prompt`, add degrade-safe `this.beads.invoke({op:'show', input:{id: issue.id}})` and fold full description + accumulated `note` evidence + discovered-from/blocked-by lineage into the conductor prompt (mirror `brain-memory.adapter.ts` recall enrichment). Turns beads from write-only tracker into read+write agent context. **Effort: M.**
-2. **beads · `sync` durability flush → memory/conductor lifecycle.**
-   Hook: small interval `bd vc/commit` driver next to `OutboxDrainService` in `memory-module`/`conductor-module`, fired after issue-graph mutations. Control plane commits the Dolt graph instead of external cron. **Effort: S.**
+1. **beads · `show` (dep-graph neighborhood) → autopilot dispatch.** ✅ **SHIPPED (Wave 3, `52079d0e8`).**
+   Landed as `pullLineage` (`bd show --long`) + `composeLaunchPrompt` in `agent-os/services/squad-autopilot.service.ts` — the dispatched prompt weaves the issue's accumulated NOTE evidence + dependency lineage; degrade-truthful (a failed `show` never blocks the dispatch). Now typed through `SquadIssuePort` over `memory.issueGraph()`.
+2. **beads · `sync` durability flush → memory/conductor lifecycle.** ✅ **SHIPPED (Wave 3, `52079d0e8`).**
+   Landed as the `MemoryMaintenanceService` interval sweep (`memory/lifecycle/memory-maintenance.service.ts`, started from `memory-module.start()`): `bd vc commit` seals the working set, truthful "nothing to commit" preserved. The beads refactor added the config-gated `bd gc` step (`memory.gcEverySweeps`, 0=off) and `memory-maintenance` actor attribution.
 3. **openfang · real token accounting → billing meter.**
    Hook: extend `TurnResult` in `conductor/adapters/openfang-runtime.adapter.ts` to carry `outcome.inputTokens/outputTokens/iterations`; thread onto the terminal `RunEvent.data` so `completion-hook.adapter.ts:101-113` meters `kind:'tokens'` (quantity = in+out) with fallback to `agent_run`. **Effort: M.**
 4. **openfang · `continueRun` (multi-turn / steer) → path b.**
@@ -128,7 +128,7 @@ Any two items that both edit the *same* one of these files must run in **differe
 (serial). Items are grouped so that within a wave, file surfaces are disjoint.
 
 ### Wave 1 — no conductor-module.ts, no bootstrap (fully parallel)
-- **beads sync flush** (`memory-module`/outbox lifecycle) — item 2
+- **beads sync flush** (`memory-module`/outbox lifecycle) — item 2 — ✅ shipped (Wave 3)
 - **mem0 write half** (`memory-lifecycle.ts`, `memory-module.ts`) — items 11, 12
 - **pal inference routing** (`inference-routing.service.ts`) — item 6a
 - **tensorzero feedback** (`inference-routing.service.ts` complete/approve path) — item 8
@@ -148,7 +148,7 @@ Any two items that both edit the *same* one of these files must run in **differe
 
 ### Wave 3 — conductor-module.ts writers, batch A (SERIAL via conductor-module.ts)
 - **beads show → dispatch** (`squad-autopilot.service.ts`, no conductor edit) can co-run —
-  it is agent-os surface; but its dispatch feeds conductor, so schedule adjacent — item 1
+  it is agent-os surface; but its dispatch feeds conductor, so schedule adjacent — item 1 — ✅ shipped (Wave 3)
 - **openfang tokens + continueRun** (`openfang-runtime.adapter.ts` + `conductor-module.ts` steer path) — items 3, 4
 - **colbert first-stage** (`conductor-module.ts:375` startCodeIntel + `retrieval-service.ts` + `recall-fusion.ts`) — item 13
 
@@ -173,7 +173,7 @@ Any two items that both edit the *same* one of these files must run in **differe
 ## Deeply-fused engines (loop closed — residual items only)
 
 - **recoder-governance** — decide→risk→audit is THE universal write seam. Residual: enforceTool teeth (item 9), dead approval store (item 10).
-- **beads** — recall + remember + promote + track + close + ready-dispatch all live. Residual: `show` read (item 1), `sync` flush (item 2).
+- **beads** — FULLY fused: recall + remember + governed promote + track/close (actor-stamped) + ready→lineage→dispatch + stale board read + durability flush + config-gated gc all live behind the ONE memory-owned facet (`memory.issueGraph()`) over the single `BeadsAdapter` spawner. Residuals (items 1, 2) shipped in Wave 3; no open beads backlog item.
 - **openfang** — native run substrate selected by runtimeId (not fallback). Residual: token accounting (3), multi-turn (4), manifest/workflow (5).
 - **colbert** — MaxSim rerank live on every launch/continue + RAG. Residual: first-stage retriever (item 13).
 - **tmux** — full run substrate (launch/steer/diff/control-mode). Residual: reconciler introspect (item 25).

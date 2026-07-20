@@ -176,6 +176,15 @@ describe('buildBeadsArgs (the single bd argv owner)', () => {
     expect(buildBeadsArgs('promote', { id: 'rc-1', actor })).toEqual([
       'promote', 'rc-1', '--json', '--actor', actor,
     ]);
+    // Durability writes carry attribution too (`--actor` is a bd global flag):
+    // maintenance-loop flush/gc read as `memory-maintenance` in the audit trail.
+    const maintenance = 'memory-maintenance';
+    expect(buildBeadsArgs('flush', { message: 'seal it', actor: maintenance })).toEqual([
+      'vc', 'commit', '-m', 'seal it', '--json', '--actor', maintenance,
+    ]);
+    expect(buildBeadsArgs('gc', { actor: maintenance })).toEqual([
+      'gc', '--force', '--json', '--actor', maintenance,
+    ]);
   });
 
   it('never adds --actor to reads (attribution is a write-op concern)', () => {
