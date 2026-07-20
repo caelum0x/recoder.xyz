@@ -9,10 +9,14 @@
  *  - path (b) enriches the prompt and hands it to the in-process substrate as the turn.
  */
 import { describe, it, expect } from 'vitest';
+import type { RunEvent, Workspace } from '@recoder/agent-os';
 import type { BrainEnrichInput } from '@recoder/substrate';
 import type { ConductorBrainMemory, RunHarvestInput } from './adapters/brain-memory.adapter.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
-import { composeConductor, FakeSubstrate, makeCreateInput, makePrincipal } from './__fixtures__/harness.js';
+import { createConductorCodeIntel } from './adapters/code-intel.adapter.js';
+import { createCompletionHookSink } from './adapters/completion-hook.adapter.js';
+import type { IssueGraphWriter } from './adapters/issue-graph.adapter.js';
+import { composeConductor, FakeSubstrate, makeCreateInput, makeLogger, makePrincipal } from './__fixtures__/harness.js';
 
 interface RecordingBrain extends ConductorBrainMemory {
   readonly enrichCalls: BrainEnrichInput[];
@@ -153,6 +157,130 @@ describe('conductor run flow uses engines', () => {
     const result = await module.createWorkspace(makeCreateInput(), makePrincipal());
     await flush();
     // The workspace still launched — the engine capability degraded, not the run.
+    expect(result.ok).toBe(true);
+  });
+});
+
+/**
+ * The conductor consumes the beads MODULE, not the engine: the fake below is
+ * shaped exactly like the bootstrap seam (`memory.issueGraph()` sliced to the
+ * conductor's {@link IssueGraphWriter}) and observes the real run-flow writes.
+ */
+interface WriterCall {
+  readonly verb: 'note' | 'update' | 'close';
+  readonly id: string;
+  readonly actor: string;
+  readonly text?: string;
+  readonly patch?: { status?: string };
+}
+
+function makeIssueGraphWriter(result = true): { writer: IssueGraphWriter; calls: WriterCall[] } {
+  const calls: WriterCall[] = [];
+  return {
+    calls,
+    writer: {
+      async note(id, text, actor) {
+        calls.push({ verb: 'note', id, text, actor });
+        return result;
+      },
+      async update(id, patch, actor) {
+        calls.push({ verb: 'update', id, patch, actor });
+        return result;
+      },
+      async close(id, _reason, actor) {
+        calls.push({ verb: 'close', id, actor });
+        return result;
+      },
+    },
+  };
+}
+
+describe('conductor consumes the issue-graph module facet (IssueGraphWriter seam)', () => {
+  it('launch: notes the claim evidence then marks in_progress through the module slice', async () => {
+    const { writer, calls } = makeIssueGraphWriter();
+    // The REAL bootstrap composition: the code-intel adapter over the module
+    // slice (recodergit absent ⇒ index is a truthful skip; tracking still fires).
+    const codeIntel = createConductorCodeIntel({ recodergit: null, beads: writer, logger: makeLogger() });
+    const { module } = composeConductor({
+      substrates: [new FakeSubstrate({ id: 'tmux_worktree' })],
+      codeIntel,
+    });
+
+    const result = await module.createWorkspace(makeCreateInput(), makePrincipal());
+    await flush();
+
+    expect(result.ok).toBe(true);
+    const workspaceId = result.value!.workspaceId;
+    // note (claim evidence) → update (in_progress), attributed to this workspace.
+    expect(calls.map((c) => c.verb)).toEqual(['note', 'update']);
+    expect(calls[0]).toMatchObject({
+      id: 'task_1',
+      text: expect.stringContaining(workspaceId),
+      actor: `conductor:${workspaceId}`,
+    });
+    expect(calls[1]).toMatchObject({
+      id: 'task_1',
+      patch: { status: 'in_progress' },
+      actor: `conductor:${workspaceId}`,
+    });
+  });
+
+  it('completion: notes the terminal outcome then closes the issue through the module slice', async () => {
+    const { writer, calls } = makeIssueGraphWriter();
+    const codeIntel = createConductorCodeIntel({ recodergit: null, beads: writer, logger: makeLogger() });
+    // The SAME decorator conductor-module composes around its RunEvent sink.
+    const sink = createCompletionHookSink({
+      inner: { append: async () => {} },
+      codeIntel,
+      getWorkspace: async () =>
+        ({
+          workspaceId: 'ws_1',
+          projectId: 'project_1',
+          taskId: 'task_1',
+          createdBy: 'user_alice',
+        }) as unknown as Workspace,
+      logger: makeLogger(),
+    });
+
+    await sink.append({
+      eventId: 'evt_completed',
+      type: 'completed',
+      taskId: 'task_1',
+      runId: 'run_ws_1',
+      createdAt: new Date().toISOString(),
+      data: { workspaceId: 'ws_1' },
+    } as RunEvent);
+    await flush();
+
+    // note (run outcome) → close (success), attributed to the conductor subsystem.
+    expect(calls.map((c) => c.verb)).toEqual(['note', 'close']);
+    expect(calls[0]).toMatchObject({
+      id: 'task_1',
+      text: 'Recoder workspace run completed',
+      actor: 'conductor',
+    });
+    expect(calls[1]).toMatchObject({ id: 'task_1', actor: 'conductor' });
+  });
+
+  it('degrade-safe: a throwing issue-graph slice never blocks the launch', async () => {
+    const writer: IssueGraphWriter = {
+      note: async () => {
+        throw new Error('issue graph down');
+      },
+      update: async () => {
+        throw new Error('issue graph down');
+      },
+      close: async () => true,
+    };
+    const codeIntel = createConductorCodeIntel({ recodergit: null, beads: writer, logger: makeLogger() });
+    const { module } = composeConductor({
+      substrates: [new FakeSubstrate({ id: 'tmux_worktree' })],
+      codeIntel,
+    });
+
+    const result = await module.createWorkspace(makeCreateInput(), makePrincipal());
+    await flush();
+    // The workspace still launched — the capability degraded, not the run.
     expect(result.ok).toBe(true);
   });
 });

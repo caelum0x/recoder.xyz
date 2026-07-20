@@ -3,32 +3,49 @@
  * as a node in the beads (bd) issue graph, so agent work is a recallable,
  * auditable graph rather than an opaque terminal session.
  *
- * It depends ONLY on the engines domain's FROZEN `EngineClientPort` for the
- * `beads` engine (injected by bootstrap as `engines.client('beads')`) — never on
- * the whole engines module, never on `bd` directly (mirrors how the inference
- * domain consumes `engines.tensorzero()`). The beads adapter maps ops onto real
- * `bd` subcommands (`note`, `update`, `close`).
+ * It depends ONLY on the narrow {@link IssueGraphWriter} slice of the
+ * memory-owned issue-graph module facet (`memory.issueGraph()`), injected by
+ * bootstrap at the composition root — never on the engines module, never on
+ * `bd` directly (the memory facet composes typed verbs over the ONE engine
+ * transport). Every write carries an `actor` (`conductor:<workspaceId>` on
+ * launch, `conductor` on completion) so bd's audit trail is attributable.
  *
- * SEAM LAW (degrade-safe, truthful): every call swallows an absent client, a
- * disabled engine, or an `{ ok:false }` invoke into a LOGGED SKIP. It never
- * throws across the boundary and never fabricates issue state. A missing `bd`
- * binary or an absent `taskId` simply means the run is not graph-tracked — the
- * workspace launch and the terminal-event path proceed unaffected.
+ * SEAM LAW (degrade-safe, truthful): every call folds an absent slice, a
+ * refused write (`false`), a slow write (bounded at {@link BEADS_TIMEOUT_MS}),
+ * or a (contract-violating) throw into a LOGGED SKIP. It never throws across
+ * the boundary and never fabricates issue state. A missing `bd` binary or an
+ * absent `taskId` simply means the run is not graph-tracked — the workspace
+ * launch and the terminal-event path proceed unaffected.
  */
 import type { Logger } from '../../../shared/logger.js';
-import type { EngineClientPort } from '../../engines/ports/engine-client.port.js';
 import type { IssueGraphPort } from '../ports/code-intel.port.js';
+
+/**
+ * The injected module slice — the three issue-graph WRITE verbs the conductor
+ * run flow consumes. `memory.issueGraph()` satisfies it structurally (per its
+ * DEGRADE LAW writes resolve `false` and never throw); bootstrap passes the
+ * facet directly. Declared here (consumer-owned port) so the conductor never
+ * imports the memory domain.
+ */
+export interface IssueGraphWriter {
+  /** Append evidence text to the bd issue. Resolves `false` when nothing was written. */
+  note(id: string, text: string, actor: string): Promise<boolean>;
+  /** Patch the bd issue (status). Resolves `false` when nothing was written. */
+  update(id: string, patch: { status?: string }, actor: string): Promise<boolean>;
+  /** Close the bd issue with a reason. Resolves `false` when nothing was written. */
+  close(id: string, reason: string, actor: string): Promise<boolean>;
+}
 
 export interface IssueGraphTrackerDeps {
   /**
-   * The beads `EngineClientPort` (`engines.client('beads')`). `null`/`undefined`
-   * when the engine is not declared/wired ⇒ every call is a truthful logged skip.
+   * The issue-graph write slice (`memory.issueGraph()`). `null`/`undefined`
+   * when the module is not wired ⇒ every call is a truthful logged skip.
    */
-  readonly beads: EngineClientPort | null | undefined;
+  readonly beads: IssueGraphWriter | null | undefined;
   readonly logger: Logger;
 }
 
-/** Per-call deadline for a `bd` subcommand (bounded so a slow CLI never stalls). */
+/** Per-call deadline for a `bd` write (bounded so a slow CLI never stalls). */
 const BEADS_TIMEOUT_MS = 15_000;
 
 export function createIssueGraphTracker(deps: IssueGraphTrackerDeps): IssueGraphPort {
@@ -43,19 +60,20 @@ export function createIssueGraphTracker(deps: IssueGraphTrackerDeps): IssueGraph
         return;
       }
       if (!beads) {
-        logger.debug({ taskId: id, workspaceId }, 'issue-graph: beads engine not wired — track skipped');
+        logger.debug({ taskId: id, workspaceId }, 'issue-graph: seam not wired — track skipped');
         return;
       }
+      const actor = `conductor:${workspaceId}`;
       // 1) Attach the workspace as evidence on the issue (note), then 2) move it
       //    to in-progress (update). Both best-effort + independently degrade-safe.
-      await run(beads, logger, {
-        op: 'note',
-        input: { id, text: `Recoder workspace ${workspaceId} claimed this issue (agent run started)` },
-      }, { taskId: id, workspaceId }, 'note claim evidence');
-      await run(beads, logger, {
-        op: 'update',
-        input: { id, status: 'in_progress' },
-      }, { taskId: id, workspaceId }, 'mark in_progress');
+      await run(
+        () => beads.note(id, `Recoder workspace ${workspaceId} claimed this issue (agent run started)`, actor),
+        logger, { taskId: id, workspaceId }, 'note claim evidence',
+      );
+      await run(
+        () => beads.update(id, { status: 'in_progress' }, actor),
+        logger, { taskId: id, workspaceId }, 'mark in_progress',
+      );
     },
 
     async completeWork(taskId: string, outcome: 'completed' | 'failed'): Promise<void> {
@@ -65,46 +83,59 @@ export function createIssueGraphTracker(deps: IssueGraphTrackerDeps): IssueGraph
         return;
       }
       if (!beads) {
-        logger.debug({ taskId: id, outcome }, 'issue-graph: beads engine not wired — completeWork skipped');
+        logger.debug({ taskId: id, outcome }, 'issue-graph: seam not wired — completeWork skipped');
         return;
       }
+      // The frozen `IssueGraphPort.completeWork` carries no workspaceId, so the
+      // completion actor is the bare subsystem subject.
+      const actor = 'conductor';
       // Always note the terminal outcome as evidence.
-      await run(beads, logger, {
-        op: 'note',
-        input: { id, text: `Recoder workspace run ${outcome}` },
-      }, { taskId: id, outcome }, 'note run outcome');
+      await run(
+        () => beads.note(id, `Recoder workspace run ${outcome}`, actor),
+        logger, { taskId: id, outcome }, 'note run outcome',
+      );
       // Close only on success — a failed run keeps the issue open for follow-up.
       if (outcome === 'completed') {
-        await run(beads, logger, {
-          op: 'close',
-          input: { id, reason: 'Completed via Recoder workspace run' },
-        }, { taskId: id }, 'close issue');
+        await run(
+          () => beads.close(id, 'Completed via Recoder workspace run', actor),
+          logger, { taskId: id }, 'close issue',
+        );
       }
     },
   };
 }
 
 /**
- * Invoke a single `bd` op and fold every non-`ok` outcome into a logged skip.
- * The engines `EngineClientPort.invoke` NEVER throws across the seam, but we still
- * guard defensively so an adapter bug can never escape into the run flow.
+ * Run a single issue-graph write and fold every non-success outcome into a
+ * logged skip. The memory facet NEVER throws across the seam (its writes
+ * resolve `false`), but we still guard defensively and bound the wait at
+ * {@link BEADS_TIMEOUT_MS} so an adapter bug or a hung CLI can never escape
+ * into (or stall) the run flow.
  */
 async function run(
-  beads: EngineClientPort,
+  write: () => Promise<boolean>,
   logger: Logger,
-  call: { op: string; input: Record<string, unknown> },
   ctx: Record<string, unknown>,
   what: string,
 ): Promise<void> {
   try {
-    const result = await beads.invoke({ op: call.op, input: call.input, timeoutMs: BEADS_TIMEOUT_MS });
-    if (!result.ok) {
-      logger.warn({ ...ctx, op: call.op, reason: result.reason }, `issue-graph: ${what} skipped (beads unavailable)`);
+    const outcome = await Promise.race([
+      write(),
+      new Promise<'timeout'>((resolve) => {
+        const timer = setTimeout(() => resolve('timeout'), BEADS_TIMEOUT_MS);
+        timer.unref?.();
+      }),
+    ]);
+    if (outcome === 'timeout') {
+      logger.warn({ ...ctx, timeoutMs: BEADS_TIMEOUT_MS }, `issue-graph: ${what} timed out — skipped`);
+    } else if (!outcome) {
+      // The facet already warned with the truthful transport reason.
+      logger.warn(ctx, `issue-graph: ${what} skipped (issue graph unavailable)`);
     } else {
-      logger.debug({ ...ctx, op: call.op }, `issue-graph: ${what} ok`);
+      logger.debug(ctx, `issue-graph: ${what} ok`);
     }
   } catch (err) {
-    // Defensive: the seam should not throw, but a skip must never become a crash.
-    logger.warn({ ...ctx, op: call.op, err }, `issue-graph: ${what} errored — skipped`);
+    // Defensive: the facet should not throw, but a skip must never become a crash.
+    logger.warn({ ...ctx, err }, `issue-graph: ${what} errored — skipped`);
   }
 }

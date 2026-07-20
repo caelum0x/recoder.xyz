@@ -41,7 +41,7 @@ import { buildApiKeysRouter } from '../domains/identity/routes/api-keys.routes.j
 import { createOrgsRbacFeature } from '../domains/identity/orgs-rbac.feature.js';
 import { createGovernanceModule } from '../domains/governance/index.js';
 import { createInteropModule } from '../domains/interop/index.js';
-import { createAgentOsModule } from '../domains/agent-os/index.js';
+import { createAgentOsModule, type SquadIssuePort } from '../domains/agent-os/index.js';
 import { createConductorModule } from '../domains/conductor/index.js';
 import type { RunEventSinkPort } from '../domains/conductor/ports/run-event-sink.port.js';
 import { createCliRuntimeSubstrate } from '../domains/conductor/adapters/cli-runtime.adapter.js';
@@ -73,6 +73,7 @@ import {
 } from './interop-wire-seams.js';
 import { createCliInferenceEnvResolver } from './conductor-inference-seam.js';
 import { createMemoryModule } from '../domains/memory/index.js';
+import type { IssueGraphService } from '../domains/memory/ports/issue-graph.port.js';
 import {
   createCloudModule,
   createDnsTlsVerifier,
@@ -146,6 +147,21 @@ function routerProvider(key: string, basePath: string, router: Router): RoutePro
 
 /** Every edge mount keeps its router's own guards — the edge adds no second layer. */
 const PUBLIC_MOUNT: GuardPolicy = { auth: 'public', interop: false };
+
+/**
+ * The agent-os squad-issue read seam over the MEMORY-owned issue-graph module
+ * facet — built at THIS composition root so agent-os never imports the memory
+ * domain. The facet's degrade law carries through unchanged (reads `[]`/`null`,
+ * truthful `health()`, nothing throws).
+ */
+function createSquadIssueAdapter(graph: IssueGraphService): SquadIssuePort {
+  return {
+    health: () => graph.health(),
+    ready: () => graph.ready(),
+    show: (id, opts) => graph.show(id, opts),
+    stale: () => graph.stale(),
+  };
+}
 
 /** Boot the empty host and return a handle. */
 export async function start(options: StartOptions = {}): Promise<BootHandle> {
@@ -358,15 +374,15 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   //     degrades truthfully to in-memory), the
   //     identity auth middleware, and the NATS/feature-flag slice via overrides.
   //     Degrade-safe: no DB → in-memory repo; no NATS → log-only outbox sink.
-  //     The beads engine seam feeds the squad autopilot (`bd ready` pull); the
-  //     conductor dispatch seam is late-bound below (conductor builds after). ---
+  //     BOTH autopilot seams are late-bound below (their owners build after
+  //     agent-os): the issue-graph read seam via `attachIssueGraph` (memory owns
+  //     the beads facet) and the conductor dispatch seam. ---
   const agentOs = await createAgentOsModule({
     config,
     logger: childLogger('agent-os'),
     executor: persistence.executor(),
     middleware: identity.middleware(),
     gate: governance.gate(),
-    beadsEngine: engines.client('beads'),
     // browser-use EngineClientPort (a supervised sidecar): the workflow
     // `browser-check` node handler auto-resolves its `.ext()` deep-op port and
     // runs `run_task` against the LIVE sidecar. Absent/down ⇒ the node degrades
@@ -420,12 +436,17 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     middleware: identity.middleware(),
     gate: governance.gate(),
     candidateStore: agentOs.repository(),
+    // The beads raw transport (frozen EngineClientPort). MEMORY owns the
+    // cohesive IssueGraphService facet over it (docs/modules/memory.md).
     beadsEngine: engines.client('beads'),
     overrides: config.memory,
     embedFallback: memoryEmbedFallback,
   });
   container.registerValue(DOMAIN_TOKENS.memory, memory);
   healthRegistry.register(memory);
+  // Late-bind the squad-autopilot issue-graph seam (agent-os builds before
+  // memory; mirrors attachSquadAutopilotConductor). Unattached ⇒ degraded tick.
+  agentOs.attachIssueGraph(createSquadIssueAdapter(memory.issueGraph()));
 
   // --- Phase 5b: Conductor — THE terminal product (worktree+tmux execution).
   //     Built AFTER agent-os so it emits every tailed RunEvent into the
@@ -588,11 +609,13 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     retrieval: memory.retrieval(),
     logger: childLogger('conductor-brain'),
   });
-  // Code-intel seam: recodergit repo index + beads issue-graph tracking, over the
-  // engines domain's FROZEN typed clients (null ⇒ truthful logged skip).
+  // Code-intel seam: recodergit repo index over the engines domain's FROZEN
+  // typed client + beads issue-graph tracking over the MEMORY-owned module
+  // facet (`memory.issueGraph()`, not the raw engine seam) — null/down ⇒
+  // truthful logged skip either way.
   const conductorCodeIntel = createConductorCodeIntel({
     recodergit: engines.client('recodergit'),
-    beads: engines.client('beads'),
+    beads: memory.issueGraph(), // the module facet, not the raw engine seam
     logger: childLogger('conductor-code-intel'),
   });
   // GitHub identity seam (zero-config onboarding): forwarded token env + `gh`

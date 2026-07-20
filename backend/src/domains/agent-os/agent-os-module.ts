@@ -50,6 +50,7 @@ import { PostgresWorkflowDefinitionStore } from './adapters/postgres-workflow-de
 import { AgentOsWorkflowRunnerDriver } from './adapters/agent-os-workflow-runner.driver.js';
 import { createBrowserCheckWorkflowHandler } from './adapters/browser-check-workflow.handler.js';
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
+import type { SquadIssuePort } from './ports/squad-issue.port.js';
 import { buildSquadBoardRouter } from './routes/squad-board.routes.js';
 import { buildSquadReadRouter } from './routes/squad-read.routes.js';
 import { buildWorkflowRouter } from './routes/workflow.routes.js';
@@ -152,14 +153,15 @@ export class AgentOsComposer implements AgentOsModule {
 
     this.squads = cfg.squadsEnabled ? new SquadService({ store: new InMemorySquadStore() }) : null;
 
-    // The autopilot loop (cron→beads→conductor) — opt-in on top of squads. The
-    // beads seam is injected now; the conductor seam is usually attached late
-    // (`attachSquadAutopilotConductor`) since bootstrap builds it after agent-os.
-    // Absent seams ⇒ ticks report a truthful `degraded`, never a faked launch.
+    // The autopilot loop (cron→beads→conductor) — opt-in on top of squads. BOTH
+    // load-bearing seams are usually attached late, since bootstrap builds their
+    // owners after agent-os: the issue-graph read seam via `attachIssueGraph`
+    // (memory owns the beads module facet) and the conductor dispatch seam via
+    // `attachSquadAutopilotConductor`. Absent seams ⇒ ticks report a truthful
+    // `degraded`, never a faked launch.
     this.autopilot =
       cfg.squadsEnabled && cfg.squadAutopilotEnabled
         ? new SquadAutopilotService({
-            beads: deps.beadsEngine ?? null,
             conductor: deps.conductorDispatch ?? null,
             squads: this.squads,
             // The configured squad every dispatch routes through (leader-first /
@@ -280,6 +282,19 @@ export class AgentOsComposer implements AgentOsModule {
       return;
     }
     this.autopilot.attachConductor(port);
+  }
+
+  /**
+   * Late-bind the issue-graph read seam onto the autopilot (bootstrap builds
+   * the MEMORY module — which owns the beads issue-graph facet — after
+   * agent-os; mirrors `attachSquadAutopilotConductor`).
+   */
+  attachIssueGraph(port: SquadIssuePort): void {
+    if (!this.autopilot) {
+      this.log.debug('agent-os: squad autopilot disabled — issue-graph seam not attached');
+      return;
+    }
+    this.autopilot.attachIssueGraph(port);
   }
 
   routes(): Router {

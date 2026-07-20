@@ -45,11 +45,6 @@ export interface AgentOsDeps {
   readonly outboxPublisher?: OutboxPublisherPort;
   readonly instructionCompiler?: InstructionCompilerPort;
   /**
-   * The beads `EngineClientPort` (`engines.client('beads')`) the squad autopilot
-   * pulls ready issues through. Absent ⇒ autopilot ticks degrade truthfully.
-   */
-  readonly beadsEngine?: EngineClientPort | null;
-  /**
    * The browser-use `EngineClientPort` (`engines.client('browser-use')`) that
    * backs the workflow `browser-check` node handler (navigate → assert →
    * screenshot → summary artifact). Absent ⇒ `browser-check` nodes degrade to a

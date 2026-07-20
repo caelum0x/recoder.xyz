@@ -26,7 +26,10 @@ import type {
   CodeIntelPort,
   IssueGraphPort,
 } from '../ports/code-intel.port.js';
-import { createIssueGraphTracker } from './issue-graph.adapter.js';
+import {
+  createIssueGraphTracker,
+  type IssueGraphWriter,
+} from './issue-graph.adapter.js';
 
 export interface ConductorCodeIntelDeps {
   /**
@@ -35,8 +38,12 @@ export interface ConductorCodeIntelDeps {
    * `indexRepo` is a truthful logged skip.
    */
   readonly recodergit: EngineClientPort | null | undefined;
-  /** The beads `EngineClientPort` (`engines.client('beads')`) for the issue graph. */
-  readonly beads: EngineClientPort | null | undefined;
+  /**
+   * The issue-graph write slice of the memory module facet
+   * (`memory.issueGraph()`) — NOT the raw engine seam. Bootstrap injects it at
+   * the composition root; `null` ⇒ track/complete are truthful logged skips.
+   */
+  readonly beads: IssueGraphWriter | null | undefined;
   readonly logger: Logger;
   /**
    * Inject a pre-built issue-graph tracker (tests / custom composition). Defaults

@@ -68,7 +68,7 @@ export async function buildAgentOsHealth(deps: AgentOsHealthDeps): Promise<Compo
   const autopilot = deps.squadAutopilot;
   if (autopilot) {
     const missing = [
-      ...(autopilot.beadsWired ? [] : ['beads engine client not wired']),
+      ...(autopilot.beadsWired ? [] : ['issue-graph seam not attached']),
       ...(autopilot.conductorWired ? [] : ['conductor dispatch seam not wired']),
     ];
     engines.push(
