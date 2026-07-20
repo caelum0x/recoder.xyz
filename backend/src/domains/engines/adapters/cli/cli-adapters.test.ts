@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import type { Logger } from '../../../../shared/logger.js';
 import { enginesConfigSchema, type EnginesConfig } from '../../config.js';
 import { runCli } from './cli-exec.js';
-import { BeadsAdapter } from './beads.adapter.js';
+import { BeadsAdapter, buildBeadsArgs } from './beads.adapter.js';
 import { TmuxAdapter } from './tmux.adapter.js';
 import { DmuxAdapter } from './dmux.adapter.js';
 import { RecodergitAdapter } from './recodergit.adapter.js';
@@ -99,6 +99,90 @@ describe('BeadsAdapter', () => {
     const badGroup = await adapter.invoke({ op: 'stats', input: { groupBy: 'phase' } });
     expect(badGroup.ok).toBe(false);
     if (!badGroup.ok) expect(badGroup.code).toBe('bad_input');
+  });
+
+  it('rejects the memory/durability ops with missing required args (bad_input, no throw)', async () => {
+    const adapter = new BeadsAdapter({ config: config(), log, resolveBin: () => process.execPath });
+    for (const call of [
+      { op: 'remember', input: { title: 'fact' } }, // missing body
+      { op: 'remember', input: { body: 'proof' } }, // missing title
+      { op: 'recall_memory', input: {} }, //           missing query
+      { op: 'promote', input: {} }, //                 missing id
+    ]) {
+      const res = await adapter.invoke(call);
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.code).toBe('bad_input');
+    }
+  });
+});
+
+describe('buildBeadsArgs (the single bd argv owner)', () => {
+  it('remember → an ephemeral memory wisp with scope label + discovered-from edge', () => {
+    expect(buildBeadsArgs('remember', { title: 'fact', body: 'proof' })).toEqual([
+      'create', 'fact', '--ephemeral', '-l', 'memory', '-d', 'proof', '--json',
+    ]);
+    expect(
+      buildBeadsArgs('remember', { title: 'fact', body: 'proof', scope: 'repo', discoveredFrom: 'rc-9' }),
+    ).toEqual([
+      'create', 'fact', '--ephemeral', '-l', 'memory,memory-scope:repo', '-d', 'proof', '--json',
+      '--deps', 'discovered-from:rc-9',
+    ]);
+  });
+
+  it('recall_memory → memory-labeled search across all statuses (default limit 10, cap 50)', () => {
+    expect(buildBeadsArgs('recall_memory', { query: 'auth' })).toEqual([
+      'search', 'auth', '--label', 'memory', '--status', 'all', '--json', '-n', '10',
+    ]);
+    expect(buildBeadsArgs('recall_memory', { query: 'auth', limit: 99, scope: 'repo' })).toEqual([
+      'search', 'auth', '--label', 'memory', '--status', 'all', '--json', '-n', '50',
+      '--label', 'memory-scope:repo',
+    ]);
+  });
+
+  it('promote / flush / stale / gc map onto the real bd subcommands', () => {
+    expect(buildBeadsArgs('promote', { id: 'rc-1' })).toEqual(['promote', 'rc-1', '--json']);
+    expect(buildBeadsArgs('flush', {})).toEqual([
+      'vc', 'commit', '-m', 'bd: memory durability flush', '--json',
+    ]);
+    expect(buildBeadsArgs('flush', { message: 'seal it' })).toEqual([
+      'vc', 'commit', '-m', 'seal it', '--json',
+    ]);
+    expect(buildBeadsArgs('stale', {})).toEqual(['stale', '--json']);
+    expect(buildBeadsArgs('stale', { limit: 5 })).toEqual(['stale', '--json', '-n', '5']);
+    // --force: the seam is non-interactive, never a hung confirmation prompt.
+    expect(buildBeadsArgs('gc', {})).toEqual(['gc', '--force', '--json']);
+  });
+
+  it('threads --actor onto every write op (bd audit-trail attribution)', () => {
+    const actor = 'conductor:ws-1';
+    expect(buildBeadsArgs('create', { title: 'T', actor })).toEqual([
+      'create', 'T', '--json', '--actor', actor,
+    ]);
+    expect(buildBeadsArgs('update', { id: 'rc-1', status: 'open', actor })).toEqual([
+      'update', 'rc-1', '--json', '--status', 'open', '--actor', actor,
+    ]);
+    expect(buildBeadsArgs('claim', { id: 'rc-1', actor })).toEqual([
+      'update', 'rc-1', '--claim', '--json', '--actor', actor,
+    ]);
+    expect(buildBeadsArgs('close', { id: 'rc-1', reason: 'done', actor })).toEqual([
+      'close', 'rc-1', '--json', '--reason', 'done', '--actor', actor,
+    ]);
+    expect(buildBeadsArgs('note', { id: 'rc-1', text: 'ev', actor })).toEqual([
+      'note', 'rc-1', 'ev', '--json', '--actor', actor,
+    ]);
+    expect(buildBeadsArgs('remember', { title: 'fact', body: 'proof', actor })).toEqual([
+      'create', 'fact', '--ephemeral', '-l', 'memory', '-d', 'proof', '--json', '--actor', actor,
+    ]);
+    expect(buildBeadsArgs('promote', { id: 'rc-1', actor })).toEqual([
+      'promote', 'rc-1', '--json', '--actor', actor,
+    ]);
+  });
+
+  it('never adds --actor to reads (attribution is a write-op concern)', () => {
+    expect(buildBeadsArgs('ready', { actor: 'x' })).toEqual(['ready', '--json']);
+    expect(buildBeadsArgs('recall_memory', { query: 'q', actor: 'x' })).toEqual([
+      'search', 'q', '--label', 'memory', '--status', 'all', '--json', '-n', '10',
+    ]);
   });
 });
 

@@ -1142,12 +1142,12 @@ var beadsMcpServer = {
     "beads.update",
     "beads.close",
     "beads.sync",
-    // memory layer: candidates (ephemeral wisps) -> policy-gated promote -> durable
+    // memory layer: candidates (ephemeral wisps) only — promotion is the governed
+    // review step on the memory-lifecycle path, never an agent bridge tool
     "beads.claim",
     "beads.note",
     "beads.remember",
-    "beads.recall",
-    "beads.memory_promote"
+    "beads.recall"
   ]
 };
 

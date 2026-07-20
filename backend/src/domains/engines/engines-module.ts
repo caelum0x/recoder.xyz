@@ -279,7 +279,10 @@ export class EnginesComposer implements EnginesModule {
     this.hostBundle = new InteropHostBundle({
       ...(this.cfg.palRootDir ? { palRootDir: this.cfg.palRootDir } : {}),
       engineBinders: [
-        beadsEngineBinder(),
+        // `recoder.beads` (ready/show/create/…/remember/recall) as thin delegates
+        // over the ONE beads transport — the same adapter seam the `beads-graph`
+        // query server binds (single `bd` spawner + argv owner).
+        beadsEngineBinder(this.adapters.get('beads') ?? null),
         browserUseEngineBinder(),
         // `recoder.browser` (open/snapshot/verify) over the SUPERVISED sidecar
         // adapter — the fix for the "advertised but 404 on call" gap.
