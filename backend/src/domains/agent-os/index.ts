@@ -23,11 +23,18 @@ import type { AgentOsRepositoryPort } from './ports/agent-os-repository.port.js'
 import type { RunEventBusPort } from './ports/run-event.port.js';
 import type { CoordinationAdmissionPort } from './ports/coordination-admission.port.js';
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
+import type { SquadIssuePort } from './ports/squad-issue.port.js';
 import type { SquadAutopilotService } from './services/squad-autopilot.service.js';
 import type { AgentOsDeps } from './types.js';
 
 export type { AgentOsDeps } from './types.js';
 export type { SquadConductorPort, SquadDispatchRequest, SquadDispatchResult } from './ports/squad-autopilot.port.js';
+export type {
+  SquadIssuePort,
+  SquadReadyIssue,
+  SquadIssueDetail,
+  SquadStaleIssue,
+} from './ports/squad-issue.port.js';
 export type {
   CoordinationAdmissionPort,
   CoordinationAdmissionInput,
@@ -65,6 +72,12 @@ export interface AgentOsModule {
    * the conductor AFTER agent-os). No-op (logged) when the autopilot is off.
    */
   attachSquadAutopilotConductor(port: SquadConductorPort): void;
+  /**
+   * Late-bind the issue-graph read seam onto the autopilot (bootstrap builds
+   * the MEMORY module — the owner of the beads issue-graph facet — AFTER
+   * agent-os). No-op (logged) when the autopilot is off.
+   */
+  attachIssueGraph(port: SquadIssuePort): void;
   /** Truthful component health (repository / outbox / instruction compiler). */
   health(): Promise<ComponentHealth>;
   /** Boot hook — starts the outbox drain loop (idempotent). */

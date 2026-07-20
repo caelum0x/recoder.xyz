@@ -1,11 +1,18 @@
 /**
- * SquadAutopilotService — the cron→beads→conductor loop. Covers the tick
- * dispatch happy path, the no-ready-work no-op, truthful degrades (no beads /
- * beads down / no conductor), dispatch refusal + retry, re-dispatch dedupe,
- * per-tick dispatch cap, squad fail-closed routing, and late conductor attach.
+ * SquadAutopilotService — the cron→beads→conductor loop, now consumed through
+ * the typed {@link SquadIssuePort} (the memory-owned issue-graph module facet,
+ * late-bound like the conductor seam). Covers the tick dispatch happy path,
+ * the no-ready-work no-op, truthful degrades (seam unattached / issue graph
+ * down / no conductor / a defensively-caught port throw), dispatch refusal +
+ * retry, re-dispatch dedupe, per-tick dispatch cap, squad fail-closed routing,
+ * and late attach of BOTH seams.
  */
-import { describe, it, expect, vi } from 'vitest';
-import type { EngineClientPort } from '../../engines/ports/engine-client.port.js';
+import { describe, it, expect } from 'vitest';
+import type {
+  SquadIssuePort,
+  SquadIssueDetail,
+  SquadReadyIssue,
+} from '../ports/squad-issue.port.js';
 import type { SquadConductorPort, SquadDispatchRequest } from '../ports/squad-autopilot.port.js';
 import { SquadAutopilotService, type SquadAutopilotDeps } from '../services/squad-autopilot.service.js';
 import { SquadService, InMemorySquadStore } from '../services/squad.service.js';
@@ -13,35 +20,32 @@ import { SquadService, InMemorySquadStore } from '../services/squad.service.js';
 const silentLogger = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never;
 const now = () => '2026-07-17T00:00:00.000Z';
 
+interface FakeIssueGraphOptions {
+  /** The typed ready pull. Throw from here to exercise the defensive catch. */
+  readonly ready?: () => readonly SquadReadyIssue[];
+  /** The per-issue `bd show --long` lineage read; omitted ⇒ `null` (degrade). */
+  readonly show?: (id: string) => SquadIssueDetail | null;
+  /** The truthful liveness probe; defaults to available. */
+  readonly health?: () => { available: boolean; reason?: string };
+}
+
 /**
- * A fake beads EngineClientPort whose `ready` op returns the given payload. An
- * optional `show` handler answers the per-issue `bd show --long` lineage read
- * the autopilot now performs before composing each launch prompt; when omitted,
- * `show` degrades (`ok:false`) so the dispatch proceeds on title+description.
+ * A fake {@link SquadIssuePort} — the SAME shape bootstrap attaches over
+ * `memory.issueGraph()`. Its degrade law mirrors the facet: reads resolve
+ * typed values / `[]` / `null`, `health()` carries the truthful reason.
  */
-function fakeBeads(ready: () => unknown, show?: (id: string) => unknown): EngineClientPort {
-  return {
-    id: 'beads',
-    transport: 'cli',
-    start: async () => {},
-    stop: async () => {},
-    invoke: vi.fn(async (call) => {
-      if (call.op === 'ready') {
-        const payload = ready();
-        if (payload instanceof Error) return { ok: false as const, reason: payload.message };
-        return { ok: true as const, value: payload };
-      }
-      if (call.op === 'show') {
-        if (!show) return { ok: false as const, reason: 'show not stubbed' };
-        const id = String((call.input as { id?: unknown }).id ?? '');
-        const payload = show(id);
-        if (payload instanceof Error) return { ok: false as const, reason: payload.message };
-        return { ok: true as const, value: payload };
-      }
-      return { ok: false as const, reason: `unexpected op ${call.op}` };
-    }),
-    health: async () => ({ engineId: 'beads', transport: 'cli', status: 'up', checkedAt: now() }),
+function fakeIssueGraph(opts: FakeIssueGraphOptions = {}) {
+  const showCalls: Array<{ id: string; long: boolean }> = [];
+  const port: SquadIssuePort = {
+    health: async () => opts.health?.() ?? { available: true },
+    ready: async () => opts.ready?.() ?? [],
+    show: async (id, o) => {
+      showCalls.push({ id, long: o.long });
+      return opts.show?.(id) ?? null;
+    },
+    stale: async () => [],
   };
+  return { port, showCalls };
 }
 
 /** A conductor seam that records dispatches and launches ws-<n>. */
@@ -71,9 +75,11 @@ function autopilot(overrides: Partial<SquadAutopilotDeps> = {}): SquadAutopilotS
 
 describe('SquadAutopilotService — tick', () => {
   it('dispatches a ready issue as a conductor workspace (happy path)', async () => {
-    const beads = fakeBeads(() => [{ id: 'bd-1', title: 'Fix login', description: 'Users cannot log in' }]);
+    const graph = fakeIssueGraph({
+      ready: () => [{ id: 'bd-1', title: 'Fix login', description: 'Users cannot log in' }],
+    });
     const conductor = fakeConductor();
-    const svc = autopilot({ beads, conductor: conductor.port });
+    const svc = autopilot({ issueGraph: graph.port, conductor: conductor.port });
 
     const result = await svc.tickOnce();
 
@@ -93,37 +99,34 @@ describe('SquadAutopilotService — tick', () => {
   });
 
   it('weaves the issue-graph lineage + notes (bd show) into the launch prompt', async () => {
-    // The `bd show --long --json` shape: a one-element array carrying the
-    // accumulated NOTE evidence (comments) + the dependency lineage prior
-    // agents wrote onto this very issue.
-    const show = (id: string) => [
-      {
-        id,
-        title: 'Fix login',
-        description: 'Users cannot log in',
-        comments: [
-          { id: 1, author: 'agent-a', text: 'evidence: the session cookie is dropped on subdomain' },
-          { id: 2, author: 'agent-b', text: 'gotcha: Better Auth verify path is HTTP-delegated' },
-        ],
-        dependencies: [
-          { id: 'bd-0', title: 'Auth spine', status: 'closed', dependency_type: 'discovered-from' },
-          { id: 'bd-9', title: 'Cookie domain', status: 'open', dependency_type: 'blocked-by' },
-        ],
-      },
-    ];
-    const beadsRef = fakeBeads(() => [{ id: 'bd-1', title: 'Fix login', description: 'Users cannot log in' }], show);
+    // The port's `SquadIssueDetail` shape: the accumulated NOTE evidence
+    // (comments) + the dependency lineage prior agents wrote onto this very
+    // issue, passed through raw off `bd show --long`.
+    const show = (id: string): SquadIssueDetail => ({
+      id,
+      title: 'Fix login',
+      description: 'Users cannot log in',
+      comments: [
+        { id: 1, author: 'agent-a', text: 'evidence: the session cookie is dropped on subdomain' },
+        { id: 2, author: 'agent-b', text: 'gotcha: Better Auth verify path is HTTP-delegated' },
+      ],
+      dependencies: [
+        { id: 'bd-0', title: 'Auth spine', status: 'closed', dependency_type: 'discovered-from' },
+        { id: 'bd-9', title: 'Cookie domain', status: 'open', dependency_type: 'blocked-by' },
+      ],
+    });
+    const graph = fakeIssueGraph({
+      ready: () => [{ id: 'bd-1', title: 'Fix login', description: 'Users cannot log in' }],
+      show,
+    });
     const conductor = fakeConductor();
-    const svc = autopilot({ beads: beadsRef, conductor: conductor.port });
+    const svc = autopilot({ issueGraph: graph.port, conductor: conductor.port });
 
     const result = await svc.tickOnce();
     expect(result.dispatched).toBe(1);
 
-    // The fusion FIRED: `show` was invoked for the issue before dispatch…
-    const showCalls = (beadsRef.invoke as ReturnType<typeof vi.fn>).mock.calls.filter(
-      ([c]) => c.op === 'show',
-    );
-    expect(showCalls).toHaveLength(1);
-    expect(showCalls[0][0]).toMatchObject({ op: 'show', input: { id: 'bd-1', long: true } });
+    // The fusion FIRED: the lineage read hit the port for the issue before dispatch…
+    expect(graph.showCalls).toEqual([{ id: 'bd-1', long: true }]);
 
     // …and its evidence + lineage are woven into the dispatched prompt.
     const prompt = conductor.calls[0].prompt;
@@ -135,12 +138,14 @@ describe('SquadAutopilotService — tick', () => {
     expect(prompt).toContain('blocked-by bd-9');
   });
 
-  it('dispatches without a lineage block when bd show degrades (never blocks the run)', async () => {
-    // No `show` stub ⇒ the per-issue lineage read returns ok:false; the dispatch
-    // still fires on the flat title+description (degrade-truthful).
-    const beads = fakeBeads(() => [{ id: 'bd-1', title: 'Fix login', description: 'Users cannot log in' }]);
+  it('dispatches without a lineage block when the show read degrades (never blocks the run)', async () => {
+    // No `show` stub ⇒ the port's lineage read resolves `null` (the facet's
+    // truthful degrade); the dispatch still fires on the flat title+description.
+    const graph = fakeIssueGraph({
+      ready: () => [{ id: 'bd-1', title: 'Fix login', description: 'Users cannot log in' }],
+    });
     const conductor = fakeConductor();
-    const svc = autopilot({ beads, conductor: conductor.port });
+    const svc = autopilot({ issueGraph: graph.port, conductor: conductor.port });
 
     const result = await svc.tickOnce();
     expect(result.dispatched).toBe(1);
@@ -150,10 +155,10 @@ describe('SquadAutopilotService — tick', () => {
     expect(prompt).not.toContain('Shared memory from the beads issue graph');
   });
 
-  it('is a no-op when there is no ready work', async () => {
-    const beads = fakeBeads(() => []);
+  it('is a no-op when there is no ready work (a live graph, just empty)', async () => {
+    const graph = fakeIssueGraph({ ready: () => [] });
     const conductor = fakeConductor();
-    const svc = autopilot({ beads, conductor: conductor.port });
+    const svc = autopilot({ issueGraph: graph.port, conductor: conductor.port });
 
     const result = await svc.tickOnce();
 
@@ -162,9 +167,9 @@ describe('SquadAutopilotService — tick', () => {
   });
 
   it('never re-dispatches an issue it already launched', async () => {
-    const beads = fakeBeads(() => [{ id: 'bd-1', title: 'Fix login' }]);
+    const graph = fakeIssueGraph({ ready: () => [{ id: 'bd-1', title: 'Fix login' }] });
     const conductor = fakeConductor();
-    const svc = autopilot({ beads, conductor: conductor.port });
+    const svc = autopilot({ issueGraph: graph.port, conductor: conductor.port });
 
     await svc.tickOnce();
     const second = await svc.tickOnce();
@@ -175,12 +180,14 @@ describe('SquadAutopilotService — tick', () => {
   });
 
   it('caps dispatches per tick and leaves the rest for the next pass', async () => {
-    const beads = fakeBeads(() => [
-      { id: 'bd-1', title: 'One' },
-      { id: 'bd-2', title: 'Two' },
-    ]);
+    const graph = fakeIssueGraph({
+      ready: () => [
+        { id: 'bd-1', title: 'One' },
+        { id: 'bd-2', title: 'Two' },
+      ],
+    });
     const conductor = fakeConductor();
-    const svc = autopilot({ beads, conductor: conductor.port, maxDispatchesPerTick: 1 });
+    const svc = autopilot({ issueGraph: graph.port, conductor: conductor.port, maxDispatchesPerTick: 1 });
 
     const first = await svc.tickOnce();
     expect(first.dispatched).toBe(1);
@@ -192,9 +199,9 @@ describe('SquadAutopilotService — tick', () => {
   });
 
   it('records a refused dispatch as failed (with the reason) and retries next tick', async () => {
-    const beads = fakeBeads(() => [{ id: 'bd-1', title: 'Fix login' }]);
+    const graph = fakeIssueGraph({ ready: () => [{ id: 'bd-1', title: 'Fix login' }] });
     const conductor = fakeConductor({ ok: false, reason: 'governance gate denied workspace.create' });
-    const svc = autopilot({ beads, conductor: conductor.port });
+    const svc = autopilot({ issueGraph: graph.port, conductor: conductor.port });
 
     const result = await svc.tickOnce();
     expect(result).toMatchObject({ status: 'ok', dispatched: 0, failed: 1 });
@@ -212,22 +219,27 @@ describe('SquadAutopilotService — tick', () => {
 });
 
 describe('SquadAutopilotService — truthful degrade', () => {
-  it('degrades (dispatching nothing) when the beads seam is not wired', async () => {
+  it('degrades (dispatching nothing) when the issue-graph seam is not attached', async () => {
     const conductor = fakeConductor();
     const svc = autopilot({ conductor: conductor.port });
 
     const result = await svc.tickOnce();
 
     expect(result.status).toBe('degraded');
-    expect(result.reason).toContain('beads engine client not wired');
+    expect(result.reason).toContain('issue-graph seam not attached');
     expect(result.dispatched).toBe(0);
     expect(conductor.calls).toHaveLength(0);
   });
 
-  it('degrades with the CLI reason when bd itself is down', async () => {
-    const beads = fakeBeads(() => new Error('bd (beads) is not installed on this host'));
+  it('degrades with the truthful health reason when the issue graph itself is down', async () => {
+    // The facet's degrade law: a down `bd` reads as an EMPTY pull, and the
+    // health probe carries the truthful reason — never guessed work.
+    const graph = fakeIssueGraph({
+      ready: () => [],
+      health: () => ({ available: false, reason: 'bd (beads) is not installed on this host' }),
+    });
     const conductor = fakeConductor();
-    const svc = autopilot({ beads, conductor: conductor.port });
+    const svc = autopilot({ issueGraph: graph.port, conductor: conductor.port });
 
     const result = await svc.tickOnce();
 
@@ -236,9 +248,23 @@ describe('SquadAutopilotService — truthful degrade', () => {
     expect(conductor.calls).toHaveLength(0);
   });
 
+  it('recovers when the issue-graph seam is attached late (mirrors the conductor attach)', async () => {
+    const conductor = fakeConductor();
+    const svc = autopilot({ conductor: conductor.port });
+
+    const before = await svc.tickOnce();
+    expect(before.status).toBe('degraded');
+    expect(before.reason).toContain('issue-graph seam not attached');
+
+    svc.attachIssueGraph(fakeIssueGraph({ ready: () => [{ id: 'bd-1', title: 'Fix login' }] }).port);
+    const after = await svc.tickOnce();
+    expect(after.status).toBe('ok');
+    expect(after.dispatched).toBe(1);
+  });
+
   it('degrades when the conductor seam is not wired, then recovers on late attach', async () => {
-    const beads = fakeBeads(() => [{ id: 'bd-1', title: 'Fix login' }]);
-    const svc = autopilot({ beads });
+    const graph = fakeIssueGraph({ ready: () => [{ id: 'bd-1', title: 'Fix login' }] });
+    const svc = autopilot({ issueGraph: graph.port });
 
     const before = await svc.tickOnce();
     expect(before.status).toBe('degraded');
@@ -252,14 +278,18 @@ describe('SquadAutopilotService — truthful degrade', () => {
     expect(after.dispatched).toBe(1);
   });
 
-  it('degrades on an unrecognized bd ready payload instead of guessing work', async () => {
-    const beads = fakeBeads(() => 'not json at all');
+  it('degrades on a (contract-violating) port throw instead of crashing the loop', async () => {
+    const graph = fakeIssueGraph({
+      ready: () => {
+        throw new Error('issue-graph facet bug');
+      },
+    });
     const conductor = fakeConductor();
-    const svc = autopilot({ beads, conductor: conductor.port });
+    const svc = autopilot({ issueGraph: graph.port, conductor: conductor.port });
 
     const result = await svc.tickOnce();
     expect(result.status).toBe('degraded');
-    expect(result.reason).toContain('unrecognized payload');
+    expect(result.reason).toContain('issue-graph facet bug');
     expect(conductor.calls).toHaveLength(0);
   });
 
@@ -270,6 +300,16 @@ describe('SquadAutopilotService — truthful degrade', () => {
     expect(board.conductor.wired).toBe(false);
     expect(board.running).toBe(false);
     expect(svc.seams()).toEqual({ beadsWired: false, conductorWired: false });
+  });
+
+  it('board surfaces the attached seam health truthfully (up / down with reason)', async () => {
+    const up = autopilot({ issueGraph: fakeIssueGraph().port });
+    expect((await up.board()).beads).toEqual({ wired: true, status: 'up' });
+
+    const down = autopilot({
+      issueGraph: fakeIssueGraph({ health: () => ({ available: false, reason: 'bd down' }) }).port,
+    });
+    expect((await down.board()).beads).toEqual({ wired: true, status: 'down', reason: 'bd down' });
   });
 });
 
@@ -282,9 +322,9 @@ describe('SquadAutopilotService — squad routing', () => {
   }
 
   it('routes each dispatch through the configured squad', async () => {
-    const beads = fakeBeads(() => [{ id: 'bd-1', title: 'Fix login' }]);
+    const graph = fakeIssueGraph({ ready: () => [{ id: 'bd-1', title: 'Fix login' }] });
     const conductor = fakeConductor();
-    const svc = autopilot({ beads, conductor: conductor.port, squads: await squadWith(true), squadId: 'sq-1' });
+    const svc = autopilot({ issueGraph: graph.port, conductor: conductor.port, squads: await squadWith(true), squadId: 'sq-1' });
 
     const result = await svc.tickOnce();
     expect(result.dispatched).toBe(1);
@@ -297,9 +337,9 @@ describe('SquadAutopilotService — squad routing', () => {
   });
 
   it('skips (fail-closed) when the squad has no eligible member', async () => {
-    const beads = fakeBeads(() => [{ id: 'bd-1', title: 'Fix login' }]);
+    const graph = fakeIssueGraph({ ready: () => [{ id: 'bd-1', title: 'Fix login' }] });
     const conductor = fakeConductor();
-    const svc = autopilot({ beads, conductor: conductor.port, squads: await squadWith(false), squadId: 'sq-1' });
+    const svc = autopilot({ issueGraph: graph.port, conductor: conductor.port, squads: await squadWith(false), squadId: 'sq-1' });
 
     const result = await svc.tickOnce();
     expect(result).toMatchObject({ status: 'ok', dispatched: 0, skipped: 1 });

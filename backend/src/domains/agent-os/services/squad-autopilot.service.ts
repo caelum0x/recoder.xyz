@@ -1,14 +1,17 @@
 /**
  * `SquadAutopilotService` — the cron→beads→conductor loop (docs/modules/
  * squads.md `autopilot`). Each tick pulls READY issues from the beads issue
- * graph (through the engines `EngineClientPort` seam — never a direct shell)
- * and dispatches each as a conductor workspace through the narrow
- * {@link SquadConductorPort}. When a squad is configured, the tick routes each
- * issue through {@link SquadService} first (leader-first / weighted) and a
- * fail-closed route SKIPS the dispatch with the routing reason.
+ * graph (through the typed {@link SquadIssuePort} over the memory-owned module
+ * facet — never a direct shell, never the raw engine seam) and dispatches each
+ * as a conductor workspace through the narrow {@link SquadConductorPort}. When
+ * a squad is configured, the tick routes each issue through
+ * {@link SquadService} first (leader-first / weighted) and a fail-closed route
+ * SKIPS the dispatch with the routing reason.
  *
  * DEGRADE LAW (truthful, never faked):
- *  - beads seam absent / `bd` down  ⇒ tick is `degraded` with the seam reason;
+ *  - issue-graph seam unattached / `bd` down ⇒ tick is `degraded` with the
+ *    seam reason (the port's `health()` is the truthful probe — its reads
+ *    degrade to `[]`, so "down" and "no work" are told apart by probing);
  *  - conductor seam absent          ⇒ tick is `degraded`, nothing dispatched;
  *  - conductor refuses a dispatch   ⇒ the issue is recorded `failed` with the
  *    refusal reason and retried on a later tick.
@@ -19,16 +22,12 @@
  * timer, overlapping passes skipped.
  */
 import type { Logger } from '../../../shared/logger.js';
-import type { EngineClientPort } from '../../engines/ports/engine-client.port.js';
+import type { SquadIssuePort, SquadReadyIssue } from '../ports/squad-issue.port.js';
 import type { SquadConductorPort } from '../ports/squad-autopilot.port.js';
 import type { SquadService } from './squad.service.js';
 
-/** A parsed ready issue from `bd ready --json`. */
-interface ReadyIssue {
-  readonly id: string;
-  readonly title: string;
-  readonly description?: string;
-}
+/** A ready issue as the issue-graph port reports it (`bd ready --json`). */
+type ReadyIssue = SquadReadyIssue;
 
 /** One accumulated NOTE (bd comment) another agent wrote onto the issue. */
 interface IssueNote {
@@ -93,8 +92,11 @@ export interface AutopilotBoardView {
 }
 
 export interface SquadAutopilotDeps {
-  /** The beads `EngineClientPort` (`engines.client('beads')`); null ⇒ degraded ticks. */
-  readonly beads?: EngineClientPort | null;
+  /**
+   * The issue-graph read seam; usually attached late via `attachIssueGraph`
+   * (bootstrap builds memory after agent-os). Unattached ⇒ degraded ticks.
+   */
+  readonly issueGraph?: SquadIssuePort | null;
   /** The conductor dispatch seam; attachable late (bootstrap builds conductor after agent-os). */
   readonly conductor?: SquadConductorPort | null;
   /** Optional squad routing: when set with `squadId`, each issue routes through the squad. */
@@ -107,15 +109,11 @@ export interface SquadAutopilotDeps {
   readonly now?: () => string;
 }
 
-/** Per-call deadline for the `bd ready` pull (a slow CLI never stalls the loop). */
-const BEADS_READY_TIMEOUT_MS = 15_000;
-/** Per-call deadline for the per-issue `bd show --long` lineage read. */
-const BEADS_SHOW_TIMEOUT_MS = 10_000;
 /** Board retention: oldest entries evicted beyond this many issues. */
 const MAX_BOARD_ENTRIES = 200;
 
 export class SquadAutopilotService {
-  private readonly beads: EngineClientPort | null;
+  private issueGraph: SquadIssuePort | null;
   private conductor: SquadConductorPort | null;
   private readonly squads: SquadService | null;
   private readonly squadId: string | null;
@@ -131,7 +129,7 @@ export class SquadAutopilotService {
   private ticking = false;
 
   constructor(deps: SquadAutopilotDeps) {
-    this.beads = deps.beads ?? null;
+    this.issueGraph = deps.issueGraph ?? null;
     this.conductor = deps.conductor ?? null;
     this.squads = deps.squads ?? null;
     this.squadId = deps.squadId ?? null;
@@ -146,10 +144,15 @@ export class SquadAutopilotService {
     this.conductor = port;
   }
 
+  /** Late-bind the issue-graph seam (bootstrap builds memory after agent-os). */
+  attachIssueGraph(port: SquadIssuePort): void {
+    this.issueGraph = port;
+  }
+
   /** Run one autopilot pass. Never throws — every fault is a truthful result. */
   async tickOnce(): Promise<AutopilotTickResult> {
     const missing: string[] = [];
-    if (!this.beads) missing.push('beads engine client not wired');
+    if (!this.issueGraph) missing.push('issue-graph seam not attached');
     if (!this.conductor) missing.push('conductor dispatch seam not wired');
     if (missing.length > 0) {
       return this.finish({ status: 'degraded', reason: missing.join('; '), ready: 0, dispatched: 0, failed: 0, skipped: 0 });
@@ -157,7 +160,7 @@ export class SquadAutopilotService {
 
     const readyResult = await this.pullReady();
     if (!readyResult.ok) {
-      return this.finish({ status: 'degraded', reason: `beads ready failed: ${readyResult.reason}`, ready: 0, dispatched: 0, failed: 0, skipped: 0 });
+      return this.finish({ status: 'degraded', reason: `issue-graph ready failed: ${readyResult.reason}`, ready: 0, dispatched: 0, failed: 0, skipped: 0 });
     }
 
     const issues = readyResult.issues;
@@ -208,15 +211,19 @@ export class SquadAutopilotService {
     return this.finish({ status: 'ok', ready: issues.length, dispatched, failed, skipped });
   }
 
-  /** The truthful board read model. Non-throwing; probes the beads seam's health. */
+  /** The truthful board read model. Non-throwing; probes the issue-graph seam's health. */
   async board(): Promise<AutopilotBoardView> {
     let beads: AutopilotBoardView['beads'] = { wired: false };
-    if (this.beads) {
+    if (this.issueGraph) {
       try {
-        const health = await this.beads.health();
-        beads = { wired: true, status: health.status, ...(health.reason ? { reason: health.reason } : {}) };
+        const health = await this.issueGraph.health();
+        beads = {
+          wired: true,
+          status: health.available ? 'up' : 'down',
+          ...(health.reason ? { reason: health.reason } : {}),
+        };
       } catch (err) {
-        beads = { wired: true, status: 'down', reason: err instanceof Error ? err.message : 'beads health probe failed' };
+        beads = { wired: true, status: 'down', reason: err instanceof Error ? err.message : 'issue-graph health probe failed' };
       }
     }
     return {
@@ -230,7 +237,7 @@ export class SquadAutopilotService {
 
   /** True when both load-bearing seams are attached (health rollup input). */
   seams(): { beadsWired: boolean; conductorWired: boolean } {
-    return { beadsWired: this.beads !== null, conductorWired: this.conductor !== null };
+    return { beadsWired: this.issueGraph !== null, conductorWired: this.conductor !== null };
   }
 
   /** Start the interval driver. Idempotent; overlapping passes are skipped. */
@@ -265,47 +272,48 @@ export class SquadAutopilotService {
 
   // ---- internals ----------------------------------------------------------
 
-  /** Pull + narrow `bd ready --json` through the engines seam (never throws). */
-  private async pullReady(): Promise<{ ok: true; issues: ReadyIssue[] } | { ok: false; reason: string }> {
+  /**
+   * Pull ready work through the typed issue-graph port (never throws). The
+   * port's DEGRADE LAW makes a down graph read as `[]`, so an EMPTY pull is
+   * followed by the truthful `health()` probe to tell "no ready work" apart
+   * from "graph down" — a busy pull never pays the extra probe.
+   */
+  private async pullReady(): Promise<{ ok: true; issues: readonly ReadyIssue[] } | { ok: false; reason: string }> {
     try {
-      const result = await this.beads!.invoke({ op: 'ready', input: {}, timeoutMs: BEADS_READY_TIMEOUT_MS });
-      if (!result.ok) return { ok: false, reason: result.reason };
-      const issues = parseReadyIssues(result.value);
-      if (issues === null) return { ok: false, reason: 'bd ready returned an unrecognized payload' };
+      const issues = await this.issueGraph!.ready();
+      if (issues.length > 0) return { ok: true, issues };
+      const health = await this.issueGraph!.health();
+      if (!health.available) return { ok: false, reason: health.reason ?? 'issue graph unavailable' };
       return { ok: true, issues };
     } catch (err) {
-      // Defensive: the seam should not throw, but the loop must never crash.
-      return { ok: false, reason: err instanceof Error ? err.message : 'beads invoke threw' };
+      // Defensive: the port should not throw, but the loop must never crash.
+      return { ok: false, reason: err instanceof Error ? err.message : 'issue-graph read threw' };
     }
   }
 
   /**
    * Read the issue's shared-memory context (`bd show <id> --long`) back off the
    * graph: the accumulated NOTE evidence + dependency lineage. Degrade-truthful
-   * — any fault (seam down, unrecognized payload, throw) returns `null` and the
+   * — any fault (seam down, absent issue, throw) returns `null` and the
    * dispatch proceeds on the flat title+description; the loop is never blocked.
    */
   private async pullLineage(issueId: string): Promise<IssueLineage | null> {
     try {
-      const result = await this.beads!.invoke({
-        op: 'show',
-        input: { id: issueId, long: true },
-        timeoutMs: BEADS_SHOW_TIMEOUT_MS,
-      });
-      if (!result.ok) {
+      const detail = await this.issueGraph!.show(issueId, { long: true });
+      if (!detail) {
         this.logger.debug?.(
-          { issueId, reason: result.reason },
-          'squad-autopilot: beads show unavailable (dispatching without lineage)',
+          { issueId },
+          'squad-autopilot: issue-graph show unavailable (dispatching without lineage)',
         );
         return null;
       }
-      return parseIssueLineage(result.value);
+      return parseIssueLineage(detail);
     } catch (err) {
-      // Defensive: the seam should not throw, but a lineage read must never
+      // Defensive: the port should not throw, but a lineage read must never
       // fail a dispatch.
       this.logger.debug?.(
         { issueId, err: err instanceof Error ? err.message : String(err) },
-        'squad-autopilot: beads show threw (dispatching without lineage)',
+        'squad-autopilot: issue-graph show threw (dispatching without lineage)',
       );
       return null;
     }
@@ -406,8 +414,8 @@ export function composeLaunchPrompt(issue: ReadyIssue, lineage: IssueLineage | n
 }
 
 /**
- * Narrow a `bd show <id> --long --json` payload into the issue's lineage. `bd`
- * returns a one-element array (`[issue]`) or a bare object; either is accepted.
+ * Narrow a `bd show <id> --long` payload (the port's `SquadIssueDetail`, or a
+ * raw bd one-element array / bare object; either is accepted) into the lineage.
  * `comments` become notes (text required), `dependencies` become the lineage
  * (id required, `dependency_type` → `type`). A malformed payload ⇒ `null`
  * (truthful degrade — the dispatch proceeds without a lineage block).
@@ -451,32 +459,4 @@ export function parseIssueLineage(payload: unknown): IssueLineage | null {
   }
 
   return { notes, dependencies };
-}
-
-/**
- * Narrow the `bd ready --json` payload into issues. Accepts a bare array or an
- * `{ issues: [...] }` envelope; anything else is `null` (truthful degrade —
- * never guess work out of an unrecognized payload). Items without a string id
- * are dropped.
- */
-function parseReadyIssues(payload: unknown): ReadyIssue[] | null {
-  const list = Array.isArray(payload)
-    ? payload
-    : payload !== null && typeof payload === 'object' && Array.isArray((payload as { issues?: unknown }).issues)
-      ? ((payload as { issues: unknown[] }).issues)
-      : null;
-  if (list === null) return null;
-
-  const issues: ReadyIssue[] = [];
-  for (const item of list) {
-    if (item === null || typeof item !== 'object') continue;
-    const rec = item as Record<string, unknown>;
-    const id = typeof rec.id === 'string' && rec.id.trim() ? rec.id.trim() : undefined;
-    if (!id) continue;
-    const title = typeof rec.title === 'string' && rec.title.trim() ? rec.title.trim() : id;
-    const description =
-      typeof rec.description === 'string' && rec.description.trim() ? rec.description.trim() : undefined;
-    issues.push({ id, title, ...(description ? { description } : {}) });
-  }
-  return issues;
 }
