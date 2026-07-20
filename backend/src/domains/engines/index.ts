@@ -34,6 +34,7 @@ import type { EngineRegistryPort, McpHostPort } from './ports/index.js';
 import type { ModuleToolsRegistration } from './mcp/host-registrar.js';
 import type { DomainToolsRegistration } from './adapters/domain-tools-bridge.adapter.js';
 import type { EngineId, EngineHealth } from './types.js';
+import type { AgentEngineService } from './ports/agent-engine.port.js';
 import type { GithubModule } from './github/index.js';
 import type { NotifyEngine } from '@recoder/agent-notify';
 
@@ -80,6 +81,17 @@ export interface EnginesModule {
    * tier binds over (CONFLICT #8-safe: shared `.node` load). Null if undeclared.
    */
   tensorzero(): EngineClientPort | null;
+  /**
+   * The cohesive openfang agent-engine facet (docs/modules/agent-engine.md):
+   * health · run · continueRun · hands · publishEvent · workflow · verifyManifest
+   * · memory. Pure verbs compose over the ONE napi transport (`OpenfangNapiAdapter`);
+   * the two streaming verbs (run/continueRun) compose over the sibling
+   * `launchOpenfangRun` function seam so a per-call RunEvent sink can be threaded
+   * (the frozen `EngineClientPort.invoke` has no sink slot). The provenance gate
+   * (built from the injected kernel) is pre-wired on BOTH the run path and the
+   * adapter's `launch_run` option. Null only when the openfang engine is undeclared.
+   */
+  agentEngine(): AgentEngineService | null;
   /**
    * The DEEP, READ-ONLY tmux introspection port over the pinned tmux binary the
    * Conductor drives — the SAME server its headless `recoder-*` sessions live in.
@@ -177,6 +189,22 @@ export type {
 } from './openfang-runtime.js';
 export { getOpenfangEngine } from './openfang-native.js';
 export type { OpenfangEngineInstance } from './openfang-native.js';
+
+/**
+ * The cohesive openfang agent-engine facet contract (docs/modules/agent-engine.md).
+ * Re-exported so the composition root (bootstrap) can type `engines.agentEngine()`
+ * and hand the facet to the conductor substrate — which consumes it structurally
+ * through its own narrow consumer-owned port (it never imports the engines domain).
+ */
+export type {
+  AgentEngineService,
+  AgentEngineHealth,
+  AgentTurnInput,
+  AgentTurnResult,
+  HandsView,
+  WorkflowRegisterResult,
+  WorkflowRunResult,
+} from './ports/agent-engine.port.js';
 
 /**
  * The native openfang WORKFLOW driver (path b): promotes the engine's

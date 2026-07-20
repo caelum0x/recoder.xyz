@@ -96,6 +96,10 @@ import {
   createRecoderGitService,
   type RecoderGitService,
 } from './recodergit-service.js';
+import { createOpenfangProvenanceGate } from './agent-engine/provenance-gate.js';
+import { createAgentEngineService } from './agent-engine/agent-engine.service.js';
+import type { AgentEngineService } from './ports/agent-engine.port.js';
+import type { OpenfangProvenanceGate } from './openfang-runtime.js';
 import {
   GithubModule,
   githubEngineBinder,
@@ -210,6 +214,14 @@ export class EnginesComposer implements EnginesModule {
   private readonly registryImpl: EngineRegistryPort;
   private readonly healthRepo: EngineHealthRepository;
   private readonly napiClients: NapiEngineClients;
+  /**
+   * The ONE openfang provenance gate — built from the injected kernel, shared into
+   * BOTH the napi adapter's `launch_run` option (MCP path) AND the agent-engine
+   * facet's direct `run()` path (substrate). Never double-constructed.
+   */
+  private readonly openfangGate: OpenfangProvenanceGate;
+  /** The cohesive openfang agent-engine facet (memoized). */
+  private agentEngineFacet: AgentEngineService | null | undefined;
   private readonly daemonSupervisor: DaemonSupervisor;
   private readonly sidecarSupervisor: SidecarSupervisor;
   private readonly adapters: ReadonlyMap<EngineId, EngineClientPort>;
@@ -242,10 +254,16 @@ export class EnginesComposer implements EnginesModule {
     const napiLoader = new NapiLoader(this.log, {
       repoRoot: this.cfg.repoRoot,
     });
+    // Build the ONE provenance gate from the injected kernel, then thread it into
+    // the adapter's `launch_run` option (MCP path). The SAME instance is handed to
+    // the agent-engine facet below for its direct `run()` path (substrate) — never
+    // double-constructed, so every fresh spawn is gated regardless of surface.
+    this.openfangGate = createOpenfangProvenanceGate(deps.kernel);
     this.napiClients = createNapiEngineClients({
       loader: napiLoader,
       logger: this.log,
       kernel: deps.kernel,
+      openfang: { governance: this.openfangGate },
     });
 
     // ONE shared recodergit service backs both the CLI adapter and the unified
@@ -459,6 +477,24 @@ export class EnginesComposer implements EnginesModule {
 
   tensorzero(): EngineClientPort | null {
     return this.client('tensorzero');
+  }
+
+  /**
+   * The cohesive openfang agent-engine facet (docs/modules/agent-engine.md).
+   * Pure verbs compose over the ONE napi transport (`OpenfangNapiAdapter`); the
+   * two streaming verbs (run/continueRun) compose over the sibling
+   * `launchOpenfangRun` function seam so a per-call RunEvent sink can be threaded.
+   * The provenance gate — the SAME instance wired into the adapter's `launch_run`
+   * option — is pre-wired on the facet's `run()` path. Null only when the openfang
+   * engine is undeclared (always declared here ⇒ always non-null in practice).
+   */
+  agentEngine(): AgentEngineService | null {
+    if (this.agentEngineFacet !== undefined) return this.agentEngineFacet;
+    const engine = this.adapters.get('openfang') ?? null;
+    this.agentEngineFacet = engine
+      ? createAgentEngineService({ engine, gate: this.openfangGate, logger: this.log })
+      : null;
+    return this.agentEngineFacet;
   }
 
   /**
