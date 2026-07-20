@@ -115,7 +115,7 @@ declare const repoMcpServer: McpServerRegistration;
 declare const tasksMcpServer: McpServerRegistration;
 /**
  * The injected agent-os task repository port. This is the SAME read/write
- * contract a runtime backend (docker-backend) implements over its store of
+ * contract a runtime backend (backend) implements over its store of
  * record. agent-mcp stays runtime-agnostic: it never owns task state, it only
  * operates over the port the host injects. All transitions go through the
  * agent-os {@link TaskService} so only legal state changes are persisted.
@@ -186,7 +186,7 @@ declare const browserMcpServer: McpServerRegistration;
  * This is DISTINCT from the older `recoder.browser` server (open/snapshot/verify,
  * a puppeteer session an agent verifies its own work in). This one is the owned,
  * Phase-2-style engine: the package owns NO engine logic and assumes no backing
- * browser. The host (docker-backend) injects a concrete `BrowserEnginePort` built
+ * browser. The host (backend) injects a concrete `BrowserEnginePort` built
  * over `@recoder/agent-browser` (puppeteer, lazily imported; or a browser-use HTTP
  * service). Every handler degrades truthfully — the engine returns a
  * `not_configured` status (never throws, never fabricates) when no driver is wired.
@@ -222,7 +222,7 @@ declare const gitNexusMcpServer: McpServerRegistration;
 /**
  * The host injects how Git Nexus tools resolve a repository on disk. The package
  * stays runtime-agnostic: it never assumes the backend's filesystem layout or a
- * default repo root. The host (docker-backend) supplies the concrete resolver.
+ * default repo root. The host (backend) supplies the concrete resolver.
  */
 type GitNexusPort = {
     /**
@@ -259,7 +259,7 @@ declare function registerGitNexusMcpTools(router: McpToolRouter, port: GitNexusP
  * Registration is governed and FLAG-GATED: this object is only added to the live
  * server list by the host when RECODER_CODE_GRAPH_ENABLED is on AND the
  * supervised `mcp --http` process is being brought up (see the host wiring in
- * docker-backend). It is never a raw passthrough — calls still flow through
+ * backend). It is never a raw passthrough — calls still flow through
  * checkMcpToolPermission + audit.
  */
 declare const recodergitMcpServer: McpServerRegistration;
@@ -278,7 +278,7 @@ declare const logsMcpServer: McpServerRegistration;
  * `retrieval.search` (embed the query → vector search → ColBERT rerank → passages).
  *
  * The package stays runtime-agnostic: it owns NO engine logic and assumes no
- * backing service. The host (docker-backend) injects a concrete `RetrievalPort`
+ * backing service. The host (backend) injects a concrete `RetrievalPort`
  * built over the shared vector foundation (`vector-store.ts`) + `@recoder/retrieval`.
  * Every handler degrades truthfully — the engine returns a `not_configured` status
  * (never throws, never fabricates) when no embedder/vector store is present.
@@ -309,7 +309,7 @@ declare function registerRetrievalMcpTools(router: McpToolRouter, port: Retrieva
  *
  * agent-mcp stays runtime-agnostic: it never owns workspace state, never assumes
  * a substrate, worktree layout, or git remote. It operates ONLY over the
- * {@link WorkspaceRepositoryPort} the host (docker-backend) injects, exactly like
+ * {@link WorkspaceRepositoryPort} the host (backend) injects, exactly like
  * the tasks and git_nexus servers inject their ports.
  */
 declare const workspaceMcpServer: McpServerRegistration;
@@ -367,7 +367,7 @@ type WorkspaceMergeResult = {
     merged: boolean;
 };
 /**
- * The injected workspace control-plane port. A runtime backend (docker-backend's
+ * The injected workspace control-plane port. A runtime backend (backend's
  * conductor) implements this over its store of record. Every method must degrade
  * truthfully: a missing workspace yields a real not-found error; an un-approved
  * merge throws an approval error rather than fabricating `merged: true`.
@@ -399,7 +399,7 @@ declare function registerWorkspaceMcpTools(router: McpToolRouter, port: Workspac
  * release`), which throws on conflict and is bound to the agent-os `WorkLockService`
  * + in-memory state callbacks. This skin is the owned-engine mirror of
  * `retrieval-server.ts`: the package owns NO engine logic and assumes no backing
- * store. The host (docker-backend) injects a concrete `CoordinationPort` built over
+ * store. The host (backend) injects a concrete `CoordinationPort` built over
  * `@recoder/coordination`'s advisory engine + an injectable lock store (in-memory
  * default; a Go `multica` daemon or DB store later). Every handler degrades
  * truthfully — the engine returns a `not_configured` status (never throws, never
@@ -434,7 +434,7 @@ declare function registerCoordinationMcpTools(router: McpToolRouter, port: Coord
  * `{ status, findings[] }`).
  *
  * The package stays runtime-agnostic: it owns NO engine logic. The host
- * (docker-backend) injects a concrete `WorkflowPort` built over
+ * (backend) injects a concrete `WorkflowPort` built over
  * `@recoder/workflow-engine` (which skins `@recoder/agent-workflows` +
  * `@recoder/agent-hooks`). Every handler degrades truthfully — the engine returns a
  * `not_configured` status (never throws, never fabricates) when no verification
@@ -481,10 +481,10 @@ declare function registerWorkflowMcpTools(router: McpToolRouter, port: WorkflowP
  * governance decision `{ runtimeId, substrate, toolGrants[], risk, approvalRequired }`.
  *
  * This is a FAST, dependency-free complement to the external Python PAL MCP
- * server (`py/pal-mcp-server`); it does not replace or disturb it.
+ * server (`backend/engines/py/pal-mcp-server`); it does not replace or disturb it.
  *
  * The package stays runtime-agnostic: it owns NO planning logic and assumes no
- * config. The host (docker-backend) injects a concrete `PalPlanPort` backed by
+ * config. The host (backend) injects a concrete `PalPlanPort` backed by
  * `@recoder/pal`'s pure decision functions. The handler is DENY-BIASED and
  * degrade-safe — it never throws on missing/invalid input; the engine returns a
  * conservative default decision (`approvalRequired: true`, no grants) instead.
@@ -506,7 +506,7 @@ declare function registerPalPlanMcpTools(router: McpToolRouter, port: PalPlanPor
  * configured webhook).
  *
  * The package stays runtime-agnostic: it owns NO engine logic and assumes no
- * backing service. The host (docker-backend) injects a concrete `NotifyPort` built
+ * backing service. The host (backend) injects a concrete `NotifyPort` built
  * over the owned `@recoder/agent-notify` engine. Every handler degrades truthfully
  * — the engine returns a `not_configured` status (never throws, never fabricates a
  * send) when no webhook url is resolvable.

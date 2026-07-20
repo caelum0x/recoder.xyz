@@ -1,37 +1,29 @@
 /**
- * beads-engine — the concrete executor behind the `recoder.beads` MCP server.
- *
- * Gives an AGENT the issue graph: read ready work, inspect an issue, create /
- * update / close issues, and check sync status — by shelling to the `bd`
- * (beads) CLI in the project repo. Every call still runs the interop gate
+ * beads-engine — the `recoder.beads` MCP tool surface over the ONE beads
+ * transport (`BeadsAdapter.invoke`, the single `bd` spawner + argv owner in
+ * `backend/src`). Gives an AGENT the issue graph: read ready work, inspect an
+ * issue, create / update / close issues, check sync status, and use the shared
+ * memory layer (remember/recall). Every call still runs the interop gate
  * (authorize → risk → execute → audit) before reaching here.
  *
- * Degrade-safe: when `bd` is not installed the tools return a truthful
- * "not available" error rather than a fabricated result. The runner is
- * injectable so the wiring is testable without the real binary.
+ * Every tool is a THIN delegate: validate args at the boundary, invoke the
+ * injected engine seam (`{ op, input }` — the adapter owns the argv), surface
+ * the result. Fail-closed and truthful: an unbound engine or a failed invoke
+ * throws the real reason, which the interop host records as a truthful tool
+ * error — never a fabricated result (mirrors the `recoder.browser` binder).
+ *
+ * `beads.memory_promote` is deliberately NOT registered: promotion is the
+ * REVIEW step of the wisp→durable memory-candidate lifecycle and stays on the
+ * governed memory-lifecycle accept path only, never an agent bridge tool.
  */
-import { execFileSync } from 'node:child_process';
 import { beadsMcpServer } from '@recoder/agent-mcp';
 import type { McpToolRouter } from '@recoder/agent-mcp';
-import { beadsBin } from './beads-bin.js';
+import type { Invoker } from './adapters/daemon/mcp/daemon-mcp-shared.js';
 
-/** Runs a `bd` invocation and returns stdout. Injectable for tests. */
-export type BeadsRunner = (args: string[]) => string;
-
-function defaultRunner(cwd: string): BeadsRunner {
-  return (args) =>
-    execFileSync(beadsBin(), args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-}
-
-function parseJson(out: string): unknown {
-  const trimmed = out.trim();
-  if (!trimmed) return null;
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    // bd printed human text (e.g. an id line) — return it raw.
-    return trimmed;
-  }
+/** Options for {@link registerBeadsMcpTools}: the one beads engine seam. */
+export interface RegisterBeadsMcpToolsOptions {
+  /** The beads adapter's invoke seam (null ⇒ tools throw a truthful not-bound error). */
+  readonly engine?: Invoker<unknown> | null;
 }
 
 function str(v: unknown): string | undefined {
@@ -39,86 +31,69 @@ function str(v: unknown): string | undefined {
 }
 
 /**
- * Register the six beads tools on the router. `cwd` is the repo the issue graph
- * lives in (the conductor base repo by default). Fail-closed on missing bd:
- * the handler throws, which the interop host surfaces as a truthful tool error.
+ * Register the `beads.*` tools on the router as thin delegates over the
+ * injected engine seam. Fail-closed on a missing/down `bd`: the handler throws
+ * the adapter's truthful reason, which the interop host surfaces as a tool error.
  */
 export function registerBeadsMcpTools(
   router: McpToolRouter,
-  options: { cwd?: string; runner?: BeadsRunner } = {},
+  options: RegisterBeadsMcpToolsOptions = {},
 ): void {
-  const cwd = options.cwd || process.env.CONDUCTOR_REPO_ROOT || process.cwd();
-  const run = options.runner || defaultRunner(cwd);
+  const engine = options.engine ?? null;
 
-  const guard = <T>(fn: () => T): T => {
-    try {
-      return fn();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (/ENOENT|not found|command not found/i.test(msg)) {
-        throw new Error('beads (bd) is not installed on this host');
-      }
-      throw new Error(`bd failed: ${msg.slice(0, 300)}`);
+  /** Delegate one op onto the seam; throw the truthful reason on any failure. */
+  const invoke = async (op: string, input: Record<string, unknown>) => {
+    if (!engine) {
+      throw new Error('beads engine not bound in the engines composer — beads tools unavailable');
     }
+    const result = await engine.invoke({ op, input });
+    if (!result.ok) throw new Error(result.reason);
+    return { content: result.value };
   };
 
-  router.register(beadsMcpServer, 'beads.ready', async () => ({
-    content: guard(() => parseJson(run(['ready', '--json']))),
-  }));
+  router.register(beadsMcpServer, 'beads.ready', async () => invoke('ready', {}));
 
   router.register(beadsMcpServer, 'beads.show', async (input) => {
     const id = str(input.args.id) ?? str(input.args.issueId);
     if (!id) throw new Error('id is required');
-    return { content: guard(() => parseJson(run(['show', id, '--json']))) };
+    return invoke('show', { id });
   });
 
   router.register(beadsMcpServer, 'beads.create', async (input) => {
     const title = str(input.args.title);
     if (!title) throw new Error('title is required');
-    const args = ['create', title, '--json'];
     const description = str(input.args.description ?? input.args.body);
-    if (description) args.push('-d', description);
     // AGENTS.md: link newly discovered work with discovered-from:<parent-id>.
     const discoveredFrom = str(input.args.discoveredFrom);
-    if (discoveredFrom) args.push('--deps', `discovered-from:${discoveredFrom}`);
     const labels = str(input.args.labels);
-    if (labels) args.push('-l', labels);
-    return { content: guard(() => parseJson(run(args))) };
+    return invoke('create', {
+      title,
+      ...(description ? { description } : {}),
+      ...(discoveredFrom ? { discoveredFrom } : {}),
+      ...(labels ? { labels } : {}),
+    });
   });
 
   router.register(beadsMcpServer, 'beads.update', async (input) => {
     const id = str(input.args.id) ?? str(input.args.issueId);
     if (!id) throw new Error('id is required');
-    const args = ['update', id, '--json'];
     const status = str(input.args.status);
-    if (status) args.push('--status', status);
-    return { content: guard(() => parseJson(run(args))) };
+    return invoke('update', { id, ...(status ? { status } : {}) });
   });
 
   router.register(beadsMcpServer, 'beads.close', async (input) => {
     const id = str(input.args.id) ?? str(input.args.issueId);
     if (!id) throw new Error('id is required');
-    const args = ['close', id, '--json'];
     const reason = str(input.args.reason);
-    if (reason) args.push('--reason', reason);
-    return { content: guard(() => parseJson(run(args))) };
+    return invoke('close', { id, ...(reason ? { reason } : {}) });
   });
 
-  router.register(beadsMcpServer, 'beads.sync', async () => ({
-    content: guard(() => parseJson(run(['vc', 'status']))),
-  }));
-
-  // ---- Memory layer (bd IS the agents' shared memory) ----------------------
-  // Contract (AGENTS.md): agents never write durable memory directly. `remember`
-  // creates an EPHEMERAL wisp labeled `memory` (subject to TTL compaction) — a
-  // memory CANDIDATE with evidence. `memory.promote` (review step, policy-gated,
-  // deliberately NOT exposed as an agent bridge tool) copies it to the permanent
-  // Dolt-versioned table. `recall` searches candidates + promoted memories alike.
+  router.register(beadsMcpServer, 'beads.sync', async () => invoke('sync', {}));
 
   router.register(beadsMcpServer, 'beads.claim', async (input) => {
     const id = str(input.args.id) ?? str(input.args.issueId);
     if (!id) throw new Error('id is required');
-    return { content: guard(() => parseJson(run(['update', id, '--claim', '--json']))) };
+    return invoke('claim', { id });
   });
 
   router.register(beadsMcpServer, 'beads.note', async (input) => {
@@ -126,38 +101,40 @@ export function registerBeadsMcpTools(
     const text = str(input.args.text ?? input.args.note);
     if (!id) throw new Error('id is required');
     if (!text) throw new Error('text is required');
-    return { content: guard(() => parseJson(run(['note', id, text, '--json']))) };
+    return invoke('note', { id, text });
   });
+
+  // ---- Memory layer (bd IS the agents' shared memory) ----------------------
+  // Contract (AGENTS.md): agents never write durable memory directly. `remember`
+  // creates an EPHEMERAL wisp labeled `memory` (subject to TTL compaction) — a
+  // memory CANDIDATE with evidence. Promotion (review step, policy-gated) stays
+  // on the governed memory-lifecycle path and is NOT an agent bridge tool.
+  // `recall` searches candidates + promoted memories alike.
 
   router.register(beadsMcpServer, 'beads.remember', async (input) => {
     const title = str(input.args.title);
     const body = str(input.args.body ?? input.args.evidence ?? input.args.description);
     if (!title) throw new Error('title is required');
     if (!body) throw new Error('body (the memory content + evidence) is required');
-    const labels = ['memory'];
     const scope = str(input.args.scope);
-    if (scope) labels.push(`memory-scope:${scope}`);
-    const args = ['create', title, '--ephemeral', '-l', labels.join(','), '-d', body, '--json'];
-    const from = str(input.args.discoveredFrom ?? input.args.from);
-    if (from) args.push('--deps', `discovered-from:${from}`);
-    return { content: guard(() => parseJson(run(args))) };
+    const discoveredFrom = str(input.args.discoveredFrom ?? input.args.from);
+    return invoke('remember', {
+      title,
+      body,
+      ...(scope ? { scope } : {}),
+      ...(discoveredFrom ? { discoveredFrom } : {}),
+    });
   });
 
   router.register(beadsMcpServer, 'beads.recall', async (input) => {
     const query = str(input.args.query);
     if (!query) throw new Error('query is required');
-    // --status all: promoted (closed/permanent) memories still count as memory.
-    const args = ['search', query, '--label', 'memory', '--status', 'all', '--json'];
-    const limit = Number(input.args.limit);
-    args.push('-n', String(Number.isFinite(limit) && limit > 0 ? Math.min(limit, 50) : 10));
     const scope = str(input.args.scope);
-    if (scope) args.push('--label', `memory-scope:${scope}`);
-    return { content: guard(() => parseJson(run(args))) };
-  });
-
-  router.register(beadsMcpServer, 'beads.memory_promote', async (input) => {
-    const id = str(input.args.id) ?? str(input.args.issueId);
-    if (!id) throw new Error('id is required');
-    return { content: guard(() => parseJson(run(['promote', id, '--json']))) };
+    const limit = Number(input.args.limit);
+    return invoke('recall_memory', {
+      query,
+      ...(scope ? { scope } : {}),
+      ...(Number.isFinite(limit) && limit > 0 ? { limit } : {}),
+    });
   });
 }
