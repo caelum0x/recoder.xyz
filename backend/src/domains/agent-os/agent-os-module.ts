@@ -49,6 +49,7 @@ import {
 import { PostgresWorkflowDefinitionStore } from './adapters/postgres-workflow-definition.store.js';
 import { AgentOsWorkflowRunnerDriver } from './adapters/agent-os-workflow-runner.driver.js';
 import { createBrowserCheckWorkflowHandler } from './adapters/browser-check-workflow.handler.js';
+import { createNativeWorkflowHandler } from '@recoder/agent-workflows';
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
 import type { SquadIssuePort } from './ports/squad-issue.port.js';
 import { buildSquadBoardRouter } from './routes/squad-board.routes.js';
@@ -194,9 +195,18 @@ export class AgentOsComposer implements AgentOsModule {
     // degrades to a truthful `skipped` per node — browsing never fakes a verdict
     // and never blocks the run. An explicitly injected `workflowDriver` wins
     // (tests / richer bootstrap composition) behind the same seam.
+    // The native-openfang-workflow `tool` handler (§4e): when the openfang native
+    // workflow engine is injected, a `tool` node marked as a native workflow
+    // (`config.workflow`) dispatches register_workflow/run_workflow inside the
+    // kernel `.node` — the FIRST real product consumer of that subsystem. Absent
+    // engine ⇒ no `executeTool` port, so the runner keeps its truthful default
+    // (unhandled tool nodes fail) and no other tool node's behaviour changes.
     const defaultDriver = new AgentOsWorkflowRunnerDriver({
       ports: {
         runBrowserCheck: createBrowserCheckWorkflowHandler({ client: deps.browserEngine ?? null }),
+        ...(deps.nativeWorkflowEngine
+          ? { executeTool: createNativeWorkflowHandler(deps.nativeWorkflowEngine) }
+          : {}),
       },
     });
     this.workflows = new WorkflowService({

@@ -54,7 +54,7 @@ import { createTmuxScanSource } from '../domains/conductor/adapters/tmux-scan-so
 import { createRecoderMcpInjector } from '../domains/conductor/adapters/mcp-inject.adapter.js';
 import { createCloudSandboxSubstrate } from '../domains/conductor/adapters/cloud-sandbox-substrate.adapter.js';
 import type { CloudSandboxGatewayPort } from '../domains/conductor/ports/cloud-sandbox.port.js';
-import { createEnginesModule } from '../domains/engines/index.js';
+import { createEnginesModule, createOpenfangWorkflowDriver } from '../domains/engines/index.js';
 import { createInferenceModule } from '../domains/inference/index.js';
 import {
   createBillingModule,
@@ -388,6 +388,13 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // runs `run_task` against the LIVE sidecar. Absent/down ⇒ the node degrades
     // to a truthful `skipped` (never a fake pass, never a blocked run).
     browserEngine: engines.client('browser-use'),
+    // Native openfang workflow engine (§4e): the FIRST real consumer of
+    // `createOpenfangWorkflowDriver` — a `tool` node marked `config.workflow`
+    // dispatches register_workflow/run_workflow inside the kernel `.node` via the
+    // native-workflow `executeTool` handler the default driver wires. Degrade-safe:
+    // the driver resolves the engine lazily and reports `available:false` (⇒ the
+    // node is a truthful `skipped`) when the `.node` is unbuilt / boot fails.
+    nativeWorkflowEngine: createOpenfangWorkflowDriver(),
     overrides: {
       natsUrl: config.agentOs.natsUrl,
       brainEnabled: config.agentOs.brainEnabled,
