@@ -6,8 +6,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type {
   BeadsFlushResult,
-  BeadsMemoryPort,
-} from '../ports/beads-memory.port.js';
+  IssueGraphService,
+} from '../ports/issue-graph.port.js';
+import { fakeIssueGraph } from '../__fixtures__/issue-graph.fixture.js';
 import type { Mem0Port, Mem0ConsolidateResult } from '../ports/mem0.port.js';
 import { MemoryMaintenanceService } from './memory-maintenance.service.js';
 
@@ -21,16 +22,12 @@ const silentLogger = {
   },
 } as never;
 
-function beads(overrides: Partial<BeadsMemoryPort> = {}): BeadsMemoryPort {
-  return {
-    available: () => true,
-    remember: () => undefined,
-    recall: () => [],
-    promote: () => false,
-    note: () => false,
-    flush: () => ({ committed: true, hash: 'abc123' }),
+function beads(overrides: Partial<IssueGraphService> = {}): IssueGraphService {
+  return fakeIssueGraph({
+    health: async () => ({ available: true }),
+    flush: async () => ({ committed: true, hash: 'abc123' }),
     ...overrides,
-  };
+  });
 }
 
 function mem0(overrides: Partial<Mem0Port> = {}): Mem0Port {
@@ -53,7 +50,7 @@ function mem0(overrides: Partial<Mem0Port> = {}): Mem0Port {
 
 describe('MemoryMaintenanceService.sweepOnce', () => {
   it('fires the beads durability flush and reports the commit hash', async () => {
-    const flush = vi.fn((): BeadsFlushResult => ({
+    const flush = vi.fn(async (): Promise<BeadsFlushResult> => ({
       committed: true,
       hash: 'deadbeef',
     }));
@@ -89,9 +86,12 @@ describe('MemoryMaintenanceService.sweepOnce', () => {
   });
 
   it('skips the flush truthfully when bd is unavailable', async () => {
-    const flush = vi.fn((): BeadsFlushResult => ({ committed: true }));
+    const flush = vi.fn(async (): Promise<BeadsFlushResult> => ({ committed: true }));
     const svc = new MemoryMaintenanceService({
-      beads: beads({ available: () => false, flush }),
+      beads: beads({
+        health: async () => ({ available: false, reason: 'bd binary not found' }),
+        flush,
+      }),
       mem0: mem0(),
       logger: silentLogger,
       intervalMs: 0,
@@ -106,7 +106,7 @@ describe('MemoryMaintenanceService.sweepOnce', () => {
   it('surfaces a truthful "nothing to commit" without faking a commit', async () => {
     const svc = new MemoryMaintenanceService({
       beads: beads({
-        flush: () => ({ committed: false, reason: 'nothing to commit' }),
+        flush: async () => ({ committed: false, reason: 'nothing to commit' }),
       }),
       mem0: mem0(),
       logger: silentLogger,
@@ -122,7 +122,7 @@ describe('MemoryMaintenanceService.sweepOnce', () => {
   it('never throws when the flush faults (degrade-safe)', async () => {
     const svc = new MemoryMaintenanceService({
       beads: beads({
-        flush: () => {
+        flush: async () => {
           throw new Error('bd exploded');
         },
       }),
@@ -157,7 +157,7 @@ describe('MemoryMaintenanceService interval driver', () => {
   afterEach(() => vi.useRealTimers());
 
   it('runs a sweep on each interval tick and stops cleanly', async () => {
-    const flush = vi.fn((): BeadsFlushResult => ({
+    const flush = vi.fn(async (): Promise<BeadsFlushResult> => ({
       committed: false,
       reason: 'nothing to commit',
     }));
@@ -180,7 +180,7 @@ describe('MemoryMaintenanceService interval driver', () => {
   });
 
   it('is disabled when intervalMs is 0 (never ticks)', async () => {
-    const flush = vi.fn((): BeadsFlushResult => ({ committed: true }));
+    const flush = vi.fn(async (): Promise<BeadsFlushResult> => ({ committed: true }));
     const svc = new MemoryMaintenanceService({
       beads: beads({ flush }),
       mem0: mem0(),

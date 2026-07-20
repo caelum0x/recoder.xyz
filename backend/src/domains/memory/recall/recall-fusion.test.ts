@@ -6,7 +6,8 @@ import { describe, it, expect } from 'vitest';
 import type { MemoryCandidate, MemoryItem } from '@recoder/agent-os';
 import { createRecallService, type RecallServiceDeps } from './recall-fusion.js';
 import type { Mem0Port } from '../ports/mem0.port.js';
-import type { BeadsMemoryPort } from '../ports/beads-memory.port.js';
+import type { IssueGraphService } from '../ports/issue-graph.port.js';
+import { fakeIssueGraph } from '../__fixtures__/issue-graph.fixture.js';
 import type { MemoryRepository } from '../ports/memory-repository.port.js';
 import type { ColbertSearchPort, ColbertSearchHit } from '../ports/colbert-search.port.js';
 import type { PassageReranker } from './rank.js';
@@ -31,15 +32,14 @@ function fakeMem0(results: { id: string; memory: string; score?: number }[], ava
   };
 }
 
-/** A beads port with a fixed availability + recall set. */
-function fakeBeads(entries: { id: string; title: string; body: string }[], available = true): BeadsMemoryPort {
-  return {
-    available: () => available,
-    remember: () => undefined,
-    recall: () => entries.map((e) => ({ ...e, status: 'open', labels: ['memory'] })),
-    promote: () => false,
-    note: () => false,
-  };
+/** An issue-graph facet with a fixed availability + recall set. */
+function fakeBeads(entries: { id: string; title: string; body: string }[], available = true): IssueGraphService {
+  return fakeIssueGraph({
+    health: async () =>
+      available ? { available: true } : { available: false, reason: 'bd binary/DB unavailable' },
+    recallMemories: async () =>
+      available ? entries.map((e) => ({ ...e, status: 'open', labels: ['memory'] })) : [],
+  });
 }
 
 function candidate(id: string, title: string, body: string, scope = 'repo'): MemoryCandidate {

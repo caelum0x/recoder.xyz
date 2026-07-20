@@ -7,19 +7,14 @@
 import { describe, it, expect } from 'vitest';
 import type { MemoryCandidate } from '@recoder/agent-os';
 import type { MemoryRepository } from '../ports/memory-repository.port.js';
-import type { BeadsMemoryPort } from '../ports/beads-memory.port.js';
+import type { IssueGraphService } from '../ports/issue-graph.port.js';
+import { fakeIssueGraph } from '../__fixtures__/issue-graph.fixture.js';
 import { createMemoryWriteAllowlist } from './write-allowlist.js';
 import { createCandidateService } from './candidate-service.js';
 
 const silentLogger = { info() {}, warn() {}, error() {}, debug() {}, child() { return silentLogger; } } as never;
 
-const beadsDown: BeadsMemoryPort = {
-  available: () => false,
-  remember: () => undefined,
-  recall: () => [],
-  promote: () => false,
-  note: () => false,
-};
+const beadsDown: IssueGraphService = fakeIssueGraph();
 
 function repoWithCapture(): { repo: MemoryRepository; stored: MemoryCandidate[] } {
   const stored: MemoryCandidate[] = [];

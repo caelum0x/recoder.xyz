@@ -15,7 +15,8 @@
  *  - A source that is absent/faulted is reported in `sources` with
  *    `available:false` + a reason and contributes ZERO memories — never a
  *    fabricated one. `candidates` + `items` come from the store-of-record and are
- *    always attempted; `mem0` + `beads` are mirrors attempted only when up.
+ *    always attempted; `mem0` + `beads` are degrade-truthful mirrors (an empty
+ *    harvest triggers a health probe so "no matches" is never confused with "down").
  *  - `reranker` reflects which reranker ACTUALLY ran (`colbert` vs `identity`).
  *  - Every returned memory carries a `provenance { source, ref, score, scope? }`
  *    pointing at the real source id — nothing is anonymous.
@@ -23,7 +24,7 @@
 import type { Logger } from '../../../shared/logger.js';
 import type { MemoryConfig } from '../config.js';
 import type { Mem0Port } from '../ports/mem0.port.js';
-import type { BeadsMemoryPort } from '../ports/beads-memory.port.js';
+import type { IssueGraphService } from '../ports/issue-graph.port.js';
 import type { ColbertSearchPort } from '../ports/colbert-search.port.js';
 import type { MemoryRepository } from '../ports/memory-repository.port.js';
 import type {
@@ -45,7 +46,8 @@ export interface RecallService {
 
 export interface RecallServiceDeps {
   readonly mem0: Mem0Port;
-  readonly beads: BeadsMemoryPort;
+  /** The beads module facet (issue-graph shared memory); degrade-truthful. */
+  readonly beads: IssueGraphService;
   readonly repository: MemoryRepository;
   readonly reranker: PassageReranker;
   readonly config: MemoryConfig;
@@ -125,15 +127,21 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
     }
   }
 
-  /** beads issue-graph shared memory — only when the `bd` seam is resolvable. */
-  function gatherBeads(query: RecallQuery): SourceHarvest {
-    if (!beads.available()) {
-      return { memories: [], availability: down('beads', 'bd binary/DB unavailable') };
-    }
+  /** beads issue-graph shared memory — through the module facet (never throws). */
+  async function gatherBeads(query: RecallQuery): Promise<SourceHarvest> {
     try {
       const options: { scope?: string; limit?: number } = { limit: perSourceLimit(query) };
       if (query.scope) options.scope = query.scope;
-      const entries = beads.recall(query.query, options);
+      const entries = await beads.recallMemories(query.query, options);
+      if (entries.length === 0) {
+        // Truthful: distinguish "an up graph with no matches" from "bd down"
+        // (the facet's degrade contract returns [] for both).
+        const health = await beads.health();
+        return {
+          memories: [],
+          availability: health.available ? up('beads') : down('beads', health.reason ?? 'bd binary/DB unavailable'),
+        };
+      }
       const memories = entries.map<RecalledMemory>((e) => ({
         id: e.id,
         title: e.title,
@@ -242,13 +250,13 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
         };
       }
 
-      const [mem0Harvest, candidateHarvest, itemHarvest, colbertHarvest] = await Promise.all([
+      const [mem0Harvest, beadsHarvest, candidateHarvest, itemHarvest, colbertHarvest] = await Promise.all([
         gatherMem0(query),
+        gatherBeads(query),
         gatherCandidates(query),
         gatherItems(query),
         gatherColbert(query),
       ]);
-      const beadsHarvest = gatherBeads(query);
 
       const sources: SourceAvailability[] = [
         mem0Harvest.availability,

@@ -8,7 +8,8 @@ import type { Principal } from '../../identity/types.js';
 import type { GovernanceGate } from '../../governance/ports/gate.port.js';
 import type { GateVerdict, GovernanceEffect } from '../../governance/types.js';
 import type { MemoryRepository } from '../ports/memory-repository.port.js';
-import type { BeadsMemoryPort } from '../ports/beads-memory.port.js';
+import type { IssueGraphService } from '../ports/issue-graph.port.js';
+import { fakeIssueGraph } from '../__fixtures__/issue-graph.fixture.js';
 import type { Mem0Message, Mem0Port, Mem0Scope } from '../ports/mem0.port.js';
 import { createMemoryLifecycle } from './memory-lifecycle.js';
 
@@ -68,13 +69,7 @@ function fakeGate(effect: GovernanceEffect): GovernanceGate {
   };
 }
 
-const beadsDown: BeadsMemoryPort = {
-  available: () => false,
-  remember: () => undefined,
-  recall: () => [],
-  promote: () => false,
-  note: () => false,
-};
+const beadsDown: IssueGraphService = fakeIssueGraph();
 
 /** A live fake mem0 port that records every add(messages, scope). */
 function mem0Up(): {
@@ -111,19 +106,20 @@ function candidate(overrides: Partial<MemoryCandidate> = {}): MemoryCandidate {
   };
 }
 
-/** A live fake beads port that records which ids get promoted. */
-function beadsUp(): { port: BeadsMemoryPort; promoted: string[] } {
-  const promoted: string[] = [];
-  const port: BeadsMemoryPort = {
-    available: () => true,
-    remember: () => 'bd-unused',
-    recall: () => [],
-    promote: id => {
-      promoted.push(id);
+/** A live fake issue-graph facet that records which ids get promoted (+ actor). */
+function beadsUp(): {
+  port: IssueGraphService;
+  promoted: { id: string; actor: string }[];
+} {
+  const promoted: { id: string; actor: string }[] = [];
+  const port = fakeIssueGraph({
+    health: async () => ({ available: true }),
+    remember: async () => 'bd-unused',
+    promote: async (id, actor) => {
+      promoted.push({ id, actor });
       return true;
     },
-    note: () => false,
-  };
+  });
   return { port, promoted };
 }
 
@@ -252,8 +248,9 @@ describe('createMemoryLifecycle.accept', () => {
       principal,
     });
     expect(result.promoted).toBe(true);
-    // The bd id captured at propose time — NOT the locally-minted 'c1'/'mc_' id.
-    expect(beads.promoted).toEqual(['bd-42']);
+    // The bd id captured at propose time — NOT the locally-minted 'c1'/'mc_' id;
+    // the reviewing principal is threaded as the bd audit-trail actor.
+    expect(beads.promoted).toEqual([{ id: 'bd-42', actor: 'u1' }]);
   });
 
   it('skips beads promote when the candidate carries no beadsRef (still materializes)', async () => {

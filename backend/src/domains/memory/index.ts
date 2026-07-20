@@ -26,6 +26,8 @@ import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
 import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
 import type { GovernanceGate } from '../governance/ports/gate.port.js';
+import type { EngineClientPort } from '../engines/ports/engine-client.port.js';
+import type { IssueGraphService } from './ports/issue-graph.port.js';
 import type { MemoryConfigOverrides } from './config.js';
 import type { MemoryCandidateItemStore } from './ports/memory-repository.port.js';
 import type { RecallService } from './recall/recall-fusion.js';
@@ -54,6 +56,12 @@ export interface MemoryModuleDeps {
   readonly gate: GovernanceGate;
   /** The agent-os repository slice that owns `memory_items` + `memory_candidates`. */
   readonly candidateStore: MemoryCandidateItemStore;
+  /**
+   * The beads raw transport (the engines `BeadsAdapter`, the ONE `bd` spawner).
+   * MEMORY owns the cohesive `IssueGraphService` facet over it; `null` degrades
+   * every issue-graph verb truthfully (empty reads, refused writes).
+   */
+  readonly beadsEngine: EngineClientPort | null;
   /** Not-yet-in-AppConfig memory values (Qdrant/embedder/colbert/mem0 URLs+keys). */
   readonly overrides?: MemoryConfigOverrides;
   /** Injectable fetch for the embedding + vector adapters (tests). */
@@ -93,6 +101,12 @@ export interface MemoryModule {
   harvest(): HarvestService;
   /** The memory-owned relation graph (`relate(from, to, kind)`). */
   relations(): RelateService;
+  /**
+   * The cohesive beads module facet (AGENTS.md: "beads IS the memory layer"):
+   * work reads/writes, the wisp→promote memory lifecycle, and Dolt durability —
+   * all over the injected engines transport, degrade-truthful per verb.
+   */
+  issueGraph(): IssueGraphService;
   /** The unified memory repository (items/candidates delegated, relations owned). */
   repository(): MemoryRepository;
   /** The `/api/agent-os` router: memory + retrieval edges. */

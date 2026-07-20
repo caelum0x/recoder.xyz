@@ -17,14 +17,14 @@
  * never keeps the process alive on its own.
  */
 import type { Logger } from '../../../shared/logger.js';
-import type { BeadsMemoryPort } from '../ports/beads-memory.port.js';
+import type { IssueGraphService } from '../ports/issue-graph.port.js';
 import type { Mem0Port } from '../ports/mem0.port.js';
 
 /** The truthful outcome of one maintenance pass. */
 export interface MaintenanceStats {
   readonly operation: 'memory.maintenance';
   readonly beads: {
-    /** True when a flush was attempted (bd reported available AND supports flush). */
+    /** True when a flush was attempted (the issue-graph facet reported bd up). */
     readonly attempted: boolean;
     /** True only when `bd vc commit` created a new Dolt commit. */
     readonly committed: boolean;
@@ -41,7 +41,8 @@ export interface MaintenanceStats {
 }
 
 export interface MemoryMaintenanceDeps {
-  readonly beads: BeadsMemoryPort;
+  /** The beads module facet — health probe + `flush` (`bd vc commit`). */
+  readonly beads: IssueGraphService;
   readonly mem0: Mem0Port;
   readonly logger: Logger;
   readonly intervalMs: number;
@@ -50,7 +51,7 @@ export interface MemoryMaintenanceDeps {
 }
 
 export class MemoryMaintenanceService {
-  private readonly beads: BeadsMemoryPort;
+  private readonly beads: IssueGraphService;
   private readonly mem0: Mem0Port;
   private readonly logger: Logger;
   private readonly intervalMs: number;
@@ -70,24 +71,25 @@ export class MemoryMaintenanceService {
 
   /** Run one maintenance pass. NEVER throws — every fault degrades truthfully. */
   async sweepOnce(): Promise<MaintenanceStats> {
-    const beads = this.flushBeads();
+    const beads = await this.flushBeads();
     const mem0 = await this.consolidateMem0();
     return { operation: 'memory.maintenance', beads, mem0 };
   }
 
   /** Beads durability flush — commit the Dolt working-set (`bd vc commit`). */
-  private flushBeads(): MaintenanceStats['beads'] {
-    // Only attempt when bd is reachable AND this port build exposes the flush
-    // seam (older/fake ports may not) — otherwise a truthful "skipped".
-    if (!this.beads.available() || typeof this.beads.flush !== 'function') {
-      return {
-        attempted: false,
-        committed: false,
-        reason: 'bd unavailable or flush unsupported',
-      };
-    }
+  private async flushBeads(): Promise<MaintenanceStats['beads']> {
     try {
-      const res = this.beads.flush(this.commitMessage);
+      // Only attempt when the facet reports bd reachable — otherwise a truthful
+      // "skipped" (attempted:false) instead of a flush that can never commit.
+      const health = await this.beads.health();
+      if (!health.available) {
+        return {
+          attempted: false,
+          committed: false,
+          reason: health.reason ?? 'bd unavailable',
+        };
+      }
+      const res = await this.beads.flush(this.commitMessage);
       return res.committed
         ? {
             attempted: true,

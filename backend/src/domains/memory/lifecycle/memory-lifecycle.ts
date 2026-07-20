@@ -20,7 +20,7 @@ import type { Principal } from '../../identity/types.js';
 import type { GovernanceGate } from '../../governance/ports/gate.port.js';
 import type { GateVerdict } from '../../governance/types.js';
 import type { MemoryRepository } from '../ports/memory-repository.port.js';
-import type { BeadsMemoryPort } from '../ports/beads-memory.port.js';
+import type { IssueGraphService } from '../ports/issue-graph.port.js';
 import type { Mem0Message, Mem0Port } from '../ports/mem0.port.js';
 
 /** The governed action key the gate classifies (durable memory promotion). */
@@ -77,7 +77,8 @@ export interface MemoryLifecycle {
 export interface MemoryLifecycleDeps {
   readonly repository: MemoryRepository;
   readonly gate: GovernanceGate;
-  readonly beads: BeadsMemoryPort;
+  /** The beads module facet — `promote` is the module-internal governed verb. */
+  readonly beads: IssueGraphService;
   /**
    * OPTIONAL semantic-memory write seam. On an allowed promotion the accepted
    * durable fact is best-effort written into mem0's vector store so mem0's LLM
@@ -258,24 +259,27 @@ export function createMemoryLifecycle(
       // `bd promote` only accepts the bd-issued wisp id captured at propose time
       // (`beadsRef`) — never the locally-minted candidateId. When the ref is
       // absent (bd was down at propose) there is no wisp to promote: skip
-      // truthfully instead of issuing a promote that can never succeed.
+      // truthfully instead of issuing a promote that can never succeed. The
+      // reviewing principal is the bd audit-trail actor.
       if (candidate.beadsRef) {
-        if (beads.available()) {
-          try {
-            beads.promote(candidate.beadsRef);
-          } catch (err) {
+        try {
+          const wispPromoted = await beads.promote(
+            candidate.beadsRef,
+            input.principal.userId
+          );
+          if (!wispPromoted) {
             logger.warn(
-              { err: err instanceof Error ? err.message : String(err) },
-              'beads promote failed'
+              {
+                candidateId: candidate.candidateId,
+                beadsRef: candidate.beadsRef,
+              },
+              'beads wisp not promoted to durable Dolt memory (bd unavailable or promote failed)'
             );
           }
-        } else {
+        } catch (err) {
           logger.warn(
-            {
-              candidateId: candidate.candidateId,
-              beadsRef: candidate.beadsRef,
-            },
-            'beads unavailable — wisp not promoted to durable Dolt memory'
+            { err: err instanceof Error ? err.message : String(err) },
+            'beads promote failed'
           );
         }
       } else {
