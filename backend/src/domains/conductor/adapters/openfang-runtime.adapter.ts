@@ -18,11 +18,12 @@
  *
  * Shape mapping onto the substrate contract:
  *  - `launch(input)` — provisions the isolated git worktree (like the tmux path),
- *    then runs ONE openfang agent turn via the injected `runOpenfang`
- *    (engines' `launchOpenfangRun`) pointed at that worktree. NB: the napi call is
- *    SYNCHRONOUS + BLOCKING (Rust `block_on`) — it holds the event loop for the
- *    full turn; we await it and record the honest transcript + exit code. We hand
- *    `launchOpenfangRun` a BUFFER sink that keeps `log` messages for `capture()`
+ *    then runs ONE openfang agent turn via the injected `agentTurn.run`
+ *    (the engines `AgentEngineService` facet over `launchOpenfangRun`) pointed at
+ *    that worktree. NB: the napi call is SYNCHRONOUS + BLOCKING (Rust `block_on`)
+ *    — it holds the event loop for the full turn; we await it and record the
+ *    honest transcript + exit code. We hand `agentTurn.run` a BUFFER sink (the
+ *    load-bearing PER-CALL sink) that keeps `log` messages for `capture()`
  *    (the run-tailer stays the transcript stream) AND forwards the TERMINAL
  *    (`completed`/`failed`) event — which carries `workspaceId` + the kernel's
  *    REAL `inputTokens`/`outputTokens` in `data` — to the late-bound real
@@ -65,13 +66,11 @@ import type {
   SubstrateLaunchInput,
 } from '../ports/substrate-registry.port.js';
 import type { ConductorConfig } from '../config.js';
-import {
-  launchOpenfangRun as defaultLaunchOpenfangRun,
-  getOpenfangEngine as defaultGetOpenfangEngine,
-  type OpenfangLaunchInput,
-  type OpenfangLaunchDeps,
-  type OpenfangLaunchResult,
-} from '../../engines/index.js';
+import type {
+  AgentTurnPort,
+  AgentTurnInput,
+  OpenfangRunEventSink,
+} from '../ports/agent-turn.port.js';
 
 /** The injectable child-process seam (default: the package's `execFileSafe`). */
 export type ExecFn = (
@@ -80,20 +79,14 @@ export type ExecFn = (
   options?: ExecOptions
 ) => Promise<ExecResult>;
 
-/** The engines `launchOpenfangRun` shape (injected so the adapter stays testable). */
-export type OpenfangRunFn = (
-  input: OpenfangLaunchInput,
-  deps?: OpenfangLaunchDeps
-) => Promise<OpenfangLaunchResult>;
-
 /**
  * The REAL RunEvent sink the native turn's TERMINAL event is forwarded to (the
- * completion-hook sink, wired by the composition root). Structurally the engines'
- * `OpenfangRunEventSink` — reused via the launch-deps `sink` slot so this adapter
- * names ONE sink shape and the conductor completion-hook `RunEventSinkPort`
- * satisfies it (its `append` returns `Promise<void>`).
+ * completion-hook sink, wired by the composition root). Structurally the
+ * conductor `OpenfangRunEventSink` — the same sink shape the per-turn buffer sink
+ * forwards to, which the completion-hook `RunEventSinkPort` satisfies (its
+ * `append` returns `Promise<void>`).
  */
-export type OpenfangRunSink = NonNullable<OpenfangLaunchDeps['sink']>;
+export type OpenfangRunSink = OpenfangRunEventSink;
 
 /**
  * The native-openfang substrate contract PLUS a late-bind for the real RunEvent
@@ -137,17 +130,20 @@ export interface CreateOpenfangRuntimeSubstrateDeps {
   /** Child-process seam for git worktree ops; defaults to `execFileSafe`. */
   readonly exec?: ExecFn;
   /**
-   * The engines `launchOpenfangRun` (path b driver). Defaults to the engines
-   * barrel export; injectable for tests. This is the LIVE reach into the engine
-   * domain — a fully degrade-safe function (engine absent ⇒ `{available:false}`).
+   * The narrow {@link AgentTurnPort} the native turn runs over — `engines.
+   * agentEngine()`, injected by the composition root. `run`/`continueRun` each
+   * take the PER-CALL buffer sink this substrate builds, so the terminal
+   * token-bearing event survives the facet indirection (that is why the
+   * conductor consumes an AgentTurnPort, NOT the frozen `engine.invoke`
+   * transport — which has no per-call sink slot).
+   *
+   * OPTIONAL: bootstrap wires this in a LATER composition-root edit; until then
+   * (and in any run where the engines facet is null because the openfang engine
+   * is undeclared) it is absent and the substrate reports `available:false`
+   * truthfully — it NEVER throws or fabricates a turn. The port is itself
+   * fully degrade-safe (engine absent/boot-failed ⇒ `{ available:false }`).
    */
-  readonly runOpenfang?: OpenfangRunFn;
-  /**
-   * Truthful engine-presence probe for `available()`. Defaults to the engines
-   * barrel `getOpenfangEngine` (boots + caches the kernel lazily). Injectable for
-   * tests; never throws.
-   */
-  readonly probeEngine?: () => boolean;
+  readonly agentTurn?: AgentTurnPort;
   /** Clock — defaults to `() => new Date()`. */
   readonly now?: () => Date;
   /**
@@ -177,13 +173,15 @@ export function createOpenfangRuntimeSubstrate(
 ): OpenfangRuntimeSubstrate {
   const logger = deps.logger ?? NOOP_LOGGER;
   const exec: ExecFn = deps.exec ?? execFileSafe;
-  const runOpenfang: OpenfangRunFn =
-    deps.runOpenfang ?? defaultLaunchOpenfangRun;
+  const agentTurn = deps.agentTurn;
   const now = deps.now ?? ((): Date => new Date());
-  const probeEngine =
-    deps.probeEngine ??
-    ((): boolean => defaultGetOpenfangEngine() !== undefined);
   const worktreeRoot = deps.config.worktreeRoot;
+
+  // Cached "run-reported unavailable" reason. The narrow AgentTurnPort carries no
+  // health probe, so `available()` is optimistic while the port is present, then
+  // flips truthfully once a real turn reports `available:false` (addon absent /
+  // kernel boot failed). Never a fabricated availability.
+  let lastUnavailableReason: string | undefined;
 
   // Substrate-owned live state: completed-turn results by handle ref, and the
   // source repo per ref for teardown. Empty after a restart ⇒ capture/exit report
@@ -198,12 +196,13 @@ export function createOpenfangRuntimeSubstrate(
 
   /**
    * Run ONE native openfang turn against `worktreePath` and record the result.
-   * Shared by `launch` (first turn, fresh agent) and `continueRun` (follow-up
-   * turn — reuse-by-name: `runOpenfang` defaults the agent name to
-   * `recoder-<workspaceId>`, so the SAME workspace resolves the SAME agent and
-   * the kernel `runAgent` continues its session).
+   * Shared by `launch` (`mode:'launch'` → `agentTurn.run`, fresh agent) and
+   * `continueRun` (`mode:'continue'` → `agentTurn.continueRun`, reuse-by-name:
+   * the facet defaults the agent name to `recoder-<workspaceId>`, so the SAME
+   * workspace resolves the SAME agent and the kernel `runAgent` continues its
+   * session).
    *
-   * The sink handed to `runOpenfang` BUFFERS `log` messages for `capture()` AND
+   * The PER-CALL sink handed to `agentTurn` BUFFERS `log` messages for `capture()` AND
    * forwards the TERMINAL (`completed`/`failed`) event — which carries
    * `workspaceId` + REAL `inputTokens`/`outputTokens` in `data` — to the real
    * `runSink` so the completion-hook meters real usage. Non-terminal events stay
@@ -216,9 +215,19 @@ export function createOpenfangRuntimeSubstrate(
     prompt: string;
     worktreePath: string;
     repoPath: string;
+    /** `launch` ⇒ fresh agent (`run`); `continue` ⇒ reuse-by-name (`continueRun`). */
+    mode: 'launch' | 'continue';
   }): Promise<TurnResult> {
+    if (!agentTurn) {
+      // Reached only if availability() raced true→absent; refuse truthfully so
+      // the engine records a `failed` workspace (never a fabricated session).
+      throw new Error(
+        'in_process (openfang) unavailable (agent-turn port not wired)'
+      );
+    }
+
     const transcriptParts: string[] = [];
-    const bufferSink: OpenfangRunSink = {
+    const bufferSink: OpenfangRunEventSink = {
       append(event): void {
         if (event.type === 'log' && typeof event.message === 'string') {
           transcriptParts.push(event.message);
@@ -242,22 +251,26 @@ export function createOpenfangRuntimeSubstrate(
     };
 
     const runId = `run_${params.workspaceId}`;
-    // ONE agent turn. SYNCHRONOUS + BLOCKING (see header). runOpenfang is itself
-    // fully degrade-safe and NEVER throws.
-    const outcome = await runOpenfang(
-      {
-        workspaceId: params.workspaceId,
-        taskId: params.taskId,
-        runId,
-        prompt: params.prompt,
-        worktreePath: params.worktreePath,
-      },
-      { sink: bufferSink, now }
-    );
+    const turnInput: AgentTurnInput = {
+      workspaceId: params.workspaceId,
+      taskId: params.taskId,
+      runId,
+      prompt: params.prompt,
+      worktreePath: params.worktreePath,
+    };
+    // ONE agent turn through the injected AgentTurnPort. The PER-CALL bufferSink
+    // is threaded so the terminal token-bearing event survives the facet
+    // indirection. The port is itself fully degrade-safe and NEVER throws.
+    const outcome =
+      params.mode === 'launch'
+        ? await agentTurn.run(turnInput, bufferSink)
+        : await agentTurn.continueRun(turnInput, bufferSink);
 
     if (outcome.available === false) {
-      // Raced from available:true to a boot failure — refuse truthfully so the
+      // Raced from available:true to a boot failure — cache the reason so
+      // subsequent `available()` reflects it, and refuse truthfully so the
       // engine records a `failed` workspace (never a fabricated session).
+      lastUnavailableReason = outcome.reason;
       throw new Error(`in_process (openfang) unavailable (${outcome.reason})`);
     }
 
@@ -286,24 +299,31 @@ export function createOpenfangRuntimeSubstrate(
     return result;
   }
 
-  /** Truthful engine readiness (never throws; a boot failure ⇒ unavailable). */
+  /**
+   * Truthful engine readiness (never throws). Unavailable when the AgentTurnPort
+   * is not wired (the composition root injects it in a later edit; a run whose
+   * openfang facet is null leaves it absent) OR when a prior real turn reported
+   * `available:false`. Otherwise optimistic — the narrow port carries no cheap
+   * health probe, and `launch()`/`continueRun()` degrade truthfully at run time.
+   */
   async function availability(): Promise<SubstrateAvailability> {
-    let present = false;
-    try {
-      present = probeEngine();
-    } catch (err) {
-      logger.warn('openfang engine probe threw — reporting unavailable', {
-        err: message(err),
-      });
-      present = false;
+    if (!agentTurn) {
+      return {
+        available: false,
+        reason:
+          'openfang in_process substrate unavailable — agent-turn port not wired ' +
+          '(engines.agentEngine() is null: openfang engine undeclared or facet not injected)',
+      };
     }
-    if (present) return { available: true };
-    return {
-      available: false,
-      reason:
-        'openfang native engine unavailable — addon not built or kernel boot failed ' +
-        '(build: cd backend/engines/rust/openfang && cargo build -p openfang-napi --release)',
-    };
+    if (lastUnavailableReason) {
+      return {
+        available: false,
+        reason:
+          `openfang native engine unavailable — ${lastUnavailableReason} ` +
+          '(build: cd backend/engines/rust/openfang && cargo build -p openfang-napi --release)',
+      };
+    }
+    return { available: true };
   }
 
   return {
@@ -372,6 +392,7 @@ export function createOpenfangRuntimeSubstrate(
         prompt,
         worktreePath,
         repoPath: input.repoPath,
+        mode: 'launch',
       });
 
       logger.info('in_process (openfang) turn completed', {
@@ -435,6 +456,7 @@ export function createOpenfangRuntimeSubstrate(
         prompt,
         worktreePath,
         repoPath,
+        mode: 'continue',
       });
 
       logger.info(
