@@ -21,6 +21,12 @@ import type {
   McpToolCallInput,
 } from '../../ports/mcp-host.port.js';
 import { ok, up, type InvokeResult } from '../../types.js';
+import type { NapiModule, NapiLoadSpec } from '../../ports/napi-loader.port.js';
+import type {
+  OpenfangEngineInstance,
+  OpenfangNativeAddon,
+} from '../../openfang-native.js';
+import type { OpenfangProvenanceGate } from '../../openfang-runtime.js';
 import type { NapiArgs } from './napi-util.js';
 import {
   buildOpenfangMcpTools,
@@ -121,6 +127,70 @@ describe('napi engine group composer', () => {
     const result = await handler!({ args: {} } as unknown as McpToolCallInput);
     expect(result.metadata).toMatchObject({ external: false });
     expect(result.content).toMatchObject({ engine: 'napi', status: 'up' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Provenance gate is threaded into the openfang adapter's launch_run path
+// ---------------------------------------------------------------------------
+
+/** A stub booted kernel: no existing agents, spawn/run/verify all succeed. */
+function stubOpenfangEngine(): OpenfangEngineInstance {
+  const jsonOk = (): string => JSON.stringify({ ok: true });
+  const base: Record<string, (...a: unknown[]) => string> = {
+    listAgents: () => JSON.stringify({ ok: true, agents: [] }),
+    spawnAgent: () => JSON.stringify({ ok: true, agent_id: 'a1' }),
+    runAgent: () => JSON.stringify({ ok: true, response: 'hi', iterations: 1 }),
+    verifySignedManifest: () => JSON.stringify({ ok: true, manifest: { signer: 'k' } }),
+  };
+  return new Proxy(base as unknown as OpenfangEngineInstance, {
+    get: (t, p: string) => (t as Record<string, unknown>)[p] ?? jsonOk,
+  });
+}
+
+/** A loader that resolves a stub addon whose `OpenfangEngine.boot` returns a stub kernel. */
+function stubOpenfangLoader(): NapiLoaderPort {
+  const addon: OpenfangNativeAddon = {
+    ping: () => true,
+    nativeVersion: () => JSON.stringify({ version: '0.0.1', build_mode: 'full' }),
+    bundledHandsJson: () => JSON.stringify({ ok: true, hands: [] }),
+    OpenfangEngine: { boot: () => stubOpenfangEngine() },
+  };
+  return {
+    resolvePath: () => '/stub/openfang_napi.node',
+    load: <T>(_spec: NapiLoadSpec<T>): NapiModule<T> | null =>
+      ({ addon: addon as unknown as T, path: '/stub/openfang_napi.node', version: '0.0.1' }),
+    evict: () => {},
+  };
+}
+
+describe('createNapiEngineClients threads the openfang provenance gate', () => {
+  it('the gate-populated openfang option reaches the launch_run spawn path', async () => {
+    const decide = vi.fn(async () => ({ allow: true as const, reason: 'ok' }));
+    const gate: OpenfangProvenanceGate = { decide };
+    const c = createNapiEngineClients({
+      loader: stubOpenfangLoader(),
+      logger: log,
+      kernel: fakeKernel({ engine: 'napi', status: 'up', degraded: false }),
+      openfang: { governance: gate },
+    });
+
+    const result = await c.openfang().invoke({
+      op: 'launchRun',
+      input: {
+        workspaceId: 'ws',
+        taskId: 't',
+        runId: 'run_ws',
+        prompt: 'go',
+        signedManifestJson: '{"sig":"x"}',
+      },
+    });
+
+    // launchRun surfaces its degrade-safe payload as ok(result); the gate FIRED
+    // before spawnAgent (proving the previously-omitted option is now populated).
+    expect(result.ok).toBe(true);
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(decide.mock.calls[0]?.[0]).toMatchObject({ action: 'agent.spawn' });
   });
 });
 
