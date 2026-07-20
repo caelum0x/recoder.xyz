@@ -521,9 +521,19 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     logger: childLogger('conductor-cli'),
     resolveInferenceEnv: cliInferenceEnvResolver,
   });
+  // The cohesive openfang agent-engine facet (docs/modules/agent-engine.md): its
+  // provenance gate is already pre-wired from the injected kernel inside the engines
+  // module (shared into BOTH the napi adapter's launch_run option AND the facet's
+  // direct run() path). We hand it to the in_process substrate as the narrow
+  // AgentTurnPort so the native turn runs over `run`/`continueRun` (each carrying a
+  // PER-CALL bufferSink for capture() + token metering). Null when the openfang
+  // engine is undeclared / its `.node` is unbuilt ⇒ the substrate reports
+  // `available:false` truthfully rather than fabricating a session.
+  const agentEngine = engines.agentEngine();
   const openfangSub = createOpenfangRuntimeSubstrate({
     config: conductorSubstrateConfig,
     logger: childLogger('conductor-openfang'),
+    agentTurn: agentEngine ?? undefined,
   });
   // PATH (c) off-box: the `daytona` remote-sandbox substrate over the Phase-10
   // cloud provisioner. The cloud module is built LATER (Phase-10, below), so the
