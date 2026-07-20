@@ -50,6 +50,8 @@ import {
 import { HealthAggregator } from './services/health-aggregator.service.js';
 import { AlertingService } from './services/alerting.service.js';
 import { WorkSignalsService } from './services/work-signals.service.js';
+import { RunSignalPushService, type RunOutcomeSignal } from './services/run-signal-push.service.js';
+import type { OpsRecorderPushResult, OpsRecorderSyncResult } from './ports/ops-recorder-push.port.js';
 import { telemetryMiddleware } from './middleware/telemetry.middleware.js';
 import { buildControlRoutes, buildHealthRoutes, buildMetricsRoutes } from './routes/observability.routes.js';
 import { buildObservabilityMcpTools } from './mcp/observability-engine.js';
@@ -106,6 +108,18 @@ export interface ObservabilityModule {
   metricsRoutes(): Router;
   /** Read-only MCP introspection tools (health/metrics/audit/signals). */
   mcp(): readonly McpToolRegistration[];
+  /**
+   * REVERSE-PUSH a run outcome (`failed`/`stuck`) onto the ops-recorder stuck-work
+   * board. Degrade-truthful: an absent sidecar is a `degraded` no-op, a `completed`
+   * run is a truthful skip — it NEVER throws into or blocks the run flow. The
+   * conductor completion hook fires this on every terminal event.
+   */
+  forwardRunSignal(input: RunOutcomeSignal): Promise<OpsRecorderPushResult>;
+  /**
+   * Trigger the ops-recorder GitHub sync detector (the conductor githubStatus
+   * wiring calls this when GitHub is connected). Degrade-truthful, never throws.
+   */
+  syncOpsRecorderGithub(): Promise<OpsRecorderSyncResult>;
   /** This module's OWN truthful engine health (folded into the aggregate). */
   health(): Promise<ComponentHealth>;
   /** Boot hook (starts the alert-eval loop when enabled). Idempotent. */
@@ -126,6 +140,7 @@ export class ObservabilityComposer implements ObservabilityModule {
   private readonly healthAggregator: HealthAggregator;
   private readonly alerting: AlertingService;
   private readonly workSignals: WorkSignalsService;
+  private readonly runSignalPush: RunSignalPushService;
   private readonly sloRepo: ReturnType<typeof createSloRepository>;
   private readonly log: Logger;
   private alertTimer: ReturnType<typeof setInterval> | null = null;
@@ -181,6 +196,14 @@ export class ObservabilityComposer implements ObservabilityModule {
       ...(deps.runEvents ? { runEvents: deps.runEvents } : {}),
       ...(deps.board ? { board: deps.board } : {}),
       defaultSpaceId: this.cfg.defaultSpaceId,
+    });
+
+    // 6b. Reverse-push service over the SAME ops-recorder client: the write edge
+    //     the conductor completion hook fires a failed/stuck run through, so a
+    //     broken run lands on the same board a stale PR does. Degrade-truthful.
+    this.runSignalPush = new RunSignalPushService({
+      logger: deps.logger,
+      port: this.opsClient,
     });
 
     // 7. Alerting service.
@@ -300,6 +323,14 @@ export class ObservabilityComposer implements ObservabilityModule {
         ...(availability.reason ? { reason: availability.reason } : {}),
       },
     ];
+  }
+
+  forwardRunSignal(input: RunOutcomeSignal): Promise<OpsRecorderPushResult> {
+    return this.runSignalPush.forwardRunSignal(input);
+  }
+
+  syncOpsRecorderGithub(): Promise<OpsRecorderSyncResult> {
+    return this.runSignalPush.syncGithub();
   }
 
   async health(): Promise<ComponentHealth> {

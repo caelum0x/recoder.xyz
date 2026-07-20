@@ -33,6 +33,8 @@ import type { QueryExecutor } from '../persistence/ports/query-executor.port.js'
 import { createGovernanceGateAdapter, type AgentOsGovernanceGate } from './adapters/governance-gate.adapter.js';
 import { MulticaCoordinationAdapter } from './adapters/multica-coordination.adapter.js';
 import type { CoordinationEnginePort } from './ports/coordination-engine.port.js';
+import type { CoordinationAdmissionPort } from './ports/coordination-admission.port.js';
+import { CoordinationAdmissionService } from './services/coordination-admission.service.js';
 import { createInstructionCompilerAdapter } from './adapters/instruction-compiler.adapter.js';
 import { createNatsOutboxPublisher } from './adapters/nats-outbox-publisher.adapter.js';
 import { RunEventIngestService } from './services/run-event-ingest.service.js';
@@ -69,6 +71,7 @@ export class AgentOsComposer implements AgentOsModule {
   private readonly instructionCompiler: InstructionCompilerPort;
   private readonly governanceGate: AgentOsGovernanceGate;
   private readonly coordination: CoordinationEnginePort;
+  private readonly coordinationAdmissionGate: CoordinationAdmissionPort;
   private readonly ingest: RunEventIngestService;
   private readonly drain: OutboxDrainService;
   private readonly squads: SquadService | null;
@@ -130,6 +133,14 @@ export class AgentOsComposer implements AgentOsModule {
         ...(process.env['MULTICA_WORKSPACE_ID'] ? { workspaceId: process.env['MULTICA_WORKSPACE_ID'] } : {}),
         logger: this.log,
       });
+
+    // The DOUBLE-ASSIGNMENT admission gate over the same coordination fabric —
+    // the conductor consults it before a launch (alongside its work-lock) to
+    // skip/defer an issue already actively held by 2+ agents. Degrade-open.
+    this.coordinationAdmissionGate = new CoordinationAdmissionService({
+      engine: this.coordination,
+      logger: this.log,
+    });
 
     this.drain = new OutboxDrainService({
       repository: this.repo,
@@ -235,6 +246,16 @@ export class AgentOsComposer implements AgentOsModule {
 
   runEventBus(): RunEventBusPort {
     return this.ingest;
+  }
+
+  /**
+   * The DOUBLE-ASSIGNMENT admission gate over the Multica coordination fabric.
+   * The conductor injects this into its `createWorkspace` flow (alongside the
+   * path-level work-lock) to skip/defer a launch for an issue already actively
+   * held by 2+ agents. Degrade-open: absent engine ⇒ never blocks a run.
+   */
+  coordinationAdmission(): CoordinationAdmissionPort {
+    return this.coordinationAdmissionGate;
   }
 
   /** Leader-routing squads (null when the feature flag is off). */

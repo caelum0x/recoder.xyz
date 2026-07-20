@@ -29,6 +29,7 @@ import type { AuthMiddleware } from '../identity/middleware/authenticate.middlew
 import type { GovernanceKernelPort } from '../governance/ports/kernel.port.js';
 import type { EnginesConfigOverrides } from './config.js';
 import type { EngineClientPort } from './ports/engine-client.port.js';
+import type { TmuxIntrospectPort } from './adapters/cli/tmux-introspect.adapter.js';
 import type { EngineRegistryPort, McpHostPort } from './ports/index.js';
 import type { ModuleToolsRegistration } from './mcp/host-registrar.js';
 import type { DomainToolsRegistration } from './adapters/domain-tools-bridge.adapter.js';
@@ -79,6 +80,15 @@ export interface EnginesModule {
    * tier binds over (CONFLICT #8-safe: shared `.node` load). Null if undeclared.
    */
   tensorzero(): EngineClientPort | null;
+  /**
+   * The DEEP, READ-ONLY tmux introspection port over the pinned tmux binary the
+   * Conductor drives — the SAME server its headless `recoder-*` sessions live in.
+   * The reconcile-GC substrate scan binds `listSessions()` over this to see the
+   * REAL live-session set on the box (orphan detection after a restart). Null when
+   * the tmux adapter is not declared (truthful skip — the scan then degrades to
+   * "cannot see the substrate", never fabricates live work).
+   */
+  tmuxIntrospect(): TmuxIntrospectPort | null;
   /**
    * The unified GitHub module (docs/modules/github.md): gh CLI + recodergit
    * facets behind ONE interface, and the single truthful `GithubHealth` source.
@@ -160,9 +170,27 @@ export type {
   OpenfangLaunchDeps,
   OpenfangLaunchResult,
   OpenfangRunEventSink,
+  OpenfangProvenanceGate,
+  OpenfangProvenanceRequest,
+  OpenfangProvenanceDecision,
+  OpenfangManifestProvenance,
 } from './openfang-runtime.js';
 export { getOpenfangEngine } from './openfang-native.js';
 export type { OpenfangEngineInstance } from './openfang-native.js';
+
+/**
+ * The native openfang WORKFLOW driver (path b): promotes the engine's
+ * event-driven `register_workflow`/`run_workflow` subsystem to a first-class,
+ * degrade-safe control-plane capability the agent-workflows seam consumes. Absent
+ * addon / boot failure ⇒ every method returns a truthful `{ available:false }`.
+ */
+export { createOpenfangWorkflowDriver } from './openfang-workflow.js';
+export type {
+  OpenfangWorkflowDriver,
+  OpenfangWorkflowDeps,
+  OpenfangWorkflowRegisterResult,
+  OpenfangWorkflowRunResult,
+} from './openfang-workflow.js';
 
 /** The domain-tools bridge types bootstrap consumes when registering `mcp()` tools. */
 export type {

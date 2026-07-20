@@ -30,6 +30,7 @@ import {
   type OpenfangLaunchInput,
   type OpenfangLaunchResult,
   type OpenfangRunEventSink,
+  type OpenfangProvenanceGate,
 } from '../../openfang-runtime.js';
 import { EngineClientBase, type EngineCall } from '../../ports/engine-client.port.js';
 import type { NapiLoaderPort, NapiLoadSpec, NapiModule } from '../../ports/napi-loader.port.js';
@@ -167,6 +168,12 @@ export interface OpenfangNapiOptions {
   readonly runSink?: OpenfangRunEventSink;
   /** Clock for the runtime driver (tests inject a fixed clock). */
   readonly now?: () => Date;
+  /**
+   * OPTIONAL manifest-provenance governance gate consulted BEFORE `spawnAgent` on
+   * the `launchRun` path. Bootstrap backs it with `GovernanceKernelPort.decide`.
+   * Absent ⇒ the gate is skipped truthfully (never blocks a run).
+   */
+  readonly governance?: OpenfangProvenanceGate;
 }
 
 export class OpenfangNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
@@ -310,15 +317,20 @@ export class OpenfangNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
       prompt: str(input, 'prompt'),
       ...(typeof input.agentName === 'string' ? { agentName: input.agentName } : {}),
       ...(typeof input.worktreePath === 'string' ? { worktreePath: input.worktreePath } : {}),
+      ...(typeof input.signedManifestJson === 'string'
+        ? { signedManifestJson: input.signedManifestJson }
+        : {}),
     };
     const engine = this.ensureEngine();
     // launchOpenfangRun is degrade-safe: an absent engine yields
     // `{ available:false, reason }` (no events) — a truthful payload, not a seam
-    // error, so we surface it as ok(result).
+    // error, so we surface it as ok(result). The provenance gate (when wired)
+    // runs before spawnAgent; absent ⇒ skipped truthfully.
     const result = await launchOpenfangRun(launchInput, {
       engine: () => engine,
       ...(this.options.runSink ? { sink: this.options.runSink } : {}),
       ...(this.options.now ? { now: this.options.now } : {}),
+      ...(this.options.governance ? { governance: this.options.governance } : {}),
     });
     return ok(result);
   }

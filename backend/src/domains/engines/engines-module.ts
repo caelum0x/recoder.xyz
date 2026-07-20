@@ -91,6 +91,7 @@ import {
   RecodergitAdapter,
   beadsEngineBinder,
 } from './adapters/cli/index.js';
+import type { TmuxIntrospectPort } from './adapters/cli/index.js';
 import {
   createRecoderGitService,
   type RecoderGitService,
@@ -455,6 +456,18 @@ export class EnginesComposer implements EnginesModule {
 
   tensorzero(): EngineClientPort | null {
     return this.client('tensorzero');
+  }
+
+  /**
+   * The DEEP, read-only tmux introspection port over the pinned tmux binary — the
+   * same seam the `tmux.*` MCP tools bind over (`bindTmuxIntrospectMcpTools`). The
+   * conductor's reconcile-GC substrate scan reads `listSessions()` here to see the
+   * REAL live `recoder-*` sessions on the box. Null when the tmux adapter is not
+   * declared (truthful skip — never a fabricated port).
+   */
+  tmuxIntrospect(): TmuxIntrospectPort | null {
+    const tmux = this.adapters.get('tmux') as TmuxAdapter | undefined;
+    return tmux ? tmux.introspect() : null;
   }
 
   /**

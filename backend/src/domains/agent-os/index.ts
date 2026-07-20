@@ -21,12 +21,19 @@ import type { ComponentHealth } from '../../shared/health-types.js';
 import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { AgentOsRepositoryPort } from './ports/agent-os-repository.port.js';
 import type { RunEventBusPort } from './ports/run-event.port.js';
+import type { CoordinationAdmissionPort } from './ports/coordination-admission.port.js';
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
 import type { SquadAutopilotService } from './services/squad-autopilot.service.js';
 import type { AgentOsDeps } from './types.js';
 
 export type { AgentOsDeps } from './types.js';
 export type { SquadConductorPort, SquadDispatchRequest, SquadDispatchResult } from './ports/squad-autopilot.port.js';
+export type {
+  CoordinationAdmissionPort,
+  CoordinationAdmissionInput,
+  CoordinationAdmissionOptions,
+  CoordinationAdmissionDecision,
+} from './ports/coordination-admission.port.js';
 
 /** The public surface every consumer of the control plane compiles against. */
 export interface AgentOsModule {
@@ -35,6 +42,12 @@ export interface AgentOsModule {
   repository(): AgentOsRepositoryPort;
   /** THE RunEvent ingest + subscribe bus (conductor/runtimes/engines emit here). */
   runEventBus(): RunEventBusPort;
+  /**
+   * The DOUBLE-ASSIGNMENT admission gate over the Multica coordination fabric —
+   * the conductor injects this into `createWorkspace` (alongside its work-lock)
+   * to skip/defer a launch for an issue already actively held by 2+ agents.
+   */
+  coordinationAdmission(): CoordinationAdmissionPort;
   /** The `/api/agent-os/*` router (read models + `/internal/*` ingest back-compat). */
   routes(): Router;
   /**

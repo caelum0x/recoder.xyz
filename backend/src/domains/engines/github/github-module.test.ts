@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest';
 import type { Logger } from '../../../shared/logger.js';
 import type { CliResult } from '../adapters/cli/cli-exec.js';
 import type { RecoderGitService } from '../recodergit-service.js';
-import { GithubModule, type GithubCliRunner } from './github-module.js';
+import { GithubModule, type GithubCliRunner, extractChangedSymbols } from './github-module.js';
 
 const log = { warn() {}, info() {}, debug() {}, error() {}, child: () => log } as unknown as Logger;
 
@@ -68,6 +68,29 @@ function recodergitStub(enabled: boolean): RecoderGitService {
       enabled
         ? { enabled: true, map: { repoId, domains: [{ name: 'core' }], crossEdges: [] } }
         : { enabled: false },
+  } as unknown as RecoderGitService;
+}
+
+/** Recorded code-intel call for the blast-radius fusion assertions. */
+type IntelCall = { op: string; repoId: string; params: Record<string, unknown> };
+
+/**
+ * A RecoderGitService stub that implements `codeIntel` (the fusion seam) and
+ * records every call. `respond` shapes the truthful ServiceResult per op.
+ */
+function recodergitImpactStub(opts: {
+  enabled: boolean;
+  calls?: IntelCall[];
+  respond?: (op: string) => { available: boolean; result?: unknown; reason?: string };
+}): RecoderGitService {
+  return {
+    isEnabled: () => opts.enabled,
+    codeIntel: async (op: string, repoId: string, params: Record<string, unknown>) => {
+      opts.calls?.push({ op, repoId, params });
+      if (!opts.enabled) return { enabled: false };
+      const r = opts.respond?.(op) ?? { available: true, result: { op, target: params.symbol } };
+      return { enabled: true, op, repoId, ...r };
+    },
   } as unknown as RecoderGitService;
 }
 
@@ -228,6 +251,138 @@ describe('GithubModule.openPR / comment / reviewPR', () => {
       expect(degraded.value.diff).toBeNull();
       expect(degraded.value.diffUnavailable).toBeTruthy();
     }
+  });
+});
+
+describe('GithubModule.reviewPR — recodergit blast-radius fusion', () => {
+  const PR_DIFF = [
+    'diff --git a/src/pay.ts b/src/pay.ts',
+    '--- a/src/pay.ts',
+    '+++ b/src/pay.ts',
+    '@@ -10,6 +10,8 @@ export class Payments {',
+    '   async settle() {}',
+    '+  async computePayout(userId: string) {',
+    '+    return charge(userId);',
+    '+  }',
+  ].join('\n');
+
+  function ghWithDiff(calls: RecordedCall[] = []): GithubCliRunner {
+    return ghUpRun((_bin, args) => {
+      if (args[1] === 'view') return { stdout: JSON.stringify({ number: 7, title: 't' }) };
+      if (args[1] === 'diff') return { stdout: PR_DIFF };
+      return {};
+    }, calls);
+  }
+
+  it('FIRES the engine: extracts changed symbols and annotates callers + callees', async () => {
+    const intel: IntelCall[] = [];
+    const module = build({
+      runCli: ghWithDiff(),
+      recodergit: recodergitImpactStub({ enabled: true, calls: intel }),
+    });
+    const result = await module.reviewPR({ pr: 7 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // The diff was still returned untouched alongside the new annotation.
+    expect(result.value.diff).toContain('computePayout');
+    const impact = result.value.impact;
+    expect(impact.available).toBe(true);
+    expect(impact.changedSymbols).toContain('computePayout');
+
+    // The fusion actually invoked the engine in BOTH blast-radius directions.
+    const ops = intel.map((c) => c.op);
+    expect(ops).toContain('find_references'); // upstream callers/dependents
+    expect(ops).toContain('call_graph'); // downstream callees/dependencies
+    // …targeting an extracted symbol, against the on-disk checkout.
+    const payoutCalls = intel.filter((c) => c.params.symbol === 'computePayout');
+    expect(payoutCalls.map((c) => c.op).sort()).toEqual(['call_graph', 'find_references']);
+    expect(payoutCalls.every((c) => c.params.repo === '/repo')).toBe(true);
+
+    // The per-symbol annotation carries both real readings (never fabricated).
+    const payout = impact.symbols.find((s) => s.symbol === 'computePayout');
+    expect(payout?.references).toEqual({ op: 'find_references', target: 'computePayout' });
+    expect(payout?.callGraph).toEqual({ op: 'call_graph', target: 'computePayout' });
+  });
+
+  it('degrades TRUTHFULLY when the code-graph is disabled — review still returns, no engine calls', async () => {
+    const intel: IntelCall[] = [];
+    const module = build({
+      runCli: ghWithDiff(),
+      recodergit: recodergitImpactStub({ enabled: false, calls: intel }),
+    });
+    const result = await module.reviewPR({ pr: 7 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.diff).toContain('computePayout'); // review NOT blocked
+    expect(result.value.impact.available).toBe(false);
+    expect(result.value.impact.reason).toMatch(/disabled/i);
+    expect(intel).toHaveLength(0); // isEnabled() gate short-circuits the fan-out
+  });
+
+  it('degrades truthfully when the engine reports the repo is not indexed', async () => {
+    const module = build({
+      runCli: ghWithDiff(),
+      recodergit: recodergitImpactStub({
+        enabled: true,
+        respond: () => ({ available: false, reason: 'repo not indexed (call index/connect first)' }),
+      }),
+    });
+    const result = await module.reviewPR({ pr: 7 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const impact = result.value.impact;
+    expect(impact.available).toBe(false);
+    expect(impact.reason).toMatch(/not indexed/i);
+    // Symbols were still extracted + attempted; each carries the truthful reason.
+    expect(impact.changedSymbols.length).toBeGreaterThan(0);
+    expect(impact.symbols.every((s) => s.references === null && s.callGraph === null)).toBe(true);
+  });
+
+  it('skips truthfully when the diff is unavailable (no fabricated impact)', async () => {
+    const module = build({
+      runCli: ghUpRun((_bin, args) => {
+        if (args[1] === 'view') return { stdout: JSON.stringify({ number: 7 }) };
+        return undefined; // diff fails
+      }),
+      recodergit: recodergitImpactStub({ enabled: true }),
+    });
+    const result = await module.reviewPR({ pr: 7 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.diff).toBeNull();
+    expect(result.value.impact.available).toBe(false);
+    expect(result.value.impact.reason).toMatch(/no diff/i);
+  });
+});
+
+describe('extractChangedSymbols', () => {
+  it('pulls declared names from hunk context and added/removed lines across languages', () => {
+    const diff = [
+      '@@ -1,2 +1,4 @@ export class Billing {',
+      '+function computeTax(amount) {}',
+      '+  async settleInvoice(id: string): Promise<void> {',
+      '-const legacyHandler = () => {}',
+      '+def reconcile(ledger):',
+      '+func ChargeCard(c *Card) error {',
+      '+fn verify_signature(sig: &str) {',
+      '   unchanged line ignored',
+    ].join('\n');
+    const symbols = extractChangedSymbols(diff);
+    expect(symbols).toContain('Billing'); // hunk-header class context
+    expect(symbols).toContain('computeTax');
+    expect(symbols).toContain('settleInvoice');
+    expect(symbols).toContain('legacyHandler');
+    expect(symbols).toContain('reconcile');
+    expect(symbols).toContain('ChargeCard');
+    expect(symbols).toContain('verify_signature');
+    // Keywords and unchanged context never leak in as symbols.
+    expect(symbols).not.toContain('function');
+    expect(symbols).not.toContain('unchanged');
+  });
+
+  it('de-duplicates and returns [] for a diff with no declarations', () => {
+    expect(extractChangedSymbols('@@ -1 +1 @@\n+  x = x + 1\n-  y = 2')).toEqual([]);
   });
 });
 

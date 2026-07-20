@@ -52,6 +52,12 @@ export type {
   LockConflictInfo,
 } from './work-lock.port.js';
 export type {
+  CoordinationAdmissionPort,
+  CoordinationAdmissionInput,
+  CoordinationAdmissionOptions,
+  CoordinationAdmissionDecision,
+} from './coordination-admission.port.js';
+export type {
   BrainPort,
   BrainEnrichInput,
   BrainEnrichResult,

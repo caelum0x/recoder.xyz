@@ -28,11 +28,13 @@ import type { Principal } from '../identity/types.js';
 import type { ConductorConfigOverrides } from './config.js';
 import type { GovernanceGatePort, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView, SteerTransportPort } from './ports/index.js';
 import type { McpInjectPort } from './ports/mcp-inject.port.js';
+import type { CoordinationAdmissionPort } from './ports/coordination-admission.port.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
 import type { ColbertSearchPort } from '../memory/ports/colbert-search.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
+import type { SubstrateScanDeps } from './adapters/substrate-scan.adapter.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type { WorkspaceRepositoryPort } from './ports/workspace-repository.port.js';
 import type {
@@ -89,6 +91,17 @@ export interface ConductorModuleDeps {
   readonly lock?: WorkLockPort;
   /** Optional resource-governor admission (refuse over-budget launches). */
   readonly admission?: AdmissionPort;
+  /**
+   * Optional DOUBLE-ASSIGNMENT admission gate over the Multica coordination
+   * fabric (agent-os `coordinationAdmission()`). Consulted in `createWorkspace`
+   * alongside the path-level {@link WorkLockPort}: when the issue a launch is
+   * about to work is ALREADY actively held by 2+ agents, the launch is
+   * skipped/deferred with a truthful reason, and a governance-gated reroute asks
+   * the squad leader to re-balance. Absent, or the coordination engine down ⇒ a
+   * truthful skip (`gated:false`) that NEVER blocks a launch. See
+   * `services/coordination-admission.service.ts`.
+   */
+  readonly coordinationAdmission?: CoordinationAdmissionPort;
   /**
    * Optional memory-backed brain (mem0 ∪ beads ∪ candidates → ColBERT rerank).
    * Used TWO ways by the run flow: injected as `engineDeps.brain` so the CLI
@@ -171,6 +184,17 @@ export interface ConductorModuleDeps {
     userId: string | undefined,
     success: boolean,
   ) => void;
+  /**
+   * Optional live-substrate scan source for reconcile GC. Reconcile joins persisted
+   * workspaces against the REAL box — live `recoder-*` tmux sessions (fed by the
+   * engines-domain tmux introspection port) + conductor worktrees — so orphaned or
+   * leaked sessions are flagged and record-vs-session drift is corrected. Bootstrap
+   * builds this from `engines.tmuxIntrospect()` via `createTmuxScanSource`. Absent ⇒
+   * `createSubstrateScan()` degrades to "cannot see the substrate" (empty lists),
+   * the truthful default — never fabricated live work. See
+   * `adapters/tmux-scan-source.adapter.ts` + `adapters/substrate-scan.adapter.ts`.
+   */
+  readonly substrateScan?: SubstrateScanDeps;
 }
 
 /** The public surface bootstrap registers and the edge/interop consume. */

@@ -79,6 +79,54 @@ export interface OpenfangRunEventSink {
   append(event: RunEvent): Promise<void> | void;
 }
 
+/**
+ * Provenance evidence for one spawn attempt, distilled from the engine's
+ * `verifySignedManifest`. This is the CROSS-DOMAIN vocabulary the governance gate
+ * reasons about — deliberately free of any `@recoder/governance` internals so the
+ * engines domain never takes a dependency on the kernel package (the bootstrap
+ * wiring bridges this shape to `GovernanceKernelPort.decide`).
+ */
+export interface OpenfangManifestProvenance {
+  /** A signed manifest envelope was supplied for this spawn. */
+  readonly signed: boolean;
+  /** The engine cryptographically verified the envelope (`false` on absent/failed verify). */
+  readonly verified: boolean;
+  /** The signer/key identity the engine reported, when the envelope carried one. */
+  readonly signer?: string;
+  /** Why verification did not succeed (engine error text) — never a secret. */
+  readonly reason?: string;
+}
+
+/** The decision the {@link OpenfangProvenanceGate} hands back (deny-biased on fault). */
+export interface OpenfangProvenanceDecision {
+  readonly allow: boolean;
+  readonly reason: string;
+}
+
+/** The request the gate reasons about before an openfang agent is spawned. */
+export interface OpenfangProvenanceRequest {
+  /** The governance action — always `agent.spawn` for this seam. */
+  readonly action: 'agent.spawn';
+  readonly agentName: string;
+  readonly workspaceId: string;
+  readonly taskId: string;
+  readonly runId: string;
+  /** Distilled provenance evidence from `verifySignedManifest`. */
+  readonly provenance: OpenfangManifestProvenance;
+}
+
+/**
+ * The governance provenance gate — the seam `launchOpenfangRun` consults BEFORE
+ * `spawnAgent`. Bootstrap backs it with `GovernanceKernelPort.decide` (mapping a
+ * `deny`/`needs_approval` verdict to `allow:false`). Absent (conductor default,
+ * tests) ⇒ the gate is SKIPPED truthfully — provenance is advisory, never a hard
+ * block, so an unwired gate can never stall a run. A gate that THROWS is folded
+ * deny-biased into a truthful `failed` (never a fabricated allow).
+ */
+export interface OpenfangProvenanceGate {
+  decide(req: OpenfangProvenanceRequest): Promise<OpenfangProvenanceDecision>;
+}
+
 export interface OpenfangLaunchInput {
   /** Conductor workspace id (events land on its timeline when runId is `run_<workspaceId>`). */
   workspaceId: string;
@@ -90,6 +138,14 @@ export interface OpenfangLaunchInput {
   agentName?: string;
   /** Conductor worktree path — becomes the openfang agent's `workspace` dir. */
   worktreePath?: string;
+  /**
+   * OPTIONAL signed manifest provenance envelope (openfang `SignedManifest` JSON).
+   * When present it is cryptographically verified via the engine's
+   * `verifySignedManifest`, and the distilled provenance rides into the governance
+   * gate BEFORE `spawnAgent`. Absent ⇒ provenance is `{ signed:false }` (the gate,
+   * if wired, still decides whether an unsigned spawn is permitted).
+   */
+  signedManifestJson?: string;
 }
 
 /** Injectable seams (tests). All optional; production callers pass nothing. */
@@ -100,6 +156,13 @@ export interface OpenfangLaunchDeps {
   sink?: OpenfangRunEventSink;
   /** Clock — defaults to `() => new Date()`. */
   now?: () => Date;
+  /**
+   * OPTIONAL governance provenance gate consulted BEFORE `spawnAgent`. Bootstrap
+   * backs it with `GovernanceKernelPort.decide`. Absent ⇒ the provenance gate is
+   * skipped truthfully (never blocks a run). Only runs on a FRESH spawn — a
+   * reused-by-name agent was already gated at its own spawn.
+   */
+  governance?: OpenfangProvenanceGate;
 }
 
 export type OpenfangLaunchResult =
@@ -158,6 +221,51 @@ function parseEngineJson(raw: string): Record<string, unknown> {
   } catch {
     return { ok: false, error: `engine returned invalid JSON: ${raw.slice(0, 200)}` };
   }
+}
+
+/**
+ * Distill signed-manifest provenance from the engine's `verifySignedManifest`.
+ * Pure over the engine handle; NEVER throws (a napi throw folds into a truthful
+ * `verified:false` with the error as `reason`). No envelope ⇒ `{ signed:false }`.
+ */
+function verifyManifestProvenance(
+  engine: OpenfangEngineInstance,
+  signedManifestJson: string | undefined,
+): OpenfangManifestProvenance {
+  if (!signedManifestJson || !signedManifestJson.trim()) {
+    return { signed: false, verified: false };
+  }
+  if (typeof engine.verifySignedManifest !== 'function') {
+    return { signed: true, verified: false, reason: 'engine lacks verifySignedManifest' };
+  }
+  try {
+    const parsed = parseEngineJson(engine.verifySignedManifest(signedManifestJson));
+    if (parsed.ok === true) {
+      const signer = extractSigner(parsed);
+      return { signed: true, verified: true, ...(signer ? { signer } : {}) };
+    }
+    const reason = typeof parsed.error === 'string' ? parsed.error : 'manifest verification failed';
+    return { signed: true, verified: false, reason };
+  } catch (err) {
+    return {
+      signed: true,
+      verified: false,
+      reason: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/** Best-effort signer/key-id extraction from the verified-manifest reply (no throw). */
+function extractSigner(parsed: Record<string, unknown>): string | undefined {
+  const direct = parsed.signer ?? parsed.key_id ?? parsed.keyId;
+  if (typeof direct === 'string' && direct) return direct;
+  const manifest = parsed.manifest;
+  if (manifest && typeof manifest === 'object') {
+    const m = manifest as Record<string, unknown>;
+    const nested = m.signer ?? m.key_id ?? m.keyId;
+    if (typeof nested === 'string' && nested) return nested;
+  }
+  return undefined;
 }
 
 /** Reuse-by-name: find an existing openfang agent id, degrade to spawn on any failure. */
@@ -253,6 +361,59 @@ export async function launchOpenfangRun(
     // ---- Resolve the agent: reuse by name, else spawn from a minimal manifest.
     let agentId = findExistingAgentId(engine, agentName);
     if (!agentId) {
+      // PROVENANCE GATE (fresh spawn only — a reused agent was already gated).
+      // Verify the signed manifest envelope (when supplied) through the engine,
+      // then let governance decide whether this spawn may proceed. Deny-biased on
+      // a gate fault; SKIPPED truthfully when no gate is wired (never blocks).
+      const provenance = verifyManifestProvenance(engine, input.signedManifestJson);
+      if (deps.governance) {
+        let decision: OpenfangProvenanceDecision;
+        try {
+          decision = await deps.governance.decide({
+            action: 'agent.spawn',
+            agentName,
+            workspaceId: input.workspaceId,
+            taskId: input.taskId,
+            runId: input.runId,
+            provenance,
+          });
+        } catch (gateErr) {
+          // A gate that throws is a hard, truthful deny — never a fabricated allow.
+          decision = {
+            allow: false,
+            reason: `provenance gate error: ${gateErr instanceof Error ? gateErr.message : String(gateErr)}`,
+          };
+        }
+        if (!decision.allow) {
+          const error = `manifest provenance denied: ${decision.reason}`;
+          await emit('failed', `openfang spawn blocked by governance — ${error}`, {
+            agentName,
+            error,
+            signed: provenance.signed,
+            verified: provenance.verified,
+            ...(provenance.signer ? { signer: provenance.signer } : {}),
+          });
+          return { available: true, ok: false, error };
+        }
+        logger.info(
+          {
+            workspaceId: input.workspaceId,
+            taskId: input.taskId,
+            agentName,
+            signed: provenance.signed,
+            verified: provenance.verified,
+          },
+          'openfang spawn allowed by governance provenance gate',
+        );
+      } else if (provenance.signed) {
+        // Envelope supplied but no gate wired: record the verification outcome so
+        // the audit trail still carries provenance, without blocking the spawn.
+        logger.debug(
+          { agentName, verified: provenance.verified, reason: provenance.reason },
+          'openfang signed manifest verified (no governance gate wired — advisory only)',
+        );
+      }
+
       const spawned = parseEngineJson(engine.spawnAgent(buildManifestJson(agentName, input)));
       if (spawned.ok !== true || typeof spawned.agent_id !== 'string') {
         const error = typeof spawned.error === 'string' ? spawned.error : 'spawnAgent failed';

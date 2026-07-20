@@ -51,4 +51,18 @@ export interface CodeIntelPort extends IssueGraphPort {
    * path and NEVER fabricates an index.
    */
   reindexRepo(repoId: string): Promise<void>;
+  /**
+   * Compose a CODE-AWARE launch context over the already-indexed recodergit
+   * graph for `repoId` (DomainMap overview + `symbol_search` + `definition` for
+   * the given prompt-derived `seedTerms`) and render it as a compact prompt block
+   * the conductor folds into the agent's launch prompt. Returns `null` — a
+   * TRUTHFUL SKIP — when the code-graph is disabled/absent, the repo is not
+   * indexed, or the graph carried nothing for the seeds. Best-effort +
+   * degrade-safe: NEVER throws into the launch path and NEVER fabricates context.
+   *
+   * OPTIONAL on the port so pre-existing implementors stay valid; the composer
+   * probes `codeIntel.queryContext` before calling and skips truthfully when
+   * absent.
+   */
+  queryContext?(repoId: string, seedTerms: string[]): Promise<string | null>;
 }

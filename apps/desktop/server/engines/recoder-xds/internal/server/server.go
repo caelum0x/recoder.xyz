@@ -47,9 +47,14 @@ type ControlPlane struct {
 	// this lock two concurrent updates could install in the opposite order they
 	// were numbered, regressing the data plane to an older config (a no-restart
 	// update hazard). The lock keeps "assign version -> build -> install"
-	// monotonic end to end.
+	// monotonic end to end. It also guards cfg so a read-modify-write in
+	// RegisterUpstream cannot race a concurrent full UpdateConfig.
 	updateMu sync.Mutex
 	version  atomic.Uint64
+	// cfg is the NetworkConfig the live snapshot was built from. Kept so an
+	// incremental RegisterUpstream can merge one edge into the current config
+	// instead of forcing the caller to resend the whole document.
+	cfg config.NetworkConfig
 }
 
 // New constructs a ControlPlane and loads the initial snapshot from cfg. It
@@ -81,7 +86,13 @@ func New(ctx context.Context, cfg config.NetworkConfig, logger *slog.Logger) (*C
 func (cp *ControlPlane) UpdateConfig(ctx context.Context, cfg config.NetworkConfig) error {
 	cp.updateMu.Lock()
 	defer cp.updateMu.Unlock()
+	return cp.updateConfigLocked(ctx, cfg)
+}
 
+// updateConfigLocked is the assign-build-install body shared by UpdateConfig and
+// RegisterUpstream. The caller MUST hold updateMu. On success it records cfg as
+// the live config so a later incremental write starts from the served state.
+func (cp *ControlPlane) updateConfigLocked(ctx context.Context, cfg config.NetworkConfig) error {
 	version := cp.version.Load() + 1
 	snap, err := snapshot.Build(cfg, fmt.Sprintf("v%d", version))
 	if err != nil {
@@ -93,12 +104,60 @@ func (cp *ControlPlane) UpdateConfig(ctx context.Context, cfg config.NetworkConf
 		return fmt.Errorf("set snapshot: %w", err)
 	}
 	cp.version.Store(version)
+	cp.cfg = cfg
 	cp.logger.Info("xds snapshot installed",
 		slog.String("node", NodeID),
 		slog.Uint64("version", version),
 		slog.Int("clusters", len(cfg.Upstreams)+1),
 	)
 	return nil
+}
+
+// RegisterUpstream merges a single upstream into the LIVE config (replacing any
+// upstream with the same cluster name) and installs a new snapshot, returning the
+// version now served. It is the no-restart control-plane WRITE the Recoder cloud
+// domain drives so Envoy fronts a new preview / mesh edge without regenerating
+// the whole NetworkConfig. Fail safe: a merge that fails validation leaves the
+// live snapshot untouched and returns the CURRENT version with the error, so a
+// bad edge can never blank the data plane.
+func (cp *ControlPlane) RegisterUpstream(ctx context.Context, u config.Upstream) (uint64, error) {
+	cp.updateMu.Lock()
+	defer cp.updateMu.Unlock()
+
+	next := cp.cfg
+	ups := make([]config.Upstream, 0, len(cp.cfg.Upstreams)+1)
+	replaced := false
+	for _, existing := range cp.cfg.Upstreams {
+		if existing.Name == u.Name {
+			ups = append(ups, u)
+			replaced = true
+			continue
+		}
+		ups = append(ups, existing)
+	}
+	if !replaced {
+		ups = append(ups, u)
+	}
+	next.Upstreams = ups
+
+	if err := next.Validate(); err != nil {
+		return cp.version.Load(), fmt.Errorf("register upstream %q: %w", u.Name, err)
+	}
+	if err := cp.updateConfigLocked(ctx, next); err != nil {
+		return cp.version.Load(), err
+	}
+	return cp.version.Load(), nil
+}
+
+// CurrentConfig returns a copy of the NetworkConfig the control plane is serving.
+// The returned Upstreams slice is a fresh copy so a caller cannot mutate the live
+// config out from under updateMu.
+func (cp *ControlPlane) CurrentConfig() config.NetworkConfig {
+	cp.updateMu.Lock()
+	defer cp.updateMu.Unlock()
+	out := cp.cfg
+	out.Upstreams = append([]config.Upstream(nil), cp.cfg.Upstreams...)
+	return out
 }
 
 // Version returns the version of the snapshot currently served for NodeID. It is

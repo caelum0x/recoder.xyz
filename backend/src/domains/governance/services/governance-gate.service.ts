@@ -32,6 +32,7 @@ import type { Principal } from '../../identity/types.js';
 import type { GovernanceGate } from '../ports/gate.port.js';
 import type { GovernanceKernelPort } from '../ports/kernel.port.js';
 import type { ApprovalRepository } from '../ports/approval-repo.port.js';
+import type { ConsensusReview, ConsensusReviewPort } from '../ports/consensus.port.js';
 import type {
   ApprovalStorePort,
   ApprovalSubmitInput,
@@ -52,6 +53,7 @@ import {
   type KernelVerdict,
   type RoutingHint,
   type ToolEnforcement,
+  riskTierRank,
 } from '../types.js';
 
 export interface GovernanceGateDeps {
@@ -66,6 +68,16 @@ export interface GovernanceGateDeps {
    * the gate degrades truthfully to the durable {@link ApprovalRepository}.
    */
   readonly approvalStore?: ApprovalStorePort;
+  /**
+   * The adversarial multi-model CONSENSUS brain (pal). When wired + `available`,
+   * a HIGH-RISK write the kernel is about to `allow` is put to a cross-model
+   * adversarial review BEFORE the allow is finalized — a credible objection
+   * downgrades it to `needs_approval`. Absent/unavailable ⇒ the kernel verdict
+   * stands (this safety check NEVER blocks a run on its own fault). Injected late
+   * via {@link GovernanceGateService.setConsensusReview} because the pal engine is
+   * composed AFTER governance at bootstrap.
+   */
+  readonly consensus?: ConsensusReviewPort;
   readonly logger?: Logger;
 }
 
@@ -74,6 +86,7 @@ export class GovernanceGateService implements GovernanceGate {
   private readonly audit: AuditChainService;
   private readonly approvals?: ApprovalRepository;
   private readonly approvalStore?: ApprovalStorePort;
+  private consensus?: ConsensusReviewPort;
   private readonly log?: Logger;
 
   constructor(deps: GovernanceGateDeps) {
@@ -81,7 +94,18 @@ export class GovernanceGateService implements GovernanceGate {
     this.audit = deps.audit;
     this.approvals = deps.approvals;
     this.approvalStore = deps.approvalStore;
+    this.consensus = deps.consensus;
     this.log = deps.logger;
+  }
+
+  /**
+   * Inject the adversarial multi-model consensus brain (pal). Called by the
+   * composer AFTER the engines module is built (governance is composed first, so
+   * the pal client is not available at construction). Idempotent last-writer-wins;
+   * absent ⇒ the gate never runs a consensus review (kernel verdict is final).
+   */
+  setConsensusReview(consensus: ConsensusReviewPort): void {
+    this.consensus = consensus;
   }
 
   async decide(action: GovernanceAction, principal: Principal, ctx: GateDecisionContext): Promise<GateVerdict> {

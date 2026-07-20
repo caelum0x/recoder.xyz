@@ -50,6 +50,7 @@ import { createBrainMemoryAdapter } from '../domains/conductor/adapters/brain-me
 import { createConductorCodeIntel } from '../domains/conductor/adapters/code-intel.adapter.js';
 import { createGithubStatusAdapter } from '../domains/conductor/adapters/github-status.adapter.js';
 import { createTmuxSteerTransport } from '../domains/conductor/adapters/steer-transport.adapter.js';
+import { createTmuxScanSource } from '../domains/conductor/adapters/tmux-scan-source.adapter.js';
 import { createRecoderMcpInjector } from '../domains/conductor/adapters/mcp-inject.adapter.js';
 import { createCloudSandboxSubstrate } from '../domains/conductor/adapters/cloud-sandbox-substrate.adapter.js';
 import type { CloudSandboxGatewayPort } from '../domains/conductor/ports/cloud-sandbox.port.js';
@@ -606,6 +607,20 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     config: conductorSubstrateConfig,
     logger: childLogger('conductor-steer'),
   });
+  // Reconcile-GC substrate scan source: feed the engines-domain DEEP tmux
+  // introspection (`list-sessions` over the pinned binary the Conductor drives)
+  // into reconcile so it sees the REAL live `recoder-*` sessions on the box and
+  // can flag orphaned/leaked sessions + correct record-vs-session drift after a
+  // restart. Degrade-truthful: tmux adapter undeclared ⇒ `tmuxIntrospect()` is
+  // null and no source is passed, so `createSubstrateScan()` keeps its truthful
+  // "cannot see the substrate" default (never fabricated live work).
+  const conductorTmuxIntrospect = engines.tmuxIntrospect();
+  const conductorSubstrateScan = conductorTmuxIntrospect
+    ? createTmuxScanSource({
+        introspect: conductorTmuxIntrospect,
+        logger: childLogger('conductor-substrate-scan'),
+      })
+    : undefined;
   // Per-worktree `.mcp.json` injection: on workspace launch the composer writes a
   // secret-free `.mcp.json` that points the launched agent at THIS backend's
   // governed MCP host via the vendored stdio bridge (`mcp/recoder-a2a-server.js`).
@@ -642,6 +657,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     githubStatus: conductorGithub,
     steerTransport: conductorSteer,
     mcpInject: conductorMcpInject,
+    ...(conductorSubstrateScan ? { substrateScan: conductorSubstrateScan } : {}),
     // Delivery-feedback seam: a MERGED workspace fires the inference routing
     // feedback sink (`task_success` on the run's persisted inference_id) so the
     // BYOK LLM gateway learns from real deliveries. Degrade-truthful: the merge

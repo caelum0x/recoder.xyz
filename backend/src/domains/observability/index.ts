@@ -72,6 +72,13 @@ export type { HealthSource, HealthReport, HealthSourceRegistry } from './ports/h
 export { isHealthSource } from './ports/health-source.port.js';
 export type { WorkSignalsPort, RawWorkSignal, SignalsAvailability } from './ports/signals.port.js';
 export type {
+  OpsRecorderPushPort,
+  OpsRecorderPushResult,
+  OpsRecorderSyncResult,
+  RunSignalPush,
+} from './ports/ops-recorder-push.port.js';
+export type { RunOutcomeSignal } from './services/run-signal-push.service.js';
+export type {
   AlertRepository,
   SignalDispositionRepository,
   SloRepository,
@@ -100,6 +107,7 @@ export {
 export { PrometheusMetrics, renderMetrics } from './adapters/prometheus-registry.adapter.js';
 export { OtelTracer, startTracing, shutdownTracing } from './adapters/otel-tracer.adapter.js';
 export { OpsRecorderClient } from './adapters/ops-recorder.adapter.js';
+export { RunSignalPushService } from './services/run-signal-push.service.js';
 export {
   AuditXdrProjection,
   AuditUnavailableError,
