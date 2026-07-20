@@ -17,7 +17,7 @@ import type { AgentOsRepositoryPort } from './ports/agent-os-repository.port.js'
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
 import type { CoordinationEnginePort } from './ports/coordination-engine.port.js';
 import type { EngineClientPort } from '../engines/ports/engine-client.port.js';
-import type { WorkflowDriver } from '@recoder/agent-workflows';
+import type { WorkflowDriver, WorkflowEnginePort } from '@recoder/agent-workflows';
 import type { AgentOsConfigOverrides } from './config.js';
 
 /**
@@ -67,6 +67,16 @@ export interface AgentOsDeps {
    * seams are built.
    */
   readonly workflowDriver?: WorkflowDriver | null;
+  /**
+   * The native openfang workflow engine (`createOpenfangWorkflowDriver()`,
+   * adapted). When present the default `AgentOsWorkflowRunnerDriver` wires the
+   * native-workflow `executeTool` handler so a `tool` node marked
+   * `config.workflow` dispatches register_workflow/run_workflow inside the kernel
+   * `.node` — the FIRST real consumer of that subsystem. Absent ⇒ the handler is
+   * not registered (unhandled tool nodes keep failing truthfully). Only consulted
+   * when no explicit `workflowDriver` is injected.
+   */
+  readonly nativeWorkflowEngine?: WorkflowEnginePort | null;
   /**
    * The Multica coordination introspection seam (squad routing / work-locks /
    * conflict detection). Absent ⇒ the composer builds the default

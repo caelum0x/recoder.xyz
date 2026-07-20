@@ -12,7 +12,10 @@
  *  - (k) code-graph REINDEX — the recodergit code-knowledge-graph is refreshed for
  *    the workspace's repo (`CodeIntelPort.reindexRepo`) so the graph the next
  *    agent queries reflects the code THIS run just committed, instead of the
- *    launch-time snapshot that goes stale as the workspace advances.
+ *    launch-time snapshot that goes stale as the workspace advances, and
+ *  - (§4c) EVENT-BUS publish — a `workspace.completed` lifecycle event is pushed
+ *    onto the native openfang kernel bus (`AgentEventPort.publish`) so kernel
+ *    triggers can fire background Hands off the finished run.
  *
  * SEAM LAW (degrade-safe, truthful): the wrapped `inner.append` (durable audit +
  * live `/sync`) runs FIRST and is always awaited — the terminal event is never
@@ -25,6 +28,7 @@ import type { Logger } from '../../../shared/logger.js';
 import type { RunEventSinkPort } from '../ports/run-event-sink.port.js';
 import type { CodeIntelPort } from '../ports/code-intel.port.js';
 import type { UsageMeterPort } from '../ports/usage-meter.port.js';
+import type { AgentEventPort } from '../ports/agent-event.port.js';
 import type { ConductorBrainMemory } from './brain-memory.adapter.js';
 
 export interface CompletionHookDeps {
@@ -41,6 +45,14 @@ export interface CompletionHookDeps {
    * `undefined` until wired ⇒ a truthful no-op (no metering).
    */
   readonly getMeter?: () => UsageMeterPort | undefined;
+  /**
+   * OPTIONAL outbound kernel event-bus seam (§4c: event-bus ↔ RunEvents bridge).
+   * On a terminal event the completion path ALSO publishes a `workspace.completed`
+   * lifecycle event onto the native openfang kernel bus so kernel triggers can fire
+   * background Hands. Absent ⇒ no publish (a truthful no-op). Fire-and-forget +
+   * degrade-safe — a publish fault NEVER stalls or rejects the terminal-event path.
+   */
+  readonly agentEvent?: AgentEventPort;
   /** Resolve the owning workspace (for userId/taskId provenance) — may return null. */
   readonly getWorkspace: (workspaceId: string) => Promise<Workspace | null>;
   readonly logger: Logger;
@@ -83,8 +95,8 @@ function repoIdFromRepoRef(ref: string | undefined): string {
 export function createCompletionHookSink(
   deps: CompletionHookDeps
 ): RunEventSinkPort {
-  const { inner, brain, codeIntel, getMeter, getWorkspace, logger } = deps;
-  if (!brain && !codeIntel && !getMeter) return inner;
+  const { inner, brain, codeIntel, getMeter, agentEvent, getWorkspace, logger } = deps;
+  if (!brain && !codeIntel && !getMeter && !agentEvent) return inner;
 
   return {
     async append(event: RunEvent): Promise<void> {
@@ -151,6 +163,29 @@ export function createCompletionHookSink(
                 )
               );
           }
+        }
+
+        // (§4c) event-bus ↔ RunEvents bridge — publish a `workspace.completed`
+        // lifecycle event onto the native openfang kernel bus so kernel triggers can
+        // fire background Hands off a finished run. Fire-and-forget + degrade-safe: an
+        // absent engine resolves an empty fired list and a fault is swallowed — the
+        // terminal event is NEVER stalled or rejected by a publish. Only the outbound
+        // hook is wired here; the inbound side (fired-trigger `run_agent` messages →
+        // new RunEvents) reuses the existing sink.
+        if (agentEvent) {
+          void agentEvent
+            .publish({
+              type: 'workspace.completed',
+              ...(workspaceId ? { workspaceId } : {}),
+              ...(taskId ? { taskId } : {}),
+              outcome,
+            })
+            .catch(err =>
+              logger.warn(
+                { err, workspaceId, taskId },
+                'conductor kernel event publish hook faulted'
+              )
+            );
         }
 
         // (j) billing metering — the run consumed one `agent_run`; meter it durably

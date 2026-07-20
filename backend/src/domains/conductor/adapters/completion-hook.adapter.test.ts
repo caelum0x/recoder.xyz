@@ -393,6 +393,100 @@ describe('conductor completion hook', () => {
     expect(inner.append).toHaveBeenCalledTimes(1);
   });
 
+  it('publishes a workspace.completed kernel event on a terminal event (workspaceId + taskId + outcome)', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const publish = vi.fn(async () => [] as { agentId: string; message: string }[]);
+    const sink = createCompletionHookSink({
+      inner,
+      agentEvent: { publish },
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('completed'));
+    await flush();
+
+    // Durable+live append always ran first, and the event was published once.
+    expect(inner.append).toHaveBeenCalledTimes(1);
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'workspace.completed',
+        workspaceId: 'ws_1',
+        taskId: 'task_1',
+        outcome: 'completed',
+      })
+    );
+  });
+
+  it('publishes with outcome:failed on a failed event', async () => {
+    const publish = vi.fn(async () => [] as { agentId: string; message: string }[]);
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      agentEvent: { publish },
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('failed'));
+    await flush();
+
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'workspace.completed', outcome: 'failed' })
+    );
+  });
+
+  it('wraps the inner sink when ONLY the event port is wired (short-circuit includes agentEvent)', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const publish = vi.fn(async () => [] as { agentId: string; message: string }[]);
+    const sink = createCompletionHookSink({
+      inner,
+      agentEvent: { publish },
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    // Not the identity sink — the decorator wraps so the publish hook can fire.
+    expect(sink).not.toBe(inner);
+    await sink.append(event('completed'));
+    await flush();
+    expect(publish).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT publish a kernel event on non-terminal events', async () => {
+    const publish = vi.fn(async () => [] as { agentId: string; message: string }[]);
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      agentEvent: { publish },
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('log', { eventId: 'evt_log' }));
+    await sink.append(event('started', { eventId: 'evt_started' }));
+    await flush();
+
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('degrade-safe: a kernel event publish throw never rejects append (terminal event unaffected)', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const sink = createCompletionHookSink({
+      inner,
+      agentEvent: {
+        publish: vi.fn(async () => {
+          throw new Error('kernel bus down');
+        }),
+      },
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await expect(sink.append(event('completed'))).resolves.toBeUndefined();
+    await flush();
+    expect(inner.append).toHaveBeenCalledTimes(1);
+  });
+
   it('degrade-safe: a harvest throw never rejects append (terminal event unaffected)', async () => {
     const inner = { append: vi.fn(async () => {}) };
     const sink = createCompletionHookSink({
