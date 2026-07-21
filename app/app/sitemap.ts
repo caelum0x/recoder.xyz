@@ -1,4 +1,6 @@
 import { MetadataRoute } from 'next';
+import { existsSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
 const baseUrl = 'https://recoder.xyz';
 const locales = ['en', 'tr', 'es', 'zh', 'de'] as const;
@@ -133,14 +135,16 @@ const companyPages: SitemapPage[] = [
 
 // NOTE: Dashboard, billing, settings, and onboarding pages are
 // disallowed in robots.txt — do not include them in the sitemap.
+//
+// Reconcile with robots.ts (C1): `/checkout`, `/checkout/success`, and
+// `/verify` are conversion/utility surfaces that robots.ts disallows, so they
+// are intentionally excluded from this indexable sitemap. robots and the
+// sitemap must agree — no indexable URL may also be disallowed.
 
 // ── Misc pages ────────────────────────────────────────────────────────────
 const miscPages: SitemapPage[] = [
   { path: '/analytics',               changeFrequency: 'daily',    priority: 0.5 },
   { path: '/plan',                    changeFrequency: 'monthly',  priority: 0.5 },
-  { path: '/verify',                  changeFrequency: 'monthly',  priority: 0.3 },
-  { path: '/checkout',                changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/checkout/success',        changeFrequency: 'monthly',  priority: 0.3 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -162,14 +166,57 @@ const allPages: SitemapPage[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// lastModified truthfulness
+// ---------------------------------------------------------------------------
+// `new Date()` on every entry tells crawlers that every page changed on every
+// build — a lie that erodes lastmod trust. Where a route is backed by a real
+// source file we derive `lastModified` from that file's on-disk mtime (a real,
+// verifiable signal); otherwise (dynamic routes, blog slugs with no matching
+// dir) we fall back to the build-time date. Resolution is best-effort and
+// wrapped so a missing/unreadable file never breaks sitemap generation.
+
+const PAGE_EXTENSIONS = ['tsx', 'ts', 'mdx', 'md', 'jsx', 'js'] as const;
+const LOCALE_ROUTE_ROOT = join(process.cwd(), 'app', '[locale]');
+
+/**
+ * Resolve the candidate source directory for a route path relative to the
+ * localized app root. The homepage lives in the `(home)` route group; all
+ * other routes map path→directory directly.
+ */
+function routeSourceDir(path: string): string {
+  const segment = path === '' ? '(home)' : path.replace(/^\/+/, '');
+  return join(LOCALE_ROUTE_ROOT, segment);
+}
+
+/**
+ * Real last-modified date for a route, derived from its backing `page.*`
+ * source file mtime when one exists. Returns `undefined` when no source file
+ * is resolvable so the caller can fall back to the build date. Never throws.
+ */
+function sourceLastModified(path: string): Date | undefined {
+  try {
+    const dir = routeSourceDir(path);
+    for (const ext of PAGE_EXTENSIONS) {
+      const file = join(dir, `page.${ext}`);
+      if (existsSync(file)) {
+        return statSync(file).mtime;
+      }
+    }
+  } catch {
+    // Filesystem access is best-effort; degrade to the build date.
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
 // Sitemap generator
 // ---------------------------------------------------------------------------
 export default function sitemap(): MetadataRoute.Sitemap {
-  const currentDate = new Date();
+  const buildDate = new Date();
 
   return allPages.map((page) => ({
     url: `${baseUrl}${page.path}`,
-    lastModified: currentDate,
+    lastModified: sourceLastModified(page.path) ?? buildDate,
     changeFrequency: page.changeFrequency,
     priority: page.priority,
     alternates: buildAlternates(page.path),
