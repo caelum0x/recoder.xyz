@@ -16,11 +16,6 @@ import {
   fakeKernel,
   silentLogger,
 } from './_fakes.js';
-import {
-  createNapiApprovalStore,
-  type NapiApprovalKernelHandle,
-} from '../adapters/napi-approval-store.adapter.js';
-import type { ApprovalStorePort } from '../ports/approval-store.port.js';
 
 function principal(overrides: Partial<Principal> = {}): Principal {
   return {
@@ -385,123 +380,58 @@ describe('GovernanceGateService.enforceTool — the per-tool teeth', () => {
   });
 });
 
-// --- kernel-backed approval store + clearance ---------------------------------
+// --- durable-repo clearance (sole store) + policy hot-swap --------------------
 
-/** An in-memory fake of the native `NapiGovernanceKernel` approval surface. */
-function fakeApprovalHandle(): NapiApprovalKernelHandle {
-  const pending = new Map<string, unknown>();
-  return {
-    submitApproval(requestJson: string): string {
-      const req = JSON.parse(requestJson) as { id: string };
-      pending.set(req.id, req);
-      return JSON.stringify({ outcome: 'pending', request_id: req.id });
-    },
-    resolveApproval(requestId: string, decision: string): string {
-      if (!pending.has(requestId)) throw new Error('no pending');
-      pending.delete(requestId);
-      return JSON.stringify({ request_id: requestId, decision });
-    },
-    listPendingApprovals: () => JSON.stringify([...pending.values()]),
-    pendingApprovalCount: () => pending.size,
-    reloadPolicies: () => {},
-  };
-}
-
-describe('GovernanceGateService — kernel-backed approval store', () => {
-  function gateWithStore(store: ApprovalStorePort) {
-    const auditRepo = new InMemoryAuditRepository();
-    return {
-      auditRepo,
-      gate: new GovernanceGateService({
-        kernel: fakeKernel({ verdict: NEEDS }),
-        audit: new AuditChainService(auditRepo),
-        approvalStore: store,
-        logger: silentLogger,
-      }),
-    };
-  }
-
-  it('CLEARS a needs_approval verdict from the kernel store (preferred over the shadow repo)', async () => {
-    const store = createNapiApprovalStore(fakeApprovalHandle());
-    // Submit + grant the approval on the SAME kernel store the gate will consult.
-    const submitted = await store.submit({
-      id: 'k-appr-1',
-      agentId: 'u1',
-      toolName: 'pr.merge',
-      description: 'merge',
-      actionSummary: 'merge pr',
-      riskLevel: 'high',
-      timeoutSecs: 300,
-      taskId: 't1',
-      action: 'pr.merge',
-    });
-    await store.resolve(submitted.requestId, 'approved', 'admin');
-
-    const { gate, auditRepo } = gateWithStore(store);
-    const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));
-
-    expect(v.effect).toBe('allow');
-    expect(v.approvalId).toBe('k-appr-1');
-    expect(auditRepo.rows[0]?.payload.clearedByApprovalId).toBe('k-appr-1');
-  });
-
-  it('does NOT clear when the kernel store has no grant for the task+action', async () => {
-    const store = createNapiApprovalStore(fakeApprovalHandle());
-    const { gate } = gateWithStore(store);
-    const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));
-    expect(v.effect).toBe('needs_approval');
-  });
-
-  it('exposes submit/resolve/list/count passthrough on the gate', async () => {
-    const store = createNapiApprovalStore(fakeApprovalHandle());
-    const { gate } = gateWithStore(store);
-
-    const submitted = await gate.submitApproval({
-      id: 'g-1', agentId: 'u1', toolName: 'branch.push', description: 'd', actionSummary: 's',
-      riskLevel: 'high', timeoutSecs: 60, taskId: 't1', action: 'branch.push',
-    });
-    expect(submitted.stored).toBe(true);
-    expect(await gate.pendingApprovalCount()).toBe(1);
-    expect(await gate.listPendingApprovals()).toHaveLength(1);
-    const resolved = await gate.resolveApproval(submitted.requestId, 'approved', 'admin');
-    expect(resolved.stored).toBe(true);
-    expect(await gate.pendingApprovalCount()).toBe(0);
-  });
-
-  it('reloadPolicies delegates to the kernel store (agent-os policy-update hook)', async () => {
-    const store = createNapiApprovalStore(fakeApprovalHandle());
-    const { gate } = gateWithStore(store);
-    expect((await gate.reloadPolicies('{"forbiddenPathGlobs":["**/.env"]}')).reloaded).toBe(true);
-  });
-
-  it('DEGRADE-TRUTHFUL: no approval store wired → passthrough returns unavailable, never fakes', async () => {
-    const gate = new GovernanceGateService({
-      kernel: fakeKernel({ verdict: NEEDS }),
-      audit: new AuditChainService(new InMemoryAuditRepository()),
-      logger: silentLogger,
-    });
-    expect((await gate.submitApproval({
-      id: 'x', agentId: 'u1', toolName: 't', description: 'd', actionSummary: 's', riskLevel: 'low', timeoutSecs: 1,
-    })).stored).toBe(false);
-    expect(await gate.pendingApprovalCount()).toBe(0);
-    expect(await gate.listPendingApprovals()).toEqual([]);
-    expect((await gate.reloadPolicies('{}')).reloaded).toBe(false);
-  });
-
-  it('falls back to the durable repo when the kernel store is unavailable', async () => {
+describe('GovernanceGateService — durable ApprovalRepository is the SOLE clearance store', () => {
+  it('RETIRE-REGRESSION: clears a needs_approval via the durable repo with NO kernel store wired', async () => {
     const approvals = new InMemoryApprovalRepository();
     const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
     await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
 
+    // No `approvalStore` param exists anymore — the durable repo is the only path.
+    const auditRepo = new InMemoryAuditRepository();
     const gate = new GovernanceGateService({
       kernel: fakeKernel({ verdict: NEEDS }),
-      audit: new AuditChainService(new InMemoryAuditRepository()),
+      audit: new AuditChainService(auditRepo),
       approvals,
-      approvalStore: createNapiApprovalStore(undefined), // unavailable native store
       logger: silentLogger,
     });
     const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));
+
     expect(v.effect).toBe('allow');
     expect(v.approvalId).toBe(created.id);
+    expect(auditRepo.rows[0]?.payload.clearedByApprovalId).toBe(created.id);
+  });
+
+  it('leaves needs_approval blocking when NO approval repo is wired (fail-closed)', async () => {
+    const gate = new GovernanceGateService({
+      kernel: fakeKernel({ verdict: NEEDS }),
+      audit: new AuditChainService(new InMemoryAuditRepository()),
+      logger: silentLogger,
+    });
+    const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));
+    expect(v.effect).toBe('needs_approval');
+  });
+});
+
+describe('GovernanceGateService.reloadPolicies — delegates to the kernel (policy hot-swap)', () => {
+  it('returns the kernel rung result (napi swap succeeds)', async () => {
+    const gate = new GovernanceGateService({
+      kernel: fakeKernel({ verdict: ALLOW, reload: { reloaded: true } }),
+      audit: new AuditChainService(new InMemoryAuditRepository()),
+      logger: silentLogger,
+    });
+    expect((await gate.reloadPolicies('{"forbiddenPathGlobs":["**/.env"]}')).reloaded).toBe(true);
+  });
+
+  it('DEGRADE-TRUTHFUL: a static (ts) rung reports reloaded:false, never fakes a swap', async () => {
+    const gate = new GovernanceGateService({
+      kernel: fakeKernel({ verdict: ALLOW }), // default reload → { reloaded:false }
+      audit: new AuditChainService(new InMemoryAuditRepository()),
+      logger: silentLogger,
+    });
+    const r = await gate.reloadPolicies('{}');
+    expect(r.reloaded).toBe(false);
+    expect(r.reason).toMatch(/static/i);
   });
 });

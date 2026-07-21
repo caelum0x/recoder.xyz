@@ -30,17 +30,9 @@
 import type { Logger } from '../../../shared/logger.js';
 import type { Principal } from '../../identity/types.js';
 import type { GovernanceGate } from '../ports/gate.port.js';
-import type { GovernanceKernelPort } from '../ports/kernel.port.js';
+import type { GovernanceKernelPort, ReloadPoliciesResult } from '../ports/kernel.port.js';
 import type { ApprovalRepository } from '../ports/approval-repo.port.js';
 import type { ConsensusReview, ConsensusReviewPort } from '../ports/consensus.port.js';
-import type {
-  ApprovalStorePort,
-  ApprovalSubmitInput,
-  ApprovalSubmitResult,
-  ApprovalResolveResult,
-  PendingApproval,
-  ReloadPoliciesResult,
-} from '../ports/approval-store.port.js';
 import type { AuditChainService } from './audit-chain.service.js';
 import {
   type AuditEntryInput,
@@ -59,15 +51,15 @@ import {
 export interface GovernanceGateDeps {
   readonly kernel: GovernanceKernelPort;
   readonly audit: AuditChainService;
-  readonly approvals?: ApprovalRepository;
   /**
-   * The Rust kernel's own in-proc `ApprovalManager` store (submit/resolve/list/
-   * count + reloadPolicies). When present + `available`, it is the PRIMARY store
-   * the gate uses to clear a `needs_approval` verdict (the SAME kernel that ran
-   * `decide()` saw the approval) and to hot-swap policy. Absent / unavailable →
-   * the gate degrades truthfully to the durable {@link ApprovalRepository}.
+   * The durable Postgres approval repository — the SOLE store the gate consults to
+   * clear a `needs_approval` verdict. It is what the `/api/agent-os` approvals
+   * routes + `ApprovalService` write and seal into the same Merkle chain, so a
+   * human's grant is durable across restarts (the retired in-proc napi
+   * `ApprovalManager` was non-durable and never wired). Absent → `needs_approval`
+   * stays blocking (fail-closed).
    */
-  readonly approvalStore?: ApprovalStorePort;
+  readonly approvals?: ApprovalRepository;
   /**
    * The adversarial multi-model CONSENSUS brain (pal). When wired + `available`,
    * a HIGH-RISK write the kernel is about to `allow` is put to a cross-model
@@ -85,7 +77,6 @@ export class GovernanceGateService implements GovernanceGate {
   private readonly kernel: GovernanceKernelPort;
   private readonly audit: AuditChainService;
   private readonly approvals?: ApprovalRepository;
-  private readonly approvalStore?: ApprovalStorePort;
   private consensus?: ConsensusReviewPort;
   private readonly log?: Logger;
 
@@ -93,7 +84,6 @@ export class GovernanceGateService implements GovernanceGate {
     this.kernel = deps.kernel;
     this.audit = deps.audit;
     this.approvals = deps.approvals;
-    this.approvalStore = deps.approvalStore;
     this.consensus = deps.consensus;
     this.log = deps.logger;
   }
@@ -317,6 +307,11 @@ export class GovernanceGateService implements GovernanceGate {
    * fail-closed: no repo / no taskId / no matching approved record / a lookup
    * fault all leave the verdict blocking. The kernel's bare `approvalGateId`
    * NEVER clears anything (it is only an evidence pointer).
+   *
+   * The durable Postgres {@link ApprovalRepository} is the SOLE clearance store:
+   * it is the tamper-evident, restart-durable home the approvals routes +
+   * `ApprovalService` write, and it seals into the same Merkle chain. (The former
+   * in-proc napi `ApprovalManager` primary was non-durable and never wired.)
    */
   private async resolveApprovalClearance(
     action: GovernanceAction,
@@ -325,23 +320,6 @@ export class GovernanceGateService implements GovernanceGate {
   ): Promise<string | undefined> {
     if (verdict.effect !== 'needs_approval') return undefined;
     if (!ctx.taskId) return undefined;
-
-    // PRIMARY: the Rust kernel's own ApprovalManager store — the SAME kernel that
-    // ran `decide()` saw the approval, so its grant is the authoritative clearance.
-    if (this.approvalStore?.available) {
-      try {
-        const granted = await this.approvalStore.findApproval(ctx.taskId, action);
-        if (granted) return granted.requestId;
-      } catch (err) {
-        this.log?.warn(
-          { err, action, taskId: ctx.taskId },
-          'governance kernel approval store lookup failed — falling back to the durable repo',
-        );
-      }
-    }
-
-    // FALLBACK (degrade-truthful): the durable Postgres approval repository (the
-    // "shadow store"). Used when the native kernel store is absent/unavailable.
     if (!this.approvals) return undefined;
     try {
       const approved = await this.approvals.hasApproval(ctx.taskId, action);
@@ -359,55 +337,16 @@ export class GovernanceGateService implements GovernanceGate {
     }
   }
 
-  // --- kernel-backed approval store passthrough (submit/resolve/list/count) ----
-  // These drive the Rust kernel's own ApprovalManager. Degrade-truthful: when the
-  // native store is absent every op returns a truthful "unavailable" result — the
-  // gate never fabricates an approval.
-
-  /** Submit an approval request into the kernel's own approval gate. */
-  async submitApproval(input: ApprovalSubmitInput): Promise<ApprovalSubmitResult> {
-    if (!this.approvalStore) {
-      return { outcome: 'denied', requestId: input.id, stored: false, reason: 'kernel approval store not wired' };
-    }
-    return this.approvalStore.submit(input);
-  }
-
-  /** Resolve a pending approval on the kernel gate with a human decision. */
-  async resolveApproval(
-    requestId: string,
-    decision: 'approved' | 'denied',
-    decidedBy: string,
-  ): Promise<ApprovalResolveResult> {
-    if (!this.approvalStore) {
-      return { requestId, decision, stored: false, reason: 'kernel approval store not wired' };
-    }
-    return this.approvalStore.resolve(requestId, decision, decidedBy);
-  }
-
-  /** The kernel's currently pending approval requests (empty when unavailable). */
-  async listPendingApprovals(): Promise<readonly PendingApproval[]> {
-    if (!this.approvalStore) return [];
-    return this.approvalStore.listPending();
-  }
-
-  /** Count of pending approvals on the kernel gate (0 when unavailable). */
-  async pendingApprovalCount(): Promise<number> {
-    if (!this.approvalStore) return 0;
-    return this.approvalStore.count();
-  }
-
   /**
    * Hot-swap the kernel's live policy bundle. Invoked from the agent-os
    * policy-update hook so an edited forbidden/secret-path or approval policy takes
    * effect for subsequent `decide()`/`enforceTool` calls without a restart. The
    * kernel is fail-closed: a rejected config leaves the OLD policy live.
-   * Degrade-truthful: no native store → `{ reloaded:false }` (policy is static).
+   * Degrade-truthful: only the in-proc napi rung actually swaps — daemon/ts rungs
+   * are static and return `{ reloaded:false }`.
    */
   async reloadPolicies(configJson: string): Promise<ReloadPoliciesResult> {
-    if (!this.approvalStore) {
-      return { reloaded: false, reason: 'kernel approval store not wired (policy is static)' };
-    }
-    return this.approvalStore.reloadPolicies(configJson);
+    return this.kernel.reloadPolicies(configJson);
   }
 
   private toAuditEntry(

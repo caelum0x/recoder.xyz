@@ -5,7 +5,7 @@
  */
 import { AUDIT_GENESIS_HASH } from '../types.js';
 import type { AuditRepository, AuditSealer } from '../ports/audit-repo.port.js';
-import type { GovernanceKernelPort } from '../ports/kernel.port.js';
+import type { GovernanceKernelPort, ReloadPoliciesResult } from '../ports/kernel.port.js';
 import type { ApprovalRepository, ApprovalQuery } from '../ports/approval-repo.port.js';
 import type { WorkLockRepository, WorkLockAcquireInput, WorkLockAcquireResult } from '../ports/worklock-repo.port.js';
 import type { SecretRepository, SecretCipherRow, SecretCipherInput } from '../ports/secrets.port.js';
@@ -103,6 +103,8 @@ export interface FakeKernelOpts {
   readonly status?: KernelStatus;
   readonly tool?: ToolEnforcement;
   readonly routing?: RoutingHint;
+  /** The result `reloadPolicies` returns (defaults to a truthful static rung). */
+  readonly reload?: ReloadPoliciesResult;
 }
 
 /** A configurable {@link GovernanceKernelPort} double. */
@@ -125,6 +127,9 @@ export function fakeKernel(opts: FakeKernelOpts = {}): GovernanceKernelPort {
     async route(): Promise<RoutingHint> {
       return opts.routing ?? { routable: true, tier: 'low', reason: 'ok' };
     },
+    async reloadPolicies(): Promise<ReloadPoliciesResult> {
+      return opts.reload ?? { reloaded: false, reason: 'policy is static in the ts rung' };
+    },
     async auditTip(): Promise<string> {
       return AUDIT_GENESIS_HASH;
     },
@@ -146,6 +151,7 @@ export function throwingKernel(status?: KernelStatus): GovernanceKernelPort {
     decide: async () => boom(),
     enforceTool: async () => boom(),
     route: async () => boom(),
+    reloadPolicies: async () => boom(),
     auditTip: async () => boom(),
     verifyAudit: async () => boom(),
     status: () => status ?? { engine: 'napi', status: 'up', degraded: false },

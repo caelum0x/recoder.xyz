@@ -19,6 +19,18 @@ import type {
   AuditVerification,
 } from '../types.js';
 
+/**
+ * The result of a live policy hot-swap (`reloadPolicies`). Relocated here from the
+ * retired `approval-store.port.ts` so it outlives that deleted file: the reload
+ * verb is now a first-class KERNEL capability, not an approval-store concern.
+ */
+export interface ReloadPoliciesResult {
+  /** True only when the active rung accepted and swapped the live policy bundle. */
+  readonly reloaded: boolean;
+  /** Truthful reason when the rung is static or the config was rejected. */
+  readonly reason?: string;
+}
+
 export interface GovernanceKernelPort {
   /** The fused decision pipeline (policy -> tier -> enforce -> verdict). */
   decide(req: KernelRequest): Promise<KernelVerdict>;
@@ -28,6 +40,14 @@ export interface GovernanceKernelPort {
 
   /** Routing-only hint for a request. Unroutable on deny. */
   route(req: KernelRequest): Promise<RoutingHint>;
+
+  /**
+   * Hot-swap the live policy bundle from a JSON `GovernanceKernelConfig`. Only the
+   * in-proc napi rung can actually swap; daemon/ts rungs are static and return
+   * `{ reloaded:false }` truthfully. Fail-closed inside the kernel: a rejected
+   * config leaves the OLD policy live.
+   */
+  reloadPolicies(configJson: string): Promise<ReloadPoliciesResult>;
 
   /** The kernel's own current (in-memory) Merkle audit tip hash. */
   auditTip(): Promise<string>;
