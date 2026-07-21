@@ -24,6 +24,39 @@ import type { AppConfig } from '../../shared/app-config.js';
 export const agentOsRepositoryDriverSchema = z.enum(['postgres', 'json', 'memory']);
 export type AgentOsRepositoryDriver = z.infer<typeof agentOsRepositoryDriverSchema>;
 
+/**
+ * Opt-in squad seed (§8.1). Populates the in-memory squad store at agent-os
+ * `start()` so {@link SquadService.route} finds a real squad instead of failing
+ * closed with "squad not found" — which otherwise makes the autopilot skip
+ * EVERY dispatch. A cohort = an id/name + a leader + weighted members. Default
+ * OFF (`squadSeed: null`) ⇒ no seed ⇒ byte-identical pass-through.
+ */
+export const squadSeedMemberSchema = z.object({
+  /** The member agent's id. */
+  agentId: z.string().min(1),
+  /** Leader vs plain member (defaults to `member` in the store). */
+  role: z.enum(['leader', 'member']).optional(),
+  /** Routing weight for the weighted fallback (higher wins; defaults to 1). */
+  weight: z.number().positive().optional(),
+});
+
+export const squadSeedSchema = z.object({
+  /** The squad id the autopilot routes through (aligns with RECODER_SQUAD_ID). */
+  squadId: z.string().min(1),
+  /** Human-readable cohort name (board / read-only introspection). */
+  displayName: z.string().min(1),
+  /** Owning space; defaults to the platform default space. */
+  spaceId: z.string().min(1).default('space-default'),
+  /** The leader agent (leader-first routing); optional. */
+  leaderAgentId: z.string().min(1).optional(),
+  /** Routing strategy; leader-first by default. */
+  routingStrategy: z.enum(['leader', 'weighted', 'round_robin']).default('leader'),
+  /** The cohort members (needs >=1 eligible member to route). */
+  members: z.array(squadSeedMemberSchema),
+});
+
+export type SquadSeed = z.infer<typeof squadSeedSchema>;
+
 export const agentOsConfigSchema = z.object({
   /** The selected repository driver (postgres when a db url is present, else memory). */
   repositoryDriver: agentOsRepositoryDriverSchema,
@@ -55,6 +88,12 @@ export const agentOsConfigSchema = z.object({
    * autopilot uses the flat default dispatch (degrade-truthful pass-through).
    */
   squadId: z.string().nullable(),
+  /**
+   * Opt-in squad seed applied at `start()` so {@link SquadService.route} finds a
+   * real squad (else the autopilot skips every dispatch). `null` (default) ⇒ no
+   * seed ⇒ degrade-truthful flat pass-through, byte-identical to today.
+   */
+  squadSeed: squadSeedSchema.nullable(),
   /** Autopilot tick cadence (ms). */
   squadAutopilotIntervalMs: z.number().int().positive(),
   /** Max conductor dispatches per autopilot tick (bounds burst launches). */
@@ -80,6 +119,8 @@ export interface AgentOsConfigOverrides {
   readonly squadAutopilotIntervalMs?: number;
   readonly squadAutopilotMaxPerTick?: number;
   readonly squadId?: string | null;
+  /** Opt-in squad seed (bootstrap parses it from env; agent-os applies it). */
+  readonly squadSeed?: SquadSeed | null;
 }
 
 const DEFAULT_NATS_SUBJECT_PREFIX = 'recoder.agent-os';
@@ -127,6 +168,7 @@ export function sliceAgentOsConfig(
     squadAutopilotMaxPerTick:
       overrides.squadAutopilotMaxPerTick ?? DEFAULT_SQUAD_AUTOPILOT_MAX_PER_TICK,
     squadId: overrides.squadId ?? null,
+    squadSeed: overrides.squadSeed ?? null,
     isProduction: app.runtime.isProduction,
   });
 }

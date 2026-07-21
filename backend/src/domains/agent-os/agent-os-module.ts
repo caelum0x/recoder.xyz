@@ -162,15 +162,27 @@ export class AgentOsComposer implements AgentOsModule {
     // (memory owns the beads module facet) and the conductor dispatch seam via
     // `attachSquadAutopilotConductor`. Absent seams ⇒ ticks report a truthful
     // `degraded`, never a faked launch.
+    // The squad the autopilot routes every dispatch through is the SEEDED squad's
+    // id (its store is populated in `start()` → `seedSquad()` before the loop
+    // begins). A bare `RECODER_SQUAD_ID` with no matching seed is a footgun —
+    // `route()` would fail closed with "squad not found" and SKIP every dispatch
+    // — so it degrades to flat pass-through with a truthful warn, never skip-all.
+    const effectiveSquadId = cfg.squadSeed?.squadId ?? null;
+    if (!effectiveSquadId && cfg.squadId) {
+      this.log.warn(
+        { squadId: cfg.squadId },
+        'agent-os: RECODER_SQUAD_ID set without a squadSeed — autopilot routes flat (pass-through), not skip-all',
+      );
+    }
     this.autopilot =
       cfg.squadsEnabled && cfg.squadAutopilotEnabled
         ? new SquadAutopilotService({
             conductor: deps.conductorDispatch ?? null,
             squads: this.squads,
-            // The configured squad every dispatch routes through (leader-first /
+            // The SEEDED squad every dispatch routes through (leader-first /
             // weighted). Absent ⇒ the autopilot falls back to the flat default
             // dispatch (degrade-truthful pass-through in `routeThroughSquad`).
-            ...(cfg.squadId ? { squadId: cfg.squadId } : {}),
+            ...(effectiveSquadId ? { squadId: effectiveSquadId } : {}),
             logger: this.log,
             intervalMs: cfg.squadAutopilotIntervalMs,
             maxDispatchesPerTick: cfg.squadAutopilotMaxPerTick,
@@ -355,9 +367,42 @@ export class AgentOsComposer implements AgentOsModule {
     });
   }
 
+  /**
+   * Seed the in-memory squad store from the opt-in {@link AgentOsConfig.squadSeed}
+   * so {@link SquadService.route} finds a real squad (else it fails closed with
+   * "squad not found" and the autopilot skips every dispatch). OPT-IN: `squadSeed`
+   * defaults to `null` ⇒ no-op ⇒ byte-identical pass-through. Idempotent — the
+   * store upserts by squadId / agentId, so a repeated seed changes nothing.
+   * Returns the seeded squad id (or `null` when no seed / squads disabled).
+   */
+  private async seedSquad(): Promise<string | null> {
+    const seed = this.cfg.squadSeed;
+    if (!this.squads || !seed) return null;
+    await this.squads.createSquad({
+      squadId: seed.squadId,
+      spaceId: seed.spaceId,
+      displayName: seed.displayName,
+      routingStrategy: seed.routingStrategy,
+      ...(seed.leaderAgentId ? { leaderAgentId: seed.leaderAgentId } : {}),
+    });
+    for (const member of seed.members) {
+      await this.squads.addMember({
+        squadId: seed.squadId,
+        agentId: member.agentId,
+        ...(member.role ? { role: member.role } : {}),
+        ...(member.weight !== undefined ? { weight: member.weight } : {}),
+      });
+    }
+    this.log.info({ squadId: seed.squadId, members: seed.members.length }, 'agent-os: squad seeded');
+    return seed.squadId;
+  }
+
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
+    // Seed the squad store BEFORE the autopilot loop starts, so its first tick's
+    // `route()` finds the configured squad (opt-in; no seed ⇒ no-op).
+    await this.seedSquad();
     this.drain.start();
     this.autopilot?.start();
     this.log.info(
