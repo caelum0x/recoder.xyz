@@ -326,6 +326,8 @@ export interface ComposeOptions {
   repoSetupStore?: ConductorModuleDeps['repoSetupStore'];
   /** OPTIONAL repo-setup run-hook exec seam (absent ⇒ the real `execFileSafe`). */
   repoSetupExec?: ConductorModuleDeps['repoSetupExec'];
+  /** OPTIONAL live-substrate scan source for reconcile GC (absent ⇒ empty box). */
+  substrateScan?: ConductorModuleDeps['substrateScan'];
 }
 
 /** Compose a conductor module over the in-memory harness. Returns the module + its gate. */
@@ -352,6 +354,7 @@ export function composeConductor(options: ComposeOptions = {}): {
     ...(options.checkpointStore ? { checkpointStore: options.checkpointStore } : {}),
     ...(options.repoSetupStore ? { repoSetupStore: options.repoSetupStore } : {}),
     ...(options.repoSetupExec ? { repoSetupExec: options.repoSetupExec } : {}),
+    ...(options.substrateScan ? { substrateScan: options.substrateScan } : {}),
   });
   return { module, gate };
 }
