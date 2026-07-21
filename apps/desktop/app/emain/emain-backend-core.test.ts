@@ -278,6 +278,32 @@ describe("assembleBackendEnv", () => {
         expect(baseEnv.PORT).toBeUndefined();
     });
 
+    it("pins the child to loopback (127.0.0.1) so the embedded backend never binds the user LAN", () => {
+        const env = assembleBackendEnv({
+            baseEnv: {},
+            port: 45678,
+            dataDir: "/d",
+            tmuxBin: "/t",
+            apiKeyHashSalt: "s",
+            internalServiceKey: "i",
+        });
+        // The backend defaults HOST to 0.0.0.0 (prod containers need all
+        // interfaces); the desktop spawn env must pin loopback explicitly.
+        expect(env.HOST).toBe("127.0.0.1");
+    });
+
+    it("honors an explicit operator-supplied HOST override", () => {
+        const env = assembleBackendEnv({
+            baseEnv: { HOST: "0.0.0.0" },
+            port: 1,
+            dataDir: "/d",
+            tmuxBin: "/t",
+            apiKeyHashSalt: "s",
+            internalServiceKey: "i",
+        });
+        expect(env.HOST).toBe("0.0.0.0");
+    });
+
     it("honors an operator-supplied CONDUCTOR_MIN_FREE_DISK_GB override", () => {
         const env = assembleBackendEnv({
             baseEnv: { CONDUCTOR_MIN_FREE_DISK_GB: "10" },
