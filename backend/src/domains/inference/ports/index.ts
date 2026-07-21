@@ -21,3 +21,4 @@ export type {
   UsageLedgerRepository,
   DeliveryOutcomeRepository,
 } from './usage-ledger.port.js';
+export type { RunInferenceSinkPort, RoutedRunInference } from './run-inference-sink.port.js';

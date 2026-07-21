@@ -61,6 +61,13 @@ export interface InferenceRequest {
    * `model`/`preferDirect` by intent (see `RoutingHint`). Absent ⇒ routed as-is.
    */
   readonly routingHint?: RoutingHint;
+  /**
+   * OPTIONAL conductor workspace correlation, stamped by the OpenAI-compat edge
+   * from the workspace-scoped base URL. Drives the run-inference sink ONLY;
+   * never affects routing/model/cost. Absent for backend-internal + plain
+   * HTTP-route callers ⇒ no sink emission.
+   */
+  readonly correlationWorkspaceId?: string;
 }
 
 /** A typed embedding request. */

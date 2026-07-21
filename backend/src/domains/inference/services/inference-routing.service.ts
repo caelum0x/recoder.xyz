@@ -32,6 +32,7 @@ import { computeCostMicroUsd, resolveUsage } from '../adapters/token-accounting.
 import type { EntitlementGate, BillingSubject } from '../ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from '../ports/usage-meter.port.js';
 import type { PalRoutePlannerPort } from '../ports/pal-route.port.js';
+import type { RunInferenceSinkPort } from '../ports/run-inference-sink.port.js';
 
 export interface InferenceRoutingDeps {
   readonly logger: Logger;
@@ -56,6 +57,8 @@ export class InferenceRoutingService {
   private usageMeter?: UsageMeterPort;
   /** OPTIONAL pal routing brain (set by the composer; absent ⇒ route as supplied). */
   private palRouter?: PalRoutePlannerPort;
+  /** OPTIONAL run-inference sink (set by the composer; absent ⇒ no correlation). */
+  private runSink?: RunInferenceSinkPort;
 
   constructor(deps: InferenceRoutingDeps) {
     this.log = deps.logger;
@@ -84,6 +87,17 @@ export class InferenceRoutingService {
    */
   setPalRouter(planner: PalRoutePlannerPort): void {
     this.palRouter = planner;
+  }
+
+  /**
+   * Inject the optional run-inference sink. Once set, a routed completion served
+   * by the `napi` tier that carries a `correlationWorkspaceId` correlates its
+   * `inference_id` back to its conductor workspace (RLHF anchor) — fire-and-forget,
+   * gated on `tier === 'napi'` (the ONLY feedback-resolvable tier). Absent ⇒ a
+   * truthful no-op. A sink fault NEVER blocks or fails delivery.
+   */
+  setRunInferenceSink(sink: RunInferenceSinkPort): void {
+    this.runSink = sink;
   }
 
   /**
@@ -274,6 +288,11 @@ export class InferenceRoutingService {
       this.log.warn({ err: message(err), model }, 'delivery outcome accounting failed (ignored)');
     }
 
+    // Correlate the run's napi-tier inference_id back to its workspace (RLHF anchor).
+    // Fired independent of the ledger below so a usage/catalog fault can't drop the
+    // anchor. Self-gated on tier === 'napi' + inferenceId + correlationWorkspaceId.
+    this.emitRunSink(params);
+
     if (!params.routed) return; // nothing to charge for a non-delivery
 
     try {
@@ -325,6 +344,38 @@ export class InferenceRoutingService {
       })
       .catch((err) =>
         this.log.warn({ err: message(err), model: params.req.model }, 'inference token meter emit failed (ignored)'),
+      );
+  }
+
+  /**
+   * Correlate a routed completion's gateway `inference_id` back to the conductor
+   * workspace that spawned it, so a MERGED workspace can fire real `task_success`
+   * feedback on a TensorZero-resolvable anchor.
+   *
+   * CORRECTNESS PRECONDITION (the napi-provenance gate): fires ONLY when the
+   * result was served by the `napi` tier — `feedback()` dispatches ONLY through
+   * napi, so a non-napi provider id (`chatcmpl-…`/`msg_…`) is an unresolvable
+   * anchor and must NEVER be persisted. NO-OP when: no sink wired, the tier is
+   * not `napi`, no `inferenceId`, or no `correlationWorkspaceId`. Fire-and-forget
+   * + self-logging — identical policy to `emitTokenMeter`; a sink fault NEVER
+   * blocks or fails delivery.
+   */
+  private emitRunSink(params: {
+    readonly req: InferenceRequest;
+    readonly tier: InferenceResult['tier'];
+    readonly inferenceId: string | undefined;
+  }): void {
+    const sink = this.runSink;
+    const workspaceId = params.req.correlationWorkspaceId;
+    if (!sink || params.tier !== 'napi' || !params.inferenceId || !workspaceId) return;
+    void sink
+      .record({
+        workspaceId,
+        inferenceId: params.inferenceId,
+        userId: params.req.userId ?? null,
+      })
+      .catch((err) =>
+        this.log.warn({ err: message(err), workspaceId }, 'run-inference sink record failed (ignored)'),
       );
   }
 }
