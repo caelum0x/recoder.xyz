@@ -356,6 +356,36 @@ export interface PrStatusView {
 }
 
 /**
+ * GET /workspaces/:id/mergeability — the workspace branch's local git merge
+ * preflight (a side-effect-free `git merge-tree` trial merge + rev-list
+ * divergence). Source of truth: MergeabilityService (backend/src/domains/
+ * conductor/services/mergeability.service.ts, MergeabilityView).
+ *
+ * DISTINCT from {@link PrStatusView.mergeable} (which is gh/GitHub-derived): this
+ * is a purely local git judgement. Degrade-truthful: `available:false` means git
+ * could NOT judge (no git / no worktree / git too old / faulted) — NEVER a
+ * fabricated clean.
+ */
+export interface WorkspaceMergeability {
+  /** Whether git could judge mergeability at all. */
+  available: boolean;
+  /** `'clean'` (trial merge succeeds), `'conflicting'` (real conflicts), or `'unknown'` (could not judge). */
+  verdict: 'clean' | 'conflicting' | 'unknown';
+  /** Conflicted paths (populated only for `'conflicting'`; else empty). */
+  conflicts: string[];
+  /** Commits the branch is AHEAD of base (0 when unknown/degraded). */
+  ahead: number;
+  /** Commits the branch is BEHIND base (0 when unknown/degraded). */
+  behind: number;
+  /** The base ref the branch was compared against. */
+  base: string;
+  /** The workspace branch under preflight (`''` when the workspace has none). */
+  branch: string;
+  /** Truthful reason when unavailable (never a fabricated success). */
+  reason?: string;
+}
+
+/**
  * Multi-agent compare (product F3) — mirror the REAL conductor compare surface.
  *
  * Source of truth:

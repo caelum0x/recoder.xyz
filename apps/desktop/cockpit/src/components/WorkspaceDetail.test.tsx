@@ -437,6 +437,121 @@ describe('WorkspaceDetail inline gate verdict', () => {
 });
 
 /**
+ * Merge-preflight line (GET /workspaces/:id/mergeability).
+ *
+ * In the ready-to-merge banner, above the Merge button, WorkspaceDetail shows a
+ * truthful LOCAL git preflight verdict — clean (with ahead/behind), conflicting
+ * (with paths), or a degrade-truthful "unavailable" — so the reviewer sees the
+ * signal BEFORE clicking. Advisory only: a conflict relabels Merge → "Merge
+ * anyway" but never disables it (the server still enforces the gate).
+ *
+ * The per-URL fetch mock keys on url.endsWith('/mergeability'); '/mergeability'
+ * does NOT end with '/merge', so it never collides with the merge-action mock.
+ */
+describe('WorkspaceDetail merge preflight line', () => {
+  function reviewWs(overrides: Partial<Workspace> = {}): Workspace {
+    return workspace({ workspaceId: 'ws-mp', state: 'awaiting_review', ...overrides });
+  }
+
+  function mergeabilityFetch(view: unknown): typeof fetch {
+    return vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.endsWith('/mergeability')) {
+        return makeResponse({ status: 200, ok: true, body: { success: true, data: view } });
+      }
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
+    }) as unknown as typeof fetch;
+  }
+
+  function mergeButton(c: HTMLDivElement): HTMLButtonElement | undefined {
+    return Array.from(c.querySelectorAll('button')).find((b) => {
+      const t = (b.textContent ?? '').trim();
+      return t === 'Merge' || t === 'Merge anyway' || t === 'Merging…';
+    }) as HTMLButtonElement | undefined;
+  }
+
+  it('shows a clean verdict with ahead count; Merge button stays "Merge"', async () => {
+    (globalThis as Record<string, unknown>).fetch = mergeabilityFetch({
+      available: true,
+      verdict: 'clean',
+      conflicts: [],
+      ahead: 2,
+      behind: 0,
+      base: 'main',
+      branch: 'feature/x',
+    });
+
+    const c = mount(reviewWs());
+    await flush(20);
+
+    const line = c.querySelector('.detail-mergeability');
+    expect(line?.textContent).toContain('Will merge cleanly · 2 ahead');
+    expect(line?.classList.contains('tone-good')).toBe(true);
+
+    const btn = mergeButton(c);
+    expect((btn?.textContent ?? '').trim()).toBe('Merge');
+  });
+
+  it('shows a conflict verdict with truncated paths; Merge reads "Merge anyway" and is NOT disabled', async () => {
+    (globalThis as Record<string, unknown>).fetch = mergeabilityFetch({
+      available: true,
+      verdict: 'conflicting',
+      conflicts: ['a', 'b', 'c', 'd'],
+      ahead: 1,
+      behind: 0,
+      base: 'main',
+      branch: 'feature/x',
+    });
+
+    const c = mount(reviewWs());
+    await flush(20);
+
+    const line = c.querySelector('.detail-mergeability');
+    expect(line?.textContent).toContain('4 conflicts: a, b, c (+1 more)');
+    expect(line?.classList.contains('tone-warn')).toBe(true);
+
+    const btn = mergeButton(c);
+    expect((btn?.textContent ?? '').trim()).toBe('Merge anyway');
+    // Advisory only — the merge is never hard-blocked by the preflight.
+    expect(btn?.disabled).toBe(false);
+  });
+
+  it('shows a degrade-truthful "unavailable" line and never "cleanly" when git could not judge', async () => {
+    (globalThis as Record<string, unknown>).fetch = mergeabilityFetch({
+      available: false,
+      verdict: 'unknown',
+      conflicts: [],
+      ahead: 0,
+      behind: 0,
+      base: 'main',
+      branch: 'feature/x',
+      reason: 'workspace has no worktree',
+    });
+
+    const c = mount(reviewWs());
+    await flush(20);
+
+    const line = c.querySelector('.detail-mergeability');
+    expect(line?.textContent).toContain('Merge preflight unavailable');
+    expect(line?.textContent ?? '').not.toContain('cleanly');
+
+    // Unavailable is not a conflict — Merge stays "Merge".
+    expect((mergeButton(c)?.textContent ?? '').trim()).toBe('Merge');
+  });
+
+  it('collapses an empty ([]) mergeability payload to the truthful unavailable line, Merge stays "Merge"', async () => {
+    // The default beforeEach fetch returns { success:true, data:[] } for every
+    // GET — the mapper must treat that malformed shape as unknown, never clean.
+    const c = mount(reviewWs());
+    await flush(20);
+
+    const line = c.querySelector('.detail-mergeability');
+    expect(line?.textContent).toContain('Merge preflight unavailable');
+    expect(line?.textContent ?? '').not.toContain('cleanly');
+    expect((mergeButton(c)?.textContent ?? '').trim()).toBe('Merge');
+  });
+});
+
+/**
  * PAL plan provenance (INTEGRATION-PLAN §a.4 step 4, display half).
  *
  * The workspace create path persists the PALPlan annotation onto
