@@ -39,7 +39,12 @@ export {
 } from "./audit/audit";
 
 // Host
-export { InteropMcpHost, type InteropMcpHostOptions, type HostCallOutcome } from "./host/host";
+export {
+  InteropMcpHost,
+  GovernanceDeniedError,
+  type InteropMcpHostOptions,
+  type HostCallOutcome,
+} from "./host/host";
 export { McpHost } from "./host/facade";
 
 // External supervision

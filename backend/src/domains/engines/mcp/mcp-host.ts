@@ -24,6 +24,7 @@ import {
   ExternalMcpProcessManager,
   buildPalServerConfig,
   palServerAvailability,
+  GovernanceDeniedError,
   PAL_SERVER_ID,
   type ExternalMcpServerConfig,
   type ExternalServerHealth,
@@ -34,7 +35,14 @@ import {
 } from '@recoder/interop';
 import type { McpToolCallInput, McpToolResult } from '@recoder/agent-mcp';
 import { McpToolRouter, McpRegistry } from '@recoder/agent-mcp';
-import type { McpHostPort, InProcToolHandler } from '../ports/mcp-host.port.js';
+import type {
+  McpHostPort,
+  InProcToolHandler,
+  EdgeBoundToolCallInput,
+} from '../ports/mcp-host.port.js';
+import type { ToolExecEnforcementPort } from '../../governance/ports/tool-exec-gate.port.js';
+import type { GateDecisionContext } from '../../governance/types.js';
+import type { Principal } from '../../identity/types.js';
 import {
   forEachInProcEngineTool,
   ENGINE_SERVERS,
@@ -43,18 +51,90 @@ import {
 import { IN_PROC_SERVERS, assertWiringComplete } from './engine-registry.js';
 
 /**
+ * Derive the enforcement subject from the EDGE-BOUND authenticated caller, never
+ * the caller-controlled `actor.agentId`. The `caller` field is the authenticated
+ * principal the MCP HTTP edge binds (`userId/orgId/scopes`, projected from a real
+ * `Principal`). Absent caller (trusted internal call or unauthenticated) ⇒ a
+ * synthetic anonymous principal — the kernel's forbidden-path / secret-path
+ * classifier is identity-independent for hard blocks, so deny-bias holds.
+ */
+function principalFromCall(input: McpToolCallInput): Principal {
+  const caller = (input as EdgeBoundToolCallInput).caller;
+  if (caller) {
+    return {
+      userId: caller.userId,
+      ...(caller.orgId ? { orgId: caller.orgId } : {}),
+      scopes: caller.scopes ?? [],
+      // The MCP edge authenticates the bridge over an sk_ platform key; the
+      // `McpToolCaller` projection keeps userId/orgId/scopes but not the credential
+      // sub-kind, so enforcement records `apikey` provenance for the audit row.
+      kind: 'apikey',
+      isAnonymous: false,
+      raw: null,
+    };
+  }
+  return {
+    userId: 'anonymous',
+    scopes: [],
+    kind: 'anonymous',
+    isAnonymous: true,
+    raw: null,
+  };
+}
+
+/** Build the gate decision context (task correlation + the governed tool target). */
+function gateCtxFromCall(input: McpToolCallInput, toolName: string): GateDecisionContext {
+  const taskId = input.task?.taskId;
+  return {
+    target: { toolName },
+    ...(taskId ? { taskId } : {}),
+  };
+}
+
+/**
  * The executor the interop host runs AFTER authorization. It routes external
  * (supervised stdio) servers through their real process over MCP `tools/call`,
  * and dispatches in-proc servers to a registered handler. An in-proc tool with
  * no registered handler surfaces a truthful error — never a faked result.
+ *
+ * THE PER-TOOL TEETH: when a `toolEnforcer` is injected, the fine-grained kernel
+ * enforcement runs HERE — after interop `authorize → risk` (upstream in
+ * `InteropMcpHost.call`) and BEFORE any in-proc `handler(input)` / external
+ * `transport.call`. This is the ONE chokepoint every recoder-MCP-server tool call
+ * traverses. A `denied` verdict throws {@link GovernanceDeniedError} (fail-closed:
+ * the inner engine/process is never touched); the deny is already Merkle-sealed by
+ * `gate.enforceTool`. Absent enforcer ⇒ truthful pass-through (never a fake-allow).
+ *
+ * COVERAGE BOUNDARY (truthful): these teeth gate the recoder-MCP tool stream ONLY
+ * — including the high-side-effect `sandbox_exec` / `workspace_merge` tools. They
+ * do NOT see a launched coding agent's OWN in-worktree bash/file/secret ops, which
+ * never cross this executor and stay under conductor's coarse
+ * `guardConductorWrite → decide`. A strict improvement over the previously-ungated
+ * MCP surface, not full per-tool coverage of the agent's native side effects.
  */
 function createInteropExecutor(
   external: ExternalMcpProcessManager,
   inProcHandlers: ReadonlyMap<string, InProcToolHandler>,
+  toolEnforcer?: ToolExecEnforcementPort,
 ) {
   return {
     async call(input: McpToolCallInput): Promise<McpToolResult> {
       const registration = input.server;
+      if (toolEnforcer) {
+        const toolName = `${registration.serverId}.${input.toolName}`;
+        const verdict = await toolEnforcer.enforce({
+          toolName,
+          rawArgs: input.args,
+          principal: principalFromCall(input),
+          ctx: gateCtxFromCall(input, toolName),
+        });
+        if (verdict.outcome === 'denied') {
+          // Fail-closed: block BEFORE dispatch. `gate.enforceTool` has already
+          // sealed the authoritative deny into the Merkle chain; the interop
+          // `try/catch` maps this throw to a non-`completed` (`'failed'`) wire row.
+          throw new GovernanceDeniedError(toolName, verdict.reason);
+        }
+      }
       const isExternal = registration.metadata?.external === true;
       if (isExternal) {
         const transport = await external.ensureStarted(registration.serverId);
@@ -105,6 +185,15 @@ export interface InteropHostBundleOptions {
   readonly enforceWiring?: boolean;
   /** Called with the wiring problems when the guard fails and `enforceWiring` is false. */
   readonly onWiringWarning?: (err: unknown) => void;
+  /**
+   * The per-tool governance teeth (bound from `governance.toolExecGate()`),
+   * injected by bootstrap. When present, EVERY authorized tool call runs the
+   * fine-grained kernel enforcement at the executor chokepoint before dispatch;
+   * a denial fails closed (throws {@link GovernanceDeniedError}, sealed by the
+   * gate). Absent (tests / standalone) ⇒ truthful pass-through — never a
+   * fake-allow. See the coverage boundary on {@link createInteropExecutor}.
+   */
+  readonly toolEnforcer?: ToolExecEnforcementPort;
 }
 
 /** The PAL server descriptor surfaced to control routes with truthful health. */
@@ -128,7 +217,11 @@ export class InteropHostBundle implements McpHostPort {
     this.external = new ExternalMcpProcessManager();
     this.host = new McpHost(
       {
-        executor: createInteropExecutor(this.external, this.inProcHandlers),
+        executor: createInteropExecutor(
+          this.external,
+          this.inProcHandlers,
+          options.toolEnforcer,
+        ),
         ...(options.auditSink ? { auditSink: options.auditSink } : {}),
       },
       this.external,

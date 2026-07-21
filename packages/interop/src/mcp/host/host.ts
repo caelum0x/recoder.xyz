@@ -36,6 +36,33 @@ import type { McpToolAuditEvent, McpToolCallStatus } from "../audit/audit";
  * can never turn a completed call into a failed one.
  */
 
+/**
+ * `GovernanceDeniedError` — thrown INSIDE the injected executor (the per-tool
+ * governance teeth) when the fine-grained kernel enforcement denies a live MCP
+ * tool call, BEFORE the in-proc handler / external `transport.call` is touched.
+ *
+ * It is a plain executor fault: `InteropMcpHost.call`'s `try/catch` catches it
+ * like any other executor throw and returns a non-`completed` (`status:'failed'`)
+ * outcome carrying `reason` — the wire-outcome record. The governance gate has
+ * ALREADY Merkle-sealed the authoritative deny row before the throw (documented
+ * dual-audit: the seal is the security record, this `'failed'` row is the wire
+ * record). Downstream assertions therefore key on `status !== 'completed'`.
+ *
+ * The teeth live at the executor, not here: absent an injected enforcer the
+ * executor never throws this, so the host is a truthful pass-through.
+ */
+export class GovernanceDeniedError extends Error {
+  readonly toolName: string;
+  readonly reason: string;
+
+  constructor(toolName: string, reason: string) {
+    super(`governance denied tool '${toolName}': ${reason}`);
+    this.name = "GovernanceDeniedError";
+    this.toolName = toolName;
+    this.reason = reason;
+  }
+}
+
 /** The outcome of a host call: the decision, the risk, and (if run) the result. */
 export type HostCallOutcome =
   | {
