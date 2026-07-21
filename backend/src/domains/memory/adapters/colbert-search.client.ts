@@ -10,6 +10,9 @@
  *     the index, not from a caller-supplied list.
  *   - `POST /collections {name, passages, overwrite}` — build/refresh the index
  *     (the conductor per-repo index-build path).
+ *   - `GET /collections` — the built-index inventory `{collections:[{name,...}]}`
+ *     (filesystem only, no torch) feeding the per-repo index GC.
+ *   - `DELETE /collections/<name>` — remove one built index `{dropped:bool}`.
  *
  * DEGRADE CONTRACT: no URL → `configured:false`, every op returns a truthful
  * `available:false` / `built:false` with a reason. On a non-2xx (404 unbuilt
@@ -20,6 +23,8 @@
  */
 import type { MemoryConfig } from '../config.js';
 import type {
+  ColbertCollectionList,
+  ColbertDropResult,
   ColbertIndexBuildResult,
   ColbertSearchHit,
   ColbertSearchPort,
@@ -31,6 +36,8 @@ import type { ColbertFetch, ColbertHttpResponse } from './colbert-sidecar.client
 const SEARCH_TIMEOUT_MS = 15_000;
 /** Building an index (encode + cluster + save) is heavy — a long, bounded budget. */
 const BUILD_TIMEOUT_MS = 600_000;
+/** Listing/dropping are filesystem-only (no torch) — a short, bounded budget. */
+const INVENTORY_TIMEOUT_MS = 15_000;
 
 function timeoutSignal(ms: number): AbortSignal | undefined {
   try {
@@ -64,6 +71,18 @@ function parseHits(body: unknown): ColbertSearchHit[] {
   return hits;
 }
 
+/** Extract the built collection names from a `GET /collections` body (drops junk). */
+function parseCollectionNames(body: unknown): string[] {
+  const collections = (body as { collections?: unknown })?.collections;
+  if (!Array.isArray(collections)) return [];
+  const names: string[] = [];
+  for (const entry of collections) {
+    const name = (entry as { name?: unknown })?.name;
+    if (typeof name === 'string' && name.trim().length > 0) names.push(name);
+  }
+  return names;
+}
+
 /**
  * Build the colbert search client. `colbertRerankUrl` doubles as the index-daemon
  * base (the one Flask process serves both `/rerank` and `/collections/*`). An
@@ -76,15 +95,19 @@ export function createColbertSearchClient(
   const base = (config.colbertRerankUrl ?? '').trim().replace(/\/+$/, '');
   const hasFetch = typeof doFetch === 'function';
 
-  async function post(path: string, payload: unknown, timeoutMs: number): Promise<
-    { ok: true; body: unknown } | { ok: false; reason: string }
-  > {
+  async function request(
+    method: string,
+    path: string,
+    payload: unknown | undefined,
+    timeoutMs: number,
+  ): Promise<{ ok: true; body: unknown } | { ok: false; reason: string }> {
     let res: ColbertHttpResponse;
     try {
       res = await doFetch(`${base}${path}`, {
-        method: 'POST',
+        method,
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
+        // GET/DELETE carry no body; a real fetch rejects a body on those verbs.
+        ...(payload !== undefined ? { body: JSON.stringify(payload) } : {}),
         signal: timeoutSignal(timeoutMs),
       });
     } catch (err) {
@@ -113,7 +136,8 @@ export function createColbertSearchClient(
         return { available: false, hits: [], reason: 'empty collection or query' };
       }
       const topK = Number.isFinite(k) && k > 0 ? Math.floor(k) : 10;
-      const result = await post(
+      const result = await request(
+        'POST',
         `/collections/${encodeURIComponent(name)}/search`,
         { query: q, k: topK },
         SEARCH_TIMEOUT_MS,
@@ -136,7 +160,8 @@ export function createColbertSearchClient(
       if (texts.length === 0) {
         return { built: false, collection: name, documents: 0, reason: 'no passages to index' };
       }
-      const result = await post(
+      const result = await request(
+        'POST',
         '/collections',
         { name, passages: texts, overwrite: opts?.overwrite === true },
         BUILD_TIMEOUT_MS,
@@ -145,6 +170,36 @@ export function createColbertSearchClient(
         return { built: false, collection: name, documents: texts.length, reason: result.reason };
       }
       return { built: true, collection: name, documents: texts.length };
+    },
+
+    async listCollections(): Promise<ColbertCollectionList> {
+      if (!base || !hasFetch) {
+        return { available: false, collections: [], reason: 'COLBERT_RERANK_URL not set' };
+      }
+      const result = await request('GET', '/collections', undefined, INVENTORY_TIMEOUT_MS);
+      if (!result.ok) return { available: false, collections: [], reason: result.reason };
+      return { available: true, collections: parseCollectionNames(result.body) };
+    },
+
+    async dropCollection(collection): Promise<ColbertDropResult> {
+      const name = typeof collection === 'string' ? collection.trim() : '';
+      if (!base || !hasFetch) {
+        return { dropped: false, collection: name, reason: 'COLBERT_RERANK_URL not set' };
+      }
+      if (!name) {
+        return { dropped: false, collection: name, reason: 'empty collection name' };
+      }
+      const result = await request(
+        'DELETE',
+        `/collections/${encodeURIComponent(name)}`,
+        undefined,
+        INVENTORY_TIMEOUT_MS,
+      );
+      if (!result.ok) return { dropped: false, collection: name, reason: result.reason };
+      const dropped = (result.body as { dropped?: unknown })?.dropped === true;
+      return dropped
+        ? { dropped: true, collection: name }
+        : { dropped: false, collection: name, reason: 'daemon did not confirm the drop' };
     },
   };
 }
