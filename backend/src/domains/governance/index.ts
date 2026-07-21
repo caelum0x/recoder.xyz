@@ -22,6 +22,7 @@ import type { AuthMiddleware } from '../identity/middleware/authenticate.middlew
 import type { GovernanceGate } from './ports/gate.port.js';
 import type { SecretsPort } from './ports/secrets.port.js';
 import type { GovernanceKernelPort } from './ports/kernel.port.js';
+import type { ConsensusReviewPort } from './ports/consensus.port.js';
 import type { WorkLockService } from './services/work-lock.service.js';
 import type { ApprovalService } from './services/approval.service.js';
 import type { AuditChainService } from './services/audit-chain.service.js';
@@ -63,6 +64,14 @@ export interface GovernanceModule {
   audit(): AuditChainService;
   /** The assembled kernel ladder (truthful `status()` reports which rung answers). */
   kernel(): GovernanceKernelPort;
+  /**
+   * Late-inject the adversarial multi-model CONSENSUS brain (pal). Bootstrap calls
+   * this AFTER the engines module is built (governance is composed first) so a
+   * high-risk `allow` the kernel is about to grant is put to a cross-model
+   * adversarial review before it finalizes. Absent ⇒ the kernel verdict is final
+   * (this safety check never blocks a run on its own fault).
+   */
+  setConsensusReview(port: ConsensusReviewPort): void;
   /**
    * Hot-swap the kernel's live policy bundle — the agent-os policy-update hook
    * calls this after a forbidden/secret-path or approval-policy edit so it takes

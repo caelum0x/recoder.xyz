@@ -130,6 +130,15 @@ export class GovernanceGateService implements GovernanceGate {
       : kernelVerdict;
     const approvalId = clearedByApprovalId ?? kernelVerdict.approvalGateId;
 
+    // 3b. HIGH-RISK adversarial consensus (pal). Only when the kernel is about to
+    //     grant a HIGH/critical `allow` that a human has NOT already cleared, put
+    //     the write to a cross-model adversarial review BEFORE finalizing. A
+    //     credible `block` downgrades the allow to `needs_approval` (sealed below
+    //     as evidence); abstain / unavailable / timeout / throw all leave the
+    //     kernel allow standing — this safety check NEVER blocks on its own fault
+    //     and NEVER hangs the gate open (the facet bounds the call).
+    const effective = await this.applyConsensusReview(action, principal, ctx, verdict, clearedByApprovalId);
+
     // 4. Seal into the durable Merkle chain. A failure to record an ALLOW fails
     //    closed (an un-audited allow cannot be trusted — including an allow that
     //    was cleared by an approval); a blocking verdict passes through with the
@@ -137,12 +146,12 @@ export class GovernanceGateService implements GovernanceGate {
     let auditHash: string | undefined;
     try {
       const record = await this.audit.append(
-        this.toAuditEntry(action, principal, verdict, ctx, clearedByApprovalId),
+        this.toAuditEntry(action, principal, effective, ctx, clearedByApprovalId),
       );
       auditHash = record.entryHash;
     } catch (err) {
       this.log?.error({ err, action, actor: principal.userId }, 'governance audit seal failed');
-      if (verdict.effect === 'allow') {
+      if (effective.effect === 'allow') {
         return this.failClosed(req, principal, action, now, 'Audit chain unavailable — refusing to allow an un-recorded write.');
       }
     }
@@ -150,15 +159,67 @@ export class GovernanceGateService implements GovernanceGate {
     return {
       verdictId: `gov_verdict_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
       requestId: req.requestId ?? `gov_req_${Date.now()}`,
-      effect: verdict.effect,
-      tier: verdict.tier,
-      reason: verdict.reason,
-      degraded: verdict.degraded,
-      engine: verdict.engine,
-      auditHash: auditHash ?? verdict.auditHash,
+      effect: effective.effect,
+      tier: effective.tier,
+      reason: effective.reason,
+      degraded: effective.degraded,
+      engine: effective.engine,
+      auditHash: auditHash ?? effective.auditHash,
       approvalId,
       createdAt: now,
     };
+  }
+
+  /**
+   * Apply the adversarial multi-model consensus review to a HIGH-RISK allow the
+   * kernel is about to grant. Deny-biased + degrade-safe: consulted ONLY when the
+   * verdict is an `allow` of tier `high`+ that a human has NOT already cleared and
+   * the consensus brain is wired + `available`. An explicit `block` downgrades the
+   * allow to `needs_approval` (never a silent deny); every other recommendation —
+   * and any thrown fault across the seam — leaves the kernel allow standing. The
+   * review is bounded inside the facet, so a slow/dead sidecar can only DELAY (by
+   * the facet's timeout) a high-risk allow, never block it and never hang the gate.
+   */
+  private async applyConsensusReview(
+    action: GovernanceAction,
+    principal: Principal,
+    ctx: GateDecisionContext,
+    verdict: KernelVerdict,
+    clearedByApprovalId: string | undefined,
+  ): Promise<KernelVerdict> {
+    if (
+      verdict.effect !== 'allow' ||
+      clearedByApprovalId ||
+      !this.consensus?.available ||
+      riskTierRank(verdict.tier) < riskTierRank('high')
+    ) {
+      return verdict;
+    }
+    try {
+      const review = await this.consensus.review({
+        action,
+        riskTier: verdict.tier,
+        actorId: principal.userId,
+        taskId: ctx.taskId,
+        runId: ctx.runId,
+        target: ctx.target,
+        kernelReason: verdict.reason,
+        autonomous: ctx.autonomous ?? false,
+      });
+      if (review.recommendation === 'block') {
+        return {
+          ...verdict,
+          effect: 'needs_approval',
+          reason: `consensus block: ${review.reason} — ${verdict.reason}`,
+        };
+      }
+    } catch (err) {
+      this.log?.warn(
+        { err, action, actor: principal.userId },
+        'governance consensus review threw — kernel allow stands',
+      );
+    }
+    return verdict;
   }
 
   /**
