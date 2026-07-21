@@ -36,6 +36,10 @@ import { validateBody, validateParams, validateQuery } from '../../../http/middl
 import { sendSuccess, sendError, createError, ErrorCode } from '../../../shared/errors.js';
 import type { AgentOsRepositoryPort } from '../ports/agent-os-repository.port.js';
 import {
+  spacePolicyToKernelConfigJson,
+  type PolicyUpdatedEvent,
+} from '../services/policy-update.emitter.js';
+import {
   agentUpsertSchema,
   artifactCreateSchema,
   eventsQuerySchema,
@@ -51,6 +55,13 @@ import {
 export interface AgentOsCrudRoutesDeps {
   readonly repository: AgentOsRepositoryPort;
   readonly middleware: AuthMiddleware;
+  /**
+   * OPTIONAL `policy.updated` sink (§4c): fired AFTER a forbidden/secret-path or
+   * approval policy artifact is durably written (space upsert / policy PUT), so
+   * the bootstrap hook can hot-swap the governance kernel bundle. Absent ⇒ no
+   * emission (unchanged behavior); a fire never blocks the write path.
+   */
+  readonly onPolicyChange?: (event: PolicyUpdatedEvent) => void;
 }
 
 /** The actor recorded on writes when the body names none (never anonymous — gate is upstream). */
@@ -80,7 +91,7 @@ function handle(fn: (req: Request, res: Response) => Promise<void>): RequestHand
 
 /** Build the CRUD edge table (mounted inside the `/api/agent-os` router). */
 export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
-  const { repository, middleware } = deps;
+  const { repository, middleware, onPolicyChange } = deps;
   const taskService = new TaskService();
   const router = Router();
 
@@ -116,7 +127,14 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
         createdAt: body.createdAt ?? now,
         updatedAt: body.updatedAt ?? now,
       };
-      sendSuccess(res, await repository.upsertSpace(space));
+      const saved = await repository.upsertSpace(space);
+      // A space upsert carries its forbidden/secret-path + approval policy — signal
+      // a hot-swap AFTER the durable write (never before; a failed write emits nothing).
+      onPolicyChange?.({
+        source: `space:${space.spaceId}`,
+        configJson: spacePolicyToKernelConfigJson(space.policy),
+      });
+      sendSuccess(res, saved);
     }),
   );
 
@@ -130,7 +148,14 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
       const spaces = await repository.listSpaces();
       if (!spaces.some((s) => s.spaceId === spaceId)) return notFound(res, 'space', spaceId);
       const policy = req.body as z.infer<typeof spacePolicyPutSchema>;
-      sendSuccess(res, await repository.upsertSpacePolicy(spaceId, policy));
+      const saved = await repository.upsertSpacePolicy(spaceId, policy);
+      // The forbidden/secret-path + approval policy changed — hot-swap the kernel
+      // bundle AFTER the durable write succeeds.
+      onPolicyChange?.({
+        source: `space:${spaceId}`,
+        configJson: spacePolicyToKernelConfigJson(policy),
+      });
+      sendSuccess(res, saved);
     }),
   );
 

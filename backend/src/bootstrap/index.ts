@@ -451,6 +451,32 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   container.registerValue(DOMAIN_TOKENS['agent-os'], agentOs);
   healthRegistry.register(agentOs);
 
+  // --- Phase 5a: policy-update hook → (c) reloadPolicies. When a forbidden/secret-
+  //     path or approval policy artifact changes on the control plane (a space
+  //     upsert / policy PUT), agent-os emits `policy.updated`; this hook hot-swaps
+  //     the governance kernel's live policy bundle so the edit takes effect for
+  //     subsequent `decide()`/`enforceTool` WITHOUT a restart. Fail-closed inside
+  //     the kernel: a rejected config leaves the OLD policy live (`reloaded:false`);
+  //     static rungs (no napi addon) report `reloaded:false` truthfully. The hook
+  //     logs the truthful `{reloaded, reason}` — it never blocks or fails the write
+  //     that triggered it (the emitter fans out fire-and-forget). ---
+  const governanceReloadLog = childLogger('governance');
+  agentOs.onPolicyUpdated(async ({ configJson, source }) => {
+    try {
+      const result = await governance.reloadPolicies(configJson);
+      governanceReloadLog.info(
+        { reloaded: result.reloaded, ...(result.reason ? { reason: result.reason } : {}), source },
+        'policy hot-swap',
+      );
+    } catch (err) {
+      // Deny-bias: a reload fault leaves the OLD policy live and is logged truthfully.
+      governanceReloadLog.warn(
+        { err: err instanceof Error ? err.message : String(err), reloaded: false, source },
+        'policy hot-swap failed',
+      );
+    }
+  });
+
   // --- Phase 6c: Memory & Retrieval — recall fusion + the GOVERNED candidate →
   //     durable-item promotion + RAG retrieval. Built BEFORE the conductor so the
   //     conductor run flow can recall on launch + harvest on completion through the

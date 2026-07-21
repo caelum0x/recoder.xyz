@@ -15,14 +15,17 @@ import type { AuthMiddleware } from '../../identity/middleware/authenticate.midd
 import type { AgentOsRepositoryPort } from '../ports/agent-os-repository.port.js';
 import { sendSuccess, sendError, createError, ErrorCode } from '../../../shared/errors.js';
 import { buildAgentOsCrudRouter } from './agent-os-crud.routes.js';
+import type { PolicyUpdatedEvent } from '../services/policy-update.emitter.js';
 
 export interface AgentOsRoutesDeps {
   readonly repository: AgentOsRepositoryPort;
   readonly middleware: AuthMiddleware;
+  /** OPTIONAL `policy.updated` sink threaded into the CRUD policy-write edges (§4c). */
+  readonly onPolicyChange?: (event: PolicyUpdatedEvent) => void;
 }
 
 export function buildAgentOsRouter(deps: AgentOsRoutesDeps): Router {
-  const { repository, middleware } = deps;
+  const { repository, middleware, onPolicyChange } = deps;
   const router = Router();
 
   // — Read models (authenticated) —
@@ -51,7 +54,9 @@ export function buildAgentOsRouter(deps: AgentOsRoutesDeps): Router {
   });
 
   // — Full per-aggregate CRUD edge table (self-gated per route) —
-  router.use(buildAgentOsCrudRouter({ repository, middleware }));
+  router.use(
+    buildAgentOsCrudRouter({ repository, middleware, ...(onPolicyChange ? { onPolicyChange } : {}) }),
+  );
 
   return router;
 }

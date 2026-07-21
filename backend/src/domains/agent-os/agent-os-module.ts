@@ -39,6 +39,7 @@ import { createInstructionCompilerAdapter } from './adapters/instruction-compile
 import { createNatsOutboxPublisher } from './adapters/nats-outbox-publisher.adapter.js';
 import { RunEventIngestService } from './services/run-event-ingest.service.js';
 import { OutboxDrainService } from './services/outbox-drain.service.js';
+import { PolicyUpdateEmitter, type PolicyUpdatedListener } from './services/policy-update.emitter.js';
 import { SquadService, InMemorySquadStore } from './services/squad.service.js';
 import { SquadAutopilotService } from './services/squad-autopilot.service.js';
 import {
@@ -79,6 +80,7 @@ export class AgentOsComposer implements AgentOsModule {
   private readonly squads: SquadService | null;
   private readonly autopilot: SquadAutopilotService | null;
   private readonly workflows: WorkflowService;
+  private readonly policyUpdates: PolicyUpdateEmitter;
   private readonly router: Router;
   private readonly internalRouter: Router;
   private started = false;
@@ -214,9 +216,16 @@ export class AgentOsComposer implements AgentOsModule {
       driver: deps.workflowDriver ?? defaultDriver,
     });
 
+    // The `policy.updated` fan-out (§4c): the CRUD policy-write edges fire it AFTER
+    // a durable space-policy write; bootstrap registers the kernel hot-swap hook
+    // (`governance.reloadPolicies`) via `onPolicyUpdated`. Absent listeners ⇒ emits
+    // are inert (no behavior change).
+    this.policyUpdates = new PolicyUpdateEmitter(this.log);
+
     const inner = buildAgentOsRouter({
       repository: this.repo,
       middleware: deps.middleware,
+      onPolicyChange: (event) => this.policyUpdates.emit(event),
     });
     // The INTERNAL_SERVICE_KEY-gated ingest edges (events / steps / runtime-
     // evidence / outbox drain). Exposed via `internalRoutes()` for the canonical
@@ -305,6 +314,15 @@ export class AgentOsComposer implements AgentOsModule {
       return;
     }
     this.autopilot.attachIssueGraph(port);
+  }
+
+  /**
+   * Register a `policy.updated` listener (§4c). Bootstrap wires the governance
+   * kernel hot-swap hook here so an edited forbidden/secret-path or approval
+   * policy takes effect for subsequent `decide()`/`enforceTool` without a restart.
+   */
+  onPolicyUpdated(listener: PolicyUpdatedListener): void {
+    this.policyUpdates.on(listener);
   }
 
   routes(): Router {
