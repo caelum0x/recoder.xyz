@@ -117,7 +117,9 @@ export class OpsRecorderLoopbackAdapter extends DaemonEngineAdapter<OpsRecorderR
     return {
       binPath: python,
       // `-m uvicorn main:app` (not `main.py`, whose dev runner forces reload=True).
-      args: ['-m', 'uvicorn', 'main:app', '--host', host || '127.0.0.1', '--port', portStr || '8894'],
+      // Port fallback matches the canonical `DEFAULT_LOOPBACK['ops-recorder']` / daemon
+      // `DEFAULT_LISTEN` (8073); in practice `listenAddr()` always carries the port.
+      args: ['-m', 'uvicorn', 'main:app', '--host', host || '127.0.0.1', '--port', portStr || '8073'],
       cwd: dirOf(entrypoint),
       env: { ...(this.config.childEnv ?? {}) },
     };

@@ -51,6 +51,7 @@ import type {
   EngineRegistryPort,
   EngineHealthRepository,
   McpHostPort,
+  McpServerRegistration,
 } from './ports/index.js';
 import { NapiLoader } from './supervisor/napi-loader.js';
 import { ProcessRegistry } from './supervisor/process-registry.js';
@@ -73,6 +74,9 @@ import {
   buildColbertIndexMcpTools,
   opsRecorderSignalsMcpServer,
   buildOpsRecorderSignalsMcpTools,
+  opsRecorderMcpServer,
+  buildOpsRecorderMcpTools,
+  OPS_RECORDER_WRITE_TOOL_NAMES,
   type DaemonAdapterConfig,
 } from './adapters/daemon/index.js';
 import {
@@ -788,6 +792,7 @@ export class EnginesComposer implements EnginesModule {
     this.bindTmuxIntrospectMcpTools();
     this.bindBeadsGraphMcpTools();
     this.bindOpsRecorderSignalsMcpTools();
+    this.bindOpsRecorderWriteMcpTools();
     const colbert = this.adapters.get('colbert');
     if (colbert) {
       // The collision-safe bridge registers the server descriptor from the tool
@@ -1008,6 +1013,52 @@ export class EnginesComposer implements EnginesModule {
           content: await tool.handler(input.args, callerFromInput(input)),
           metadata: {
             serverId: opsRecorderSignalsMcpServer.serverId,
+            toolName: tool.name,
+            external: false,
+          },
+        })
+      );
+    }
+  }
+
+  /**
+   * Bind the ops-recorder WRITE/DETECT tools (`ops-recorder.sync` /
+   * `ops-recorder.ingest` / `ops-recorder.resolve`) directly on the host over the
+   * ops-recorder adapter seam — the agent-facing write path onto the stuck-work
+   * board (trigger a detector run, push a detected item, resolve/re-open a signal).
+   * Same gated delegating shape as `bindOpsRecorderSignalsMcpTools`: each write
+   * traverses interop's `authorize → risk → execute → audit` gate, so the governed
+   * writes are risk-classified at the boundary.
+   *
+   * SCOPED registration (§8.4): only {@link OPS_RECORDER_WRITE_TOOL_NAMES} are
+   * bound. The write server's pure-read `ops-recorder.list` / `ops-recorder.get`
+   * are intentionally NOT registered — their read surface is served by
+   * `ops-recorder.query` / `ops-recorder.stats` on the sibling
+   * `ops-recorder-signals` server — and `ops-recorder.handoff` is deferred (no
+   * product consumer yet). Registering only the bound subset keeps the gated
+   * catalog free of executor-less orphans. Truthful skip when the ops-recorder
+   * adapter is absent (never a faked registration).
+   */
+  private bindOpsRecorderWriteMcpTools(): void {
+    const engine = this.adapters.get('ops-recorder');
+    if (!engine) return; // truthful skip when the ops-recorder adapter is absent
+    const registered = new Set<string>(OPS_RECORDER_WRITE_TOOL_NAMES);
+    // Register only the write tools we bind (never the full 6-tool descriptor)
+    // so the gated registry's allowlist matches the executors that exist.
+    const server: McpServerRegistration = {
+      ...opsRecorderMcpServer,
+      toolNames: [...OPS_RECORDER_WRITE_TOOL_NAMES],
+    };
+    this.hostBundle.registerServer(server);
+    for (const tool of buildOpsRecorderMcpTools(engine)) {
+      if (!registered.has(tool.name)) continue; // list/get/handoff: documented, unregistered
+      this.hostBundle.registerInProcTool(
+        server.serverId,
+        tool.name,
+        async input => ({
+          content: await tool.handler(input.args, callerFromInput(input)),
+          metadata: {
+            serverId: server.serverId,
             toolName: tool.name,
             external: false,
           },

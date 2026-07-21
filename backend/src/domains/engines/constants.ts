@@ -75,7 +75,11 @@ export function isRestartable(transport: EngineTransport): boolean {
 /** Default loopback bind addresses (127.0.0.1 only) per daemon/sidecar engine. */
 export const DEFAULT_LOOPBACK: Readonly<Record<string, string>> = {
   colbert: '127.0.0.1:8893',
-  'ops-recorder': '127.0.0.1:8894',
+  // Canonical ops-recorder port — MUST match `ops-recorder-daemon.ts`
+  // `DEFAULT_LISTEN` (127.0.0.1:8073), the address the sidecar actually binds and
+  // the fleet manifest publishes. (Reconciled from the stale :8894 that drifted
+  // apart from the spawn seam.)
+  'ops-recorder': '127.0.0.1:8073',
   multica: '127.0.0.1:8895',
   ziti: '127.0.0.1:1280',
   'tensorzero-loopback': '127.0.0.1:3030',
