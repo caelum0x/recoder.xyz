@@ -47,6 +47,7 @@ import type {
 import { classifyAttention, type AttentionResult } from './attention/attention-classifier.js';
 import type { ConductorModule, ConductorModuleDeps } from './index.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
+import type { CoordinationAdmissionPort } from './ports/coordination-admission.port.js';
 import type { ConductorPlanPort, ConductorPlanDecision } from './ports/plan.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
 import { deriveSeedTerms } from './adapters/code-intel.adapter.js';
@@ -199,6 +200,12 @@ export class ConductorComposer implements ConductorModule {
   private readonly codeIntel?: CodeIntelPort;
   /** OPTIONAL pal launch-planning seam (advisory runtime/skill/tool/sandbox + risk). */
   private readonly plan?: ConductorPlanPort;
+  /**
+   * OPTIONAL double-assignment admission gate over the Multica coordination
+   * fabric; consulted in `createWorkspace`. Absent / engine-down / a fault ⇒
+   * admit (never blocks a launch) — only a LIVE double-assignment defers.
+   */
+  private readonly coordinationAdmission: CoordinationAdmissionPort | null;
   /** OPTIONAL ColBERT PLAID index seam (per-repo late-interaction index build). */
   private readonly colbertIndex?: ConductorModuleDeps['colbertIndex'];
   /** OPTIONAL GitHub identity seam (`GET /github/status`); absent ⇒ truthful not-connected. */
@@ -235,6 +242,7 @@ export class ConductorComposer implements ConductorModule {
     this.brain = deps.brain;
     this.codeIntel = deps.codeIntel;
     this.plan = deps.plan;
+    this.coordinationAdmission = deps.coordinationAdmission ?? null;
     this.colbertIndex = deps.colbertIndex;
     this.github = deps.githubStatus;
     this.steerTransport = deps.steerTransport;
@@ -629,6 +637,58 @@ export class ConductorComposer implements ConductorModule {
         this.log.warn(
           { err, taskId: input.taskId },
           'conductor pal planLaunch faulted — launching without advisory',
+        );
+      }
+    }
+
+    // Coordination admission (OPTIONAL, degrade-open): on the axis
+    // resource-governor → coordination-admission → work-lock → launch, defer a
+    // launch whose ISSUE is ALREADY actively held by 2+ agents (a contention the
+    // Multica `conflictStatus` sees under 2+ members). Keyed on `input.taskId`
+    // (the bd issue the autopilot passes). FAIL-OPEN: absent gate / engine down /
+    // any fault ⇒ admit — a coordination engine being down must NEVER block a
+    // launch; only a LIVE, engine-confirmed double-assignment defers. The reroute
+    // WRITE is governance-gated by the caller (`coordination.reroute`); a
+    // deny/throw ⇒ no reroute, launch still deferred (fail-safe).
+    if (this.coordinationAdmission && input.taskId) {
+      const issueId = input.taskId;
+      try {
+        const decision = await this.coordinationAdmission.admitIssue(
+          { issueId },
+          {
+            authorizeReroute: async () =>
+              (
+                await guardConductorWrite(this.gate, 'coordination.reroute', principal, {
+                  target: { path: input.repoPath },
+                  taskId: issueId,
+                  metadata: { issueId },
+                })
+              ).allowed,
+          },
+        );
+        if (!decision.admit) {
+          // Truthful DEFER — not a governance deny: the write-gate already
+          // allowed this launch; coordination re-balances a contended issue.
+          await recordConductorAudit(
+            this.gate,
+            conductorAuditEntry(action, principal, verdict, {
+              coordinationDeferred: true,
+              contenders: decision.conflict?.contenders.length ?? 0,
+              rerouted: decision.reroute?.routed ?? false,
+            }),
+          );
+          return {
+            ok: false,
+            verdict,
+            reason: decision.reason ?? 'issue contended — launch deferred',
+          };
+        }
+      } catch (err) {
+        // An optional enrichment gate faulting must NEVER block a launch the
+        // policy gate already allowed (fail-open, mirrors the entitlement gate).
+        this.log.warn(
+          { err, taskId: issueId },
+          'conductor coordination admission errored — degrading open',
         );
       }
     }
