@@ -90,6 +90,40 @@ export interface WorkspaceTree {
   truncated: boolean;
 }
 
+/**
+ * One structured changed-file entry. Mirrors the backend authoritatively:
+ * backend/src/domains/conductor/services/workspace-review.ops.ts
+ * (workspaceDiffFiles → the per-file view derived from `git diff --numstat`).
+ *
+ * `status` is inlined here (NOT reusing lib/diff-files.ts' module-scoped
+ * DiffFileStatus, which is a narrower 'added'|'modified' fallback type).
+ * `insertions`/`deletions` are `null` for a binary side (git numstat reports
+ * `-`), and MUST render as nothing — never a fabricated `+0`/`-0`.
+ */
+export interface DiffFileEntry {
+  path: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed';
+  insertions: number | null;
+  deletions: number | null;
+  /** Present only for a renamed entry: the pre-rename path. */
+  oldPath?: string;
+}
+
+/**
+ * GET /workspaces/:id/diff/files — the authoritative structured changed-file
+ * list. Source of truth: workspace-review.ops.ts (workspaceDiffFiles →
+ * sendSuccess(res, view)). Degrade-truthful: `available:false` means the
+ * worktree could not be read — never an empty-success masquerading as "no
+ * changes".
+ */
+export interface WorkspaceDiffFilesView {
+  workspaceId: string;
+  base: string;
+  branch: string;
+  available: boolean;
+  files: DiffFileEntry[];
+}
+
 /** GET /workspaces/:id/dev-command — detected command to run the app (or null). */
 export interface DevCommand {
   command: string;

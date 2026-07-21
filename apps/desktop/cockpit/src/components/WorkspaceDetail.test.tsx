@@ -852,3 +852,145 @@ describe('WorkspaceDetail cross-workspace state bleed (keyed by workspaceId)', (
     ).toBeTruthy();
   });
 });
+
+/**
+ * Structured changed-list from the authoritative GET /diff/files edge.
+ *
+ * The Changes tab (default 'output') is sourced from the backend's structured
+ * per-file view (workspace-review.ops.ts → workspaceDiffFiles) when it is
+ * available, with the legacy --stat parser as a degrade-truthful fallback:
+ *
+ *  - available:true  → glyph A/M/D/R + path (renamed shows old → new) + real
+ *    +/- counts. A binary side (insertions/deletions === null) renders NOTHING
+ *    for that count — never a fabricated +0/-0.
+ *  - available:false → a truthful "Changed list unavailable" line, never an
+ *    empty-success masquerading as "no changes".
+ *  - 404 (mid-rollout) → silently falls back to the REAL --stat-derived list.
+ *
+ * The default beforeEach fetch returns { success:true, data:[] } for every GET;
+ * the diffFilesView() narrowing must send that malformed [] down the FileList
+ * fallback path (no .available crash) — the existing suites above prove it.
+ */
+describe('WorkspaceDetail structured changed-list (/diff/files)', () => {
+  const view = {
+    workspaceId: 'ws-detail',
+    base: 'main',
+    branch: 'feature/x',
+    available: true,
+    files: [
+      { path: 'src/added.ts', status: 'added', insertions: 10, deletions: 0 },
+      { path: 'src/mod.ts', status: 'modified', insertions: 3, deletions: 2 },
+      { path: 'src/gone.ts', status: 'deleted', insertions: 0, deletions: 8 },
+      { path: 'src/new.ts', status: 'renamed', oldPath: 'src/old.ts', insertions: 1, deletions: 1 },
+      { path: 'img/logo.png', status: 'modified', insertions: null, deletions: null },
+    ],
+  };
+
+  /** Route /diff/files to `filesResponse`; every other GET is empty-success. */
+  function diffFilesFetch(filesResponse: Response): typeof fetch {
+    return vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.endsWith('/diff/files')) return filesResponse;
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
+    }) as unknown as typeof fetch;
+  }
+
+  it('renders the authoritative per-file list with A/M/D/R glyphs and a renamed old → new label', async () => {
+    (globalThis as Record<string, unknown>).fetch = diffFilesFetch(
+      makeResponse({ status: 200, ok: true, body: { success: true, data: view } }),
+    );
+
+    const c = mount(workspace());
+    await flush(20);
+
+    const glyphs = Array.from(c.querySelectorAll('.detail-file-icon')).map((g) =>
+      (g.textContent ?? '').trim(),
+    );
+    expect(glyphs).toContain('A');
+    expect(glyphs).toContain('M');
+    expect(glyphs).toContain('D');
+    expect(glyphs).toContain('R');
+
+    // The renamed entry shows old → new (not just the new path).
+    const body = c.querySelector('.detail-changes')?.textContent ?? '';
+    expect(body).toContain('src/old.ts → src/new.ts');
+
+    // The distinct status classes are present in the DOM.
+    expect(c.querySelector('.detail-file-deleted')).toBeTruthy();
+    expect(c.querySelector('.detail-file-renamed')).toBeTruthy();
+  });
+
+  it('renders NO fabricated +0/-0 for a binary file (insertions/deletions null)', async () => {
+    (globalThis as Record<string, unknown>).fetch = diffFilesFetch(
+      makeResponse({ status: 200, ok: true, body: { success: true, data: view } }),
+    );
+
+    const c = mount(workspace());
+    await flush(20);
+
+    // Find the binary row and assert it carries no fabricated zero count.
+    const rows = Array.from(c.querySelectorAll('.detail-file'));
+    const binaryRow = rows.find((r) => (r.textContent ?? '').includes('img/logo.png'));
+    expect(binaryRow, 'the binary row is rendered').toBeTruthy();
+    const rowText = binaryRow?.textContent ?? '';
+    expect(rowText).not.toContain('+0');
+    expect(rowText).not.toContain('-0');
+  });
+
+  it('shows a truthful "Changed list unavailable" line when available:false (never an empty-success)', async () => {
+    (globalThis as Record<string, unknown>).fetch = diffFilesFetch(
+      makeResponse({
+        status: 200,
+        ok: true,
+        body: {
+          success: true,
+          data: { workspaceId: 'ws-detail', base: 'main', branch: 'feature/x', available: false, files: [] },
+        },
+      }),
+    );
+
+    const c = mount(workspace());
+    await flush(20);
+
+    const changes = c.querySelector('.detail-changes')?.textContent ?? '';
+    expect(changes).toContain('Changed list unavailable');
+    // The worktree could not be read — no per-file rows are rendered.
+    expect(c.querySelector('.detail-changes .detail-files')).toBeNull();
+  });
+
+  it('degrades to the --stat-derived list when /diff/files 404s mid-rollout', async () => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.endsWith('/diff/files')) {
+        return makeResponse({ status: 404, ok: false, body: { success: false, error: 'not found' } });
+      }
+      if (typeof url === 'string' && url.endsWith('/diff')) {
+        return makeResponse({
+          status: 200,
+          ok: true,
+          body: {
+            success: true,
+            data: {
+              workspaceId: 'ws-detail',
+              baseRef: 'main',
+              branch: 'feature/x',
+              stat: ' README.md | 3 +++',
+              patch: 'diff --git a/README.md b/README.md',
+              untracked: [],
+              changedFiles: 1,
+            },
+          },
+        });
+      }
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
+    }) as unknown as typeof fetch;
+
+    const c = mount(workspace());
+    await flush(20);
+
+    // The legacy stat-derived FileRow renders (path + count + glyph), no crash.
+    const rows = Array.from(c.querySelectorAll('.detail-file'));
+    const readmeRow = rows.find((r) => (r.textContent ?? '').includes('README.md'));
+    expect(readmeRow, 'the fallback --stat row is rendered').toBeTruthy();
+    expect(readmeRow?.textContent ?? '').toContain('+3');
+    expect(readmeRow?.querySelector('.detail-file-icon')?.textContent).toContain('M');
+  });
+});
