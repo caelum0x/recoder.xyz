@@ -19,11 +19,15 @@ import {
   readInitialView,
   hasDesktopDeviceLogin,
   hasDesktopSignOut,
+  hasDesktopBackendStatus,
+  readBackendStatus,
   runDesktopSignOut,
   runDesktopRefresh,
   COCKPIT_NAVIGATE_EVENT,
   type CockpitView,
 } from './lib/config';
+import { backendPhaseLine } from './lib/backend-phase-line';
+import type { BackendPhaseSnapshot } from './types';
 import {
   planLabel,
   isCapabilityGated,
@@ -55,6 +59,7 @@ import { SignIn } from './components/SignIn';
 import { PANEL_REGISTRY, PRIMARY_PANEL_IDS, getPanelById } from './panels/registry';
 
 const WORKSPACE_POLL_MS = 2000;
+const BACKEND_PHASE_POLL_MS = 2000;
 const HEALTH_POLL_MS = 15_000;
 const RUNTIMES_POLL_MS = 30_000;
 const ARCHIVED_POLL_MS = 8000;
@@ -113,6 +118,10 @@ export function App() {
   // A sign-in completed this run. Clears the first-run gate even when the auth
   // result carried no display identity (the session is real either way).
   const [signedInThisRun, setSignedInThisRun] = useState(false);
+  // The redacted embedded-backend supervisor phase, polled ONLY while the board
+  // poll is failing (see the effect below). Null when the desktop bridge is
+  // absent or the phase is not worth surfacing — the banner then stays generic.
+  const [backendPhase, setBackendPhase] = useState<BackendPhaseSnapshot | null>(null);
 
   // Switch the active view (only the Board today; kept for deep-link parity).
   function goTo(target: CockpitView) {
@@ -208,6 +217,30 @@ export function App() {
   useEffect(() => {
     if (board.data && !board.error) setWasAuthed(true);
   }, [board.data, board.error]);
+
+  // While the board poll is failing as unreachable, ask the desktop shell for
+  // the REAL supervisor phase so the banner can say starting/restarting/failed
+  // instead of a bare "unreachable". Only runs inside the Electron shell (bridge
+  // present) and only while unreachable; degrade-truthful — readBackendStatus
+  // resolves null on any error, and the banner falls back to the generic copy.
+  useEffect(() => {
+    if (!unreachable || !hasDesktopBackendStatus()) {
+      setBackendPhase(null);
+      return;
+    }
+    let cancelled = false;
+    const tick = () => {
+      readBackendStatus().then((s) => {
+        if (!cancelled) setBackendPhase(s);
+      });
+    };
+    tick();
+    const id = setInterval(tick, BACKEND_PHASE_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [unreachable]);
 
   // On the FIRST 401 this run, attempt one transparent device-token refresh
   // (stored refresh token → fresh access token) before showing SignIn. On
@@ -410,8 +443,12 @@ export function App() {
 
       {view === 'board' && unreachable && (
         <div class="banner banner-error">
-          <strong>Backend unreachable.</strong> Can't reach the backend at {config.backendUrl}.
-          {!configWasInjected() && ' (No shell config injected — using default localhost:3100.)'}
+          {backendPhaseLine(backendPhase) ?? (
+            <span>
+              <strong>Backend unreachable.</strong> Can't reach the backend at {config.backendUrl}.
+              {!configWasInjected() && ' (No shell config injected — using default localhost:3100.)'}
+            </span>
+          )}
         </div>
       )}
       {view === 'board' && board.error && !unreachable && !unauthenticated && (

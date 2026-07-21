@@ -41,3 +41,27 @@ export function isBackendFrameOrigin(frameUrl: string, backendUrl: string): bool
     }
     return isLoopbackHostname(frame.hostname) && isLoopbackHostname(backend.hostname);
 }
+
+/**
+ * True when the requesting frame is a loopback http(s) page, WITHOUT needing to
+ * know the backend port. isBackendFrameOrigin() needs the READY backend origin
+ * (getBackendAuth().backendUrl), but that is null exactly during the phases we
+ * must serve the phase banner for (starting/crashed/failed). The embedded
+ * cockpit frame is still the loopback backend origin then — the page stays
+ * loaded, only its polls fail — so a readiness-independent loopback-frame check
+ * gates the non-secret status projection while auth is still null. The status
+ * names only a local log path (no key/URL), so a loopback-frame gate is
+ * sufficient; an arbitrary remote webview frame never passes.
+ */
+export function isLoopbackFrameUrl(frameUrl: string): boolean {
+    let frame: URL;
+    try {
+        frame = new URL(frameUrl);
+    } catch {
+        return false;
+    }
+    if (frame.protocol !== "http:" && frame.protocol !== "https:") {
+        return false;
+    }
+    return isLoopbackHostname(frame.hostname);
+}

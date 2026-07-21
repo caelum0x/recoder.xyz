@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from "vitest";
-import { isBackendFrameOrigin } from "./cockpit-origin";
+import { isBackendFrameOrigin, isLoopbackFrameUrl } from "./cockpit-origin";
 
 const Backend = "http://127.0.0.1:3100";
 
@@ -53,5 +53,28 @@ describe("isBackendFrameOrigin", () => {
     it("matches identical non-loopback hostnames (packaged custom host) but never mixes them with loopback", () => {
         expect(isBackendFrameOrigin("http://backend.internal:3100/", "http://backend.internal:3100")).toBe(true);
         expect(isBackendFrameOrigin("http://backend.internal:3100/", Backend)).toBe(false);
+    });
+});
+
+describe("isLoopbackFrameUrl", () => {
+    it("accepts loopback http frames on any port (readiness-independent status gate)", () => {
+        expect(isLoopbackFrameUrl("http://127.0.0.1:3100/cockpit/")).toBe(true);
+        expect(isLoopbackFrameUrl("http://localhost:3100/cockpit/")).toBe(true);
+        expect(isLoopbackFrameUrl("http://[::1]:41733/cockpit/")).toBe(true);
+    });
+
+    it("rejects remote origins even over https", () => {
+        expect(isLoopbackFrameUrl("https://evil.example.com/")).toBe(false);
+        expect(isLoopbackFrameUrl("http://localhost.evil.example/")).toBe(false);
+    });
+
+    it("rejects non-http(s) schemes", () => {
+        expect(isLoopbackFrameUrl("file:///x")).toBe(false);
+        expect(isLoopbackFrameUrl("chrome://settings")).toBe(false);
+    });
+
+    it("rejects unparseable/empty urls without throwing", () => {
+        expect(isLoopbackFrameUrl("")).toBe(false);
+        expect(isLoopbackFrameUrl("garbage")).toBe(false);
     });
 });

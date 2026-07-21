@@ -146,6 +146,7 @@ export function readConfig(): CockpitConfig {
     resolveToken: injected?.resolveToken,
     refreshToken: injected?.refreshToken,
     signOut: injected?.signOut,
+    backendStatus: injected?.backendStatus,
   };
 }
 
@@ -167,6 +168,27 @@ export function hasDesktopDeviceLogin(): boolean {
 /** True when the desktop shell exposes the sign-out bridge. */
 export function hasDesktopSignOut(): boolean {
   return typeof readConfig().signOut === 'function';
+}
+
+/** True when the desktop shell exposes the redacted backend-phase bridge. */
+export function hasDesktopBackendStatus(): boolean {
+  return typeof readConfig().backendStatus === 'function';
+}
+
+/**
+ * Read the redacted embedded-backend supervisor phase, or null when the bridge
+ * is absent (plain browser / dev) or the call fails. Degrade-truthful: any
+ * failure resolves to null so the cockpit falls back to its generic banner
+ * rather than surfacing a fabricated phase.
+ */
+export async function readBackendStatus(): Promise<import('../types').BackendPhaseSnapshot | null> {
+  const { backendStatus } = readConfig();
+  if (typeof backendStatus !== 'function') return null;
+  try {
+    return await backendStatus();
+  } catch {
+    return null;
+  }
 }
 
 /** The signed-in display identity (email/plan), or null when unknown. */

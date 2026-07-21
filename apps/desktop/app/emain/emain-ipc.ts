@@ -19,8 +19,9 @@ import {
     incrementTermCommandsWsl,
     setWasActive,
 } from "./emain-activity";
-import { isBackendFrameOrigin } from "./cockpit-origin";
-import { getBackendAuth } from "./emain-backend";
+import { projectBackendStatus } from "./backend-status-view";
+import { isBackendFrameOrigin, isLoopbackFrameUrl } from "./cockpit-origin";
+import { getBackendAuth, getBackendStatus } from "./emain-backend";
 import { getDeviceAuthManager } from "./emain-device-auth";
 import { createBuilderWindow, getAllBuilderWindows, getBuilderWindowByWebContentsId } from "./emain-builder";
 import { callWithOriginalXdgCurrentDesktopAsync, unamePlatform } from "./emain-platform";
@@ -214,6 +215,19 @@ export function initIpcHandlers() {
         // a signed-in user lands straight on the board (no first-run gate).
         const identity = getDeviceAuthManager().getIdentity();
         return { backendUrl: auth.backendUrl, token: auth.apiKey, identity: identity ?? undefined };
+    });
+    // Redacted, secret-free supervisor-phase projection for the cockpit's
+    // "backend unreachable" banner. It names a local log path (no key/URL), so
+    // it is gated to the embedded cockpit (a loopback frame) rather than
+    // origin-matched against the READY backend — because auth (and thus the
+    // backend origin) is null exactly during starting/crashed/failed, the phases
+    // this must report. Absent supervisor ⇒ null (the cockpit keeps its generic
+    // banner). An arbitrary remote webview frame gets null.
+    electron.ipcMain.handle("recoder:backend-status", (event) => {
+        if (!isLoopbackFrameUrl(event.senderFrame?.url ?? "")) {
+            return null;
+        }
+        return projectBackendStatus(getBackendStatus());
     });
     // Device-flow auth bridge (cockpit SignIn). Origin-gated exactly like
     // cockpit-config: only the page served FROM the embedded backend may drive
