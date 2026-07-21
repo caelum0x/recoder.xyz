@@ -217,7 +217,19 @@ export class AgentOsComposer implements AgentOsModule {
     // (unhandled tool nodes fail) and no other tool node's behaviour changes.
     const defaultDriver = new AgentOsWorkflowRunnerDriver({
       ports: {
-        runBrowserCheck: createBrowserCheckWorkflowHandler({ client: deps.browserEngine ?? null }),
+        // The `browser-check` handler is wired only when bootstrap injects the
+        // browser-verification runner (the engines `executeBrowserVerification`).
+        // Absent ⇒ no handler, so a `browser-check` node degrades to a truthful
+        // `skipped` (unhandled) — the same posture as a null engine, and agent-os
+        // holds no cross-domain value edge into the engines executor.
+        ...(deps.browserVerifyRunner
+          ? {
+              runBrowserCheck: createBrowserCheckWorkflowHandler({
+                client: deps.browserEngine ?? null,
+                runBrowserVerify: deps.browserVerifyRunner,
+              }),
+            }
+          : {}),
         ...(deps.nativeWorkflowEngine
           ? { executeTool: createNativeWorkflowHandler(deps.nativeWorkflowEngine) }
           : {}),

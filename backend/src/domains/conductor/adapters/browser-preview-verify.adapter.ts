@@ -17,10 +17,8 @@
  * law (engine-down mid-run ⇒ `skipped` degrade; a real page break ⇒ `failed`).
  */
 import type { EngineClientPort } from '../../engines/ports/engine-client.port.js';
-import {
-  executeBrowserVerification,
-  type BrowserVerificationRun,
-} from '../../engines/adapters/sidecar/browser-verification.executor.js';
+import type { BrowserVerificationRun } from '../../engines/adapters/sidecar/browser-verification.executor.js';
+import type { BrowserVerifyRunner } from '../ports/browser-verify.port.js';
 import type {
   PreviewEvidenceArtifact,
   PreviewVerification,
@@ -42,16 +40,20 @@ const NO_ENGINE_REASON =
 export const DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS = 15_000;
 
 /**
- * Build the preview verifier over a browser-use client. Pure over its dep — the
- * composer wires one per process. A null client yields the truthful-skip verifier.
+ * Build the preview verifier over a browser-use client + the injected
+ * `BrowserVerifyRunner` (the engines `executeBrowserVerification`, bound at the
+ * composition root). Pure over its deps — the composer wires one per process. A
+ * null client (or an absent runner) yields the truthful-skip verifier; the
+ * conductor holds no cross-domain value edge into the engines executor.
  */
 export function createBrowserPreviewVerifier(
   client: EngineClientPort | null,
+  runBrowserVerify?: BrowserVerifyRunner,
 ): PreviewVerifyPort {
   return {
     async verify(request: PreviewVerifyRequest): Promise<PreviewVerification> {
-      if (!client) return skipped(NO_ENGINE_REASON);
-      const run = await executeBrowserVerification(client, {
+      if (!client || !runBrowserVerify) return skipped(NO_ENGINE_REASON);
+      const run = await runBrowserVerify(client, {
         url: request.url,
         ...(request.taskId ? { taskId: request.taskId } : {}),
         ...(request.assertions && request.assertions.length > 0

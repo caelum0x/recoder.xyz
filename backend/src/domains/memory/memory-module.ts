@@ -97,7 +97,10 @@ export class MemoryComposer implements MemoryModule {
     const sidecar = cfg.mem0SidecarUrl
       ? createMem0SidecarClient(cfg.mem0SidecarUrl)
       : null;
-    this.mem0 = createMem0Adapter({ sidecar });
+    this.mem0 = createMem0Adapter({
+      sidecar,
+      ...(deps.mem0Engine ? { mem0Engine: deps.mem0Engine } : {}),
+    });
     // The beads module facet over the INJECTED engines transport (the one `bd`
     // spawner) — memory never spawns `bd` or resolves the binary itself.
     this.issueGraphSvc = createIssueGraphService({

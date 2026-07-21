@@ -22,6 +22,9 @@ import type { BrowserExtPort } from '../../engines/adapters/sidecar/browser-ext.
 import { fail, ok, up, type InvokeResult } from '../../engines/types.js';
 import { AgentOsWorkflowRunnerDriver } from '../adapters/agent-os-workflow-runner.driver.js';
 import { createBrowserCheckWorkflowHandler } from '../adapters/browser-check-workflow.handler.js';
+// The real engines executor, injected as the `BrowserVerifyRunner` port (tests may
+// value-import across domains; bootstrap does the same at the composition root).
+import { executeBrowserVerification } from '../../engines/adapters/sidecar/browser-verification.executor.js';
 
 type Op = 'navigate' | 'extract' | 'screenshot';
 type OpHandler = (input: Record<string, unknown>) => InvokeResult<unknown>;
@@ -69,7 +72,7 @@ const CONTEXT = { workflowRunId: 'run-1' } as unknown as WorkflowExecutionContex
 describe('createBrowserCheckWorkflowHandler (direct — the runBrowserCheck port)', () => {
   it('FIRES the engine (navigate→extract→screenshot) and attaches evidence artifacts', async () => {
     const { client, ops } = recordingClient(HEALTHY);
-    const handler = createBrowserCheckWorkflowHandler({ client });
+    const handler = createBrowserCheckWorkflowHandler({ runBrowserVerify: executeBrowserVerification, client });
 
     const result = await handler(
       browserCheckNode({
@@ -98,7 +101,7 @@ describe('createBrowserCheckWorkflowHandler (direct — the runBrowserCheck port
       ...HEALTHY,
       extract: () => ok({ status: 'ok', text: 'totally different content' }),
     });
-    const handler = createBrowserCheckWorkflowHandler({ client });
+    const handler = createBrowserCheckWorkflowHandler({ runBrowserVerify: executeBrowserVerification, client });
 
     const result = await handler(
       browserCheckNode({ browserChecks: [{ url: 'https://x', assertions: [{ expected: 'deploy succeeded' }] }] }),
@@ -112,7 +115,7 @@ describe('createBrowserCheckWorkflowHandler (direct — the runBrowserCheck port
   });
 
   it('degrades to a truthful `skipped` (never a faked pass) when no engine is wired', async () => {
-    const handler = createBrowserCheckWorkflowHandler({ client: null });
+    const handler = createBrowserCheckWorkflowHandler({ runBrowserVerify: executeBrowserVerification, client: null });
 
     const result = await handler(
       browserCheckNode({ browserChecks: [{ url: 'https://x', assertions: [{ expected: 'ok' }] }] }),
@@ -128,7 +131,7 @@ describe('createBrowserCheckWorkflowHandler (direct — the runBrowserCheck port
     const { client } = recordingClient({
       navigate: () => fail('sidecar down', 'unavailable'),
     });
-    const handler = createBrowserCheckWorkflowHandler({ client });
+    const handler = createBrowserCheckWorkflowHandler({ runBrowserVerify: executeBrowserVerification, client });
 
     const result = await handler(
       browserCheckNode({ browserChecks: [{ url: 'https://x', assertions: [{ expected: 'ok' }] }] }),
@@ -159,7 +162,7 @@ describe('createBrowserCheckWorkflowHandler (direct — the runBrowserCheck port
         return ok({});
       },
     };
-    const handler = createBrowserCheckWorkflowHandler({ client, ext });
+    const handler = createBrowserCheckWorkflowHandler({ runBrowserVerify: executeBrowserVerification, client, ext });
 
     const result = await handler(
       browserCheckNode({ researchTask: { task: 'how many pricing tiers are shown?', maxSteps: 5 } }),
@@ -176,7 +179,7 @@ describe('browser-check FIRES through the real AgentOsWorkflowRunnerDriver (disp
   it('runs a browser-check node in the DAG walk and lands evidence on the run', async () => {
     const { client, ops } = recordingClient(HEALTHY);
     const driver = new AgentOsWorkflowRunnerDriver({
-      ports: { runBrowserCheck: createBrowserCheckWorkflowHandler({ client }) },
+      ports: { runBrowserCheck: createBrowserCheckWorkflowHandler({ runBrowserVerify: executeBrowserVerification, client }) },
     });
 
     const run = await driver.start(
@@ -218,7 +221,7 @@ describe('browser-check FIRES through the real AgentOsWorkflowRunnerDriver (disp
 describe('browser-check regression-lock — multiplicity + run_task truthful-degrade', () => {
   it('fires ONE executor cycle + a screenshot+summary evidence pair PER browserChecks[] entry', async () => {
     const { client, ops } = recordingClient(HEALTHY);
-    const handler = createBrowserCheckWorkflowHandler({ client });
+    const handler = createBrowserCheckWorkflowHandler({ runBrowserVerify: executeBrowserVerification, client });
     const urls = ['https://a.preview.example', 'https://b.preview.example', 'https://c.preview.example'];
 
     const result = await handler(
@@ -252,7 +255,7 @@ describe('browser-check regression-lock — multiplicity + run_task truthful-deg
   it('lands N evidence artifacts on the RUN through the real dispatch driver', async () => {
     const { client, ops } = recordingClient(HEALTHY);
     const driver = new AgentOsWorkflowRunnerDriver({
-      ports: { runBrowserCheck: createBrowserCheckWorkflowHandler({ client }) },
+      ports: { runBrowserCheck: createBrowserCheckWorkflowHandler({ runBrowserVerify: executeBrowserVerification, client }) },
     });
     const urls = ['https://one.example', 'https://two.example'];
 
@@ -286,7 +289,7 @@ describe('browser-check regression-lock — multiplicity + run_task truthful-deg
         return ok({});
       },
     };
-    const handler = createBrowserCheckWorkflowHandler({ client, ext });
+    const handler = createBrowserCheckWorkflowHandler({ runBrowserVerify: executeBrowserVerification, client, ext });
 
     const result = await handler(
       browserCheckNode({ browserChecks: [{ url: 'https://x', assertions: [{ expected: 'deploy succeeded' }] }] }),
@@ -315,7 +318,7 @@ describe('browser-check regression-lock — multiplicity + run_task truthful-deg
         return ok({});
       },
     };
-    const handler = createBrowserCheckWorkflowHandler({ client, ext });
+    const handler = createBrowserCheckWorkflowHandler({ runBrowserVerify: executeBrowserVerification, client, ext });
 
     const result = await handler(browserCheckNode({ researchTask: { task: 'how many tiers?' } }), CONTEXT);
 
@@ -329,7 +332,7 @@ describe('browser-check regression-lock — multiplicity + run_task truthful-deg
 
   it('is a truthful `skipped` for a researchTask when no deep-op sidecar is wired', async () => {
     const { client } = recordingClient(HEALTHY);
-    const handler = createBrowserCheckWorkflowHandler({ client, ext: null });
+    const handler = createBrowserCheckWorkflowHandler({ runBrowserVerify: executeBrowserVerification, client, ext: null });
 
     const result = await handler(browserCheckNode({ researchTask: { task: 'how many tiers?' } }), CONTEXT);
 

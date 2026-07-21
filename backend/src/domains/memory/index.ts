@@ -42,6 +42,7 @@ import type { RelateService } from './lifecycle/relate.js';
 import type { FetchLike } from './vector-store.js';
 import type { ColbertFetch } from './adapters/colbert-sidecar.client.js';
 import type { EmbeddingPort } from './ports/embedding.port.js';
+import type { Mem0EnginePort } from './ports/mem0-engine.port.js';
 import type { LanceModuleLoader } from './adapters/lance-napi.client.js';
 
 /** Dependencies injected by bootstrap (after persistence + identity + governance). */
@@ -62,6 +63,12 @@ export interface MemoryModuleDeps {
    * every issue-graph verb truthfully (empty reads, refused writes).
    */
   readonly beadsEngine: EngineClientPort | null;
+  /**
+   * The engines mem0 client, shaped as the consumer-owned `Mem0EnginePort` by
+   * bootstrap (NO cross-domain value import here). Absent ⇒ the mem0 adapter
+   * degrades to a truthful `available:false` engine (empty recall / down health).
+   */
+  readonly mem0Engine?: Mem0EnginePort;
   /** Not-yet-in-AppConfig memory values (Qdrant/embedder/colbert/mem0 URLs+keys). */
   readonly overrides?: MemoryConfigOverrides;
   /** Injectable fetch for the embedding + vector adapters (tests). */

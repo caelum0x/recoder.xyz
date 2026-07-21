@@ -21,6 +21,8 @@ import type { EngineClientPort } from '../../engines/ports/engine-client.port.js
 import type { EngineCall } from '../../engines/ports/engine-client.port.js';
 import type { InvokeResult } from '../../engines/types.js';
 import { createBrowserPreviewVerifier } from '../adapters/browser-preview-verify.adapter.js';
+// The real engines executor, injected as the conductor `BrowserVerifyRunner` port.
+import { executeBrowserVerification } from '../../engines/adapters/sidecar/browser-verification.executor.js';
 import {
   verifyWorkspacePreview,
   PREVIEW_VERIFY_ACTION,
@@ -87,7 +89,7 @@ function makeDeps(
 ): PreviewVerifyDeps {
   return {
     gate,
-    verifier: createBrowserPreviewVerifier(client),
+    verifier: createBrowserPreviewVerifier(client, executeBrowserVerification),
     getWorkspace: async () => workspace,
   };
 }
