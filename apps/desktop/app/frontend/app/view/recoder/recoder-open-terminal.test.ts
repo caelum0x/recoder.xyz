@@ -15,13 +15,15 @@ import {
     openWorkspaceTerminal,
     parseOpenWorkspaceTerminalPayload,
     resolveConductorTmuxBin,
+    resolveConductorTmuxServer,
+    sanitizeTmuxSocket,
 } from "./recoder-open-terminal";
 
 const createBlockMock = vi.mocked(createBlock);
 
-function mockHealthFetch(tmuxBin: unknown) {
+function mockHealthFetch(tmuxBin: unknown, tmuxSocket?: unknown) {
     return vi.fn().mockResolvedValue({
-        json: async () => ({ data: { substrate: { tmuxBin } } }),
+        json: async () => ({ data: { substrate: { tmuxBin, tmuxSocket } } }),
     });
 }
 
@@ -79,6 +81,55 @@ describe("buildAttachBlockMeta", () => {
         const meta = buildAttachBlockMeta({ sessionName: "s1" }, "tmux");
         expect(meta).not.toHaveProperty("cmd:cwd");
     });
+
+    it("prepends -S <socket> as a global flag so attach hits the conductor's server", () => {
+        const meta = buildAttachBlockMeta({ sessionName: "conductor-s1" }, "/pin/tmux", "/tmp/tmux-501/default");
+        expect(meta["cmd:args"]).toEqual(["-S", "/tmp/tmux-501/default", "attach-session", "-t", "conductor-s1"]);
+    });
+
+    it("omits -S when the socket is unknown (falls back to tmux's default server)", () => {
+        const meta = buildAttachBlockMeta({ sessionName: "s1" }, "/pin/tmux");
+        expect(meta["cmd:args"]).toEqual(["attach-session", "-t", "s1"]);
+    });
+});
+
+describe("sanitizeTmuxSocket", () => {
+    it("keeps a plausible absolute socket path", () => {
+        expect(sanitizeTmuxSocket("/tmp/tmux-501/default")).toBe("/tmp/tmux-501/default");
+    });
+
+    it("drops empty, flag-shaped, null-byte, and non-string sockets", () => {
+        expect(sanitizeTmuxSocket("")).toBeUndefined();
+        expect(sanitizeTmuxSocket("  ")).toBeUndefined();
+        expect(sanitizeTmuxSocket("-L evil")).toBeUndefined();
+        expect(sanitizeTmuxSocket("/tmp/a\0b")).toBeUndefined();
+        expect(sanitizeTmuxSocket(42)).toBeUndefined();
+        expect(sanitizeTmuxSocket(null)).toBeUndefined();
+    });
+});
+
+describe("resolveConductorTmuxServer", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("sources the pinned binary AND default socket from conductor health", async () => {
+        vi.stubGlobal("fetch", mockHealthFetch("/engines/tmux/bin/tmux", "/tmp/tmux-501/default"));
+        await expect(resolveConductorTmuxServer()).resolves.toEqual({
+            tmuxBin: "/engines/tmux/bin/tmux",
+            tmuxSocket: "/tmp/tmux-501/default",
+        });
+    });
+
+    it("omits the socket when health reports it unknown (null)", async () => {
+        vi.stubGlobal("fetch", mockHealthFetch("/pin/tmux", null));
+        await expect(resolveConductorTmuxServer()).resolves.toEqual({ tmuxBin: "/pin/tmux" });
+    });
+
+    it("falls back to PATH tmux with no socket when the backend is unreachable", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("down")));
+        await expect(resolveConductorTmuxServer()).resolves.toEqual({ tmuxBin: "tmux" });
+    });
 });
 
 describe("resolveConductorTmuxBin", () => {
@@ -90,7 +141,7 @@ describe("resolveConductorTmuxBin", () => {
         vi.unstubAllGlobals();
     });
 
-    it("uses the conductor-pinned tmux from health/full", async () => {
+    it("uses the conductor-pinned tmux from /api/conductor/health", async () => {
         await expect(resolveConductorTmuxBin()).resolves.toBe("/engines/tmux/bin/tmux");
     });
 
@@ -126,6 +177,25 @@ describe("openWorkspaceTerminal", () => {
         await openWorkspaceTerminal({ sessionName: "s1" });
         expect(createBlockMock).toHaveBeenCalledWith({
             meta: expect.objectContaining({ cmd: "/pin/tmux" }),
+        });
+    });
+
+    it("attaches on the conductor's socket when health reports one (no caller bin)", async () => {
+        vi.stubGlobal("fetch", mockHealthFetch("/pin/tmux", "/tmp/tmux-501/default"));
+        await openWorkspaceTerminal({ sessionName: "conductor-s1" });
+        expect(createBlockMock).toHaveBeenCalledWith({
+            meta: expect.objectContaining({
+                cmd: "/pin/tmux",
+                "cmd:args": ["-S", "/tmp/tmux-501/default", "attach-session", "-t", "conductor-s1"],
+            }),
+        });
+    });
+
+    it("ignores the socket for a caller-provided (trusted) bin — hub path unchanged", async () => {
+        vi.stubGlobal("fetch", mockHealthFetch("/pin/tmux", "/tmp/tmux-501/default"));
+        await openWorkspaceTerminal({ sessionName: "s1" }, "/custom/tmux");
+        expect(createBlockMock).toHaveBeenCalledWith({
+            meta: expect.objectContaining({ cmd: "/custom/tmux", "cmd:args": ["attach-session", "-t", "s1"] }),
         });
     });
 
