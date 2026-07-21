@@ -19,6 +19,7 @@
  *   POST   /api/conductor/workspaces/:id/merge    merge into base, gh or local (GATED)
  *   POST   /api/conductor/workspaces/:id/archive  teardown + archive (GATED)
  *   POST   /api/conductor/workspaces/:id/preview-url  persist sniffed preview URL (GATED)
+ *   POST   /api/conductor/workspaces/:id/preview-verify  verify the stored preview URL (GATED)
  *   GET    /api/conductor/substrates              truthful per-substrate availability
  *   GET    /api/conductor/runtimes                installed agent CLIs (PATH-probed)
  *   GET    /api/conductor/github/status           GitHub connection + identity (token-free)
@@ -41,6 +42,8 @@ import type { AuthMiddleware } from '../../identity/middleware/authenticate.midd
 import type { WorkspaceState, WorkspaceSubstrate } from '@recoder/agent-os';
 import type { ConductorModule } from '../index.js';
 import type { CreateConductorWorkspaceInput, ConductorWriteResult } from '../conductor-module.js';
+import type { PreviewVerifyOptions } from '../services/preview-verify.service.js';
+import type { PreviewVerifyAssertion } from '../ports/preview-verify.port.js';
 
 export interface ConductorRouterDeps {
   readonly module: ConductorModule;
@@ -305,6 +308,23 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     }),
   );
 
+  // VERIFY the persisted preview URL — GATED (`workspace.preview_verify`, a SECOND
+  // gate independent of the `workspace.preview_url` write). The awaited twin of the
+  // fire-and-forget auto-verify `setPreviewUrl` fires: one bounded browser run
+  // navigates the preview, asserts expected text, captures an evidence screenshot,
+  // and seals the summary + screenshot artifact ids into the durable audit chain.
+  // Degrade-truthful: no driver / no stored preview URL ⇒ a truthful `skipped` or
+  // `ok:false` verification — never a fabricated pass. A gate deny is a truthful 403.
+  router.post(
+    '/workspaces/:id/preview-verify',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const options = readPreviewVerifyOptions(asObject(req.body ?? {}));
+      const result = await module.verifyPreview(req.params.id, req.principal!, options);
+      finishWrite(res, result, { key: 'verification' });
+    }),
+  );
+
   // Selectable runtimes: installed agent CLIs (fresh PATH probe per request so
   // the cockpit's "N agents ready" is truthful, never a cached assumption) PLUS
   // the native in-process openfang runtime with its live engine availability.
@@ -465,6 +485,30 @@ function requireString(body: Record<string, unknown>, key: string): string {
     throw createError(ErrorCode.VALIDATION_ERROR, `\`${key}\` is required`);
   }
   return value;
+}
+
+/**
+ * Parse the OPTIONAL preview-verify options off a request body. Every field is
+ * optional (a bare `POST` verifies with the adapter's bounded defaults); only
+ * well-typed entries are forwarded, everything else is dropped (never trusted).
+ */
+function readPreviewVerifyOptions(body: Record<string, unknown>): PreviewVerifyOptions {
+  const assertions: PreviewVerifyAssertion[] = Array.isArray(body.assertions)
+    ? body.assertions.flatMap((entry) => {
+        if (entry === null || typeof entry !== 'object') return [];
+        const expected = (entry as { expected?: unknown }).expected;
+        if (typeof expected !== 'string' || expected.length === 0) return [];
+        const target = (entry as { target?: unknown }).target;
+        return [{ expected, ...(typeof target === 'string' ? { target } : {}) }];
+      })
+    : [];
+  return {
+    ...(assertions.length > 0 ? { assertions } : {}),
+    ...(typeof body.screenshot === 'boolean' ? { screenshot: body.screenshot } : {}),
+    ...(typeof body.timeoutMs === 'number' && Number.isFinite(body.timeoutMs) && body.timeoutMs > 0
+      ? { timeoutMs: body.timeoutMs }
+      : {}),
+  };
 }
 
 function optionalString(value: unknown): string | undefined {
