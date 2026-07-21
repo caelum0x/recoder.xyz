@@ -25,9 +25,14 @@ import type { CoordinationAdmissionPort } from './ports/coordination-admission.p
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
 import type { SquadIssuePort } from './ports/squad-issue.port.js';
 import type { SquadAutopilotService } from './services/squad-autopilot.service.js';
+import type { PolicyUpdatedListener } from './services/policy-update.emitter.js';
 import type { AgentOsDeps } from './types.js';
 
 export type { AgentOsDeps } from './types.js';
+export type {
+  PolicyUpdatedEvent,
+  PolicyUpdatedListener,
+} from './services/policy-update.emitter.js';
 export type { SquadConductorPort, SquadDispatchRequest, SquadDispatchResult } from './ports/squad-autopilot.port.js';
 export type {
   SquadIssuePort,
@@ -78,6 +83,14 @@ export interface AgentOsModule {
    * agent-os). No-op (logged) when the autopilot is off.
    */
   attachIssueGraph(port: SquadIssuePort): void;
+  /**
+   * Register a `policy.updated` listener (§4c). Fired when a forbidden/secret-path
+   * or approval policy artifact changes (a space upsert / policy PUT); bootstrap
+   * wires the governance kernel hot-swap hook here (`governance.reloadPolicies`)
+   * so the edit takes effect for subsequent `decide()`/`enforceTool` without a
+   * restart. Fire-and-forget: a faulted listener never blocks the policy write.
+   */
+  onPolicyUpdated(listener: PolicyUpdatedListener): void;
   /** Truthful component health (repository / outbox / instruction compiler). */
   health(): Promise<ComponentHealth>;
   /** Boot hook — starts the outbox drain loop (idempotent). */
