@@ -144,6 +144,10 @@ import {
   type CompareDeps,
   type CompareView,
 } from './services/compare.service.js';
+import type {
+  WorkspaceGridPort,
+  GroupGridArrangement,
+} from './ports/workspace-grid.port.js';
 
 /** The create request the routes/callers build (createdBy is stamped from the principal). */
 export type CreateConductorWorkspaceInput = Omit<CreateWorkspaceInput, 'createdBy'>;
@@ -250,6 +254,13 @@ export class ConductorComposer implements ConductorModule {
   private readonly repoSetup: RepoSetupService;
   /** Workspace pull-request status via the `gh` CLI (degrade-truthful, read-only). */
   private readonly prStatus: PrStatusService;
+  /**
+   * OPTIONAL dmux LAYOUT-brain seam (F3 compare/parallel grid). Absent / dmux not
+   * built ⇒ the compare read stays hint-less and `arrangeCompareGrid` returns a
+   * truthful `null` (never a fabricated grid). Read in the compare wrappers +
+   * the governed `arrangeCompareGrid`.
+   */
+  private readonly workspaceGrid?: WorkspaceGridPort;
   private started = false;
 
   constructor(deps: ConductorModuleDeps) {
@@ -267,6 +278,7 @@ export class ConductorComposer implements ConductorModule {
     this.steerTransport = deps.steerTransport;
     this.mcpInject = deps.mcpInject;
     this.onDeliveryFeedback = deps.onDeliveryFeedback;
+    this.workspaceGrid = deps.workspaceGrid;
     this.checkpointStore = deps.checkpointStore ?? createInMemoryCheckpointStore();
 
     // Per-repo setup script: config seam (governed setScript/getScript) + the
@@ -1346,11 +1358,85 @@ export class ConductorComposer implements ConductorModule {
   }
 
   async compareTaskGroup(taskGroup: string): Promise<CompareView> {
-    return compareTaskGroupOp(this.compareDeps(), taskGroup);
+    const view = await compareTaskGroupOp(this.compareDeps(), taskGroup);
+    return this.withGridHint(view);
   }
 
   async workspaceSiblings(workspaceId: string): Promise<CompareView | null> {
-    return workspaceSiblingsOp(this.compareDeps(), workspaceId);
+    const view = await workspaceSiblingsOp(this.compareDeps(), workspaceId);
+    return view ? this.withGridHint(view) : view;
+  }
+
+  /**
+   * Enrich a compare read with the READ-ONLY operator-attach hint (never a
+   * mutation — the pure service stays substrate-free). Degrade-truthful: no grid
+   * seam, a singleton/ungrouped view, or no repo/sessions ⇒ the identical
+   * hint-less view; `attachHint` faulting ⇒ the view unchanged. The `attachCommand`
+   * half is tenant-gated inside the adapter (desktop-only); `visibleSessions`
+   * (intersected to the group) is always safe.
+   */
+  private async withGridHint(view: CompareView): Promise<CompareView> {
+    if (!this.workspaceGrid || view.count < 2) return view; // singleton/ungrouped ⇒ no grid
+    const sessions = view.siblings
+      .map((s) => s.sessionName)
+      .filter((name): name is string => typeof name === 'string' && name.trim().length > 0);
+    const repoPath = this.groupRepoPath(view);
+    if (!repoPath || sessions.length === 0) return view; // truthful: no repo/sessions ⇒ no hint
+    const hint = await this.workspaceGrid
+      .attachHint({ repoPath, groupSessionNames: sessions })
+      .catch(() => null);
+    return hint ? { ...view, grid: hint } : view; // dmux absent/fault ⇒ unchanged view
+  }
+
+  /**
+   * A real member worktree path the operator console launches in (dmux renders
+   * the box-wide `recoder-*` sessions from any cwd). The FIRST sibling with a real
+   * `worktreePath` — never a fabricated/shared repoPath; `undefined` when none has
+   * one (⇒ no hint).
+   */
+  private groupRepoPath(view: CompareView): string | undefined {
+    for (const sibling of view.siblings) {
+      if (typeof sibling.worktreePath === 'string' && sibling.worktreePath.trim().length > 0) {
+        return sibling.worktreePath;
+      }
+    }
+    return undefined;
+  }
+
+  async arrangeCompareGrid(
+    taskGroup: string,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<GroupGridArrangement | null>> {
+    const action = 'workspace.grid';
+    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
+      target: { environment: 'conductor' },
+      metadata: { taskGroup },
+    });
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    // dmux absent ⇒ truthful null (no grid) — the write is a governed no-op.
+    if (!this.workspaceGrid) return { ok: true, verdict, value: null };
+
+    const view = await compareTaskGroupOp(this.compareDeps(), taskGroup);
+    const worktrees = view.siblings
+      .filter((s): s is typeof s & { worktreePath: string } => typeof s.worktreePath === 'string')
+      .map((s) => ({ workspaceId: s.workspaceId, worktreePath: s.worktreePath }));
+    // No honest N-way grid to build — never a hollow one-dir grid.
+    if (worktrees.length < 2) return { ok: true, verdict, value: null };
+
+    const arrangement = await this.workspaceGrid
+      .arrangeGrid({ taskGroup, worktrees })
+      .catch(() => null);
+    if (arrangement) {
+      await recordConductorAudit(
+        this.gate,
+        conductorAuditEntry(action, principal, verdict, {
+          taskGroup,
+          sessionName: arrangement.sessionName,
+          paneCount: arrangement.paneCount,
+        }),
+      );
+    }
+    return { ok: true, verdict, value: arrangement }; // null on any tmux fault
   }
 
   async workspaceDiff(workspaceId: string): Promise<WorkspaceDiffView> {

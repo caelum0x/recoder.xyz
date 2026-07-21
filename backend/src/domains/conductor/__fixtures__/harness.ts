@@ -328,6 +328,8 @@ export interface ComposeOptions {
   repoSetupExec?: ConductorModuleDeps['repoSetupExec'];
   /** OPTIONAL live-substrate scan source for reconcile GC (absent ⇒ empty box). */
   substrateScan?: ConductorModuleDeps['substrateScan'];
+  /** OPTIONAL dmux LAYOUT-brain grid seam (absent ⇒ no grid hint, arrange ⇒ null). */
+  workspaceGrid?: ConductorModuleDeps['workspaceGrid'];
 }
 
 /** Compose a conductor module over the in-memory harness. Returns the module + its gate. */
@@ -355,6 +357,7 @@ export function composeConductor(options: ComposeOptions = {}): {
     ...(options.repoSetupStore ? { repoSetupStore: options.repoSetupStore } : {}),
     ...(options.repoSetupExec ? { repoSetupExec: options.repoSetupExec } : {}),
     ...(options.substrateScan ? { substrateScan: options.substrateScan } : {}),
+    ...(options.workspaceGrid ? { workspaceGrid: options.workspaceGrid } : {}),
   });
   return { module, gate };
 }

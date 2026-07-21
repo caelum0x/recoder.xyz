@@ -20,6 +20,7 @@ import { Router } from 'express';
 import { ErrorCode, createError, sendError, sendSuccess, asyncHandler } from '../../../shared/errors.js';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { ConductorModule } from '../index.js';
+import type { ConductorWriteResult } from '../conductor-module.js';
 
 export interface CompareRouterDeps {
   readonly module: ConductorModule;
@@ -61,7 +62,50 @@ export function buildCompareRoutes(deps: CompareRouterDeps): Router {
     }),
   );
 
+  // Arrange the parallel-run group's worktree-bound operator grid (GATED
+  // `workspace.grid`). Unlike the two reads above this MUTATES the shared tmux
+  // server (a dedicated `recoder-group-<taskGroup>` session), so it uses
+  // `authenticateMutating` + the module's governance gate. Degrade-truthful: dmux
+  // absent / <2 real worktrees ⇒ a 200 with `grid:null` (no honest grid to build).
+  router.post(
+    '/workspaces/compare/:taskGroup/grid',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const taskGroup = req.params.taskGroup?.trim();
+      if (!taskGroup) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`taskGroup` path param is required'));
+        return;
+      }
+      const result = await module.arrangeCompareGrid(taskGroup, req.principal!);
+      finishGridWrite(res, result);
+    }),
+  );
+
   return router;
+}
+
+/** Map the governed grid-arrange result onto the response envelope (deny ⇒ 403). */
+function finishGridWrite<T>(res: import('express').Response, result: ConductorWriteResult<T>): void {
+  if (result.ok) {
+    sendSuccess(res, {
+      grid: result.value ?? null,
+      verdict: {
+        effect: result.verdict.effect,
+        tier: result.verdict.tier,
+        degraded: result.verdict.degraded,
+        engine: result.verdict.engine,
+      },
+    });
+    return;
+  }
+  if (result.verdict.effect === 'allow') {
+    sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'grid arrange failed'));
+    return;
+  }
+  sendError(
+    res,
+    createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, result.reason ?? 'blocked by governance gate'),
+  );
 }
 
 /** First non-empty string from a query value (handles the `?k=a&k=b` array form). */

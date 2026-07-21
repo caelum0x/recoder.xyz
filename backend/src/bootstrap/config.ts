@@ -81,6 +81,7 @@ const envSchema = z.object({
   RECODER_TMUX_BUILD_PATH: z.string().optional(),
   CONDUCTOR_WORKTREE_ROOT: z.string().optional(),
   CONDUCTOR_TMUX_CONTROL_MODE: z.string().optional(),
+  CONDUCTOR_DESKTOP_SINGLE_TENANT: z.string().optional(),
   CONDUCTOR_MAX_CONCURRENT: z.coerce.number().int().positive().max(10_000).optional(),
   CONDUCTOR_MAX_CONCURRENT_PER_USER: z.coerce.number().int().positive().max(10_000).optional(),
   CONDUCTOR_MAX_TMUX_SESSIONS: z.coerce.number().int().positive().max(100_000).optional(),
@@ -464,6 +465,9 @@ function buildConfig(env: ParsedEnv, rawEnv: EnvSource): AppConfig {
       path.resolve(process.cwd(), '..', 'apps', 'desktop', 'engines', 'tmux', 'tmux'),
     worktreeRoot: env.CONDUCTOR_WORKTREE_ROOT ?? '/tmp/recoder-worktrees',
     tmuxControlMode: asBool(env.CONDUCTOR_TMUX_CONTROL_MODE, false),
+    // Single-tenant desktop composition (the supervisor sets it) — gates the
+    // box-wide dmux `attachCommand` on the compare read model. Shared/prod: false.
+    desktopSingleTenant: asBool(env.CONDUCTOR_DESKTOP_SINGLE_TENANT, false),
     caps: {
       maxConcurrentWorkspaces: env.CONDUCTOR_MAX_CONCURRENT ?? 10,
       maxConcurrentPerUser: env.CONDUCTOR_MAX_CONCURRENT_PER_USER ?? 5,

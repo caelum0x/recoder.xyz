@@ -17,6 +17,7 @@
  */
 import type { Workspace, WorkspaceState } from '@recoder/agent-os';
 import type { AttentionState, WorkspaceView } from '../types.js';
+import type { GroupAttachHint } from '../ports/workspace-grid.port.js';
 
 /** The metadata key the F3 launch stamps to bind sibling workspaces into one group. */
 export const TASK_GROUP_METADATA_KEY = 'taskGroup';
@@ -53,6 +54,18 @@ export interface SiblingCompareEntry {
   readonly diffStat?: DiffStat;
   /** Truthful reason `diffStat` is absent (no worktree, substrate fault, …). */
   readonly diffStatReason?: string;
+  /**
+   * The sibling's live tmux session name, PROJECTED verbatim from the Workspace
+   * record (absent when never launched) — the operator-grid/attach seam reads it.
+   * Read-only projection: this service computes nothing new.
+   */
+  readonly sessionName?: string;
+  /**
+   * The sibling's isolated worktree path, PROJECTED verbatim from the Workspace
+   * record (absent when never launched / torn down) — the per-pane cwd the
+   * worktree-bound grid binds to. Read-only projection.
+   */
+  readonly worktreePath?: string;
 }
 
 /** The aggregate of one parallel-run group for side-by-side review. */
@@ -63,6 +76,13 @@ export interface CompareView {
   readonly count: number;
   /** The siblings, sorted oldest-first (stable by workspaceId on a tie). */
   readonly siblings: readonly SiblingCompareEntry[];
+  /**
+   * A READ-ONLY operator-attach hint for the group, enriched by the conductor
+   * module AFTER this pure read (never here — this service stays read-only +
+   * substrate-free). Absent when the group is a singleton, dmux is absent, or the
+   * repo/sessions are unknown (truthful degrade — never a fabricated grid).
+   */
+  readonly grid?: GroupAttachHint;
 }
 
 /** The narrow, injectable seams the compare service reads through (no substrate coupling). */
@@ -131,6 +151,10 @@ async function buildEntry(deps: CompareDeps, workspace: Workspace): Promise<Sibl
     updatedAt: workspace.updatedAt,
     ...(diff.stat ? { diffStat: diff.stat } : {}),
     ...(diff.reason ? { diffStatReason: diff.reason } : {}),
+    // Read-only PROJECTION of two fields already on the Workspace record (the
+    // worktree-bound grid + attach seam read them); computes nothing new.
+    ...(workspace.sessionName ? { sessionName: workspace.sessionName } : {}),
+    ...(workspace.worktreePath ? { worktreePath: workspace.worktreePath } : {}),
   };
 }
 
