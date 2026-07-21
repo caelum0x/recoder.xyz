@@ -145,6 +145,13 @@ export class ObservabilityComposer implements ObservabilityModule {
   private readonly log: Logger;
   private alertTimer: ReturnType<typeof setInterval> | null = null;
   private signalsTimer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * Reentrancy guard for the signals poll loop. Each pass now optionally fires the
+   * detector tick (two extra HTTP round-trips) BEFORE `refresh()`, so a slow/hung
+   * sidecar could let `setInterval` enqueue a second pass over the first — which
+   * would overlap refreshes and double-log. This flag makes an in-flight pass skip.
+   */
+  private pollInFlight = false;
 
   constructor(deps: ObservabilityModuleDeps) {
     this.log = deps.logger;
@@ -365,13 +372,20 @@ export class ObservabilityComposer implements ObservabilityModule {
   }
 
   /**
-   * One work-signals poll pass (degrade-safe). Delegates to the service's
-   * `refresh()`, which normalizes each raw sidecar signal to a `RunEvent`, emits
-   * it to the bus, and surfaces needs-you signals to the board. A `down` sidecar
-   * yields an empty, `degraded` batch — logged truthfully, never fabricated.
+   * One work-signals poll pass (degrade-safe). When the detector tick is enabled
+   * it fires the GitHub + Linear sidecar detectors FIRST (so the following
+   * `refresh()` picks up what they just stored), then delegates to the service's
+   * `refresh()`, which normalizes each raw sidecar signal to a `RunEvent`, emits it
+   * to the bus, and surfaces needs-you signals to the board. A `down` sidecar
+   * yields an empty, `degraded` batch — logged truthfully, never fabricated. An
+   * in-flight pass short-circuits (§overlap guard) so a slow refresh/sync can't
+   * stack a second pass or double-log while the sidecar is persistently down.
    */
   private async pollSignalsOnce(): Promise<void> {
+    if (this.pollInFlight) return; // no overlap, no double-log, no double-refresh
+    this.pollInFlight = true;
     try {
+      if (this.cfg.signalsSyncEnabled) await this.runDetectorTick();
       const result = await this.workSignals.refresh();
       if (result.degraded) {
         this.log.debug(
@@ -389,7 +403,22 @@ export class ObservabilityComposer implements ObservabilityModule {
         { err: err instanceof Error ? err.message : String(err) },
         'work-signals poll pass failed',
       );
+    } finally {
+      this.pollInFlight = false;
     }
+  }
+
+  /**
+   * Fire the ops-recorder GitHub + Linear detectors so a following `refresh()`
+   * pulls what they just stored. Folded into `pollSignalsOnce` (one cadence, one
+   * timer) rather than a second overlapping loop. Degrade-truthful and NEVER
+   * throws into the timer: each sync swallows an absent/rejecting sidecar as a
+   * `degraded` no-op, and `allSettled` isolates one detector's failure from the
+   * other. Token absence is the Python detector's concern — it stores nothing,
+   * so the subsequent pull fabricates nothing.
+   */
+  private async runDetectorTick(): Promise<void> {
+    await Promise.allSettled([this.runSignalPush.syncGithub(), this.runSignalPush.syncLinear()]);
   }
 
   /** One alert-evaluation pass over the current fused health (degrade-safe). */

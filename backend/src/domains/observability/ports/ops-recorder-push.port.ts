@@ -57,7 +57,7 @@ export interface OpsRecorderPushResult {
   readonly reason?: string;
 }
 
-/** The result of triggering the sidecar's GitHub sync detector (degrade-truthful). */
+/** The result of triggering a sidecar sync detector (github/linear; degrade-truthful). */
 export interface OpsRecorderSyncResult {
   /** True ONLY when the sidecar accepted the sync trigger (2xx). */
   readonly triggered: boolean;
@@ -80,4 +80,12 @@ export interface OpsRecorderPushPort {
    * is absent — never throws.
    */
   syncGithub(): Promise<OpsRecorderSyncResult>;
+  /**
+   * Trigger the sidecar's `POST /work-signals/sync/linear` detector so the board
+   * reflects current Linear issue state — the twin of {@link syncGithub}. Returns
+   * a `degraded` no-op when the sidecar is absent — never throws. Linear/GitHub
+   * token absence is the Python detector's concern: it detects nothing → stores
+   * nothing → the following `refresh()` pulls nothing (no fabricated signal).
+   */
+  syncLinear(): Promise<OpsRecorderSyncResult>;
 }
