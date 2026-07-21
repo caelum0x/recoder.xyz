@@ -13,6 +13,16 @@
  * hasWaveTerminalBridge() to decide whether to render the action at all.
  */
 
+/**
+ * Shown on a disabled terminal-attach affordance when the cockpit runs outside
+ * the desktop app (plain browser / old shell) and the wave bridge is absent.
+ * Canonical home is here — next to hasWaveTerminalBridge/openWorkspaceTerminal —
+ * so both the per-workspace button and the group-attach action share one string
+ * without either reaching across to a sibling component.
+ */
+export const NO_TERMINAL_BRIDGE_HINT =
+  'Open the Recoder desktop app to use the terminal — this browser has no terminal bridge.';
+
 export interface OpenWorkspaceTerminalRequest {
   /** Conductor tmux session name (workspace.sessionName). */
   sessionName: string;

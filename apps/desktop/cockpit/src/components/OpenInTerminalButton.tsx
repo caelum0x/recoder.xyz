@@ -14,12 +14,16 @@
  *  - the bridge refuses/throws → a truthful inline note next to the button.
  */
 import { useState } from 'preact/hooks';
-import { hasWaveTerminalBridge, openWorkspaceTerminal } from '../lib/wave-bridge';
+import {
+  hasWaveTerminalBridge,
+  openWorkspaceTerminal,
+  NO_TERMINAL_BRIDGE_HINT,
+} from '../lib/wave-bridge';
 import type { Workspace } from '../types';
 
-/** Shown on the disabled affordance when the cockpit runs outside the desktop app. */
-export const NO_TERMINAL_BRIDGE_HINT =
-  'Open the Recoder desktop app to use the terminal — this browser has no terminal bridge.';
+// Canonical declaration moved to lib/wave-bridge (the shared bridge seam);
+// re-exported here to preserve this module's existing importers.
+export { NO_TERMINAL_BRIDGE_HINT } from '../lib/wave-bridge';
 
 interface OpenInTerminalButtonProps {
   workspace: Workspace;
