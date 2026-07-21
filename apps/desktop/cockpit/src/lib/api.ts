@@ -322,6 +322,39 @@ function conductorClient(): ConductorClient {
   });
 }
 
+/** One check line in a preview verification (open / assert / screenshot). */
+export interface PreviewVerifyCheck {
+  readonly tool: string;
+  readonly status: 'passed' | 'failed' | 'skipped';
+  readonly message?: string;
+}
+
+/**
+ * GET /workspaces/:id/preview-verification — the last preview verification
+ * summary, a pure projection over the workspace's persisted
+ * `metadata.previewVerification` (written back by the awaited verifyPreview and
+ * the setPreviewUrl auto-verify). Mirrors backend
+ * conductor/ports/preview-verify.port.ts (PreviewVerificationView).
+ *
+ * `screenshotRef` is ALWAYS `null` in this cut: the screenshot PNG is not
+ * retained (only an opaque artifact id was sealed), so the cockpit shows
+ * "screenshot not retained", never a broken image. A real screenshot artifact
+ * store is a separate future item.
+ */
+export interface PreviewVerificationView {
+  readonly workspaceId: string;
+  readonly status: 'passed' | 'failed' | 'skipped';
+  /** ISO timestamp the verification was sealed. */
+  readonly checkedAt: string;
+  readonly summary: string;
+  /** True when the browser engine was unavailable — the run proved NOTHING. */
+  readonly degraded: boolean;
+  /** The engine's real failure/skip reason when the run degraded or failed. */
+  readonly reason?: string;
+  readonly checks: readonly PreviewVerifyCheck[];
+  readonly screenshotRef: string | null;
+}
+
 export const api = {
   health: () =>
     request<{ available: boolean; git?: boolean; tmux?: boolean; tmuxBin?: string; reason?: string }>(
@@ -436,6 +469,20 @@ export const api = {
     request<unknown>('POST', `/workspaces/${encodeURIComponent(id)}/preview-url`, { url }).then(
       (d) => pick<Workspace>(d, 'workspace'),
     ),
+  /**
+   * The last preview verification summary
+   * (GET /workspaces/:id/preview-verification). A 404 is TRUTHFUL — the
+   * workspace is missing OR was never verified — and resolves to `null`
+   * ("preview not checked"), NEVER a fabricated pass. Any other failure
+   * propagates as an ApiError. Keyed envelope (`data: { verification }`).
+   */
+  previewVerification: (id: string): Promise<PreviewVerificationView | null> =>
+    request<unknown>('GET', `/workspaces/${encodeURIComponent(id)}/preview-verification`)
+      .then((d) => pick<PreviewVerificationView>(d, 'verification'))
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      }),
   openPr: (id: string, body: { title: string; body?: string; base?: string; draft?: boolean }) =>
     request<unknown>('POST', `/workspaces/${encodeURIComponent(id)}/pr`, body).then((d) =>
       pick<CreatePrResult>(d, 'pr'),

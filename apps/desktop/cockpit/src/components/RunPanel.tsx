@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { api } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { extractPreviewUrl } from '../lib/preview-url';
+import { formatPreviewVerifyLine } from '../lib/preview-verify-line';
 import type { ConductorSession, Workspace } from '../types';
 
 interface RunPanelProps {
@@ -43,6 +44,17 @@ function RunningView({
   const output = usePoll(() => api.sessionOutput(session.sessionId, 200), 3000, [session.sessionId]);
   const previewUrl = extractPreviewUrl(output.data?.output);
   const screenRef = useRef<HTMLDivElement>(null);
+
+  // The last preview verification the backend persisted (setPreviewUrl auto-verifies
+  // and writes back a compact summary). Only polled once a preview URL exists so the
+  // "preview checked" line sits under the preview link; a never-verified workspace
+  // is a truthful 404 → null → muted "preview not checked", never a fabricated pass.
+  const verification = usePoll(
+    () => (previewUrl ? api.previewVerification(workspaceId) : Promise.resolve(null)),
+    8000,
+    [workspaceId, previewUrl],
+  );
+  const verifyLine = previewUrl ? formatPreviewVerifyLine(verification.data) : null;
 
   // Keep the live output pinned to the bottom as new lines arrive.
   useEffect(() => {
@@ -78,6 +90,26 @@ function RunningView({
           {busy ? 'Stopping…' : 'Stop'}
         </button>
       </div>
+      {/* Terminal-plain verification line under the preview link — the glyph carries
+          the verdict (no engine name). No screenshot is retained in this cut, so a
+          truthful "screenshot not retained" note stands in for a broken image. */}
+      {verifyLine && (
+        <div class="run-panel-detected run-panel-verify" title={verifyLine.text}>
+          <span class="run-panel-verify-text">{verifyLine.text}</span>
+          {verifyLine.screenshotRef ? (
+            <a
+              class="run-panel-preview"
+              href={verifyLine.screenshotRef}
+              target="_blank"
+              rel="noreferrer"
+            >
+              screenshot ↗
+            </a>
+          ) : verifyLine.screenshotNote ? (
+            <span class="run-panel-verify-shot">· {verifyLine.screenshotNote}</span>
+          ) : null}
+        </div>
+      )}
       {/* Read-only live output of the run's tmux pane over the same HTTP poll
           that feeds the preview sniffer — truthful: errors and emptiness are
           shown as-is, never a fabricated "running" screen. */}
