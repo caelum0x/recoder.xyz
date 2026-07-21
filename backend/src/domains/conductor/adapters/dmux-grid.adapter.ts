@@ -33,11 +33,11 @@ import type {
   GroupWorktree,
   WorkspaceGridPort,
 } from '../ports/workspace-grid.port.js';
+// The conductor namespaces every tmux session under this prefix (single-sourced).
+import { SESSION_PREFIX } from '../session-naming.js';
 
-/** The conductor namespaces every tmux session under this prefix. */
-const CONDUCTOR_SESSION_PREFIX = 'recoder-';
 /** The dedicated operator-grid session for a group is namespaced under this prefix. */
-const GROUP_SESSION_PREFIX = 'recoder-group-';
+const GROUP_SESSION_PREFIX = `${SESSION_PREFIX}group-`;
 
 export interface DmuxGridAdapterDeps {
   /** The engines-domain dmux LAYOUT brain (`engines.dmuxLayout()`). */
@@ -58,7 +58,7 @@ export interface DmuxGridAdapterDeps {
 
 /** Build the {@link WorkspaceGridPort} over the dmux layout brain + engine client. */
 export function createDmuxGridAdapter(deps: DmuxGridAdapterDeps): WorkspaceGridPort {
-  const prefix = deps.sessionPrefix ?? CONDUCTOR_SESSION_PREFIX;
+  const prefix = deps.sessionPrefix ?? SESSION_PREFIX;
   const singleTenant = deps.singleTenant === true;
 
   /** The box-wide visible `recoder-*` sessions, or `null` on any invoke failure. */

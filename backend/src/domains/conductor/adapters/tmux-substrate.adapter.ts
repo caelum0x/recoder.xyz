@@ -37,6 +37,8 @@ import type {
   SubstrateLaunchInput,
 } from '../ports/substrate-registry.port.js';
 import type { ConductorConfig } from '../config.js';
+// The `recoder-<id>` naming contract is single-sourced (golden-locked) here.
+import { tmuxNameFor } from '../session-naming.js';
 
 /** The injectable child-process seam (default: the package's `execFileSafe`). */
 export type ExecFn = (
@@ -44,14 +46,6 @@ export type ExecFn = (
   args: readonly string[],
   options?: ExecOptions,
 ) => Promise<ExecResult>;
-
-/** tmux session names + worktree dirs are namespaced under this prefix. */
-const SESSION_PREFIX = 'recoder-';
-
-/** Deterministic tmux session name for a workspace id (restart-survivable). */
-function tmuxNameFor(id: string): string {
-  return `${SESSION_PREFIX}${id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-}
 
 /**
  * tmux's remain-on-exit dead-pane banner ("Pane is dead (status 0, …)"). We keep
