@@ -61,6 +61,7 @@ import type { InferenceModule, InferenceModuleDeps } from './index.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { PalRoutePlannerPort } from './ports/pal-route.port.js';
+import type { RunInferenceSinkPort } from './ports/run-inference-sink.port.js';
 
 /** A permanently-unavailable vault → the BYOK cache disables (no plaintext cache). */
 function unavailableVault(): KeyVaultPort {
@@ -195,6 +196,17 @@ export class InferenceComposer implements InferenceModule {
    */
   setPalRouter(planner: PalRoutePlannerPort): void {
     this.routingService.setPalRouter(planner);
+  }
+
+  /**
+   * Inject the optional run-inference sink (conductor's single-writer
+   * `recordRunInferenceId`, adapted). Once wired, a `napi`-tier routed
+   * completion carrying a `correlationWorkspaceId` correlates its
+   * `inference_id` back to its workspace so a MERGE can fire real RLHF
+   * feedback. Absent ⇒ a truthful no-op; fire-and-forget, never blocks delivery.
+   */
+  setRunInferenceSink(sink: RunInferenceSinkPort): void {
+    this.routingService.setRunInferenceSink(sink);
   }
 
   /**

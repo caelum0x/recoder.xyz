@@ -34,6 +34,7 @@ import type { InferenceRoutingService } from './services/inference-routing.servi
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { PalRoutePlannerPort } from './ports/pal-route.port.js';
+import type { RunInferenceSinkPort } from './ports/run-inference-sink.port.js';
 import type {
   ByokKeyResolver,
   ByokSecretsPort,
@@ -132,6 +133,20 @@ export interface InferenceModule {
    * default. The inference domain takes no direct pal-engine-package import (§7 gate).
    */
   setPalRouter(planner: PalRoutePlannerPort): void;
+  /**
+   * Inject the OPTIONAL run-inference sink (bootstrap:
+   * `inference.setRunInferenceSink(sink)` backed by conductor's single-writer
+   * `recordRunInferenceId`). When wired, a routed completion that (1) was served
+   * by the `napi` embedded-TensorZero tier AND (2) carries a
+   * `correlationWorkspaceId` emits `(workspaceId, inferenceId, userId)` exactly
+   * once per run, so a MERGED workspace can fire real `task_success` feedback on
+   * a TensorZero-resolvable inference_id. NON-napi ids (loopback/rung-3 BYOK
+   * provider ids like `chatcmpl-…`/`msg_…`) are NOT emitted — the feedback seam
+   * only exists on the napi tier, so a non-napi id would be an unresolvable
+   * anchor. Absent sink ⇒ a truthful no-op. Fire-and-forget; a sink fault NEVER
+   * blocks or fails delivery.
+   */
+  setRunInferenceSink(sink: RunInferenceSinkPort): void;
   /** The BYOK key resolver (delivery-path key resolution + governed store). */
   byokResolver(): ByokKeyResolver;
   /** The routable model catalog. */

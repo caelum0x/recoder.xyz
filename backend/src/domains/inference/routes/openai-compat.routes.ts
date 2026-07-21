@@ -158,12 +158,19 @@ export async function handleChatCompletion(deps: InferenceOpenAiCompatDeps, req:
 
   const model = body.model.trim();
   const userId = req.principal?.userId;
+  // Workspace correlation rides a workspace-scoped base-URL path segment
+  // (`/gateway/ws/:workspaceId/v1/...`) that a headless OpenAI-wire CLI preserves.
+  // Absent on the plain `/gateway/v1/...` mount ⇒ no correlation, no sink emission.
+  const rawWorkspaceId = (req.params as { workspaceId?: unknown } | undefined)?.workspaceId;
+  const correlationWorkspaceId =
+    typeof rawWorkspaceId === 'string' && rawWorkspaceId.trim() ? rawWorkspaceId.trim() : undefined;
   const request = {
     model,
     messages,
     ...(typeof body.temperature === 'number' ? { temperature: body.temperature } : {}),
     ...(typeof body.max_tokens === 'number' ? { maxTokens: body.max_tokens } : {}),
     ...(userId ? { userId } : {}),
+    ...(correlationWorkspaceId ? { correlationWorkspaceId } : {}),
   };
 
   const now = deps.now ?? (() => Math.floor(Date.now() / 1000));
@@ -244,10 +251,17 @@ async function handleStream(
   res.end();
 }
 
-/** Build the OpenAI-compatible sub-router. Mount so `/v1/chat/completions` resolves. */
+/**
+ * Build the OpenAI-compatible sub-router. Mounts the plain `/v1/chat/completions`
+ * PLUS a workspace-correlating variant `/ws/:workspaceId/v1/chat/completions` — a
+ * headless OpenAI-wire CLI pointed at a workspace-scoped base URL preserves the
+ * `ws/<id>` path segment, so the workspace id rides every request with zero
+ * header/SDK cooperation. The plain mount is unaffected (no correlation stamped).
+ */
 export function createOpenAiCompatRouter(deps: InferenceOpenAiCompatDeps): Router {
   const router = Router();
   const auth = deps.authenticateRequest ?? passthrough;
   router.post('/v1/chat/completions', auth, (req, res) => handleChatCompletion(deps, req, res));
+  router.post('/ws/:workspaceId/v1/chat/completions', auth, (req, res) => handleChatCompletion(deps, req, res));
   return router;
 }
