@@ -66,6 +66,7 @@ import type {
   GithubRepo,
   GithubStatus,
   GovernanceAuditTrail,
+  GroupGridArrangement,
   McpHostSummary,
   McpServer,
   McpToolCheckResult,
@@ -95,6 +96,7 @@ import type {
   Workspace,
   WorkspaceDiff,
   WorkspaceTree,
+  WriteVerdictView,
   ZitiHealth,
   ZitiIdentityList,
 } from '../types';
@@ -531,6 +533,23 @@ export const api = {
     request<unknown>('GET', `/workspaces/${encodeURIComponent(id)}/siblings`).then((d) =>
       pick<CompareView>(d, 'compare'),
     ),
+  /**
+   * Arrange the parallel-run group's operator grid — a GOVERNED write
+   * (POST /workspaces/compare/:taskGroup/grid). Degrade-truthful: the console
+   * absent / <2 real worktrees ⇒ a 200 with `grid:null` (no honest grid to
+   * build). A governance deny is a real 403 (AUTHZ_PROJECT_ACCESS_DENIED)
+   * surfaced as an ApiError — the grid write has NO awaiting_approval/409 path.
+   * Returns the keyed `{ grid, verdict }` envelope: `grid` is the opened
+   * operator session on success, or `null` when it degraded.
+   */
+  arrangeCompareGrid: (taskGroup: string) =>
+    request<unknown>(
+      'POST',
+      `/workspaces/compare/${encodeURIComponent(taskGroup)}/grid`,
+    ).then((d) => ({
+      grid: pick<GroupGridArrangement | null>(d, 'grid'),
+      verdict: pick<WriteVerdictView | undefined>(d, 'verdict'),
+    })),
 
   reconcile: () => request<unknown>('POST', '/reconcile'),
   runtimes: () =>

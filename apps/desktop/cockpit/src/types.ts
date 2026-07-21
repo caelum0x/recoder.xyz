@@ -408,6 +408,47 @@ export interface SiblingCompareEntry {
 }
 
 /**
+ * A READ-ONLY operator-attach hint for a parallel-run group — enriched onto the
+ * compare read model when the tmux operator console can see the group's live
+ * sessions. Mirrors `GroupAttachHint` in
+ * backend/src/domains/conductor/ports/workspace-grid.port.ts.
+ *
+ * DEGRADE-TRUTHFUL BY CONTRACT: the console absent / not-built / <2 worktrees /
+ * any tmux fault ⇒ the backend omits this (or sends `null`) — never a fabricated
+ * hint. The cockpit renders NO attach affordance when it is absent or empty.
+ */
+export interface GroupAttachHint {
+  /**
+   * The exact operator attach line — DESKTOP-ONLY (present only in the
+   * single-tenant desktop composition; absent on shared/prod). Intentionally NOT
+   * wired into a raw-command bridge in the cockpit; sessions are attached by name.
+   */
+  attachCommand?: string;
+  /**
+   * The group's live sessions the console can see, already intersected to THIS
+   * group (tenant-safe, always emitted when non-empty). Each is a session name
+   * the wave-bridge can open directly.
+   */
+  visibleSessions: string[];
+}
+
+/**
+ * The result of a GOVERNED grid-arrange write over a parallel-run group. Mirrors
+ * `GroupGridArrangement` in
+ * backend/src/domains/conductor/ports/workspace-grid.port.ts. `sessionName` is a
+ * single real operator session (`recoder-group-<taskGroup>`) the wave-bridge can
+ * open to lay out one pane per sibling worktree.
+ */
+export interface GroupGridArrangement extends GroupAttachHint {
+  /** The dedicated detached operator session the grid was built in. */
+  sessionName: string;
+  /** Per-pane cwds, in pane order == the ordered sibling worktrees (binding proof). */
+  worktreePaths: string[];
+  paneCount: number;
+  layout: 'agent-grid';
+}
+
+/**
  * GET /workspaces/compare — the aggregate of one parallel-run group. A blank or
  * unknown group is a truthful empty view (`taskGroup: null`/count 0), never an
  * error and never invented rows.
@@ -417,6 +458,13 @@ export interface CompareView {
   taskGroup: string | null;
   count: number;
   siblings: SiblingCompareEntry[];
+  /**
+   * READ-ONLY operator-attach hint for the whole group, enriched by the backend
+   * only when the tmux operator console can see the group's live sessions.
+   * ABSENT (undefined) or `null` ⇒ no attach affordance is shown — degrade-safe,
+   * never a broken or fabricated button.
+   */
+  grid?: GroupAttachHint | null;
 }
 
 /** A checkpoint record (GET/POST /workspaces/:id/checkpoints). */
