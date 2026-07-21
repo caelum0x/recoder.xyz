@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { logger } from '@/lib/logger';
 import { sendPaymentFailedEmail, sendSubscriptionCancelledEmail } from '@/lib/email';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+import { emitSubscriptionCreated } from '@/lib/analytics';
 
 const webhookRateLimiter = rateLimit(rateLimitConfigs.webhook);
 const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET || '';
@@ -178,6 +179,17 @@ async function handleSubscriptionCreated(data: any) {
   });
 
   logger.info('Subscription created', { route: 'api/webhooks/dodo', userId: user_id, plan });
+
+  // Conversion event — fired only from this verified subscription.created
+  // webhook, carrying real fields parsed from the payload. Amount/currency are
+  // included only when the payload actually provides them (dropped otherwise).
+  emitSubscriptionCreated({
+    userId: user_id,
+    planId: plan,
+    priceAmount: typeof data.amount === 'number' ? data.amount : undefined,
+    currency: typeof data.currency === 'string' ? data.currency : undefined,
+    provider: 'dodo',
+  });
 }
 
 async function handleSubscriptionUpdated(data: any) {

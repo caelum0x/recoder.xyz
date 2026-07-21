@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { emitSubscriptionCreated } from '@/lib/analytics';
 
 export async function POST(request: NextRequest) {
   try {
@@ -102,6 +103,19 @@ async function handleSubscriptionCreated(event: any) {
       planId: plan || 'pro',
       updatedAt: new Date(),
     },
+  });
+
+  // Conversion event — fired only from this verified subscription_created
+  // webhook, carrying real fields parsed from the payload. Amount/currency are
+  // included only when Paddle actually provides them (dropped otherwise).
+  const unitPrice =
+    typeof event.unit_price === 'string' ? parseFloat(event.unit_price) : undefined;
+  emitSubscriptionCreated({
+    userId,
+    planId: plan || 'pro',
+    priceAmount: typeof unitPrice === 'number' && Number.isFinite(unitPrice) ? unitPrice : undefined,
+    currency: typeof event.currency === 'string' ? event.currency : undefined,
+    provider: 'paddle',
   });
 }
 

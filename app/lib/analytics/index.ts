@@ -20,3 +20,4 @@ export type {
 } from './events';
 
 export { trackEvent, trackServerEvent } from './tracker';
+export { emitSubscriptionCreated, emitCheckoutStarted } from './conversions';

@@ -22,6 +22,7 @@ export type {
   EventPropertiesMap,
 } from './analytics/events';
 export { trackEvent, trackServerEvent } from './analytics/tracker';
+export { emitSubscriptionCreated, emitCheckoutStarted } from './analytics/conversions';
 
 // Backward-compatible convenience API used by older auth UI components.
 export const analytics = {
