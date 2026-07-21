@@ -278,6 +278,14 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   container.registerValue(DOMAIN_TOKENS.governance, governance);
   // Cross-domain capability seams later phases resolve without the whole module.
   container.registerValue(CAPABILITY_TOKENS.governanceGate, governance.gate());
+  // The per-tool teeth (bound from `gate.enforceTool`): injected below into the
+  // engines' interop MCP host so every authorized recoder-MCP tool call is
+  // kernel-enforced + Merkle-sealed before dispatch. Coverage boundary: this
+  // gates the recoder-MCP tool stream ONLY (incl. `sandbox_exec`/`workspace_merge`),
+  // NOT the launched agent's native in-worktree bash/file/secret ops — those never
+  // cross this executor and stay under conductor's coarse `guardConductorWrite→decide`.
+  // Absent enforcer ⇒ pass-through (truthful, never a fake-allow).
+  container.registerValue(CAPABILITY_TOKENS.toolExecGate, governance.toolExecGate());
   container.registerValue(CAPABILITY_TOKENS.secrets, governance.secrets());
   container.registerValue(CAPABILITY_TOKENS.workLock, governance.workLocks());
   container.registerValue(CAPABILITY_TOKENS.approval, governance.approvals());
@@ -309,6 +317,10 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     executor: persistence.executor(),
     middleware: identity.middleware(),
     kernel: governance.kernel(),
+    // The per-tool teeth → `InteropHostBundle.toolEnforcer` → the executor
+    // chokepoint. Every authorized recoder-MCP tool call is kernel-enforced +
+    // Merkle-sealed before dispatch; an infra fault deny-biases (fail-closed).
+    toolExecGate: governance.toolExecGate(),
     notifyEngine,
     overrides: config.engines,
   });

@@ -13,6 +13,7 @@ import type { DomainKey } from './domain-registry.js';
 // capability token lets a later domain resolve ONE cross-domain seam (the gate,
 // secrets, the interop chain) without resolving the whole owning module.
 import type { GovernanceGate } from '../domains/governance/ports/gate.port.js';
+import type { ToolExecEnforcementPort } from '../domains/governance/ports/tool-exec-gate.port.js';
 import type { SecretsPort } from '../domains/governance/ports/secrets.port.js';
 import type { InteropChain } from '../domains/governance/ports/interop.port.js';
 import type { WorkLockService } from '../domains/governance/services/work-lock.service.js';
@@ -47,6 +48,15 @@ export const TOKENS = {
 export const CAPABILITY_TOKENS = {
   /** THE write seam: `GovernanceGate.decide → risk → audit` (governance-owned). */
   governanceGate: createToken<GovernanceGate>('capability:governance-gate'),
+  /**
+   * THE per-tool teeth (governance-owned): the narrow `enforce` seam bound from
+   * `gate.enforceTool`, injected into the engines' interop MCP host so every
+   * authorized recoder-MCP-server tool call is kernel-enforced + Merkle-sealed
+   * before dispatch. Coverage boundary: this gates the recoder-MCP tool stream
+   * only (incl. `sandbox_exec`/`workspace_merge`) — NOT the agent's native
+   * in-worktree bash/file/secret ops, which stay under conductor's coarse gate.
+   */
+  toolExecGate: createToken<ToolExecEnforcementPort>('capability:tool-exec-gate'),
   /** The envelope-encrypted secret store (governance-owned). */
   secrets: createToken<SecretsPort>('capability:secrets'),
   /** Path/work-lock acquire/release/check (governance-owned). */
