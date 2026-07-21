@@ -10,6 +10,7 @@
  *   GET    /api/conductor/workspaces/:id/diff     reviewable diff vs base
  *   GET    /api/conductor/workspaces/:id/tree     worktree file list
  *   GET    /api/conductor/workspaces/:id/dev-command  detected dev command (or null)
+ *   GET    /api/conductor/workspaces/:id/preview-verification  last preview verification summary (404 when unverified)
  *   GET    /api/conductor/workspaces/:id/view     attention-enriched view (truthful unknown)
  *   GET    /api/conductor/views                   attention-enriched views of every workspace
  *   POST   /api/conductor/workspaces/:id/stop     graceful run stop → cancelled (GATED)
@@ -167,6 +168,34 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     middleware.authenticate,
     asyncHandler(async (req, res) => {
       sendSuccess(res, await module.workspaceDevCommand(req.params.id));
+    }),
+  );
+
+  // Last preview verification summary — a PURE projection over the workspace's
+  // persisted `metadata.previewVerification` (written back by the awaited
+  // `verifyPreview` and the `setPreviewUrl` auto-verify). Read-only (no gate). A
+  // 404 is TRUTHFUL: the workspace is missing OR was never verified — never a
+  // fabricated pass. `screenshotRef` is always `null` (the screenshot PNG is not
+  // retained — only an opaque artifact id was sealed), so the cockpit shows
+  // "screenshot not retained", never a broken image.
+  router.get(
+    '/workspaces/:id/preview-verification',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      const view = await module.getPreviewVerification(req.params.id);
+      if (view) {
+        sendSuccess(res, { verification: view });
+        return;
+      }
+      // Distinguish a missing workspace from an unverified one — both truthful 404s.
+      const workspace = await module.getWorkspace(req.params.id);
+      sendError(
+        res,
+        createError(
+          ErrorCode.NOT_FOUND,
+          workspace ? 'preview not verified' : 'workspace not found',
+        ),
+      );
     }),
   );
 
