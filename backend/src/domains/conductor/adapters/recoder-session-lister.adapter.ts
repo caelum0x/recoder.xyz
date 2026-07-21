@@ -5,9 +5,10 @@
  * competing durability engine.
  *
  * It is a pure composition of two EXISTING, verified seams:
- *   - the engines domain's DEEP read-only {@link TmuxIntrospectPort}
- *     (`createTmuxIntrospect` over the SAME pinned binary from `tmux-path.ts` the
- *     conductor's headless sessions live in), and
+ *   - the engines domain's DEEP read-only {@link TmuxIntrospectPort} (built at the
+ *     composition root over the SAME pinned binary the conductor's headless
+ *     sessions live in) — INJECTED here, never imported across the domain boundary,
+ *     and
  *   - the conductor's `createTmuxScanSource`, which filters the box-wide
  *     `list-sessions` down to the conductor's OWN `recoder-` namespace.
  *
@@ -25,16 +26,20 @@
  * is the empty state. Nothing is ever fabricated.
  */
 import type { LoggerPort } from '@recoder/substrate';
-import { createTmuxIntrospect, type TmuxIntrospectPort } from '../../engines/adapters/cli/tmux-introspect.adapter.js';
-import { TMUX_BIN, TMUX_IS_VENDORED } from '../../engines/tmux-path.js';
+// Type-only across the domain boundary (the guard allows types): the engines
+// domain OWNS `createTmuxIntrospect`/`TMUX_BIN`; a runtime value import of them
+// here would couple conductor → engines. The concrete port is INJECTED from the
+// composition root instead (bootstrap builds `engines.tmuxIntrospect()`).
+import type { TmuxIntrospectPort } from '../../engines/adapters/cli/tmux-introspect.adapter.js';
 import { createTmuxScanSource } from './tmux-scan-source.adapter.js';
 
 export interface RecoderSessionListerDeps {
   /**
-   * The read-only introspection port to observe through. Absent ⇒ the default
-   * over the pinned tmux binary (`TMUX_BIN` / `TMUX_IS_VENDORED` from
-   * `tmux-path.ts`) — the SAME server the conductor drives. Injectable so tests
-   * mock the exec seam instead of touching a real tmux.
+   * The read-only introspection port to observe through, INJECTED from the
+   * composition root over the SAME pinned tmux binary the conductor drives.
+   * Absent ⇒ the engines-owned tmux facet is undeclared, so this bridge cannot
+   * observe the substrate and DEGRADES TRUTHFULLY to an empty list — it never
+   * value-imports the engines default and never fabricates a live session.
    */
   readonly introspect?: TmuxIntrospectPort;
   /** Structured logger for the truthful degrade path (optional). */
@@ -43,23 +48,21 @@ export interface RecoderSessionListerDeps {
 
 /**
  * Build the read-only `recoder-*` session lister. The returned function resolves
- * the live conductor-owned session names (prefix-filtered), or an empty list when
- * tmux cannot be observed — it NEVER throws and NEVER fabricates a live session.
+ * the live conductor-owned session names (prefix-filtered) when an introspect
+ * port is injected, or an empty list when it is absent or tmux cannot be observed
+ * — it NEVER throws and NEVER fabricates a live session.
  */
 export function createRecoderSessionLister(
   deps: RecoderSessionListerDeps = {},
 ): () => Promise<readonly string[]> {
-  const introspect =
-    deps.introspect ??
-    createTmuxIntrospect({
-      bin: TMUX_BIN,
-      // Pure read bridge: always attempt the observation and let the introspect
-      // port's own degrade-truthful path (tmux absent ⇒ typed fail ⇒ empty) speak.
-      enabled: () => true,
-      vendored: TMUX_IS_VENDORED,
-    });
+  // No injected introspect ⇒ the engines tmux facet is undeclared. Cannot observe
+  // ⇒ truthful empty list (never a fabricated live session), never a cross-domain
+  // value import to build a default.
+  if (!deps.introspect) {
+    return async () => [];
+  }
   const scan = createTmuxScanSource({
-    introspect,
+    introspect: deps.introspect,
     ...(deps.logger ? { logger: deps.logger } : {}),
   });
   return async () => (await scan.listLiveSessions?.()) ?? [];

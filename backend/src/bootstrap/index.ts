@@ -763,6 +763,11 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     mcpInject: conductorMcpInject,
     ...(conductorSubstrateScan ? { substrateScan: conductorSubstrateScan } : {}),
     ...(conductorWorkspaceGrid ? { workspaceGrid: conductorWorkspaceGrid } : {}),
+    // Read-only `/sessions` attach bridge (durable-shell unify §A2): inject the
+    // SAME engines-owned tmux introspect the substrate scan uses so the conductor
+    // surfaces its live `recoder-*` sessions WITHOUT value-importing the engines
+    // domain. Absent ⇒ the lister degrades truthfully to an empty list.
+    ...(conductorTmuxIntrospect ? { tmuxIntrospect: conductorTmuxIntrospect } : {}),
     // Delivery-feedback seam: a MERGED workspace fires the inference routing
     // feedback sink (`task_success` on the run's persisted inference_id) so the
     // BYOK LLM gateway learns from real deliveries. Degrade-truthful: the merge

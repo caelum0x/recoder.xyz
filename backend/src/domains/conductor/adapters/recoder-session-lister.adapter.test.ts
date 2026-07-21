@@ -70,6 +70,14 @@ describe('createRecoderSessionLister', () => {
     expect(warn).toHaveBeenCalledOnce();
   });
 
+  it('degrades to a truthful empty list when NO introspect port is injected', async () => {
+    // The engines-owned tmux facet is undeclared at the composition root ⇒ this
+    // bridge cannot observe the substrate and must NOT value-import an engines
+    // default. It returns `[]` (never a fabricated live session) and never throws.
+    const sessions = await createRecoderSessionLister()();
+    expect(sessions).toEqual([]);
+  });
+
   it('treats "no server running yet" as the empty state (not a failure)', async () => {
     const warn = vi.fn();
     const run = vi.fn<TmuxRun>(async () => failResult('no server running on /tmp/tmux-501/default'));
