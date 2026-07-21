@@ -65,8 +65,13 @@ export function createConductorRegistry(deps: ConductorRegistryDeps): ConductorR
 
   const availability = (): readonly SubstrateAvailabilityView[] =>
     KNOWN_SUBSTRATES.map((id) => {
-      if (registered.has(id)) return { id, available: true };
-      return { id, available: false, reason: reasonUnavailable(id, deps.config) };
+      // The effective pinned tmux binary (config pin, else PATH `tmux`) is a config
+      // fact independent of whether the substrate is wired, so surface it on the
+      // `tmux_worktree` entry in BOTH branches. This gives the shared-tmux-server
+      // invariant (durable-shell unify §A1a) a real source for the wave-side attach.
+      const pin = id === 'tmux_worktree' ? { tmuxBin: deps.config.tmuxBin ?? 'tmux' } : {};
+      if (registered.has(id)) return { id, available: true, ...pin };
+      return { id, available: false, reason: reasonUnavailable(id, deps.config), ...pin };
     });
 
   const getFull = (id: SubstrateKind): ConductorSubstrate => {
