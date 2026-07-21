@@ -78,12 +78,12 @@ afterEach(() => {
 describe('GroupAttachAction', () => {
   it('renders nothing when there is no attach hint', () => {
     setBridge({ openWorkspaceTerminal: () => undefined });
-    expect(mount(undefined).querySelector('button')).toBeNull();
-    container?.remove();
-    container = null;
-    expect(mount(null).querySelector('button')).toBeNull();
-    container?.remove();
-    container = null;
+    const noHint = mount(undefined);
+    expect(noHint.querySelector('button')).toBeNull();
+    noHint.remove();
+    const nullHint = mount(null);
+    expect(nullHint.querySelector('button')).toBeNull();
+    nullHint.remove();
     expect(mount({ visibleSessions: [] }).querySelector('button')).toBeNull();
   });
 
