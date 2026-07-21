@@ -401,3 +401,88 @@ describe('keyed envelope unwrap (new backend contract)', () => {
     expect(await api.githubStatus()).toEqual(status);
   });
 });
+
+describe('compare group attach hint (product F3, grid enrichment)', () => {
+  it('carries the READ-ONLY grid hint through compareTaskGroup when the backend enriches it', async () => {
+    const compare = {
+      taskGroup: 'g1',
+      count: 2,
+      siblings: [],
+      grid: { visibleSessions: ['recoder-a', 'recoder-b'], attachCommand: 'dmux /repo' },
+    };
+    mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: { compare } } }));
+    const result = await api.compareTaskGroup('g1');
+    expect(result).toEqual(compare);
+    expect(result.grid?.visibleSessions).toEqual(['recoder-a', 'recoder-b']);
+  });
+
+  it('leaves grid absent (undefined) when the backend omits it — degrade-safe, never fabricated', async () => {
+    const compare = { taskGroup: 'g1', count: 1, siblings: [{ workspaceId: 'w1' }] };
+    mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: { compare } } }));
+    const result = await api.compareTaskGroup('g1');
+    expect(result).toEqual(compare);
+    expect(result.grid).toBeUndefined();
+  });
+
+  it('carries grid on the per-workspace siblings read too', async () => {
+    const compare = {
+      taskGroup: 'g1',
+      count: 2,
+      siblings: [],
+      grid: { visibleSessions: ['recoder-a'] },
+    };
+    mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: { compare } } }));
+    const result = await api.workspaceSiblings('w1');
+    expect(result.grid?.visibleSessions).toEqual(['recoder-a']);
+  });
+
+  it('POSTs the governed arrange to /workspaces/compare/:taskGroup/grid and unwraps { grid, verdict }', async () => {
+    let captured: RequestInit | undefined;
+    const arrangement = {
+      sessionName: 'recoder-group-g1',
+      visibleSessions: ['recoder-a', 'recoder-b'],
+      worktreePaths: ['/wt/a', '/wt/b'],
+      paneCount: 2,
+      layout: 'agent-grid',
+    };
+    const verdict = { effect: 'allow', tier: 'medium', degraded: false, engine: 'dmux' };
+    mockFetch((url, init) => {
+      captured = init;
+      lastUrl = url;
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: { grid: arrangement, verdict } } });
+    });
+    const result = await api.arrangeCompareGrid('g1');
+    expect(lastUrl).toBe(`${BACKEND_URL}/api/conductor/workspaces/compare/g1/grid`);
+    expect(captured?.method).toBe('POST');
+    expect(result.grid).toEqual(arrangement);
+    expect(result.verdict).toEqual(verdict);
+  });
+
+  it('unwraps a degraded arrange as grid:null (200, no honest grid to build)', async () => {
+    mockFetch(() =>
+      makeResponse({
+        status: 200,
+        ok: true,
+        body: { success: true, data: { grid: null, verdict: { effect: 'allow' } } },
+      }),
+    );
+    const result = await api.arrangeCompareGrid('g1');
+    expect(result.grid).toBeNull();
+  });
+
+  it('propagates a governance deny as a 403 ApiError (grid write has no 409/approval path)', async () => {
+    mockFetch(() =>
+      makeResponse({ status: 403, ok: false, body: { success: false, error: 'blocked by governance gate' } }),
+    );
+    const err = await api.arrangeCompareGrid('g1').catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(403);
+    expect(err.message).toBe('blocked by governance gate');
+  });
+
+  it('encodes the taskGroup in the arrange path', async () => {
+    mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: { grid: null } } }));
+    await api.arrangeCompareGrid('g/1');
+    expect(lastUrl).toBe(`${BACKEND_URL}/api/conductor/workspaces/compare/g%2F1/grid`);
+  });
+});
