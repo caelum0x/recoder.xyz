@@ -102,7 +102,7 @@ overrides:
   express>path-to-regexp: 0.1.13
   path-to-regexp@>=8: '>=8.4.0'
   validator: '>=13.15.22'
-  '@xmldom/xmldom': '>=0.8.12'
+  '@xmldom/xmldom': '>=0.8.12 <0.9.0'
   svgo: '>=3.3.3'
   socket.io-parser: '>=4.2.6'
   immutable: '>=5.1.5'
@@ -767,28 +767,6 @@ importers:
       vite:
         specifier: ^6.4.2
         version: 6.4.3(@types/node@25.9.4)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.93.3)(terser@5.44.1)(tsx@4.23.1)(yaml@2.8.3)
-
-  apps/social:
-    dependencies:
-      '@recoder/connectors':
-        specifier: workspace:*
-        version: link:../desktop/engines/openclaw
-    devDependencies:
-      '@types/node':
-        specifier: ^20.10.0
-        version: 20.19.27
-      tsup:
-        specifier: ^8.0.0
-        version: 8.5.1(@swc/core@1.15.43(@swc/helpers@0.5.17))(jiti@2.7.0)(postcss@8.5.6)(tsx@4.23.1)(typescript@5.9.3)(yaml@2.8.3)
-      tsx:
-        specifier: ^4.7.0
-        version: 4.23.1
-      typescript:
-        specifier: ^5.3.3
-        version: 5.9.3
-      vitest:
-        specifier: 2.1.9
-        version: 2.1.9(@types/node@20.19.27)(@vitest/ui@2.1.9)(happy-dom@20.8.9(bufferutil@4.0.9)(utf-8-validate@6.0.6))(jsdom@27.4.0(@noble/hashes@2.2.0)(bufferutil@4.0.9)(canvas@3.2.0)(utf-8-validate@6.0.6))(lightningcss@1.32.0)(sass@1.93.3)(terser@5.44.1)
 
   backend:
     dependencies:
@@ -8725,10 +8703,9 @@ packages:
   '@vue/shared@3.5.22':
     resolution: {integrity: sha512-F4yc6palwq3TT0u+FYf0Ns4Tfl9GRFURDN2gWG7L1ecIaS/4fCIuFOjMTnCyjsu/OK6vaDKLCrGAa+KvvH+h4w==}
 
-  '@xmldom/xmldom@0.9.9':
-    resolution: {integrity: sha512-qycIHAucxy/LXAYIjmLmtQ8q9GPnMbnjG1KXhWm9o5sCr6pOYDATkMPiTNa6/v8eELyqOQ2FsEqeoFYmgv/gJg==}
-    engines: {node: '>=14.6'}
-    deprecated: this version has critical issues, please update to the latest version
+  '@xmldom/xmldom@0.8.13':
+    resolution: {integrity: sha512-KRYzxepc14G/CEpEGc3Yn+JKaAeT63smlDr+vjB8jRfgTBBI9wRj/nkQEO+ucV8p8I9bfKLWp37uHgFrbntPvw==}
+    engines: {node: '>=10.0.0'}
 
   '@xterm/addon-fit@0.11.0':
     resolution: {integrity: sha512-jYcgT6xtVYhnhgxh3QgYDnnNMYTcf8ElbxxFzX0IZo+vabQqSPAjC3c1wJrKB5E19VwQei89QCiZZP86DCPF7g==}
@@ -24682,7 +24659,7 @@ snapshots:
 
   '@vue/shared@3.5.22': {}
 
-  '@xmldom/xmldom@0.9.9': {}
+  '@xmldom/xmldom@0.8.13': {}
 
   '@xterm/addon-fit@0.11.0': {}
 
@@ -31778,7 +31755,7 @@ snapshots:
 
   plist@3.1.0:
     dependencies:
-      '@xmldom/xmldom': 0.9.9
+      '@xmldom/xmldom': 0.8.13
       base64-js: 1.5.1
       xmlbuilder: 15.1.1
 
