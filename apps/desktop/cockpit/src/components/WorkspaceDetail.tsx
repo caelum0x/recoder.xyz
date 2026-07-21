@@ -42,6 +42,7 @@ import type {
   DiffFileEntry,
   WorkspaceDiff,
   WorkspaceDiffFilesView,
+  WorkspaceFilePatchView,
   WorkspaceMergeability,
 } from '../types';
 import {
@@ -304,22 +305,95 @@ function statusGlyph(status: DiffFileEntry['status']): string {
 }
 
 /**
- * One row in the authoritative changed-file list: status glyph + path + real
- * +/- counts. A binary side (insertions/deletions === null) renders NOTHING for
- * that count — never a fabricated `+0`/`-0`.
+ * Local unified-diff line classifier (mirrors DiffView.classifyLine, kept local
+ * to avoid editing DiffView, which is not in scope and stays untouched).
  */
-function DiffFileEntryRow({ file }: { file: DiffFileEntry }) {
-  const label = file.status === 'renamed' && file.oldPath ? `${file.oldPath} → ${file.path}` : file.path;
+function classifyDiffLine(line: string): string {
+  if (line.startsWith('+++') || line.startsWith('---')) return 'diff-meta';
+  if (line.startsWith('@@')) return 'diff-hunk';
+  if (line.startsWith('diff ') || line.startsWith('index ')) return 'diff-meta';
+  if (line.startsWith('+')) return 'diff-add';
+  if (line.startsWith('-')) return 'diff-del';
+  return 'diff-ctx';
+}
+
+/** The lazy per-file patch fetch state behind an expanded changed-file row. */
+type PatchState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'loaded'; view: WorkspaceFilePatchView }
+  | { status: 'unavailable' };
+
+/**
+ * The inline body of an expanded changed-file row. Degrade-truthful by branch:
+ * a null/unavailable/available:false patch is an honest line, never a fabricated
+ * body; binary and empty are distinguished truthfully; a real patch renders with
+ * the same classify/coloring as the Diff tab.
+ */
+function FilePatchBody({ state }: { state: PatchState }) {
+  if (state.status === 'loading') return <div class="log-empty">Loading patch…</div>;
+  if (state.status === 'unavailable') return <div class="log-empty">Patch unavailable.</div>;
+  if (state.status !== 'loaded') return null;
+  const { view } = state;
+  if (!view.available || view.patch === null) return <div class="log-empty">Patch unavailable.</div>;
+  if (view.binary) return <div class="log-empty">Binary file — no text diff to show.</div>;
+  if (view.patch.trim() === '') return <div class="log-empty">No line changes to show.</div>;
+  const lines = view.patch.split('\n');
   return (
-    <div class="detail-file" title={label}>
-      <span class={`detail-file-icon detail-file-${file.status}`} aria-hidden="true">
-        {statusGlyph(file.status)}
-      </span>
-      <span class="detail-file-path">{label}</span>
-      <span class="detail-file-changes">
-        {file.insertions !== null && <span class="ws-diffstat-add">+{file.insertions}</span>}
-        {file.deletions !== null && <span class="ws-diffstat-del">-{file.deletions}</span>}
-      </span>
+    <pre class="diff-patch detail-file-patch">
+      {lines.map((line, i) => (
+        <div class={`diff-line ${classifyDiffLine(line)}`} key={i}>{line || ' '}</div>
+      ))}
+    </pre>
+  );
+}
+
+/**
+ * One row in the authoritative changed-file list: status glyph + path + real
+ * +/- counts, expandable to lazily fetch and inline-render that ONE file's
+ * unified patch (GET /diff/file?path=). A binary side (insertions/deletions ===
+ * null) renders NOTHING for that count — never a fabricated `+0`/`-0`. The
+ * header keeps every existing class; the patch body is a sibling so expanding
+ * never re-lays-out the clickable header.
+ */
+function DiffFileEntryRow({ workspaceId, file }: { workspaceId: string; file: DiffFileEntry }) {
+  const [open, setOpen] = useState(false);
+  const [patch, setPatch] = useState<PatchState>({ status: 'idle' });
+  const label = file.status === 'renamed' && file.oldPath ? `${file.oldPath} → ${file.path}` : file.path;
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    // Lazy + once-only: fetch on the FIRST open; guard against any refetch
+    // (idle → loading), so a reopen shows the cached result, never re-hits git.
+    if (next && patch.status === 'idle') {
+      setPatch({ status: 'loading' });
+      void api
+        .diffFile(workspaceId, file.path)
+        .then((view) => setPatch(view ? { status: 'loaded', view } : { status: 'unavailable' }))
+        .catch(() => setPatch({ status: 'unavailable' }));
+    }
+  }
+
+  return (
+    <div class="detail-file-entry">
+      <button
+        type="button"
+        class={`detail-file detail-file-row${open ? ' detail-file-open' : ''}`}
+        title={label}
+        aria-expanded={open}
+        onClick={toggle}
+      >
+        <span class={`detail-file-icon detail-file-${file.status}`} aria-hidden="true">
+          {statusGlyph(file.status)}
+        </span>
+        <span class="detail-file-path">{label}</span>
+        <span class="detail-file-changes">
+          {file.insertions !== null && <span class="ws-diffstat-add">+{file.insertions}</span>}
+          {file.deletions !== null && <span class="ws-diffstat-del">-{file.deletions}</span>}
+        </span>
+      </button>
+      {open && <FilePatchBody state={patch} />}
     </div>
   );
 }
@@ -340,7 +414,11 @@ function DiffFilesList({ view }: { view: WorkspaceDiffFilesView }) {
   return (
     <div class="detail-files">
       {view.files.map((f) => (
-        <DiffFileEntryRow key={f.oldPath ? `${f.oldPath}->${f.path}` : f.path} file={f} />
+        <DiffFileEntryRow
+          key={f.oldPath ? `${f.oldPath}->${f.path}` : f.path}
+          workspaceId={view.workspaceId}
+          file={f}
+        />
       ))}
     </div>
   );

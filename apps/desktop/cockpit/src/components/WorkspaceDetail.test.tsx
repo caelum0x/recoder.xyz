@@ -994,3 +994,154 @@ describe('WorkspaceDetail structured changed-list (/diff/files)', () => {
     expect(readmeRow?.querySelector('.detail-file-icon')?.textContent).toContain('M');
   });
 });
+
+/**
+ * Lazy single-file patch view in the Changes tab (GET /diff/file?path=).
+ *
+ * Each authoritative /diff/files row is a click-to-expand button. Opening it
+ * lazily fetches THAT one file's unified patch and inline-renders it with the
+ * same classify/coloring as the Diff tab. One fetch per opened file, cached; a
+ * reopen never re-hits the backend. Degrade-truthful: a null/available:false/
+ * errored patch shows an honest "Patch unavailable." — never a fabricated body.
+ */
+describe('WorkspaceDetail lazy per-file patch (/diff/file)', () => {
+  const filesView = {
+    workspaceId: 'ws-detail',
+    base: 'main',
+    branch: 'feature/x',
+    available: true,
+    files: [{ path: 'src/added.ts', status: 'added', insertions: 1, deletions: 0 }],
+  };
+
+  const addedPatch = {
+    workspaceId: 'ws-detail',
+    base: 'main',
+    branch: 'feature/x',
+    path: 'src/added.ts',
+    available: true,
+    binary: false,
+    patch: 'diff --git a/src/added.ts b/src/added.ts\n@@ -0,0 +1 @@\n+hello',
+  };
+
+  /** Count only real /diff/file?path= calls (not /diff/files). */
+  function diffFileCalls(fetchMock: ReturnType<typeof vi.fn>): string[] {
+    return fetchMock.mock.calls
+      .map((args) => String(args[0]))
+      .filter((u) => u.includes('/diff/file?path='));
+  }
+
+  function addedRowButton(c: HTMLDivElement): HTMLButtonElement {
+    const btn = Array.from(c.querySelectorAll('button.detail-file-row')).find((b) =>
+      (b.textContent ?? '').includes('src/added.ts'),
+    );
+    if (!btn) throw new Error('src/added.ts row button not found');
+    return btn as HTMLButtonElement;
+  }
+
+  it("opening a changed-file row lazily fetches and renders that file's patch", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/diff/file?path=')) {
+        return makeResponse({ status: 200, ok: true, body: { success: true, data: addedPatch } });
+      }
+      if (typeof url === 'string' && url.endsWith('/diff/files')) {
+        return makeResponse({ status: 200, ok: true, body: { success: true, data: filesView } });
+      }
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
+    });
+    (globalThis as Record<string, unknown>).fetch = fetchMock;
+
+    const c = mount(workspace());
+    await flush(20);
+
+    // Before opening: no patch fetched, no patch body rendered.
+    expect(diffFileCalls(fetchMock)).toHaveLength(0);
+    expect(c.querySelector('.detail-file-patch')).toBeNull();
+
+    act(() => addedRowButton(c).click());
+    await flush(20);
+
+    // The patch body renders with the real +hello add line.
+    const patch = c.querySelector('.detail-file-patch');
+    expect(patch).toBeTruthy();
+    const addLine = Array.from(patch?.querySelectorAll('.diff-add') ?? []).find((l) =>
+      (l.textContent ?? '').includes('+hello'),
+    );
+    expect(addLine, 'the +hello add line is rendered and colored').toBeTruthy();
+
+    // Exactly ONE fetch to /diff/file?path=src%2Fadded.ts occurred.
+    const calls = diffFileCalls(fetchMock);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('/diff/file?path=src%2Fadded.ts');
+  });
+
+  it('re-opening the same row does NOT refetch (one lazy fetch, cached)', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/diff/file?path=')) {
+        return makeResponse({ status: 200, ok: true, body: { success: true, data: addedPatch } });
+      }
+      if (typeof url === 'string' && url.endsWith('/diff/files')) {
+        return makeResponse({ status: 200, ok: true, body: { success: true, data: filesView } });
+      }
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
+    });
+    (globalThis as Record<string, unknown>).fetch = fetchMock;
+
+    const c = mount(workspace());
+    await flush(20);
+
+    // Open (fetch), close, reopen (cached).
+    act(() => addedRowButton(c).click());
+    await flush(20);
+    expect(c.querySelector('.detail-file-patch')).toBeTruthy();
+
+    act(() => addedRowButton(c).click());
+    await flush(20);
+    expect(c.querySelector('.detail-file-patch')).toBeNull();
+
+    act(() => addedRowButton(c).click());
+    await flush(20);
+
+    // The cached patch renders again, with no second backend hit.
+    expect(c.querySelector('.detail-file-patch')).toBeTruthy();
+    expect(diffFileCalls(fetchMock)).toHaveLength(1);
+  });
+
+  it("shows a truthful 'Patch unavailable' line and no fabricated patch when the file patch degrades (available:false)", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/diff/file?path=')) {
+        return makeResponse({
+          status: 200,
+          ok: true,
+          body: {
+            success: true,
+            data: {
+              workspaceId: 'ws-detail',
+              base: 'main',
+              branch: 'feature/x',
+              path: 'src/added.ts',
+              available: false,
+              binary: false,
+              patch: null,
+            },
+          },
+        });
+      }
+      if (typeof url === 'string' && url.endsWith('/diff/files')) {
+        return makeResponse({ status: 200, ok: true, body: { success: true, data: filesView } });
+      }
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
+    });
+    (globalThis as Record<string, unknown>).fetch = fetchMock;
+
+    const c = mount(workspace());
+    await flush(20);
+
+    act(() => addedRowButton(c).click());
+    await flush(20);
+
+    // Honest degrade: the entry states "Patch unavailable" and renders no patch body.
+    const entry = addedRowButton(c).closest('.detail-file-entry');
+    expect(entry?.textContent).toContain('Patch unavailable');
+    expect(c.querySelector('.detail-file-patch')).toBeNull();
+  });
+});

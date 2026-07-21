@@ -96,6 +96,7 @@ import type {
   Workspace,
   WorkspaceDiff,
   WorkspaceDiffFilesView,
+  WorkspaceFilePatchView,
   WorkspaceMergeability,
   WorkspaceTree,
   WriteVerdictView,
@@ -472,6 +473,23 @@ export const api = {
         throw err;
       },
     ),
+  /**
+   * ONE changed file's unified patch (GET /workspaces/:id/diff/file?path=). The
+   * lazy body behind a Changes-tab row: fetched only when the operator opens the
+   * row, cached by the caller (one fetch per open). Degrade-truthful: a 404
+   * (missing workspace / route not yet deployed) resolves to `null` → the row
+   * shows an honest "patch unavailable" line; any other failure (503/400/
+   * unreachable) propagates and the row likewise degrades — NEVER a fabricated
+   * or blank-success patch. `path` is URL-encoded so a nested path rides intact.
+   */
+  diffFile: (id: string, path: string): Promise<WorkspaceFilePatchView | null> =>
+    request<WorkspaceFilePatchView>(
+      'GET',
+      `/workspaces/${encodeURIComponent(id)}/diff/file?path=${encodeURIComponent(path)}`,
+    ).catch((err) => {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }),
   tree: (id: string) => request<WorkspaceTree>('GET', `/workspaces/${encodeURIComponent(id)}/tree`),
   devCommand: (id: string) =>
     request<DevCommand | null>('GET', `/workspaces/${encodeURIComponent(id)}/dev-command`),

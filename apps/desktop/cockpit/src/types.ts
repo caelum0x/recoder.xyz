@@ -124,6 +124,27 @@ export interface WorkspaceDiffFilesView {
   files: DiffFileEntry[];
 }
 
+/**
+ * GET /workspaces/:id/diff/file?path= — ONE changed file's unified patch
+ * (working tree vs base). Source of truth: workspace-review.ops.ts
+ * (workspaceFilePatch → sendSuccess(res, view)). Degrade-truthful:
+ *  - available:false ⇒ could-not-compute (non-repo / no worktree / git absent /
+ *    exec fault / rejected path); `patch` is null. NEVER a fabricated patch.
+ *  - patch:'' ⇒ computed, but no textual diff for that path.
+ *  - binary:true ⇒ `patch` carries git's binary marker, not a hunk (the UI
+ *    renders a friendly "binary" line, never the raw marker).
+ */
+export interface WorkspaceFilePatchView {
+  workspaceId: string;
+  base: string;
+  branch: string;
+  /** The requested repo-relative path (echoed back). */
+  path: string;
+  available: boolean;
+  binary: boolean;
+  patch: string | null;
+}
+
 /** GET /workspaces/:id/dev-command — detected command to run the app (or null). */
 export interface DevCommand {
   command: string;
