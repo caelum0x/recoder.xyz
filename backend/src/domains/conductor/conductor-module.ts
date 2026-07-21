@@ -378,7 +378,7 @@ export class ConductorComposer implements ConductorModule {
       registry: this.registry.registry,
       repository: this.repository,
       runTailer: this.tailer,
-      scan: createSubstrateScan(),
+      scan: createSubstrateScan(deps.substrateScan ?? {}),
       logger: loggerPort,
       clock: systemClock,
       id: uuidId,
