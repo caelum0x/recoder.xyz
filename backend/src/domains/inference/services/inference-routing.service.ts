@@ -31,7 +31,7 @@ import type {
 import { computeCostMicroUsd, resolveUsage } from '../adapters/token-accounting.js';
 import type { EntitlementGate, BillingSubject } from '../ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from '../ports/usage-meter.port.js';
-import type { PalRoutePlannerPort } from './pal-route-planner.js';
+import type { PalRoutePlannerPort } from '../ports/pal-route.port.js';
 
 export interface InferenceRoutingDeps {
   readonly logger: Logger;
