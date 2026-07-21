@@ -63,6 +63,15 @@ export const observabilityConfigSchema = z.object({
   signalsPollEnabled: z.boolean(),
   /** Work-signals poll cadence (ms); `0` disables the loop (default off outside prod). */
   signalsPollIntervalMs: z.number().int().nonnegative(),
+  /**
+   * Enable the GitHub/Linear detector tick that rides the signals poll loop.
+   * HARD DEPENDENCY: the tick fires only inside `pollSignalsOnce`, so this flag is
+   * INERT unless the poller is armed (`signalsPollEnabled && signalsPollIntervalMs
+   * > 0`). Opt-in (default false) — the detectors touch real GH/Linear via tokens
+   * held in the Python sidecar. Degrade-truthful: no tokens ⇒ the sidecar detects
+   * nothing ⇒ the following `refresh()` pulls nothing (never a fabricated signal).
+   */
+  signalsSyncEnabled: z.boolean(),
   /** Bounded in-memory log ring buffer size for the ops surface. */
   logRingSize: z.number().int().positive(),
   /** Default space id for un-scoped internal reads/writes. */
@@ -85,6 +94,7 @@ export interface ObservabilityConfigOverrides {
   readonly alertEvalIntervalMs?: number;
   readonly signalsPollEnabled?: boolean;
   readonly signalsPollIntervalMs?: number;
+  readonly signalsSyncEnabled?: boolean;
   readonly logRingSize?: number;
   readonly defaultSpaceId?: string;
 }
@@ -134,6 +144,9 @@ export function sliceObservabilityConfig(
     // a `0` interval disables the loop so tests/dev never spin a background timer.
     signalsPollEnabled: overrides.signalsPollEnabled ?? true,
     signalsPollIntervalMs: overrides.signalsPollIntervalMs ?? (isProduction ? 60_000 : 0),
+    // The detector tick is opt-in and rides the poll loop (inert unless the poller
+    // is armed). Off by default — it touches real GH/Linear via the sidecar.
+    signalsSyncEnabled: overrides.signalsSyncEnabled ?? false,
     logRingSize: overrides.logRingSize ?? 1_000,
     defaultSpaceId: overrides.defaultSpaceId ?? 'default',
     isProduction,

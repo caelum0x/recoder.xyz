@@ -97,8 +97,8 @@ export class RunSignalPushService {
   }
 
   /**
-   * Trigger the sidecar's GitHub sync detector (used by the conductor
-   * githubStatus wiring). Degrade-truthful, never throws.
+   * Trigger the sidecar's GitHub sync detector (driven by the signals poller's
+   * detector tick). Degrade-truthful, never throws.
    */
   async syncGithub(): Promise<OpsRecorderSyncResult> {
     try {
@@ -112,6 +112,26 @@ export class RunSignalPushService {
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       this.deps.logger.warn({ err: reason }, 'ops-recorder github sync faulted (degraded)');
+      return { triggered: false, degraded: true, reason };
+    }
+  }
+
+  /**
+   * Trigger the sidecar's Linear sync detector — the twin of {@link syncGithub},
+   * driven by the same detector tick. Degrade-truthful, never throws.
+   */
+  async syncLinear(): Promise<OpsRecorderSyncResult> {
+    try {
+      const result = await this.deps.port.syncLinear();
+      if (result.triggered) {
+        this.deps.logger.info({}, 'ops-recorder linear sync triggered (board refreshing issue state)');
+      } else {
+        this.deps.logger.debug({ reason: result.reason }, 'ops-recorder linear sync skipped (sidecar down or rejected)');
+      }
+      return result;
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      this.deps.logger.warn({ err: reason }, 'ops-recorder linear sync faulted (degraded)');
       return { triggered: false, degraded: true, reason };
     }
   }

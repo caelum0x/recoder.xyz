@@ -60,6 +60,7 @@ function makeComposer(opts: {
   readonly runEventsIngest?: ReturnType<typeof vi.fn>;
   readonly boardNotify?: ReturnType<typeof vi.fn>;
   readonly pollEnabled?: boolean;
+  readonly syncEnabled?: boolean;
 }): ObservabilityComposer {
   return new ObservabilityComposer({
     config: appConfig,
@@ -75,6 +76,7 @@ function makeComposer(opts: {
       opsRecorderAuthDisabled: true,
       signalsPollEnabled: opts.pollEnabled ?? true,
       signalsPollIntervalMs: opts.pollIntervalMs,
+      signalsSyncEnabled: opts.syncEnabled ?? false,
     },
   });
 }
@@ -177,6 +179,128 @@ describe('ObservabilityModule signals poller', () => {
 
     await composer.start();
     await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(ingest).not.toHaveBeenCalled();
+
+    await composer.stop();
+  });
+
+  it('detector tick fires github+linear syncs then refresh when signalsSyncEnabled', async () => {
+    const ingest = vi.fn();
+    const fetchMock = vi.fn(async () => okJson([rawSignal]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const composer = makeComposer({
+      pollIntervalMs: 1_000,
+      opsRecorderUrl: 'http://127.0.0.1:9099',
+      runEventsIngest: ingest,
+      syncEnabled: true,
+    });
+
+    await composer.start();
+    await vi.advanceTimersByTimeAsync(0); // immediate first pass
+
+    const urls = fetchMock.mock.calls.map(c => String(c[0]));
+    // The tick fires BOTH detectors before the pull.
+    expect(urls.some(u => u.endsWith('/work-signals/sync/github'))).toBe(true);
+    expect(urls.some(u => u.endsWith('/work-signals/sync/linear'))).toBe(true);
+    // The pull still runs (refresh reads the freshly-detected signals).
+    expect(urls.some(u => u.endsWith('/work-signals'))).toBe(true);
+
+    await composer.stop();
+  });
+
+  it('detector tick is inert (no sync calls) when signalsSyncEnabled is false', async () => {
+    const fetchMock = vi.fn(async () => okJson([rawSignal]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const composer = makeComposer({
+      pollIntervalMs: 1_000,
+      opsRecorderUrl: 'http://127.0.0.1:9099',
+      syncEnabled: false,
+    });
+
+    await composer.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const urls = fetchMock.mock.calls.map(c => String(c[0]));
+    expect(urls.some(u => u.includes('/sync/'))).toBe(false);
+    expect(urls.some(u => u.endsWith('/work-signals'))).toBe(true);
+
+    await composer.stop();
+  });
+
+  it('overlap guard: a slow pass short-circuits the next tick (no double-refresh)', async () => {
+    const ingest = vi.fn();
+    // A controllable deferred so the first refresh stays in flight across a tick.
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const fetchMock = vi.fn(async () => {
+      await gate;
+      return okJson([rawSignal]);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const composer = makeComposer({
+      pollIntervalMs: 1_000,
+      opsRecorderUrl: 'http://127.0.0.1:9099',
+      runEventsIngest: ingest,
+    });
+
+    await composer.start(); // pass 1 begins, fetch pending on the gate
+    await vi.advanceTimersByTimeAsync(1_000); // pass 2 tick → pollInFlight ⇒ short-circuit
+    await vi.advanceTimersByTimeAsync(1_000); // pass 3 tick → still in flight ⇒ short-circuit
+    expect(fetchMock).toHaveBeenCalledTimes(1); // no stacked refresh
+
+    release();
+    await vi.advanceTimersByTimeAsync(0); // let pass 1 settle, pollInFlight clears
+    await vi.advanceTimersByTimeAsync(1_000); // next tick now runs a fresh pass
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
+
+    await composer.stop();
+  });
+
+  it('coupling: signalsSyncEnabled true + interval 0 → no timer, no detector tick', async () => {
+    const ingest = vi.fn();
+    const fetchMock = vi.fn(async () => okJson([rawSignal]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const composer = makeComposer({
+      pollIntervalMs: 0,
+      opsRecorderUrl: 'http://127.0.0.1:9099',
+      runEventsIngest: ingest,
+      syncEnabled: true,
+    });
+
+    await composer.start();
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    // The tick rides the poll loop; with the poller off it never runs.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(ingest).not.toHaveBeenCalled();
+
+    await composer.stop();
+  });
+
+  it('degrade-truthful: sync enabled + down sidecar → no fabricated signal', async () => {
+    const ingest = vi.fn();
+    const fetchMock = vi.fn(async () => okJson([rawSignal]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    // No URL ⇒ sync preflight skips (no POST) and refresh degrades (no GET);
+    // nothing is stored, nothing is pulled, nothing is fabricated.
+    const composer = makeComposer({
+      pollIntervalMs: 1_000,
+      opsRecorderUrl: null,
+      runEventsIngest: ingest,
+      syncEnabled: true,
+    });
+
+    await composer.start();
+    await vi.advanceTimersByTimeAsync(1_000);
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(ingest).not.toHaveBeenCalled();

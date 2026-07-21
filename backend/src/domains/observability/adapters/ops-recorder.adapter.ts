@@ -198,6 +198,27 @@ export class OpsRecorderClient implements WorkSignalsPort, OpsRecorderPushPort {
   }
 
   /**
+   * Trigger the sidecar's `POST /work-signals/sync/linear` detector — the exact
+   * twin of {@link syncGithub}. Degrade-truthful: absent/unreachable/unauthorized
+   * ⇒ `triggered:false, degraded:true`, never throws. A 2xx is a truthful accept
+   * (the sidecar syncs Linear in the background; token absence is its concern).
+   */
+  async syncLinear(): Promise<OpsRecorderSyncResult> {
+    const skip = this.pushPreflight();
+    if (skip) return { triggered: false, degraded: true, reason: skip };
+
+    const res = await this.request('/work-signals/sync/linear', 'POST');
+    if (!res) return { triggered: false, degraded: true, reason: 'ops-recorder sidecar unreachable' };
+    if (res.status === 401 || res.status === 403) {
+      return { triggered: false, degraded: true, reason: 'ops-recorder auth preflight rejected' };
+    }
+    if (res.status < 200 || res.status >= 300) {
+      return { triggered: false, degraded: res.status >= 500, reason: `ops-recorder sync/linear returned ${res.status}` };
+    }
+    return { triggered: true, degraded: false };
+  }
+
+  /**
    * Shared write-preflight for the reverse-push edge: returns a truthful skip
    * reason (⇒ degraded no-op) when there is no URL or the token would be rejected;
    * `null` means it is safe to attempt the write.

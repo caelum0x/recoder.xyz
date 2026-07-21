@@ -157,6 +157,39 @@ describe('OpsRecorderClient.forwardToOpsRecorder — reverse-push wire contract'
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it('syncLinear POSTs to /work-signals/sync/linear and reports triggered on 202', async () => {
+    const fetchMock = stubFetch(new Response('{"status":"accepted"}', { status: 202 }));
+    const result = await client().syncLinear();
+    expect(result).toEqual({ triggered: true, degraded: false });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://127.0.0.1:8091/work-signals/sync/linear');
+    expect(init.method).toBe('POST');
+    const headers = init.headers as Record<string, string>;
+    expect(headers['X-API-Key']).toBe('sidecar-key');
+  });
+
+  it('syncLinear against an absent sidecar ⇒ degraded no-op, no network call', async () => {
+    const fetchMock = stubFetch(new Response('{}', { status: 202 }));
+    const result = await client({ baseUrl: null }).syncLinear();
+    expect(result).toEqual({
+      triggered: false,
+      degraded: true,
+      reason: 'ops-recorder sidecar not configured (no URL)',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('syncLinear missing token (preflight would fail) ⇒ degraded no-op', async () => {
+    const fetchMock = stubFetch(new Response('{}', { status: 202 }));
+    const result = await client({ token: null }).syncLinear();
+    expect(result).toEqual({
+      triggered: false,
+      degraded: true,
+      reason: 'ops-recorder auth token absent (preflight would fail)',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('RunSignalPushService.forwardRunSignal — run-outcome mapping', () => {
@@ -206,9 +239,33 @@ describe('RunSignalPushService.forwardRunSignal — run-outcome mapping', () => 
     const port = {
       forwardToOpsRecorder: vi.fn().mockRejectedValue(new Error('kaput')),
       syncGithub: vi.fn(),
+      syncLinear: vi.fn(),
     };
     const svc = new RunSignalPushService({ logger, port });
     const result = await svc.forwardRunSignal({ outcome: 'failed', title: 't', runId: 'run_3' });
     expect(result).toEqual({ forwarded: false, degraded: true, reason: 'kaput' });
+  });
+
+  it('syncLinear delegates to the port and reports triggered', async () => {
+    const port = {
+      forwardToOpsRecorder: vi.fn(),
+      syncGithub: vi.fn(),
+      syncLinear: vi.fn().mockResolvedValue({ triggered: true, degraded: false }),
+    };
+    const svc = new RunSignalPushService({ logger, port });
+    const result = await svc.syncLinear();
+    expect(result).toEqual({ triggered: true, degraded: false });
+    expect(port.syncLinear).toHaveBeenCalledTimes(1);
+  });
+
+  it('syncLinear swallows a port fault as a degraded no-op (never rethrows)', async () => {
+    const port = {
+      forwardToOpsRecorder: vi.fn(),
+      syncGithub: vi.fn(),
+      syncLinear: vi.fn().mockRejectedValue(new Error('boom')),
+    };
+    const svc = new RunSignalPushService({ logger, port });
+    const result = await svc.syncLinear();
+    expect(result).toEqual({ triggered: false, degraded: true, reason: 'boom' });
   });
 });
