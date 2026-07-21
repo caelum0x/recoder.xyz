@@ -4,6 +4,7 @@ import { Providers } from '@/components/providers';
 import UTMCapture from '@/components/UTMCapture';
 import { roobert, roobertMono } from './fonts/roobert';
 import { MobileAppBanner } from '@/app/components/MobileAppBanner';
+import { resolveGaMeasurementId, resolveSiteVerification } from '@/lib/analytics/ga';
 
 export const viewport: Viewport = {
   viewportFit: 'cover',
@@ -77,11 +78,11 @@ export const metadata: Metadata = {
   alternates: {
     canonical: 'https://recoder.xyz',
   },
-  verification: {
-    google: '', // Set in Google Search Console -> Settings -> Ownership verification
-    // yandex: 'your-yandex-verification-code',
-    // other: 'your-other-verification-code',
-  },
+  // Site-ownership verification tokens resolve from env (owner-provided). Empty
+  // ⇒ omitted, so no empty <meta> tags ship. See @/lib/analytics/ga.
+  // - NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION (Google Search Console)
+  // - NEXT_PUBLIC_BING_SITE_VERIFICATION   (Bing Webmaster Tools)
+  verification: resolveSiteVerification(),
 };
 
 interface RootLayoutProps {
@@ -91,18 +92,23 @@ interface RootLayoutProps {
 export default function RootLayout({
   children,
 }: RootLayoutProps) {
+  // GA4 measurement id resolves from NEXT_PUBLIC_GA_ID (fallback = current prod
+  // id) so nothing breaks in prod and the owner can rotate it via env. This is
+  // the in-code event layer only; Cloudflare Web Analytics covers pageviews at
+  // the edge — do NOT add a second pageview beacon here.
+  const gaMeasurementId = resolveGaMeasurementId();
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         {/* Google Analytics */}
-        <script async src="https://www.googletagmanager.com/gtag/js?id=G-V0G79DP41C"></script>
+        <script async src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}></script>
         <script
           dangerouslySetInnerHTML={{
             __html: `
               window.dataLayer = window.dataLayer || [];
               function gtag(){dataLayer.push(arguments);}
               gtag('js', new Date());
-              gtag('config', 'G-V0G79DP41C');
+              gtag('config', '${gaMeasurementId}');
             `,
           }}
         />
