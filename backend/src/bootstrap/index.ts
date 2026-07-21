@@ -42,6 +42,7 @@ import { createOrgsRbacFeature } from '../domains/identity/orgs-rbac.feature.js'
 import { createGovernanceModule } from '../domains/governance/index.js';
 import { createInteropModule } from '../domains/interop/index.js';
 import { createAgentOsModule, type SquadIssuePort } from '../domains/agent-os/index.js';
+import { squadSeedSchema, type SquadSeed } from '../domains/agent-os/config.js';
 import { createConductorModule } from '../domains/conductor/index.js';
 import type { RunEventSinkPort } from '../domains/conductor/ports/run-event-sink.port.js';
 import { createCliRuntimeSubstrate } from '../domains/conductor/adapters/cli-runtime.adapter.js';
@@ -164,6 +165,64 @@ function createSquadIssueAdapter(graph: IssueGraphService): SquadIssuePort {
     show: (id, opts) => graph.show(id, opts),
     stale: () => graph.stale(),
   };
+}
+
+/**
+ * Parse the OPT-IN squad seed from env (bootstrap is the sole sanctioned env
+ * read; agent-os OWNS the actual seed — this only shapes config). Two truthful
+ * forms, JSON preferred:
+ *   - `RECODER_SQUAD_DEF` = a full {@link SquadSeed} JSON object.
+ *   - `RECODER_SQUAD_ID` + `RECODER_SQUAD_MEMBERS` (csv of `agentId[:weight]`),
+ *     with optional `RECODER_SQUAD_LEADER` / `RECODER_SQUAD_NAME` /
+ *     `RECODER_SQUAD_STRATEGY` / `RECODER_SQUAD_SPACE`.
+ * Absent ⇒ `null` ⇒ byte-identical pass-through (the default, seed OFF). A
+ * malformed / incomplete env ⇒ `null` + a truthful warn — NEVER a fabricated
+ * squad; agent-os then leaves the autopilot un-routed (flat pass-through), it
+ * never skips every dispatch. Validated by the agent-os `squadSeedSchema` (the
+ * single source of truth for the seed shape), so no drift is possible.
+ */
+export function parseSquadSeedEnv(env: EnvSource): SquadSeed | null {
+  const rawJson = env.RECODER_SQUAD_DEF?.trim();
+  const squadId = env.RECODER_SQUAD_ID?.trim();
+  const membersCsv = env.RECODER_SQUAD_MEMBERS?.trim();
+  // Nothing configured ⇒ opt-out. A bare RECODER_SQUAD_ID (no members) also
+  // yields null here — agent-os then warns and routes flat, never skip-all.
+  if (!rawJson && !(squadId && membersCsv)) return null;
+  try {
+    if (rawJson) {
+      return squadSeedSchema.parse(JSON.parse(rawJson));
+    }
+    const leaderAgentId = env.RECODER_SQUAD_LEADER?.trim();
+    const members = membersCsv!
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+      .map((entry) => {
+        const [agentId, weightRaw] = entry.split(':').map((part) => part.trim());
+        const weight = weightRaw ? Number(weightRaw) : undefined;
+        return {
+          agentId,
+          ...(leaderAgentId && agentId === leaderAgentId ? { role: 'leader' as const } : {}),
+          ...(weight !== undefined && Number.isFinite(weight) ? { weight } : {}),
+        };
+      });
+    return squadSeedSchema.parse({
+      squadId,
+      displayName: env.RECODER_SQUAD_NAME?.trim() || squadId,
+      ...(env.RECODER_SQUAD_SPACE?.trim() ? { spaceId: env.RECODER_SQUAD_SPACE.trim() } : {}),
+      ...(leaderAgentId ? { leaderAgentId } : {}),
+      ...(env.RECODER_SQUAD_STRATEGY?.trim()
+        ? { routingStrategy: env.RECODER_SQUAD_STRATEGY.trim() }
+        : {}),
+      members,
+    });
+  } catch (err) {
+    childLogger('bootstrap').warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      'bootstrap: malformed squad seed env — squad routing OFF (autopilot routes flat, not skip-all)',
+    );
+    return null;
+  }
 }
 
 /** Boot the empty host and return a handle. */
@@ -446,6 +505,11 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       // weighted via multica's SquadService). Unset ⇒ null ⇒ flat default
       // dispatch (degrade-truthful; the loop still runs, just un-routed).
       squadId: bootEnv.RECODER_SQUAD_ID ?? null,
+      // Opt-in squad seed: agent-os seeds its in-memory store at start() so
+      // SquadService.route() finds a real squad instead of failing closed with
+      // "squad not found" (which would make the autopilot skip EVERY dispatch).
+      // Absent / malformed env ⇒ null ⇒ pass-through, byte-identical to today.
+      squadSeed: parseSquadSeedEnv(bootEnv),
     },
   });
   container.registerValue(DOMAIN_TOKENS['agent-os'], agentOs);
@@ -758,6 +822,13 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     substrates: [cliSub, openfangSub, cloudDaytonaSub],
     brain: conductorBrain,
     codeIntel: conductorCodeIntel,
+    // Double-assignment admission over the Multica coordination fabric, consulted
+    // in createWorkspace on the axis resource-governor → coordination-admission →
+    // work-lock → launch (keyed on input.taskId). FAIL-OPEN: no MULTICA_URL /
+    // engine down / any fault ⇒ admit:true,gated:false ⇒ the launch is untouched
+    // (a coordination engine being down NEVER blocks a launch). Only a LIVE,
+    // engine-confirmed double-assignment defers the launch (truthful ok:false).
+    coordinationAdmission: agentOs.coordinationAdmission(),
     // --- Consumer (b): the pal LAUNCH-PLANNING advisory over the engines-owned
     //     `PalBrainService` facet (NOT `@recoder/pal` — the conductor domain takes
     //     no such import). On a workspace create the launch path consults
