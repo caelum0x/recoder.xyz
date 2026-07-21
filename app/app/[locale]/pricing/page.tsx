@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Check, ArrowRight, Zap, Shield, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { PLANS, type Plan, type PlanId } from '@/lib/pricing-config';
-import { trackEvent, AnalyticsEvents } from '@/lib/analytics';
+import { trackEvent, emitCheckoutStarted, AnalyticsEvents } from '@/lib/analytics';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 
@@ -65,6 +65,14 @@ function CTAButton({ plan }: { plan: Plan }) {
   return (
     <Link
       href={`/auth/signup?plan=${plan.id}`}
+      onClick={() =>
+        emitCheckoutStarted({
+          planId: plan.id,
+          priceAmount: plan.price,
+          currency: 'USD',
+          promptSurface: 'pricing_page',
+        })
+      }
       className={`block w-full text-center px-6 py-3 rounded-lg font-semibold transition-all ${
         isHighlighted
           ? 'bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 text-white'

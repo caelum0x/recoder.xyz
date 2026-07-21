@@ -5,6 +5,7 @@ import { serialize } from 'php-serialize';
 import { logger } from '@/lib/logger';
 import { sendPaymentFailedEmail, sendSubscriptionCancelledEmail } from '@/lib/email';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+import { emitSubscriptionCreated } from '@/lib/analytics';
 
 const webhookRateLimiter = rateLimit(rateLimitConfigs.webhook);
 const PADDLE_PUBLIC_KEY = process.env.PADDLE_PUBLIC_KEY;
@@ -194,6 +195,19 @@ async function handleSubscriptionCreated(data: JsonObject) {
   });
 
   logger.info('Paddle subscription created', { route: 'api/webhooks/paddle', userId, plan: planName });
+
+  // Conversion event — fired only from this verified subscription_created
+  // webhook, carrying real fields parsed from the payload. Amount/currency are
+  // included only when Paddle actually provides them (dropped otherwise).
+  const unitPrice = parseFloat(getString(data.unit_price));
+  emitSubscriptionCreated({
+    userId,
+    planId: getString(subscription_plan_id) || planName,
+    priceAmount: Number.isFinite(unitPrice) ? unitPrice : undefined,
+    currency: getString(data.currency) || undefined,
+    plan: planName,
+    provider: 'paddle',
+  });
 }
 
 async function handleSubscriptionUpdated(data: JsonObject) {
