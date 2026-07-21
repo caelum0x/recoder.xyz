@@ -147,7 +147,7 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
                                         meta: {
                                             view: "recoder-terminal",
                                             "recoder:workspaceid": result.workspaceId,
-                                        },
+                                        } as MetaType,
                                     })
                                 }
                             >
