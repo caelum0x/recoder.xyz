@@ -49,6 +49,7 @@ import { createCliRuntimeSubstrate } from '../domains/conductor/adapters/cli-run
 import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/openfang-runtime.adapter.js';
 import { createBrainMemoryAdapter } from '../domains/conductor/adapters/brain-memory.adapter.js';
 import { createConductorCodeIntel } from '../domains/conductor/adapters/code-intel.adapter.js';
+import { createBrowserPreviewVerifier } from '../domains/conductor/adapters/browser-preview-verify.adapter.js';
 import { createConductorPlanAdapter } from '../domains/conductor/adapters/plan.adapter.js';
 import { createGithubStatusAdapter } from '../domains/conductor/adapters/github-status.adapter.js';
 import { createTmuxSteerTransport } from '../domains/conductor/adapters/steer-transport.adapter.js';
@@ -822,6 +823,15 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     substrates: [cliSub, openfangSub, cloudDaytonaSub],
     brain: conductorBrain,
     codeIntel: conductorCodeIntel,
+    // Browsing facet (item 21): the conductor verifies a stored preview URL
+    // through the browser-use EngineClientPort. Mirrors the code-intel injection
+    // (constructor dep, not a late setter — engines is built before the conductor).
+    // Constructed here so setPreviewUrl fires it fire-and-forget and
+    // POST /workspaces/:id/preview-verify is served. Degrade-truthful: browser-use
+    // unwired/down ⇒ the adapter yields a `skipped(degraded)` verification with the
+    // real reason (never a faked pass), and every fire is deadline-bounded so a
+    // hung preview can never stall the caller or the completion hook.
+    previewVerify: createBrowserPreviewVerifier(engines.client('browser-use')),
     // Double-assignment admission over the Multica coordination fabric, consulted
     // in createWorkspace on the axis resource-governor → coordination-admission →
     // work-lock → launch (keyed on input.taskId). FAIL-OPEN: no MULTICA_URL /
