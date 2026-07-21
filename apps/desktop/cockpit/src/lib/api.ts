@@ -95,6 +95,7 @@ import type {
   DevCommand,
   Workspace,
   WorkspaceDiff,
+  WorkspaceMergeability,
   WorkspaceTree,
   WriteVerdictView,
   ZitiHealth,
@@ -529,6 +530,17 @@ export const api = {
    */
   prStatus: (id: string) =>
     request<PrStatusView>('GET', `/workspaces/${encodeURIComponent(id)}/pr-status`),
+
+  /**
+   * The workspace branch's LOCAL git merge preflight
+   * (GET /workspaces/:id/mergeability). A side-effect-free `git merge-tree` trial
+   * merge + rev-list divergence, DISTINCT from the gh-derived {@link prStatus}.
+   * Degrade-truthful: `available:false` means git could not judge (no git / no
+   * worktree / git too old / faulted), NEVER a fabricated clean. The route does
+   * `sendSuccess(res, view)` so `data` is the bare view (no keyed pick).
+   */
+  mergeability: (id: string) =>
+    request<WorkspaceMergeability>('GET', `/workspaces/${encodeURIComponent(id)}/mergeability`),
 
   // --- checkpoints & restore (git snapshot capability) ---
   /** List a workspace's checkpoints (newest-first). */

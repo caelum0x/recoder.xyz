@@ -35,9 +35,10 @@ import {
 } from '../lib/conductor-health-state';
 import type { DeliveryGateDetail } from '../types';
 import { diffFileList, type DiffFile } from '../lib/diff-files';
+import { mergeabilityLine } from '../lib/mergeability-line';
 import { workspaceGoal } from '../lib/workspace-goal';
 import { workspaceCodename } from '../lib/workspace-codename';
-import type { WorkspaceDiff } from '../types';
+import type { WorkspaceDiff, WorkspaceMergeability } from '../types';
 import {
   canArchive,
   canMerge,
@@ -306,6 +307,21 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
     workspace.state === 'merging' ||
     workspace.state === 'merged';
 
+  // Merge preflight (GET /workspaces/:id/mergeability) — a LOCAL git trial merge,
+  // distinct from the gh-derived PR chip. Co-mounted with the ready-to-merge
+  // banner (readyToMerge = canMerge, or awaiting_review) so git is never probed
+  // speculatively and the line never renders outside the banner.
+  const wantsMergeability = readyToMerge || workspace.state === 'awaiting_review';
+  const mergeability = usePoll<WorkspaceMergeability | null>(
+    () => (wantsMergeability ? api.mergeability(workspace.workspaceId) : Promise.resolve(null)),
+    live ? 4000 : 30_000,
+    [workspace.workspaceId, wantsMergeability],
+  );
+  // Advisory only: relabel Merge → "Merge anyway" on a truthful conflict verdict.
+  // Never hard-block — the server still enforces the delivery gate.
+  const mergeConflicting =
+    mergeability.data?.available === true && mergeability.data.verdict === 'conflicting';
+
   async function runAction(
     name: string,
     fn: () => Promise<unknown>,
@@ -364,13 +380,30 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
           allows merging (canMerge), so we never imply a mergeable PR falsely. */}
       {readyToMerge && (
         <div class="detail-pr-banner">
-          <span class="detail-pr-banner-main">
-            <span class="detail-pr-check" aria-hidden="true">✓</span>
-            {pr ? `PR #${pr}` : 'PR'} · Ready to merge
-          </span>
-          <button class="btn btn-primary btn-sm" disabled={busy !== null} onClick={merge}>
-            {busy === 'merge' ? 'Merging…' : 'Merge'}
-          </button>
+          <div class="detail-pr-banner-row">
+            <span class="detail-pr-banner-main">
+              <span class="detail-pr-check" aria-hidden="true">✓</span>
+              {pr ? `PR #${pr}` : 'PR'} · Ready to merge
+            </span>
+            <button class="btn btn-primary btn-sm" disabled={busy !== null} onClick={merge}>
+              {busy === 'merge' ? 'Merging…' : mergeConflicting ? 'Merge anyway' : 'Merge'}
+            </button>
+          </div>
+          {/* Merge preflight advisory — a truthful local-git verdict before the
+              operator clicks Merge. Degrade-truthful: an unavailable / could-not-
+              judge edge shows an honest "unavailable", never a fabricated clean. */}
+          {mergeability.loading && !mergeability.data ? (
+            <div class="detail-mergeability tone-unknown">Checking merge…</div>
+          ) : mergeability.error && !mergeability.data ? (
+            <div class="detail-mergeability tone-unknown" title={describeError(mergeability.error)}>
+              Merge preflight unavailable — {describeError(mergeability.error)}
+            </div>
+          ) : mergeability.data ? (
+            (() => {
+              const line = mergeabilityLine(mergeability.data);
+              return <div class={`detail-mergeability tone-${line.tone}`}>{line.label}</div>;
+            })()
+          ) : null}
         </div>
       )}
 
