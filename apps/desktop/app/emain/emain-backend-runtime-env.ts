@@ -42,6 +42,17 @@ export const OPENFANG_CONFIG_ENV = "OPENFANG_CONFIG";
 export const TENSORZERO_ADDON_ENV = "TENSORZERO_GATEWAY_NAPI_NODE";
 
 /**
+ * The embedded vector store reads these: RECODER_NATIVE_DIR / LANCE_NATIVE_DIR
+ * point the napi loader at the packaged <resourcesPath>/native dir (where the
+ * governance + lance .node land); LANCE_DATA_DIR is the on-disk store root. All
+ * are set ONLY when the artifact is actually present so an absent lance addon
+ * leaves the backend degrading to Qdrant/no-op truthfully (never a dead path).
+ */
+export const RECODER_NATIVE_DIR_ENV = "RECODER_NATIVE_DIR";
+export const LANCE_NATIVE_DIR_ENV = "LANCE_NATIVE_DIR";
+export const LANCE_DATA_DIR_ENV = "LANCE_DATA_DIR";
+
+/**
  * BYOK provider-key names the openfang kernel (model_catalog.rs api_key_env)
  * and the embedded TensorZero gateway resolve from env. Only these names are
  * ever lifted out of the secret store into the backend spawn env — the store
@@ -69,6 +80,23 @@ export const BYOK_SECRET_ENV_NAMES: readonly string[] = [
     "TENSORZERO_URL",
     "TENSORZERO_API_KEY",
     "TENSORZERO_GATEWAY_API_KEY",
+];
+
+/**
+ * Connector ADDRESSING secrets (endpoints, not provider keys) that ride the
+ * SAME encrypted store, still allowlisted so unrelated user secrets never leak
+ * into the child. HONESTY: we never fabricate a localhost URL for a sidecar we
+ * did not package — if the user configured no cloud/self-hosted endpoint the
+ * var stays absent and the backend reports the capability `down` truthfully.
+ *   - MEM0_BASE_URL:      points the platform mem0 client at a cloud sidecar.
+ *   - COLBERT_RERANK_URL: cloud rerank endpoint; absent → identity order.
+ *   - QDRANT_URL/KEY:     external vector store (alternative to embedded Lance).
+ */
+export const CONNECTOR_SECRET_ENV_NAMES: readonly string[] = [
+    "MEM0_BASE_URL",
+    "COLBERT_RERANK_URL",
+    "QDRANT_URL",
+    "QDRANT_API_KEY",
 ];
 
 /**
@@ -157,6 +185,47 @@ export function resolveOpenfangRuntimeEnv(opts: {
     const configPath = env[OPENFANG_CONFIG_ENV]?.trim() ? null : existsSync(homeConfig) ? homeConfig : null;
 
     return { addonPath, homeDir, configPath, tensorzeroAddonPath };
+}
+
+/**
+ * The resolved embedded-vector env to FILL into the backend spawn env.
+ * `null` means "nothing to inject": in dev, or when the packaged native dir /
+ * lance addon is absent — so the embedded Lance store stays a truthful no-op
+ * (the backend degrades to Qdrant/no-op) instead of dlopen-ing a missing .node.
+ */
+export interface EmbeddedVectorEnv {
+    nativeDir: string | null;
+    lanceDataDir: string | null;
+}
+
+/**
+ * Resolve the embedded vector-store env for the backend child. Packaged:
+ * electron-builder extraResources lands the native .node addons in
+ * <resourcesPath>/native, so RECODER_NATIVE_DIR / LANCE_NATIVE_DIR point there
+ * to make governance + lance resolution EXPLICIT (not only the resourcesPath
+ * probe in the backend's napi-loader). LANCE_DATA_DIR is returned ONLY when the
+ * lance addon is actually on disk — otherwise the embedded store must stay a
+ * no-op (backend degrades to Qdrant), never a load of a missing addon. Dev
+ * (isPackaged:false) returns all-null: the repo has no packaged native dir and
+ * lance is not built here. Explicit env always wins (fill resolves to null).
+ */
+export function resolveEmbeddedVectorEnv(opts: {
+    isPackaged: boolean;
+    resourcesPath?: string;
+    dataDir: string;
+    baseEnv?: NodeJS.ProcessEnv;
+    existsSync?: (p: string) => boolean;
+}): EmbeddedVectorEnv {
+    const env = opts.baseEnv ?? process.env;
+    const existsSync = opts.existsSync ?? nodeFs.existsSync;
+
+    const nativeDir = opts.isPackaged && opts.resourcesPath ? nodePath.join(opts.resourcesPath, "native") : null;
+
+    const lanceAddonPresent = !!nativeDir && existsSync(nodePath.join(nativeDir, "lance_npm_bindings.node"));
+    const lanceDataDir =
+        lanceAddonPresent && !env[LANCE_DATA_DIR_ENV]?.trim() ? nodePath.join(opts.dataDir, "lance") : null;
+
+    return { nativeDir, lanceDataDir };
 }
 
 /** The minimal fs surface the secret-store reader needs (injectable for tests). */

@@ -10,7 +10,9 @@
 import { describe, expect, it } from "vitest";
 import {
     BYOK_SECRET_ENV_NAMES,
+    CONNECTOR_SECRET_ENV_NAMES,
     readByokSecretsFromStore,
+    resolveEmbeddedVectorEnv,
     resolveOpenfangRuntimeEnv,
 } from "./emain-backend-runtime-env";
 
@@ -109,6 +111,64 @@ describe("resolveOpenfangRuntimeEnv", () => {
         );
         expect(out.homeDir).toBeNull();
         expect(out.configPath).toBe("/custom/home/config.toml");
+    });
+});
+
+describe("resolveEmbeddedVectorEnv", () => {
+    const LANCE_ADDON = `${RESOURCES}/native/lance_npm_bindings.node`;
+
+    it("sets nativeDir + LANCE_DATA_DIR when packaged and the lance addon exists", () => {
+        const out = resolveEmbeddedVectorEnv({
+            isPackaged: true,
+            resourcesPath: RESOURCES,
+            dataDir: "/ud/backend-data",
+            baseEnv: {},
+            existsSync: (p: string) => p === LANCE_ADDON,
+        });
+        expect(out.nativeDir).toBe(`${RESOURCES}/native`);
+        expect(out.lanceDataDir).toBe("/ud/backend-data/lance");
+    });
+
+    it("sets nativeDir but leaves lanceDataDir null when the addon is absent (no-op honesty)", () => {
+        const out = resolveEmbeddedVectorEnv({
+            isPackaged: true,
+            resourcesPath: RESOURCES,
+            dataDir: "/ud/backend-data",
+            baseEnv: {},
+            existsSync: () => false,
+        });
+        expect(out.nativeDir).toBe(`${RESOURCES}/native`);
+        expect(out.lanceDataDir).toBeNull();
+    });
+
+    it("returns all-null in dev (no packaged native dir; lance not built here)", () => {
+        const out = resolveEmbeddedVectorEnv({
+            isPackaged: false,
+            resourcesPath: RESOURCES,
+            dataDir: "/repo/data",
+            baseEnv: {},
+            existsSync: () => true,
+        });
+        expect(out.nativeDir).toBeNull();
+        expect(out.lanceDataDir).toBeNull();
+    });
+
+    it("yields to an explicit LANCE_DATA_DIR (explicit wins; fill resolves to null)", () => {
+        const out = resolveEmbeddedVectorEnv({
+            isPackaged: true,
+            resourcesPath: RESOURCES,
+            dataDir: "/ud/backend-data",
+            baseEnv: { LANCE_DATA_DIR: "/custom/lance" },
+            existsSync: (p: string) => p === LANCE_ADDON,
+        });
+        expect(out.nativeDir).toBe(`${RESOURCES}/native`);
+        expect(out.lanceDataDir).toBeNull();
+    });
+
+    it("allowlists only connector addressing endpoints (mem0/colbert/qdrant), never provider keys", () => {
+        expect(CONNECTOR_SECRET_ENV_NAMES).toContain("MEM0_BASE_URL");
+        expect(CONNECTOR_SECRET_ENV_NAMES).toContain("COLBERT_RERANK_URL");
+        expect(CONNECTOR_SECRET_ENV_NAMES).not.toContain("ANTHROPIC_API_KEY");
     });
 });
 

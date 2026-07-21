@@ -31,7 +31,7 @@ import {
     writeCockpitWidgetConfig,
     writeWaveAIGatewayConfig,
 } from "./emain-backend-core";
-import { readByokSecretsFromStore } from "./emain-backend-runtime-env";
+import { CONNECTOR_SECRET_ENV_NAMES, readByokSecretsFromStore } from "./emain-backend-runtime-env";
 import { getElectronAppBasePath, getWaveConfigDir } from "./emain-platform";
 
 let supervisor: BackendSupervisor = null;
@@ -99,6 +99,20 @@ export async function startBackendSupervisor(): Promise<void> {
             readByokSecrets: () =>
                 readByokSecretsFromStore({
                     secretsFilePath: path.join(getWaveConfigDir(), "secrets.enc"),
+                    decrypt: (ciphertextBase64) => {
+                        if (!safeStorage.isEncryptionAvailable()) {
+                            throw new Error("safeStorage encryption is not available");
+                        }
+                        return safeStorage.decryptString(Buffer.from(ciphertextBase64, "base64"));
+                    },
+                }),
+            // Connector addressing URLs (mem0/colbert/qdrant) from the SAME store,
+            // allowlisted separately so only endpoints ride into the child. Absent
+            // ⇒ those capabilities report down truthfully; never a fabricated URL.
+            readConnectorSecrets: () =>
+                readByokSecretsFromStore({
+                    secretsFilePath: path.join(getWaveConfigDir(), "secrets.enc"),
+                    allowlist: CONNECTOR_SECRET_ENV_NAMES,
                     decrypt: (ciphertextBase64) => {
                         if (!safeStorage.isEncryptionAvailable()) {
                             throw new Error("safeStorage encryption is not available");
