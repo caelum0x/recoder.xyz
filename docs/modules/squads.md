@@ -30,6 +30,35 @@ reports down, never fakes success. Three are read edges; the reroute is
   bypass the read-only posture above; the CRUD verbs (`createSquad`/`assign`/`autopilot`)
   remain internal-only.
 
+## Multica fusion posture (route + admission — SHIPPED, degrade-safe)
+
+The multica engine's routing + coordination ideas are **ported into the backend
+domains**, not run as a hard subprocess dependency. The Go squads binary / loopback
+supervisor stays a **degrade-safe optional enrichment**, reached ONLY as an external
+`MULTICA_URL` through `MulticaCoordinationAdapter` — absent ⇒ everything degrades open.
+Two dark wiring hops were closed (items 19–20), both **opt-in / fail-open**:
+
+- **Squad routing is opt-in via a squad seed.** `SquadService.route` was threaded
+  end-to-end but sat over a never-seeded in-memory store, so a set `RECODER_SQUAD_ID`
+  returned "squad not found" and the autopilot skipped every dispatch. Agent-os now
+  runs an **opt-in** `seedSquad()` in `start()` (before the autopilot loop) driven by a
+  zod-validated `squadSeed` config (default `null` = OFF; bootstrap parses it from
+  `RECODER_SQUAD_DEF` json | `RECODER_SQUAD_ID`+`RECODER_SQUAD_MEMBERS` csv). Once
+  seeded, `route()` genuinely selects a member (leader-first / weighted) and threads
+  `routedAgentId` into the conductor launch. **DEFAULT OFF:** with no seed the autopilot
+  is a byte-identical flat pass-through; a bare `squadId` with no seed degrades to
+  pass-through with a truthful warn — never the skip-all footgun, never a fabricated
+  route.
+- **Coordination admission is consulted on `createWorkspace`, fail-open.** The conductor
+  consults `CoordinationAdmissionService.admitIssue({issueId})` on the axis
+  resource-governor → coordination-admission → work-lock → launch. A **live,
+  engine-confirmed** double-assignment defers the launch truthfully (`ok:false`, audit
+  `coordinationDeferred`) — not a governance deny; the reroute WRITE stays
+  governance-gated (`coordination.reroute`). **FAIL-OPEN (load-bearing):** no
+  `MULTICA_URL` / engine absent/unreachable/errored / no `taskId` / absent gate ⇒
+  `admit:true, gated:false` ⇒ the launch proceeds untouched. A coordination engine being
+  down NEVER blocks a launch; only a confirmed contention defers.
+
 **Rule:** this module drives the real engine(s) directly and exposes ONE cohesive,
 governed, health-truthful interface to the backend. Depth lives in the engine dirs;
 this folder owns the composition + interface. Degrade-safe: any engine down → that
