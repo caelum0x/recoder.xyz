@@ -19,10 +19,31 @@ import type { GovernanceKernelPort } from '../../../governance/ports/kernel.port
 import type { NapiLoaderPort, NapiModule } from '../../ports/napi-loader.port.js';
 import { generateTzConfig, type GeneratedTzConfig } from '../../../inference/adapters/tz-config-generator.js';
 import type { ModelCatalogEntry } from '../../../inference/types.js';
+import type { TensorzeroConfigProvider } from '../../ports/tensorzero-config.port.js';
+import {
+  registryFromEnv,
+  buildTensorzeroConfig,
+  tensorzeroFunctionName,
+  TENSORZERO_DEFAULT_FUNCTION,
+  generateTensorzeroConfig,
+} from '../../../inference/tensorzero-config.js';
 import { createEnginesModule } from '../../index.js';
 import { TensorzeroNapiAdapter } from './tensorzero-napi.adapter.js';
 
 const log = { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() } as unknown as Logger;
+
+/**
+ * The REAL config provider bootstrap injects — the concrete inference
+ * `tensorzero-config` module. The adapter's boot-config path (`resolveConfigFile`)
+ * calls this injected port (§7 V5); wiring it here reproduces the production boot.
+ */
+const realTzConfig: TensorzeroConfigProvider = {
+  registryFromEnv,
+  buildTensorzeroConfig,
+  tensorzeroFunctionName,
+  TENSORZERO_DEFAULT_FUNCTION,
+  generateTensorzeroConfig,
+};
 
 interface TzGateway {
   inference(p: string): Promise<string>;
@@ -83,6 +104,7 @@ describe('TensorzeroNapiAdapter catalog-config-provider merge (§4b)', () => {
   it('boots the gateway on registry ∪ DB catalog when a provider is wired', async () => {
     const captured: { config?: string | null } = {};
     const adapter = new TensorzeroNapiAdapter(capturingLoader(captured), log);
+    adapter.setTensorzeroConfigProvider(realTzConfig);
     adapter.setCatalogConfigProvider(async () => overlay('anthropic/claude-3-5-haiku'));
     await adapter.start();
     expect(captured.config).toBeTruthy();
@@ -94,6 +116,7 @@ describe('TensorzeroNapiAdapter catalog-config-provider merge (§4b)', () => {
   it('degrades to the env-only config when the provider throws', async () => {
     const captured: { config?: string | null } = {};
     const adapter = new TensorzeroNapiAdapter(capturingLoader(captured), log);
+    adapter.setTensorzeroConfigProvider(realTzConfig);
     adapter.setCatalogConfigProvider(async () => {
       throw new Error('catalog DB down');
     });
@@ -106,6 +129,7 @@ describe('TensorzeroNapiAdapter catalog-config-provider merge (§4b)', () => {
   it('degrades to the env-only config when the catalog is empty', async () => {
     const captured: { config?: string | null } = {};
     const adapter = new TensorzeroNapiAdapter(capturingLoader(captured), log);
+    adapter.setTensorzeroConfigProvider(realTzConfig);
     adapter.setCatalogConfigProvider(async () => overlay()); // no models
     await adapter.start();
     const toml = readFileSync(captured.config!, 'utf8');
@@ -113,13 +137,23 @@ describe('TensorzeroNapiAdapter catalog-config-provider merge (§4b)', () => {
     expect(toml).not.toContain('anthropic');
   });
 
-  it('boots the env-only config when NO provider is wired', async () => {
+  it('boots the env-only config when NO catalog provider is wired', async () => {
     const captured: { config?: string | null } = {};
     const adapter = new TensorzeroNapiAdapter(capturingLoader(captured), log);
+    adapter.setTensorzeroConfigProvider(realTzConfig);
     await adapter.start();
     const toml = readFileSync(captured.config!, 'utf8');
     expect(toml).toContain('[models."openai/gpt-4o-mini"]');
     expect(toml).not.toContain('anthropic');
+  });
+
+  it('boots the default (null) config when NO tensorzero config provider is injected', async () => {
+    // §7 V5: without the injected config provider the boot-config path degrades to
+    // the default (null) config instead of lazy-importing the inference domain.
+    const captured: { config?: string | null } = {};
+    const adapter = new TensorzeroNapiAdapter(capturingLoader(captured), log);
+    await adapter.start();
+    expect(captured.config).toBeNull();
   });
 });
 
@@ -188,5 +222,22 @@ describe('engines.setTensorzeroCatalogProvider (typed tz-scoped accessor)', () =
     const generic = engines.client('beads'); // a non-tensorzero engine client
     expect(generic).not.toBeNull();
     expect((generic as unknown as { setCatalogConfigProvider?: unknown }).setCatalogConfigProvider).toBeUndefined();
+  });
+});
+
+describe('engines.setTensorzeroConfigProvider (typed tz-scoped accessor, §7 V5)', () => {
+  it('reaches the concrete TensorzeroNapiAdapter', async () => {
+    const engines = await buildEngines();
+    const adapter = engines.tensorzero();
+    expect(adapter).toBeInstanceOf(TensorzeroNapiAdapter);
+    const spy = vi.spyOn(adapter as TensorzeroNapiAdapter, 'setTensorzeroConfigProvider');
+    engines.setTensorzeroConfigProvider(realTzConfig);
+    expect(spy).toHaveBeenCalledWith(realTzConfig);
+  });
+
+  it('is a truthful no-op (never throws) when tensorzero is not a bound napi adapter', async () => {
+    const engines = await buildEngines();
+    (engines as unknown as { adapters: Map<string, unknown> }).adapters.delete('tensorzero');
+    expect(() => engines.setTensorzeroConfigProvider(realTzConfig)).not.toThrow();
   });
 });

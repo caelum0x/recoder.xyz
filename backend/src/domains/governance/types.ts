@@ -14,8 +14,15 @@
  * The totally-ordered risk classification. Mirrors the Rust kernel + package
  * `RiskTier`. A higher tier subsumes the approval/enforcement requirements of a
  * lower one. Compare through {@link riskTierRank}, never by string sort.
+ *
+ * RELOCATED (owner mandate 2026-07-21): the PURE risk-tier vocabulary + ordering
+ * now lives in the leaf `@recoder/agent-policy` package (shared, no-domain layer)
+ * so the engines governance re-expose consumes it as a package value (category-5
+ * legal) instead of reaching into this domain. Imported here so the shapes below
+ * keep using it, and re-exported so governance keeps its public surface.
  */
-export type RiskTier = 'low' | 'medium' | 'high' | 'critical';
+import type { RiskTier } from '@recoder/agent-policy';
+export type { RiskTier };
 
 /** The three verdict effects. `deny` is a hard block; `needs_approval` is gated. */
 export type GovernanceEffect = 'allow' | 'deny' | 'needs_approval';
@@ -31,23 +38,12 @@ export type GovernanceAction = string;
 /** Which rung of the degrade ladder produced a verdict (drives truthful health). */
 export type KernelEngine = 'napi' | 'daemon' | 'ts' | 'synthetic';
 
-/** Numeric rank for the four tiers (deny-biased max). */
-const RISK_TIER_RANK: Readonly<Record<RiskTier, number>> = {
-  low: 0,
-  medium: 1,
-  high: 2,
-  critical: 3,
-};
-
-/** Rank of a tier (0..3). */
-export function riskTierRank(tier: RiskTier): number {
-  return RISK_TIER_RANK[tier];
-}
-
-/** The more severe of two tiers (deny-biased toward higher risk). */
-export function maxRiskTier(a: RiskTier, b: RiskTier): RiskTier {
-  return RISK_TIER_RANK[a] >= RISK_TIER_RANK[b] ? a : b;
-}
+/**
+ * Back-compat value re-exports of the PURE tier ordering, now owned by the leaf
+ * `@recoder/agent-policy` package (see the {@link RiskTier} note above). Governance
+ * internals + consumers keep importing `riskTierRank` / `maxRiskTier` from here.
+ */
+export { riskTierRank, maxRiskTier } from '@recoder/agent-policy';
 
 /**
  * The concrete subject of an action. Mirrors the package `GovernanceTarget` so

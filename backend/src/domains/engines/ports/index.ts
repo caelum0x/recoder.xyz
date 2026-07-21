@@ -44,3 +44,5 @@ export type {
   EngineRestartRecord,
   EngineHealthLogRow,
 } from './engine-registry.port.js';
+
+export type { TensorzeroConfigProvider } from './tensorzero-config.port.js';

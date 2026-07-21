@@ -34,11 +34,14 @@ import { EngineClientBase, type EngineCall } from '../../ports/engine-client.por
 import type { NapiLoaderPort, NapiLoadSpec, NapiModule } from '../../ports/napi-loader.port.js';
 import { type EngineHealth, type InvokeResult, down, fail, ok, up } from '../../types.js';
 import { msg, parseJson, str, type NapiArgs } from './napi-util.js';
-// TYPE-ONLY edge (erased at build): the DB-catalog config-provider shape the
-// inference domain owns. This is NOT a static value import — the ONLY runtime
-// engines→inference edges are the deliberate lazy `await import(...)` calls in
-// `resolveConfigFile`/`runModelCatalog` below (§7 invariant).
+// TYPE-ONLY edges (erased at build): the DB-catalog config-provider shape the
+// inference domain owns, and the consumer-owned config-provider port this adapter
+// calls. There are NO runtime engines→inference edges: the two former lazy
+// `await import('../../../inference/tensorzero-config.js')` calls in
+// `runModelCatalog`/`resolveConfigFile` are gone — both now read the INJECTED
+// `TensorzeroConfigProvider` (bootstrap wires the concrete inference impl).
 import type { CatalogConfigProvider } from '../../../inference/adapters/tz-config-generator.js';
+import type { TensorzeroConfigProvider } from '../../ports/tensorzero-config.port.js';
 
 /** The embedded gateway (the full TZ engine, in-process — no HTTP server). */
 interface TzEmbeddedGatewayInstance {
@@ -212,6 +215,16 @@ export class TensorzeroNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
    * empty / throwing ⇒ the env-only boot config (degrade-safe).
    */
   private catalogConfigProvider?: CatalogConfigProvider;
+  /**
+   * The env→registry→config generation surface (`registryFromEnv` /
+   * `buildTensorzeroConfig` / `tensorzeroFunctionName` / `TENSORZERO_DEFAULT_FUNCTION`
+   * / `generateTensorzeroConfig`), injected by bootstrap over the inference domain's
+   * concrete `tensorzero-config` module (§7 V5). Replaces the two former lazy
+   * `await import(...)` cross-domain edges. Unset ⇒ the same degrade the old
+   * dynamic-import catch produced: `runModelCatalog` fails truthfully and
+   * `resolveConfigFile` boots the default (null) config.
+   */
+  private tensorzeroConfig?: TensorzeroConfigProvider;
 
   constructor(
     private readonly loader: NapiLoaderPort,
@@ -360,6 +373,16 @@ export class TensorzeroNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
     this.catalogConfigProvider = provider;
   }
 
+  /**
+   * Inject the env→registry→config generation provider (bootstrap wires the
+   * inference domain's concrete `tensorzero-config` module). Write-once seam like
+   * the catalog provider above; wired before the first inference / eager boot.
+   * Removes the adapter's two former lazy `await import(...)` edges into inference.
+   */
+  setTensorzeroConfigProvider(provider: TensorzeroConfigProvider): void {
+    this.tensorzeroConfig = provider;
+  }
+
   // --- internals ---
 
   /**
@@ -370,9 +393,11 @@ export class TensorzeroNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
    */
   private async runModelCatalog(): Promise<InvokeResult<TensorzeroModelCatalog>> {
     if (this.options.enabled === false) return fail('tensorzero engine disabled by config', 'DISABLED');
+    const provider = this.tensorzeroConfig;
+    if (!provider) return fail('tensorzero config provider not injected', 'ENGINE_DOWN');
     try {
       const { registryFromEnv, buildTensorzeroConfig, tensorzeroFunctionName, TENSORZERO_DEFAULT_FUNCTION } =
-        await import('../../../inference/tensorzero-config.js');
+        provider;
       const registry = registryFromEnv();
       const built = buildTensorzeroConfig(registry);
       const models: TensorzeroCatalogModel[] = registry.models.map((entry) => ({
@@ -560,11 +585,16 @@ export class TensorzeroNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
   private async resolveConfigFile(): Promise<string | null> {
     if (this.options.configFile !== undefined) return this.options.configFile;
     if (this.options.generateConfig === false) return null;
-    // REUSE the existing config generator (env → registry → TOML → temp path),
+    // REUSE the injected config generator (env → registry → TOML → temp path),
     // UNIONed with the DB catalog when a provider is wired (§4b). Exactly ONE
     // temp file is materialized; the overlay path degrades to the env-only path.
+    const provider = this.tensorzeroConfig;
+    if (!provider) {
+      this.log.warn({}, 'tensorzero config provider not injected — booting default config');
+      return null;
+    }
     try {
-      const { generateTensorzeroConfig } = await import('../../../inference/tensorzero-config.js');
+      const { generateTensorzeroConfig } = provider;
       const overlay = await this.resolveCatalogOverlay();
       return generateTensorzeroConfig(process.env, overlay).path ?? null;
     } catch (err) {

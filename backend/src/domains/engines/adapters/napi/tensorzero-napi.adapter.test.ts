@@ -15,9 +15,30 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Logger } from '../../../../shared/logger.js';
 import type { NapiLoaderPort, NapiModule } from '../../ports/napi-loader.port.js';
+import type { TensorzeroConfigProvider } from '../../ports/tensorzero-config.port.js';
+import {
+  registryFromEnv,
+  buildTensorzeroConfig,
+  tensorzeroFunctionName,
+  TENSORZERO_DEFAULT_FUNCTION,
+  generateTensorzeroConfig,
+} from '../../../inference/tensorzero-config.js';
 import { TensorzeroNapiAdapter } from './tensorzero-napi.adapter.js';
 
 const log = { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() } as unknown as Logger;
+
+/**
+ * The REAL config provider bootstrap injects — the concrete inference
+ * `tensorzero-config` module. Wiring it here exercises the identical code path the
+ * two former `await import(...)` calls hit (behavior-preserving; §7 V5).
+ */
+const realTzConfig: TensorzeroConfigProvider = {
+  registryFromEnv,
+  buildTensorzeroConfig,
+  tensorzeroFunctionName,
+  TENSORZERO_DEFAULT_FUNCTION,
+  generateTensorzeroConfig,
+};
 
 interface TzGateway {
   inference(p: string): Promise<string>;
@@ -225,6 +246,7 @@ describe('TensorzeroNapiAdapter deep inference port (catalog + batch)', () => {
     process.env.OPENAI_API_KEY = 'sk-test';
     // .node absent → gatewayVersion is null, but the catalog is still resolved.
     const adapter = new TensorzeroNapiAdapter(fakeLoader(null, null), log, { configFile: null });
+    adapter.setTensorzeroConfigProvider(realTzConfig);
     const result = await adapter.invoke({ op: 'modelCatalog', input: {} });
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -245,6 +267,7 @@ describe('TensorzeroNapiAdapter deep inference port (catalog + batch)', () => {
   it('modelCatalog reports the gateway version when the .node is present', async () => {
     process.env.TENSORZERO_MODELS = '';
     const adapter = new TensorzeroNapiAdapter(fakeLoader(withEmbedded(), '/tmp/tz.node'), log, { configFile: null });
+    adapter.setTensorzeroConfigProvider(realTzConfig);
     const result = await adapter.invoke({ op: 'modelCatalog', input: {} });
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -253,6 +276,15 @@ describe('TensorzeroNapiAdapter deep inference port (catalog + batch)', () => {
       expect(catalog.models).toHaveLength(0);
       expect(catalog.defaultFunction).toBeNull();
     }
+  });
+
+  it('modelCatalog degrades truthfully (ENGINE_DOWN) when no config provider is injected', async () => {
+    // §7 V5: the two former `await import(...)` edges are gone; with no injected
+    // provider the catalog path fails truthfully instead of reaching the inference domain.
+    const adapter = new TensorzeroNapiAdapter(fakeLoader(null, null), log, { configFile: null });
+    const result = await adapter.invoke({ op: 'modelCatalog', input: {} });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('ENGINE_DOWN');
   });
 
   it('batchInference runs every request over the single-inference napi and aggregates outcomes', async () => {
