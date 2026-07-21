@@ -381,6 +381,12 @@ export function assembleBackendEnv(opts: {
     const env: NodeJS.ProcessEnv = {
         ...opts.baseEnv,
         PORT: String(opts.port),
+        // Loopback-only bind. The backend defaults HOST to 0.0.0.0 (prod
+        // containers legitimately need all-interfaces), so an embedded desktop
+        // that never set HOST would expose the control-plane backend on the
+        // user's LAN. The supervisor already reaches it via 127.0.0.1; pin the
+        // child to loopback. An explicit operator override still wins.
+        HOST: opts.baseEnv.HOST || "127.0.0.1",
         DATA_DIR: opts.dataDir,
         STRICT_AUTH: "false",
         NODE_ENV: opts.baseEnv.NODE_ENV || "production",
