@@ -99,6 +99,8 @@ import {
 import { createOpenfangProvenanceGate } from './agent-engine/provenance-gate.js';
 import { createAgentEngineService } from './agent-engine/agent-engine.service.js';
 import type { AgentEngineService } from './ports/agent-engine.port.js';
+import { createPalBrainService } from './pal-brain/pal-brain.service.js';
+import type { PalBrainService } from './ports/pal-brain.port.js';
 import type { OpenfangProvenanceGate } from './openfang-runtime.js';
 import {
   GithubModule,
@@ -222,6 +224,8 @@ export class EnginesComposer implements EnginesModule {
   private readonly openfangGate: OpenfangProvenanceGate;
   /** The cohesive openfang agent-engine facet (memoized). */
   private agentEngineFacet: AgentEngineService | null | undefined;
+  /** The cohesive pal agent-comms-brain facet (memoized). */
+  private palFacet: PalBrainService | null = null;
   private readonly daemonSupervisor: DaemonSupervisor;
   private readonly sidecarSupervisor: SidecarSupervisor;
   private readonly adapters: ReadonlyMap<EngineId, EngineClientPort>;
@@ -327,8 +331,12 @@ export class EnginesComposer implements EnginesModule {
           (this.adapters.get('dmux') as DmuxAdapter | undefined)?.layout() ??
             null
         ),
-        palPlanEngineBinder(),
-        // `recoder.pal-comms` (route/consensus/debate/models) over the pal adapter.
+        // `recoder.pal-plan` — thin over the ONE owned pal seam: the facet's
+        // deny-biased `plan()` (composes `@recoder/pal`'s `computePalPlanDecision`).
+        palPlanEngineBinder((taskSpec) => this.pal()!.plan({ taskSpec })),
+        // `recoder.pal-comms` (route/consensus/debate/models) stays a PARALLEL thin
+        // surface over the raw `EngineClientPort` transport — NOT re-pointed at the
+        // facet (the facet + binder are two thin surfaces over one frozen transport).
         palCommsEngineBinder(this.adapters.get('pal-mcp') ?? null),
         githubEngineBinder(this.githubModule),
         repoEngineBinder({ repoRoot: this.cfg.repoRoot ?? null }),
@@ -495,6 +503,21 @@ export class EnginesComposer implements EnginesModule {
       ? createAgentEngineService({ engine, gate: this.openfangGate, logger: this.log })
       : null;
     return this.agentEngineFacet;
+  }
+
+  /**
+   * The cohesive pal agent-comms-brain facet (docs/modules/communication.md).
+   * Pure verbs (plan/routeModel/planLaunch/escalate) compose `@recoder/pal`
+   * in-proc and stay live even with the sidecar absent; the sidecar verbs
+   * (consensus/debate) compose the `pal-mcp` transport and degrade truthfully to
+   * `abstain` when it is down. Always non-null (the pure verbs need no engine); a
+   * null `pal-mcp` adapter only disables the sidecar verbs. Memoized.
+   */
+  pal(): PalBrainService | null {
+    if (this.palFacet) return this.palFacet;
+    const engine = this.adapters.get('pal-mcp') ?? null;
+    this.palFacet = createPalBrainService({ engine, logger: this.log });
+    return this.palFacet;
   }
 
   /**
