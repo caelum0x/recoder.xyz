@@ -120,6 +120,37 @@ describe('executeBrowserVerification (truthful degrade)', () => {
     expect(openCheck?.message).toContain('ERR_CONNECTION_REFUSED');
   });
 
+  it('treats a bounded-deadline breach as a degraded skip — never hangs, never fabricates a verdict', async () => {
+    // A client that HONORS timeoutMs by returning the adapter's truthful timeout
+    // fail (the shape BrowserUseAdapter.invoke produces on a hung page).
+    const hungPage: EngineClientPort = {
+      id: 'browser-use',
+      transport: 'sidecar',
+      async start() {},
+      async stop() {},
+      async invoke(call: EngineCall<unknown>) {
+        expect(call.timeoutMs).toBe(50); // the executor threaded the deadline through
+        return fail(`browser-use ${call.op} exceeded ${call.timeoutMs}ms deadline`, 'timeout');
+      },
+      async health() {
+        return up('browser-use', 'sidecar');
+      },
+    };
+    const started = Date.now();
+    const run = await executeBrowserVerification(hungPage, {
+      url: 'https://example.com',
+      assertions: [{ expected: 'deploy succeeded' }],
+      timeoutMs: 50,
+    });
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(run.degraded).toBe(true);
+    expect(run.reason).toContain('deadline');
+    expect(run.result.status).toBe('skipped');
+    expect(run.result.checks.every((check) => check.status === 'skipped')).toBe(true);
+    const summary = run.result.artifacts.find((artifact) => artifact.kind === 'verification_summary');
+    expect(summary?.metadata?.degraded).toBe(true);
+  });
+
   it('skips assertions truthfully when text extraction is unavailable mid-run', async () => {
     const extractDown = fakeClient({
       navigate: () => ok({ status: 'ok', url: 'https://example.com/' }),
