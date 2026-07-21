@@ -1347,6 +1347,35 @@ export class ConductorComposer implements ConductorModule {
     }
   }
 
+  /**
+   * SINGLE-WRITER persist of a run's napi-tier `inference_id` onto the workspace
+   * record — the WRITE side of the merge → `feedback()` RLHF loop consumed at
+   * {@link mergeWorkspace} (`:1338`). Reuses the same-state metadata-patch idiom of
+   * {@link setPreviewUrl} (`:1245`): `advanceWorkspace` transitions the workspace to
+   * its CURRENT state and MERGES the `{ inferenceId }` patch onto existing metadata
+   * (verified: `transitionWorkspace` spreads `...metadata`), so a concurrent
+   * lifecycle advance is never clobbered and only `inferenceId` is written.
+   *
+   * WRITE-ONCE: an already-anchored workspace returns `true` without a write — the
+   * first napi-served completion of a run claims the anchor, minimizing the race
+   * window against concurrent advances and never overwriting a resolvable id.
+   *
+   * No governance gate: this is an internal correlation write on the sink's
+   * fire-and-forget path (mirrors the internal principal path the autopilot uses),
+   * not a customer-visible action. Degrade-truthful: a missing workspace ⇒ `false`.
+   */
+  async recordRunInferenceId(workspaceId: string, inferenceId: string): Promise<boolean> {
+    if (!inferenceId) return false;
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    if (!workspace) return false;
+    // Write-once anchor: never clobber a persisted id.
+    const existing = workspace.metadata?.inferenceId;
+    if (typeof existing === 'string' && existing.length > 0) return true;
+    // Same-state advance (no illegal transition) — the metadata patch merges.
+    await this.engine.advanceWorkspace(workspaceId, workspace.state, undefined, { inferenceId });
+    return true;
+  }
+
   async sendWorkspaceMessage(
     workspaceId: string,
     input: ContinueWorkspaceInput,

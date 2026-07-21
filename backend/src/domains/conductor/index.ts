@@ -297,6 +297,21 @@ export interface ConductorModule {
     input: MergeInput,
     principal: Principal,
   ): Promise<ConductorWriteResult<MergeResultView>>;
+  /**
+   * SINGLE-WRITER persist of a run's TensorZero-resolvable `inference_id` onto the
+   * workspace record (`metadata.inferenceId`), so a later {@link mergeWorkspace}
+   * fires real `task_success` RLHF feedback on an anchor the gateway can resolve.
+   * Reuses the same-state metadata-patch idiom of {@link setPreviewUrl}
+   * (`advanceWorkspace` MERGES the `{ inferenceId }` patch, never replaces) and is
+   * WRITE-ONCE — an already-anchored workspace is a durable no-op (the run's first
+   * napi-served completion claims the anchor). Backs the inference
+   * `RunInferenceSinkPort` injected at bootstrap, reached ONLY for napi-tier ids
+   * (the routing service gates on `tier === 'napi'`, so a non-napi provider id is
+   * never persisted). Not governance-gated: an internal correlation write, not a
+   * customer-visible action. Degrade-truthful: a missing workspace ⇒ `false`.
+   * Returns whether the anchor is now persisted.
+   */
+  recordRunInferenceId(workspaceId: string, inferenceId: string): Promise<boolean>;
   /** Chat: start another run in the same worktree — GATED (`workspace.message`). */
   sendWorkspaceMessage(
     workspaceId: string,
