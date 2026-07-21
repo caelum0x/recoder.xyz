@@ -25,7 +25,6 @@ import { createEdgeModule, type EdgeModule } from '../domains/edge/index.js';
 import type { RouteProvider } from '../domains/edge/ports/route-provider.port.js';
 import type { GuardPolicy } from '../domains/edge/types.js';
 
-import type { Principal } from '../domains/identity/types.js';
 import { loadConfig, type EnvSource } from './config.js';
 import { createContainer, Container } from './container.js';
 import { createHealthRegistry, HealthRegistry } from './health-registry.js';
@@ -42,7 +41,6 @@ import { createOrgsRbacFeature } from '../domains/identity/orgs-rbac.feature.js'
 import { createGovernanceModule } from '../domains/governance/index.js';
 import { createInteropModule } from '../domains/interop/index.js';
 import { createAgentOsModule } from '../domains/agent-os/index.js';
-import { squadSeedSchema, type SquadSeed } from '../domains/agent-os/config.js';
 import { createConductorModule } from '../domains/conductor/index.js';
 import { createCliRuntimeSubstrate } from '../domains/conductor/adapters/cli-runtime.adapter.js';
 import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/openfang-runtime.adapter.js';
@@ -102,6 +100,7 @@ import {
   createSocialReplyInference,
 } from './social-seams.js';
 import { createObservabilityDelivery } from './observability-seams.js';
+import { createSquadAutopilotDispatch, parseSquadSeedEnv } from './agent-os-seams.js';
 import { createMemoryModule } from '../domains/memory/index.js';
 import type { Mem0EnginePort } from '../domains/memory/ports/mem0-engine.port.js';
 // Composition root: value-imports the engines mem0 client, injected as the memory
@@ -175,63 +174,10 @@ function routerProvider(key: string, basePath: string, router: Router): RoutePro
 /** Every edge mount keeps its router's own guards — the edge adds no second layer. */
 const PUBLIC_MOUNT: GuardPolicy = { auth: 'public', interop: false };
 
-/**
- * Parse the OPT-IN squad seed from env (bootstrap is the sole sanctioned env
- * read; agent-os OWNS the actual seed — this only shapes config). Two truthful
- * forms, JSON preferred:
- *   - `RECODER_SQUAD_DEF` = a full {@link SquadSeed} JSON object.
- *   - `RECODER_SQUAD_ID` + `RECODER_SQUAD_MEMBERS` (csv of `agentId[:weight]`),
- *     with optional `RECODER_SQUAD_LEADER` / `RECODER_SQUAD_NAME` /
- *     `RECODER_SQUAD_STRATEGY` / `RECODER_SQUAD_SPACE`.
- * Absent ⇒ `null` ⇒ byte-identical pass-through (the default, seed OFF). A
- * malformed / incomplete env ⇒ `null` + a truthful warn — NEVER a fabricated
- * squad; agent-os then leaves the autopilot un-routed (flat pass-through), it
- * never skips every dispatch. Validated by the agent-os `squadSeedSchema` (the
- * single source of truth for the seed shape), so no drift is possible.
- */
-export function parseSquadSeedEnv(env: EnvSource): SquadSeed | null {
-  const rawJson = env.RECODER_SQUAD_DEF?.trim();
-  const squadId = env.RECODER_SQUAD_ID?.trim();
-  const membersCsv = env.RECODER_SQUAD_MEMBERS?.trim();
-  // Nothing configured ⇒ opt-out. A bare RECODER_SQUAD_ID (no members) also
-  // yields null here — agent-os then warns and routes flat, never skip-all.
-  if (!rawJson && !(squadId && membersCsv)) return null;
-  try {
-    if (rawJson) {
-      return squadSeedSchema.parse(JSON.parse(rawJson));
-    }
-    const leaderAgentId = env.RECODER_SQUAD_LEADER?.trim();
-    const members = membersCsv!
-      .split(',')
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.length > 0)
-      .map((entry) => {
-        const [agentId, weightRaw] = entry.split(':').map((part) => part.trim());
-        const weight = weightRaw ? Number(weightRaw) : undefined;
-        return {
-          agentId,
-          ...(leaderAgentId && agentId === leaderAgentId ? { role: 'leader' as const } : {}),
-          ...(weight !== undefined && Number.isFinite(weight) ? { weight } : {}),
-        };
-      });
-    return squadSeedSchema.parse({
-      squadId,
-      displayName: env.RECODER_SQUAD_NAME?.trim() || squadId,
-      ...(env.RECODER_SQUAD_SPACE?.trim() ? { spaceId: env.RECODER_SQUAD_SPACE.trim() } : {}),
-      ...(leaderAgentId ? { leaderAgentId } : {}),
-      ...(env.RECODER_SQUAD_STRATEGY?.trim()
-        ? { routingStrategy: env.RECODER_SQUAD_STRATEGY.trim() }
-        : {}),
-      members,
-    });
-  } catch (err) {
-    childLogger('bootstrap').warn(
-      { err: err instanceof Error ? err.message : String(err) },
-      'bootstrap: malformed squad seed env — squad routing OFF (autopilot routes flat, not skip-all)',
-    );
-    return null;
-  }
-}
+// The OPT-IN squad-seed env parser is re-homed in `agent-os-seams.ts` (bootstrap
+// is the sole sanctioned env read; agent-os owns the seed shape). Re-exported here
+// (over the imported binding) for the prior public surface.
+export { parseSquadSeedEnv };
 
 /** Boot the empty host and return a handle. */
 export async function start(options: StartOptions = {}): Promise<BootHandle> {
@@ -855,45 +801,15 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // BEFORE the conductor, so the port attaches here). The autopilot pulls ready
   // bd issues through the beads engine seam and launches each through the real
   // governed `createWorkspace` path; a refused/faulted launch surfaces as a
-  // truthful `ok:false` — never a fabricated workspace/run.
-  const squadAutopilotPrincipal: Principal = {
-    userId: 'squad-autopilot',
-    scopes: ['internal', 'write'],
-    kind: 'internal',
-    isAnonymous: false,
-    raw: null,
-  };
-  const squadAutopilotRepoRoot = bootEnv.CONDUCTOR_REPO_ROOT ?? process.cwd();
-  agentOs.attachSquadAutopilotConductor({
-    async dispatch(req) {
-      const res = await conductor.createWorkspace(
-        {
-          spaceId: 'space-default',
-          projectId: 'squad-autopilot',
-          taskId: req.taskId, // the bd issue id — the issue-graph tracker claims it
-          repoPath: squadAutopilotRepoRoot,
-          runtimeId: 'claude_code',
-          prompt: req.prompt,
-          // Carry the squad-routed agent (multica's leader-first / weighted
-          // selection) onto the workspace record so the launch reflects WHICH
-          // squad member the work was routed to. Absent (no squad configured)
-          // ⇒ omitted; the flat default dispatch is unchanged.
-          ...(req.routedAgentId
-            ? { metadata: { routedAgentId: req.routedAgentId } }
-            : {}),
-        },
-        squadAutopilotPrincipal,
-      );
-      if (!res.ok || !res.value) {
-        return { ok: false, reason: res.reason ?? 'conductor refused workspace.create' };
-      }
-      return {
-        ok: true,
-        workspaceId: res.value.workspaceId,
-        ...(res.value.runId ? { runId: res.value.runId } : {}),
-      };
-    },
-  });
+  // truthful `ok:false` — never a fabricated workspace/run. The dispatch closure
+  // (fixed internal principal + launch shape) lives in `agent-os-seams.ts`;
+  // bootstrap owns only the env-derived repo root.
+  agentOs.attachSquadAutopilotConductor(
+    createSquadAutopilotDispatch({
+      conductor,
+      repoRoot: bootEnv.CONDUCTOR_REPO_ROOT ?? process.cwd(),
+    }),
+  );
 
   // --- Phase 9: Billing — THE EntitlementGate (plans/metering/quotas/webhooks).
   //     Built AFTER identity (it gates on the credential seam). Its `gate()` is the
