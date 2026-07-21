@@ -3,6 +3,12 @@ import { GovernanceGateService } from '../services/governance-gate.service.js';
 import { AuditChainService } from '../services/audit-chain.service.js';
 import type { Principal } from '../../identity/types.js';
 import type { GateDecisionContext, KernelVerdict } from '../types.js';
+import type {
+  ConsensusRecommendation,
+  ConsensusReview,
+  ConsensusReviewPort,
+  ConsensusReviewRequest,
+} from '../ports/consensus.port.js';
 import {
   InMemoryAuditRepository,
   FailingAuditRepository,
@@ -198,6 +204,137 @@ describe('GovernanceGateService — decide → risk → audit', () => {
     });
     const result = await gate.enforceTool('rm', 'rm -rf /', principal());
     expect(result.outcome).toBe('denied');
+  });
+});
+
+// --- high-risk adversarial consensus review (pal fusion) -----------------------
+
+describe('GovernanceGateService — high-risk consensus review (pal)', () => {
+  const ALLOW_HIGH: KernelVerdict = { effect: 'allow', tier: 'high', reason: 'kernel allowed', degraded: false, engine: 'ts' };
+  const ALLOW_CRITICAL: KernelVerdict = { effect: 'allow', tier: 'critical', reason: 'kernel allowed', degraded: false, engine: 'ts' };
+  const ALLOW_MEDIUM: KernelVerdict = { effect: 'allow', tier: 'medium', reason: 'kernel allowed', degraded: false, engine: 'ts' };
+  const NEEDS_HIGH: KernelVerdict = { effect: 'needs_approval', tier: 'high', reason: 'gated', degraded: false, engine: 'ts' };
+
+  function review(recommendation: ConsensusRecommendation, overrides: Partial<ConsensusReview> = {}): ConsensusReview {
+    return { recommendation, reason: 'consensus reason', models: ['m1', 'm2'], degraded: false, engine: 'pal-mcp', ...overrides };
+  }
+
+  /** A consensus port that records every call; `answer` is a review or an Error to throw. */
+  function stubConsensus(answer: ConsensusReview | Error, available = true) {
+    const calls: ConsensusReviewRequest[] = [];
+    const port: ConsensusReviewPort = {
+      available,
+      async review(req: ConsensusReviewRequest): Promise<ConsensusReview> {
+        calls.push(req);
+        if (answer instanceof Error) throw answer;
+        return answer;
+      },
+    };
+    return { port, calls };
+  }
+
+  function buildGateWithConsensus(
+    verdict: KernelVerdict,
+    consensus?: ConsensusReviewPort,
+    approvals?: InMemoryApprovalRepository,
+  ) {
+    const auditRepo = new InMemoryAuditRepository();
+    const gate = new GovernanceGateService({
+      kernel: fakeKernel({ verdict }),
+      audit: new AuditChainService(auditRepo),
+      approvals,
+      consensus,
+      logger: silentLogger,
+    });
+    return { gate, auditRepo };
+  }
+
+  it('BLOCK downgrades a high-risk allow to needs_approval and seals it into the chain', async () => {
+    const { port, calls } = stubConsensus(review('block', { reason: 'credential exfil risk' }));
+    const { gate, auditRepo } = buildGateWithConsensus(ALLOW_HIGH, port);
+    const v = await gate.decide('branch.push', principal(), ctx({ taskId: 't1' }));
+
+    expect(v.effect).toBe('needs_approval');
+    expect(v.reason).toContain('consensus block');
+    expect(v.reason).toContain('credential exfil risk');
+    expect(calls).toHaveLength(1);
+    // The downgrade is sealed as a needs_approval audit row (evidence).
+    expect(auditRepo.rows).toHaveLength(1);
+    expect(auditRepo.rows[0]?.effect).toBe('needs_approval');
+  });
+
+  it('BLOCK downgrades a CRITICAL allow too (tier >= high)', async () => {
+    const { port } = stubConsensus(review('block'));
+    const { gate } = buildGateWithConsensus(ALLOW_CRITICAL, port);
+    const v = await gate.decide('secret.rotate', principal(), ctx());
+    expect(v.effect).toBe('needs_approval');
+  });
+
+  it('ABSTAIN leaves the kernel allow standing', async () => {
+    const { port, calls } = stubConsensus(review('abstain', { degraded: true, engine: 'synthetic', models: [] }));
+    const { gate, auditRepo } = buildGateWithConsensus(ALLOW_HIGH, port);
+    const v = await gate.decide('branch.push', principal(), ctx());
+    expect(v.effect).toBe('allow');
+    expect(calls).toHaveLength(1);
+    expect(auditRepo.rows[0]?.effect).toBe('allow');
+  });
+
+  it('ALLOW recommendation leaves the kernel allow standing', async () => {
+    const { port } = stubConsensus(review('allow'));
+    const { gate } = buildGateWithConsensus(ALLOW_HIGH, port);
+    const v = await gate.decide('branch.push', principal(), ctx());
+    expect(v.effect).toBe('allow');
+  });
+
+  it('a timeout/unavailable-shaped abstain keeps the allow (never hangs open)', async () => {
+    // The facet abstains on timeout; model that shape and assert the allow stands.
+    const { port } = stubConsensus(review('abstain', { degraded: true, engine: 'synthetic', models: [], reason: 'pal consensus timed out' }));
+    const { gate } = buildGateWithConsensus(ALLOW_HIGH, port);
+    const v = await gate.decide('branch.push', principal(), ctx());
+    expect(v.effect).toBe('allow');
+  });
+
+  it('a THROWING consensus port leaves the kernel allow standing (never blocks on its own fault)', async () => {
+    const { port } = stubConsensus(new Error('seam boom'));
+    const { gate } = buildGateWithConsensus(ALLOW_HIGH, port);
+    const v = await gate.decide('branch.push', principal(), ctx());
+    expect(v.effect).toBe('allow');
+  });
+
+  it('an UNAVAILABLE consensus port is not consulted (allow stands, no added latency)', async () => {
+    const { port, calls } = stubConsensus(review('block'), false);
+    const { gate } = buildGateWithConsensus(ALLOW_HIGH, port);
+    const v = await gate.decide('branch.push', principal(), ctx());
+    expect(v.effect).toBe('allow');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('a LOW/MEDIUM-risk allow is NOT consulted (scope gate)', async () => {
+    const { port, calls } = stubConsensus(review('block'));
+    const { gate } = buildGateWithConsensus(ALLOW_MEDIUM, port);
+    const v = await gate.decide('file.write', principal(), ctx());
+    expect(v.effect).toBe('allow');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('an approval-CLEARED high-risk allow SKIPS consensus (human already decided)', async () => {
+    const approvals = new InMemoryApprovalRepository();
+    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
+
+    const { port, calls } = stubConsensus(review('block'));
+    const { gate } = buildGateWithConsensus(NEEDS_HIGH, port, approvals);
+    const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));
+
+    expect(v.effect).toBe('allow');
+    expect(v.approvalId).toBe(created.id);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('with NO consensus port wired, a high-risk allow passes through unchanged', async () => {
+    const { gate } = buildGateWithConsensus(ALLOW_HIGH);
+    const v = await gate.decide('branch.push', principal(), ctx());
+    expect(v.effect).toBe('allow');
   });
 });
 

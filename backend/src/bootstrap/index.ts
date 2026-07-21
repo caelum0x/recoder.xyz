@@ -57,6 +57,7 @@ import type { CloudSandboxGatewayPort } from '../domains/conductor/ports/cloud-s
 import { createEnginesModule, createOpenfangWorkflowDriver } from '../domains/engines/index.js';
 import { createInferenceModule } from '../domains/inference/index.js';
 import { createInferenceRoutePalAdapter } from '../domains/inference/adapters/pal-route.adapter.js';
+import { createPalConsensusReview } from '../domains/governance/adapters/pal-consensus.adapter.js';
 import {
   createBillingModule,
   type BillingSubject,
@@ -354,6 +355,20 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   const palBrain = engines.pal();
   if (palBrain) {
     inference.setPalRouter(createInferenceRoutePalAdapter(palBrain));
+  }
+
+  // --- Consumer (c): the governance high-risk gate consults pal's adversarial
+  //     multi-model CONSENSUS over the SAME engines-owned facet. Governance was
+  //     composed BEFORE engines, so this is a LATE setter (now that `engines.pal()`
+  //     exists). On a HIGH/critical `allow` the kernel is about to grant, the gate
+  //     runs a cross-model review; a credible `block` downgrades it to
+  //     `needs_approval`. Degrade-safe: with the `pal-mcp` sidecar absent the facet
+  //     abstains, so the kernel allow always stands — the check never blocks on
+  //     its own fault. ---
+  if (palBrain) {
+    governance.setConsensusReview(
+      createPalConsensusReview({ pal: palBrain, logger: childLogger('governance') }),
+    );
   }
 
   // --- Phase 3: Interop — the A2A wire + the ONE edge chain

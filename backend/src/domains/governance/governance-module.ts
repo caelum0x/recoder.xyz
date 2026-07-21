@@ -25,6 +25,7 @@ import type { GovernanceConfig } from './config.js';
 import type { GovernanceKernelPort } from './ports/kernel.port.js';
 import type { GovernanceGate } from './ports/gate.port.js';
 import type { ReloadPoliciesResult } from './ports/approval-store.port.js';
+import type { ConsensusReviewPort } from './ports/consensus.port.js';
 import type { SecretsPort } from './ports/secrets.port.js';
 import { createVaultAdapter, type VaultAdapter } from './adapters/vault.adapter.js';
 import { createNapiApprovalStore } from './adapters/napi-approval-store.adapter.js';
@@ -135,6 +136,17 @@ export class GovernanceComposer implements GovernanceModule {
 
   kernel(): GovernanceKernelPort {
     return this.kernelPort;
+  }
+
+  /**
+   * Late-inject the adversarial multi-model CONSENSUS brain (pal). Governance is
+   * composed BEFORE the engines module at bootstrap, so the pal facet is not
+   * available at construction; bootstrap calls this once `engines.pal()` exists.
+   * A pure passthrough to the gate's own setter — idempotent, last-writer-wins;
+   * absent ⇒ the gate never runs a consensus review (kernel verdict is final).
+   */
+  setConsensusReview(port: ConsensusReviewPort): void {
+    this.gateService.setConsensusReview(port);
   }
 
   /** Hot-swap the kernel's live policy bundle (agent-os policy-update hook). */
