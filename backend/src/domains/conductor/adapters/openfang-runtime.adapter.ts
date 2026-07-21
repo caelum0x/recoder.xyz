@@ -71,6 +71,8 @@ import type {
   AgentTurnInput,
   OpenfangRunEventSink,
 } from '../ports/agent-turn.port.js';
+// in_process worktree dirs share the tmux path's `recoder-<id>` naming contract.
+import { tmuxNameFor } from '../session-naming.js';
 
 /** The injectable child-process seam (default: the package's `execFileSafe`). */
 export type ExecFn = (
@@ -99,9 +101,6 @@ export interface OpenfangRuntimeSubstrate extends ConductorSubstrate {
   /** Late-bind the completion-hook RunEvent sink (idempotent; last write wins). */
   setRunSink(sink: OpenfangRunSink): void;
 }
-
-/** in_process worktrees are namespaced under this prefix (mirrors the tmux path). */
-const SESSION_PREFIX = 'recoder-';
 
 /** A no-op logger so the substrate works even when none is injected. */
 const NOOP_LOGGER: LoggerPort = {
@@ -160,7 +159,7 @@ export interface CreateOpenfangRuntimeSubstrateDeps {
 
 /** Deterministic worktree dir name for a workspace id (restart-survivable). */
 function worktreeNameFor(id: string): string {
-  return `${SESSION_PREFIX}${id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+  return tmuxNameFor(id);
 }
 
 /**

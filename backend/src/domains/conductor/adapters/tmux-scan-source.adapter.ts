@@ -25,9 +25,8 @@
 import type { LoggerPort } from '@recoder/substrate';
 import type { TmuxIntrospectPort } from '../../engines/adapters/cli/tmux-introspect.adapter.js';
 import type { SubstrateScanDeps } from './substrate-scan.adapter.js';
-
-/** The conductor namespaces every tmux session + worktree dir under this prefix. */
-const CONDUCTOR_SESSION_PREFIX = 'recoder-';
+// The conductor namespaces every tmux session + worktree dir under this prefix.
+import { SESSION_PREFIX } from '../session-naming.js';
 
 export interface TmuxScanSourceDeps {
   /** The engines domain's read-only tmux introspection port (box-wide `list-sessions`). */
@@ -50,7 +49,7 @@ export interface TmuxScanSourceDeps {
  * `createSubstrateScan(...)` so `reconcile` can see the live box.
  */
 export function createTmuxScanSource(deps: TmuxScanSourceDeps): SubstrateScanDeps {
-  const prefix = deps.sessionPrefix ?? CONDUCTOR_SESSION_PREFIX;
+  const prefix = deps.sessionPrefix ?? SESSION_PREFIX;
   return {
     async listLiveSessions(): Promise<readonly string[]> {
       const res = await deps.introspect.listSessions();
