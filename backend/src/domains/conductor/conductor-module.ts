@@ -141,6 +141,7 @@ import { buildWorkspaceQueryRoutes } from './routes/workspaces-query.routes.js';
 import { buildRepoConfigRoutes } from './routes/repo-config.routes.js';
 import { RepoSetupService, repoKeyFor } from './services/repo-setup.service.js';
 import { PrStatusService } from './services/pr-status.service.js';
+import { MergeabilityService, type MergeabilityView } from './services/mergeability.service.js';
 import { createInMemoryRepoSetupStore } from './adapters/repo-setup-store.adapter.js';
 import {
   compareTaskGroup as compareTaskGroupOp,
@@ -259,6 +260,8 @@ export class ConductorComposer implements ConductorModule {
   private readonly repoSetup: RepoSetupService;
   /** Workspace pull-request status via the `gh` CLI (degrade-truthful, read-only). */
   private readonly prStatus: PrStatusService;
+  /** Read-only pre-merge conflict + base-divergence probe (git-native, degrade-truthful). */
+  private readonly mergeability: MergeabilityService;
   /**
    * OPTIONAL dmux LAYOUT-brain seam (F3 compare/parallel grid). Absent / dmux not
    * built ⇒ the compare read stays hint-less and `arrangeCompareGrid` returns a
@@ -306,6 +309,9 @@ export class ConductorComposer implements ConductorModule {
     // Workspace PR status over the shared `gh` CLI seam (never throws; truthful
     // `available:false` when gh/worktree/branch is absent).
     this.prStatus = new PrStatusService({ logger: this.log });
+    // Read-only merge preflight over the SAME git seam (never throws; truthful
+    // `available:false` when git/worktree/branch is absent — never a fake clean).
+    this.mergeability = new MergeabilityService({ logger: this.log });
 
     const loggerPort = toLoggerPort(this.log);
 
@@ -1458,6 +1464,12 @@ export class ConductorComposer implements ConductorModule {
 
   async workspaceTree(workspaceId: string): Promise<WorkspaceTreeView> {
     return workspaceTreeOp(this.reviewDeps(), workspaceId);
+  }
+
+  async workspaceMergeability(workspaceId: string): Promise<MergeabilityView> {
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
+    return this.mergeability.probe(workspace);
   }
 
   async workspaceDevCommand(workspaceId: string): Promise<DevCommandView | null> {

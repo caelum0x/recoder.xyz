@@ -57,6 +57,7 @@ import type {
 } from './types.js';
 import type { CreateConductorWorkspaceInput, ConductorWriteResult } from './conductor-module.js';
 import type { WorkspaceDiffView, WorkspaceTreeView } from './review/workspace-review.ops.js';
+import type { MergeabilityView } from './services/mergeability.service.js';
 import type {
   CreatePrInput,
   CreatePrResultView,
@@ -339,6 +340,8 @@ export interface ConductorModule {
   workspaceDiff(workspaceId: string): Promise<WorkspaceDiffView>;
   /** Full worktree file list (tracked + untracked), changed subset marked. */
   workspaceTree(workspaceId: string): Promise<WorkspaceTreeView>;
+  /** Read-only pre-merge conflict + base-divergence probe (git-native, degrade-truthful; never a fabricated clean). */
+  workspaceMergeability(workspaceId: string): Promise<MergeabilityView>;
   /** Detected dev-server command for the worktree's project (or null). */
   workspaceDevCommand(workspaceId: string): Promise<DevCommandView | null>;
   /** Persist a sniffed loopback preview URL — GATED (`workspace.preview_url`). */
