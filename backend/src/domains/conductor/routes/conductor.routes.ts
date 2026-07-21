@@ -24,7 +24,7 @@
  *   GET    /api/conductor/runtimes                installed agent CLIs (PATH-probed)
  *   GET    /api/conductor/github/status           GitHub connection + identity (token-free)
  *   GET    /api/conductor/github/repos            detected account's repos via gh (empty when gh absent)
- *   GET    /api/conductor/health                  conductor readiness summary
+ *   GET    /api/conductor/health                  conductor readiness summary + substrate.tmuxBin pin
  *   GET    /api/conductor/reconcile/findings      reconcile findings (operator review)
  *   POST   /api/conductor/reconcile               run a reconcile pass (GATED)
  *
@@ -358,6 +358,11 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   );
 
   // Conductor readiness summary the cockpit polls: can work be launched here.
+  // Also carries `substrate.tmuxBin` — the effective pinned tmux binary (config
+  // pin, else PATH `tmux`) — so the wave-side attach (durable-shell unify §A1a)
+  // sources the SAME server the conductor drives instead of silently falling back
+  // to PATH `tmux`. `null` when no tmux substrate is known. Behavior-preserving:
+  // additive field, no change to launch/lifecycle.
   router.get(
     '/health',
     middleware.authenticate,
@@ -368,6 +373,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
       sendSuccess(res, {
         available,
         tmux: tmux?.available === true,
+        substrate: { tmuxBin: tmux?.tmuxBin ?? null },
         ...(available ? {} : { reason: tmux?.reason ?? 'no substrate available' }),
       });
     }),

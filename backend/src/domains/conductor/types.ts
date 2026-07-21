@@ -123,6 +123,14 @@ export interface SubstrateAvailabilityView {
   readonly available: boolean;
   /** Why a substrate is unavailable (missing tmux/git/creds) — never hidden. */
   readonly reason?: string;
+  /**
+   * The effective pinned tmux binary this deployment drives (the conductor
+   * config pin, else PATH `tmux`) — present ONLY on the `tmux_worktree` entry.
+   * A config fact independent of whether the substrate is wired, so the shared-
+   * tmux-server invariant (durable-shell unify §A1a) has a real, non-guessed
+   * source for the wave-side attach instead of falling back to PATH `tmux`.
+   */
+  readonly tmuxBin?: string;
 }
 
 /** A reconcile finding as returned to operators (mirror of the DB row). */

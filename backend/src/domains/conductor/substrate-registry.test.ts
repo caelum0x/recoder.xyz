@@ -45,6 +45,28 @@ describe('conductor substrate registry', () => {
     expect(byId.get('ssh')?.reason).toMatch(/SSH/);
   });
 
+  it('surfaces the effective pinned tmux binary on the tmux_worktree entry (config pin)', () => {
+    const registry = createConductorRegistry({
+      config: sliceConductorConfig(makeConfig(), { tmuxBin: '/vendored/recoder/tmux' }),
+    });
+    const byId = new Map(registry.availability().map((a) => [a.id, a]));
+
+    // The pin is a config fact independent of wiring — present even when unavailable.
+    expect(byId.get('tmux_worktree')?.tmuxBin).toBe('/vendored/recoder/tmux');
+    // Only the tmux entry carries a binary; the rest never guess one.
+    expect(byId.get('daytona')?.tmuxBin).toBeUndefined();
+    expect(byId.get('ssh')?.tmuxBin).toBeUndefined();
+    expect(byId.get('in_process')?.tmuxBin).toBeUndefined();
+  });
+
+  it('falls back to PATH `tmux` on the tmux_worktree entry when no pin is configured', () => {
+    const registry = createConductorRegistry({ config: cfg() });
+    const byId = new Map(registry.availability().map((a) => [a.id, a]));
+
+    // `tmuxBin: null` in config ⇒ the truthful effective binary is PATH `tmux`.
+    expect(byId.get('tmux_worktree')?.tmuxBin).toBe('tmux');
+  });
+
   it('exposes the narrow engine registry with the wired ids listed', () => {
     const registry = createConductorRegistry({
       config: cfg(),
