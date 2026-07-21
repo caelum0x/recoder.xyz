@@ -820,6 +820,10 @@ body {
 .detail-file-renamed { background: var(--bg-inset); border: 1px solid rgba(88, 166, 255, 0.3); color: var(--progress); }
 .detail-file-path { flex: 1; min-width: 0; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .detail-file-changes { display: inline-flex; gap: 6px; font-family: var(--mono); font-size: 11px; flex-shrink: 0; }
+.detail-file-entry { display: flex; flex-direction: column; }
+.detail-file-row { width: 100%; text-align: left; background: none; border: none; font: inherit; cursor: pointer; }
+.detail-file-open { background: var(--bg-card); }
+.detail-file-patch { margin: 2px 8px 8px; max-height: 340px; }
 .detail-output-log { border-top: 1px solid var(--border); display: flex; flex-direction: column; min-height: 160px; }
 .detail-output-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); padding: 8px 12px 0; }
 
