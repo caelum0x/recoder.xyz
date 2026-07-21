@@ -79,6 +79,16 @@ async function checkOnboardingStatus(request: NextRequest): Promise<boolean | nu
 }
 
 export default async function middleware(request: NextRequest) {
+  // CVE-2025-29927 defense-in-depth: `x-middleware-subrequest` is an INTERNAL
+  // Next.js signal. When an external client spoofs it, the framework skips
+  // middleware execution entirely — bypassing every session/admin/onboarding
+  // check below. It must never arrive from outside, so reject it outright,
+  // independent of the Next.js version's own patch (enforcement below the
+  // framework, per .claude/rules/security.md).
+  if (request.headers.has('x-middleware-subrequest')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   const nextActionId = request.headers.get('next-action');
   if (request.method === 'POST' && nextActionId) {
     const isPlausibleActionId = /^[A-Za-z0-9_-]{20,}$/.test(nextActionId);
