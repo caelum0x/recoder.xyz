@@ -31,6 +31,7 @@ import type { ToolExecEnforcementPort } from '../governance/ports/tool-exec-gate
 import type { EnginesConfigOverrides } from './config.js';
 import type { EngineClientPort } from './ports/engine-client.port.js';
 import type { TmuxIntrospectPort } from './adapters/cli/tmux-introspect.adapter.js';
+import type { DmuxLayoutPort } from './dmux-adapter.js';
 import type { EngineRegistryPort, McpHostPort } from './ports/index.js';
 import type { ModuleToolsRegistration } from './mcp/host-registrar.js';
 import type { DomainToolsRegistration } from './adapters/domain-tools-bridge.adapter.js';
@@ -137,6 +138,16 @@ export interface EnginesModule {
    * "cannot see the substrate", never fabricates live work).
    */
   tmuxIntrospect(): TmuxIntrospectPort | null;
+  /**
+   * The dmux LAYOUT brain over the shared tmux server (`DmuxAdapter.layout()`) —
+   * the SAME `select-layout`/`split-window` seam the `recoder.dmux` MCP tools bind
+   * over. The conductor's F3 compare/parallel grid source consumes
+   * `buildWorktreeGrid()` here to arrange one operator pane per sibling, EACH cwd'd
+   * to its OWN worktree (never a hollow shared-repoPath grid). Independent of the
+   * dmux TUI binary (the optional human viewer). Null when the dmux adapter is not
+   * declared (truthful skip — the compare read then stays hint-less).
+   */
+  dmuxLayout(): DmuxLayoutPort | null;
   /**
    * The unified GitHub module (docs/modules/github.md): gh CLI + recodergit
    * facets behind ONE interface, and the single truthful `GithubHealth` source.

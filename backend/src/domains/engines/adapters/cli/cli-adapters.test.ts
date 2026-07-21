@@ -260,6 +260,19 @@ describe('DmuxAdapter (optional engine)', () => {
           seen.applyLayout = input;
           return { ok: true, value: { target: input.target, preset: input.preset, tmuxLayout: 'tiled', panes: [] } };
         },
+        async buildWorktreeGrid(input) {
+          seen.buildWorktreeGrid = input;
+          return {
+            ok: true,
+            value: {
+              session: input.session,
+              created: true,
+              worktreePaths: input.worktrees.map((worktree) => worktree.worktreePath),
+              panes: [],
+              layout: 'agent-grid',
+            },
+          };
+        },
       },
     });
 
