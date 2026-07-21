@@ -899,6 +899,37 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   conductor.setUsageMeter(billing.metering());
   inference.setUsageMeter(billing.metering());
 
+  // Close the merge → task_success RLHF loop (the run-inference sink). A routed
+  // completion the inference routing service serves through the `napi` embedded-
+  // TensorZero tier — AND ONLY that tier — with a `correlationWorkspaceId` emits its
+  // gateway `inference_id` here, so conductor (the single writer of the workspace
+  // record) can anchor the run on an id TensorZero can actually resolve. The routing
+  // service enforces the `tier === 'napi'` provenance gate upstream: a non-napi
+  // provider id (`chatcmpl-…`/`msg_…` from loopback / rung-3 BYOK) has no feedback
+  // seam and is NEVER emitted, so it can never be persisted as an unresolvable anchor.
+  // Fire-and-forget + degrade-truthful: `recordRunInferenceId` write-once-patches the
+  // workspace metadata and never throws; the `.catch` guarantees a sink fault can
+  // never block or fail a completion's delivery. Absent this injection the routing
+  // service's emission is a truthful no-op (see docs/modules/inference.md).
+  inference.setRunInferenceSink({
+    record: async ({ workspaceId, inferenceId }) => {
+      // Reached ONLY for napi-tier ids (the routing service gates on tier === 'napi').
+      await conductor.recordRunInferenceId(workspaceId, inferenceId).catch(() => {
+        /* never throws into delivery */
+      });
+    },
+  });
+
+  // Activate the DB-catalog → gateway boot-config loop (`generateConfig()` — dark
+  // until now). Late-bound over the TYPED, tz-scoped engines accessor (NOT the
+  // generic `engines.tensorzero()` port handle), so the embedded TensorZero gateway
+  // boots on `registry ∪ DB-catalog` (model-table merge + single re-materialize)
+  // instead of env `TENSORZERO_MODELS` alone. Degrade-safe: no napi tensorzero
+  // adapter ⇒ the accessor no-ops; the provider throwing / returning an empty model
+  // set ⇒ the adapter falls back to the byte-identical env-only boot file. inference
+  // + engines are both built above (Phase 6a/6b), so the closure is safe here.
+  engines.setTensorzeroCatalogProvider(() => inference.generateConfig());
+
   // --- Phase 10: Cloud — off-box substrate (sandboxes/previews/tenancy/mesh). Built
   //     AFTER billing. The Phase-3 governance decide→audit seam guards EVERY cloud
   //     write (sandbox provision/destroy, deployment create, preview-URL mint,
