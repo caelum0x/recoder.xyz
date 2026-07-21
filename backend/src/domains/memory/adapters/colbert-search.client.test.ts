@@ -45,6 +45,25 @@ function fetchWith(body: unknown, ok = true, status = 200): { fetch: ColbertFetc
   return { fetch, calls };
 }
 
+/** A ColbertFetch capturing url + method (for verb assertions on GET/DELETE). */
+function fetchCapture(
+  body: unknown,
+  ok = true,
+  status = 200,
+): { fetch: ColbertFetch; calls: { url: string; method: string; hasBody: boolean }[] } {
+  const calls: { url: string; method: string; hasBody: boolean }[] = [];
+  const fetch: ColbertFetch = async (url, init): Promise<ColbertHttpResponse> => {
+    calls.push({ url, method: init.method, hasBody: init.body !== undefined });
+    return { ok, status, json: async () => body };
+  };
+  return { fetch, calls };
+}
+
+/** A ColbertFetch that throws — models an unreachable daemon. */
+const throwingFetch: ColbertFetch = async () => {
+  throw new Error('ECONNREFUSED');
+};
+
 describe('createColbertSearchClient.search', () => {
   it('is not configured and degrades truthfully when no URL is set', async () => {
     const client = createColbertSearchClient(config(null));
@@ -127,5 +146,110 @@ describe('createColbertSearchClient.ensureIndex', () => {
     const result = await client.ensureIndex('repo_x', ['   ', '']);
     expect(result.built).toBe(false);
     expect(result.reason).toBe('no passages to index');
+  });
+});
+
+describe('createColbertSearchClient.listCollections', () => {
+  it('degrades truthfully when no URL is set (never fabricates an inventory)', async () => {
+    const client = createColbertSearchClient(config(null));
+    const result = await client.listCollections();
+    expect(result.available).toBe(false);
+    expect(result.collections).toEqual([]);
+    expect(result.reason).toBe('COLBERT_RERANK_URL not set');
+  });
+
+  it('lists the built-index inventory as names via a bodyless GET', async () => {
+    const body = {
+      index_root: '/data/indexes',
+      collections: [
+        { name: 'repo_abc', documents: 12 },
+        { name: 'mem0_memories', documents: 3 },
+      ],
+      reason: null,
+    };
+    const { fetch, calls } = fetchCapture(body);
+    const client = createColbertSearchClient(config('http://127.0.0.1:8893'), fetch);
+    const result = await client.listCollections();
+    expect(result.available).toBe(true);
+    expect(result.collections).toEqual(['repo_abc', 'mem0_memories']);
+    expect(calls[0]).toEqual({ url: 'http://127.0.0.1:8893/collections', method: 'GET', hasBody: false });
+  });
+
+  it('is available with an empty list when the index root is absent (not an error)', async () => {
+    const { fetch } = fetchWith({ index_root: '/data/indexes', collections: [], reason: 'index root does not exist' });
+    const client = createColbertSearchClient(config('http://127.0.0.1:8893'), fetch);
+    const result = await client.listCollections();
+    expect(result.available).toBe(true);
+    expect(result.collections).toEqual([]);
+  });
+
+  it('drops junk rows without a name (never fabricates a collection name)', async () => {
+    const { fetch } = fetchWith({ collections: [{ name: 'repo_a' }, { documents: 5 }, { name: '' }, 'bad'] });
+    const client = createColbertSearchClient(config('http://127.0.0.1:8893'), fetch);
+    const result = await client.listCollections();
+    expect(result.collections).toEqual(['repo_a']);
+  });
+
+  it('degrades to unavailable on a non-2xx', async () => {
+    const { fetch } = fetchWith({ error: 'boom' }, false, 500);
+    const client = createColbertSearchClient(config('http://127.0.0.1:8893'), fetch);
+    const result = await client.listCollections();
+    expect(result.available).toBe(false);
+    expect(result.collections).toEqual([]);
+    expect(result.reason).toBe('colbert daemon HTTP 500');
+  });
+
+  it('degrades to unavailable when the daemon is unreachable (never throws)', async () => {
+    const client = createColbertSearchClient(config('http://127.0.0.1:8893'), throwingFetch);
+    const result = await client.listCollections();
+    expect(result.available).toBe(false);
+    expect(result.reason).toBe('ECONNREFUSED');
+  });
+});
+
+describe('createColbertSearchClient.dropCollection', () => {
+  it('degrades truthfully when no URL is set (GC never fakes a drop)', async () => {
+    const client = createColbertSearchClient(config(null));
+    const result = await client.dropCollection('repo_stale');
+    expect(result.dropped).toBe(false);
+    expect(result.collection).toBe('repo_stale');
+    expect(result.reason).toBe('COLBERT_RERANK_URL not set');
+  });
+
+  it('skips truthfully on an empty collection name', async () => {
+    const { fetch } = fetchWith({});
+    const client = createColbertSearchClient(config('http://127.0.0.1:8893'), fetch);
+    const result = await client.dropCollection('   ');
+    expect(result.dropped).toBe(false);
+    expect(result.reason).toBe('empty collection name');
+  });
+
+  it('drops a built index via a bodyless DELETE on the encoded name', async () => {
+    const { fetch, calls } = fetchCapture({ name: 'repo_stale', dropped: true, removed_files: 9 });
+    const client = createColbertSearchClient(config('http://127.0.0.1:8893'), fetch);
+    const result = await client.dropCollection('repo_stale');
+    expect(result.dropped).toBe(true);
+    expect(result.collection).toBe('repo_stale');
+    expect(calls[0]).toEqual({
+      url: 'http://127.0.0.1:8893/collections/repo_stale',
+      method: 'DELETE',
+      hasBody: false,
+    });
+  });
+
+  it('degrades to not-dropped on a 404 (collection not found)', async () => {
+    const { fetch } = fetchWith({ error: 'not found', dropped: false }, false, 404);
+    const client = createColbertSearchClient(config('http://127.0.0.1:8893'), fetch);
+    const result = await client.dropCollection('repo_ghost');
+    expect(result.dropped).toBe(false);
+    expect(result.reason).toBe('colbert daemon HTTP 404');
+  });
+
+  it('does not fake a drop when the daemon does not confirm it', async () => {
+    const { fetch } = fetchWith({ name: 'repo_stale', dropped: false });
+    const client = createColbertSearchClient(config('http://127.0.0.1:8893'), fetch);
+    const result = await client.dropCollection('repo_stale');
+    expect(result.dropped).toBe(false);
+    expect(result.reason).toBe('daemon did not confirm the drop');
   });
 });

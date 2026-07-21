@@ -20,7 +20,7 @@ export interface ColbertHttpResponse {
 
 export type ColbertFetch = (
   url: string,
-  init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal },
+  init: { method: string; headers: Record<string, string>; body?: string; signal?: AbortSignal },
 ) => Promise<ColbertHttpResponse>;
 
 export interface ColbertSidecarClient {

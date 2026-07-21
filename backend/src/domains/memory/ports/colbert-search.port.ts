@@ -6,7 +6,7 @@
  * passage the single-vector Qdrant top-K misses can still enter retrieval through
  * ColBERT late-interaction.
  *
- * Two capabilities, both degrade-truthful:
+ * Four capabilities, all degrade-truthful:
  *  - `search(collection, query, k)` → the best-k passages from the built index,
  *    scored by MaxSim. `available:false` (never a fabricated hit) when the daemon
  *    is unconfigured/unreachable, the collection is not built (404), or the heavy
@@ -14,6 +14,12 @@
  *  - `ensureIndex(collection, passages)` → build/refresh the per-collection index
  *    (the conductor per-repo index-build path). `built:false` + a truthful reason
  *    on any degrade — an absent engine NEVER blocks a run.
+ *  - `listCollections()` → the built-index inventory (`GET /collections`, filesystem
+ *    only, no torch). Feeds the maintenance GC that prunes abandoned per-repo
+ *    `repo_*` indexes. `available:false` on any degrade — never a fabricated name.
+ *  - `dropCollection(name)` → remove one built index (`DELETE /collections/<name>`,
+ *    filesystem only). `dropped:false` + a truthful reason on any degrade — the GC
+ *    never fakes a drop.
  *
  * The base URL is the SAME daemon the rerank path uses (`colbertRerankUrl`): the
  * one supervised Flask process now serves both `/rerank` and the index surface.
@@ -53,6 +59,26 @@ export interface ColbertIndexBuildResult {
   readonly reason?: string;
 }
 
+/** Outcome of a built-index inventory listing (degrade-truthful). */
+export interface ColbertCollectionList {
+  /** True only when the daemon was reached and returned an inventory. */
+  readonly available: boolean;
+  /** The built collection names. Always `[]` on any degrade path. */
+  readonly collections: readonly string[];
+  /** Why the listing was skipped/degraded (only set when `available` is false). */
+  readonly reason?: string;
+}
+
+/** Outcome of a per-collection index drop (degrade-truthful). */
+export interface ColbertDropResult {
+  /** True only when the daemon confirmed the index directory was removed. */
+  readonly dropped: boolean;
+  /** The collection name that was (attempted to be) dropped. */
+  readonly collection: string;
+  /** Why the drop was skipped/degraded (only set when `dropped` is false). */
+  readonly reason?: string;
+}
+
 /** The FIRST-STAGE ColBERT retriever + index-maintenance port. */
 export interface ColbertSearchPort {
   /** True when a daemon base URL is configured (not liveness — see `search`). */
@@ -65,4 +91,13 @@ export interface ColbertSearchPort {
     passages: readonly string[],
     opts?: { readonly overwrite?: boolean },
   ): Promise<ColbertIndexBuildResult>;
+  /**
+   * List the built-index inventory (for GC of abandoned indexes); degrade-truthful.
+   * OPTIONAL on the port so lighter fakes/adapters that only search or build need
+   * not implement inventory management — the real client always does, and the GC
+   * caller treats an absent method as an unconfigured skip.
+   */
+  listCollections?(): Promise<ColbertCollectionList>;
+  /** Drop one built collection index; degrade-truthful (never fakes a drop). OPTIONAL (see `listCollections`). */
+  dropCollection?(collection: string): Promise<ColbertDropResult>;
 }
