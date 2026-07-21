@@ -22,13 +22,12 @@ import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
 import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
 import type { GovernanceConfig } from './config.js';
-import type { GovernanceKernelPort } from './ports/kernel.port.js';
+import type { GovernanceKernelPort, ReloadPoliciesResult } from './ports/kernel.port.js';
 import type { GovernanceGate } from './ports/gate.port.js';
-import type { ReloadPoliciesResult } from './ports/approval-store.port.js';
+import type { ToolExecEnforcementPort } from './ports/tool-exec-gate.port.js';
 import type { ConsensusReviewPort } from './ports/consensus.port.js';
 import type { SecretsPort } from './ports/secrets.port.js';
 import { createVaultAdapter, type VaultAdapter } from './adapters/vault.adapter.js';
-import { createNapiApprovalStore } from './adapters/napi-approval-store.adapter.js';
 import { createAuditRepository } from './repositories/audit.repository.js';
 import {
   createApprovalRepository,
@@ -37,6 +36,7 @@ import {
 import { createSecretRepository } from './repositories/secret.repository.js';
 import { AuditChainService } from './services/audit-chain.service.js';
 import { GovernanceGateService } from './services/governance-gate.service.js';
+import { createToolExecGate } from './services/tool-exec-gate.js';
 import { createSecretsService, type SecretsService } from './services/secrets.service.js';
 import { createWorkLockService, type WorkLockService } from './services/work-lock.service.js';
 import { createApprovalService, type ApprovalService } from './services/approval.service.js';
@@ -57,6 +57,7 @@ export class GovernanceComposer implements GovernanceModule {
   private readonly vault: VaultAdapter;
   private readonly auditChain: AuditChainService;
   private readonly gateService: GovernanceGateService;
+  private readonly toolExecGatePort: ToolExecEnforcementPort;
   private readonly secretsService: SecretsService;
   private readonly workLockService: WorkLockService;
   private readonly approvalService: ApprovalService;
@@ -82,19 +83,22 @@ export class GovernanceComposer implements GovernanceModule {
     // The tamper-evident chain writer/verifier (cross-checks the kernel tip).
     this.auditChain = new AuditChainService(auditRepo, kernel, this.log);
 
-    // The Rust kernel's OWN in-proc ApprovalManager store (submit/resolve/list/
-    // count + reloadPolicies). Degrade-truthful: absent native handle → an
-    // `available:false` store, and the gate falls back to the durable repo below.
-    const approvalStore = createNapiApprovalStore(deps.napiApprovalHandle, this.log);
-
-    // THE write seam: decide → risk → audit. Fail-closed on any kernel fault.
+    // THE write seam: decide → risk → audit. Fail-closed on any kernel fault. The
+    // durable Postgres approval repository is the SOLE clearance store (the former
+    // in-proc napi ApprovalManager was non-durable and never wired — retired).
     this.gateService = new GovernanceGateService({
       kernel,
       audit: this.auditChain,
       approvals: approvalRepo,
-      approvalStore,
       logger: this.log,
     });
+
+    // The per-tool teeth as a narrow, least-authority port (bound to the gate's
+    // deny-biased + Merkle-sealing `enforceTool`). Injected at bootstrap into the
+    // engines MCP host, where it gates the recoder-MCP-server tool stream at the
+    // interop executor chokepoint. Boundary: it does NOT see an agent's own
+    // in-worktree bash/file/secret ops (those never cross the executor).
+    this.toolExecGatePort = createToolExecGate(this.gateService);
 
     // Secrets seal mutations into the SAME durable chain via the gate.
     this.secretsService = createSecretsService({
@@ -116,6 +120,10 @@ export class GovernanceComposer implements GovernanceModule {
 
   gate(): GovernanceGate {
     return this.gateService;
+  }
+
+  toolExecGate(): ToolExecEnforcementPort {
+    return this.toolExecGatePort;
   }
 
   secrets(): SecretsPort {

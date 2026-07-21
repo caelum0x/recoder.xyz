@@ -12,7 +12,7 @@
  * faked non-degraded).
  */
 import type { Governance } from '@recoder/governance';
-import type { GovernanceKernelPort } from '../ports/kernel.port.js';
+import type { GovernanceKernelPort, ReloadPoliciesResult } from '../ports/kernel.port.js';
 import {
   AUDIT_GENESIS_HASH,
   type AuditVerification,
@@ -30,6 +30,12 @@ export class GovernanceBackedKernel implements GovernanceKernelPort {
     private readonly gov: Governance,
     private readonly engine: KernelEngine,
     private readonly statusReason?: string,
+    /**
+     * Live policy hot-swap, injected by the constructing rung. Only the napi rung
+     * wires one (driving the addon handle); daemon/ts leave it undefined so
+     * {@link reloadPolicies} reports a truthful `{ reloaded:false }` (static rung).
+     */
+    private readonly reloadFn?: (configJson: string) => Promise<ReloadPoliciesResult>,
   ) {}
 
   async decide(req: KernelRequest): Promise<KernelVerdict> {
@@ -49,6 +55,15 @@ export class GovernanceBackedKernel implements GovernanceKernelPort {
   async route(req: KernelRequest): Promise<RoutingHint> {
     const routing = await this.gov.route(toGovernanceRequest(req));
     return { routable: routing.routable !== false, tier: routing.tier, reason: routing.reason ?? '', target: routing.runtime };
+  }
+
+  async reloadPolicies(configJson: string): Promise<ReloadPoliciesResult> {
+    // Only the rung that injected a reload hook (napi, via the addon handle) can
+    // hot-swap the live bundle; daemon/ts are static and report so truthfully.
+    if (!this.reloadFn) {
+      return { reloaded: false, reason: `policy is static in the ${this.engine} rung` };
+    }
+    return this.reloadFn(configJson);
   }
 
   async auditTip(): Promise<string> {

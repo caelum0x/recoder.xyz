@@ -11,8 +11,30 @@
  * degrade-safe napi loader). The crate is never built here.
  */
 import { Governance } from '@recoder/governance';
-import type { GovernanceKernelPort } from '../ports/kernel.port.js';
+import type { GovernanceKernelPort, ReloadPoliciesResult } from '../ports/kernel.port.js';
 import { GovernanceBackedKernel } from './governance-kernel.js';
+
+/**
+ * Drive a live policy hot-swap through the in-proc addon handle. The reload verb
+ * is surfaced on the `@recoder/governance` facade only in builds shipped with the
+ * `recoder-governance-napi` addon; feature-detected so an older build degrades
+ * truthfully to `{ reloaded:false }` instead of throwing. Fail-closed inside the
+ * kernel: a rejected config keeps the OLD policy live.
+ */
+function napiReloadPolicies(gov: Governance): (configJson: string) => Promise<ReloadPoliciesResult> {
+  return async (configJson: string): Promise<ReloadPoliciesResult> => {
+    const handle = gov as unknown as { reloadPolicies?: (json: string) => void };
+    if (typeof handle.reloadPolicies !== 'function') {
+      return { reloaded: false, reason: 'napi kernel build does not expose reloadPolicies (policy is static)' };
+    }
+    try {
+      handle.reloadPolicies(configJson);
+      return { reloaded: true };
+    } catch (err) {
+      return { reloaded: false, reason: err instanceof Error ? err.message : String(err) };
+    }
+  };
+}
 
 /**
  * Try to build the in-proc napi kernel rung. Returns `undefined` when the native
@@ -39,7 +61,12 @@ export async function createNapiKernelAdapter(opts: {
       gov.close();
       return undefined;
     }
-    return new GovernanceBackedKernel(gov, 'napi', 'in-process recoder-governance-napi kernel');
+    return new GovernanceBackedKernel(
+      gov,
+      'napi',
+      'in-process recoder-governance-napi kernel',
+      napiReloadPolicies(gov),
+    );
   } catch {
     // A native-load / construction fault must never throw at ladder assembly.
     return undefined;

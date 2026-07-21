@@ -16,7 +16,7 @@
  *
  * `status()` / `degraded` are truthful: they report the highest available rung.
  */
-import type { GovernanceKernelPort } from '../ports/kernel.port.js';
+import type { GovernanceKernelPort, ReloadPoliciesResult } from '../ports/kernel.port.js';
 import type { GovernanceConfig } from '../config.js';
 import {
   AUDIT_GENESIS_HASH,
@@ -71,6 +71,19 @@ export class KernelLadder implements GovernanceKernelPort {
       }
     }
     return { routable: false, tier: 'critical', reason: 'Governance kernel unavailable — unroutable (fail closed).' };
+  }
+
+  async reloadPolicies(configJson: string): Promise<ReloadPoliciesResult> {
+    // Hot-swap only the ACTIVE (top) rung — the one that actually serves
+    // decide()/enforceTool(). Lower rungs are static and never reached live.
+    const active = this.rungs[0];
+    if (!active) return { reloaded: false, reason: 'no governance kernel rung available' };
+    try {
+      return await active.reloadPolicies(configJson);
+    } catch (err) {
+      // Fail-closed: a thrown reload leaves the OLD policy live.
+      return { reloaded: false, reason: err instanceof Error ? err.message : String(err) };
+    }
   }
 
   async auditTip(): Promise<string> {

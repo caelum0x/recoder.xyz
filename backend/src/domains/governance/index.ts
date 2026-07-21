@@ -20,13 +20,13 @@ import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
 import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
 import type { GovernanceGate } from './ports/gate.port.js';
+import type { ToolExecEnforcementPort } from './ports/tool-exec-gate.port.js';
 import type { SecretsPort } from './ports/secrets.port.js';
-import type { GovernanceKernelPort } from './ports/kernel.port.js';
+import type { GovernanceKernelPort, ReloadPoliciesResult } from './ports/kernel.port.js';
 import type { ConsensusReviewPort } from './ports/consensus.port.js';
 import type { WorkLockService } from './services/work-lock.service.js';
 import type { ApprovalService } from './services/approval.service.js';
 import type { AuditChainService } from './services/audit-chain.service.js';
-import type { ReloadPoliciesResult } from './ports/approval-store.port.js';
 import type { GovernanceConfigOverrides } from './config.js';
 
 /** Dependencies injected by bootstrap (after persistence + identity are built). */
@@ -39,14 +39,6 @@ export interface GovernanceModuleDeps {
   readonly middleware: AuthMiddleware;
   /** Not-yet-in-AppConfig governance values (vault key, daemon socket, napi toggle). */
   readonly overrides?: GovernanceConfigOverrides;
-  /**
-   * The raw `recoder-governance-napi` `NapiGovernanceKernel` handle, when the
-   * native addon is loaded for this arch/platform. Injected by bootstrap; used to
-   * back the gate's `needs_approval` clearance + policy hot-swap with the kernel's
-   * OWN `ApprovalManager` store. Absent → the gate degrades truthfully to the
-   * durable Postgres approval repository (no behavior change).
-   */
-  readonly napiApprovalHandle?: unknown;
 }
 
 /** The public surface every other domain consumes. */
@@ -54,6 +46,15 @@ export interface GovernanceModule {
   readonly name: 'governance';
   /** THE write seam: `decide → risk → audit` for every governed mutation. */
   gate(): GovernanceGate;
+  /**
+   * The per-tool teeth as a narrow, least-authority port (bound to
+   * `gate.enforceTool`). Bootstrap injects this into the engines MCP host, where
+   * it gates the recoder-MCP-server tool stream at the interop executor
+   * chokepoint. Boundary (truthful): it does NOT see a launched agent's own
+   * in-worktree bash/file/secret ops — those never cross the executor and stay
+   * under conductor's coarse `guardConductorWrite → decide`.
+   */
+  toolExecGate(): ToolExecEnforcementPort;
   /** The envelope-encrypted secret store (get/set/rotate/delete/list). */
   secrets(): SecretsPort;
   /** Path/work-lock acquire/release/check (conflict prevention before writes). */
