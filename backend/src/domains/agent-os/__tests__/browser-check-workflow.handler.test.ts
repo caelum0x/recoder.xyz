@@ -208,3 +208,134 @@ describe('browser-check FIRES through the real AgentOsWorkflowRunnerDriver (disp
     expect(node?.status).toBe('skipped');
   });
 });
+
+/**
+ * REGRESSION-LOCK (browser-use fusion §8.6) — the `browser-check` node + the
+ * `.ext().run_task` research step are LIVE (Wave-4-shipped); these gates pin the
+ * multiplicity + truthful-degrade contracts so a refactor can't silently regress
+ * them. No handler rewrite — assertions only.
+ */
+describe('browser-check regression-lock — multiplicity + run_task truthful-degrade', () => {
+  it('fires ONE executor cycle + a screenshot+summary evidence pair PER browserChecks[] entry', async () => {
+    const { client, ops } = recordingClient(HEALTHY);
+    const handler = createBrowserCheckWorkflowHandler({ client });
+    const urls = ['https://a.preview.example', 'https://b.preview.example', 'https://c.preview.example'];
+
+    const result = await handler(
+      browserCheckNode({
+        browserChecks: urls.map((url) => ({ url, assertions: [{ expected: 'deploy succeeded' }] })),
+      }),
+      CONTEXT,
+    );
+
+    // N entries ⇒ N executor cycles (each cycle = navigate→extract→screenshot).
+    expect(ops.filter((op) => op === 'navigate').length).toBe(urls.length);
+    expect(ops.filter((op) => op === 'extract').length).toBe(urls.length);
+    expect(ops.filter((op) => op === 'screenshot').length).toBe(urls.length);
+    expect(result.status).toBe('completed');
+
+    // N evidence pairs on the run: N screenshots + N verification summaries.
+    const kinds = (result.artifacts ?? []).map((artifact) => artifact.kind);
+    expect(kinds.filter((kind) => kind === 'screenshot').length).toBe(urls.length);
+    expect(kinds.filter((kind) => kind === 'verification').length).toBe(urls.length);
+
+    const output = result.output as {
+      checks: Array<{ url: string; status: string }>;
+      evidenceArtifacts: string[];
+    };
+    // One check row per entry, every entry passed, and every artifact id surfaced.
+    expect(output.checks.map((check) => check.url)).toEqual(urls);
+    expect(output.checks.every((check) => check.status === 'passed')).toBe(true);
+    expect(output.evidenceArtifacts.length).toBe(urls.length * 2);
+  });
+
+  it('lands N evidence artifacts on the RUN through the real dispatch driver', async () => {
+    const { client, ops } = recordingClient(HEALTHY);
+    const driver = new AgentOsWorkflowRunnerDriver({
+      ports: { runBrowserCheck: createBrowserCheckWorkflowHandler({ client }) },
+    });
+    const urls = ['https://one.example', 'https://two.example'];
+
+    const run = await driver.start(
+      definition(browserCheckNode({ browserChecks: urls.map((url) => ({ url })) })),
+    );
+
+    expect(ops.filter((op) => op === 'navigate').length).toBe(urls.length);
+    expect(run.status).toBe('completed');
+    // Every entry's screenshot + summary rode onto the run's artifacts.
+    const kinds = (run.artifacts ?? []).map((artifact) => artifact.kind);
+    expect(kinds.filter((kind) => kind === 'screenshot').length).toBe(urls.length);
+    expect(kinds.filter((kind) => kind === 'verification').length).toBe(urls.length);
+  });
+
+  it('does NOT touch the run_task deep-op when a node carries no researchTask', async () => {
+    const { client } = recordingClient(HEALTHY);
+    const seen: string[] = [];
+    const ext: BrowserExtPort = {
+      async extractStructured() {
+        return ok({});
+      },
+      async runTask(input) {
+        seen.push(input.task);
+        return ok({ status: 'done' });
+      },
+      async screenshotAnnotate() {
+        return ok({});
+      },
+      async fillForm() {
+        return ok({});
+      },
+    };
+    const handler = createBrowserCheckWorkflowHandler({ client, ext });
+
+    const result = await handler(
+      browserCheckNode({ browserChecks: [{ url: 'https://x', assertions: [{ expected: 'deploy succeeded' }] }] }),
+      CONTEXT,
+    );
+
+    // The autonomous browse loop is opt-in: a pure browser-check never fires it.
+    expect(seen).toEqual([]);
+    expect(result.status).toBe('completed');
+    expect((result.output as Record<string, unknown>).research).toBeUndefined();
+  });
+
+  it('is a truthful `skipped` (never a faked verdict) when the run_task sidecar is unavailable', async () => {
+    const { client } = recordingClient(HEALTHY);
+    const ext: BrowserExtPort = {
+      async extractStructured() {
+        return ok({});
+      },
+      async runTask() {
+        return fail('deep-op sidecar 503', 'unavailable');
+      },
+      async screenshotAnnotate() {
+        return ok({});
+      },
+      async fillForm() {
+        return ok({});
+      },
+    };
+    const handler = createBrowserCheckWorkflowHandler({ client, ext });
+
+    const result = await handler(browserCheckNode({ researchTask: { task: 'how many tiers?' } }), CONTEXT);
+
+    // Sidecar down ⇒ the research sub-step is a truthful skip, the node does not fail.
+    expect(result.status).toBe('skipped');
+    const research = (result.output as { research: { status: string; reason?: string } }).research;
+    expect(research.status).toBe('skipped');
+    expect(research.reason).toContain('deep-op sidecar 503');
+    expect(result.error).toBeUndefined();
+  });
+
+  it('is a truthful `skipped` for a researchTask when no deep-op sidecar is wired', async () => {
+    const { client } = recordingClient(HEALTHY);
+    const handler = createBrowserCheckWorkflowHandler({ client, ext: null });
+
+    const result = await handler(browserCheckNode({ researchTask: { task: 'how many tiers?' } }), CONTEXT);
+
+    expect(result.status).toBe('skipped');
+    const research = (result.output as { research: { status: string; reason?: string } }).research;
+    expect(research.status).toBe('skipped');
+    expect(research.reason).toContain('not wired');
+  });
+});
