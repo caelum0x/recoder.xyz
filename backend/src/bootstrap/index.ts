@@ -41,10 +41,9 @@ import { buildApiKeysRouter } from '../domains/identity/routes/api-keys.routes.j
 import { createOrgsRbacFeature } from '../domains/identity/orgs-rbac.feature.js';
 import { createGovernanceModule } from '../domains/governance/index.js';
 import { createInteropModule } from '../domains/interop/index.js';
-import { createAgentOsModule, type SquadIssuePort } from '../domains/agent-os/index.js';
+import { createAgentOsModule } from '../domains/agent-os/index.js';
 import { squadSeedSchema, type SquadSeed } from '../domains/agent-os/config.js';
 import { createConductorModule } from '../domains/conductor/index.js';
-import type { RunEventSinkPort } from '../domains/conductor/ports/run-event-sink.port.js';
 import { createCliRuntimeSubstrate } from '../domains/conductor/adapters/cli-runtime.adapter.js';
 import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/openfang-runtime.adapter.js';
 import { createBrainMemoryAdapter } from '../domains/conductor/adapters/brain-memory.adapter.js';
@@ -61,7 +60,6 @@ import { createTmuxScanSource } from '../domains/conductor/adapters/tmux-scan-so
 import { createDmuxGridAdapter } from '../domains/conductor/adapters/dmux-grid.adapter.js';
 import { createRecoderMcpInjector } from '../domains/conductor/adapters/mcp-inject.adapter.js';
 import { createCloudSandboxSubstrate } from '../domains/conductor/adapters/cloud-sandbox-substrate.adapter.js';
-import type { CloudSandboxGatewayPort } from '../domains/conductor/ports/cloud-sandbox.port.js';
 import { createEnginesModule, createOpenfangWorkflowDriver } from '../domains/engines/index.js';
 import { createInferenceModule } from '../domains/inference/index.js';
 import { createInferenceRoutePalAdapter } from '../domains/inference/adapters/pal-route.adapter.js';
@@ -92,8 +90,13 @@ import {
   type EnvelopeFetch,
 } from './interop-wire-seams.js';
 import { createCliInferenceEnvResolver } from './conductor-inference-seam.js';
+import {
+  createCloudSandboxGateway,
+  createConductorRunSink,
+  createCliMintClosure,
+} from './conductor-seams.js';
+import { createMemoryEmbedFallback, createSquadIssueAdapter } from './memory-seams.js';
 import { createMemoryModule } from '../domains/memory/index.js';
-import type { IssueGraphService } from '../domains/memory/ports/issue-graph.port.js';
 import type { Mem0EnginePort } from '../domains/memory/ports/mem0-engine.port.js';
 // Composition root: value-imports the engines mem0 client, injected as the memory
 // consumer-owned `Mem0EnginePort` so the mem0 adapter holds no value edge into engines.
@@ -102,7 +105,6 @@ import {
   createCloudModule,
   createDnsTlsVerifier,
   type CloudModule,
-  type Tenant,
 } from '../domains/cloud/index.js';
 import {
   createInteropWireComposer,
@@ -171,21 +173,6 @@ function routerProvider(key: string, basePath: string, router: Router): RoutePro
 
 /** Every edge mount keeps its router's own guards — the edge adds no second layer. */
 const PUBLIC_MOUNT: GuardPolicy = { auth: 'public', interop: false };
-
-/**
- * The agent-os squad-issue read seam over the MEMORY-owned issue-graph module
- * facet — built at THIS composition root so agent-os never imports the memory
- * domain. The facet's degrade law carries through unchanged (reads `[]`/`null`,
- * truthful `health()`, nothing throws).
- */
-function createSquadIssueAdapter(graph: IssueGraphService): SquadIssuePort {
-  return {
-    health: () => graph.health(),
-    ready: () => graph.ready(),
-    show: (id, opts) => graph.show(id, opts),
-    stale: () => graph.stale(),
-  };
-}
 
 /**
  * Parse the OPT-IN squad seed from env (bootstrap is the sole sanctioned env
@@ -577,19 +564,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // gateway → loopback), shaped as the memory domain's `EmbeddingPort` — memory
   // takes NO cross-domain import; the seam is injected here. Truthful: an
   // unrouted/failed call yields null so memory degrades to keyword search.
-  const memoryEmbedFallback = {
-    provider: 'inference',
-    async embed(texts: string[]): Promise<number[][] | null> {
-      try {
-        const result = await inference
-          .gateway()
-          .embed({ model: 'text-embedding-3-small', input: texts });
-        return result.routed ? result.embeddings : null;
-      } catch {
-        return null;
-      }
-    },
-  };
+  const memoryEmbedFallback = createMemoryEmbedFallback(inference.gateway());
   // The engines mem0 client bound to the memory consumer-owned `Mem0EnginePort`.
   // Same runtime behavior as the direct value import, now injected at the root.
   const mem0Engine: Mem0EnginePort = {
@@ -633,11 +608,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   //     absent on the box, `available()` reports `down` with the missing binary and
   //     `launch()` refuses rather than fabricate a session, while the module + its
   //     `/api/conductor` edges and the `/terminal` WS still boot. ---
-  const conductorRunSink: RunEventSinkPort = {
-    async append(event) {
-      await agentOs.runEventBus().ingest(event, 'conductor');
-    },
-  };
+  const conductorRunSink = createConductorRunSink(agentOs.runEventBus());
   const conductorSubstrateConfig = {
     tmuxBin: config.conductor.tmuxBin,
     worktreeRoot: config.conductor.worktreeRoot,
@@ -674,19 +645,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     gateway: inference.gateway(),
     baseUrl: cliGatewayBaseUrl,
     logger: childLogger('conductor-cli-inference'),
-    mintGatewayKey: async () => {
-      try {
-        const minted = await apiKeyService.mint({
-          userId: 'conductor',
-          name: 'conductor-cli-inference-gateway',
-          scopes: ['inference'],
-        });
-        return minted.rawKey;
-      } catch {
-        // No DB / key store down / gate refuse ⇒ truthful null (CLI runs unmetered).
-        return null;
-      }
-    },
+    mintGatewayKey: createCliMintClosure(apiKeyService),
   });
   const cliSub = createCliRuntimeSubstrate({
     config: conductorSubstrateConfig,
@@ -719,68 +678,16 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // provider and MIS-LABEL the run — that would fake success, so it stays unwired
   // until a real ssh SandboxProvider lands.
   let cloudRef: CloudModule | null = null;
-  // The system tenant conductor off-box runs execute under. `tenancy.ensure`
-  // auto-provisions a tenant keyed by this owner and assigns it a real id; we
-  // CACHE that resolved tenant so provision/exec/destroy all scope to the SAME
-  // tenant id (a fixed literal id would never match the auto-provisioned one).
-  const CLOUD_TENANT_OWNER = 'conductor';
-  let conductorTenant: Tenant | null = null;
-  const ensureConductorTenant = async (): Promise<Tenant> => {
-    if (!cloudRef) throw new Error('cloud module not wired');
-    if (conductorTenant) return conductorTenant;
-    const r = await cloudRef.tenancy().ensure({ ownerUserId: CLOUD_TENANT_OWNER });
-    if (!r.ok) throw new Error(r.error.message);
-    conductorTenant = r.value;
-    return conductorTenant;
-  };
-  const cloudSandboxGateway = (substrateId: 'daytona'): CloudSandboxGatewayPort => ({
-    substrateId,
-    // Enabled once the cloud module is wired; real reachability is the async probe.
-    isEnabled: () => cloudRef !== null,
-    isAvailable: async () => {
-      if (!cloudRef) return false;
-      const h = await cloudRef.provisioner().health();
-      return h.status !== 'down';
-    },
-    provision: async () => {
-      if (!cloudRef) throw new Error('cloud module not wired');
-      const tenant = await ensureConductorTenant();
-      const provisioned = await cloudRef
-        .provisioner()
-        .provision({ tenant, userId: CLOUD_TENANT_OWNER });
-      if (!provisioned.ok) throw new Error(provisioned.error.message);
-      return { id: provisioned.value.id };
-    },
-    getWorkDir: async (sandboxId) => {
-      if (!cloudRef) return '/';
-      const tenant = await ensureConductorTenant();
-      const r = await cloudRef
-        .provisioner()
-        .execInSandbox(sandboxId, tenant.id, { command: 'pwd' });
-      return r.ok ? r.value.stdout.trim() : '/';
-    },
-    exec: async (sandboxId, command, options) => {
-      if (!cloudRef) throw new Error('cloud module not wired');
-      const tenant = await ensureConductorTenant();
-      const r = await cloudRef.provisioner().execInSandbox(sandboxId, tenant.id, {
-        command,
-        ...(options?.cwd ? { cwd: options.cwd } : {}),
-        ...(options?.timeoutSecs ? { timeoutMs: options.timeoutSecs * 1000 } : {}),
-      });
-      if (!r.ok) throw new Error(r.error.message);
-      return {
-        output: `${r.value.stdout}${r.value.stderr}`,
-        ...(r.value.exitCode != null ? { exitCode: r.value.exitCode } : {}),
-      };
-    },
-    destroy: async (sandboxId) => {
-      if (!cloudRef) return;
-      const tenant = await ensureConductorTenant();
-      await cloudRef.provisioner().destroy(sandboxId, tenant.id);
-    },
-  });
+  // The off-box sandbox gateway (tenant-caching + provision/exec/destroy) lives in
+  // `conductor-seams.ts`. `cloudRef` is resolved LAZILY through a getter so the
+  // Phase-10 late-bind (`cloudRef = cloud`) is observed; the tenant is CACHED so
+  // provision/exec/destroy all scope to the SAME auto-provisioned tenant id.
   const cloudDaytonaSub = createCloudSandboxSubstrate({
-    gateway: cloudSandboxGateway('daytona'),
+    gateway: createCloudSandboxGateway({
+      cloudRef: () => cloudRef,
+      tenantOwner: 'conductor',
+      substrateId: 'daytona',
+    }),
     logger: childLogger('conductor-daytona'),
   });
   // The memory-backed brain: recall on launch (mem0 ∪ beads ∪ candidates → rerank)
