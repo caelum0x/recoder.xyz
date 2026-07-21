@@ -48,6 +48,7 @@ import type { ConductorModule, ConductorModuleDeps } from './index.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
 import type { ConductorPlanPort, ConductorPlanDecision } from './ports/plan.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
+import { deriveSeedTerms } from './adapters/code-intel.adapter.js';
 import {
   selectSubstrateForRuntime,
   isOpenfangRuntime,
@@ -361,10 +362,20 @@ export class ConductorComposer implements ConductorModule {
   }
 
   /**
-   * Path (b) prompt enrichment: recall memory (mem0 ∪ beads ∪ candidates → rerank)
-   * and fold it into the prompt the native openfang turn runs as its `command`.
+   * Path (b) prompt enrichment: fold two capability blocks into the prompt the
+   * native openfang turn runs as its `command`:
+   *   1. MEMORY recall (mem0 ∪ beads ∪ candidates → rerank) — unchanged.
+   *   2. CODE-MAP (recodergit code-knowledge-graph): a bounded, code-aware launch
+   *      context (`codeIntel.queryContext`) appended AFTER the memory block.
    * Degrade-safe: no brain / empty prompt / recall fault ⇒ the raw prompt (or
-   * `undefined` when there is no prompt, so the substrate refuses truthfully).
+   * `undefined` when there is no prompt, so the substrate refuses truthfully); an
+   * absent/disabled/not-indexed code-graph ⇒ the prompt is left memory-only.
+   *
+   * Ordering caveat (degrade-truthful, NOT a bug): `startCodeIntel` fires the repo
+   * index fire-and-forget AFTER this enrichment, so the FIRST launch of a
+   * never-indexed repo races the index and truthfully gets `queryContext === null`
+   * (memory-only prompt). The code-map warms on subsequent launches and after the
+   * completion-hook reindex — never forced ahead of the index here.
    */
   private async enrichOpenfangCommand(
     input: CreateConductorWorkspaceInput,
@@ -372,31 +383,59 @@ export class ConductorComposer implements ConductorModule {
   ): Promise<string | undefined> {
     const raw = (input.prompt ?? '').trim();
     if (!raw) return undefined;
-    if (!this.brain) return input.prompt;
-    try {
-      const enriched = await this.brain.enrichPrompt({
-        prompt: input.prompt ?? '',
-        userId: principal.userId,
-        ...(input.taskId ? { taskId: input.taskId } : {}),
-        ...(input.repoPath ? { repoPath: input.repoPath } : {}),
-        ...(input.library ? { library: input.library } : {}),
-        // Thread the SAME per-repo ColBERT collection `startCodeIntel` builds so
-        // the brain's first-stage retrieval reads the index instead of leaving it
-        // a dead write. Gated on `repoPath` — the only case `startCodeIntel`
-        // builds a `repo_<id>` collection — so we never point search at an index
-        // that was never built (absent ⇒ retrieval falls back to its default).
-        ...(input.repoPath
-          ? { repoCollection: `repo_${repoIdFromRepoRef(input.projectId || input.repoPath)}` }
-          : {}),
-      });
-      return enriched.prompt;
-    } catch (err) {
-      this.log.warn(
-        { err, runtimeId: input.runtimeId },
-        'conductor openfang prompt enrich faulted — running raw prompt',
-      );
-      return input.prompt;
+
+    // 1) MEMORY recall (unchanged): no brain ⇒ the raw prompt is the base; a
+    //    recall fault logs + leaves the base prompt, then the code-map still runs.
+    let prompt = input.prompt ?? '';
+    if (this.brain) {
+      try {
+        const enriched = await this.brain.enrichPrompt({
+          prompt: input.prompt ?? '',
+          userId: principal.userId,
+          ...(input.taskId ? { taskId: input.taskId } : {}),
+          ...(input.repoPath ? { repoPath: input.repoPath } : {}),
+          ...(input.library ? { library: input.library } : {}),
+          // Thread the SAME per-repo ColBERT collection `startCodeIntel` builds so
+          // the brain's first-stage retrieval reads the index instead of leaving it
+          // a dead write. Gated on `repoPath` — the only case `startCodeIntel`
+          // builds a `repo_<id>` collection — so we never point search at an index
+          // that was never built (absent ⇒ retrieval falls back to its default).
+          ...(input.repoPath
+            ? { repoCollection: `repo_${repoIdFromRepoRef(input.projectId || input.repoPath)}` }
+            : {}),
+        });
+        prompt = enriched.prompt;
+      } catch (err) {
+        this.log.warn(
+          { err, runtimeId: input.runtimeId },
+          'conductor openfang prompt enrich faulted — running raw prompt',
+        );
+      }
     }
+
+    // 2) CODE-MAP (recodergit code-graph), degrade-truthful. Probe the OPTIONAL
+    //    port method before calling (older impls omit it). Gated on `repoPath`
+    //    (the only case a `repo_<id>` index exists) and derived with the SAME
+    //    `repoIdFromRepoRef(projectId || repoPath)` `startCodeIntel` indexes under,
+    //    so we only query an index that was, or will be, built for this repo.
+    //    `queryContext` returns a rendered block OR a truthful `null` (disabled /
+    //    not-indexed / no seed match) ⇒ the prompt is left memory-only. Bounded +
+    //    non-blocking: a fault is logged and skipped, never crashing a launch.
+    if (input.repoPath && this.codeIntel?.queryContext) {
+      try {
+        const repoId = repoIdFromRepoRef(input.projectId || input.repoPath);
+        const seeds = deriveSeedTerms(input.prompt ?? '');
+        const block = await this.codeIntel.queryContext(repoId, seeds);
+        if (block) prompt = `${prompt}\n\n${block}`;
+      } catch (err) {
+        this.log.warn(
+          { err, runtimeId: input.runtimeId },
+          'conductor openfang code-context enrich faulted — skipped',
+        );
+      }
+    }
+
+    return prompt;
   }
 
   /**
