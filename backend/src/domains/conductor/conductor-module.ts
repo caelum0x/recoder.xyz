@@ -63,6 +63,7 @@ import {
 import { createCompletionHookSink } from './adapters/completion-hook.adapter.js';
 import { readRepoPassages } from './adapters/repo-passages.adapter.js';
 import { toLoggerPort } from './adapters/logger.adapter.js';
+import { createRecoderSessionLister } from './adapters/recoder-session-lister.adapter.js';
 import { createConductorRegistry, type ConductorRegistry } from './adapters/substrate-registry.adapter.js';
 import { listConductorRuntimes, type ConductorRuntimeView } from './adapters/runtime-listing.adapter.js';
 import { createWorkspaceRepository } from './adapters/workspace-repository.adapter.js';
@@ -265,6 +266,13 @@ export class ConductorComposer implements ConductorModule {
    * the governed `arrangeCompareGrid`.
    */
   private readonly workspaceGrid?: WorkspaceGridPort;
+  /**
+   * OPTIONAL read-only tmux introspection port (durable-shell unify §A2). Injected
+   * from the composition root (`engines.tmuxIntrospect()`) so the `/sessions`
+   * attach bridge observes the SAME server the conductor drives WITHOUT the
+   * conductor value-importing the engines domain. Absent ⇒ the bridge lists `[]`.
+   */
+  private readonly tmuxIntrospect?: ConductorModuleDeps['tmuxIntrospect'];
   private started = false;
 
   constructor(deps: ConductorModuleDeps) {
@@ -283,6 +291,7 @@ export class ConductorComposer implements ConductorModule {
     this.mcpInject = deps.mcpInject;
     this.onDeliveryFeedback = deps.onDeliveryFeedback;
     this.workspaceGrid = deps.workspaceGrid;
+    this.tmuxIntrospect = deps.tmuxIntrospect;
     this.checkpointStore = deps.checkpointStore ?? createInMemoryCheckpointStore();
 
     // Per-repo setup script: config seam (governed setScript/getScript) + the
@@ -1784,7 +1793,23 @@ export class ConductorComposer implements ConductorModule {
         prStatus: this.prStatus,
       }),
     );
-    router.use(buildConductorRoutes({ module: this, middleware: this.middleware }));
+    router.use(
+      buildConductorRoutes({
+        module: this,
+        middleware: this.middleware,
+        // Read-only `/sessions` attach bridge over the INJECTED engines-owned tmux
+        // introspect port (never a cross-domain value import). Absent ⇒ the lister
+        // degrades to an empty list (truthful "cannot observe the substrate").
+        ...(this.tmuxIntrospect
+          ? {
+              listRecoderSessions: createRecoderSessionLister({
+                introspect: this.tmuxIntrospect,
+                logger: toLoggerPort(this.log),
+              }),
+            }
+          : {}),
+      }),
+    );
     return router;
   }
 

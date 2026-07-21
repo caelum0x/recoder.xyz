@@ -72,6 +72,10 @@ import type { ConductorRuntimeView } from './adapters/runtime-listing.adapter.js
 import type { WorkspaceQueryFilters } from './services/workspace-query.service.js';
 import type { CompareView } from './services/compare.service.js';
 import type { WorkspaceGridPort, GroupGridArrangement } from './ports/workspace-grid.port.js';
+// Type-only across the boundary (the guard allows types): the read-only
+// `/sessions` attach bridge observes through an INJECTED engines-owned tmux
+// introspect port; the concrete value is built at the composition root.
+import type { TmuxIntrospectPort } from '../engines/adapters/cli/tmux-introspect.adapter.js';
 import type { CheckpointRecord, CheckpointStorePort } from './ports/checkpoint-store.port.js';
 import type { BranchResultView, RestoreResultView } from './services/checkpoint.service.js';
 import type { RepoSetupStorePort } from './ports/repo-setup-store.port.js';
@@ -246,6 +250,15 @@ export interface ConductorModuleDeps {
    * `adapters/dmux-grid.adapter.ts`.
    */
   readonly workspaceGrid?: WorkspaceGridPort;
+  /**
+   * Optional read-only tmux introspection port for the `/sessions` attach bridge
+   * (durable-shell unify §A2). Bootstrap injects `engines.tmuxIntrospect()` — the
+   * SAME pinned binary the conductor drives — so the read-only `recoder-*` session
+   * lister can surface live sessions WITHOUT the conductor value-importing the
+   * engines domain. Absent ⇒ the bridge degrades truthfully to an empty list
+   * (never a fabricated live session). See `adapters/recoder-session-lister.adapter.ts`.
+   */
+  readonly tmuxIntrospect?: TmuxIntrospectPort;
 }
 
 /** The public surface bootstrap registers and the edge/interop consume. */
