@@ -26,6 +26,12 @@ interface WorkspaceSidebarProps {
   onNewWorkspace: () => void;
   /** workspaceId → prompt a running agent is blocked on (needs_input). */
   waits?: Record<string, string>;
+  /**
+   * The keyboard-nav highlight cursor (distinct from the opened `selectedId`).
+   * Optional — undefined leaves every row unhighlighted, so existing consumers
+   * are unaffected.
+   */
+  focusedId?: string | null;
   /** Collapsed to a thin rail (the workspace list is hidden). */
   collapsed?: boolean;
   /** Toggle the collapsed state (shown as a chevron in the header/rail). */
@@ -49,12 +55,14 @@ function WorkspaceRow({
   workspace,
   ordinal,
   selected,
+  focused,
   onSelect,
   waitPrompt,
 }: {
   workspace: Workspace;
   ordinal?: number;
   selected: boolean;
+  focused: boolean;
   onSelect: (id: string) => void;
   waitPrompt?: string;
 }) {
@@ -63,7 +71,7 @@ function WorkspaceRow({
   const pill = waitPrompt ? 'Needs you' : statePill(workspace.state, Boolean(collision));
   return (
     <button
-      class={`ws-row ${selected ? 'ws-row-active' : ''} ${collision ? 'ws-row-collision' : ''} ${waitPrompt ? 'ws-row-needs-input' : ''}`}
+      class={`ws-row ${selected ? 'ws-row-active' : ''} ${focused ? 'ws-row-focused' : ''} ${collision ? 'ws-row-collision' : ''} ${waitPrompt ? 'ws-row-needs-input' : ''}`}
       onClick={() => onSelect(workspace.workspaceId)}
       title={waitPrompt ? `${waitPrompt} — ${workspaceGoal(workspace)}` : `${workspaceGoal(workspace)} (${workspace.branch})`}
     >
@@ -92,6 +100,7 @@ export function WorkspaceSidebar({
   onSelect,
   onNewWorkspace,
   waits,
+  focusedId,
   collapsed,
   onToggleCollapse,
   onHome,
@@ -159,6 +168,7 @@ export function WorkspaceSidebar({
                     workspace={ws}
                     ordinal={i + 1}
                     selected={ws.workspaceId === selectedId}
+                    focused={ws.workspaceId === focusedId}
                     onSelect={onSelect}
                     waitPrompt={waits?.[ws.workspaceId]}
                   />

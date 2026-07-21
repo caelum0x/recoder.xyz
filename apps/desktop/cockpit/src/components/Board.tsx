@@ -14,6 +14,12 @@ interface BoardProps {
   onSelect: (id: string) => void;
   /** workspaceId → the prompt a running agent is blocked on (needs_input). */
   waits?: Record<string, string>;
+  /**
+   * The keyboard-nav highlight cursor (distinct from the opened `selectedId`).
+   * Optional — undefined leaves every card unhighlighted, so existing consumers
+   * and tests are unaffected.
+   */
+  focusedId?: string | null;
 }
 
 function timeAgo(iso: string): string {
@@ -28,7 +34,7 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-export function Board({ workspaces, selectedId, onSelect, waits }: BoardProps) {
+export function Board({ workspaces, selectedId, onSelect, waits, focusedId }: BoardProps) {
   return (
     <div class="board">
       {BOARD_COLUMNS.map((col) => {
@@ -51,7 +57,7 @@ export function Board({ workspaces, selectedId, onSelect, waits }: BoardProps) {
                   const waitPrompt = waits?.[w.workspaceId];
                   return (
                     <button
-                      class={`card ${selectedId === w.workspaceId ? 'card-selected' : ''} ${collision ? 'card-collision' : ''} ${waitPrompt ? 'card-needs-input' : ''}`}
+                      class={`card ${selectedId === w.workspaceId ? 'card-selected' : ''} ${selectedId !== w.workspaceId && focusedId === w.workspaceId ? 'card-focused' : ''} ${collision ? 'card-collision' : ''} ${waitPrompt ? 'card-needs-input' : ''}`}
                       key={w.workspaceId}
                       onClick={() => onSelect(w.workspaceId)}
                     >
