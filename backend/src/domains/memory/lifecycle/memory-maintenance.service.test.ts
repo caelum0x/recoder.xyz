@@ -163,6 +163,30 @@ describe('MemoryMaintenanceService.sweepOnce', () => {
     expect(stats.beads.reason).toMatch(/exploded/i);
   });
 
+  it('reports the in-lib consolidate no-op truthfully (no faked batch without the sidecar)', async () => {
+    // The in-lib mem0 client runs consolidation INLINE on every add, so its
+    // batch-sweep seam is a truthful no-op ({ok:false, reason}). The maintenance
+    // driver must pass that through verbatim — never fabricate ok:true.
+    const consolidate = vi.fn(async (): Promise<Mem0ConsolidateResult> => ({
+      ok: false,
+      reason: 'inline on add',
+    }));
+    const svc = new MemoryMaintenanceService({
+      beads: beads(),
+      mem0: mem0({ consolidate }),
+      logger: silentLogger,
+      intervalMs: 0,
+    });
+
+    const stats = await svc.sweepOnce();
+    expect(consolidate).toHaveBeenCalledTimes(1);
+    expect(stats.mem0).toEqual({
+      attempted: true,
+      ok: false,
+      reason: 'inline on add',
+    });
+  });
+
   it('skips mem0 consolidate truthfully when the port does not expose it', async () => {
     const noConsolidate = mem0();
     delete (noConsolidate as { consolidate?: unknown }).consolidate;
