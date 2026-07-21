@@ -1202,6 +1202,28 @@ export interface DeviceLoginPrompt {
   expiresIn: number;
 }
 
+/**
+ * The embedded backend supervisor's phase, as the Electron shell tracks it. A
+ * redacted, secret-free mirror of the main process's SupervisorPhase — the
+ * cockpit uses it only to turn the generic "backend unreachable" banner into the
+ * real starting/restarting/failed line while a poll is failing.
+ */
+export type BackendPhase = 'idle' | 'starting' | 'ready' | 'crashed' | 'failed' | 'stopped';
+
+/**
+ * The redacted supervisor-phase snapshot the Electron shell projects to the
+ * cockpit (window.__RECODER_COCKPIT__.backendStatus()). ALLOWLISTED to these 5
+ * non-sensitive fields in the main process — never a backend URL, port, key, or
+ * engine roster. `userMessage`/`logPath` are null unless the phase is `failed`.
+ */
+export interface BackendPhaseSnapshot {
+  phase: BackendPhase;
+  ready: boolean;
+  restartCount: number;
+  userMessage: string | null;
+  logPath: string | null;
+}
+
 /** Config the Electron shell injects on window.__RECODER_COCKPIT__. */
 export interface CockpitConfig {
   backendUrl: string;
@@ -1247,4 +1269,11 @@ export interface CockpitConfig {
    * inside the Electron shell. Resolves to { ok: true }.
    */
   signOut?: () => Promise<{ ok: boolean }>;
+  /**
+   * Read the redacted embedded-backend supervisor phase (starting/crashed/…).
+   * Electron-shell only; secret-free by construction (the main process
+   * allowlists the 5 BackendPhaseSnapshot fields). Undefined when opened in a
+   * plain browser — the cockpit then keeps its generic unreachable banner.
+   */
+  backendStatus?: () => Promise<BackendPhaseSnapshot | null>;
 }

@@ -25,6 +25,11 @@ try {
                 openWorkspaceTerminal: (payload: { sessionName: string; cwd?: string }) => {
                     ipcRenderer.sendToHost("recoder:open-workspace-terminal", payload);
                 },
+                // Redacted, secret-free supervisor-phase projection. Exposed
+                // UNCONDITIONALLY (before the cockpit-config block) so it exists
+                // precisely when the backend is NOT READY — the phases the phase
+                // banner needs. The main process re-gates on a loopback frame.
+                backendStatus: () => ipcRenderer.invoke("recoder:backend-status"),
             };
             try {
                 const cfg = await ipcRenderer.invoke("recoder:cockpit-config");
