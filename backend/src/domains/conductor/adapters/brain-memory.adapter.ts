@@ -169,7 +169,15 @@ export function createBrainMemoryAdapter(deps: BrainMemoryAdapterDeps): Conducto
     if (!retrieval) return { block: '', sources: [] };
     try {
       if (!retrieval.configured()) return { block: '', sources: [] };
-      const result = await retrieval.search(input.prompt, { topK: maxPassages });
+      // Point the ColBERT first stage at the conductor-built per-repo PLAID index
+      // when the launch resolved one (`repoCollection`); absent ⇒ retrieval uses
+      // its default collection (today's behavior). This is what CLOSES the dead
+      // write: the `repo_<id>` index built on workspace create is finally read.
+      const repoCollection = input.repoCollection?.trim();
+      const searchOpts = repoCollection
+        ? { topK: maxPassages, colbertCollection: repoCollection }
+        : { topK: maxPassages };
+      const result = await retrieval.search(input.prompt, searchOpts);
       if (result.status !== 'ok' || result.passages.length === 0) return { block: '', sources: [] };
       const passages = result.passages.slice(0, maxPassages);
       const lines = passages.map((p) => {

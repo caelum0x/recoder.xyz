@@ -18,6 +18,15 @@ export interface BrainEnrichInput {
   library?: string;
   /** User id whose mem0 recall to include. */
   userId?: string;
+  /**
+   * OPTIONAL per-repo ColBERT PLAID collection (e.g. `repo_<id>`) the conductor
+   * built on workspace create. When set, the brain's repo-context retrieval
+   * targets THIS late-interaction index as its first stage; absent ⇒ retrieval
+   * falls back to the default collection (today's behavior). Only the conductor
+   * knows the repo id, so it resolves and threads this — the CLI enrich path
+   * leaves it undefined.
+   */
+  repoCollection?: string;
 }
 
 export interface BrainProvenanceRef {

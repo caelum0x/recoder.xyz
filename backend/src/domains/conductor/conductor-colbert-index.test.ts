@@ -16,6 +16,8 @@ import type {
   ColbertSearchPort,
   ColbertSearchResult,
 } from '../memory/ports/colbert-search.port.js';
+import type { BrainEnrichInput } from './ports/brain.port.js';
+import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
 import { composeConductor, FakeSubstrate, makeCreateInput, makePrincipal } from './__fixtures__/harness.js';
 
 interface RecordingColbert extends ColbertSearchPort {
@@ -122,5 +124,72 @@ describe('conductor per-repo ColBERT index build', () => {
     // The build was attempted, then faulted — the launch still succeeded.
     expect(colbertIndex.builds).toHaveLength(1);
     expect(result.ok).toBe(true);
+  });
+});
+
+describe('conductor launch enrich consumes the per-repo ColBERT collection', () => {
+  interface RecordingBrain extends ConductorBrainMemory {
+    readonly enrichInputs: BrainEnrichInput[];
+  }
+
+  function makeBrain(): RecordingBrain {
+    const enrichInputs: BrainEnrichInput[] = [];
+    return {
+      enrichInputs,
+      async enrichPrompt(input: BrainEnrichInput) {
+        enrichInputs.push(input);
+        return { prompt: input.prompt, sources: [] };
+      },
+      async harvestOnCompletion() {
+        return { harvested: false, reason: 'not exercised' };
+      },
+    };
+  }
+
+  it('threads repoCollection === the build name (repo_<repoId>) into enrichPrompt', async () => {
+    const brain = makeBrain();
+    // The openfang path enriches the prompt HERE (path b) via `enrichOpenfangCommand`.
+    const { module } = composeConductor({
+      substrates: [new FakeSubstrate({ id: 'tmux_worktree' }), new FakeSubstrate({ id: 'in_process' })],
+      brain,
+    });
+
+    const result = await module.createWorkspace(
+      // projectId 'project_1' → repoId 'project_1' → collection `repo_project_1`,
+      // the SAME name `startCodeIntel` builds. Build and search names must match.
+      makeCreateInput({
+        projectId: 'project_1',
+        repoPath: '/tmp/enrich-repo',
+        runtimeId: 'openfang',
+        substrate: undefined,
+      }),
+      makePrincipal('user_ann'),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(brain.enrichInputs).toHaveLength(1);
+    expect(brain.enrichInputs[0]!.repoCollection).toBe('repo_project_1');
+  });
+
+  it('omits repoCollection when there is no repoPath (no index was ever built)', async () => {
+    const brain = makeBrain();
+    const { module } = composeConductor({
+      substrates: [new FakeSubstrate({ id: 'tmux_worktree' }), new FakeSubstrate({ id: 'in_process' })],
+      brain,
+    });
+
+    const result = await module.createWorkspace(
+      makeCreateInput({
+        projectId: 'project_1',
+        repoPath: undefined,
+        runtimeId: 'openfang',
+        substrate: undefined,
+      }),
+      makePrincipal('user_ann'),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(brain.enrichInputs).toHaveLength(1);
+    expect(brain.enrichInputs[0]!.repoCollection).toBeUndefined();
   });
 });

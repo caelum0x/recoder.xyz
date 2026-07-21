@@ -115,6 +115,57 @@ describe('brain-memory adapter — enrichPrompt', () => {
     expect(out.prompt).toContain('server.ts: server boots on :3001');
     expect(out.sources).toEqual([{ source: 'retrieval', ref: 'doc9' }]);
   });
+
+  it('targets the per-repo ColBERT collection when repoCollection is set (closes the dead write)', async () => {
+    const search = vi.fn().mockResolvedValue({
+      status: 'ok',
+      query: 'q',
+      reranker: 'identity',
+      passages: [{ id: 'p1', text: 'boots on :3001', score: 0.5, docId: 'doc9', source: 'server.ts' }],
+    });
+    const retrieval: RetrievalPort = { configured: () => true, ingest: vi.fn(), search };
+    const brain = createBrainMemoryAdapter({
+      recall: recallOf(fusion([])),
+      retrieval,
+      harvest: harvestStub({ harvested: false, reason: 'x' }),
+      logger,
+    });
+
+    await brain.enrichPrompt({
+      prompt: 'where does it boot',
+      userId: 'u1',
+      repoPath: '/repo',
+      repoCollection: 'repo_project_1',
+    });
+
+    // The colbert first-stage search is pointed at the per-repo PLAID index; the
+    // Qdrant `collection` opt is left untouched (decoupled by SearchOpts).
+    expect(search).toHaveBeenCalledWith('where does it boot', {
+      topK: 4,
+      colbertCollection: 'repo_project_1',
+    });
+  });
+
+  it('omits colbertCollection when no repoCollection is resolved (CLI path falls back to default)', async () => {
+    const search = vi.fn().mockResolvedValue({
+      status: 'ok',
+      query: 'q',
+      reranker: 'identity',
+      passages: [],
+    });
+    const retrieval: RetrievalPort = { configured: () => true, ingest: vi.fn(), search };
+    const brain = createBrainMemoryAdapter({
+      recall: recallOf(fusion([])),
+      retrieval,
+      harvest: harvestStub({ harvested: false, reason: 'x' }),
+      logger,
+    });
+
+    await brain.enrichPrompt({ prompt: 'boot?', userId: 'u1', repoPath: '/repo' });
+
+    // No `colbertCollection` key at all — retrieval uses its default collection.
+    expect(search).toHaveBeenCalledWith('boot?', { topK: 4 });
+  });
 });
 
 describe('brain-memory adapter — harvestOnCompletion', () => {
