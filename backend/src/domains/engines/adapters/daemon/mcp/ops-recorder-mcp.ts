@@ -10,6 +10,15 @@
  *
  * The composer seeds `opsRecorderMcpServer` into the gated registry and binds
  * these handlers; the interop gate risk-classifies the writes at the boundary.
+ *
+ * REGISTRATION SCOPE (engines-module `bindOpsRecorderWriteMcpTools`): only the
+ * WRITE/DETECT tools with a real product use are bound on the host —
+ * {@link OPS_RECORDER_WRITE_TOOL_NAMES} (`sync` / `ingest` / `resolve`). The
+ * pure-read `ops-recorder.list` / `ops-recorder.get` are intentionally left
+ * unregistered — their read surface is served by the `ops-recorder.query` /
+ * `ops-recorder.stats` tools on the sibling `ops-recorder-signals` server
+ * (`ops-recorder-signals-mcp.ts`) — and `ops-recorder.handoff` is deferred (no
+ * product consumer yet). The builder still exposes all six for direct/manual use.
  */
 import type { McpToolRegistration } from '../../../../../shared/module-base.js';
 import type { OpsRecorderRequest } from '../ops-recorder-loopback.adapter.js';
@@ -18,11 +27,27 @@ import { asRecord, readBool, readString, runOp, type Invoker } from './daemon-mc
 
 export const OPS_RECORDER_MCP_SERVER_ID = 'ops-recorder';
 
+/**
+ * The write/detect tools the host actually registers (§8.4). A subset of the
+ * builder's tools: the reads (`list`/`get`) are covered by the signals server's
+ * `query`/`stats`, and `handoff` has no consumer yet — documented, not registered,
+ * so the gated catalog carries no executor-less orphan tool.
+ */
+export const OPS_RECORDER_WRITE_TOOL_NAMES = [
+  'ops-recorder.sync',
+  'ops-recorder.ingest',
+  'ops-recorder.resolve',
+] as const;
+
 export const opsRecorderMcpServer = {
   serverId: OPS_RECORDER_MCP_SERVER_ID,
-  kind: 'engines',
+  // `custom` is the only valid `McpServerKind` for a backend-local engine server
+  // (there is no `engines` kind); `custom` is the valid in-proc transport (no
+  // `in-proc` member). Matches the sibling `ops-recorder-signals` descriptor so
+  // this server is a valid `McpServerRegistration` the host can register.
+  kind: 'custom' as const,
   displayName: 'Ops Recorder (stuck-work signal detector)',
-  transport: 'in-proc' as const,
+  transport: 'custom' as const,
   enabled: true,
   toolNames: [
     'ops-recorder.sync',

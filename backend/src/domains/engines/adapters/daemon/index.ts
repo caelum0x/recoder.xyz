@@ -56,6 +56,7 @@ export {
   opsRecorderMcpServer,
   buildOpsRecorderMcpTools,
   OPS_RECORDER_MCP_SERVER_ID,
+  OPS_RECORDER_WRITE_TOOL_NAMES,
 } from './mcp/ops-recorder-mcp.js';
 export {
   opsRecorderSignalsMcpServer,
