@@ -19,10 +19,13 @@ import {
     BackendSupervisor,
     backendUrlForPort,
     backoffMs,
+    describeVectorStore,
+    fetchEngineRoster,
     FsLike,
     gatewayEndpointForPort,
     loadOrCreateSecrets,
     mergePathIntoEnv,
+    parseEngineRoster,
     PHASE,
     pickFreePort,
     pollHealth,
@@ -734,6 +737,184 @@ describe("pollHealth", () => {
         expect(result.ok).toBe(false);
         expect(result.reason).toBe("backend-process-exited");
         expect(fetchImpl).not.toHaveBeenCalled();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Truthful engine roster
+// ---------------------------------------------------------------------------
+
+function rosterPayload(engines: Array<Record<string, unknown>>) {
+    return {
+        status: 200,
+        json: async () => ({
+            success: true,
+            data: { count: engines.length, up: engines.filter((e) => e.status === "up").length, engines },
+        }),
+    };
+}
+
+describe("parseEngineRoster", () => {
+    it("splits engines by their OWN reported status — no hardcoded names", () => {
+        const roster = parseEngineRoster({
+            success: true,
+            data: {
+                engines: [
+                    { engineId: "beads", transport: "cli", status: "up", checkedAt: "t" },
+                    { engineId: "openfang", transport: "napi", status: "up", checkedAt: "t" },
+                    {
+                        engineId: "mem0",
+                        transport: "sidecar",
+                        status: "down",
+                        reason: "uv venv absent",
+                        checkedAt: "t",
+                    },
+                    {
+                        engineId: "colbert",
+                        transport: "daemon",
+                        status: "degraded",
+                        reason: "not packaged",
+                        checkedAt: "t",
+                    },
+                ],
+            },
+        });
+        expect(roster.known).toBe(true);
+        expect(roster.alive).toEqual(["beads:cli", "openfang:napi"]);
+        expect(roster.degraded.map((e) => e.name)).toEqual(["mem0:sidecar", "colbert:daemon"]);
+        // Degraded entries carry the endpoint's OWN reason.
+        expect(roster.degraded[0].reason).toBe("uv venv absent");
+        expect(roster.degraded[1].reason).toBe("not packaged");
+    });
+
+    it("accepts the already-flattened {name,status} shape too", () => {
+        const roster = parseEngineRoster({ data: { engines: [{ name: "tmux:cli", status: "up" }] } });
+        expect(roster.alive).toEqual(["tmux:cli"]);
+    });
+
+    it("returns an UNKNOWN roster (truthful) when there is no engines array", () => {
+        const roster = parseEngineRoster({ success: true });
+        expect(roster.known).toBe(false);
+        expect(roster.alive).toEqual([]);
+        expect(roster.reason).toMatch(/unexpected/);
+    });
+});
+
+describe("fetchEngineRoster", () => {
+    it("sends the internal-service-key header and surfaces a 200 roster", async () => {
+        const fetchImpl = vi.fn(async () => rosterPayload([{ engineId: "beads", transport: "cli", status: "up" }]));
+        const roster = await fetchEngineRoster({
+            backendUrl: "http://127.0.0.1:3100",
+            internalServiceKey: "internal-abc",
+            fetch: fetchImpl as any,
+        });
+        expect(roster.known).toBe(true);
+        expect(roster.alive).toEqual(["beads:cli"]);
+        const [url, init] = fetchImpl.mock.calls[0] as any;
+        expect(url).toBe("http://127.0.0.1:3100/internal/engines/health");
+        expect(init.headers["x-internal-service-key"]).toBe("internal-abc");
+    });
+
+    it("returns UNKNOWN (no throw) when the key is absent — never a fabricated alive list", async () => {
+        const fetchImpl = vi.fn();
+        const roster = await fetchEngineRoster({
+            backendUrl: "http://127.0.0.1:3100",
+            fetch: fetchImpl as any,
+        });
+        expect(roster.known).toBe(false);
+        expect(roster.reason).toMatch(/no internal service key/);
+        expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it("returns UNKNOWN on a 401 (roster unavailable, not faked up)", async () => {
+        const fetchImpl = vi.fn(async () => ({ status: 401, json: async () => ({}) }));
+        const roster = await fetchEngineRoster({
+            backendUrl: "http://127.0.0.1:3100",
+            internalServiceKey: "bad",
+            fetch: fetchImpl as any,
+        });
+        expect(roster.known).toBe(false);
+        expect(roster.reason).toBe("status-401");
+    });
+
+    it("returns UNKNOWN (no throw) when the fetch rejects", async () => {
+        const fetchImpl = vi.fn(async () => {
+            throw new Error("ECONNREFUSED");
+        });
+        const roster = await fetchEngineRoster({
+            backendUrl: "http://127.0.0.1:3100",
+            internalServiceKey: "k",
+            fetch: fetchImpl as any,
+        });
+        expect(roster.known).toBe(false);
+        expect(roster.reason).toMatch(/ECONNREFUSED/);
+    });
+});
+
+describe("describeVectorStore", () => {
+    it("is alive with the data dir when the lance addon was packaged", () => {
+        expect(describeVectorStore({ nativeDir: "/n", lanceDataDir: "/ud/lance" })).toEqual({
+            lance: "alive",
+            dataDir: "/ud/lance",
+            reason: null,
+        });
+    });
+
+    it("degrades truthfully (Lance derived from packaging, not the engine roster)", () => {
+        const status = describeVectorStore({ nativeDir: "/n", lanceDataDir: null });
+        expect(status.lance).toBe("degraded");
+        expect(status.dataDir).toBeNull();
+        expect(status.reason).toMatch(/no native lance addon/);
+        expect(describeVectorStore(null).lance).toBe("degraded");
+    });
+});
+
+describe("BackendSupervisor engine roster surfacing", () => {
+    function routingFetch(rosterEngines: Array<Record<string, unknown>> | "fail") {
+        return vi.fn(async (url: string) => {
+            if (String(url).includes("/internal/engines/health")) {
+                if (rosterEngines === "fail") {
+                    throw new Error("ECONNREFUSED");
+                }
+                return rosterPayload(rosterEngines);
+            }
+            return { status: 200, json: async () => ({ success: true }) };
+        });
+    }
+
+    it("exposes the parsed roster + packaging-derived Lance on getStatus() after READY", async () => {
+        const fetchImpl = routingFetch([
+            { engineId: "beads", transport: "cli", status: "up" },
+            { engineId: "mem0", transport: "sidecar", status: "down", reason: "uv venv absent" },
+        ]);
+        const sup = new BackendSupervisor(baseOptions({ fetchImpl }) as any);
+
+        const result = await sup.start();
+
+        expect(result.ok).toBe(true);
+        const status = sup.getStatus();
+        expect(status.engines.known).toBe(true);
+        expect(status.engines.alive).toEqual(["beads:cli"]);
+        expect(status.engines.degraded[0]).toMatchObject({ name: "mem0:sidecar", reason: "uv venv absent" });
+        // Lance is NOT on the engines payload — it is derived from packaging.
+        expect(status.engines.alive).not.toContain("lance");
+        expect(status.vector.lance).toBe("degraded");
+        // The roster probe carried the internal key the supervisor holds.
+        const rosterCall = fetchImpl.mock.calls.find(([u]: any) =>
+            String(u).includes("/internal/engines/health")
+        ) as any;
+        expect(rosterCall[1].headers["x-internal-service-key"]).toBe(sup._internalServiceKey);
+    });
+
+    it("keeps an UNKNOWN roster (no throw, still READY) when the roster probe fails", async () => {
+        const fetchImpl = routingFetch("fail");
+        const sup = new BackendSupervisor(baseOptions({ fetchImpl }) as any);
+
+        const result = await sup.start();
+
+        expect(result.ok).toBe(true);
+        expect(sup.phase).toBe(PHASE.READY);
+        expect(sup.getStatus().engines.known).toBe(false);
     });
 });
 
