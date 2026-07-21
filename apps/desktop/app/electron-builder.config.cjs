@@ -6,6 +6,29 @@ const { assertExtraResourcesExist } = require("./build/assert-extra-resources.cj
 
 const windowsShouldSign = !!process.env.SM_CODE_SIGNING_CERT_SHA1_HASH;
 
+// Deliberate cloud-or-degrade artifacts: absence is LOGGED LOUD by the
+// beforePack gate, never fatal. The Lance embedded vector store degrades to
+// Qdrant/no-op at runtime (backend/src/domains/memory). Its napi crate does not
+// yet exist at the repo root (crates/lance/npm-bindings is absent — it cannot be
+// built here), so the entry is retained purely so the gate emits an explicit
+// degrade line instead of silence. When Lance is later vendored + built, move
+// this out so its absence fails loud again.
+const OPTIONAL_EXTRA_RESOURCES = new Set([
+    "../../../crates/lance/npm-bindings/target/release/lance_npm_bindings.node",
+]);
+
+// Native binaries whose CPU arch must match the dmg target arch. The gate reads
+// each Mach-O header and aborts on an arm64-in-x64-dmg (or vice-versa) mismatch.
+// Every entry here is arm64-only on disk today, which is why the mac target is
+// restricted to arm64 below until per-arch variants exist.
+const ARCH_SENSITIVE_EXTRA_RESOURCES = new Set([
+    "../../../backend/engines/rust/recoder-governance/target/release/recoder-governance-napi.node",
+    "../../../crates/lance/npm-bindings/target/release/lance_npm_bindings.node",
+    "../../../backend/engines/rust/openfang/target/release/openfang_napi.node",
+    "../../../backend/engines/rust/tensorzero/crates/target/release/tensorzero_gateway_napi.node",
+    "../server/engines/beads/bin/bd",
+]);
+
 /**
  * @type {import('electron-builder').Configuration}
  * @see https://www.electron.build/configuration/configuration
@@ -135,14 +158,18 @@ const config = {
         "dist/schema/**/*", // schema files for Monaco editor
     ],
     mac: {
+        // arm64 only: every native .node addon and the beads bd binary on disk is
+        // host arm64 (verified). An x64 dmg would copy arm64 binaries → runtime
+        // dlopen failure, and the arch-aware gate would reject it anyway. x64 /
+        // universal returns once cross-built native artifacts exist (owner runbook).
         target: [
             {
                 target: "zip",
-                arch: ["arm64", "x64"],
+                arch: ["arm64"],
             },
             {
                 target: "dmg",
-                arch: ["arm64", "x64"],
+                arch: ["arm64"],
             },
         ],
         category: "public.app-category.developer-tools",
@@ -217,8 +244,15 @@ const config = {
     // Fail-loud gate: abort packaging (with the full missing list) if any
     // extraResources source is absent, instead of electron-builder silently
     // skipping it and shipping a desktop app without its native engines.
-    beforePack: async () => {
-        assertExtraResourcesExist(config.extraResources, __dirname);
+    beforePack: async (context) => {
+        // context.arch is an Arch enum member; universal is a merged binary so the
+        // per-arch check is skipped (null targetArch), matching the gate contract.
+        const archName = context && context.arch != null ? Arch[context.arch] : null;
+        assertExtraResourcesExist(config.extraResources, __dirname, {
+            targetArch: archName === "universal" ? null : archName,
+            optional: OPTIONAL_EXTRA_RESOURCES,
+            archSensitive: ARCH_SENSITIVE_EXTRA_RESOURCES,
+        });
     },
     afterPack: (context) => {
         // This is a workaround to restore file permissions to the recoder-server binaries on macOS after packaging the universal binary.
