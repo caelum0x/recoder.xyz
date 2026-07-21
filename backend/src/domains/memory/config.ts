@@ -25,6 +25,12 @@ export const DEFAULT_MEM0_COLLECTION = 'recoder_mem0';
 export const DEFAULT_RETRIEVAL_COLLECTION = 'recoder_retrieval';
 /** Default embedding model when a provider is wired but no model is set. */
 export const DEFAULT_EMBED_MODEL = 'text-embedding-3-small';
+/**
+ * Default retention window (ms) for the per-repo ColBERT index GC. A `repo_*`
+ * PLAID index this loop has observed continuously for longer than this window
+ * is treated as abandoned and pruned. 7 days.
+ */
+export const DEFAULT_COLBERT_GC_RETENTION_MS = 604_800_000;
 
 const nullableUrl = z.string().url().nullable();
 
@@ -99,6 +105,26 @@ export const memoryConfigSchema = z.object({
    * graph compaction is opt-in; the flush-only sweep behavior is unchanged).
    */
   gcEverySweeps: z.number().int().min(0).default(0),
+  /**
+   * Prune abandoned per-repo ColBERT indexes (`repo_*`) every Nth maintenance
+   * sweep. `0` disables the colbert index GC entirely (default — index cleanup is
+   * opt-in; without it abandoned `repo_*` PLAID indexes accumulate on disk
+   * forever after their workspace is gone).
+   */
+  colbertGcEverySweeps: z.number().int().min(0).default(0),
+  /**
+   * Retention window (ms) for the per-repo ColBERT index GC. A `repo_*` index the
+   * maintenance loop has observed continuously for longer than this is treated as
+   * stale and dropped. Absent daemon-reported mtime, age is measured from first
+   * observation by this loop (conservative — a restart resets the clock, so a
+   * genuinely-old index survives at most one extra window; the GC never
+   * over-prunes). Default 7 days.
+   */
+  colbertGcRetentionMs: z
+    .number()
+    .int()
+    .min(0)
+    .default(DEFAULT_COLBERT_GC_RETENTION_MS),
 });
 
 export type MemoryConfig = z.infer<typeof memoryConfigSchema>;
@@ -125,6 +151,8 @@ export interface MemoryConfigOverrides {
   readonly candidateTtlDays?: number;
   readonly maintenanceIntervalMs?: number;
   readonly gcEverySweeps?: number;
+  readonly colbertGcEverySweeps?: number;
+  readonly colbertGcRetentionMs?: number;
 }
 
 /** Normalize an allowlist override: trim, drop blanks, de-duplicate. */
@@ -204,5 +232,8 @@ export function sliceMemoryConfig(
     candidateTtlDays: overrides.candidateTtlDays ?? 30,
     maintenanceIntervalMs: overrides.maintenanceIntervalMs ?? 300_000,
     gcEverySweeps: overrides.gcEverySweeps ?? 0,
+    colbertGcEverySweeps: overrides.colbertGcEverySweeps ?? 0,
+    colbertGcRetentionMs:
+      overrides.colbertGcRetentionMs ?? DEFAULT_COLBERT_GC_RETENTION_MS,
   });
 }
