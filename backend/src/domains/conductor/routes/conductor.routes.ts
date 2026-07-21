@@ -26,6 +26,7 @@
  *   GET    /api/conductor/github/repos            detected account's repos via gh (empty when gh absent)
  *   GET    /api/conductor/health                  conductor readiness summary + substrate.tmuxBin/tmuxSocket
  *   GET    /api/conductor/reconcile/findings      reconcile findings (operator review)
+ *   GET    /api/conductor/sessions                live recoder-* tmux sessions (read-only attach list)
  *   POST   /api/conductor/reconcile               run a reconcile pass (GATED)
  *
  * Security posture:
@@ -45,6 +46,7 @@ import type { CreateConductorWorkspaceInput, ConductorWriteResult } from '../con
 import type { PreviewVerifyOptions } from '../services/preview-verify.service.js';
 import type { PreviewVerifyAssertion } from '../ports/preview-verify.port.js';
 import { resolveConductorTmuxSocket } from '../tmux-socket.js';
+import { createRecoderSessionLister } from '../adapters/recoder-session-lister.adapter.js';
 
 export interface ConductorRouterDeps {
   readonly module: ConductorModule;
@@ -56,6 +58,13 @@ export interface ConductorRouterDeps {
    * effective uid). `null` ⇒ a truthful "unknown" socket, never a guess.
    */
   readonly resolveTmuxSocket?: () => string | null;
+  /**
+   * List the live `recoder-*` tmux sessions for the read-only `/sessions` attach
+   * bridge (durable-shell unify §A2). Injectable so tests mock the exec seam;
+   * defaults to {@link createRecoderSessionLister} over the SAME pinned binary the
+   * conductor drives. Read-only + degrade-truthful (tmux absent ⇒ `[]`).
+   */
+  readonly listRecoderSessions?: () => Promise<readonly string[]>;
 }
 
 const SUBSTRATES: readonly WorkspaceSubstrate[] = ['tmux_worktree', 'daytona', 'in_process', 'ssh'];
@@ -85,6 +94,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   const router = Router();
   const { module, middleware } = deps;
   const resolveTmuxSocket = deps.resolveTmuxSocket ?? resolveConductorTmuxSocket;
+  const listRecoderSessions = deps.listRecoderSessions ?? createRecoderSessionLister();
 
   // --- reads -----------------------------------------------------------------
 
@@ -402,6 +412,21 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     asyncHandler(async (req, res) => {
       const workspaceId = optionalString(req.query.workspaceId);
       sendSuccess(res, { findings: await module.listReconcileFindings(workspaceId) });
+    }),
+  );
+
+  // READ-ONLY attach list (durable-shell unify §A2): the live `recoder-*` tmux
+  // sessions the conductor drives, so the wave-side attach can SEE them without
+  // owning a competing durability engine. Reuses the reconcile scan seam
+  // (`list-sessions` through the engines introspect port, prefix-filtered to the
+  // conductor's own namespace) — pure read, no spawn/kill, and it changes no
+  // session's lifecycle. Degrade-truthful: tmux absent/unrunnable ⇒ a truthful
+  // empty list, never a fabricated session.
+  router.get(
+    '/sessions',
+    middleware.authenticate,
+    asyncHandler(async (_req, res) => {
+      sendSuccess(res, { sessions: await listRecoderSessions() });
     }),
   );
 
