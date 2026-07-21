@@ -96,6 +96,12 @@ import {
   createCliMintClosure,
 } from './conductor-seams.js';
 import { createMemoryEmbedFallback, createSquadIssueAdapter } from './memory-seams.js';
+import {
+  createSocialTargetResolver,
+  createSocialConductorDispatch,
+  createSocialReplyInference,
+} from './social-seams.js';
+import { createObservabilityDelivery } from './observability-seams.js';
 import { createMemoryModule } from '../domains/memory/index.js';
 import type { Mem0EnginePort } from '../domains/memory/ports/mem0-engine.port.js';
 // Composition root: value-imports the engines mem0 client, injected as the memory
@@ -111,11 +117,6 @@ import {
   type InteropWireComposite,
 } from '../domains/interop-wire/interop-wire-module.js';
 import { createSocialComposer, type SocialComposite } from '../domains/social/social-module.js';
-import type {
-  ConductorDispatchPort as SocialConductorDispatchPort,
-  ConductorTargetResolver as SocialConductorTargetResolver,
-} from '../domains/social/dispatch/conductor-dispatch.js';
-import type { ReplyInferencePort } from '../domains/social/dispatch/reply-agent.js';
 import { createSealedIngressVouch } from '../domains/social/adapters/signed-vouch.adapter.js';
 import { createObservabilityModule } from '../domains/observability/index.js';
 import { createNotifyEngine, type NotifyFetch } from '@recoder/agent-notify';
@@ -1111,75 +1112,19 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // null ⇒ truthful "unbound chat" error). The binding's owner is the launch
   // principal; the repo root mirrors the squad-autopilot convention.
   let socialRef: SocialComposite | null = null;
-  const socialTargetResolver: SocialConductorTargetResolver = {
-    async resolve(env) {
-      if (!socialRef) return null;
-      const binding = await socialRef.core().repository().getBinding(env.channel, env.chatRef);
-      if (!binding?.allow) return null;
-      const principal: Principal = {
-        userId: binding.userId,
-        scopes: ['internal', 'write'],
-        kind: 'internal',
-        isAnonymous: false,
-        raw: null,
-      };
-      return {
-        spaceId: binding.spaceId ?? 'space-default',
-        projectId: `social-${env.channel}`,
-        taskId: `social-${env.channel}-${env.providerMsgId}`,
-        repoPath: bootEnv.CONDUCTOR_REPO_ROOT ?? process.cwd(),
-        runtimeId: binding.agentId ?? 'claude_code',
-        principal,
-      };
-    },
-  };
+  const socialTargetResolver = createSocialTargetResolver({
+    socialRef: () => socialRef,
+    repoRoot: bootEnv.CONDUCTOR_REPO_ROOT ?? process.cwd(),
+  });
   // The conductor `/run` seam: the REAL governed `createWorkspace` path (gate +
   // quota + substrate launch). A refused/faulted launch surfaces as `ok:false`.
-  const socialConductorDispatch: SocialConductorDispatchPort = {
-    async createWorkspace(req) {
-      const res = await conductor.createWorkspace(
-        {
-          spaceId: req.spaceId,
-          projectId: req.projectId,
-          taskId: req.taskId,
-          repoPath: req.repoPath,
-          runtimeId: req.runtimeId,
-          prompt: req.prompt,
-        },
-        req.principal as Principal,
-      );
-      if (!res.ok || !res.value) {
-        return { ok: false, ...(res.reason ? { reason: res.reason } : {}) };
-      }
-      return {
-        ok: true,
-        workspaceId: res.value.workspaceId,
-        ...(res.value.runId ? { runId: res.value.runId } : {}),
-      };
-    },
-  };
+  const socialConductorDispatch = createSocialConductorDispatch(conductor);
   // The reply seam: one bounded completion through the inference delivery
   // ladder. An unrouted ladder yields a truthful `ok:false` (never a fake).
-  const socialReplyInference: ReplyInferencePort = {
-    async reply(input) {
-      const result = await inference.gateway().complete({
-        model: config.inference.defaultModel ?? 'openai/gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You are Recoder answering a message in a chat channel. Reply briefly and helpfully.',
-          },
-          { role: 'user', content: input.text },
-        ],
-        maxTokens: 512,
-      });
-      if (!result.routed || !result.content) {
-        return { ok: false, reason: result.reason ?? 'inference ladder could not route the reply' };
-      }
-      return { ok: true, text: result.content };
-    },
-  };
+  const socialReplyInference = createSocialReplyInference({
+    gateway: inference.gateway(),
+    defaultModel: config.inference.defaultModel ?? 'openai/gpt-4o-mini',
+  });
   // Signed connector-ingress vouch over SOCIAL_INGRESS_SECRET (null ⇒ inert,
   // the gate skips the step) + the governance secret vault for connector creds
   // (vault down ⇒ null secrets, channels stay down truthfully).
@@ -1252,6 +1197,14 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       'OPS_RECORDER_SYNC_ENABLED set but the signals poller is off (interval 0); the detector tick will not run',
     );
   }
+  // The three delivery objects the observability module consumes — signals bridge
+  // onto the agent-os RunEvent bus (`source:'engine'`), needs-you signals + fired
+  // alerts post through the SAME truthful notify webhook. Extracted verbatim into
+  // `observability-seams.ts` (each degrades truthfully — never a fabricated send).
+  const observabilityDelivery = createObservabilityDelivery({
+    runEventBus: agentOs.runEventBus(),
+    notifyEngine,
+  });
   const observability = createObservabilityModule({
     config,
     logger: childLogger('observability'),
@@ -1266,31 +1219,11 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // into the agent-os RunEvent bus (provenance 'engine' — the ops-recorder
     // sidecar is an engine). Idempotent by eventId; a gate-refused ingest is a
     // truthful rejection, never a masked success.
-    runEvents: {
-      async ingest(event): Promise<void> {
-        await agentOs.runEventBus().ingest(event, 'engine');
-      },
-    },
+    runEvents: observabilityDelivery.runEvents,
     // Needs-you signals surface through the notify webhook (the board seam).
-    board: {
-      async notify(signal): Promise<void> {
-        await notifyEngine.notify({
-          title: `needs-you: ${signal.title}`,
-          message: `${signal.reason} (${signal.sourceUrl})`,
-          level: signal.priority === 'high' ? 'warn' : 'info',
-        });
-      },
-    },
+    board: observabilityDelivery.board,
     // Alert delivery: fired alerts post through the same truthful notify seam.
-    notifier: {
-      async deliver(rule, event): Promise<void> {
-        await notifyEngine.notify({
-          title: `alert ${rule.severity}: ${rule.name}`,
-          message: `status=${event.status} value=${event.value ?? 'n/a'} fired_at=${event.firedAt}`,
-          level: rule.severity === 'critical' ? 'error' : rule.severity === 'warning' ? 'warn' : 'info',
-        });
-      },
-    },
+    notifier: observabilityDelivery.notifier,
     // The supervised ops-recorder daemon's LIVE loopback URL (engines module
     // publishes it once its first health passes); a static OPS_RECORDER_URL
     // override still wins inside the client.
