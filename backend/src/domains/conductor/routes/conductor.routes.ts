@@ -8,6 +8,8 @@
  *   POST   /api/conductor/workspaces/:id/steer    send-keys to a live agent (GATED)
  *   GET    /api/conductor/workspaces/:id/events   RunEvents (conversation + lifecycle)
  *   GET    /api/conductor/workspaces/:id/diff     reviewable diff vs base
+ *   GET    /api/conductor/workspaces/:id/diff/files  per-file changed list (numstat + name-status)
+ *   GET    /api/conductor/workspaces/:id/diff/file   single-file unified patch (?path=)
  *   GET    /api/conductor/workspaces/:id/tree     worktree file list
  *   GET    /api/conductor/workspaces/:id/mergeability  pre-merge conflict + base-divergence probe
  *   GET    /api/conductor/workspaces/:id/dev-command  detected dev command (or null)
@@ -160,6 +162,42 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
         sendSuccess(res, await module.workspaceTree(req.params.id));
       } catch (err) {
         sendError(res, toReadError(err, 'tree failed'));
+      }
+    }),
+  );
+
+  // Per-file changed list — a faithful slice of the `/diff` blob (working tree vs
+  // base). Read-only, never mutates. "not found" → 404, else → 503; a non-repo /
+  // no-worktree tree is a truthful `available:false, files:[]`, never a fabrication.
+  router.get(
+    '/workspaces/:id/diff/files',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      try {
+        sendSuccess(res, await module.workspaceDiffFiles(req.params.id));
+      } catch (err) {
+        sendError(res, toReadError(err, 'diff files failed'));
+      }
+    }),
+  );
+
+  // A single file's unified patch (working tree vs base). The `?path=` query is the
+  // ONLY user input: it is required (400 when absent) and rejected when it begins
+  // with `-` (400) — the canonical option-injection reject BEFORE the module/spawn,
+  // where it is passed EXCLUSIVELY as a pathspec after the `--` fence. Read-only.
+  router.get(
+    '/workspaces/:id/diff/file',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      const p = optionalString(req.query.path);
+      if (!p) throw createError(ErrorCode.VALIDATION_ERROR, '`path` query param is required');
+      if (p.startsWith('-')) {
+        throw createError(ErrorCode.VALIDATION_ERROR, '`path` must not begin with "-"');
+      }
+      try {
+        sendSuccess(res, await module.workspaceFilePatch(req.params.id, p));
+      } catch (err) {
+        sendError(res, toReadError(err, 'file diff failed'));
       }
     }),
   );

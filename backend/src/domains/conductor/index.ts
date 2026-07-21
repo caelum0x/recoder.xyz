@@ -56,7 +56,16 @@ import type {
   WorkspaceView,
 } from './types.js';
 import type { CreateConductorWorkspaceInput, ConductorWriteResult } from './conductor-module.js';
-import type { WorkspaceDiffView, WorkspaceTreeView } from './review/workspace-review.ops.js';
+import type {
+  WorkspaceDiffView,
+  WorkspaceDiffFilesView,
+  WorkspaceFilePatchView,
+  WorkspaceTreeView,
+} from './review/workspace-review.ops.js';
+export type {
+  WorkspaceDiffFilesView,
+  WorkspaceFilePatchView,
+} from './review/workspace-review.ops.js';
 import type { MergeabilityView } from './services/mergeability.service.js';
 import type {
   CreatePrInput,
@@ -340,6 +349,18 @@ export interface ConductorModule {
   workspaceDiff(workspaceId: string): Promise<WorkspaceDiffView>;
   /** Full worktree file list (tracked + untracked), changed subset marked. */
   workspaceTree(workspaceId: string): Promise<WorkspaceTreeView>;
+  /**
+   * Per-file changed list (numstat + name-status) — a faithful slice of the
+   * {@link workspaceDiff} blob (working tree vs base). PURE read (no transition);
+   * degrade-truthful (`available:false, files:[]` for a non-repo/no-worktree tree).
+   */
+  workspaceDiffFiles(workspaceId: string): Promise<WorkspaceDiffFilesView>;
+  /**
+   * A single file's unified patch (working tree vs base) — the agent-supplied
+   * `path` is passed ONLY as a pathspec after `--` and rejected pre-spawn on a
+   * leading `-`. PURE read; degrade-truthful (`patch:null` when uncomputable).
+   */
+  workspaceFilePatch(workspaceId: string, path: string): Promise<WorkspaceFilePatchView>;
   /** Read-only pre-merge conflict + base-divergence probe (git-native, degrade-truthful; never a fabricated clean). */
   workspaceMergeability(workspaceId: string): Promise<MergeabilityView>;
   /** Detected dev-server command for the worktree's project (or null). */

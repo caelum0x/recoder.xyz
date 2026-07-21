@@ -84,9 +84,13 @@ import {
 import {
   archiveWorkspace as archiveWorkspaceOp,
   workspaceDiff as workspaceDiffOp,
+  workspaceDiffFiles as workspaceDiffFilesOp,
+  workspaceFilePatch as workspaceFilePatchOp,
   workspaceTree as workspaceTreeOp,
   type ReviewOpsDeps,
   type WorkspaceDiffView,
+  type WorkspaceDiffFilesView,
+  type WorkspaceFilePatchView,
   type WorkspaceTreeView,
 } from './review/workspace-review.ops.js';
 import {
@@ -1464,6 +1468,26 @@ export class ConductorComposer implements ConductorModule {
 
   async workspaceTree(workspaceId: string): Promise<WorkspaceTreeView> {
     return workspaceTreeOp(this.reviewDeps(), workspaceId);
+  }
+
+  /**
+   * Per-file changed list — a faithful slice of the {@link workspaceDiff} blob
+   * (working tree vs the review base). PURE read (no state transition, unlike the
+   * legacy `/diff`); degrade-truthful (`available:false, files:[]` for a
+   * non-repo/no-worktree tree, never a fabricated file).
+   */
+  async workspaceDiffFiles(workspaceId: string): Promise<WorkspaceDiffFilesView> {
+    return workspaceDiffFilesOp(this.reviewDeps(), workspaceId);
+  }
+
+  /**
+   * A single file's unified patch (working tree vs the review base). The
+   * agent-supplied `path` is passed ONLY as a pathspec after the `--` fence and is
+   * rejected pre-spawn if it begins with `-`. PURE read; degrade-truthful
+   * (`patch:null` when it cannot be computed, `patch:''` for no diff).
+   */
+  async workspaceFilePatch(workspaceId: string, path: string): Promise<WorkspaceFilePatchView> {
+    return workspaceFilePatchOp(this.reviewDeps(), workspaceId, path);
   }
 
   async workspaceMergeability(workspaceId: string): Promise<MergeabilityView> {
