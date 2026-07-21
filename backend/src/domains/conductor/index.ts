@@ -32,6 +32,7 @@ import type { CoordinationAdmissionPort } from './ports/coordination-admission.p
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
+import type { ConductorPlanPort } from './ports/plan.port.js';
 import type { ColbertSearchPort } from '../memory/ports/colbert-search.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
 import type { SubstrateScanDeps } from './adapters/substrate-scan.adapter.js';
@@ -119,6 +120,18 @@ export interface ConductorModuleDeps {
    * launch, never fabricated). See `adapters/code-intel.adapter.ts`.
    */
   readonly codeIntel?: CodeIntelPort;
+  /**
+   * Optional pal launch-planning seam (`engines.pal().planLaunch()`, adapted at
+   * the composition root). On a workspace create the launch path consults it —
+   * AFTER the governance write-gate allow, BEFORE substrate/skill selection — for
+   * pal's advisory runtime/skill/tool-grant/sandbox tier + governed risk. The
+   * CALLER's explicit choices ALWAYS win (pal only fills gaps the operator left
+   * blank); `risk`/`approvalRequired` are recorded as advisory launch-audit
+   * metadata (pal advises, the governance kernel still decides). Absent ⇒ the
+   * launch is byte-identical to today; a throwing port never fails a launch. See
+   * `adapters/plan.adapter.ts`.
+   */
+  readonly plan?: ConductorPlanPort;
   /**
    * Optional ColBERT PLAID index seam (`memory.colbertSearch()`). On a workspace
    * create the run flow chunks the repo's text files and builds/refreshes the

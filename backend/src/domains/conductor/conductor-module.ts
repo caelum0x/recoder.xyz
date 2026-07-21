@@ -46,6 +46,7 @@ import type {
 import { classifyAttention, type AttentionResult } from './attention/attention-classifier.js';
 import type { ConductorModule, ConductorModuleDeps } from './index.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
+import type { ConductorPlanPort, ConductorPlanDecision } from './ports/plan.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
 import {
   selectSubstrateForRuntime,
@@ -194,6 +195,8 @@ export class ConductorComposer implements ConductorModule {
   private readonly brain?: ConductorBrainMemory;
   /** OPTIONAL code-intel seam (recodergit index + beads issue-graph track/close). */
   private readonly codeIntel?: CodeIntelPort;
+  /** OPTIONAL pal launch-planning seam (advisory runtime/skill/tool/sandbox + risk). */
+  private readonly plan?: ConductorPlanPort;
   /** OPTIONAL ColBERT PLAID index seam (per-repo late-interaction index build). */
   private readonly colbertIndex?: ConductorModuleDeps['colbertIndex'];
   /** OPTIONAL GitHub identity seam (`GET /github/status`); absent ⇒ truthful not-connected. */
@@ -223,6 +226,7 @@ export class ConductorComposer implements ConductorModule {
     this.middleware = deps.middleware;
     this.brain = deps.brain;
     this.codeIntel = deps.codeIntel;
+    this.plan = deps.plan;
     this.colbertIndex = deps.colbertIndex;
     this.github = deps.githubStatus;
     this.steerTransport = deps.steerTransport;
@@ -540,15 +544,38 @@ export class ConductorComposer implements ConductorModule {
       }
     }
 
+    // Pal launch advisory (OPTIONAL): after the write-gate allow, before substrate
+    // selection, consult the engines-owned `planLaunch` facet. Pal ADVISES — the
+    // caller's explicit choices always win, and pal only fills gaps the operator
+    // left blank. A throwing/faulted port NEVER fails a launch (degrade to no
+    // advisory); absent ⇒ the whole path is byte-identical to today. `planLaunch`
+    // is a pure in-proc verb, so this adds no I/O latency to the launch path.
+    let plan: ConductorPlanDecision | undefined;
+    if (this.plan) {
+      try {
+        plan = this.plan.plan({
+          ...(input.taskId ? { taskId: input.taskId } : {}),
+          ...(input.prompt ? { goal: input.prompt } : {}),
+        });
+      } catch (err) {
+        this.log.warn(
+          { err, taskId: input.taskId },
+          'conductor pal planLaunch faulted — launching without advisory',
+        );
+      }
+    }
+
     try {
       // Execution-path selection (the ONE seam that splits path a/b). openfang →
       // the native in-process substrate; every CLI runtime → tmux+worktree (or the
       // caller's explicitly requested, registered substrate). Both paths converge on
-      // engine.createWorkspace + the SAME capability seams below.
+      // engine.createWorkspace + the SAME capability seams below. The caller's
+      // runtimeId ALWAYS wins; pal's advisory runtime only fills a blank one.
       const registered = this.registry.registry.list();
-      const openfang = isOpenfangRuntime(input.runtimeId);
+      const runtimeId = input.runtimeId ?? plan?.runtimeId;
+      const openfang = isOpenfangRuntime(runtimeId);
       const substrate: SubstrateKind = openfang
-        ? selectSubstrateForRuntime(input.runtimeId, { registered })
+        ? selectSubstrateForRuntime(runtimeId, { registered })
         : (input.substrate ?? 'tmux_worktree');
 
       // Path (b): the in-process substrate runs `command` as the agent turn, so the
@@ -593,6 +620,16 @@ export class ConductorComposer implements ConductorModule {
         conductorAuditEntry(action, principal, verdict, {
           workspaceId: workspace.workspaceId,
           substrate,
+          // Pal advisory (present ONLY when the port is wired and pal was
+          // consulted) — recorded for audit; pal advises, the governance kernel
+          // still decides. Absent port ⇒ these keys are omitted (byte-identical).
+          ...(plan
+            ? {
+                planRisk: plan.risk,
+                planApprovalRequired: plan.approvalRequired,
+                planSource: plan.source,
+              }
+            : {}),
         }),
       );
       return { ok: true, verdict, value: workspace };

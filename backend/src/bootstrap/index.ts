@@ -48,6 +48,7 @@ import { createCliRuntimeSubstrate } from '../domains/conductor/adapters/cli-run
 import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/openfang-runtime.adapter.js';
 import { createBrainMemoryAdapter } from '../domains/conductor/adapters/brain-memory.adapter.js';
 import { createConductorCodeIntel } from '../domains/conductor/adapters/code-intel.adapter.js';
+import { createConductorPlanAdapter } from '../domains/conductor/adapters/plan.adapter.js';
 import { createGithubStatusAdapter } from '../domains/conductor/adapters/github-status.adapter.js';
 import { createTmuxSteerTransport } from '../domains/conductor/adapters/steer-transport.adapter.js';
 import { createTmuxScanSource } from '../domains/conductor/adapters/tmux-scan-source.adapter.js';
@@ -719,6 +720,14 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     substrates: [cliSub, openfangSub, cloudDaytonaSub],
     brain: conductorBrain,
     codeIntel: conductorCodeIntel,
+    // --- Consumer (b): the pal LAUNCH-PLANNING advisory over the engines-owned
+    //     `PalBrainService` facet (NOT `@recoder/pal` — the conductor domain takes
+    //     no such import). On a workspace create the launch path consults
+    //     `planLaunch()` (a pure in-proc verb) for runtime/skill/tool-grant/sandbox
+    //     + governed risk; the caller's explicit choices always win and the
+    //     risk/approval advice is sealed onto the launch audit. Absent ⇒ launch is
+    //     byte-identical to today (the pure verb needs no sidecar). ---
+    ...(palBrain ? { plan: createConductorPlanAdapter(palBrain) } : {}),
     // Per-repo ColBERT PLAID index build on workspace create (late-interaction
     // retrieval): degrade-truthful — the daemon unconfigured ⇒ a truthful skip.
     colbertIndex: memory.colbertSearch(),
