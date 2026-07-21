@@ -569,6 +569,171 @@ export async function pollHealth(opts: {
     };
 }
 
+// ---------------------------------------------------------------------------
+// Truthful engine roster (packaging truth -> runtime truth)
+// ---------------------------------------------------------------------------
+
+/** One declared engine's live liveness, named `<engineId>:<transport>`. */
+export interface EngineRosterEntry {
+    name: string;
+    status: string;
+    reason: string | null;
+}
+
+/**
+ * The parsed per-engine roster from `GET /internal/engines/health`. `known` is
+ * false when the roster could not be read (missing key, non-200, unparseable
+ * payload, fetch error) — an UNKNOWN roster is truthful, never a fabricated
+ * `alive` list. `reason` explains why it is unknown.
+ */
+export interface EngineRoster {
+    known: boolean;
+    alive: string[];
+    degraded: EngineRosterEntry[];
+    entries: EngineRosterEntry[];
+    reason: string | null;
+}
+
+/**
+ * Engines whose native/CLI artifact the packaging gate REQUIRES present (the
+ * §2a arch-sensitive `.node` set plus the always-bundled beads/dmux/tmux/
+ * recodergit CLIs). A `down` here is built-but-broken — a real fault worth a
+ * louder line — not a deliberate cloud-or-degrade absence (mem0/colbert/…).
+ */
+export const PACKAGED_REQUIRED_ENGINES: ReadonlySet<string> = new Set([
+    "beads:cli",
+    "dmux:cli",
+    "tmux:cli",
+    "recodergit:cli",
+    "governance:napi",
+    "openfang:napi",
+    "tensorzero:napi",
+]);
+
+export const INTERNAL_ENGINES_HEALTH_PATH = "/internal/engines/health";
+export const INTERNAL_SERVICE_KEY_HEADER = "x-internal-service-key";
+
+function unknownRoster(reason: string): EngineRoster {
+    return { known: false, alive: [], degraded: [], entries: [], reason };
+}
+
+/** Map one raw engine reading (`{engineId,transport,status,reason?}` OR the
+ * already-flattened `{name,status,reason?}`) into a roster entry, or null when
+ * it is not a usable object. */
+function toRosterEntry(raw: unknown): EngineRosterEntry | null {
+    if (!raw || typeof raw !== "object") {
+        return null;
+    }
+    const r = raw as Record<string, unknown>;
+    let name: string | null = null;
+    if (typeof r.name === "string" && r.name.trim()) {
+        name = r.name.trim();
+    } else if (typeof r.engineId === "string" && typeof r.transport === "string") {
+        name = `${r.engineId}:${r.transport}`;
+    }
+    if (!name) {
+        return null;
+    }
+    const status = typeof r.status === "string" && r.status.trim() ? r.status.trim() : "unknown";
+    const reason = typeof r.reason === "string" && r.reason.trim() ? r.reason.trim() : null;
+    return { name, status, reason };
+}
+
+function extractEnginesArray(body: unknown): unknown[] | null {
+    if (!body || typeof body !== "object") {
+        return null;
+    }
+    const b = body as Record<string, unknown>;
+    const data = b.data && typeof b.data === "object" ? (b.data as Record<string, unknown>) : b;
+    const engines = data.engines;
+    return Array.isArray(engines) ? engines : null;
+}
+
+/**
+ * Parse the `/internal/engines/health` success envelope into a roster. Splits
+ * engines by their OWN reported status (`up` → alive, anything else → degraded
+ * carrying the endpoint's own reason) — no engine names are hardcoded, so the
+ * roster always reflects what the backend actually declared. A payload with no
+ * engines array is an UNKNOWN roster (truthful), never an empty-but-known one.
+ */
+export function parseEngineRoster(body: unknown): EngineRoster {
+    const engines = extractEnginesArray(body);
+    if (!engines) {
+        return unknownRoster("unexpected roster payload");
+    }
+    const entries: EngineRosterEntry[] = [];
+    for (const raw of engines) {
+        const entry = toRosterEntry(raw);
+        if (entry) {
+            entries.push(entry);
+        }
+    }
+    const alive = entries.filter((e) => e.status === "up").map((e) => e.name);
+    const degraded = entries.filter((e) => e.status !== "up");
+    return { known: true, alive, degraded, entries, reason: null };
+}
+
+/**
+ * Fetch the per-engine roster from the INTERNAL_SERVICE_KEY-gated worker surface
+ * `GET /internal/engines/health` (the endpoint that actually enumerates engines
+ * — NOT /api/conductor/health, which only lists execution substrates). Sends the
+ * `x-internal-service-key` the supervisor already mints/holds. DEGRADE-SAFE: any
+ * failure (no key, non-200, unparseable body, network error) resolves to an
+ * UNKNOWN roster with a truthful reason — it NEVER throws and NEVER blocks boot.
+ */
+export async function fetchEngineRoster(opts: {
+    backendUrl: string;
+    internalServiceKey?: string;
+    fetch: typeof fetch;
+}): Promise<EngineRoster> {
+    if (!opts.internalServiceKey) {
+        return unknownRoster("no internal service key");
+    }
+    const url = `${opts.backendUrl.replace(/\/+$/, "")}${INTERNAL_ENGINES_HEALTH_PATH}`;
+    try {
+        const res = await opts.fetch(url, {
+            method: "GET",
+            headers: {
+                Accept: "application/json",
+                [INTERNAL_SERVICE_KEY_HEADER]: opts.internalServiceKey,
+            },
+        });
+        if (!res || res.status !== 200) {
+            return unknownRoster(`status-${res ? res.status : "no-response"}`);
+        }
+        let body: unknown = null;
+        try {
+            body = await res.json();
+        } catch (err) {
+            return unknownRoster(err instanceof Error ? err.message : "unparseable roster body");
+        }
+        return parseEngineRoster(body);
+    } catch (err) {
+        return unknownRoster(err instanceof Error ? err.message : String(err));
+    }
+}
+
+/** The embedded vector store's truthful liveness. Lance is NOT a declared engine
+ * on the roster endpoint, so it is derived from packaging classification (the
+ * resolver only sets LANCE_DATA_DIR when the addon is actually packaged). */
+export interface VectorStoreStatus {
+    lance: "alive" | "degraded";
+    dataDir: string | null;
+    reason: string | null;
+}
+
+export function describeVectorStore(vector: EmbeddedVectorEnv | null): VectorStoreStatus {
+    const dataDir = vector?.lanceDataDir ?? null;
+    if (dataDir) {
+        return { lance: "alive", dataDir, reason: null };
+    }
+    return {
+        lance: "degraded",
+        dataDir: null,
+        reason: "no native lance addon packaged → Qdrant/no-op",
+    };
+}
+
 /**
  * Compute the next restart backoff (ms). Exponential with a cap, so a
  * crash-looping backend does not hammer the host. An optional `jitterMs` adds
@@ -738,6 +903,10 @@ export interface SupervisorStatus {
     error: string;
     logPath: string;
     userMessage: string;
+    /** Per-engine roster from /internal/engines/health (unknown until READY). */
+    engines: EngineRoster;
+    /** Embedded vector store liveness (derived from packaging classification). */
+    vector: VectorStoreStatus;
 }
 
 export interface BackendAuth {
@@ -807,6 +976,12 @@ export class BackendSupervisor {
     lastError: string = null;
     restartCount = 0;
     child: ChildProcessLike = null;
+
+    // Truthful runtime roster, surfaced on getStatus() so a dead-because-
+    // unpackaged engine is VISIBLE, never hidden. Unknown until the first READY.
+    _internalServiceKey: string = null;
+    _engineRoster: EngineRoster = unknownRoster("not yet probed");
+    _vectorEnv: EmbeddedVectorEnv = null;
 
     dataDir: string;
     secretsPath: string;
@@ -896,6 +1071,8 @@ export class BackendSupervisor {
                       logPath: this.logPath,
                   })
                 : null,
+            engines: this._engineRoster,
+            vector: describeVectorStore(this._vectorEnv),
         };
     }
 
@@ -953,6 +1130,9 @@ export class BackendSupervisor {
             }
             const backendUrl = backendUrlForPort(port);
             const secrets = loadOrCreateSecrets({ secretsPath: this.secretsPath, fs: this._fs });
+            // Hold the internal key so the READY roster probe can authenticate to
+            // the INTERNAL_SERVICE_KEY-gated /internal/engines/health surface.
+            this._internalServiceKey = secrets.internalServiceKey;
             const tmuxBin = resolveTmuxBin({
                 isPackaged: this.isPackaged,
                 repoRoot: this.repoRoot,
@@ -1000,6 +1180,7 @@ export class BackendSupervisor {
                 baseEnv: process.env,
                 existsSync: this._fs.existsSync,
             });
+            this._vectorEnv = vectorEnv;
             let connectorSecrets: Record<string, string> = {};
             try {
                 connectorSecrets = this._readConnectorSecrets();
@@ -1121,6 +1302,10 @@ export class BackendSupervisor {
                     error: err instanceof Error ? err.message : String(err),
                 });
             }
+            // Truthful engine roster: surface which engines are alive vs
+            // dead-because-unpackaged. Degrade-safe — an unreachable roster
+            // resolves to UNKNOWN (never throws, never blocks this boot).
+            await this._refreshEngineRoster();
             return { ok: true, backendUrl, apiKey: this.apiKey };
         } catch (err) {
             this.phase = PHASE.FAILED;
@@ -1128,6 +1313,48 @@ export class BackendSupervisor {
             this._appendLog("error", "backend start failed", { error: this.lastError });
             this._killChild();
             return { ok: false, reason: this.lastError };
+        }
+    }
+
+    /**
+     * Probe /internal/engines/health and write a truthful alive/degraded roster
+     * to the log + the status object. Never throws (fetchEngineRoster is
+     * degrade-safe) and never blocks boot: an unreachable roster stays UNKNOWN.
+     * Lance is rendered from packaging classification since it is NOT a declared
+     * engine on the endpoint; a PACKAGED-required engine reporting `down` is
+     * built-but-broken and gets a louder line than a deliberate absence.
+     */
+    async _refreshEngineRoster(): Promise<void> {
+        const roster = await fetchEngineRoster({
+            backendUrl: this.backendUrl,
+            internalServiceKey: this._internalServiceKey || undefined,
+            fetch: this._fetch,
+        });
+        this._engineRoster = roster;
+
+        const vector = describeVectorStore(this._vectorEnv);
+        if (!roster.known) {
+            this._appendLog("warn", "engine roster unavailable", {
+                reason: roster.reason,
+                lance: vector.lance,
+            });
+            return;
+        }
+
+        this._appendLog("info", "engine roster", {
+            alive: roster.alive,
+            degraded: roster.degraded.map((e) => (e.reason ? `${e.name} (${e.reason})` : e.name)),
+            lance: vector.lance === "alive" ? vector.dataDir : vector.reason,
+        });
+
+        // Reconcile packaging truth with runtime truth: a PACKAGED-required
+        // engine reporting `down` is built-but-broken (a real fault), not the
+        // deliberate cloud-or-degrade absence of an un-packaged sidecar.
+        const brokenRequired = roster.degraded.filter((e) => PACKAGED_REQUIRED_ENGINES.has(e.name));
+        if (brokenRequired.length) {
+            this._appendLog("error", "packaged engine(s) reporting down (built-but-broken)", {
+                engines: brokenRequired.map((e) => (e.reason ? `${e.name} (${e.reason})` : e.name)),
+            });
         }
     }
 
