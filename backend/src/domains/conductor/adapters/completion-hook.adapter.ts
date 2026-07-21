@@ -29,6 +29,7 @@ import type { RunEventSinkPort } from '../ports/run-event-sink.port.js';
 import type { CodeIntelPort } from '../ports/code-intel.port.js';
 import type { UsageMeterPort } from '../ports/usage-meter.port.js';
 import type { AgentEventPort } from '../ports/agent-event.port.js';
+import type { RunSignalPushPort } from '../ports/run-signal-push.port.js';
 import type { ConductorBrainMemory } from './brain-memory.adapter.js';
 
 export interface CompletionHookDeps {
@@ -53,6 +54,18 @@ export interface CompletionHookDeps {
    * degrade-safe — a publish fault NEVER stalls or rejects the terminal-event path.
    */
   readonly agentEvent?: AgentEventPort;
+  /**
+   * OPTIONAL ops-recorder REVERSE-PUSH resolver (§8.2 b: terminal run → stuck-work
+   * board). A thunk (not a value) because the port is injected post-construction by
+   * bootstrap (`ConductorModule.setRunSignalPush`), AFTER this sink is built, and
+   * satisfied STRUCTURALLY by observability so neither domain imports the other.
+   * Returns `undefined` until wired ⇒ a truthful no-op (no push). On a terminal
+   * event the completion path reverse-pushes a failed/stuck outcome so a broken run
+   * lands on the SAME board a stale PR does; a `completed` outcome calls through but
+   * is a truthful far-side SKIP (a finished run is not stuck work). Fire-and-forget +
+   * degrade-safe — a push fault NEVER stalls or rejects the terminal-event path.
+   */
+  readonly getRunSignalPush?: () => RunSignalPushPort | undefined;
   /** Resolve the owning workspace (for userId/taskId provenance) — may return null. */
   readonly getWorkspace: (workspaceId: string) => Promise<Workspace | null>;
   readonly logger: Logger;
@@ -95,8 +108,8 @@ function repoIdFromRepoRef(ref: string | undefined): string {
 export function createCompletionHookSink(
   deps: CompletionHookDeps
 ): RunEventSinkPort {
-  const { inner, brain, codeIntel, getMeter, agentEvent, getWorkspace, logger } = deps;
-  if (!brain && !codeIntel && !getMeter && !agentEvent) return inner;
+  const { inner, brain, codeIntel, getMeter, agentEvent, getRunSignalPush, getWorkspace, logger } = deps;
+  if (!brain && !codeIntel && !getMeter && !agentEvent && !getRunSignalPush) return inner;
 
   return {
     async append(event: RunEvent): Promise<void> {
@@ -239,6 +252,41 @@ export function createCompletionHookSink(
                 )
               );
           }
+        }
+
+        // (§8.2 b) ops-recorder REVERSE-PUSH — a terminal run is pushed onto the
+        // stuck-work board so a `failed`/`stuck` run surfaces on the SAME board a
+        // stale PR does (a human sees a broken run without opening the terminal). A
+        // `completed` outcome calls through but is a truthful far-side SKIP (a
+        // finished run is not stuck work), so the hook needs no special-casing. The
+        // port is late-bound (bootstrap injects it AFTER this sink is built) and
+        // satisfied structurally by observability. Fire-and-forget + degrade-safe: an
+        // unwired/down port is a truthful no-op and a push fault NEVER stalls or
+        // rejects the terminal-event path (`inner.append` already ran + was awaited).
+        const push = getRunSignalPush?.();
+        if (push) {
+          void push
+            .forwardRunSignal({
+              outcome,
+              title: workspace?.projectId ?? `run ${outcome}`,
+              reason:
+                typeof event.data?.reason === 'string'
+                  ? event.data.reason
+                  : `run ${outcome}`,
+              // The run's PR URL when the terminal event carries one; else null and
+              // the far side synthesizes a `recoder://run/<id>` anchor.
+              sourceUrl:
+                typeof event.data?.prUrl === 'string' ? event.data.prUrl : null,
+              ...(event.runId ? { runId: event.runId } : {}),
+              ...(workspaceId ? { workspaceId } : {}),
+              ...(taskId ? { taskId } : {}),
+            })
+            .catch(err =>
+              logger.warn(
+                { err, workspaceId, taskId },
+                'conductor run-signal push hook faulted'
+              )
+            );
         }
       } catch (err) {
         logger.warn(

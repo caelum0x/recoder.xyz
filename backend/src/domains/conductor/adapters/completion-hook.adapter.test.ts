@@ -487,6 +487,133 @@ describe('conductor completion hook', () => {
     expect(inner.append).toHaveBeenCalledTimes(1);
   });
 
+  it('reverse-pushes a run signal on a failed terminal event (outcome:failed, workspace anchor)', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const forwardRunSignal = vi.fn(async () => ({ forwarded: true, degraded: false }));
+    const sink = createCompletionHookSink({
+      inner,
+      getRunSignalPush: () => ({ forwardRunSignal }),
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('failed'));
+    await flush();
+
+    // Durable+live append always ran first, and exactly one push fired.
+    expect(inner.append).toHaveBeenCalledTimes(1);
+    expect(forwardRunSignal).toHaveBeenCalledTimes(1);
+    expect(forwardRunSignal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'failed',
+        title: 'project_1',
+        runId: 'run_ws_1',
+        workspaceId: 'ws_1',
+        taskId: 'task_1',
+      })
+    );
+  });
+
+  it('reverse-pushes on a completed event too (far-side truthful skip is the port’s job, not the hook’s)', async () => {
+    const forwardRunSignal = vi.fn(async () => ({
+      forwarded: false,
+      degraded: false,
+      reason: 'completed run is not stuck work',
+    }));
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      getRunSignalPush: () => ({ forwardRunSignal }),
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('completed'));
+    await flush();
+
+    expect(forwardRunSignal).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'completed' })
+    );
+  });
+
+  it('carries the PR url + reason from the terminal event data when present', async () => {
+    const forwardRunSignal = vi.fn(async () => ({ forwarded: true, degraded: false }));
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      getRunSignalPush: () => ({ forwardRunSignal }),
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(
+      event('failed', {
+        data: {
+          workspaceId: 'ws_1',
+          prUrl: 'https://github.com/acme/app/pull/7',
+          reason: 'tests red',
+        },
+      })
+    );
+    await flush();
+
+    expect(forwardRunSignal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceUrl: 'https://github.com/acme/app/pull/7',
+        reason: 'tests red',
+      })
+    );
+  });
+
+  it('does NOT reverse-push on non-terminal events', async () => {
+    const forwardRunSignal = vi.fn(async () => ({ forwarded: false, degraded: false }));
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      getRunSignalPush: () => ({ forwardRunSignal }),
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('log', { eventId: 'evt_log' }));
+    await sink.append(event('started', { eventId: 'evt_started' }));
+    await flush();
+
+    expect(forwardRunSignal).not.toHaveBeenCalled();
+  });
+
+  it('is the identity sink when ONLY an unwired push thunk is present (returns undefined ⇒ no wrap, no push)', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const sink = createCompletionHookSink({
+      inner,
+      // The port is not yet injected by bootstrap ⇒ the thunk returns undefined.
+      getRunSignalPush: () => undefined,
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    // The decorator still wraps (the thunk itself is a wired capability), but a
+    // terminal event pushes nothing and never throws.
+    await expect(sink.append(event('failed'))).resolves.toBeUndefined();
+    await flush();
+    expect(inner.append).toHaveBeenCalledTimes(1);
+  });
+
+  it('degrade-safe: a reverse-push throw never rejects append (terminal event unaffected)', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const sink = createCompletionHookSink({
+      inner,
+      getRunSignalPush: () => ({
+        forwardRunSignal: vi.fn(async () => {
+          throw new Error('ops-recorder down');
+        }),
+      }),
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await expect(sink.append(event('failed'))).resolves.toBeUndefined();
+    await flush();
+    expect(inner.append).toHaveBeenCalledTimes(1);
+  });
+
   it('degrade-safe: a harvest throw never rejects append (terminal event unaffected)', async () => {
     const inner = { append: vi.fn(async () => {}) };
     const sink = createCompletionHookSink({
