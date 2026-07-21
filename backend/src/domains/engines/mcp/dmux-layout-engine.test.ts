@@ -33,6 +33,10 @@ function spyPort(result: InvokeResult<unknown> = ok({ done: true })) {
       seen.applyLayout = input;
       return result as InvokeResult<never>;
     },
+    async buildWorktreeGrid(input) {
+      seen.buildWorktreeGrid = input;
+      return result as InvokeResult<never>;
+    },
   };
   return { port, seen };
 }

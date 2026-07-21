@@ -372,6 +372,104 @@ export async function dmuxApplyLayout(input: DmuxApplyLayoutInput): Promise<Dmux
   };
 }
 
+/** One sibling's real worktree, as fed to the worktree-bound grid builder. */
+export interface DmuxGridWorktree {
+  readonly workspaceId: string;
+  /** The sibling's OWN worktree path — this pane's cwd (never a shared repoPath). */
+  readonly worktreePath: string;
+}
+
+export interface DmuxBuildWorktreeGridInput {
+  /** The dedicated operator session to build the grid in (e.g. `recoder-group-<taskGroup>`). */
+  readonly session: string;
+  /** The ordered siblings; EACH becomes one pane cwd'd to its OWN `worktreePath`. */
+  readonly worktrees: readonly DmuxGridWorktree[];
+}
+
+export interface DmuxBuildWorktreeGridResult {
+  readonly session: string;
+  /** True when this call created the session / added panes; false when idempotent no-op. */
+  readonly created: boolean;
+  /** The per-pane cwds, in pane order == the ordered sibling worktrees fed in (the binding proof). */
+  readonly worktreePaths: readonly string[];
+  readonly panes: readonly DmuxPaneInfo[];
+  readonly layout: 'agent-grid';
+}
+
+/**
+ * Does the shared tmux server already hold this session? A missing session is the
+ * normal case (not an error), so a rejected `has-session` becomes `false`. When
+ * tmux itself is absent the subsequent `new-session` rejects and that real error
+ * propagates — the caller's port maps it to a truthful `{ ok:false }`.
+ */
+async function dmuxHasSession(session: string): Promise<boolean> {
+  try {
+    await exec(TMUX_BIN, ['has-session', '-t', session]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Split one `-h` pane in `session`, cwd'd to `cwd`, rebalancing to `tiled` after. */
+async function dmuxSplitWorktreePane(session: string, cwd: string): Promise<string> {
+  const { stdout } = await exec(TMUX_BIN, [
+    'split-window',
+    '-h',
+    '-P',
+    '-F',
+    '#{pane_id}',
+    '-t',
+    session,
+    '-c',
+    cwd,
+  ]);
+  // Rebalance so the next split (and the final agent-grid layout) has usable space.
+  await exec(TMUX_BIN, ['select-layout', '-t', session, 'tiled']).catch(() => undefined);
+  return stdout.trim();
+}
+
+/**
+ * Build a WORKTREE-BOUND `agent-grid` in one call — the honest, non-hollow grid:
+ * every pane is cwd'd to a DISTINCT real sibling worktree (NEVER a single shared
+ * repoPath, NEVER empty panes). Steps:
+ *   1. `has-session -t <session>`; else `new-session -d -s <session> -c worktrees[0]`.
+ *   2. for each remaining worktree: `split-window -h -c <that worktree>`
+ *      (`select-layout tiled` between so each split has room).
+ *   3. `applyLayout(agent-grid)` last (only when we created/added panes).
+ * Idempotent-ish: an existing session already holding ≥N panes creates nothing
+ * (`created:false`). Bound to at most {@link MAX_WORKSPACE_PANES} worktrees.
+ * Throws the real tmux error (no tmux, bad path) — the port maps it to `{ ok:false }`.
+ */
+export async function dmuxBuildWorktreeGrid(
+  input: DmuxBuildWorktreeGridInput,
+): Promise<DmuxBuildWorktreeGridResult> {
+  const targets = input.worktrees.slice(0, MAX_WORKSPACE_PANES);
+  const worktreePaths = targets.map((worktree) => worktree.worktreePath);
+  const exists = await dmuxHasSession(input.session);
+  let created = false;
+  if (!exists) {
+    // Pane 0 is bound to the FIRST sibling worktree via `new-session -c`.
+    await exec(TMUX_BIN, ['new-session', '-d', '-s', input.session, '-c', worktreePaths[0]!]);
+    created = true;
+    for (let i = 1; i < targets.length; i++) {
+      await dmuxSplitWorktreePane(input.session, worktreePaths[i]!);
+    }
+  } else {
+    const existing = await dmuxListPanes(input.session);
+    // Only add the panes still missing, each bound to its own worktree.
+    for (let i = existing.length; i < targets.length; i++) {
+      await dmuxSplitWorktreePane(input.session, worktreePaths[i]!);
+      created = true;
+    }
+  }
+  if (created) {
+    await applyLayoutCommands(input.session, 'agent-grid');
+  }
+  const panes = await dmuxListPanes(input.session);
+  return { session: input.session, created, worktreePaths, panes, layout: 'agent-grid' };
+}
+
 /**
  * The layout capability as a port the MCP binder consumes. Every method wraps the
  * pure tmux functions in a truthful {@link InvokeResult} — a rejected tmux call
@@ -383,6 +481,13 @@ export interface DmuxLayoutPort {
   listPanes(input: { target?: string }): Promise<InvokeResult<{ panes: readonly DmuxPaneInfo[] }>>;
   createPanes(input: DmuxCreatePanesInput): Promise<InvokeResult<DmuxCreatePanesResult>>;
   applyLayout(input: DmuxApplyLayoutInput): Promise<InvokeResult<DmuxApplyLayoutResult>>;
+  /**
+   * Build a WORKTREE-BOUND `agent-grid`: one pane per sibling, EACH cwd'd to its
+   * OWN `worktreePath` (never one shared repoPath, never empty panes). `created`
+   * is false on an idempotent re-run. Requires ≥1 worktree with a real path, else
+   * `{ ok:false }`. Rejected tmux ⇒ `{ ok:false }`, never a throw across the seam.
+   */
+  buildWorktreeGrid(input: DmuxBuildWorktreeGridInput): Promise<InvokeResult<DmuxBuildWorktreeGridResult>>;
 }
 
 /** Build the {@link DmuxLayoutPort} over the shared tmux server. */
@@ -418,6 +523,21 @@ export function createDmuxLayoutPort(): DmuxLayoutPort {
         return ok(await dmuxApplyLayout(input));
       } catch (err) {
         return fail(`dmux layout-apply failed: ${message(err)}`, 'tmux_error');
+      }
+    },
+    async buildWorktreeGrid(input) {
+      if (!input.session?.trim()) return fail('dmux build-worktree-grid requires a session', 'bad_input');
+      // Bind ONLY siblings with a real worktree path — the honest, non-hollow grid.
+      const worktrees = (input.worktrees ?? []).filter(
+        (worktree) => typeof worktree.worktreePath === 'string' && worktree.worktreePath.trim(),
+      );
+      if (worktrees.length === 0) {
+        return fail('dmux build-worktree-grid requires at least one worktree with a real path', 'bad_input');
+      }
+      try {
+        return ok(await dmuxBuildWorktreeGrid({ session: input.session, worktrees }));
+      } catch (err) {
+        return fail(`dmux build-worktree-grid failed: ${message(err)}`, 'tmux_error');
       }
     },
   };

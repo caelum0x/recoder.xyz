@@ -96,6 +96,7 @@ import {
   beadsEngineBinder,
 } from './adapters/cli/index.js';
 import type { TmuxIntrospectPort } from './adapters/cli/index.js';
+import type { DmuxLayoutPort } from './dmux-adapter.js';
 import {
   createRecoderGitService,
   type RecoderGitService,
@@ -556,6 +557,21 @@ export class EnginesComposer implements EnginesModule {
   tmuxIntrospect(): TmuxIntrospectPort | null {
     const tmux = this.adapters.get('tmux') as TmuxAdapter | undefined;
     return tmux ? tmux.introspect() : null;
+  }
+
+  /**
+   * The dmux LAYOUT brain over the shared tmux server (`DmuxAdapter.layout()`) —
+   * the SAME `select-layout`/`split-window` seam the `recoder.dmux` MCP tools bind
+   * over. The conductor's F3 compare/parallel grid source consumes
+   * `buildWorktreeGrid()` here to arrange one operator pane per sibling, EACH cwd'd
+   * to its OWN worktree (never a hollow shared-repoPath grid). Independent of the
+   * dmux TUI binary (that is the optional human viewer of the same layout). Null
+   * when the dmux adapter is not declared (truthful skip — the compare read then
+   * stays hint-less, never a fabricated grid).
+   */
+  dmuxLayout(): DmuxLayoutPort | null {
+    const dmux = this.adapters.get('dmux') as DmuxAdapter | undefined;
+    return dmux ? dmux.layout() : null;
   }
 
   /**
