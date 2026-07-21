@@ -303,6 +303,10 @@ export class EnginesComposer implements EnginesModule {
     // wiring guard logs (does not throw) for servers agent-os/conductor still bind.
     this.hostBundle = new InteropHostBundle({
       ...(this.cfg.palRootDir ? { palRootDir: this.cfg.palRootDir } : {}),
+      // The per-tool governance teeth at the executor chokepoint (row 11-12): when
+      // bootstrap injects `toolExecGate`, every authorized recoder-MCP tool call
+      // runs fine-grained kernel enforcement before dispatch. Absent ⇒ pass-through.
+      ...(deps.toolExecGate ? { toolEnforcer: deps.toolExecGate } : {}),
       engineBinders: [
         // `recoder.beads` (ready/show/create/…/remember/recall) as thin delegates
         // over the ONE beads transport — the same adapter seam the `beads-graph`

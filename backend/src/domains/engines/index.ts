@@ -27,6 +27,7 @@ import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
 import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
 import type { GovernanceKernelPort } from '../governance/ports/kernel.port.js';
+import type { ToolExecEnforcementPort } from '../governance/ports/tool-exec-gate.port.js';
 import type { EnginesConfigOverrides } from './config.js';
 import type { EngineClientPort } from './ports/engine-client.port.js';
 import type { TmuxIntrospectPort } from './adapters/cli/tmux-introspect.adapter.js';
@@ -56,6 +57,15 @@ export interface EnginesModuleDeps {
    * `governance` engine client re-exposes it — no second kernel is built here.
    */
   readonly kernel: GovernanceKernelPort;
+  /**
+   * The per-tool governance teeth (`governance.toolExecGate()`), injected by
+   * bootstrap and threaded into the interop MCP host's executor chokepoint so
+   * EVERY authorized recoder-MCP tool call runs the fine-grained kernel
+   * enforcement (deny-biased + Merkle-sealed) before dispatch. Absent (tests /
+   * standalone) ⇒ the host is a truthful pass-through — never a fake-allow. Its
+   * coverage is the recoder-MCP tool stream only; see the engines MCP host doc.
+   */
+  readonly toolExecGate?: ToolExecEnforcementPort;
   /**
    * The OWNED notify engine (webhook delivery) the `recoder.notify` MCP tool binds
    * over. Injected by bootstrap so the SAME instance backs both the agent-callable

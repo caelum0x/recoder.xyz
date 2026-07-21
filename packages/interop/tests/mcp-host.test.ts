@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { InteropMcpHost } from "../src/mcp/host/host";
+import { InteropMcpHost, GovernanceDeniedError } from "../src/mcp/host/host";
 import type {
   McpToolExecutor,
   McpToolResult,
@@ -101,6 +101,45 @@ test("a throwing audit sink does NOT corrupt a completed call (fail-safe audit)"
   });
   const outcome = await host.call(callInput());
   assert.equal(outcome.status, "completed");
+});
+
+test("GovernanceDeniedError carries the tool name + reason for the wire outcome", () => {
+  const err = new GovernanceDeniedError("recoder.beads.beads.create", "forbidden path /etc/shadow");
+  assert.equal(err.name, "GovernanceDeniedError");
+  assert.equal(err.toolName, "recoder.beads.beads.create");
+  assert.equal(err.reason, "forbidden path /etc/shadow");
+  assert.match(err.message, /governance denied tool 'recoder\.beads\.beads\.create'/);
+  assert.match(err.message, /\/etc\/shadow/);
+});
+
+test("a GovernanceDeniedError thrown by the executor (per-tool teeth) maps to a failed + audited wire outcome", async () => {
+  // The per-tool teeth live at the injected executor (the backend's
+  // `createInteropExecutor`); on a denied verdict it throws GovernanceDeniedError
+  // AFTER the gate has already Merkle-sealed the authoritative deny. The interop
+  // host catches it like any executor fault and returns the non-`completed`
+  // (`'failed'`) wire-audit row — the SECOND record of the documented dual-audit.
+  const denying: McpToolExecutor = {
+    call: async (input) => {
+      throw new GovernanceDeniedError(
+        `${input.server.serverId}.${input.toolName}`,
+        "forbidden path /etc/shadow",
+      );
+    },
+  };
+  const audited: McpToolAuditEvent[] = [];
+  const host = new InteropMcpHost({
+    executor: denying,
+    auditSink: { record: (e) => void audited.push(e) },
+  });
+
+  const outcome = await host.call(callInput());
+
+  // Downstream keys on `status !== 'completed'` (documented: a governance deny
+  // surfaces here as the `'failed'` wire outcome, not a literal `'denied'`).
+  assert.notEqual(outcome.status, "completed");
+  if (outcome.status === "failed") assert.match(outcome.reason, /\/etc\/shadow/);
+  assert.equal(audited.at(-1)?.call.status, "failed");
+  assert.match(String(audited.at(-1)?.error), /governance denied/);
 });
 
 test("call on a failing executor reports failed status and audits the failure", async () => {

@@ -30,16 +30,12 @@ export type {
 export { PalMcpAdapter, palPlanEngineBinder } from './pal-mcp.adapter.js';
 export type { PalMcpAdapterDeps, PalExternalCall } from './pal-mcp.adapter.js';
 
-export {
-  GovernedSidecarAdapter,
-  governSidecar,
-  bindSidecarEnforcement,
-} from './governed-sidecar.adapter.js';
-export type {
-  SidecarEnforcement,
-  SidecarToolEnforcer,
-  GovernedSidecarOptions,
-} from './governed-sidecar.adapter.js';
+// The `GovernedSidecarAdapter`/`governSidecar`/`bindSidecarEnforcement` sidecar
+// decorator was SUPERSEDED and DELETED: it decorated the low-level
+// `EngineClientPort.invoke`, which the live MCP-tool stream does not traverse.
+// The per-tool teeth now live at the interop executor chokepoint
+// (`mcp/mcp-host.ts` → `createInteropExecutor`, bound from `governance.toolExecGate()`),
+// which is the ONE funnel every recoder-MCP tool call crosses.
 
 export {
   palCommsEngineBinder,
