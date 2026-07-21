@@ -9,7 +9,7 @@
  * The board view retains its special 3-pane layout — it is registered in the
  * registry for metadata/health purposes but rendered inline here.
  */
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { api, BackendUnreachableError, UnauthorizedError } from './lib/api';
 import { usePoll } from './lib/usePoll';
 import { useWorkspaceWaits } from './lib/useWorkspaceWaits';
@@ -53,6 +53,8 @@ import { NewWorkspaceForm } from './components/NewWorkspaceForm';
 import { RepoSettings } from './components/RepoSettings';
 import { WorkspaceDetail } from './components/WorkspaceDetail';
 import { WorkspaceSidebar } from './components/WorkspaceSidebar';
+import { groupWorkspacesByRepo } from './lib/workspace-groups';
+import { useListKeyboardNav } from './lib/useListKeyboardNav';
 import { WorkspaceCenter } from './components/WorkspaceCenter';
 import { SignIn } from './components/SignIn';
 // Registry drives the nav. It now registers only the Board.
@@ -283,6 +285,33 @@ export function App() {
   // refreshes with no UI flash).
   const showSignIn = needsFirstRunSignIn || (unauthenticated && refreshAttempted && !refreshing);
 
+  // Keyboard-driven workspace switching. The motion order is the sidebar's flat
+  // order (grouped-by-repo, then row order) so j/k reads exactly as the always-
+  // present left list is drawn. Any modal/overlay disables the listener entirely;
+  // while a thread is open the list is non-navigable but Escape still returns.
+  const navIds = useMemo(
+    () => groupWorkspacesByRepo(workspaces).flatMap((g) => g.workspaces.map((w) => w.workspaceId)),
+    [workspaces],
+  );
+  const anyOverlay = showSignIn || showCreate || showSettings || Boolean(compareGroup);
+  const { focusedId, setFocusedId } = useListKeyboardNav({
+    ids: navIds,
+    enabled: !anyOverlay,
+    navigable: !anyOverlay && !selected,
+    onOpen: (id) => setSelectedId(id),
+    onEscape: () => setSelectedId(null),
+  });
+  // A click opens a workspace AND parks the cursor on it, so keyboard nav
+  // resumes from wherever the mouse left off. Archived rows aren't in navIds and
+  // stay on plain setSelectedId (a pruned cursor rather than a phantom highlight).
+  const selectWorkspace = useCallback(
+    (id: string) => {
+      setSelectedId(id);
+      setFocusedId(id);
+    },
+    [setFocusedId],
+  );
+
   function onAuthenticated() {
     // Re-resolve config picks up the fresh token; force every poll to refetch.
     setSignedInThisRun(true);
@@ -463,8 +492,9 @@ export function App() {
           <WorkspaceSidebar
             workspaces={workspaces}
             selectedId={selectedId}
+            focusedId={focusedId}
             loading={board.loading && !board.data}
-            onSelect={setSelectedId}
+            onSelect={selectWorkspace}
             onNewWorkspace={() => setShowCreate(true)}
             waits={waits}
             collapsed={leftCollapsed}
@@ -541,7 +571,8 @@ export function App() {
                   <Board
                     workspaces={boardWorkspaces}
                     selectedId={selectedId}
-                    onSelect={setSelectedId}
+                    focusedId={focusedId}
+                    onSelect={selectWorkspace}
                     waits={waits}
                   />
                 )}
