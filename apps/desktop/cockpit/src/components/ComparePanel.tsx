@@ -27,6 +27,7 @@ import {
 } from '../lib/conductor-health-state';
 import { canMerge, statePill, stateTone } from '../lib/workspace-state';
 import { workspaceCodename } from '../lib/workspace-codename';
+import { GroupAttachAction } from './GroupAttachAction';
 import type { AttentionState, DiffStat, SiblingCompareEntry } from '../types';
 
 interface ComparePanelProps {
@@ -206,6 +207,7 @@ export function ComparePanel({ taskGroup, goal, onClose, onChanged }: ComparePan
               {compare ? ` · ${compare.count} agent${compare.count === 1 ? '' : 's'}` : ''}
             </span>
           </div>
+          <GroupAttachAction taskGroup={taskGroup} grid={compare?.grid} onChanged={onChanged} />
           <button class="icon-btn" onClick={onClose} aria-label="Close compare">×</button>
         </div>
 

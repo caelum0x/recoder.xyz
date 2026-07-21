@@ -211,6 +211,42 @@ describe('ComparePanel', () => {
     expect(btn.disabled).toBe(true);
   });
 
+  it('still renders siblings and now offers the group attach action when grid is present', async () => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async () =>
+      compareResponse({
+        ...compareView([
+          sibling({ workspaceId: 'ws_a', agent: 'claude' }),
+          sibling({ workspaceId: 'ws_b', agent: 'codex' }),
+        ]),
+        grid: { visibleSessions: ['recoder-a', 'recoder-b'] },
+      }),
+    );
+
+    const c = mount();
+    await flush(10);
+
+    expect(c.querySelectorAll('.compare-col').length).toBe(2);
+    const attach = Array.from(c.querySelectorAll('button')).find(
+      (b) => (b.textContent ?? '').trim() === 'Open all in terminal',
+    );
+    expect(attach).toBeTruthy();
+  });
+
+  it('is unchanged (no attach action) for a grid-less compare view', async () => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async () =>
+      compareResponse(compareView([sibling({ workspaceId: 'ws_a', agent: 'claude' })])),
+    );
+
+    const c = mount();
+    await flush(10);
+
+    expect(c.querySelectorAll('.compare-col').length).toBe(1);
+    const attach = Array.from(c.querySelectorAll('button')).find(
+      (b) => (b.textContent ?? '').trim() === 'Open all in terminal',
+    );
+    expect(attach).toBeUndefined();
+  });
+
   it('renders a truthful empty state for an unknown group', async () => {
     (globalThis as Record<string, unknown>).fetch = vi.fn(async () =>
       compareResponse({ taskGroup: 'grp_x', count: 0, siblings: [] }),
