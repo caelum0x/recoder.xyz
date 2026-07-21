@@ -14,6 +14,9 @@
  *    (its callees / dependencies — "what does this reach?").
  *  - `recodergit.definition`     — READ: a symbol's 360° context (definition,
  *    location, callers, callees, and the execution flows it participates in).
+ *  - `recodergit.query_context`  — READ: the COMPOSED code-aware launch context
+ *    (projected DomainMap overview + per-seed-term `symbol_search` + `definition`)
+ *    the conductor folds into an agent's launch prompt — reachable on demand.
  *
  * IDENTITY (SECURITY): the code graph is a shared per-repo resource, not per-user
  * tenant data, so there is no `userId` subject to rewrite. But these tools are
@@ -41,7 +44,12 @@ export const RECODERGIT_INTEL_MCP_SERVER_ID = 'recodergit';
 
 /** The code-intel adapter ops the tools drive on the recodergit adapter seam. */
 export type RecodergitIntelOp =
-  'symbol-search' | 'find-references' | 'call-graph' | 'definition';
+  | 'symbol-search'
+  | 'find-references'
+  | 'call-graph'
+  | 'definition'
+  // Composed CODE-AWARE launch context (domainMap + symbol_search + definition).
+  | 'query-context';
 
 /** The seam the tools bind to — one `invoke` over the recodergit adapter's ops. */
 export interface RecodergitIntelMcpDeps {
@@ -78,6 +86,13 @@ interface DefinitionInput {
   readonly filePath?: string;
   readonly kind?: string;
   readonly includeContent?: boolean;
+}
+
+interface QueryContextInput {
+  readonly repoId?: string;
+  readonly seedTerms?: readonly unknown[];
+  readonly maxTerms?: number;
+  readonly symbolLimit?: number;
 }
 
 /** The authenticated caller's own id, or a refusal for an absent identity. */
@@ -129,6 +144,19 @@ function putBool(
   value: unknown
 ): void {
   if (typeof value === 'boolean') payload[key] = value;
+}
+
+/** Copy an optional array-of-strings arg, keeping only non-empty string entries. */
+function putStrArray(
+  payload: Record<string, unknown>,
+  key: string,
+  value: unknown
+): void {
+  if (!Array.isArray(value)) return;
+  const terms = value.filter(
+    (item): item is string => typeof item === 'string' && item.trim().length > 0
+  );
+  if (terms.length > 0) payload[key] = terms;
 }
 
 /** Present an invoke result truthfully: the value on ok, a degrade object on fail. */
@@ -224,6 +252,26 @@ export function buildRecodergitIntelMcpTools(
         return present(await deps.invoke('definition', payload));
       },
     },
+    {
+      name: 'recodergit.query_context',
+      description:
+        'Compose the CODE-AWARE launch context for an indexed repo: the projected DomainMap overview plus ' +
+        'a bounded per-seed-term symbol_search + definition lookup (the same block the conductor folds into ' +
+        'an agent launch prompt), reachable on demand. Requires repoId; optional seedTerms (string[]) focus ' +
+        'the search, maxTerms/symbolLimit bound it. Read-only; truthful { available:false, reason } when the ' +
+        'repo is not indexed, the engine lib is absent, or the graph is empty for the given seeds.',
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
+        requireCaller(caller);
+        const input = (raw ?? {}) as QueryContextInput;
+        const payload: Record<string, unknown> = {
+          repoId: requireArg(input.repoId, 'repoId'),
+        };
+        putStrArray(payload, 'seedTerms', input.seedTerms);
+        putNum(payload, 'maxTerms', input.maxTerms);
+        putNum(payload, 'symbolLimit', input.symbolLimit);
+        return present(await deps.invoke('query-context', payload));
+      },
+    },
   ];
 }
 
@@ -258,6 +306,7 @@ export const recodergitIntelMcpServer = {
     'recodergit.find_references',
     'recodergit.call_graph',
     'recodergit.definition',
+    'recodergit.query_context',
   ],
   metadata: { external: false },
 };

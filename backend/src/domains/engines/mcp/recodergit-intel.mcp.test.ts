@@ -28,19 +28,21 @@ function toolsWith(invoke: Invoke) {
     refs: byName.get('recodergit.find_references')!,
     callGraph: byName.get('recodergit.call_graph')!,
     def: byName.get('recodergit.definition')!,
+    queryContext: byName.get('recodergit.query_context')!,
   };
 }
 
 const user = (userId: string): McpToolCaller => ({ userId, scopes: ['read'] });
 
 describe('recodergit code-intel MCP tools — server descriptor', () => {
-  it('declares the four code-intel tools under the recodergit server id', () => {
+  it('declares the five code-intel tools under the recodergit server id', () => {
     expect(recodergitIntelMcpServer.serverId).toBe('recodergit');
     expect([...recodergitIntelMcpServer.toolNames]).toEqual([
       'recodergit.symbol_search',
       'recodergit.find_references',
       'recodergit.call_graph',
       'recodergit.definition',
+      'recodergit.query_context',
     ]);
     const names = buildRecodergitIntelMcpTools({
       invoke: async () => ok(null),
@@ -69,6 +71,11 @@ describe('anonymous refusal (cross-tenant class CLOSED)', () => {
     });
     await expect(
       t.def.handler({ repoId: 'r1', symbol: 'f' }, undefined)
+    ).rejects.toMatchObject({
+      code: 'AUTH_REQUIRED',
+    });
+    await expect(
+      t.queryContext.handler({ repoId: 'r1' }, undefined)
     ).rejects.toMatchObject({
       code: 'AUTH_REQUIRED',
     });
@@ -171,6 +178,33 @@ describe('op routing + param mapping onto the adapter seam', () => {
       symbol: 'login',
       kind: 'Function',
     });
+  });
+
+  it('query_context → query-context op with forwarded seeds + bounds', async () => {
+    const invoke = vi.fn(async () => ok({ available: true, symbols: [] }));
+    const { queryContext } = toolsWith(invoke);
+    await queryContext.handler(
+      {
+        repoId: 'r1',
+        seedTerms: ['auth flow', 'login', '', 42],
+        maxTerms: 4,
+        symbolLimit: 6,
+      },
+      user('u1')
+    );
+    expect(invoke).toHaveBeenCalledWith('query-context', {
+      repoId: 'r1',
+      seedTerms: ['auth flow', 'login'],
+      maxTerms: 4,
+      symbolLimit: 6,
+    });
+  });
+
+  it('query_context → query-context op with repoId only (seeds optional)', async () => {
+    const invoke = vi.fn(async () => ok({ available: true }));
+    const { queryContext } = toolsWith(invoke);
+    await queryContext.handler({ repoId: 'r1' }, user('u1'));
+    expect(invoke).toHaveBeenCalledWith('query-context', { repoId: 'r1' });
   });
 });
 
