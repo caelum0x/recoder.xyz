@@ -28,6 +28,7 @@ import {
 } from '../audit/conductor-audit.js';
 import type {
   PreviewVerification,
+  PreviewVerificationRecord,
   PreviewVerifyAssertion,
   PreviewVerifyPort,
 } from '../ports/preview-verify.port.js';
@@ -60,6 +61,19 @@ export interface PreviewVerifyDeps {
   readonly gate: GovernanceGatePort;
   readonly verifier: PreviewVerifyPort;
   readonly getWorkspace: (workspaceId: string) => Promise<Workspace | null>;
+  /**
+   * OPTIONAL write-back seam: persist the COMPACT verification summary onto the
+   * workspace record so a later read edge can project it (the audit Merkle chain
+   * seals the evidence but is NOT queryable by `workspaceId`). The module wires
+   * this to the SAME same-state metadata-merge idiom `setPreviewUrl` uses. Called
+   * AFTER the audit is recorded, on every RAN verification (a `skipped(degraded)`
+   * run persists a truthful skip too). Absent ⇒ the verification is still audited,
+   * just not workspace-addressable (the read edge 404s). Degrade-truthful.
+   */
+  readonly persistVerification?: (
+    workspaceId: string,
+    record: PreviewVerificationRecord,
+  ) => Promise<void>;
 }
 
 /** Read the persisted preview URL off the workspace metadata (the `setPreviewUrl` sink). */
@@ -126,5 +140,36 @@ export async function verifyWorkspacePreview(
     }),
   );
 
+  // Write-back the COMPACT summary onto the workspace record (AFTER the audit) so
+  // a later read edge can project it — the audit chain is not queryable by
+  // `workspaceId`. Runs on EVERY ran verification, `skipped(degraded)` included
+  // (a truthful skip is readable, never a fabricated pass). Absent seam ⇒ audited
+  // only (the read edge 404s).
+  if (deps.persistVerification) {
+    await deps.persistVerification(workspaceId, toVerificationRecord(outcome));
+  }
+
   return { ok: true, verdict, value: outcome };
+}
+
+/**
+ * Project a verification outcome into the COMPACT, persistable record. The
+ * screenshot PNG is not retained — only its opaque artifact id is carried (the
+ * image was returned once then GC'd; a real artifact store is a future item).
+ */
+function toVerificationRecord(outcome: PreviewVerification): PreviewVerificationRecord {
+  const screenshot = outcome.artifacts.find((artifact) => artifact.kind === 'screenshot');
+  return {
+    status: outcome.status,
+    checkedAt: new Date().toISOString(),
+    summary: outcome.summary,
+    degraded: outcome.degraded,
+    checks: outcome.checks.map((check) => ({
+      tool: check.tool,
+      status: check.status,
+      ...(check.message !== undefined ? { message: check.message } : {}),
+    })),
+    ...(outcome.reason !== undefined ? { reason: outcome.reason } : {}),
+    ...(screenshot ? { screenshotArtifactId: screenshot.artifactId } : {}),
+  };
 }

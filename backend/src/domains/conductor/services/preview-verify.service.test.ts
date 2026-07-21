@@ -28,6 +28,7 @@ import {
   PREVIEW_VERIFY_ACTION,
   type PreviewVerifyDeps,
 } from './preview-verify.service.js';
+import type { PreviewVerificationRecord } from '../ports/preview-verify.port.js';
 import { makeGate, makePrincipal } from '../__fixtures__/harness.js';
 
 const principal = makePrincipal();
@@ -165,6 +166,68 @@ describe('verifyWorkspacePreview — truthful degrade', () => {
     expect(result.value?.status).toBe('skipped');
     expect(result.value?.degraded).toBe(true);
     expect(result.value?.reason).toMatch(/not wired/);
+  });
+});
+
+describe('verifyWorkspacePreview — write-back seam', () => {
+  /** A recording persist seam: captures each record + the audit count at call time. */
+  function makePersist(gate: ReturnType<typeof makeGate>) {
+    const calls: { workspaceId: string; record: PreviewVerificationRecord; auditsAtCall: number }[] = [];
+    const persistVerification = async (workspaceId: string, record: PreviewVerificationRecord) => {
+      calls.push({ workspaceId, record, auditsAtCall: gate.audits.length });
+    };
+    return { calls, persistVerification };
+  }
+
+  it('persists the compact summary AFTER recording the audit (passed run)', async () => {
+    const gate = makeGate();
+    const { client } = makeBrowserClient({ pageText: 'Welcome to the Preview App' });
+    const { calls, persistVerification } = makePersist(gate);
+    const deps: PreviewVerifyDeps = { ...makeDeps(gate, client), persistVerification };
+
+    const result = await verifyWorkspacePreview(deps, 'ws_1', principal, {
+      assertions: [{ expected: 'Preview App' }],
+    });
+
+    expect(result.value?.status).toBe('passed');
+    // Called exactly once, for the right workspace, with the passed summary.
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.workspaceId).toBe('ws_1');
+    expect(calls[0]?.record.status).toBe('passed');
+    expect(calls[0]?.record.degraded).toBe(false);
+    expect(typeof calls[0]?.record.checkedAt).toBe('string');
+    expect(typeof calls[0]?.record.summary).toBe('string');
+    // The screenshot rode along as an opaque artifact id (never a fetchable image).
+    expect(calls[0]?.record.screenshotArtifactId).toBeTruthy();
+    // Ordering law: the audit was already sealed before the write-back ran.
+    expect(calls[0]?.auditsAtCall).toBeGreaterThanOrEqual(1);
+  });
+
+  it('persists a truthful skipped(degraded) record with its reason (no fabricated pass)', async () => {
+    const gate = makeGate();
+    const { calls, persistVerification } = makePersist(gate);
+    // A wired verifier whose browser-use client is null ⇒ skipped(degraded).
+    const deps: PreviewVerifyDeps = { ...makeDeps(gate, null), persistVerification };
+
+    const result = await verifyWorkspacePreview(deps, 'ws_1', principal);
+
+    expect(result.value?.status).toBe('skipped');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.record.status).toBe('skipped');
+    expect(calls[0]?.record.degraded).toBe(true);
+    expect(calls[0]?.record.reason).toMatch(/not wired/);
+    // A skip retained no screenshot artifact.
+    expect(calls[0]?.record.screenshotArtifactId).toBeUndefined();
+  });
+
+  it('does NOT write back when governance denies (nothing ran)', async () => {
+    const gate = makeGate('deny');
+    const { calls, persistVerification } = makePersist(gate);
+    const deps: PreviewVerifyDeps = { ...makeDeps(gate), persistVerification };
+
+    const result = await verifyWorkspacePreview(deps, 'ws_1', principal);
+    expect(result.ok).toBe(false);
+    expect(calls).toHaveLength(0);
   });
 });
 

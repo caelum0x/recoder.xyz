@@ -47,7 +47,11 @@ import type {
 import { classifyAttention, type AttentionResult } from './attention/attention-classifier.js';
 import type { ConductorModule, ConductorModuleDeps } from './index.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
-import type { PreviewVerifyPort } from './ports/preview-verify.port.js';
+import type {
+  PreviewVerifyPort,
+  PreviewVerificationRecord,
+  PreviewVerificationView,
+} from './ports/preview-verify.port.js';
 import type { CoordinationAdmissionPort } from './ports/coordination-admission.port.js';
 import type { ConductorPlanPort, ConductorPlanDecision } from './ports/plan.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
@@ -1467,6 +1471,48 @@ export class ConductorComposer implements ConductorModule {
       gate: this.gate,
       verifier: this.previewVerify ?? createBrowserPreviewVerifier(null),
       getWorkspace: (id) => this.engine.getWorkspace(id),
+      // Write-back seam: persist the COMPACT verification summary onto the
+      // workspace record via the SAME same-state metadata-merge idiom
+      // `setPreviewUrl` uses (`advanceWorkspace` MERGES the `{ previewVerification }`
+      // patch, never replaces), so the `GET …/preview-verification` read edge can
+      // project it — the audit Merkle chain is not queryable by `workspaceId`.
+      // Degrade-truthful: a vanished workspace ⇒ a no-op (nothing to write onto).
+      persistVerification: async (id, record) => {
+        const workspace = await this.engine.getWorkspace(id);
+        if (!workspace) return;
+        await this.engine.advanceWorkspace(id, workspace.state, undefined, {
+          previewVerification: record,
+        });
+      },
+    };
+  }
+
+  /**
+   * PURE projection of a workspace's persisted preview-verification summary
+   * (`metadata.previewVerification`) into the read model the
+   * `GET …/preview-verification` edge returns — or `null` when the workspace does
+   * not exist OR was never verified (no record). Read-only: no gate, no audit, no
+   * mutation. `screenshotRef` is ALWAYS `null` in this cut (the screenshot PNG is
+   * not retained — only an opaque artifact id was sealed), so the cockpit shows
+   * "screenshot not retained", never a broken image. A never-verified workspace is
+   * a truthful `null` (⇒ a 404 at the edge), NEVER a fabricated pass.
+   */
+  async getPreviewVerification(workspaceId: string): Promise<PreviewVerificationView | null> {
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    if (!workspace) return null;
+    const raw = (workspace.metadata as Record<string, unknown> | undefined)?.previewVerification;
+    if (!raw || typeof raw !== 'object') return null;
+    const record = raw as PreviewVerificationRecord;
+    return {
+      workspaceId: workspace.workspaceId,
+      status: record.status,
+      checkedAt: record.checkedAt,
+      summary: record.summary,
+      degraded: record.degraded,
+      ...(record.reason !== undefined ? { reason: record.reason } : {}),
+      checks: Array.isArray(record.checks) ? record.checks : [],
+      // The screenshot PNG is not retained (only an opaque artifact id was sealed).
+      screenshotRef: null,
     };
   }
 

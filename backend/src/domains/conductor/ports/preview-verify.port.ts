@@ -84,3 +84,46 @@ export interface PreviewVerification {
 export interface PreviewVerifyPort {
   verify(request: PreviewVerifyRequest): Promise<PreviewVerification>;
 }
+
+/**
+ * The COMPACT, workspace-addressable verification summary the write-back seam
+ * persists onto the workspace record (`metadata.previewVerification`). The audit
+ * Merkle chain seals every verification but is NOT queryable by `workspaceId`;
+ * this record is, so a later read edge can project it. The screenshot PNG is NOT
+ * retained — only its opaque `screenshotArtifactId` is sealed (the image is
+ * returned once then garbage-collected). A real screenshot artifact store is a
+ * SEPARATE future item. A `skipped(degraded)` run still persists a record (with
+ * its reason) — a truthful skip is readable, never a fabricated pass.
+ */
+export interface PreviewVerificationRecord {
+  readonly status: PreviewCheckStatus;
+  /** ISO timestamp the verification was sealed (write-back time). */
+  readonly checkedAt: string;
+  /** One-glance human summary (the verification-summary artifact's text). */
+  readonly summary: string;
+  /** True when the browser engine was unavailable — the run proved NOTHING. */
+  readonly degraded: boolean;
+  /** The engine's real failure/skip reason when the run degraded or failed. */
+  readonly reason?: string;
+  readonly checks: readonly PreviewVerifyCheck[];
+  /** The opaque sealed screenshot artifact id (NOT a fetchable image in this cut). */
+  readonly screenshotArtifactId?: string;
+}
+
+/**
+ * The projected READ model the `GET …/preview-verification` edge returns — a pure
+ * projection over the persisted {@link PreviewVerificationRecord}. `screenshotRef`
+ * is ALWAYS `null` in this cut: the screenshot PNG is not retained (only an opaque
+ * artifact id is sealed), so the cockpit shows "screenshot not retained", never a
+ * broken image. A real screenshot artifact store is a separate future item.
+ */
+export interface PreviewVerificationView {
+  readonly workspaceId: string;
+  readonly status: PreviewCheckStatus;
+  readonly checkedAt: string;
+  readonly summary: string;
+  readonly degraded: boolean;
+  readonly reason?: string;
+  readonly checks: readonly PreviewVerifyCheck[];
+  readonly screenshotRef: string | null;
+}

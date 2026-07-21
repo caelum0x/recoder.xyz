@@ -33,11 +33,16 @@ import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { RunSignalPushPort } from './ports/run-signal-push.port.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
-import type { PreviewVerifyPort } from './ports/preview-verify.port.js';
+import type {
+  PreviewVerifyPort,
+  PreviewVerificationView,
+} from './ports/preview-verify.port.js';
 import type {
   PreviewVerifyOptions,
   PreviewVerifyResult,
 } from './services/preview-verify.service.js';
+
+export type { PreviewVerificationView } from './ports/preview-verify.port.js';
 import type { ConductorPlanPort } from './ports/plan.port.js';
 import type { ColbertSearchPort } from '../memory/ports/colbert-search.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
@@ -344,6 +349,16 @@ export interface ConductorModule {
     principal: Principal,
     options?: PreviewVerifyOptions,
   ): Promise<PreviewVerifyResult>;
+  /**
+   * PURE READ projection of a workspace's persisted preview-verification summary
+   * (`metadata.previewVerification`, written back by {@link verifyPreview} and the
+   * `setPreviewUrl` auto-verify) — the `GET …/preview-verification` read model, or
+   * `null` when the workspace does not exist OR was never verified. Read-only (no
+   * gate/audit/mutation); `screenshotRef` is always `null` (the screenshot PNG is
+   * not retained — only an opaque artifact id was sealed). A never-verified
+   * workspace is a truthful `null`, never a fabricated pass.
+   */
+  getPreviewVerification(workspaceId: string): Promise<PreviewVerificationView | null>;
   /** Archive a finished workspace (teardown + archived) — GATED (`workspace.archive`). */
   archiveWorkspace(workspaceId: string, principal: Principal): Promise<ConductorWriteResult<Workspace>>;
   /** Push the branch + open a PR — GATED (`workspace.pr`). */
