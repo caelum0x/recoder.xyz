@@ -38,7 +38,12 @@ import { diffFileList, type DiffFile } from '../lib/diff-files';
 import { mergeabilityLine } from '../lib/mergeability-line';
 import { workspaceGoal } from '../lib/workspace-goal';
 import { workspaceCodename } from '../lib/workspace-codename';
-import type { WorkspaceDiff, WorkspaceMergeability } from '../types';
+import type {
+  DiffFileEntry,
+  WorkspaceDiff,
+  WorkspaceDiffFilesView,
+  WorkspaceMergeability,
+} from '../types';
 import {
   canArchive,
   canMerge,
@@ -267,6 +272,80 @@ function FileList({
   );
 }
 
+/**
+ * Boundary-narrow an untrusted poll value into a WorkspaceDiffFilesView. Mirrors
+ * palPlanFromMetadata: only a well-formed object (with a boolean `available` and
+ * an array `files`) is treated as authoritative. Any array / malformed shape /
+ * 404-null / loading / error value falls through to `null`, sending the Changes
+ * tab down the safe FileList(diff) fallback path — never crashing on `.files`.
+ */
+function diffFilesView(v: unknown): WorkspaceDiffFilesView | null {
+  return v &&
+    typeof v === 'object' &&
+    !Array.isArray(v) &&
+    typeof (v as WorkspaceDiffFilesView).available === 'boolean' &&
+    Array.isArray((v as WorkspaceDiffFilesView).files)
+    ? (v as WorkspaceDiffFilesView)
+    : null;
+}
+
+/** The status glyph for one authoritative changed-file entry. */
+function statusGlyph(status: DiffFileEntry['status']): string {
+  switch (status) {
+    case 'added':
+      return 'A';
+    case 'deleted':
+      return 'D';
+    case 'renamed':
+      return 'R';
+    default:
+      return 'M';
+  }
+}
+
+/**
+ * One row in the authoritative changed-file list: status glyph + path + real
+ * +/- counts. A binary side (insertions/deletions === null) renders NOTHING for
+ * that count — never a fabricated `+0`/`-0`.
+ */
+function DiffFileEntryRow({ file }: { file: DiffFileEntry }) {
+  const label = file.status === 'renamed' && file.oldPath ? `${file.oldPath} → ${file.path}` : file.path;
+  return (
+    <div class="detail-file" title={label}>
+      <span class={`detail-file-icon detail-file-${file.status}`} aria-hidden="true">
+        {statusGlyph(file.status)}
+      </span>
+      <span class="detail-file-path">{label}</span>
+      <span class="detail-file-changes">
+        {file.insertions !== null && <span class="ws-diffstat-add">+{file.insertions}</span>}
+        {file.deletions !== null && <span class="ws-diffstat-del">-{file.deletions}</span>}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The authoritative changed-file list from GET /diff/files. Degrade-truthful:
+ * `available:false` states the worktree could not be read (not a fabricated
+ * empty-success); an available-but-empty view shows the same calm "no changes"
+ * empty as the fallback.
+ */
+function DiffFilesList({ view }: { view: WorkspaceDiffFilesView }) {
+  if (!view.available) {
+    return <div class="log-empty">Changed list unavailable — the worktree could not be read.</div>;
+  }
+  if (view.files.length === 0) {
+    return <div class="log-empty">No changed files yet — this updates once the agent produces work.</div>;
+  }
+  return (
+    <div class="detail-files">
+      {view.files.map((f) => (
+        <DiffFileEntryRow key={f.oldPath ? `${f.oldPath}->${f.path}` : f.path} file={f} />
+      ))}
+    </div>
+  );
+}
+
 export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDetailProps) {
   const [tab, setTab] = useState<Tab>('output');
   const [actionOutcome, setActionOutcome] = useState<ActionOutcome>({ kind: 'idle' });
@@ -281,6 +360,17 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
     () => (wantsDiff ? api.diff(workspace.workspaceId) : Promise.resolve(null)),
     live ? 4000 : 30_000,
     [workspace.workspaceId, wantsDiff],
+  );
+
+  // The authoritative structured changed-file list (GET /diff/files). Gated on
+  // the Changes tab only so the Diff tab never double-reads. The existing `diff`
+  // poll (untouched) still powers the Diff tab AND is the fallback source for
+  // Changes when this edge is a 404 / malformed / loading / errored.
+  const wantsFiles = tab === 'output' && canViewDiff(workspace.state);
+  const diffFiles = usePoll(
+    () => (wantsFiles ? api.diffFiles(workspace.workspaceId) : Promise.resolve(null)),
+    live ? 4000 : 30_000,
+    [workspace.workspaceId, wantsFiles],
   );
 
   // The full worktree file tree (All files tab) — fetched only when that tab is
@@ -528,7 +618,14 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
              agent's talk lives in the center conversation and the raw terminal
              behind the Terminal tab — this panel is no longer a duplicate log. */
           <div class="detail-changes">
-            <FileList diff={diff.data} loading={diff.loading} error={diff.error} />
+            {(() => {
+              const filesView = diffFilesView(diffFiles.data);
+              return filesView ? (
+                <DiffFilesList view={filesView} />
+              ) : (
+                <FileList diff={diff.data} loading={diff.loading} error={diff.error} />
+              );
+            })()}
           </div>
         ) : tab === 'diff' ? (
           <DiffView diff={diff.data} error={diff.error} loading={diff.loading} />

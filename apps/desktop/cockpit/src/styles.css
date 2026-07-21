@@ -816,8 +816,10 @@ body {
 }
 .detail-file-modified { background: var(--bg-inset); border: 1px solid rgba(210, 153, 34, 0.3); color: var(--warn); }
 .detail-file-added { background: var(--bg-inset); border: 1px solid rgba(63, 185, 80, 0.3); color: var(--good); }
+.detail-file-deleted { background: var(--bg-inset); border: 1px solid rgba(248, 81, 73, 0.3); color: var(--bad); }
+.detail-file-renamed { background: var(--bg-inset); border: 1px solid rgba(88, 166, 255, 0.3); color: var(--progress); }
 .detail-file-path { flex: 1; min-width: 0; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.detail-file-changes { font-family: var(--mono); font-size: 11px; flex-shrink: 0; }
+.detail-file-changes { display: inline-flex; gap: 6px; font-family: var(--mono); font-size: 11px; flex-shrink: 0; }
 .detail-output-log { border-top: 1px solid var(--border); display: flex; flex-direction: column; min-height: 160px; }
 .detail-output-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); padding: 8px 12px 0; }
 

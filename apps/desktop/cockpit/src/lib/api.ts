@@ -95,6 +95,7 @@ import type {
   DevCommand,
   Workspace,
   WorkspaceDiff,
+  WorkspaceDiffFilesView,
   WorkspaceMergeability,
   WorkspaceTree,
   WriteVerdictView,
@@ -456,6 +457,21 @@ export const api = {
     opts?: { pollIntervalMs?: number; lines?: number },
   ): ConductorStreamHandle => conductorClient().openStream(id, onEvent, opts),
   diff: (id: string) => request<WorkspaceDiff>('GET', `/workspaces/${encodeURIComponent(id)}/diff`),
+  /**
+   * The authoritative structured changed-file list
+   * (GET /workspaces/:id/diff/files → workspaceDiffFiles). The route does
+   * `sendSuccess(res, view)`, so `data` is the bare {@link WorkspaceDiffFilesView}
+   * (no keyed pick). A 404 (route not yet deployed mid-rollout) resolves to
+   * `null` so the Changes tab silently falls back to the --stat-derived list;
+   * any other failure (503, unreachable) propagates to usePoll.error.
+   */
+  diffFiles: (id: string): Promise<WorkspaceDiffFilesView | null> =>
+    request<WorkspaceDiffFilesView>('GET', `/workspaces/${encodeURIComponent(id)}/diff/files`).catch(
+      (err) => {
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      },
+    ),
   tree: (id: string) => request<WorkspaceTree>('GET', `/workspaces/${encodeURIComponent(id)}/tree`),
   devCommand: (id: string) =>
     request<DevCommand | null>('GET', `/workspaces/${encodeURIComponent(id)}/dev-command`),
