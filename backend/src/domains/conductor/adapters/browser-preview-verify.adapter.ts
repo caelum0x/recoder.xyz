@@ -33,6 +33,15 @@ const NO_ENGINE_REASON =
   'browser-use engine not wired into conductor — preview verification skipped';
 
 /**
+ * The bounded per-run browser deadline (ms) applied when the caller passes no
+ * `timeoutMs`. This is the hung-page guard: a preview URL that points at a slow
+ * or wedged dev server can never stall the fire-and-forget auto-verify (nor the
+ * completion hook downstream of it) — the executor's `timeout` invoke code
+ * resolves the run to a truthful `skipped(degraded)` within this window.
+ */
+export const DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS = 15_000;
+
+/**
  * Build the preview verifier over a browser-use client. Pure over its dep — the
  * composer wires one per process. A null client yields the truthful-skip verifier.
  */
@@ -49,6 +58,10 @@ export function createBrowserPreviewVerifier(
           ? { assertions: request.assertions }
           : {}),
         ...(request.screenshot !== undefined ? { screenshot: request.screenshot } : {}),
+        // Bounded deadline on EVERY navigate/extract/screenshot invoke — the
+        // caller's override, else the adapter's default. A breach is a `timeout`
+        // invoke code the executor classifies as a degraded skip (never a hang).
+        timeoutMs: request.timeoutMs ?? DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS,
       });
       return mapRun(run);
     },

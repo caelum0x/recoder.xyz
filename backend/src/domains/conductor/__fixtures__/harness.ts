@@ -310,6 +310,8 @@ export interface ComposeOptions {
   brain?: ConductorModuleDeps['brain'];
   /** OPTIONAL code-intel seam (recodergit index + beads track/close). */
   codeIntel?: ConductorModuleDeps['codeIntel'];
+  /** OPTIONAL preview verifier (browsing facet; absent ⇒ auto-verify does not fire). */
+  previewVerify?: ConductorModuleDeps['previewVerify'];
   /** OPTIONAL pal launch-planning seam (absent ⇒ launch is byte-identical to today). */
   plan?: ConductorModuleDeps['plan'];
   /** OPTIONAL ColBERT PLAID index seam (absent ⇒ no per-repo index build). */
@@ -342,6 +344,7 @@ export function composeConductor(options: ComposeOptions = {}): {
     ...(options.repository ? { repository: options.repository } : {}),
     ...(options.brain ? { brain: options.brain } : {}),
     ...(options.codeIntel ? { codeIntel: options.codeIntel } : {}),
+    ...(options.previewVerify ? { previewVerify: options.previewVerify } : {}),
     ...(options.plan ? { plan: options.plan } : {}),
     ...(options.colbertIndex ? { colbertIndex: options.colbertIndex } : {}),
     ...(options.steerTransport ? { steerTransport: options.steerTransport } : {}),

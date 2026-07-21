@@ -37,6 +37,16 @@ export interface PreviewVerifyRequest {
   readonly assertions?: readonly PreviewVerifyAssertion[];
   /** Capture an evidence screenshot artifact (default true). */
   readonly screenshot?: boolean;
+  /**
+   * Per-run browser deadline (ms). Absent ⇒ the concrete adapter's bounded
+   * default ({@link import('../adapters/browser-preview-verify.adapter.js')}
+   * `DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS`). This is the hung-page guard: EVERY
+   * conductor verify — including the fire-and-forget auto-fire that re-fires on
+   * each dev-server port restart — is deadline-bounded, so a hung navigate can
+   * never accumulate leaked promises. A breach resolves to `skipped(degraded)`
+   * with a `timeout` reason within the deadline, never a fabricated verdict.
+   */
+  readonly timeoutMs?: number;
 }
 
 /** The truthful status of one check or the whole verification. */

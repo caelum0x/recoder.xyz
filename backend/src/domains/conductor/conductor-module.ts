@@ -47,6 +47,7 @@ import type {
 import { classifyAttention, type AttentionResult } from './attention/attention-classifier.js';
 import type { ConductorModule, ConductorModuleDeps } from './index.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
+import type { PreviewVerifyPort } from './ports/preview-verify.port.js';
 import type { CoordinationAdmissionPort } from './ports/coordination-admission.port.js';
 import type { ConductorPlanPort, ConductorPlanDecision } from './ports/plan.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
@@ -99,6 +100,16 @@ import {
   type ContinueWorkspaceResult,
 } from './review/workspace-continue.ops.js';
 import { normalizeLocalPreviewUrl } from './review/preview-url-guard.js';
+import {
+  verifyWorkspacePreview,
+  type PreviewVerifyDeps,
+  type PreviewVerifyOptions,
+  type PreviewVerifyResult,
+} from './services/preview-verify.service.js';
+import {
+  createBrowserPreviewVerifier,
+  DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS,
+} from './adapters/browser-preview-verify.adapter.js';
 import { detectDevCommand, type DevCommandView } from './adapters/dev-command.adapter.js';
 import type { CheckpointRecord, CheckpointStorePort } from './ports/checkpoint-store.port.js';
 import { createInMemoryCheckpointStore } from './adapters/checkpoint-store.adapter.js';
@@ -198,6 +209,13 @@ export class ConductorComposer implements ConductorModule {
   private readonly brain?: ConductorBrainMemory;
   /** OPTIONAL code-intel seam (recodergit index + beads issue-graph track/close). */
   private readonly codeIntel?: CodeIntelPort;
+  /**
+   * OPTIONAL preview verifier (browsing facet): fires a bounded browser
+   * navigate→assert→screenshot over a stored preview URL. Consulted fire-and-forget
+   * by `setPreviewUrl` and on the awaited `verifyPreview` path; absent ⇒ both are
+   * truthful no-ops (never a faked pass, never a block).
+   */
+  private readonly previewVerify?: PreviewVerifyPort;
   /** OPTIONAL pal launch-planning seam (advisory runtime/skill/tool/sandbox + risk). */
   private readonly plan?: ConductorPlanPort;
   /**
@@ -241,6 +259,7 @@ export class ConductorComposer implements ConductorModule {
     this.middleware = deps.middleware;
     this.brain = deps.brain;
     this.codeIntel = deps.codeIntel;
+    this.previewVerify = deps.previewVerify;
     this.plan = deps.plan;
     this.coordinationAdmission = deps.coordinationAdmission ?? null;
     this.colbertIndex = deps.colbertIndex;
@@ -1350,6 +1369,21 @@ export class ConductorComposer implements ConductorModule {
 
   // --- workspace detail: governed writes ---------------------------------------
 
+  /**
+   * The narrow gate + verifier + read seams the preview-verify service runs over.
+   * Uses the wired verifier when present; else a truthful null-skip verifier, so
+   * the explicit `verifyPreview` path still runs its gate + seals a skipped record
+   * (never a faked pass). The fire-and-forget auto-verify guards on presence, so
+   * it never spends a gate/audit on a composition with no browsing facet.
+   */
+  private previewVerifyDeps(): PreviewVerifyDeps {
+    return {
+      gate: this.gate,
+      verifier: this.previewVerify ?? createBrowserPreviewVerifier(null),
+      getWorkspace: (id) => this.engine.getWorkspace(id),
+    };
+  }
+
   async setPreviewUrl(
     workspaceId: string,
     url: unknown,
@@ -1377,10 +1411,57 @@ export class ConductorComposer implements ConductorModule {
         this.gate,
         conductorAuditEntry(action, principal, verdict, { workspaceId }),
       );
+      // Fire-and-forget preview verification (browsing facet). The persist above is
+      // AWAITED and truthful; this side effect is `void … .catch(…)` and NEVER
+      // rethrows into or blocks the caller — the completion-hook precedent. The URL
+      // is freshest here (newest, most likely still pointing at a live port), so
+      // firing now maximizes a real passed/failed. It crosses a SECOND, independent
+      // gate (`workspace.preview_verify`): a deny / needs_approval there is a
+      // truthful no-op — logged, never a block on the already-succeeded write. The
+      // bounded `timeoutMs` guarantees a slow/hung preview can never stall the
+      // caller (nor the completion hook downstream). Degrade-truthful end to end:
+      // no driver ⇒ skipped(degraded); page break ⇒ failed; never a fabricated pass.
+      if (this.previewVerify) {
+        void verifyWorkspacePreview(this.previewVerifyDeps(), workspaceId, principal, {
+          timeoutMs: DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS,
+        })
+          .then((r) => {
+            if (!r.ok) {
+              this.log.info(
+                { workspaceId, verdict: r.verdict.effect, reason: r.reason },
+                'conductor preview auto-verify not run',
+              );
+            }
+          })
+          .catch((err) =>
+            this.log.warn({ err, workspaceId }, 'conductor preview auto-verify faulted'),
+          );
+      }
       return { ok: true, verdict, value: updated };
     } catch (err) {
       return { ok: false, verdict, reason: err instanceof Error ? err.message : 'preview-url update failed' };
     }
+  }
+
+  /**
+   * VERIFY the workspace's stored preview URL — GATED (`workspace.preview_verify`),
+   * the awaited twin of the fire-and-forget auto-verify. Delegates to the governed
+   * {@link verifyWorkspacePreview} service, which runs the browser navigate →
+   * assert → screenshot and SEALS the summary + screenshot artifact ids into the
+   * durable audit chain. A bounded default deadline is applied unless the caller
+   * overrides it. Degrade-truthful: no verifier / no driver / no stored preview
+   * URL ⇒ a truthful `ok:false` or `skipped(degraded)` outcome with the real
+   * reason — never a fabricated pass, never a throw, never a block on a run/merge.
+   */
+  async verifyPreview(
+    workspaceId: string,
+    principal: Principal,
+    options?: PreviewVerifyOptions,
+  ): Promise<PreviewVerifyResult> {
+    return verifyWorkspacePreview(this.previewVerifyDeps(), workspaceId, principal, {
+      timeoutMs: DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS,
+      ...(options ?? {}),
+    });
   }
 
   async archiveWorkspace(
