@@ -420,6 +420,72 @@ describe("assembleBackendEnv native runtime injection", () => {
         });
         expect(env.OPENFANG_NATIVE_ADDON).toBe("/custom.node");
     });
+
+    it("injects the embedded-vector env (nativeDir + LANCE_DATA_DIR) when resolved", () => {
+        const env = assembleBackendEnv({
+            ...base,
+            baseEnv: {},
+            vector: { nativeDir: "/Resources/native", lanceDataDir: "/ud/backend-data/lance" },
+        });
+        expect(env.RECODER_NATIVE_DIR).toBe("/Resources/native");
+        expect(env.LANCE_NATIVE_DIR).toBe("/Resources/native");
+        expect(env.LANCE_DATA_DIR).toBe("/ud/backend-data/lance");
+    });
+
+    it("omits LANCE_DATA_DIR when the addon is absent (not an empty string)", () => {
+        const env = assembleBackendEnv({
+            ...base,
+            baseEnv: {},
+            vector: { nativeDir: "/Resources/native", lanceDataDir: null },
+        });
+        expect(env.RECODER_NATIVE_DIR).toBe("/Resources/native");
+        expect(env.LANCE_DATA_DIR).toBeUndefined();
+    });
+
+    it("never overrides an explicit vector env var from the base env", () => {
+        const env = assembleBackendEnv({
+            ...base,
+            baseEnv: { RECODER_NATIVE_DIR: "/custom/native", LANCE_DATA_DIR: "/custom/lance" },
+            vector: { nativeDir: "/Resources/native", lanceDataDir: "/ud/backend-data/lance" },
+        });
+        expect(env.RECODER_NATIVE_DIR).toBe("/custom/native");
+        expect(env.LANCE_DATA_DIR).toBe("/custom/lance");
+    });
+
+    it("injects connector secrets fill-only (an explicit base env URL wins)", () => {
+        const env = assembleBackendEnv({
+            ...base,
+            baseEnv: { MEM0_BASE_URL: "https://from-shell.example" },
+            connectorSecrets: {
+                MEM0_BASE_URL: "https://from-store.example",
+                COLBERT_RERANK_URL: "https://rerank.example",
+            },
+        });
+        expect(env.MEM0_BASE_URL).toBe("https://from-shell.example");
+        expect(env.COLBERT_RERANK_URL).toBe("https://rerank.example");
+    });
+
+    it("skips empty connector values and leaves absent capabilities unset (truthful down)", () => {
+        const env = assembleBackendEnv({
+            ...base,
+            baseEnv: {},
+            connectorSecrets: { COLBERT_RERANK_URL: "   " },
+        });
+        expect(env.COLBERT_RERANK_URL).toBeUndefined();
+        expect(env.MEM0_BASE_URL).toBeUndefined();
+    });
+
+    it("does not mutate the input baseEnv (purity)", () => {
+        const baseEnv: NodeJS.ProcessEnv = {};
+        assembleBackendEnv({
+            ...base,
+            baseEnv,
+            vector: { nativeDir: "/Resources/native", lanceDataDir: "/ud/backend-data/lance" },
+            connectorSecrets: { MEM0_BASE_URL: "https://store.example" },
+        });
+        expect(baseEnv.RECODER_NATIVE_DIR).toBeUndefined();
+        expect(baseEnv.MEM0_BASE_URL).toBeUndefined();
+    });
 });
 
 describe("mergePathIntoEnv", () => {

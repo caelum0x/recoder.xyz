@@ -32,10 +32,15 @@ import * as nodeFs from "node:fs";
 import * as net from "node:net";
 import * as nodePath from "node:path";
 import {
+    EmbeddedVectorEnv,
+    LANCE_DATA_DIR_ENV,
+    LANCE_NATIVE_DIR_ENV,
     OPENFANG_ADDON_ENV,
     OPENFANG_CONFIG_ENV,
     OPENFANG_HOME_ENV,
     OpenfangRuntimeEnv,
+    RECODER_NATIVE_DIR_ENV,
+    resolveEmbeddedVectorEnv,
     resolveOpenfangRuntimeEnv,
     TENSORZERO_ADDON_ENV,
 } from "./emain-backend-runtime-env";
@@ -366,8 +371,12 @@ export function assembleBackendEnv(opts: {
     beadsBin?: string;
     /** Resolved native openfang/tensorzero env (fill-only; see emain-backend-runtime-env.ts). */
     openfang?: OpenfangRuntimeEnv;
+    /** Resolved embedded vector-store env (fill-only; see resolveEmbeddedVectorEnv). */
+    vector?: EmbeddedVectorEnv;
     /** BYOK provider keys from the desktop secret store (fill-only; base env wins). */
     byokSecrets?: Record<string, string>;
+    /** Connector addressing secrets (mem0/colbert/qdrant URLs) from the store (fill-only). */
+    connectorSecrets?: Record<string, string>;
 }): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = {
         ...opts.baseEnv,
@@ -421,6 +430,29 @@ export function assembleBackendEnv(opts: {
             if (value && !env[name]) {
                 env[name] = value;
             }
+        }
+    }
+    // Embedded vector store (Lance) addressing, fill-only + existence-gated by
+    // the resolver: nativeDir makes governance + lance .node resolution explicit;
+    // LANCE_DATA_DIR is set only when the lance addon is actually packaged, so an
+    // absent addon leaves the backend degrading to Qdrant/no-op truthfully.
+    if (opts.vector?.nativeDir) {
+        if (!env[RECODER_NATIVE_DIR_ENV]) {
+            env[RECODER_NATIVE_DIR_ENV] = opts.vector.nativeDir;
+        }
+        if (!env[LANCE_NATIVE_DIR_ENV]) {
+            env[LANCE_NATIVE_DIR_ENV] = opts.vector.nativeDir;
+        }
+    }
+    if (opts.vector?.lanceDataDir && !env[LANCE_DATA_DIR_ENV]) {
+        env[LANCE_DATA_DIR_ENV] = opts.vector.lanceDataDir;
+    }
+    // Connector addressing secrets (mem0/colbert/qdrant URLs), fill-only: an
+    // explicit env var always wins; an absent store value stays absent so the
+    // backend reports the capability down instead of pointing at nothing.
+    for (const [name, value] of Object.entries(opts.connectorSecrets ?? {})) {
+        if (!env[name] && typeof value === "string" && value.trim()) {
+            env[name] = value;
         }
     }
     // Packaged: the backend + mint scripts are spawned with process.execPath,
@@ -734,6 +766,14 @@ export interface BackendSupervisorOptions {
      * A throwing reader degrades truthfully to a keyless spawn (logged).
      */
     readByokSecrets?: () => Record<string, string>;
+    /**
+     * Connector addressing secrets (mem0/colbert/qdrant URLs) for the embedded
+     * backend. The glue passes a reader over the same encrypted secret store as
+     * BYOK, allowlisted to CONNECTOR_SECRET_ENV_NAMES. Absent ⇒ no URLs are
+     * injected (the backend reports those capabilities down truthfully); a
+     * throwing reader degrades to no connector env (logged), never a faked URL.
+     */
+    readConnectorSecrets?: () => Record<string, string>;
     log?: (level: string, message: string, extra?: object) => void;
     onReady?: (auth: { port: number; backendUrl: string; apiKey: string | null }) => void;
     healthTimeoutMs?: number;
@@ -779,6 +819,7 @@ export class BackendSupervisor {
     _portIsFree: (port: number) => Promise<boolean>;
     _mintKey: (env: NodeJS.ProcessEnv) => Promise<string>;
     _readByokSecrets: () => Record<string, string>;
+    _readConnectorSecrets: () => Record<string, string>;
     _resolveLoginShellPath: () => string;
     _log: (level: string, message: string, extra?: object) => void;
     _onReady?: (auth: { port: number; backendUrl: string; apiKey: string | null }) => void;
@@ -811,6 +852,7 @@ export class BackendSupervisor {
         this._portIsFree = options.portIsFree || portIsFree;
         this._mintKey = options.mintKey || ((env) => this._mintKeyViaScript(env));
         this._readByokSecrets = options.readByokSecrets || (() => ({}));
+        this._readConnectorSecrets = options.readConnectorSecrets || (() => ({}));
         this._resolveLoginShellPath = options.resolveLoginShellPath || resolveLoginShellPathCached;
         this._log = options.log || (() => {});
         this._onReady = options.onReady;
@@ -947,12 +989,33 @@ export class BackendSupervisor {
                     error: err instanceof Error ? err.message : String(err),
                 });
             }
+            // Embedded vector store (Lance) addressing + connector URLs. Both are
+            // fill-only and truthful: an absent lance addon leaves LANCE_DATA_DIR
+            // unset (backend degrades to Qdrant/no-op); an unconfigured connector
+            // URL stays absent (that capability reports down) — never a faked URL.
+            const vectorEnv = resolveEmbeddedVectorEnv({
+                isPackaged: this.isPackaged,
+                resourcesPath: this.resourcesPath,
+                dataDir: this.dataDir,
+                baseEnv: process.env,
+                existsSync: this._fs.existsSync,
+            });
+            let connectorSecrets: Record<string, string> = {};
+            try {
+                connectorSecrets = this._readConnectorSecrets();
+            } catch (err) {
+                this._appendLog("warn", "connector secret read failed; connectors report down", {
+                    error: err instanceof Error ? err.message : String(err),
+                });
+            }
             this._appendLog("info", "native runtime env resolved", {
                 openfangAddon: Boolean(openfangEnv.addonPath || process.env.OPENFANG_NATIVE_ADDON),
                 tensorzeroAddon: Boolean(openfangEnv.tensorzeroAddonPath || process.env.TENSORZERO_GATEWAY_NAPI_NODE),
                 openfangHome: openfangEnv.homeDir || process.env.OPENFANG_HOME || null,
-                // Names only — key VALUES must never reach the log.
+                lanceDataDir: vectorEnv.lanceDataDir || null,
+                // Names only — key/URL VALUES must never reach the log.
                 byokKeys: Object.keys(byokSecrets),
+                connectorKeys: Object.keys(connectorSecrets),
             });
 
             const env = assembleBackendEnv({
@@ -971,7 +1034,9 @@ export class BackendSupervisor {
                 loginShellPath: this._resolveLoginShellPath(),
                 beadsBin,
                 openfang: openfangEnv,
+                vector: vectorEnv,
                 byokSecrets,
+                connectorSecrets,
             });
 
             this.port = port;
