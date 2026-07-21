@@ -24,7 +24,7 @@
  *   GET    /api/conductor/runtimes                installed agent CLIs (PATH-probed)
  *   GET    /api/conductor/github/status           GitHub connection + identity (token-free)
  *   GET    /api/conductor/github/repos            detected account's repos via gh (empty when gh absent)
- *   GET    /api/conductor/health                  conductor readiness summary + substrate.tmuxBin pin
+ *   GET    /api/conductor/health                  conductor readiness summary + substrate.tmuxBin/tmuxSocket
  *   GET    /api/conductor/reconcile/findings      reconcile findings (operator review)
  *   POST   /api/conductor/reconcile               run a reconcile pass (GATED)
  *
@@ -44,10 +44,18 @@ import type { ConductorModule } from '../index.js';
 import type { CreateConductorWorkspaceInput, ConductorWriteResult } from '../conductor-module.js';
 import type { PreviewVerifyOptions } from '../services/preview-verify.service.js';
 import type { PreviewVerifyAssertion } from '../ports/preview-verify.port.js';
+import { resolveConductorTmuxSocket } from '../tmux-socket.js';
 
 export interface ConductorRouterDeps {
   readonly module: ConductorModule;
   readonly middleware: AuthMiddleware;
+  /**
+   * Resolve THIS backend's default tmux socket for the `/health` shared-server
+   * mirror (durable-shell unify §A1b). Injectable so tests never read the real
+   * process; defaults to {@link resolveConductorTmuxSocket} (live process env +
+   * effective uid). `null` ⇒ a truthful "unknown" socket, never a guess.
+   */
+  readonly resolveTmuxSocket?: () => string | null;
 }
 
 const SUBSTRATES: readonly WorkspaceSubstrate[] = ['tmux_worktree', 'daytona', 'in_process', 'ssh'];
@@ -76,6 +84,7 @@ function isWorkspaceState(value: unknown): value is WorkspaceState {
 export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   const router = Router();
   const { module, middleware } = deps;
+  const resolveTmuxSocket = deps.resolveTmuxSocket ?? resolveConductorTmuxSocket;
 
   // --- reads -----------------------------------------------------------------
 
@@ -359,10 +368,13 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
 
   // Conductor readiness summary the cockpit polls: can work be launched here.
   // Also carries `substrate.tmuxBin` — the effective pinned tmux binary (config
-  // pin, else PATH `tmux`) — so the wave-side attach (durable-shell unify §A1a)
-  // sources the SAME server the conductor drives instead of silently falling back
-  // to PATH `tmux`. `null` when no tmux substrate is known. Behavior-preserving:
-  // additive field, no change to launch/lifecycle.
+  // pin, else PATH `tmux`; durable-shell unify §A1a) — and `substrate.tmuxSocket`
+  // — this backend's DEFAULT tmux socket (`${TMUX_TMPDIR:-/tmp}/tmux-<uid>/default`,
+  // §A1b) — so the wave-side attach can source AND assert the SAME tmux server the
+  // conductor drives instead of silently falling back to PATH `tmux` / a guessed
+  // socket. Both are `null` when unknown (no tmux entry / no effective uid).
+  // Behavior-preserving: additive fields that only MIRROR today's default socket;
+  // no socket is selected, no launch/lifecycle changes.
   router.get(
     '/health',
     middleware.authenticate,
@@ -373,7 +385,12 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
       sendSuccess(res, {
         available,
         tmux: tmux?.available === true,
-        substrate: { tmuxBin: tmux?.tmuxBin ?? null },
+        substrate: {
+          tmuxBin: tmux?.tmuxBin ?? null,
+          // Only meaningful when a tmux substrate exists; otherwise `null` so the
+          // caller never asserts a shared server that is not configured here.
+          tmuxSocket: tmux ? resolveTmuxSocket() : null,
+        },
         ...(available ? {} : { reason: tmux?.reason ?? 'no substrate available' }),
       });
     }),

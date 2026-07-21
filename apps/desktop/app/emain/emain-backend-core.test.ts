@@ -351,6 +351,30 @@ describe("assembleBackendEnv", () => {
         expect(absent.BEADS_BIN).toBeUndefined();
     });
 
+    it("propagates TMUX_TMPDIR unchanged so the backend shares the conductor's default tmux socket (§A1b)", () => {
+        const env = assembleBackendEnv({
+            baseEnv: { TMUX_TMPDIR: "/private/var/folders/xyz/T" },
+            port: 1,
+            dataDir: "/d",
+            tmuxBin: "/t",
+            apiKeyHashSalt: "s",
+            internalServiceKey: "i",
+        });
+        expect(env.TMUX_TMPDIR).toBe("/private/var/folders/xyz/T");
+    });
+
+    it("never invents TMUX_TMPDIR when absent (both sides default to /tmp identically)", () => {
+        const env = assembleBackendEnv({
+            baseEnv: {},
+            port: 1,
+            dataDir: "/d",
+            tmuxBin: "/t",
+            apiKeyHashSalt: "s",
+            internalServiceKey: "i",
+        });
+        expect(env.TMUX_TMPDIR).toBeUndefined();
+    });
+
     it("augments PATH with the login-shell PATH (installed agents become resolvable)", () => {
         const env = assembleBackendEnv({
             baseEnv: { PATH: "/usr/bin:/bin" },
