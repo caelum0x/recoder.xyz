@@ -11,14 +11,37 @@ Everything in this repo that can be built and verified **without owner credentia
 ---
 
 ## 1. Sign & ship the desktop `.dmg`  (needs your Apple Developer cert)
-The engine layer is proven-alive; only signing + the electron package run remain.
+**The UNSIGNED package now builds end-to-end** (verified 2026-07-22): a full
+`electron-builder --mac --arm64` produces `Recoder-darwin-arm64-<ver>.dmg` (+ `.zip`
++ `.app`, ~306 MB dmg) with every native engine shipped in `Contents/Resources/`
+(`native/{openfang,recoder-governance,tensorzero}_napi.node`, `backend/engines/beads/bin/bd`,
+`backend/engines/tmux/tmux`), the embedded `backend/dist`, and `cockpit/dist`. The
+packaging-truth gate passes (lance degrades truthfully). Only SIGNING + the human
+e2e run remain.
+
+Exact minimal build (avoids the full `task package`, which `clean`s dist and
+cross-compiles Windows via `zig`, which isn't installed here):
 ```
-# from apps/desktop
-task build:tsunamiscaffold        # produces app/dist/tsunamiscaffold (gate needs it)
-# build backend/dist + cockpit/dist (their own build tasks) if not fresh
-scripts/build-native-addons.sh    # release .node (already present; rebuild if stale) — governance|tensorzero|openfang
-cd app && CSC_LINK=<your cert> CSC_KEY_PASSWORD=<pw> pnpm electron-builder --mac --arm64
+# from apps/desktop — prerequisites already on disk are reused
+task build:tsunamiscaffold                       # the one required artifact that was missing
+cd app && pnpm run build:prod                     # production electron-vite frontend build
+# UNSIGNED (proves the pipeline):
+CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder -c electron-builder.config.cjs -p never --mac --arm64
+# SIGNED (your cert):
+CSC_LINK=<your-cert.p12> CSC_KEY_PASSWORD=<pw> pnpm exec electron-builder -c electron-builder.config.cjs -p never --mac --arm64
 ```
+- Native `.node` addons + `bd` + `tmux` + `backend/dist` + `cockpit/dist` were already
+  built and present; only `dist/tsunamiscaffold` needed building. Rebuild the `.node`
+  via `scripts/build-native-addons.sh` only if stale.
+- **Landmine (fixed 2026-07-22, commit `38acbade4`):** the root pnpm override
+  `@xmldom/xmldom: ">=0.8.12"` floated to 0.9.9, which broke electron-builder's mac
+  plist parsing (`plist@3.1.0` calls `parseFromString` with no mimeType; 0.9.x rejects
+  it). Now constrained to `>=0.8.12 <0.9.0` (→ 0.8.13). If a future install re-floats
+  it, packaging dies with a `DOMParser.parseFromString ... mimeType "undefined"` error.
+- A clean `pnpm install` currently crashes in pnpm's bin-linking dedup (`Invalid
+  Version` in `_linkBins`) — the pre-existing #22 workspace drift (a package with an
+  empty `version`). The lockfile here was regenerated with `pnpm install --lockfile-only`
+  (which skips bin-linking). Fixing the crash is part of task #22.
 - The `beforePack` gate aborts if a REQUIRED engine artifact is missing or wrong-arch — that is intended. lance is optional (ships degraded → Qdrant).
 - Then boot the `.app`, sign in, create a workspace on a real repo, confirm an agent runs in a tmux worktree, review the diff, merge. This completes task #17's "dmg boots and runs a real workspace".
 
