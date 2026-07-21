@@ -1173,6 +1173,30 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // The human-notification delivery seam (`notifyEngine`) is built ABOVE (before
   // the engines module) so the SAME instance backs the agent-callable
   // `recoder.notify` MCP tool AND observability's alert notifier + needs-you board.
+  //
+  // (a) Arm the SHIPPED signals poller outside prod (embedded desktop + dev) so
+  // stuck-work surfaces autonomously, not only on a human `GET /signals`. Use a
+  // REAL test signal: `config.runtime.env` is the typed NodeEnv ('development' |
+  // 'production' | 'test') — there is NO `config.runtime.isTest`. Tests ⇒ 0 so no
+  // background timer and no boot-time availability probe fire in the unit suite.
+  const isTestRuntime = config.runtime.env === 'test';
+  const signalsPollIntervalMs = isTestRuntime
+    ? 0
+    : config.runtime.isProduction
+      ? 60_000
+      : 120_000;
+  // (c) Opt-in GitHub/Linear detector tick, sourced from `bootEnv` like every
+  // ops-recorder value (AppConfig carries no observability slice). ENFORCED
+  // COUPLING: the tick rides inside `pollSignalsOnce`, so it is only enabled when
+  // the poller is actually armed (interval > 0) — never silently dead. A `true`
+  // env with the poller off is warned about (invariant made explicit), not honored.
+  const signalsSyncRequested = bootEnv.OPS_RECORDER_SYNC_ENABLED === 'true';
+  const signalsSyncEnabled = signalsPollIntervalMs > 0 && signalsSyncRequested;
+  if (signalsSyncRequested && !signalsSyncEnabled) {
+    childLogger('observability').warn(
+      'OPS_RECORDER_SYNC_ENABLED set but the signals poller is off (interval 0); the detector tick will not run',
+    );
+  }
   const observability = createObservabilityModule({
     config,
     logger: childLogger('observability'),
@@ -1223,12 +1247,31 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       // Mirrors the engines slice default (loopback-only dev sidecar runs
       // authless); the availability probe still decides truthfully.
       opsRecorderAuthDisabled: bootEnv.OPS_RECORDER_AUTH_DISABLED !== 'false',
+      // (a) Arm the shipped poller outside prod (test ⇒ 0). (c) Opt-in detector
+      // tick, enabled ONLY when the poller is armed (see the coupling above).
+      signalsPollEnabled: true,
+      signalsPollIntervalMs,
+      signalsSyncEnabled,
     },
   });
   container.registerValue(DOMAIN_TOKENS.observability, observability);
   // Register observability's OWN engine health as the 15th source — its aggregate
   // includes itself (logging/metrics/tracing/signals), never a blind spot.
   healthRegistry.register(observability);
+
+  // (b) SINGLE-WRITER late-bind: the conductor's completion hook reverse-pushes a
+  // failed/stuck terminal run onto the ops-recorder stuck-work board, so a broken
+  // run lands on the SAME board a stale PR does. This one structural adapter binds
+  // the conductor-owned `RunSignalPushPort` to observability's `forwardRunSignal`
+  // WITHOUT either domain importing the other (ConductorRunOutcome ⊆ RunOutcomeSignal,
+  // OpsRecorderPushResult ⊇ RunSignalPushResult). Observability is built AFTER the
+  // conductor, so this is a late setter (mirrors setUsageMeter / setEntitlementGate).
+  // Degrade-truthful + fire-and-forget: the hook already swallows any fault, so a
+  // push can never stall or fail a run completion; an unwired/down sidecar is a
+  // truthful no-op (never a fabricated signal).
+  conductor.setRunSignalPush({
+    forwardRunSignal: (input) => observability.forwardRunSignal(input),
+  });
 
   // --- MCP tool registration: bridge every domain's flat `mcp()` tools onto the ONE
   //     interop-gated host the engines module owns (`registerModuleTools` builds the
