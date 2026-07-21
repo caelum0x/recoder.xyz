@@ -5,92 +5,19 @@
  *    pal `EngineClientPort` (no live sidecar): correct `agentcomms` op + args,
  *    boundary validation, and TRUTHFUL degrade (client absent / invoke `!ok`
  *    ⇒ the handler throws the real reason, never a fabricated model answer).
- *  - `PalMcpAdapter` typed methods (`route`/`consensus`/`debate`/`listModels`):
- *    truthful `unavailable` when the venv is absent, and — with the real pal dir
- *    on disk + a stubbed host transport — a delegation that reaches the stdio
- *    server as tool `agentcomms` with the built args (the live-sidecar path).
  *
- * LIVE-SIDECAR NOTE: the python pal server is not spawned here. The happy path
- * stubs `externalCall` (the interop `tools/call` transport) and a live
- * supervisor handle; against a real venv the same call reaches the process and
- * the new `tools/agentcomms.py` primitive executes the multi-model orchestration.
+ * The pal-comms binder stays a thin parallel surface over the frozen
+ * `EngineClientPort.invoke({ op:'agentcomms' })` transport (the backend
+ * consensus/debate path lives on the `PalBrainService` facet, not here).
  */
 import { describe, it, expect } from 'vitest';
-import { join } from 'node:path';
-import { existsSync } from 'node:fs';
 import type { Logger } from '../../../../shared/logger.js';
-import { enginesConfigSchema, type EnginesConfig } from '../../config.js';
 import type { McpToolRouter } from '@recoder/agent-mcp';
-import type {
-  PreflightResult,
-  SidecarHandle,
-  SidecarSpec,
-  SidecarSupervisorPort,
-} from '../../ports/sidecar-supervisor.port.js';
 import type { EngineClientPort, EngineCall } from '../../ports/engine-client.port.js';
-import { down, up, ok, fail, type EngineHealth, type InvokeResult } from '../../types.js';
-import { PalMcpAdapter, type PalExternalCall } from './pal-mcp.adapter.js';
+import { down, ok, fail, type InvokeResult } from '../../types.js';
 import { buildAgentCommsArgs, palCommsEngineBinder, recoderPalCommsServer } from './pal-comms.binder.js';
 
 const log = { warn() {}, info() {}, debug() {}, error() {}, child: () => log } as unknown as Logger;
-
-/** The real pal server dir (has `.pal_venv/bin/python` + `server.py` on disk). */
-const REAL_PAL_ROOT = join(process.cwd(), 'engines', 'py', 'pal-mcp-server');
-/** The live-sidecar delegation assertion only runs where the real venv exists. */
-const HAS_REAL_PAL = existsSync(join(REAL_PAL_ROOT, '.pal_venv', 'bin', 'python'));
-
-function config(overrides: Partial<EnginesConfig> = {}): EnginesConfig {
-  return enginesConfigSchema.parse({
-    isProduction: false,
-    internalServiceKeyPresent: false,
-    internalServiceKey: null,
-    repoRoot: null,
-    palRootDir: null,
-    napiPaths: { openfang: null, tensorzero: null, governance: null },
-    daemonBins: { colbert: null, 'ops-recorder': null, multica: null, ziti: null, 'tensorzero-loopback': null },
-    externalUrls: {
-      colbert: null,
-      'ops-recorder': null,
-      multica: null,
-      ziti: null,
-      'tensorzero-loopback': null,
-      mem0: null,
-      'browser-use': null,
-    },
-    sidecarPython: { mem0: null, 'browser-use': null, 'pal-mcp': null },
-    enabled: {},
-    napiFirst: true,
-    ...overrides,
-  });
-}
-
-const deadSupervisor: SidecarSupervisorPort = {
-  async preflight(): Promise<PreflightResult> {
-    return { ok: false, reason: 'venv absent' };
-  },
-  async ensureStarted(): Promise<SidecarHandle | null> {
-    return null;
-  },
-  async stop(): Promise<void> {},
-  handle(): SidecarHandle | null {
-    return null;
-  },
-  async health(spec: SidecarSpec): Promise<EngineHealth> {
-    return down(spec.engineId as never, 'sidecar', 'not started');
-  },
-  async stopAll(): Promise<void> {},
-};
-
-/** A supervisor whose `ensureStarted` resolves a live stdio handle. */
-const liveStdioSupervisor: SidecarSupervisorPort = {
-  ...deadSupervisor,
-  async ensureStarted(): Promise<SidecarHandle | null> {
-    return { engineId: 'pal-mcp', transport: 'stdio-mcp' } as unknown as SidecarHandle;
-  },
-  async health(spec: SidecarSpec): Promise<EngineHealth> {
-    return up(spec.engineId as never, 'sidecar');
-  },
-};
 
 /** A fake pal `EngineClientPort` recording every `invoke` and returning `result`. */
 function fakeEngine(result: InvokeResult<unknown>): { engine: EngineClientPort; calls: EngineCall<unknown>[] } {
@@ -244,39 +171,5 @@ describe('palCommsEngineBinder', () => {
     const cap = captureRouter();
     palCommsEngineBinder(fakeEngine(fail('pal venv absent', 'unavailable')).engine)(cap.router);
     await expect(cap.call('pal.route', { prompt: 'q' })).rejects.toThrow(/pal\.route failed: pal venv absent/);
-  });
-});
-
-describe('PalMcpAdapter agentic-communications methods', () => {
-  it('degrades truthfully (unavailable) when the pal venv is absent', async () => {
-    const adapter = new PalMcpAdapter({ supervisor: deadSupervisor, config: config({ palRootDir: '/nonexistent/pal' }), log });
-    for (const res of [
-      await adapter.route({ prompt: 'hi' }),
-      await adapter.consensus({ prompt: 'hi', models: ['a', 'b'] }),
-      await adapter.debate({ prompt: 'hi', models: [{ model: 'a', stance: 'for' }] }),
-      await adapter.listModels(),
-    ]) {
-      expect(res.ok).toBe(false);
-      if (!res.ok) expect(res.code).toBe('unavailable');
-    }
-  });
-
-  it.runIf(HAS_REAL_PAL)('with the real pal dir + host transport, route reaches the stdio server as tool `agentcomms`', async () => {
-    const seen: Array<{ tool: string; args: Record<string, unknown> }> = [];
-    const externalCall: PalExternalCall = async (tool, args) => {
-      seen.push({ tool, args });
-      return { status: 'ok', model: 'flash', answer: { status: 'ok', content: 'hello' } };
-    };
-    const adapter = new PalMcpAdapter({
-      supervisor: liveStdioSupervisor,
-      config: config({ palRootDir: REAL_PAL_ROOT }),
-      log,
-      externalCall,
-    });
-    const res = await adapter.route({ prompt: 'say hi', model: 'flash' });
-    expect(res.ok).toBe(true);
-    expect(seen).toHaveLength(1);
-    expect(seen[0].tool).toBe('agentcomms');
-    expect(seen[0].args).toMatchObject({ operation: 'route', prompt: 'say hi', models: [{ model: 'flash' }] });
   });
 });

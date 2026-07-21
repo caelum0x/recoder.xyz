@@ -35,6 +35,7 @@ import type { ModuleToolsRegistration } from './mcp/host-registrar.js';
 import type { DomainToolsRegistration } from './adapters/domain-tools-bridge.adapter.js';
 import type { EngineId, EngineHealth } from './types.js';
 import type { AgentEngineService } from './ports/agent-engine.port.js';
+import type { PalBrainService } from './ports/pal-brain.port.js';
 import type { GithubModule } from './github/index.js';
 import type { NotifyEngine } from '@recoder/agent-notify';
 
@@ -92,6 +93,17 @@ export interface EnginesModule {
    * adapter's `launch_run` option. Null only when the openfang engine is undeclared.
    */
   agentEngine(): AgentEngineService | null;
+  /**
+   * The cohesive pal agent-comms-brain facet (docs/modules/communication.md):
+   * health · plan · routeModel · planLaunch · escalate · consensus · debate. The
+   * pure verbs compose `@recoder/pal` in-proc (always live); the sidecar verbs
+   * (consensus/debate) compose the `pal-mcp` transport and degrade truthfully to
+   * `abstain` when it is down. The INFERENCE / CONDUCTOR / GOVERNANCE consumers
+   * take it through their OWN narrow consumer-owned ports (they never import the
+   * engines domain or `@recoder/pal`). Always non-null (the pure verbs need no
+   * engine).
+   */
+  pal(): PalBrainService | null;
   /**
    * The DEEP, READ-ONLY tmux introspection port over the pinned tmux binary the
    * Conductor drives — the SAME server its headless `recoder-*` sessions live in.
@@ -205,6 +217,28 @@ export type {
   WorkflowRegisterResult,
   WorkflowRunResult,
 } from './ports/agent-engine.port.js';
+
+/**
+ * The cohesive pal agent-comms-brain facet contract (docs/modules/communication.md).
+ * Re-exported so the composition root (bootstrap) can type `engines.pal()` and
+ * hand it to the inference / conductor / governance consumers — each of which
+ * consumes it structurally through its OWN narrow consumer-owned port (they never
+ * import the engines domain or `@recoder/pal`).
+ */
+export type {
+  PalBrainService,
+  PalBrainHealth,
+  PalPlanSpec,
+  PalPlanDecision,
+  PalCatalogModel,
+  PalRoutingHint,
+  PalRouteDecision,
+  PalLaunchPlan,
+  PalConsensusRequest,
+  PalConsensusResult,
+  PalEscalateInput,
+  PalEscalateDecision,
+} from './ports/pal-brain.port.js';
 
 /**
  * The native openfang WORKFLOW driver (path b): promotes the engine's

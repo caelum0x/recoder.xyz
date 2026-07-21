@@ -14,9 +14,10 @@
  *     supervised process via the injected host `externalCall` (interop
  *     `tools/call`). Absent host wiring ⇒ a truthful `{ ok:false }`.
  *  2. The in-proc `pal.plan` governance decision: the exported binder wires
- *     `registerPalPlanMcpTools` over `@recoder/pal`'s pure `computePalPlanDecision`
- *     (deny-biased, never throws) so the `pal.plan` MCP tool is agent-callable
- *     behind the interop gate.
+ *     `registerPalPlanMcpTools` over an INJECTED plan function — the composer
+ *     passes the `PalBrainService` facet's `plan()` (which composes `@recoder/pal`'s
+ *     pure `computePalPlanDecision`, deny-biased + never throws) so the `pal.plan`
+ *     MCP tool is agent-callable behind the interop gate over the ONE owned seam.
  *
  * DEGRADE-SAFE LAW: no pal venv on disk ⇒ `health()` is a truthful `down` with
  * the availability reason; no host caller wired ⇒ multi-model `invoke` fails
@@ -38,12 +39,6 @@ import { EngineClientBase } from '../../ports/engine-client.port.js';
 import type { EngineCall } from '../../ports/engine-client.port.js';
 import type { SidecarSpec, SidecarSupervisorPort } from '../../ports/sidecar-supervisor.port.js';
 import { down, fail, ok, up, type EngineHealth, type InvokeResult } from '../../types.js';
-import {
-  PAL_AGENTCOMMS_OP,
-  buildAgentCommsArgs,
-  type PalRouteRequest,
-  type PalConsensusRequest,
-} from './pal-comms.binder.js';
 
 /** The host's interop `tools/call` transport into the supervised stdio server. */
 export type PalExternalCall = (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
@@ -122,31 +117,6 @@ export class PalMcpAdapter extends EngineClientBase<unknown, unknown> {
     }
   }
 
-  /**
-   * Agentic-communications: route a prompt to one model (explicit `model`, else
-   * the pal server's first available). Thin typed wrapper over the `agentcomms`
-   * pal tool — builds the tool arg envelope and routes through `invoke`, so it is
-   * degrade-safe (venv/host absent ⇒ `{ ok:false }`, never a fabricated answer).
-   */
-  route(request: PalRouteRequest): Promise<InvokeResult<unknown>> {
-    return this.invoke({ op: PAL_AGENTCOMMS_OP, input: buildAgentCommsArgs('route', request) });
-  }
-
-  /** Query N models with the same prompt in parallel and return every answer. */
-  consensus(request: PalConsensusRequest): Promise<InvokeResult<unknown>> {
-    return this.invoke({ op: PAL_AGENTCOMMS_OP, input: buildAgentCommsArgs('consensus', request) });
-  }
-
-  /** Stance-based cross-model debate (consensus with per-model stances). */
-  debate(request: PalConsensusRequest): Promise<InvokeResult<unknown>> {
-    return this.invoke({ op: PAL_AGENTCOMMS_OP, input: buildAgentCommsArgs('debate', request) });
-  }
-
-  /** List configured providers + available model names (no model call). */
-  listModels(): Promise<InvokeResult<unknown>> {
-    return this.invoke({ op: PAL_AGENTCOMMS_OP, input: buildAgentCommsArgs('models', {}) });
-  }
-
   async health(): Promise<EngineHealth> {
     if (!isEngineEnabled(this.deps.config, 'pal-mcp')) {
       return down('pal-mcp', 'sidecar', 'pal-mcp engine disabled by config');
@@ -192,12 +162,16 @@ export class PalMcpAdapter extends EngineClientBase<unknown, unknown> {
 
 /**
  * The MCP binder factory for the in-proc `pal.plan` governance tool. Wires
- * `registerPalPlanMcpTools` over `@recoder/pal`'s pure `computePalPlanDecision`
- * (deny-biased, degrade-safe). The composer passes this binder into the host.
+ * `registerPalPlanMcpTools` over an INJECTED, deny-biased plan function — the
+ * composer passes the `PalBrainService` facet's `plan()` so the `pal.plan` MCP
+ * tool is a thin surface over the ONE owned pal decision seam (the facet composes
+ * `@recoder/pal`'s pure `computePalPlanDecision` behind it). Degrade-safe: the
+ * facet's `plan()` never throws.
  */
-export function palPlanEngineBinder(): (router: McpToolRouter) => void {
-  return (router) =>
-    registerPalPlanMcpTools(router, { plan: (taskSpec: unknown) => computePalPlanDecision(taskSpec) });
+export function palPlanEngineBinder(
+  plan: (taskSpec: unknown) => unknown,
+): (router: McpToolRouter) => void {
+  return (router) => registerPalPlanMcpTools(router, { plan });
 }
 
 function defaultPalRoot(repoRoot: string | null): string {
