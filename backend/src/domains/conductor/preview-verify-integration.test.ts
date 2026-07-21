@@ -43,6 +43,8 @@ import type {
   PreviewVerifyRequest,
 } from './ports/preview-verify.port.js';
 import { createBrowserPreviewVerifier } from './adapters/browser-preview-verify.adapter.js';
+// The real engines executor, injected as the conductor `BrowserVerifyRunner` port.
+import { executeBrowserVerification } from '../engines/adapters/sidecar/browser-verification.executor.js';
 import { PREVIEW_VERIFY_ACTION } from './services/preview-verify.service.js';
 import {
   composeConductor,
@@ -173,7 +175,7 @@ describe('conductor preview-verify integration — default-on auto-fire seals ev
     const { client, ops } = makeBrowserClient('Welcome to the Preview App');
     const { module } = composeConductor({
       substrates: [new FakeSubstrate()],
-      previewVerify: createBrowserPreviewVerifier(client),
+      previewVerify: createBrowserPreviewVerifier(client, executeBrowserVerification),
       gate,
     });
     const workspace = await createRunningWorkspace(module);
@@ -205,7 +207,7 @@ describe('conductor preview-verify integration — double-gate no-op', () => {
     const { client, ops } = makeBrowserClient('Welcome to the Preview App');
     const { module } = composeConductor({
       substrates: [new FakeSubstrate()],
-      previewVerify: createBrowserPreviewVerifier(client),
+      previewVerify: createBrowserPreviewVerifier(client, executeBrowserVerification),
       gate,
     });
     const workspace = await createRunningWorkspace(module);
@@ -267,7 +269,7 @@ describe('conductor preview-verify integration — truthful degrade', () => {
     const { client, ops } = makeBrowserClient('Welcome to the Preview App');
     const { module } = composeConductor({
       substrates: [new FakeSubstrate()],
-      previewVerify: createBrowserPreviewVerifier(client),
+      previewVerify: createBrowserPreviewVerifier(client, executeBrowserVerification),
       gate,
     });
     // A workspace whose preview url was NEVER set (no setPreviewUrl call).
@@ -371,7 +373,7 @@ describe('conductor preview-verify integration — bounded deadline (fix #2)', (
     const gate = makeGate();
     const { module } = composeConductor({
       substrates: [new FakeSubstrate()],
-      previewVerify: createBrowserPreviewVerifier(adapter),
+      previewVerify: createBrowserPreviewVerifier(adapter, executeBrowserVerification),
       gate,
     });
     const workspace = await createRunningWorkspace(module);

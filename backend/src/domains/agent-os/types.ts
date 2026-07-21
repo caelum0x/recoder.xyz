@@ -17,6 +17,7 @@ import type { AgentOsRepositoryPort } from './ports/agent-os-repository.port.js'
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
 import type { CoordinationEnginePort } from './ports/coordination-engine.port.js';
 import type { EngineClientPort } from '../engines/ports/engine-client.port.js';
+import type { BrowserVerifyRunner } from './ports/browser-verify.port.js';
 import type { WorkflowDriver, WorkflowEnginePort } from '@recoder/agent-workflows';
 import type { AgentOsConfigOverrides } from './config.js';
 
@@ -53,6 +54,15 @@ export interface AgentOsDeps {
    * injected (the default `AgentOsWorkflowRunnerDriver` wires the handler).
    */
   readonly browserEngine?: EngineClientPort | null;
+  /**
+   * The injected browser-verification runner (the engines `executeBrowserVerification`,
+   * bound at the composition root). The default `AgentOsWorkflowRunnerDriver` wires the
+   * `browser-check` node handler over it + `browserEngine`. Absent ⇒ the handler is not
+   * registered, so a `browser-check` node degrades to a truthful `skipped` (unhandled) —
+   * the same posture as a null engine, with zero cross-domain value coupling in agent-os.
+   * Only consulted when no explicit `workflowDriver` is injected.
+   */
+  readonly browserVerifyRunner?: BrowserVerifyRunner;
   /**
    * The narrow conductor dispatch seam the autopilot launches workspaces
    * through. Bootstrap builds the conductor AFTER agent-os, so this is usually

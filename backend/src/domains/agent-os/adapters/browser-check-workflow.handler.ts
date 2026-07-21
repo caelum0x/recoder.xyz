@@ -6,10 +6,11 @@
  * definition's `browser-check` node actually FIRES the browser-use engine in
  * production instead of throwing "no handler".
  *
- * One node carries a `browserChecks[]` config; each entry runs the OWNED
- * `executeBrowserVerification` executor (navigate → assert expected text →
- * evidence screenshot → verification-summary artifact) through the injected
- * browser-use `EngineClientPort`. An optional `researchTask` runs the sidecar's
+ * One node carries a `browserChecks[]` config; each entry runs the injected
+ * `BrowserVerifyRunner` (the engines `executeBrowserVerification`, bound at the
+ * composition root: navigate → assert expected text → evidence screenshot →
+ * verification-summary artifact) through the injected browser-use
+ * `EngineClientPort`. An optional `researchTask` runs the sidecar's
  * autonomous `.ext().run_task` loop (`browser_use.Agent`) as a control-plane
  * research/verification step — so autonomous browsing is a real product
  * capability, not a dormant deep-op.
@@ -34,11 +35,11 @@ import type { Artifact } from '@recoder/agent-os';
 import type { BrowserVerificationArtifact } from '@recoder/browser-verification';
 import type { EngineClientPort } from '../../engines/ports/engine-client.port.js';
 import type { BrowserExtPort } from '../../engines/adapters/sidecar/browser-ext.client.js';
-import {
-  executeBrowserVerification,
-  type BrowserVerificationRun,
-  type BrowserVerifyAssertion,
+import type {
+  BrowserVerificationRun,
+  BrowserVerifyAssertion,
 } from '../../engines/adapters/sidecar/browser-verification.executor.js';
+import type { BrowserVerifyRunner } from '../ports/browser-verify.port.js';
 
 /** One live browser check parsed from a `browser-check` node's config. */
 interface ParsedBrowserCheck {
@@ -60,6 +61,13 @@ export interface BrowserCheckWorkflowHandlerDeps {
    * every browser check degrades to a truthful `skipped` (never a faked verdict).
    */
   readonly client: EngineClientPort | null;
+  /**
+   * The injected browser-verification runner (the engines `executeBrowserVerification`,
+   * bound at the composition root). Consumer-owned seam — the handler never
+   * value-imports the engines executor; bootstrap injects it so the runtime
+   * behavior is identical with zero cross-domain value coupling.
+   */
+  readonly runBrowserVerify: BrowserVerifyRunner;
   /**
    * The deep-op port for the autonomous `run_task` loop. Absent ⇒ derived from
    * `client.ext()` when the adapter exposes it; still absent ⇒ a `researchTask`
@@ -117,7 +125,7 @@ export function createBrowserCheckWorkflowHandler(
     const runs: Array<{ url: string; run: BrowserVerificationRun }> = [];
     const artifacts: Artifact[] = [];
     for (const check of checks) {
-      const run = await executeBrowserVerification(deps.client, {
+      const run = await deps.runBrowserVerify(deps.client, {
         url: check.url,
         taskId: check.taskId ?? fallbackTaskId,
         ...(check.assertions.length > 0 ? { assertions: check.assertions } : {}),

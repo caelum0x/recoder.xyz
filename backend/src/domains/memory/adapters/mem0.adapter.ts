@@ -10,7 +10,6 @@
  * (the `engines/py/mem0` FastAPI server). Either way the port stays fully
  * degrade-safe — no provider anywhere → `search → []`, `health → available:false`.
  */
-import { mem0Add, mem0Health, mem0Search } from '../../engines/mem0-client.js';
 import type {
   Mem0Availability,
   Mem0ConsolidateResult,
@@ -19,12 +18,37 @@ import type {
   Mem0Result,
   Mem0Scope,
 } from '../ports/mem0.port.js';
+import type { Mem0EnginePort } from '../ports/mem0-engine.port.js';
 import type { Mem0SidecarClient } from './mem0-sidecar.client.js';
 
 export interface Mem0AdapterDeps {
+  /**
+   * The engines mem0 client, injected at the composition root as the consumer-owned
+   * {@link Mem0EnginePort} (the adapter never value-imports `engines/mem0-client`).
+   * Absent ⇒ a truthful `available:false` engine (search → `[]`, health down) — the
+   * degrade-safe contract is unchanged whether the engine is unwired or unconfigured.
+   */
+  readonly mem0Engine?: Mem0EnginePort;
   /** Optional self-hosted sidecar used only when the in-lib client is `none`. */
   readonly sidecar?: Mem0SidecarClient | null;
 }
+
+/**
+ * The truthful-unavailable engine used when no `mem0Engine` is injected. Keeps the
+ * adapter's degrade contract identical to an unconfigured in-lib client: nothing
+ * is fabricated, the sidecar (when wired) still handles the fallthrough.
+ */
+const UNAVAILABLE_ENGINE: Mem0EnginePort = {
+  async add() {
+    return { available: false, reason: 'mem0 engine not wired' };
+  },
+  async search() {
+    return { available: false, reason: 'mem0 engine not wired', results: [] };
+  },
+  async health() {
+    return { available: false, mode: 'none', reason: 'mem0 engine not wired' };
+  },
+};
 
 /** Narrow a legacy mem0 record `{ id, memory, [k]:unknown }` to `Mem0Result`. */
 function toResult(row: {
@@ -65,10 +89,11 @@ function scopeArg(scope: Mem0Scope): {
  */
 export function createMem0Adapter(deps: Mem0AdapterDeps = {}): Mem0Port {
   const sidecar = deps.sidecar ?? null;
+  const engine = deps.mem0Engine ?? UNAVAILABLE_ENGINE;
 
   return {
     async search(query, scope, limit = 10): Promise<readonly Mem0Result[]> {
-      const res = await mem0Search(query, scopeArg(scope), limit);
+      const res = await engine.search(query, scopeArg(scope), limit);
       if (res.available) {
         return res.results
           .map(toResult)
@@ -80,7 +105,7 @@ export function createMem0Adapter(deps: Mem0AdapterDeps = {}): Mem0Port {
     },
 
     async add(messages, scope): Promise<{ ok: boolean; reason?: string }> {
-      const res = await mem0Add(messages as Mem0Message[], scopeArg(scope));
+      const res = await engine.add(messages as Mem0Message[], scopeArg(scope));
       if (res.available)
         return res.reason ? { ok: false, reason: res.reason } : { ok: true };
       if (sidecar) return sidecar.add(messages, scope);
@@ -92,7 +117,7 @@ export function createMem0Adapter(deps: Mem0AdapterDeps = {}): Mem0Port {
       // fact-merge / dedup / decay runs INLINE on every `add` (closed by the
       // lifecycle write-half). Only a self-hosted sidecar exposes a batch pass,
       // so a driver-triggered sweep is a truthful no-op unless one is wired.
-      const h = await mem0Health();
+      const h = await engine.health();
       if (h.available) {
         return {
           ok: false,
@@ -105,7 +130,7 @@ export function createMem0Adapter(deps: Mem0AdapterDeps = {}): Mem0Port {
     },
 
     async health(): Promise<Mem0Availability> {
-      const h = await mem0Health();
+      const h = await engine.health();
       if (h.available) {
         const detail: Record<string, unknown> = {};
         if (h.vectorStore) detail.vectorStore = h.vectorStore;

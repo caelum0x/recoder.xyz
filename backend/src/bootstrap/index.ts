@@ -50,6 +50,10 @@ import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/op
 import { createBrainMemoryAdapter } from '../domains/conductor/adapters/brain-memory.adapter.js';
 import { createConductorCodeIntel } from '../domains/conductor/adapters/code-intel.adapter.js';
 import { createBrowserPreviewVerifier } from '../domains/conductor/adapters/browser-preview-verify.adapter.js';
+// Composition root: the ONE place allowed to value-import the engines browser
+// verification executor. It is injected as the agent-os + conductor consumer-owned
+// `BrowserVerifyRunner` port so neither domain holds a runtime value edge into engines.
+import { executeBrowserVerification } from '../domains/engines/adapters/sidecar/browser-verification.executor.js';
 import { createConductorPlanAdapter } from '../domains/conductor/adapters/plan.adapter.js';
 import { createGithubStatusAdapter } from '../domains/conductor/adapters/github-status.adapter.js';
 import { createTmuxSteerTransport } from '../domains/conductor/adapters/steer-transport.adapter.js';
@@ -80,6 +84,10 @@ import {
 import { createCliInferenceEnvResolver } from './conductor-inference-seam.js';
 import { createMemoryModule } from '../domains/memory/index.js';
 import type { IssueGraphService } from '../domains/memory/ports/issue-graph.port.js';
+import type { Mem0EnginePort } from '../domains/memory/ports/mem0-engine.port.js';
+// Composition root: value-imports the engines mem0 client, injected as the memory
+// consumer-owned `Mem0EnginePort` so the mem0 adapter holds no value edge into engines.
+import { mem0Add, mem0Search, mem0Health } from '../domains/engines/mem0-client.js';
 import {
   createCloudModule,
   createDnsTlsVerifier,
@@ -489,6 +497,10 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // runs `run_task` against the LIVE sidecar. Absent/down ⇒ the node degrades
     // to a truthful `skipped` (never a fake pass, never a blocked run).
     browserEngine: engines.client('browser-use'),
+    // The browser-verification runner (the engines `executeBrowserVerification`),
+    // injected as agent-os's consumer-owned `BrowserVerifyRunner` port. The default
+    // workflow driver wires the `browser-check` node handler over it + `browserEngine`.
+    browserVerifyRunner: executeBrowserVerification,
     // Native openfang workflow engine (§4e): the FIRST real consumer of
     // `createOpenfangWorkflowDriver` — a `tool` node marked `config.workflow`
     // dispatches register_workflow/run_workflow inside the kernel `.node` via the
@@ -568,6 +580,13 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       }
     },
   };
+  // The engines mem0 client bound to the memory consumer-owned `Mem0EnginePort`.
+  // Same runtime behavior as the direct value import, now injected at the root.
+  const mem0Engine: Mem0EnginePort = {
+    add: mem0Add,
+    search: mem0Search,
+    health: mem0Health,
+  };
   const memory = createMemoryModule({
     config,
     logger: childLogger('memory'),
@@ -578,6 +597,10 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // The beads raw transport (frozen EngineClientPort). MEMORY owns the
     // cohesive IssueGraphService facet over it (docs/modules/memory.md).
     beadsEngine: engines.client('beads'),
+    // The engines mem0 client, shaped as the memory consumer-owned `Mem0EnginePort`
+    // — memory takes NO cross-domain value import; the seam is injected here. The
+    // client self-resolves its provider and degrades to `available:false` truthfully.
+    mem0Engine,
     overrides: config.memory,
     embedFallback: memoryEmbedFallback,
   });
@@ -849,7 +872,10 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // unwired/down ⇒ the adapter yields a `skipped(degraded)` verification with the
     // real reason (never a faked pass), and every fire is deadline-bounded so a
     // hung preview can never stall the caller or the completion hook.
-    previewVerify: createBrowserPreviewVerifier(engines.client('browser-use')),
+    previewVerify: createBrowserPreviewVerifier(
+      engines.client('browser-use'),
+      executeBrowserVerification,
+    ),
     // Double-assignment admission over the Multica coordination fabric, consulted
     // in createWorkspace on the axis resource-governor → coordination-admission →
     // work-lock → launch (keyed on input.taskId). FAIL-OPEN: no MULTICA_URL /

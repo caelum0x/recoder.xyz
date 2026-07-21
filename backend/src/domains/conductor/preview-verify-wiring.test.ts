@@ -34,6 +34,8 @@ import type {
   PreviewVerifyRequest,
 } from './ports/preview-verify.port.js';
 import { createBrowserPreviewVerifier, DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS } from './adapters/browser-preview-verify.adapter.js';
+// The real engines executor, injected as the conductor `BrowserVerifyRunner` port.
+import { executeBrowserVerification } from '../engines/adapters/sidecar/browser-verification.executor.js';
 import { PREVIEW_VERIFY_ACTION } from './services/preview-verify.service.js';
 import {
   composeConductor,
@@ -234,7 +236,7 @@ describe('conductor preview-verify wiring — auto-fire on setPreviewUrl', () =>
 describe('conductor preview-verify wiring — explicit verifyPreview', () => {
   it('runs the real navigate→assert→screenshot chain and seals evidence artifact ids', async () => {
     const gate: FakeGate = makeGate();
-    const verifier = createBrowserPreviewVerifier(makeBrowserClient('Welcome to the Preview App'));
+    const verifier = createBrowserPreviewVerifier(makeBrowserClient('Welcome to the Preview App'), executeBrowserVerification);
     const { module } = composeConductor({ substrates: [new FakeSubstrate()], previewVerify: verifier, gate });
     const workspace = await createRunningWorkspace(module);
     await module.setPreviewUrl(workspace.workspaceId, LOOPBACK_URL, principal);
