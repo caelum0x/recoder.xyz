@@ -34,6 +34,7 @@ import { sliceConductorConfig, type ConductorConfig } from './config.js';
 import type { GateVerdict, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView, SteerTransportPort } from './ports/index.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
+import type { RunSignalPushPort } from './ports/run-signal-push.port.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type { WorkspaceRepositoryPort } from './ports/workspace-repository.port.js';
 import type {
@@ -212,6 +213,12 @@ export class ConductorComposer implements ConductorModule {
   private entitlementGate?: EntitlementGate;
   /** OPTIONAL usage-meter emitter (set by bootstrap; absent ⇒ no per-run metering). */
   private usageMeter?: UsageMeterPort;
+  /**
+   * OPTIONAL ops-recorder reverse-push port (set by bootstrap `setRunSignalPush`;
+   * absent ⇒ no run-signal push). Read by the completion-hook thunk on each
+   * terminal event; observability satisfies it structurally at the composition root.
+   */
+  private runSignalPush?: RunSignalPushPort;
   /** Checkpoint metadata store (degrade-truthful in-process by default). */
   private readonly checkpointStore: CheckpointStorePort;
   /** Per-repo setup-script config + the worktree-create run hook (governed writes). */
@@ -292,6 +299,10 @@ export class ConductorComposer implements ConductorModule {
       // Late-bound meter: the sink reads it per terminal event, so bootstrap can
       // inject the billing meter AFTER this module is constructed (setUsageMeter).
       getMeter: () => this.usageMeter,
+      // Late-bound reverse-push (§8.2 b): the sink reads it per terminal event, so
+      // bootstrap can inject the ops-recorder push port AFTER this module is
+      // constructed (setRunSignalPush). Unwired ⇒ a truthful no-op (no push).
+      getRunSignalPush: () => this.runSignalPush,
       getWorkspace: (id) => this.repository.getWorkspace(id),
       logger: this.log,
     });
@@ -359,6 +370,16 @@ export class ConductorComposer implements ConductorModule {
   /** Inject the optional billing usage meter (per-run `agent_run` metering). */
   setUsageMeter(meter: UsageMeterPort): void {
     this.usageMeter = meter;
+  }
+
+  /**
+   * Inject the optional ops-recorder reverse-push port (terminal run → stuck-work
+   * board). SINGLE-WRITER: this is the ONLY mutation of `this.runSignalPush`,
+   * called once at bootstrap after observability exists — same discipline as
+   * `setUsageMeter`/`setEntitlementGate`. Read by the completion-hook thunk.
+   */
+  setRunSignalPush(port: RunSignalPushPort): void {
+    this.runSignalPush = port;
   }
 
   /**

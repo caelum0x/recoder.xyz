@@ -31,6 +31,7 @@ import type { McpInjectPort } from './ports/mcp-inject.port.js';
 import type { CoordinationAdmissionPort } from './ports/coordination-admission.port.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
+import type { RunSignalPushPort } from './ports/run-signal-push.port.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
 import type { ConductorPlanPort } from './ports/plan.port.js';
 import type { ColbertSearchPort } from '../memory/ports/colbert-search.port.js';
@@ -358,6 +359,15 @@ export interface ConductorModule {
    * metering hiccup never blocks or delays the terminal RunEvent.
    */
   setUsageMeter(meter: UsageMeterPort): void;
+  /**
+   * Inject the OPTIONAL ops-recorder reverse-push port. Set post-construction by
+   * bootstrap (`conductor.setRunSignalPush({...})`) after observability exists,
+   * satisfied STRUCTURALLY so neither domain imports the other. When wired, a
+   * terminal run reverse-pushes a failed/stuck outcome onto the ops-recorder
+   * stuck-work board (a `completed` run is a truthful far-side skip). Absent ⇒ a
+   * truthful no-op (no push); a push fault NEVER blocks or delays the completion.
+   */
+  setRunSignalPush(port: RunSignalPushPort): void;
   /** Truthful per-substrate availability (`GET /substrates`). */
   substrates(): readonly SubstrateAvailabilityView[];
   /**

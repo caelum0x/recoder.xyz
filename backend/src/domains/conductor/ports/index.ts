@@ -96,3 +96,10 @@ export type {
   AuditEntryInput,
   AuditRecord,
 } from './governance-gate.port.js';
+
+// --- Reverse-push: terminal run outcome → ops-recorder stuck-work board ---
+export type {
+  RunSignalPushPort,
+  ConductorRunOutcome,
+  RunSignalPushResult,
+} from './run-signal-push.port.js';
