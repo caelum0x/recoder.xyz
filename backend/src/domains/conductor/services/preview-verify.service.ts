@@ -47,6 +47,12 @@ export interface PreviewVerifyResult {
 export interface PreviewVerifyOptions {
   readonly assertions?: readonly PreviewVerifyAssertion[];
   readonly screenshot?: boolean;
+  /**
+   * Per-run browser deadline (ms). Threaded into the verifier request so a
+   * slow/hung preview can never stall the caller (absent ⇒ the adapter's bounded
+   * default). The auto-fire from `setPreviewUrl` always passes one.
+   */
+  readonly timeoutMs?: number;
 }
 
 /** The narrow read/verify seams the service depends on (injected by the module). */
@@ -101,6 +107,7 @@ export async function verifyWorkspacePreview(
       ? { assertions: options.assertions }
       : {}),
     ...(options.screenshot !== undefined ? { screenshot: options.screenshot } : {}),
+    ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
   });
 
   // Seal the verification + its evidence (summary text + artifact ids) into the

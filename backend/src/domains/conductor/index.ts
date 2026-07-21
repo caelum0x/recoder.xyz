@@ -33,6 +33,11 @@ import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { RunSignalPushPort } from './ports/run-signal-push.port.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
+import type { PreviewVerifyPort } from './ports/preview-verify.port.js';
+import type {
+  PreviewVerifyOptions,
+  PreviewVerifyResult,
+} from './services/preview-verify.service.js';
 import type { ConductorPlanPort } from './ports/plan.port.js';
 import type { ColbertSearchPort } from '../memory/ports/colbert-search.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
@@ -121,6 +126,18 @@ export interface ConductorModuleDeps {
    * launch, never fabricated). See `adapters/code-intel.adapter.ts`.
    */
   readonly codeIntel?: CodeIntelPort;
+  /**
+   * OPTIONAL preview verifier (the browsing facet): a concrete
+   * {@link PreviewVerifyPort} over the engines-domain browser-use
+   * `EngineClientPort`, constructed at bootstrap
+   * (`createBrowserPreviewVerifier(engines.client('browser-use'))`). When wired,
+   * `setPreviewUrl` fires a fire-and-forget, deadline-bounded verification of the
+   * just-persisted URL, and `verifyPreview` serves the explicit/route path — both
+   * sealing evidence to the audit chain. Absent ⇒ both are truthful no-ops (never
+   * a faked pass, never a block on a run/merge). See
+   * `adapters/browser-preview-verify.adapter.ts`.
+   */
+  readonly previewVerify?: PreviewVerifyPort;
   /**
    * Optional pal launch-planning seam (`engines.pal().planLaunch()`, adapted at
    * the composition root). On a workspace create the launch path consults it —
@@ -284,6 +301,21 @@ export interface ConductorModule {
     url: unknown,
     principal: Principal,
   ): Promise<ConductorWriteResult<Workspace>>;
+  /**
+   * VERIFY the workspace's stored preview URL — GATED (`workspace.preview_verify`,
+   * a SECOND gate independent of the `workspace.preview_url` write). The awaited
+   * twin of the fire-and-forget auto-verify `setPreviewUrl` fires: one bounded
+   * browser run navigates the preview, asserts expected text, captures an
+   * evidence screenshot, and SEALS the summary + screenshot artifact ids into the
+   * durable audit chain. Degrade-truthful: no verifier wired / no driver / no
+   * stored preview URL ⇒ `ok:false` or a `skipped(degraded)` verification with the
+   * real reason — never a fabricated pass, never a block on a run/merge.
+   */
+  verifyPreview(
+    workspaceId: string,
+    principal: Principal,
+    options?: PreviewVerifyOptions,
+  ): Promise<PreviewVerifyResult>;
   /** Archive a finished workspace (teardown + archived) — GATED (`workspace.archive`). */
   archiveWorkspace(workspaceId: string, principal: Principal): Promise<ConductorWriteResult<Workspace>>;
   /** Push the branch + open a PR — GATED (`workspace.pr`). */
