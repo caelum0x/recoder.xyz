@@ -380,6 +380,14 @@ export class ConductorComposer implements ConductorModule {
         ...(input.taskId ? { taskId: input.taskId } : {}),
         ...(input.repoPath ? { repoPath: input.repoPath } : {}),
         ...(input.library ? { library: input.library } : {}),
+        // Thread the SAME per-repo ColBERT collection `startCodeIntel` builds so
+        // the brain's first-stage retrieval reads the index instead of leaving it
+        // a dead write. Gated on `repoPath` — the only case `startCodeIntel`
+        // builds a `repo_<id>` collection — so we never point search at an index
+        // that was never built (absent ⇒ retrieval falls back to its default).
+        ...(input.repoPath
+          ? { repoCollection: `repo_${repoIdFromRepoRef(input.projectId || input.repoPath)}` }
+          : {}),
       });
       return enriched.prompt;
     } catch (err) {
