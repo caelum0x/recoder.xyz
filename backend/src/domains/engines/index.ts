@@ -44,6 +44,7 @@ import type { NotifyEngine } from '@recoder/agent-notify';
 // inference domain owns, consumed by the typed `setTensorzeroCatalogProvider`
 // accessor below. Not a static value import — no runtime engines→inference edge.
 import type { CatalogConfigProvider } from '../inference/adapters/tz-config-generator.js';
+import type { TensorzeroConfigProvider } from './ports/tensorzero-config.port.js';
 
 /** Dependencies injected by bootstrap (after persistence + identity + governance). */
 export interface EnginesModuleDeps {
@@ -107,6 +108,15 @@ export interface EnginesModule {
    * embedded gateway then boots the env-only config (degrade-safe).
    */
   setTensorzeroCatalogProvider(provider: CatalogConfigProvider): void;
+  /**
+   * Late-bind the env→registry→config generation provider onto the tensorzero napi
+   * adapter (§7 V5): bootstrap injects the inference domain's concrete
+   * `tensorzero-config` module so the adapter's model-catalog + gateway boot-config
+   * paths consume an injected port rather than two lazy `await import(...)` edges
+   * into the inference domain. TZ-scoped downcast; a no-op when tensorzero is absent
+   * / not a napi adapter (the model catalog then degrades truthfully).
+   */
+  setTensorzeroConfigProvider(provider: TensorzeroConfigProvider): void;
   /**
    * The cohesive openfang agent-engine facet (docs/modules/agent-engine.md):
    * health · run · continueRun · hands · publishEvent · workflow · verifyManifest

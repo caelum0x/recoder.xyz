@@ -169,6 +169,7 @@ import type { EnginesModule, EnginesModuleDeps } from './index.js';
 // TYPE-ONLY edge (erased at build): the DB-catalog config-provider shape the
 // inference domain owns, threaded into the concrete tensorzero adapter below.
 import type { CatalogConfigProvider } from '../inference/adapters/tz-config-generator.js';
+import type { TensorzeroConfigProvider } from './ports/tensorzero-config.port.js';
 
 /** Build the static declared-engine descriptors from the closed engine catalog. */
 function buildDescriptors(): readonly EngineDescriptor[] {
@@ -512,6 +513,21 @@ export class EnginesComposer implements EnginesModule {
       | TensorzeroNapiAdapter
       | undefined;
     adapter?.setCatalogConfigProvider(provider);
+  }
+
+  /**
+   * Late-bind the env→registry→config generation provider onto the concrete
+   * tensorzero napi adapter (§7 V5). Bootstrap injects the inference domain's
+   * concrete `tensorzero-config` module here, so the adapter's model-catalog +
+   * boot-config paths call an injected port instead of the two former lazy
+   * `await import(...)` cross-domain edges. Same tz-scoped downcast as
+   * `setTensorzeroCatalogProvider`; a no-op when tensorzero isn't a napi adapter.
+   */
+  setTensorzeroConfigProvider(provider: TensorzeroConfigProvider): void {
+    const adapter = this.adapters.get('tensorzero') as
+      | TensorzeroNapiAdapter
+      | undefined;
+    adapter?.setTensorzeroConfigProvider(provider);
   }
 
   /**

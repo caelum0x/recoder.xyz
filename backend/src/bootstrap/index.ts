@@ -65,6 +65,16 @@ import type { CloudSandboxGatewayPort } from '../domains/conductor/ports/cloud-s
 import { createEnginesModule, createOpenfangWorkflowDriver } from '../domains/engines/index.js';
 import { createInferenceModule } from '../domains/inference/index.js';
 import { createInferenceRoutePalAdapter } from '../domains/inference/adapters/pal-route.adapter.js';
+// The composition root owns the engines→inference config bridge: the concrete
+// tensorzero config-generation module is injected into the engines tensorzero
+// adapter (§7 V5), so the adapter never lazy-`import()`s the inference domain.
+import {
+  registryFromEnv as tzRegistryFromEnv,
+  buildTensorzeroConfig as tzBuildTensorzeroConfig,
+  tensorzeroFunctionName as tzTensorzeroFunctionName,
+  TENSORZERO_DEFAULT_FUNCTION as TZ_DEFAULT_FUNCTION,
+  generateTensorzeroConfig as tzGenerateTensorzeroConfig,
+} from '../domains/inference/tensorzero-config.js';
 import { createPalConsensusReview } from '../domains/governance/adapters/pal-consensus.adapter.js';
 import {
   createBillingModule,
@@ -1093,6 +1103,18 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // set ⇒ the adapter falls back to the byte-identical env-only boot file. inference
   // + engines are both built above (Phase 6a/6b), so the closure is safe here.
   engines.setTensorzeroCatalogProvider(() => inference.generateConfig());
+
+  // Inject the engines→inference config-generation bridge (§7 V5): the tensorzero
+  // napi adapter's model-catalog + gateway boot-config paths call this injected
+  // provider instead of two lazy `await import(...)` edges into the inference
+  // domain. The five members mirror the inference `tensorzero-config` module 1:1.
+  engines.setTensorzeroConfigProvider({
+    registryFromEnv: tzRegistryFromEnv,
+    buildTensorzeroConfig: tzBuildTensorzeroConfig,
+    tensorzeroFunctionName: tzTensorzeroFunctionName,
+    TENSORZERO_DEFAULT_FUNCTION: TZ_DEFAULT_FUNCTION,
+    generateTensorzeroConfig: tzGenerateTensorzeroConfig,
+  });
 
   // --- Phase 10: Cloud — off-box substrate (sandboxes/previews/tenancy/mesh). Built
   //     AFTER billing. The Phase-3 governance decide→audit seam guards EVERY cloud

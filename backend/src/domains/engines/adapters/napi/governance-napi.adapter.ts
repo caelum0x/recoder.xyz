@@ -21,10 +21,12 @@ import type {
   KernelEngine,
   KernelRequest,
   KernelVerdict,
-  RiskTier,
   RoutingHint,
 } from '../../../governance/types.js';
-import { riskTierRank } from '../../../governance/types.js';
+// PURE risk-tier vocabulary from the leaf policy package (category-5 legal: a
+// package, not another domain) — the ONLY value edge this re-expose needs, now
+// off the governance domain per the owner mandate.
+import { riskTierRank, type RiskTier } from '@recoder/agent-policy';
 import { EngineClientBase, type EngineCall } from '../../ports/engine-client.port.js';
 import { type EngineHealth, type InvokeResult, fail, ok } from '../../types.js';
 import { msg, str, type NapiArgs } from './napi-util.js';
