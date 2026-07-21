@@ -12,6 +12,7 @@ import type {
 } from '../ports/issue-graph.port.js';
 import { fakeIssueGraph } from '../__fixtures__/issue-graph.fixture.js';
 import type { Mem0Port, Mem0ConsolidateResult } from '../ports/mem0.port.js';
+import type { ColbertSearchPort } from '../ports/colbert-search.port.js';
 import { MAINTENANCE_ACTOR, MemoryMaintenanceService } from './memory-maintenance.service.js';
 
 const silentLogger = {
@@ -45,6 +46,28 @@ function mem0(overrides: Partial<Mem0Port> = {}): Mem0Port {
     },
     async consolidate(): Promise<Mem0ConsolidateResult> {
       return { ok: false, reason: 'inline on add' };
+    },
+    ...overrides,
+  };
+}
+
+/** A degrade-truthful ColBERT port fake; overridable per test. */
+function colbertSearch(
+  overrides: Partial<ColbertSearchPort> = {}
+): ColbertSearchPort {
+  return {
+    configured: () => true,
+    async search() {
+      return { available: false, hits: [] };
+    },
+    async ensureIndex(collection) {
+      return { built: false, collection, documents: 0 };
+    },
+    async listCollections() {
+      return { available: true, collections: [] };
+    },
+    async dropCollection(collection) {
+      return { dropped: true, collection };
     },
     ...overrides,
   };
@@ -236,6 +259,249 @@ describe('MemoryMaintenanceService gc sweep (config-gated, off by default)', () 
     expect(stats.gc.attempted).toBe(true);
     expect(stats.gc.ran).toBe(false);
     expect(stats.gc.reason).toMatch(/exploded/i);
+  });
+});
+
+describe('MemoryMaintenanceService colbert index gc (config-gated, off by default)', () => {
+  it('never runs the colbert index gc when colbertGcEverySweeps is unset/0', async () => {
+    const dropCollection = vi.fn(async (c: string) => ({ dropped: true, collection: c }));
+    const svc = new MemoryMaintenanceService({
+      beads: beads(),
+      mem0: mem0(),
+      colbertSearch: colbertSearch({ dropCollection }),
+      logger: silentLogger,
+      intervalMs: 0,
+    });
+
+    const stats = await svc.sweepOnce();
+    expect(dropCollection).not.toHaveBeenCalled();
+    expect(stats.colbert).toEqual({
+      attempted: false,
+      ran: false,
+      dropped: 0,
+      reason: 'colbert gc disabled (colbertGcEverySweeps=0)',
+    });
+  });
+
+  it('skips truthfully when colbert is not configured', async () => {
+    const svc = new MemoryMaintenanceService({
+      beads: beads(),
+      mem0: mem0(),
+      colbertSearch: colbertSearch({ configured: () => false }),
+      logger: silentLogger,
+      intervalMs: 0,
+      colbertGcEverySweeps: 1,
+    });
+
+    const stats = await svc.sweepOnce();
+    expect(stats.colbert).toEqual({
+      attempted: false,
+      ran: false,
+      dropped: 0,
+      reason: 'colbert not configured',
+    });
+  });
+
+  it('skips truthfully when no colbert port is wired at all', async () => {
+    const svc = new MemoryMaintenanceService({
+      beads: beads(),
+      mem0: mem0(),
+      logger: silentLogger,
+      intervalMs: 0,
+      colbertGcEverySweeps: 1,
+    });
+
+    const stats = await svc.sweepOnce();
+    expect(stats.colbert).toEqual({
+      attempted: false,
+      ran: false,
+      dropped: 0,
+      reason: 'colbert not configured',
+    });
+  });
+
+  it('skips truthfully when a lighter fake lacks list/drop ops', async () => {
+    const lite: ColbertSearchPort = {
+      configured: () => true,
+      async search() {
+        return { available: false, hits: [] };
+      },
+      async ensureIndex(collection) {
+        return { built: false, collection, documents: 0 };
+      },
+    };
+    const svc = new MemoryMaintenanceService({
+      beads: beads(),
+      mem0: mem0(),
+      colbertSearch: lite,
+      logger: silentLogger,
+      intervalMs: 0,
+      colbertGcEverySweeps: 1,
+    });
+
+    const stats = await svc.sweepOnce();
+    expect(stats.colbert).toEqual({
+      attempted: false,
+      ran: false,
+      dropped: 0,
+      reason: 'colbert not configured',
+    });
+  });
+
+  it('runs the colbert index gc only every Nth sweep', async () => {
+    const listCollections = vi.fn(async () => ({ available: true, collections: [] as string[] }));
+    const svc = new MemoryMaintenanceService({
+      beads: beads(),
+      mem0: mem0(),
+      colbertSearch: colbertSearch({ listCollections }),
+      logger: silentLogger,
+      intervalMs: 0,
+      colbertGcEverySweeps: 2,
+    });
+
+    const first = await svc.sweepOnce();
+    expect(listCollections).not.toHaveBeenCalled();
+    expect(first.colbert.attempted).toBe(false);
+    expect(first.colbert.reason).toContain('not due');
+
+    const second = await svc.sweepOnce();
+    expect(listCollections).toHaveBeenCalledTimes(1);
+    expect(second.colbert).toEqual({ attempted: true, ran: true, dropped: 0 });
+  });
+
+  it('prunes repo_* indexes past the retention window, never on sight, leaving others', async () => {
+    let clock = 0;
+    const dropCollection = vi.fn(async (c: string) => ({ dropped: true, collection: c }));
+    const listCollections = vi.fn(async () => ({
+      available: true,
+      collections: ['repo_stale', 'mem0_memories', 'recoder_retrieval'],
+    }));
+    const svc = new MemoryMaintenanceService({
+      beads: beads(),
+      mem0: mem0(),
+      colbertSearch: colbertSearch({ listCollections, dropCollection }),
+      logger: silentLogger,
+      intervalMs: 0,
+      colbertGcEverySweeps: 1,
+      colbertGcRetentionMs: 1000,
+      now: () => clock,
+    });
+
+    // First observation: the abandoned repo index is recorded but never dropped
+    // on sight (no daemon mtime — age is measured from first observation).
+    const first = await svc.sweepOnce();
+    expect(dropCollection).not.toHaveBeenCalled();
+    expect(first.colbert).toEqual({ attempted: true, ran: true, dropped: 0 });
+
+    // Advance past the retention window: only the per-repo index is pruned; the
+    // mem0/retrieval collections are never GC'd by this pass.
+    clock = 2000;
+    const second = await svc.sweepOnce();
+    expect(dropCollection).toHaveBeenCalledTimes(1);
+    expect(dropCollection).toHaveBeenCalledWith('repo_stale');
+    expect(second.colbert).toEqual({ attempted: true, ran: true, dropped: 1 });
+  });
+
+  it('does not prune a repo_* index still within the retention window', async () => {
+    let clock = 0;
+    const dropCollection = vi.fn(async (c: string) => ({ dropped: true, collection: c }));
+    const svc = new MemoryMaintenanceService({
+      beads: beads(),
+      mem0: mem0(),
+      colbertSearch: colbertSearch({
+        listCollections: async () => ({ available: true, collections: ['repo_fresh'] }),
+        dropCollection,
+      }),
+      logger: silentLogger,
+      intervalMs: 0,
+      colbertGcEverySweeps: 1,
+      colbertGcRetentionMs: 10_000,
+      now: () => clock,
+    });
+
+    await svc.sweepOnce();
+    clock = 5000; // still under the 10s window
+    const stats = await svc.sweepOnce();
+    expect(dropCollection).not.toHaveBeenCalled();
+    expect(stats.colbert).toEqual({ attempted: true, ran: true, dropped: 0 });
+  });
+
+  it('reports a truthful {ran:false, reason} when the daemon is down (no drops)', async () => {
+    const dropCollection = vi.fn(async (c: string) => ({ dropped: true, collection: c }));
+    const svc = new MemoryMaintenanceService({
+      beads: beads(),
+      mem0: mem0(),
+      colbertSearch: colbertSearch({
+        listCollections: async () => ({
+          available: false,
+          collections: [],
+          reason: 'colbert daemon unreachable',
+        }),
+        dropCollection,
+      }),
+      logger: silentLogger,
+      intervalMs: 0,
+      colbertGcEverySweeps: 1,
+    });
+
+    const stats = await svc.sweepOnce();
+    expect(dropCollection).not.toHaveBeenCalled();
+    expect(stats.colbert).toEqual({
+      attempted: true,
+      ran: false,
+      dropped: 0,
+      reason: 'colbert daemon unreachable',
+    });
+  });
+
+  it('never throws when the colbert gc faults (degrade-safe)', async () => {
+    const svc = new MemoryMaintenanceService({
+      beads: beads(),
+      mem0: mem0(),
+      colbertSearch: colbertSearch({
+        listCollections: async () => {
+          throw new Error('colbert gc exploded');
+        },
+      }),
+      logger: silentLogger,
+      intervalMs: 0,
+      colbertGcEverySweeps: 1,
+    });
+
+    const stats = await svc.sweepOnce();
+    expect(stats.colbert.attempted).toBe(true);
+    expect(stats.colbert.ran).toBe(false);
+    expect(stats.colbert.dropped).toBe(0);
+    expect(stats.colbert.reason).toMatch(/exploded/i);
+  });
+
+  it('counts only daemon-confirmed drops (never fabricates a prune)', async () => {
+    let clock = 0;
+    const dropCollection = vi.fn(async (c: string) => ({
+      dropped: false,
+      collection: c,
+      reason: 'daemon did not confirm the drop',
+    }));
+    const svc = new MemoryMaintenanceService({
+      beads: beads(),
+      mem0: mem0(),
+      colbertSearch: colbertSearch({
+        listCollections: async () => ({ available: true, collections: ['repo_stale'] }),
+        dropCollection,
+      }),
+      logger: silentLogger,
+      intervalMs: 0,
+      colbertGcEverySweeps: 1,
+      colbertGcRetentionMs: 1000,
+      now: () => clock,
+    });
+
+    await svc.sweepOnce();
+    clock = 2000;
+    const stats = await svc.sweepOnce();
+    expect(dropCollection).toHaveBeenCalledWith('repo_stale');
+    // The daemon refused the drop → the count stays truthful at 0.
+    expect(stats.colbert).toEqual({ attempted: true, ran: true, dropped: 0 });
   });
 });
 

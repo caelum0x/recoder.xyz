@@ -180,14 +180,19 @@ export class MemoryComposer implements MemoryModule {
 
     // Maintenance loop: beads durability flush (`bd vc commit`) + config-gated
     // beads gc (`bd gc` every `gcEverySweeps` sweeps; 0 = off) + mem0
-    // consolidation sweep. Degrade-safe; the driver self-skips when bd/mem0 are
-    // down. `maintenanceIntervalMs === 0` disables it entirely.
+    // consolidation sweep + config-gated ColBERT per-repo index GC (prune
+    // abandoned `repo_*` PLAID indexes every `colbertGcEverySweeps` sweeps; 0 =
+    // off). Degrade-safe; the driver self-skips when bd/mem0/colbert are down.
+    // `maintenanceIntervalMs === 0` disables it entirely.
     this.maintenance = new MemoryMaintenanceService({
       beads: this.issueGraphSvc,
       mem0: this.mem0,
+      colbertSearch: this.colbertSearchClient,
       logger: this.log,
       intervalMs: cfg.maintenanceIntervalMs,
       gcEverySweeps: cfg.gcEverySweeps,
+      colbertGcEverySweeps: cfg.colbertGcEverySweeps,
+      colbertGcRetentionMs: cfg.colbertGcRetentionMs,
     });
   }
 
@@ -414,6 +419,7 @@ export class MemoryComposer implements MemoryModule {
         beads: beadsHealth.available,
         maintenanceIntervalMs: this.cfg.maintenanceIntervalMs,
         gcEverySweeps: this.cfg.gcEverySweeps,
+        colbertGcEverySweeps: this.cfg.colbertGcEverySweeps,
       },
       'memory module started'
     );
