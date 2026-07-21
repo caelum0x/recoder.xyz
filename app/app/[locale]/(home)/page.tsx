@@ -219,18 +219,19 @@ export default function HomePage() {
             {/* Copy column */}
             <div className="rec-rise text-center lg:text-left">
               <div className="mb-6 flex justify-center lg:justify-start">
-                <Eyebrow>Agent control plane</Eyebrow>
+                <Eyebrow>Terminal for coding agents</Eyebrow>
               </div>
 
               <h1 className="text-balance text-4xl font-bold leading-[1.05] tracking-tight text-white sm:text-5xl md:text-6xl xl:text-7xl">
-                Ship with AI agents,
+                Run Claude Code, Codex,
                 <br />
-                <span className="text-orange-400">end to end.</span>
+                and any agent <span className="text-orange-400">in parallel.</span>
               </h1>
 
               <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-gray-400 lg:mx-0">
-                Build, deploy, and orchestrate AI agents across code, projects,
-                and clients — one platform, from prompt to production.
+                Recoder is a terminal for AI coding agents. Run each in its own
+                isolated git worktree, bring your own API key (BYOK), then review
+                the diff and merge — free to start, no lock-in.
               </p>
 
               {/* Spec strip — monospace, engineered */}
