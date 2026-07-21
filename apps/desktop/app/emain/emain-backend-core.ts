@@ -402,6 +402,17 @@ export function assembleBackendEnv(opts: {
         RECODER_TMUX_BUILD_PATH: opts.tmuxBin,
         TMUX_BIN: opts.tmuxBin,
     };
+    // Shared-tmux-server invariant (durable-shell unify §A1b): TMUX_TMPDIR must
+    // reach the backend UNCHANGED so the conductor's default-socket mirror
+    // (`${TMUX_TMPDIR:-/tmp}/tmux-<uid>/default`, reported on /api/conductor/health)
+    // and any tmux client the backend drives resolve the SAME server the Go
+    // wavesrv (which inherits the same base env) uses. The `...baseEnv` spread
+    // already carries it; we deliberately never override or invent it — an absent
+    // TMUX_TMPDIR leaves BOTH sides defaulting to /tmp identically. This fill-only
+    // guard keeps the invariant explicit if a future env-filter drops the spread.
+    if (opts.baseEnv.TMUX_TMPDIR && !env.TMUX_TMPDIR) {
+        env.TMUX_TMPDIR = opts.baseEnv.TMUX_TMPDIR;
+    }
     // Owned beads bd, fill-only: an explicit BEADS_BIN (operator override) wins;
     // an unresolved bd stays absent so the backend degrades truthfully instead
     // of chasing a path the supervisor could not verify.

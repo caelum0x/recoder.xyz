@@ -6,6 +6,10 @@
  *    availability view (the effective pinned binary — config pin, else PATH `tmux`),
  *    so the wave-side attach can source the SAME server instead of a silent
  *    PATH-`tmux` fallback;
+ *  - the body exposes `substrate.tmuxSocket` — this backend's DEFAULT tmux socket
+ *    (durable-shell unify §A1b) via the injected resolver — so the wave-side attach
+ *    can ASSERT it shares the SAME server; `null` is a truthful "unknown", never a
+ *    guessed default, and it is `null` whenever no tmux substrate exists;
  *  - a missing/unknown tmux substrate yields a truthful `tmuxBin: null` (never a
  *    guessed default);
  *  - the existing `available` / `tmux` fields are unchanged (behavior-preserving).
@@ -44,10 +48,13 @@ interface Harness {
   close: () => Promise<void>;
 }
 
-function serve(module: ConductorModule): Promise<Harness> {
+function serve(
+  module: ConductorModule,
+  resolveTmuxSocket: () => string | null = () => '/tmp/tmux-501/default',
+): Promise<Harness> {
   const app = express();
   app.use(express.json());
-  app.use('/api/conductor', buildConductorRoutes({ module, middleware }));
+  app.use('/api/conductor', buildConductorRoutes({ module, middleware, resolveTmuxSocket }));
   return new Promise((resolve) => {
     const server = http.createServer(app);
     server.listen(0, '127.0.0.1', () => {
@@ -82,7 +89,7 @@ function get(base: string, path: string): Promise<{ status: number; body: () => 
 interface HealthBody {
   available: boolean;
   tmux: boolean;
-  substrate: { tmuxBin: string | null };
+  substrate: { tmuxBin: string | null; tmuxSocket: string | null };
   reason?: string;
 }
 
@@ -101,6 +108,35 @@ describe('GET /api/conductor/health', () => {
       expect(data.tmux).toBe(true);
       // The load-bearing new field: a real binary, not the silent PATH fallback.
       expect(data.substrate.tmuxBin).toBe('/vendored/recoder/tmux');
+      // §A1b: the DEFAULT socket is mirrored from the injected resolver so the
+      // wave-side attach can assert the shared server.
+      expect(data.substrate.tmuxSocket).toBe('/tmp/tmux-501/default');
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('mirrors the DEFAULT tmux socket from the resolver when a tmux substrate exists', async () => {
+    const module = stubModule([{ id: 'tmux_worktree', available: true, tmuxBin: 'tmux' }]);
+    const harness = await serve(module, () => '/custom/tmp/tmux-1000/default');
+    try {
+      const res = await get(harness.base, '/api/conductor/health');
+      const data = (res.body() as { data: HealthBody }).data;
+      expect(data.substrate.tmuxSocket).toBe('/custom/tmp/tmux-1000/default');
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('reports a truthful `tmuxSocket: null` when the resolver cannot determine it (unknown)', async () => {
+    // A tmux entry exists but the socket is unknown (e.g. no effective uid /
+    // Windows) — the caller must treat null as "unknown", never a guessed default.
+    const module = stubModule([{ id: 'tmux_worktree', available: true, tmuxBin: 'tmux' }]);
+    const harness = await serve(module, () => null);
+    try {
+      const res = await get(harness.base, '/api/conductor/health');
+      const data = (res.body() as { data: HealthBody }).data;
+      expect(data.substrate.tmuxSocket).toBeNull();
     } finally {
       await harness.close();
     }
@@ -118,14 +154,17 @@ describe('GET /api/conductor/health', () => {
     }
   });
 
-  it('yields a truthful `tmuxBin: null` when no tmux substrate is known', async () => {
+  it('yields a truthful `tmuxBin`/`tmuxSocket: null` when no tmux substrate is known', async () => {
     const module = stubModule([{ id: 'daytona', available: false, reason: 'DAYTONA_API_KEY not configured' }]);
-    const harness = await serve(module);
+    // Resolver returns a path, but with no tmux entry the socket must still be
+    // null — the health never asserts a shared server that is not configured here.
+    const harness = await serve(module, () => '/tmp/tmux-501/default');
     try {
       const res = await get(harness.base, '/api/conductor/health');
       const data = (res.body() as { data: HealthBody }).data;
-      // No tmux entry ⇒ never a guessed binary; the caller treats null as "unknown".
+      // No tmux entry ⇒ never a guessed binary/socket; the caller treats null as "unknown".
       expect(data.substrate.tmuxBin).toBeNull();
+      expect(data.substrate.tmuxSocket).toBeNull();
       expect(data.available).toBe(false);
       expect(data.tmux).toBe(false);
       expect(data.reason).toBeTruthy();
