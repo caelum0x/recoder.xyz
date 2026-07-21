@@ -32,6 +32,13 @@ export interface DiffStat {
   readonly deletions: number;
 }
 
+/** A file 2+ siblings BOTH touched — where parallel agents will collide. */
+export interface ContestedFile {
+  readonly path: string;
+  /** Workspace ids of the 2+ siblings that BOTH touched this path (sorted, deduped). */
+  readonly workspaceIds: readonly string[];
+}
+
 /** One agent's row in the side-by-side compare of a parallel-run group. */
 export interface SiblingCompareEntry {
   readonly workspaceId: string;
@@ -54,6 +61,10 @@ export interface SiblingCompareEntry {
   readonly diffStat?: DiffStat;
   /** Truthful reason `diffStat` is absent (no worktree, substrate fault, …). */
   readonly diffStatReason?: string;
+  /** Tracked changed-file paths vs base — ABSENT (with a reason) when unreadable; `[]` = readable, no changes. */
+  readonly changedFiles?: readonly string[];
+  /** Truthful reason `changedFiles` is absent (no worktree, non-repo, git absent). */
+  readonly changedFilesReason?: string;
   /**
    * The sibling's live tmux session name, PROJECTED verbatim from the Workspace
    * record (absent when never launched) — the operator-grid/attach seam reads it.
@@ -77,6 +88,12 @@ export interface CompareView {
   /** The siblings, sorted oldest-first (stable by workspaceId on a tie). */
   readonly siblings: readonly SiblingCompareEntry[];
   /**
+   * Files 2+ siblings BOTH touched — where parallel agents will collide. Always
+   * emitted; an empty group (or no overlap) ⇒ `[]`. A sibling whose changed-file
+   * list is unreadable contributes NOTHING (never a fabricated collision).
+   */
+  readonly contested: readonly ContestedFile[];
+  /**
    * A READ-ONLY operator-attach hint for the group, enriched by the conductor
    * module AFTER this pure read (never here — this service stays read-only +
    * substrate-free). Absent when the group is a singleton, dmux is absent, or the
@@ -99,6 +116,11 @@ export interface CompareDeps {
    * `{ reason }` (no `stat`), never a fabricated stat.
    */
   diffStat(workspace: Workspace): Promise<{ stat?: DiffStat; reason?: string }>;
+  /**
+   * Read-only tracked changed-file paths for a workspace. MUST be side-effect free
+   * and degrade-safe: unreadable ⇒ `{ reason }` (never a fabricated list).
+   */
+  changedFiles(workspace: Workspace): Promise<{ files?: readonly string[]; reason?: string }>;
 }
 
 /** Read a workspace's shared group key from its metadata (absent/blank ⇒ undefined). */
@@ -133,10 +155,37 @@ function bySiblingOrder(a: SiblingCompareEntry, b: SiblingCompareEntry): number 
   return a.createdAt.localeCompare(b.createdAt) || a.workspaceId.localeCompare(b.workspaceId);
 }
 
+/**
+ * The CONTESTED set: files 2+ siblings BOTH touched — where parallel agents will
+ * collide. Pure + degrade-truthful: a sibling whose `changedFiles` is absent
+ * (unreadable) contributes NOTHING (never a fabricated collision); paths are
+ * deduped within a sibling; the result is sorted by path with sorted workspaceIds.
+ */
+export function computeContested(siblings: readonly SiblingCompareEntry[]): ContestedFile[] {
+  const byPath = new Map<string, Set<string>>();
+  for (const sibling of siblings) {
+    if (!sibling.changedFiles) continue; // degrade: an unreadable sibling contributes nothing
+    for (const path of new Set(sibling.changedFiles)) {
+      // dedupe within a sibling
+      let ids = byPath.get(path);
+      if (!ids) {
+        ids = new Set();
+        byPath.set(path, ids);
+      }
+      ids.add(sibling.workspaceId);
+    }
+  }
+  return [...byPath.entries()]
+    .filter(([, ids]) => ids.size >= 2)
+    .map(([path, ids]) => ({ path, workspaceIds: [...ids].sort() }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+}
+
 async function buildEntry(deps: CompareDeps, workspace: Workspace): Promise<SiblingCompareEntry> {
-  const [view, diff] = await Promise.all([
+  const [view, diff, changed] = await Promise.all([
     safeView(deps, workspace),
     deps.diffStat(workspace),
+    deps.changedFiles(workspace),
   ]);
   return {
     workspaceId: workspace.workspaceId,
@@ -151,6 +200,9 @@ async function buildEntry(deps: CompareDeps, workspace: Workspace): Promise<Sibl
     updatedAt: workspace.updatedAt,
     ...(diff.stat ? { diffStat: diff.stat } : {}),
     ...(diff.reason ? { diffStatReason: diff.reason } : {}),
+    // `[]` is truthy → a readable-but-empty changed-file list is KEPT (not a reason).
+    ...(changed.files ? { changedFiles: changed.files } : {}),
+    ...(changed.reason ? { changedFilesReason: changed.reason } : {}),
     // Read-only PROJECTION of two fields already on the Workspace record (the
     // worktree-bound grid + attach seam read them); computes nothing new.
     ...(workspace.sessionName ? { sessionName: workspace.sessionName } : {}),
@@ -177,13 +229,14 @@ export async function compareTaskGroup(
   taskGroup: string,
 ): Promise<CompareView> {
   const group = taskGroup.trim();
-  if (!group) return { taskGroup: null, count: 0, siblings: [] };
+  if (!group) return { taskGroup: null, count: 0, siblings: [], contested: [] };
 
   const all = await deps.listWorkspaces();
   const members = all.filter((ws) => taskGroupOf(ws) === group);
   const siblings = await Promise.all(members.map((ws) => buildEntry(deps, ws)));
   siblings.sort(bySiblingOrder);
-  return { taskGroup: group, count: siblings.length, siblings };
+  const contested = computeContested(siblings);
+  return { taskGroup: group, count: siblings.length, siblings, contested };
 }
 
 /**
@@ -201,7 +254,8 @@ export async function workspaceSiblings(
   const group = taskGroupOf(workspace);
   if (!group) {
     const entry = await buildEntry(deps, workspace);
-    return { taskGroup: null, count: 1, siblings: [entry] };
+    // A singleton can't contest itself — always `[]` (truthful).
+    return { taskGroup: null, count: 1, siblings: [entry], contested: computeContested([entry]) };
   }
   return compareTaskGroup(deps, group);
 }

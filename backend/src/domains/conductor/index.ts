@@ -311,13 +311,18 @@ export interface ConductorModule {
   listWorkspaceViews(): Promise<WorkspaceView[]>;
   /**
    * Side-by-side compare of a parallel-run group (F3): aggregate every sibling
-   * workspace sharing `taskGroup` — each row's agent, diffStat, outcome, runId.
-   * Read-only + degrade-safe (a missing/blank group is a truthful empty view).
+   * workspace sharing `taskGroup` — each row's agent, diffStat, its tracked
+   * changed-file paths, outcome, runId — plus the view's CONTESTED set (files 2+
+   * siblings both touched, always emitted as `[]` when none). Read-only +
+   * degrade-safe: an unreadable sibling reports a reason and contributes NOTHING
+   * to the overlap; a missing/blank group is a truthful empty view.
    */
   compareTaskGroup(taskGroup: string): Promise<CompareView>;
   /**
    * The compare view for the group a single workspace belongs to (its own
-   * singleton set when ungrouped). Null when the workspace does not exist.
+   * singleton set when ungrouped — `contested` is then always `[]`). Each row
+   * carries its changed-file list; the view carries the contested-overlap set.
+   * Null when the workspace does not exist.
    */
   workspaceSiblings(workspaceId: string): Promise<CompareView | null>;
   /**
