@@ -56,6 +56,7 @@ import { createCloudSandboxSubstrate } from '../domains/conductor/adapters/cloud
 import type { CloudSandboxGatewayPort } from '../domains/conductor/ports/cloud-sandbox.port.js';
 import { createEnginesModule, createOpenfangWorkflowDriver } from '../domains/engines/index.js';
 import { createInferenceModule } from '../domains/inference/index.js';
+import { createInferenceRoutePalAdapter } from '../domains/inference/adapters/pal-route.adapter.js';
 import {
   createBillingModule,
   type BillingSubject,
@@ -343,6 +344,17 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   });
   container.registerValue(DOMAIN_TOKENS.inference, inference);
   healthRegistry.register(inference);
+
+  // --- Consumer (a): the pal routing brain, injected over the engines-owned
+  //     `PalBrainService` facet (NOT `@recoder/pal` — the inference domain takes no
+  //     such import). A request carrying a `routingHint` now has its provider/model/
+  //     rung chosen by task INTENT via `engines.pal().routeModel()`; requests without
+  //     a hint route exactly as supplied. The facet's pure verbs stay live even with
+  //     the `pal-mcp` sidecar absent, so this injection is always safe. ---
+  const palBrain = engines.pal();
+  if (palBrain) {
+    inference.setPalRouter(createInferenceRoutePalAdapter(palBrain));
+  }
 
   // --- Phase 3: Interop — the A2A wire + the ONE edge chain
   //     (`authorize→risk→policy→audit`) over the governance gate (conflict #1: one

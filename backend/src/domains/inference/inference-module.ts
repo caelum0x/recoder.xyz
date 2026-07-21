@@ -52,7 +52,6 @@ import type { ByokKeyResolver, InferenceKeyWriteGate } from './ports/byok-resolv
 import { generateTzConfig, type GeneratedTzConfig } from './adapters/tz-config-generator.js';
 import type { StreamFetchLike } from './adapters/gateway-stream.js';
 import { InferenceRoutingService } from './services/inference-routing.service.js';
-import { createPalRoutePlanner } from './services/pal-route-planner.js';
 import { buildInferenceRouter } from './routes/inference.routes.js';
 import { createOpenAiCompatRouter } from './routes/openai-compat.routes.js';
 import { createOpenAiEmbeddingsRouter } from './routes/openai-embeddings.routes.js';
@@ -61,6 +60,7 @@ import { buildInferenceHealth } from './health.js';
 import type { InferenceModule, InferenceModuleDeps } from './index.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
+import type { PalRoutePlannerPort } from './ports/pal-route.port.js';
 
 /** A permanently-unavailable vault → the BYOK cache disables (no plaintext cache). */
 function unavailableVault(): KeyVaultPort {
@@ -162,10 +162,11 @@ export class InferenceComposer implements InferenceModule {
       ledger: this.ledgerRepo,
       outcomes: this.outcomeRepo,
     });
-    // FUSION: the pal routing brain is wired by DEFAULT. It only fires when a
-    // request carries a `routingHint` (task intent); requests without one route
-    // exactly as supplied, so the hot path is unchanged for legacy callers.
-    this.routingService.setPalRouter(createPalRoutePlanner({ logger: this.log }));
+    // FUSION: the pal routing brain is NO LONGER self-wired here. It lives behind
+    // the engines-owned `PalBrainService` facet; bootstrap injects it over
+    // `engines.pal()` via `setPalRouter(createInferenceRoutePalAdapter(...))` so
+    // the inference domain takes no direct pal-engine-package import (§7 grep
+    // gate). Until injected, requests route as supplied — the degrade-safe default.
   }
 
   gateway(): InferenceGatewayPort {
@@ -184,6 +185,16 @@ export class InferenceComposer implements InferenceModule {
   /** Inject the optional billing usage meter (per-completion token metering). */
   setUsageMeter(meter: UsageMeterPort): void {
     this.routingService.setUsageMeter(meter);
+  }
+
+  /**
+   * Inject the optional pal routing brain (the engines-owned `PalBrainService`
+   * facet, adapted). Bootstrap wires it over `engines.pal()`; a `routingHint`-
+   * carrying request then routes by task INTENT. Absent ⇒ requests route as
+   * supplied. No direct pal-engine-package import crosses this domain.
+   */
+  setPalRouter(planner: PalRoutePlannerPort): void {
+    this.routingService.setPalRouter(planner);
   }
 
   /**

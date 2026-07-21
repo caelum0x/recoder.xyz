@@ -33,6 +33,7 @@ import type {
 import type { InferenceRoutingService } from './services/inference-routing.service.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
+import type { PalRoutePlannerPort } from './ports/pal-route.port.js';
 import type {
   ByokKeyResolver,
   ByokSecretsPort,
@@ -122,6 +123,15 @@ export interface InferenceModule {
    * key-write route fails CLOSED with a truthful 503.
    */
   setGovernanceGate(gate: InferenceKeyWriteGate): void;
+  /**
+   * Inject the OPTIONAL pal routing brain (bootstrap:
+   * `inference.setPalRouter(createInferenceRoutePalAdapter(engines.pal()))`). Once
+   * wired, a request carrying a `routingHint` has its provider/model/rung chosen by
+   * task INTENT via the engines-owned `PalBrainService` facet; a request without a
+   * hint (or until this is set) routes exactly as supplied — the degrade-safe
+   * default. The inference domain takes no direct pal-engine-package import (§7 gate).
+   */
+  setPalRouter(planner: PalRoutePlannerPort): void;
   /** The BYOK key resolver (delivery-path key resolution + governed store). */
   byokResolver(): ByokKeyResolver;
   /** The routable model catalog. */

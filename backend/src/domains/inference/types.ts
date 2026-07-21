@@ -23,7 +23,8 @@ export interface InferenceMessage {
  * OPTIONAL task-intent context a caller (conductor / agent-os / an HTTP client)
  * attaches so the pal routing brain can pick the provider/model/rung by INTENT
  * instead of taking the caller's `model` verbatim. Deliberately pal-agnostic:
- * the planner (`pal-route-planner.ts`) coerces it into pal's `TaskSpec` shape.
+ * the engines-owned `PalBrainService` facet (consumed via `pal-route.adapter.ts`)
+ * coerces it into pal's `TaskSpec` shape behind the boundary.
  * Absent ⇒ the request routes exactly as supplied (the current default).
  */
 export interface RoutingHint {
