@@ -54,6 +54,7 @@ import { createConductorPlanAdapter } from '../domains/conductor/adapters/plan.a
 import { createGithubStatusAdapter } from '../domains/conductor/adapters/github-status.adapter.js';
 import { createTmuxSteerTransport } from '../domains/conductor/adapters/steer-transport.adapter.js';
 import { createTmuxScanSource } from '../domains/conductor/adapters/tmux-scan-source.adapter.js';
+import { createDmuxGridAdapter } from '../domains/conductor/adapters/dmux-grid.adapter.js';
 import { createRecoderMcpInjector } from '../domains/conductor/adapters/mcp-inject.adapter.js';
 import { createCloudSandboxSubstrate } from '../domains/conductor/adapters/cloud-sandbox-substrate.adapter.js';
 import type { CloudSandboxGatewayPort } from '../domains/conductor/ports/cloud-sandbox.port.js';
@@ -793,6 +794,23 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
         logger: childLogger('conductor-substrate-scan'),
       })
     : undefined;
+  // F3 dmux LAYOUT-brain grid source: the compare/parallel path arranges one
+  // operator pane per sibling worktree + surfaces a read-only attach hint.
+  // Degrade-truthful: dmux adapter undeclared ⇒ `dmuxLayout()` is null and no
+  // source is passed, so the compare read stays hint-less and `arrangeCompareGrid`
+  // returns a truthful null (never a fabricated grid). `singleTenant` (desktop
+  // composition) gates the box-wide `attachCommand`; shared/prod withholds it.
+  const conductorDmuxLayout = engines.dmuxLayout();
+  const conductorDmuxClient = engines.client('dmux');
+  const conductorWorkspaceGrid =
+    conductorDmuxLayout && conductorDmuxClient
+      ? createDmuxGridAdapter({
+          layout: conductorDmuxLayout,
+          client: conductorDmuxClient,
+          logger: childLogger('conductor-dmux-grid'),
+          singleTenant: config.conductor.desktopSingleTenant,
+        })
+      : undefined;
   // Per-worktree `.mcp.json` injection: on workspace launch the composer writes a
   // secret-free `.mcp.json` that points the launched agent at THIS backend's
   // governed MCP host via the vendored stdio bridge (`mcp/recoder-a2a-server.js`).
@@ -854,6 +872,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     steerTransport: conductorSteer,
     mcpInject: conductorMcpInject,
     ...(conductorSubstrateScan ? { substrateScan: conductorSubstrateScan } : {}),
+    ...(conductorWorkspaceGrid ? { workspaceGrid: conductorWorkspaceGrid } : {}),
     // Delivery-feedback seam: a MERGED workspace fires the inference routing
     // feedback sink (`task_success` on the run's persisted inference_id) so the
     // BYOK LLM gateway learns from real deliveries. Degrade-truthful: the merge

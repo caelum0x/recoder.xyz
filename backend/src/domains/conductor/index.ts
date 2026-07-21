@@ -66,6 +66,7 @@ import type { DevCommandView } from './adapters/dev-command.adapter.js';
 import type { ConductorRuntimeView } from './adapters/runtime-listing.adapter.js';
 import type { WorkspaceQueryFilters } from './services/workspace-query.service.js';
 import type { CompareView } from './services/compare.service.js';
+import type { WorkspaceGridPort, GroupGridArrangement } from './ports/workspace-grid.port.js';
 import type { CheckpointRecord, CheckpointStorePort } from './ports/checkpoint-store.port.js';
 import type { BranchResultView, RestoreResultView } from './services/checkpoint.service.js';
 import type { RepoSetupStorePort } from './ports/repo-setup-store.port.js';
@@ -226,6 +227,20 @@ export interface ConductorModuleDeps {
    * `adapters/tmux-scan-source.adapter.ts` + `adapters/substrate-scan.adapter.ts`.
    */
   readonly substrateScan?: SubstrateScanDeps;
+  /**
+   * Optional dmux LAYOUT-brain seam for the F3 compare/parallel group. When wired
+   * (bootstrap builds `createDmuxGridAdapter` over `engines.dmuxLayout()` +
+   * `engines.client('dmux')`), the compare read model carries a READ-ONLY
+   * operator-attach hint (`CompareView.grid`) and `arrangeCompareGrid` builds a
+   * GOVERNED worktree-bound operator grid — one pane per sibling, EACH cwd'd to
+   * its OWN worktree. The `attachCommand` half of the hint is emitted ONLY in the
+   * single-tenant desktop composition (the box-wide dmux console spans every
+   * tenant); `visibleSessions` (intersected to the group) is tenant-safe and
+   * always emitted. Absent / dmux not built ⇒ no grid + no hint, the compare read
+   * still returns (never a fabricated layout, never blocks a compare). See
+   * `adapters/dmux-grid.adapter.ts`.
+   */
+  readonly workspaceGrid?: WorkspaceGridPort;
 }
 
 /** The public surface bootstrap registers and the edge/interop consume. */
@@ -277,6 +292,19 @@ export interface ConductorModule {
    * singleton set when ungrouped). Null when the workspace does not exist.
    */
   workspaceSiblings(workspaceId: string): Promise<CompareView | null>;
+  /**
+   * Arrange the parallel-run group's operator grid — GATED (`workspace.grid`):
+   * ensure the dedicated `recoder-group-<taskGroup>` session then build one pane
+   * per sibling, EACH cwd'd to its OWN worktree (`agent-grid`). NEVER splits,
+   * moves, or links a live agent session, so it cannot disrupt a running run.
+   * Degrade-truthful: dmux absent, no wired grid, or <2 siblings with a real
+   * worktree ⇒ `{ ok:true, value:null }` (no honest N-way grid to build); a tmux
+   * fault ⇒ `value:null` — never a fabricated/hollow arrangement.
+   */
+  arrangeCompareGrid(
+    taskGroup: string,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<GroupGridArrangement | null>>;
   /** RunEvents for a workspace's run — the conversation + lifecycle log. */
   listWorkspaceEvents(workspaceId: string): Promise<RunEvent[]>;
   /** Captured pane text (the stream client's poll fallback). */

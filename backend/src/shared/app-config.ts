@@ -110,6 +110,16 @@ export interface ConductorSliceConfig {
   readonly worktreeRoot: string;
   /** Opt-in real-time tmux control-mode (`-CC`) `%output` stream. */
   readonly tmuxControlMode: boolean;
+  /**
+   * SINGLE-TENANT desktop composition switch. The desktop supervisor sets it
+   * (`CONDUCTOR_DESKTOP_SINGLE_TENANT=1`) so the embedded backend may emit the
+   * box-wide dmux `attachCommand` on the compare read model — that console spans
+   * every `recoder-*` session with no tenant partition, safe ONLY on a single-user
+   * box. Default `false`: shared/prod withholds the attach line (the tenant-safe
+   * `visibleSessions` list is still emitted). One flag, two consumers (the grid
+   * attach hint here + the control-mode default the supervisor also flips).
+   */
+  readonly desktopSingleTenant: boolean;
   /** Resource-governor admission caps. */
   readonly caps: ConductorCapsConfig;
 }
