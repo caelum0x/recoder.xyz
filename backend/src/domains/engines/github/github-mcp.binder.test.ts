@@ -192,6 +192,22 @@ describe('repo.* handlers execute through a real router', () => {
     await expect(broken.call(call(repoMcpServer, 'repo.diff', {}))).rejects.toThrow(/repo\.diff failed/);
   });
 
+  it('repo.diff rejects a git-option-injecting base (arbitrary file write) before spawning git', async () => {
+    const seen: string[][] = [];
+    const built = router({
+      repoRoot: '/repo',
+      runCli: fakeRun((_bin, args) => {
+        seen.push([...args]);
+        return { stdout: '' };
+      }),
+    });
+    await expect(
+      built.call(call(repoMcpServer, 'repo.diff', { base: '--output=/tmp/pwned' })),
+    ).rejects.toThrow(/must be a git ref/);
+    // The guard fires before git is ever invoked — no arbitrary-write spawn.
+    expect(seen).toHaveLength(0);
+  });
+
   it('repo tools without any repoRoot surface a truthful configuration error', async () => {
     const built = router({});
     await expect(built.call(call(repoMcpServer, 'repo.read', { path: 'a.ts' }))).rejects.toThrow(
