@@ -53,3 +53,57 @@ facet reports down, never fakes success. See ../RECODER-MODULES.md §GOVERNANCE.
 
 Degrade-safe throughout: without a DB the durable audit/approval/lock/secret repos
 no-op truthfully and the ladder deny-biases on the pure-TS floor.
+
+**Per-tool teeth (2026-07-21, C1–C4):** the three previously-dark residuals are now
+live. Governance exposes a narrow least-authority facet `toolExecGate()` returning a
+`ToolExecEnforcementPort` (`ports/tool-exec-gate.port.ts`) bound by `createToolExecGate`
+(`services/tool-exec-gate.ts`) to the gate's deny-biased + Merkle-sealing
+`enforceTool` (`services/governance-gate.service.ts:238`) — the shipped
+`decide → risk → audit` seam is **untouched**; this is a narrow binding on the existing
+`enforceTool`, not a second seam.
+
+- **Chokepoint (the teeth):** the port is injected at bootstrap
+  (`CAPABILITY_TOKENS.toolExecGate`, Phase 3) into the engines MCP host and threaded as
+  `InteropHostBundle.toolEnforcer` into **`createInteropExecutor`** (`engines/mcp/mcp-host.ts`).
+  This executor is the ONE funnel every recoder-MCP tool call traverses (`host.call →
+  executor`); the enforcer runs **after** interop `authorize → risk` and **before**
+  in-proc `handler(input)` / external `transport.call(...)`. It projects args to a
+  secret-free string (`describeToolInput`, lifted from the retired sidecar adapter),
+  derives the principal from the **edge-bound caller** (never the caller-controlled
+  `actor.agentId`), and on a `denied` verdict throws `GovernanceDeniedError` before the
+  inner engine is touched. Absent enforcer ⇒ truthful pass-through (no fake-allow); an
+  enforcement infra fault fails **closed** (synthetic deny).
+- **TRUTHFUL COVERAGE BOUNDARY (read this):** these teeth gate the **recoder-MCP-server
+  tool stream only** — including the high-side-effect `sandbox_exec` and
+  `workspace_merge` tools. They do **NOT** see a launched coding agent's own
+  in-worktree `bash`, file writes, or secret reads: those side effects run inside the
+  agent's runtime in its worktree, never cross `createInteropExecutor`, and remain
+  governed only by conductor's coarse `guardConductorWrite → decide` at workspace-op
+  grain. This is a **strict improvement over the previously-ungated MCP surface**, not
+  full per-tool coverage of the agent's native side effects — do not describe it as such.
+- **Dual-audit on denial:** `gate.enforceTool` already seals every allow **and** deny
+  into the durable Merkle chain (secret-free: tool name + `inputLength`, never raw args)
+  — the authoritative security record. On denial, interop's `try/catch` additionally
+  returns a non-`completed` (`'failed'`) wire outcome and emits a second interop
+  `'failed'` audit row (the wire-outcome record). Documented dual-audit, not a hidden
+  double-count; downstream assertions key on `status !== 'completed'`.
+- **Retired napi approval store:** the in-proc, non-durable napi `ApprovalManager`
+  clearance store is deleted (`napi-approval-store.adapter.ts` + `approval-store.port.ts`
+  gone; the never-passed `napiApprovalHandle` knob dropped). The durable Postgres
+  `ApprovalRepository` — already what the approvals routes + `ApprovalService` seal into
+  the same Merkle chain — is now the **sole** clearance path in
+  `resolveApprovalClearance`. Backing clearance with an unwired in-memory store would be
+  less truthful, not more.
+- **Live reload hook:** `reloadPolicies` is now a first-class `GovernanceKernelPort` verb
+  (`ports/kernel.port.ts`; `ReloadPoliciesResult` relocated here). The napi rung drives a
+  live policy-bundle swap via the addon handle; daemon/ts rungs report `{ reloaded:false }`
+  truthfully. An agent-os `PolicyUpdateEmitter` fires `policy.updated` after a durable
+  space-policy write, and a bootstrap Phase-5a hook calls `governance.reloadPolicies(configJson)`
+  — fail-closed inside the kernel (a rejected config leaves the OLD policy live), logging
+  the truthful `{ reloaded, reason }`. An edited forbidden/secret-path policy then takes
+  effect for subsequent `decide()` / `enforceTool` without a restart.
+
+**No conductor-module change:** the per-tool teeth land at the MCP host that
+`conductor/adapters/mcp-inject.adapter.ts` already points agents at; conductor keeps its
+coarse `guardConductorWrite → decide`, which remains the only governance over the agent's
+native shell/file ops.
