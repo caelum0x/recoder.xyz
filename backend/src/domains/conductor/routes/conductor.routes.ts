@@ -9,6 +9,7 @@
  *   GET    /api/conductor/workspaces/:id/events   RunEvents (conversation + lifecycle)
  *   GET    /api/conductor/workspaces/:id/diff     reviewable diff vs base
  *   GET    /api/conductor/workspaces/:id/tree     worktree file list
+ *   GET    /api/conductor/workspaces/:id/mergeability  pre-merge conflict + base-divergence probe
  *   GET    /api/conductor/workspaces/:id/dev-command  detected dev command (or null)
  *   GET    /api/conductor/workspaces/:id/preview-verification  last preview verification summary (404 when unverified)
  *   GET    /api/conductor/workspaces/:id/view     attention-enriched view (truthful unknown)
@@ -159,6 +160,21 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
         sendSuccess(res, await module.workspaceTree(req.params.id));
       } catch (err) {
         sendError(res, toReadError(err, 'tree failed'));
+      }
+    }),
+  );
+
+  // Read-only merge preflight: a git-native trial merge + base-divergence probe.
+  // Never mutates, never a fabricated clean — a git-too-old / faulted probe is a
+  // truthful `available:false`. "not found" → 404, else → 503.
+  router.get(
+    '/workspaces/:id/mergeability',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      try {
+        sendSuccess(res, await module.workspaceMergeability(req.params.id));
+      } catch (err) {
+        sendError(res, toReadError(err, 'mergeability failed'));
       }
     }),
   );
