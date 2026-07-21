@@ -38,6 +38,10 @@ import type { AgentEngineService } from './ports/agent-engine.port.js';
 import type { PalBrainService } from './ports/pal-brain.port.js';
 import type { GithubModule } from './github/index.js';
 import type { NotifyEngine } from '@recoder/agent-notify';
+// TYPE-ONLY edge (erased at build): the DB-catalog config-provider shape the
+// inference domain owns, consumed by the typed `setTensorzeroCatalogProvider`
+// accessor below. Not a static value import — no runtime engines→inference edge.
+import type { CatalogConfigProvider } from '../inference/adapters/tz-config-generator.js';
 
 /** Dependencies injected by bootstrap (after persistence + identity + governance). */
 export interface EnginesModuleDeps {
@@ -82,6 +86,16 @@ export interface EnginesModule {
    * tier binds over (CONFLICT #8-safe: shared `.node` load). Null if undeclared.
    */
   tensorzero(): EngineClientPort | null;
+  /**
+   * Late-bind the DB-catalog config provider onto the tensorzero napi adapter so
+   * the embedded gateway boots on `registry ∪ DB-catalog`, not just env
+   * `TENSORZERO_MODELS` (bootstrap closes it over `inference.generateConfig()`).
+   * TZ-SCOPED + typed: it downcasts the concrete `TensorzeroNapiAdapter` (the
+   * generic `EngineClientPort` returned by `tensorzero()` learns nothing about
+   * catalogs). A no-op when tensorzero is absent / not a napi adapter — the
+   * embedded gateway then boots the env-only config (degrade-safe).
+   */
+  setTensorzeroCatalogProvider(provider: CatalogConfigProvider): void;
   /**
    * The cohesive openfang agent-engine facet (docs/modules/agent-engine.md):
    * health · run · continueRun · hands · publishEvent · workflow · verifyManifest
