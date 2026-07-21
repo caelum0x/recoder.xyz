@@ -162,6 +162,61 @@ describe('retrieval-service ColBERT first-stage union (fusion fires in the flow)
     expect(colbertStat?.contributed).toBe(1);
   });
 
+  it('targets the colbertCollection override for the first-stage search while Qdrant keeps its own collection', async () => {
+    const foundation = createVectorFoundation({
+      config: configuredConfig(),
+      fetchImpl: stackFetch('qdrant passage about deploys'),
+    });
+
+    // Capture which collection the ColBERT first-stage was asked to search.
+    let searchedCollection: string | undefined;
+    const colbertSearch: ColbertSearchPort = {
+      configured: () => true,
+      async search(collection) {
+        searchedCollection = collection;
+        return { available: true, hits: [{ text: 'repo passage from PLAID index', score: 30.0, pid: 1 }] };
+      },
+      async ensureIndex(collection, passages) {
+        return { built: true, collection, documents: passages.length };
+      },
+    };
+
+    const service = createRetrievalService({ foundation, colbertSearch });
+
+    const result = await service.search('deploys', { topK: 5, collection: 'kb', colbertCollection: 'repo_abc' });
+    expect(result.status).toBe('ok');
+    // The colbert first-stage read the per-repo collection, NOT the Qdrant one.
+    expect(searchedCollection).toBe('repo_abc');
+    // The per-repo hit unioned into results (Qdrant collection 'kb' did not collide).
+    const texts = result.passages.map((p) => p.text);
+    expect(texts).toContain('qdrant passage about deploys');
+    expect(texts).toContain('repo passage from PLAID index');
+  });
+
+  it('falls back to the Qdrant collection for the first-stage when no colbertCollection is given', async () => {
+    const foundation = createVectorFoundation({
+      config: configuredConfig(),
+      fetchImpl: stackFetch('qdrant passage about deploys'),
+    });
+
+    let searchedCollection: string | undefined;
+    const colbertSearch: ColbertSearchPort = {
+      configured: () => true,
+      async search(collection) {
+        searchedCollection = collection;
+        return { available: true, hits: [] };
+      },
+      async ensureIndex(collection, passages) {
+        return { built: true, collection, documents: passages.length };
+      },
+    };
+
+    const service = createRetrievalService({ foundation, colbertSearch });
+
+    await service.search('deploys', { topK: 5, collection: 'kb' });
+    expect(searchedCollection).toBe('kb');
+  });
+
   it('degrades to Qdrant-only when the colbert search is not configured', async () => {
     const foundation = createVectorFoundation({
       config: configuredConfig(),

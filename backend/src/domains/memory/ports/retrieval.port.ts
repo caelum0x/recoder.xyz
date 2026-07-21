@@ -72,7 +72,17 @@ export interface SearchResult {
 /** Options for a search call. */
 export interface SearchOpts {
   readonly topK?: number;
+  /** The Qdrant single-vector collection to search (defaults to the retrieval collection). */
   readonly collection?: string;
+  /**
+   * OPTIONAL ColBERT-only first-stage collection override. When set, the PLAID
+   * late-interaction search targets THIS collection (e.g. a per-repo `repo_<id>`
+   * index) while the Qdrant single-vector search keeps using `collection` — so a
+   * per-repo index can be read without pointing Qdrant at a non-existent
+   * collection. Absent → the colbert first-stage falls back to `collection`
+   * (current default behavior).
+   */
+  readonly colbertCollection?: string;
 }
 
 /** Options for an ingest call. */
