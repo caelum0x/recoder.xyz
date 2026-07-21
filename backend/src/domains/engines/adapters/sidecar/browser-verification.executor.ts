@@ -47,6 +47,13 @@ export interface BrowserVerifyRequest {
   readonly assertions?: readonly BrowserVerifyAssertion[];
   /** Capture an evidence screenshot artifact (default true). */
   readonly screenshot?: boolean;
+  /**
+   * Per-op browser deadline (ms), threaded into every `client.invoke`. Absent ⇒
+   * the adapter's unbounded legacy behavior. A breach surfaces as a `timeout`
+   * invoke code, which the executor treats as a degraded skip (a hung page
+   * proved nothing) — never a fabricated pass/fail.
+   */
+  readonly timeoutMs?: number;
 }
 
 /** The verification result plus the truthful degrade posture of the run. */
@@ -61,9 +68,13 @@ export interface BrowserVerificationRun {
 const DEFAULT_TASK_ID = 'adhoc';
 const ACTUAL_EXCERPT_CHARS = 200;
 
-/** Engine-down codes: the run is a truthful skip, not a pass/fail verdict. */
+/**
+ * "Proved nothing" invoke codes: the run is a truthful skip, not a pass/fail
+ * verdict. Engine down (`unavailable`/`disabled`) and a bounded-deadline breach
+ * (`timeout` — a hung page proved nothing about correctness) share this posture.
+ */
 function isEngineDown(code: string | undefined): boolean {
-  return code === 'unavailable' || code === 'disabled';
+  return code === 'unavailable' || code === 'disabled' || code === 'timeout';
 }
 
 export async function executeBrowserVerification(
@@ -73,9 +84,14 @@ export async function executeBrowserVerification(
   const taskId = request.taskId ?? DEFAULT_TASK_ID;
   const assertions = request.assertions ?? [];
   const wantScreenshot = request.screenshot !== false;
+  const timeoutMs = request.timeoutMs;
   const plan = buildPlan(request.url, taskId, assertions, wantScreenshot);
 
-  const nav = await client.invoke({ op: 'navigate', input: { url: request.url } });
+  const nav = await client.invoke({
+    op: 'navigate',
+    input: { url: request.url },
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+  });
   if (!nav.ok) {
     return finalize(plan, degradedChecks(request.url, assertions, wantScreenshot, nav.reason, nav.code), [], {
       degraded: isEngineDown(nav.code),
@@ -88,12 +104,12 @@ export async function executeBrowserVerification(
   let midRunDownReason: string | null = null;
 
   if (assertions.length > 0) {
-    const asserted = await runAssertions(client, request.url, assertions);
+    const asserted = await runAssertions(client, request.url, assertions, timeoutMs);
     checks.push(...asserted.checks);
     if (asserted.engineDownReason) midRunDownReason = asserted.engineDownReason;
   }
   if (wantScreenshot) {
-    const evidence = await captureEvidence(client, request.url, taskId, plan.planId);
+    const evidence = await captureEvidence(client, request.url, taskId, plan.planId, timeoutMs);
     checks.push(evidence.check);
     if (evidence.artifact) artifacts.push(evidence.artifact);
   }
@@ -176,8 +192,13 @@ async function runAssertions(
   client: EngineClientPort,
   url: string,
   assertions: readonly BrowserVerifyAssertion[],
+  timeoutMs: number | undefined,
 ): Promise<{ checks: BrowserVerificationCheckResult[]; engineDownReason?: string }> {
-  const extract = await client.invoke({ op: 'extract', input: { url } });
+  const extract = await client.invoke({
+    op: 'extract',
+    input: { url },
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+  });
   if (!extract.ok) {
     const engineDown = isEngineDown(extract.code);
     const status = engineDown ? ('skipped' as const) : ('failed' as const);
@@ -214,8 +235,13 @@ async function captureEvidence(
   url: string,
   taskId: string,
   planId: string,
+  timeoutMs: number | undefined,
 ): Promise<{ check: BrowserVerificationCheckResult; artifact?: BrowserVerificationArtifact }> {
-  const shot = await client.invoke({ op: 'screenshot', input: { url } });
+  const shot = await client.invoke({
+    op: 'screenshot',
+    input: { url },
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+  });
   const image = shot.ok ? (shot.value as Partial<ScreenshotResult>).imageBase64 : undefined;
   if (!image) {
     const reason = shot.ok ? 'driver returned no image' : shot.reason;

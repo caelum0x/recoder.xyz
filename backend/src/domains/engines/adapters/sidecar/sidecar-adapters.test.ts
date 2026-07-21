@@ -6,6 +6,7 @@
  * always-local surfaces (pal's in-proc `plan` decision) still succeed.
  */
 import { describe, it, expect } from 'vitest';
+import type { BrowserDriver } from '@recoder/agent-browser';
 import type { Logger } from '../../../../shared/logger.js';
 import { enginesConfigSchema, type EnginesConfig } from '../../config.js';
 import type {
@@ -291,6 +292,47 @@ describe('BrowserUseAdapter', () => {
     const res = await adapter.invoke({ op: 'screenshot', input: { url: 'https://example.com' } });
     expect(res.ok).toBe(true);
     expect(calls[0]?.url).toBe('http://operator.example:9000/screenshot');
+  });
+
+  // --- bounded-deadline contract (EngineCall.timeoutMs) -----------------------
+
+  /** A driver whose ops never settle — the hung-sidecar / hung-page shape. */
+  const hangingDriver: BrowserDriver = {
+    kind: 'test-hang',
+    navigate: () => new Promise<never>(() => {}),
+    extractText: () => new Promise<never>(() => {}),
+    screenshot: () => new Promise<never>(() => {}),
+  };
+
+  it('honors call.timeoutMs on navigate — a hung page returns a truthful timeout, never hangs', async () => {
+    const adapter = new BrowserUseAdapter({ supervisor: deadSupervisor, config: config(), log, driver: hangingDriver, env: {} });
+    const started = Date.now();
+    const res = await adapter.invoke({ op: 'navigate', input: { url: 'https://example.com' }, timeoutMs: 25 });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe('timeout');
+    // Bounded: the caller is unblocked well within a test-safe window.
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it('honors call.timeoutMs on extract + screenshot too', async () => {
+    const adapter = new BrowserUseAdapter({ supervisor: deadSupervisor, config: config(), log, driver: hangingDriver, env: {} });
+    for (const op of ['extract', 'screenshot'] as const) {
+      const res = await adapter.invoke({ op, input: { url: 'https://example.com' }, timeoutMs: 25 });
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.code).toBe('timeout');
+    }
+  });
+
+  it('a fast op passes within the deadline (timeoutMs present but not tripped)', async () => {
+    const fastDriver: BrowserDriver = {
+      kind: 'test-fast',
+      navigate: async (url) => ({ url, title: 'Example' }),
+      extractText: async () => ({ text: 'hello' }),
+      screenshot: async () => ({ imageBase64: 'aGk=' }),
+    };
+    const adapter = new BrowserUseAdapter({ supervisor: deadSupervisor, config: config(), log, driver: fastDriver, env: {} });
+    const res = await adapter.invoke({ op: 'navigate', input: { url: 'https://example.com' }, timeoutMs: 1000 });
+    expect(res.ok).toBe(true);
   });
 });
 

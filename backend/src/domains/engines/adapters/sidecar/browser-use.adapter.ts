@@ -117,18 +117,40 @@ export class BrowserUseAdapter extends EngineClientBase<unknown, unknown> implem
       switch (op) {
         case 'navigate': {
           if (!url) return fail('browser-use navigate requires a url', 'bad_input');
-          return classify(await engine.navigate(url));
+          return await this.bounded(op, call.timeoutMs, () => engine.navigate(url));
         }
         case 'extract':
-          return classify(await engine.extractText(url));
+          return await this.bounded(op, call.timeoutMs, () => engine.extractText(url));
         case 'screenshot':
-          return classify(await engine.screenshot(url));
+          return await this.bounded(op, call.timeoutMs, () => engine.screenshot(url));
         default:
           return fail(`unknown browser-use op '${call.op}'`, 'bad_op');
       }
     } catch (err) {
       return fail(`browser-use ${op} failed: ${message(err)}`);
     }
+  }
+
+  /**
+   * Run one agent-loop op under `call.timeoutMs` (the `EngineCall` contract at
+   * engine-client.port.ts:33 mandates the adapter bound long operations). The
+   * HTTP `browser-use` driver exposes no per-call abort seam here, so the driver
+   * promise is RACED against the deadline: a hung page can never stall the caller
+   * (a completion hook, the conductor auto-verify), it resolves to a truthful
+   * `fail(reason, 'timeout')`. Absent/zero deadline ⇒ the call runs unbounded
+   * (unchanged legacy behavior). The in-flight driver promise is left to settle
+   * on its own after a breach; only the caller is unblocked.
+   */
+  private async bounded(
+    op: BrowserUseOp,
+    timeoutMs: number | undefined,
+    run: () => Promise<unknown>,
+  ): Promise<InvokeResult<unknown>> {
+    const outcome = await withDeadline(run(), timeoutMs);
+    if (outcome.timedOut) {
+      return fail(`browser-use ${op} exceeded ${outcome.ms}ms deadline`, 'timeout');
+    }
+    return classify(outcome.value);
   }
 
   async health(): Promise<EngineHealth> {
@@ -293,6 +315,33 @@ function classify(result: unknown): InvokeResult<unknown> {
     return fail(reason, 'browser_error');
   }
   return ok(result);
+}
+
+/** A deadline-breach sentinel — distinct from any real driver return value. */
+const DEADLINE_BREACH = Symbol('browser-use-deadline');
+
+type DeadlineOutcome<T> = { readonly timedOut: false; readonly value: T } | { readonly timedOut: true; readonly ms: number };
+
+/**
+ * Race a driver promise against an optional deadline. A breach never aborts the
+ * in-flight work (the HTTP driver has no signal seam here); it only unblocks the
+ * caller with a `{ timedOut: true }` outcome so `invoke` can return truthfully.
+ * A driver rejection propagates (the caller's try/catch maps it to a `fail`).
+ */
+async function withDeadline<T>(work: Promise<T>, timeoutMs: number | undefined): Promise<DeadlineOutcome<T>> {
+  if (timeoutMs === undefined || timeoutMs <= 0) {
+    return { timedOut: false, value: await work };
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<typeof DEADLINE_BREACH>((resolve) => {
+    timer = setTimeout(() => resolve(DEADLINE_BREACH), timeoutMs);
+  });
+  try {
+    const result = await Promise.race([work, deadline]);
+    return result === DEADLINE_BREACH ? { timedOut: true, ms: timeoutMs } : { timedOut: false, value: result };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 let puppeteerCache: boolean | null = null;
