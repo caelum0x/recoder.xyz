@@ -34,6 +34,11 @@ import { EngineClientBase, type EngineCall } from '../../ports/engine-client.por
 import type { NapiLoaderPort, NapiLoadSpec, NapiModule } from '../../ports/napi-loader.port.js';
 import { type EngineHealth, type InvokeResult, down, fail, ok, up } from '../../types.js';
 import { msg, parseJson, str, type NapiArgs } from './napi-util.js';
+// TYPE-ONLY edge (erased at build): the DB-catalog config-provider shape the
+// inference domain owns. This is NOT a static value import — the ONLY runtime
+// engines→inference edges are the deliberate lazy `await import(...)` calls in
+// `resolveConfigFile`/`runModelCatalog` below (§7 invariant).
+import type { CatalogConfigProvider } from '../../../inference/adapters/tz-config-generator.js';
 
 /** The embedded gateway (the full TZ engine, in-process — no HTTP server). */
 interface TzEmbeddedGatewayInstance {
@@ -199,6 +204,14 @@ export class TensorzeroNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
   private bootPromise: Promise<TzEmbeddedGatewayInstance | undefined> | undefined;
   private bootFailed = false;
   private started = false;
+  /**
+   * OPTIONAL DB-catalog config provider, late-bound by bootstrap through the
+   * engines module's typed `setTensorzeroCatalogProvider` accessor. When set, the
+   * gateway boots on `registry ∪ DB-catalog` — its model/function blocks are
+   * merged over the env/registry config in `resolveConfigFile` (§4b). Absent /
+   * empty / throwing ⇒ the env-only boot config (degrade-safe).
+   */
+  private catalogConfigProvider?: CatalogConfigProvider;
 
   constructor(
     private readonly loader: NapiLoaderPort,
@@ -333,6 +346,18 @@ export class TensorzeroNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
       modelCatalog: () => this.runModelCatalog(),
       batchInference: (batchInput) => this.runBatchInference(batchInput),
     };
+  }
+
+  /**
+   * Late-bind the DB-catalog config provider (bootstrap closes it over
+   * `inference.generateConfig()`). Write-once seam like the entitlement gate /
+   * usage meter: once set, the NEXT gateway boot merges the DB-catalog model/
+   * function blocks over the env/registry config (§4b). Injecting after an eager
+   * boot only affects a subsequent (re)boot — bootstrap wires this before the
+   * first inference. Degrade-safe: a null/empty/throwing provider is a no-op.
+   */
+  setCatalogConfigProvider(provider: CatalogConfigProvider): void {
+    this.catalogConfigProvider = provider;
   }
 
   // --- internals ---
@@ -535,12 +560,35 @@ export class TensorzeroNapiAdapter extends EngineClientBase<NapiArgs, unknown> {
   private async resolveConfigFile(): Promise<string | null> {
     if (this.options.configFile !== undefined) return this.options.configFile;
     if (this.options.generateConfig === false) return null;
-    // REUSE the existing config generator (env → registry → TOML → temp path).
+    // REUSE the existing config generator (env → registry → TOML → temp path),
+    // UNIONed with the DB catalog when a provider is wired (§4b). Exactly ONE
+    // temp file is materialized; the overlay path degrades to the env-only path.
     try {
       const { generateTensorzeroConfig } = await import('../../../inference/tensorzero-config.js');
-      return generateTensorzeroConfig().path ?? null;
+      const overlay = await this.resolveCatalogOverlay();
+      return generateTensorzeroConfig(process.env, overlay).path ?? null;
     } catch (err) {
       this.log.warn({ err: msg(err) }, 'tensorzero config generation failed — booting default config');
+      return null;
+    }
+  }
+
+  /**
+   * Resolve the DB-catalog overlay from the late-bound provider, if any. A
+   * provider fault / empty catalog is a truthful `null` (the env-only config
+   * boots) — the sink of the boot path never throws for a catalog hiccup.
+   */
+  private async resolveCatalogOverlay(): Promise<Awaited<ReturnType<CatalogConfigProvider>> | null> {
+    const provider = this.catalogConfigProvider;
+    if (!provider) return null;
+    try {
+      const config = await provider();
+      return config && config.models.length > 0 ? config : null;
+    } catch (err) {
+      this.log.warn(
+        { err: msg(err) },
+        'tensorzero catalog config provider threw — booting env/registry config only',
+      );
       return null;
     }
   }

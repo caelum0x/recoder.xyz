@@ -71,6 +71,17 @@ export interface GeneratedTzConfig {
   readonly skipped: readonly { readonly modelId: string; readonly reason: string }[];
 }
 
+/**
+ * A late-bound provider of the DB-catalog TOML config. Bootstrap closes it over
+ * `inference.generateConfig()` and injects it into the engines tensorzero napi
+ * adapter (`engines.setTensorzeroCatalogProvider`), which merges the DB-catalog
+ * model/function blocks over the env/registry config before the embedded gateway
+ * boots (§4b). Declared HERE (the shape owner) and consumed by the adapter through
+ * a type-only edge — never a static value import across the engines→inference
+ * boundary. Absent/throwing/empty ⇒ the adapter degrades to the env-only config.
+ */
+export type CatalogConfigProvider = () => Promise<GeneratedTzConfig>;
+
 /** Derive a TOML-safe function name from a model id (`openai/gpt-4o-mini` → `openai_gpt_4o_mini`). */
 export function functionNameFor(modelId: string): string {
   return modelId.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '').toLowerCase();

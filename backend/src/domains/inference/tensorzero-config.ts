@@ -54,6 +54,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { createLogger } from '../../shared/logger.js';
+import type { GeneratedTzConfig } from './adapters/tz-config-generator.js';
 
 const logger = createLogger('tensorzero-config');
 
@@ -389,37 +390,180 @@ export interface TensorzeroGeneratedConfig {
   skipped: TensorzeroSkippedEntry[];
 }
 
+// ---------------------------------------------------------------------------
+// DB-catalog overlay merge (§4b — model-table union, not string-concat)
+// ---------------------------------------------------------------------------
+
+/** One top-level TOML table (`[header]` + its body), grouped by model/function key. */
+interface TomlTable {
+  /** The model/function group key (`models::"id"` / `functions::name`), or the
+   *  raw header for an unclassified table (kept verbatim, never merged). */
+  readonly groupKey: string;
+  /** The trimmed table text (header line + body). */
+  readonly text: string;
+}
+
+/**
+ * Derive the merge group key from a table header. All blocks of one model
+ * (`[models."id"]` + `[models."id".providers.*]`) share a key, and all blocks of
+ * one function (`[functions.fn]` + `[functions.fn.variants.*]`) share a key, so a
+ * DB override replaces the model/function as a UNIT. Returns `null` for a header
+ * that is neither a model nor a function table.
+ */
+function tomlGroupKey(header: string): string | null {
+  const model = header.match(/^\[models\.("(?:[^"\\]|\\.)*")/);
+  if (model) return `models::${model[1]}`;
+  const fn = header.match(/^\[functions\.([A-Za-z0-9_]+)/);
+  if (fn) return `functions::${fn[1]}`;
+  return null;
+}
+
+/** Split a TOML string into its leading preamble (comments) + grouped tables. */
+function splitTomlTables(toml: string): { preamble: string; tables: TomlTable[] } {
+  const preamble: string[] = [];
+  const tables: TomlTable[] = [];
+  let current: string[] | null = null;
+  let currentKey: string | null = null;
+  const flush = (): void => {
+    if (current && currentKey !== null) {
+      tables.push({ groupKey: currentKey, text: current.join('\n').trim() });
+    }
+    current = null;
+    currentKey = null;
+  };
+  for (const line of toml.split('\n')) {
+    if (line.startsWith('[')) {
+      flush();
+      current = [line];
+      currentKey = tomlGroupKey(line) ?? `raw::${line}`;
+    } else if (current) {
+      current.push(line);
+    } else {
+      preamble.push(line);
+    }
+  }
+  flush();
+  return { preamble: preamble.join('\n').trim(), tables };
+}
+
+/** Group tables by their merge key, preserving first-seen order per key. */
+function groupTomlTables(tables: readonly TomlTable[]): Map<string, TomlTable[]> {
+  const byKey = new Map<string, TomlTable[]>();
+  for (const table of tables) {
+    const existing = byKey.get(table.groupKey);
+    if (existing) existing.push(table);
+    else byKey.set(table.groupKey, [table]);
+  }
+  return byKey;
+}
+
+/**
+ * Merge two TensorZero TOML strings at the model/function-table level, name-keyed.
+ * The `overlay` (DB catalog) blocks OVERRIDE the `base` (env/registry) blocks that
+ * share a model id / function name; base-only and overlay-only blocks are both
+ * kept. Order is base's blocks first (in place), then any overlay-only blocks. The
+ * base preamble (comment header) is preserved. Because both producers derive the
+ * function name from the same transform, an overridden model carries its function
+ * override too — no dangling function references an absent model.
+ */
+export function mergeTensorzeroToml(baseToml: string, overlayToml: string): string {
+  const base = splitTomlTables(baseToml);
+  const overlay = splitTomlTables(overlayToml);
+  const baseByKey = groupTomlTables(base.tables);
+  const overlayByKey = groupTomlTables(overlay.tables);
+
+  const orderedKeys: string[] = [];
+  const seen = new Set<string>();
+  for (const table of [...base.tables, ...overlay.tables]) {
+    if (!seen.has(table.groupKey)) {
+      seen.add(table.groupKey);
+      orderedKeys.push(table.groupKey);
+    }
+  }
+
+  const out: string[] = [];
+  if (base.preamble) out.push(base.preamble);
+  for (const key of orderedKeys) {
+    const tables = overlayByKey.get(key) ?? baseByKey.get(key) ?? [];
+    for (const table of tables) out.push(table.text);
+  }
+  return `${out.join('\n\n')}\n`;
+}
+
+/** The top-level function names a TOML config defines (excludes `.variants.*`). */
+function functionNamesIn(toml: string): string[] {
+  const names: string[] = [];
+  for (const line of toml.split('\n')) {
+    const match = line.match(/^\[functions\.([A-Za-z0-9_]+)\]\s*$/);
+    if (match) names.push(match[1]);
+  }
+  return names;
+}
+
 /**
  * End-to-end convenience: env → registry → TOML → temp file path.
  *
  * With no usable models the config is NOT written and `path` is `undefined` —
  * `getEmbeddedGateway()` then boots TensorZero's default empty config (the
  * proven `boot(null)` path). Never throws.
+ *
+ * When `overlay` (a DB-catalog {@link GeneratedTzConfig}) carries models, its
+ * model/function blocks are UNIONED over the env/registry config (name-keyed, DB
+ * overrides env) and the union is materialized as EXACTLY ONE temp file (§4b) — so
+ * the embedded gateway boots on `registry ∪ DB-catalog`. A null / empty overlay is
+ * byte-identical to the env-only path (no new failure surface, no extra file).
  */
 export function generateTensorzeroConfig(
   env: NodeJS.ProcessEnv = process.env,
+  overlay?: GeneratedTzConfig | null,
 ): TensorzeroGeneratedConfig {
   const registry = registryFromEnv(env);
   const built = buildTensorzeroConfig(registry);
 
-  if (built.functions.length === 0) {
-    logger.info(
-      { skipped: built.skipped },
-      'no usable tensorzero models in registry — embedded gateway will use its default config',
-    );
-    return { path: undefined, functions: [], skipped: built.skipped };
+  // Degrade path (byte-identical to the pre-overlay behavior): no DB-catalog
+  // overlay, or an empty one, ⇒ env/registry config only.
+  const overlayModels = overlay && overlay.models.length > 0 ? overlay : null;
+  if (!overlayModels) {
+    if (built.functions.length === 0) {
+      logger.info(
+        { skipped: built.skipped },
+        'no usable tensorzero models in registry — embedded gateway will use its default config',
+      );
+      return { path: undefined, functions: [], skipped: built.skipped };
+    }
+    const filePath = writeTensorzeroConfig(built.toml);
+    if (filePath) {
+      logger.info(
+        { path: filePath, functions: built.functions, skipped: built.skipped },
+        'generated tensorzero config from Recoder model registry',
+      );
+    }
+    return {
+      path: filePath,
+      functions: filePath ? built.functions : [],
+      skipped: built.skipped,
+    };
   }
 
-  const filePath = writeTensorzeroConfig(built.toml);
+  // Merge the DB catalog over the env/registry config, then materialize ONCE.
+  const mergedToml = mergeTensorzeroToml(built.toml, overlayModels.toml);
+  const functions = functionNamesIn(mergedToml);
+  const filePath = writeTensorzeroConfig(mergedToml);
   if (filePath) {
     logger.info(
-      { path: filePath, functions: built.functions, skipped: built.skipped },
-      'generated tensorzero config from Recoder model registry',
+      {
+        path: filePath,
+        functions,
+        envModels: built.functions.length,
+        catalogModels: overlayModels.models.length,
+        skipped: built.skipped,
+      },
+      'generated tensorzero config from Recoder registry ∪ DB catalog',
     );
   }
   return {
     path: filePath,
-    functions: filePath ? built.functions : [],
+    functions: filePath ? functions : [],
     skipped: built.skipped,
   };
 }

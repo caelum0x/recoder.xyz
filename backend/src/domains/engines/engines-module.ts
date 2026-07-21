@@ -161,6 +161,9 @@ import {
 } from './routes/mcp-edge.routes.js';
 import { buildEnginesHealth } from './health.js';
 import type { EnginesModule, EnginesModuleDeps } from './index.js';
+// TYPE-ONLY edge (erased at build): the DB-catalog config-provider shape the
+// inference domain owns, threaded into the concrete tensorzero adapter below.
+import type { CatalogConfigProvider } from '../inference/adapters/tz-config-generator.js';
 
 /** Build the static declared-engine descriptors from the closed engine catalog. */
 function buildDescriptors(): readonly EngineDescriptor[] {
@@ -485,6 +488,21 @@ export class EnginesComposer implements EnginesModule {
 
   tensorzero(): EngineClientPort | null {
     return this.client('tensorzero');
+  }
+
+  /**
+   * Late-bind the DB-catalog config provider onto the concrete tensorzero napi
+   * adapter (§2c/§4b). The adapter is already in scope as the downcast handle
+   * (same pattern the `recoder.tensorzero` MCP binder uses at construction). The
+   * generic `EngineClientPort` from `tensorzero()` is untouched — this method is
+   * the ONLY carrier of the tz-specific catalog seam. Degrade-safe: a no-op when
+   * tensorzero isn't bound as a napi adapter.
+   */
+  setTensorzeroCatalogProvider(provider: CatalogConfigProvider): void {
+    const adapter = this.adapters.get('tensorzero') as
+      | TensorzeroNapiAdapter
+      | undefined;
+    adapter?.setCatalogConfigProvider(provider);
   }
 
   /**
