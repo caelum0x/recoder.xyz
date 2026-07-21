@@ -131,6 +131,12 @@ export function repoEngineBinder(deps: RepoToolsDeps = {}): (router: McpToolRout
       const root = resolveRepoRoot(input.args, deps);
       const args = ['diff'];
       const base = optionalString(input.args.base);
+      // `base` lands as a standalone argv element BEFORE `--`, so a value like
+      // `--output=/abs/path` would inject a git option (arbitrary file write).
+      // It must be a git rev, never a flag: reject any leading '-'.
+      if (base && base.startsWith('-')) {
+        throw new Error(`repo.diff base must be a git ref, not an option: ${JSON.stringify(base)}`);
+      }
       if (base) args.push(base);
       const target = optionalString(input.args.path);
       if (target) args.push('--', target);
