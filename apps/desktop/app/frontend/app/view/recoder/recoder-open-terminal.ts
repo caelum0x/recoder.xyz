@@ -17,6 +17,14 @@ type OpenWorkspaceTerminalPayload = {
     cwd?: string;
 };
 
+// The conductor's own tmux server, sourced from its `/health` payload: the pinned
+// binary AND (§A1b) the DEFAULT socket it drives. Attaching with both pins the
+// wave block to the SAME tmux server the conductor's `recoder-*` sessions live on.
+type ConductorTmuxServer = {
+    tmuxBin: string;
+    tmuxSocket?: string;
+};
+
 // The cwd rides into cmd:cwd (argv, no shell), so the only hard requirements are
 // "plausible absolute path" and "not flag-shaped". A bad cwd is dropped rather
 // than rejecting the whole request — tmux attach works from any directory.
@@ -29,6 +37,21 @@ function sanitizeCwd(raw: unknown): string | undefined {
         return undefined;
     }
     return cwd;
+}
+
+// The socket path is sourced from the conductor's health payload (never the
+// guest), but is still guarded so a malformed value can't smuggle a tmux flag
+// into argv. A bad/absent socket is dropped — attach then falls back to tmux's
+// own default socket, which is the same server (§A1b mirror), so this is safe.
+function sanitizeTmuxSocket(raw: unknown): string | undefined {
+    if (typeof raw != "string") {
+        return undefined;
+    }
+    const socket = raw.trim();
+    if (socket == "" || socket.startsWith("-") || socket.includes("\0")) {
+        return undefined;
+    }
+    return socket;
 }
 
 function parseOpenWorkspaceTerminalPayload(raw: unknown): OpenWorkspaceTerminalPayload | null {
@@ -49,12 +72,21 @@ function parseOpenWorkspaceTerminalPayload(raw: unknown): OpenWorkspaceTerminalP
 
 // cmd:runonstart=true + cmd:runonce=false is deliberate (differs from `wsh run`):
 // the tmux session outlives the app, so the block should re-attach after relaunch.
-function buildAttachBlockMeta(payload: OpenWorkspaceTerminalPayload, tmuxBin: string): Record<string, unknown> {
+function buildAttachBlockMeta(
+    payload: OpenWorkspaceTerminalPayload,
+    tmuxBin: string,
+    tmuxSocket?: string,
+): Record<string, unknown> {
+    // `-S <socket>` is a GLOBAL tmux flag and must precede the command word; it
+    // pins attach to the SAME default socket the conductor drives (§A1b). Absent
+    // socket ⇒ tmux resolves its own default, so the target server is unchanged.
+    const attachArgs = ["attach-session", "-t", payload.sessionName];
+    const args = tmuxSocket != null ? ["-S", tmuxSocket, ...attachArgs] : attachArgs;
     const meta: Record<string, unknown> = {
         view: "term",
         controller: "cmd",
         cmd: tmuxBin,
-        "cmd:args": ["attach-session", "-t", payload.sessionName],
+        "cmd:args": args,
         "cmd:shell": false,
         "cmd:runonstart": true,
         "cmd:runonce": false,
@@ -66,28 +98,47 @@ function buildAttachBlockMeta(payload: OpenWorkspaceTerminalPayload, tmuxBin: st
     return meta;
 }
 
-// The pinned tmux path comes from the conductor's own health payload
-// (CONDUCTOR_TMUX_BIN / engines tmux) — NEVER from the caller/guest, because
-// `cmd` is the program the term block executes. Degrades to PATH "tmux".
-async function resolveConductorTmuxBin(): Promise<string> {
+// The pinned tmux binary AND default socket come from the conductor's own
+// `/api/conductor/health` payload (§A1a/§A1b) — NEVER from the caller/guest,
+// because `cmd` is the program the term block executes. Sourcing both is what
+// makes an "attach to a conductor recoder-* session" open against the SAME tmux
+// server the conductor drives instead of a PATH `tmux` on some other socket.
+// Degrades truthfully: unreachable backend / missing field ⇒ PATH "tmux" on
+// tmux's own default socket (unknown socket is dropped, never guessed).
+async function resolveConductorTmuxServer(): Promise<ConductorTmuxServer> {
     try {
-        const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/health/full`);
+        const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/health`);
         const body = await res.json();
-        const tmuxBin = body?.data?.substrate?.tmuxBin;
-        if (typeof tmuxBin == "string" && tmuxBin.trim() != "") {
-            return tmuxBin.trim();
-        }
+        const substrate = body?.data?.substrate;
+        const rawBin = substrate?.tmuxBin;
+        const tmuxBin = typeof rawBin == "string" && rawBin.trim() != "" ? rawBin.trim() : FallbackTmuxBin;
+        const tmuxSocket = sanitizeTmuxSocket(substrate?.tmuxSocket);
+        return tmuxSocket != null ? { tmuxBin, tmuxSocket } : { tmuxBin };
     } catch {
-        // backend unreachable — PATH tmux is the truthful fallback
+        // backend unreachable — PATH tmux on the default socket is the truthful fallback
+        return { tmuxBin: FallbackTmuxBin };
     }
-    return FallbackTmuxBin;
+}
+
+// Binary-only convenience used by callers that already hold a trusted pin (the
+// hub "Terminal" button passes `setup.tmuxBin`); the socket-aware attach goes
+// through resolveConductorTmuxServer.
+async function resolveConductorTmuxBin(): Promise<string> {
+    return (await resolveConductorTmuxServer()).tmuxBin;
 }
 
 // Fire-and-forget from event handlers; a failed open must never crash the view.
+// A caller-provided (trusted) tmuxBin attaches with that binary alone — the
+// default hub path, unchanged. Without one, the explicit attach-conductor-session
+// affordance sources binary+socket from health so it hits the conductor's server.
 async function openWorkspaceTerminal(payload: OpenWorkspaceTerminalPayload, tmuxBin?: string): Promise<void> {
     try {
-        const bin = tmuxBin && tmuxBin.trim() != "" ? tmuxBin.trim() : await resolveConductorTmuxBin();
-        await createBlock({ meta: buildAttachBlockMeta(payload, bin) });
+        if (tmuxBin != null && tmuxBin.trim() != "") {
+            await createBlock({ meta: buildAttachBlockMeta(payload, tmuxBin.trim()) });
+            return;
+        }
+        const server = await resolveConductorTmuxServer();
+        await createBlock({ meta: buildAttachBlockMeta(payload, server.tmuxBin, server.tmuxSocket) });
     } catch {
         // degrade-safe: opening a block should never take down the calling view
     }
@@ -142,5 +193,8 @@ export {
     OpenWorkspaceTerminalChannel,
     parseOpenWorkspaceTerminalPayload,
     resolveConductorTmuxBin,
+    resolveConductorTmuxServer,
+    sanitizeTmuxSocket,
+    type ConductorTmuxServer,
     type OpenWorkspaceTerminalPayload,
 };
