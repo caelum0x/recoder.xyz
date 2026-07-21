@@ -1348,7 +1348,33 @@ export class ConductorComposer implements ConductorModule {
       getWorkspace: (id) => this.engine.getWorkspace(id),
       buildView: (workspace) => this.buildWorkspaceView(workspace),
       diffStat: (workspace) => this.computeDiffStat(workspace),
+      changedFiles: (workspace) => this.computeChangedFiles(workspace),
     };
+  }
+
+  /**
+   * A READ-ONLY tracked changed-file path list for one workspace — the compare
+   * row's `changedFiles` + the input to the CONTESTED overlap. REUSES the shipped
+   * pure `workspaceDiffFiles` op (base fenced before `--`, NO agent pathspec,
+   * exec-bounded) — no new git surface. Mirrors `computeDiffStat`'s degrade
+   * posture: a record with no worktree, a non-repo/git-absent tree, or a racy
+   * vanish yields a truthful reason and NO list (never a fabricated set).
+   */
+  private async computeChangedFiles(
+    workspace: Workspace,
+  ): Promise<{ files?: readonly string[]; reason?: string }> {
+    if (!workspace.worktreePath) {
+      return { reason: 'no worktree (never launched or already torn down)' };
+    }
+    try {
+      const view = await workspaceDiffFilesOp(this.reviewDeps(), workspace.workspaceId);
+      if (!view.available) {
+        return { reason: 'changed-file list unavailable (non-repo / git absent)' };
+      }
+      return { files: view.files.map((f) => f.path) };
+    } catch (err) {
+      return { reason: err instanceof Error ? err.message : 'changed-file list failed' };
+    }
   }
 
   /**

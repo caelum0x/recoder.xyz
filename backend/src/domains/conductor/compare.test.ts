@@ -11,13 +11,74 @@
  * with a truthful reason (never a fabricated `0/0/0`).
  */
 import { describe, it, expect } from 'vitest';
+import type { Workspace } from '@recoder/agent-os';
 import {
   composeConductor,
   FakeSubstrate,
   makeCreateInput,
   makePrincipal,
 } from './__fixtures__/harness.js';
-import { parseDiffStat, taskGroupOf } from './services/compare.service.js';
+import {
+  compareTaskGroup as compareTaskGroupOp,
+  computeContested,
+  parseDiffStat,
+  taskGroupOf,
+  type CompareDeps,
+  type SiblingCompareEntry,
+} from './services/compare.service.js';
+
+/** A fake `Workspace` record tagged into `taskGroup` — the population the op groups over. */
+function fakeWorkspace(workspaceId: string, taskGroup: string, createdAt: string): Workspace {
+  return {
+    workspaceId,
+    spaceId: 's',
+    projectId: 'p',
+    taskId: 't',
+    runtimeId: 'claude_code',
+    substrate: 'tmux_worktree',
+    branch: 'b',
+    baseRef: 'HEAD',
+    state: 'running',
+    createdBy: 'u',
+    createdAt,
+    updatedAt: createdAt,
+    metadata: { taskGroup },
+  } as unknown as Workspace;
+}
+
+/**
+ * A pure, injected {@link CompareDeps} that serves each workspace's changed-file
+ * list from `changed`. `buildView` throws (the compare service catches it → no
+ * attention) and `diffStat` is irrelevant here — this isolates the overlap logic.
+ */
+function fakeCompareDeps(
+  workspaces: readonly Workspace[],
+  changed: Record<string, { files?: readonly string[]; reason?: string }>,
+): CompareDeps {
+  return {
+    listWorkspaces: async () => [...workspaces],
+    getWorkspace: async (id) => workspaces.find((w) => w.workspaceId === id) ?? null,
+    buildView: async () => {
+      throw new Error('no view in this pure overlap test');
+    },
+    diffStat: async () => ({ reason: 'diffStat not exercised in this test' }),
+    changedFiles: async (ws) => changed[ws.workspaceId] ?? { reason: 'unset' },
+  };
+}
+
+/** A minimal {@link SiblingCompareEntry} for direct {@link computeContested} tests. */
+function fakeEntry(workspaceId: string, changedFiles?: readonly string[]): SiblingCompareEntry {
+  return {
+    workspaceId,
+    agent: 'claude_code',
+    runtimeId: 'claude_code',
+    branch: 'b',
+    state: 'running',
+    createdAt: 'now',
+    updatedAt: 'now',
+    ...(changedFiles ? { changedFiles } : {}),
+  };
+}
 
 /** A FakeSubstrate whose diff reports a real `git diff --stat` summary line. */
 function statSubstrate() {
@@ -158,9 +219,123 @@ describe('conductor multi-agent compare', () => {
     expect(sib.diffStat).toBeUndefined();
     expect(sib.diffStatReason).toContain('no worktree');
   });
+
+  it('composed 3-sibling group degrades contested to [] with changedFilesReason when worktrees are not real repos', async () => {
+    // The FakeSubstrate worktree (`/tmp/fake/<ref>`) is NOT a real git repo, so the
+    // reused per-file diff read degrades every sibling to a truthful reason — the
+    // contested overlap must be `[]` (never a fabricated collision), end to end.
+    const { module } = composeConductor({ substrates: [statSubstrate()] });
+    await launchSibling(module, 'grp_contest', 'claude_code');
+    await launchSibling(module, 'grp_contest', 'codex');
+    await launchSibling(module, 'grp_contest', 'opencode');
+
+    const compare = await module.compareTaskGroup('grp_contest');
+
+    expect(compare.count).toBe(3);
+    expect(compare.contested).toEqual([]);
+    for (const sib of compare.siblings) {
+      expect(sib.changedFiles).toBeUndefined();
+      expect(sib.changedFilesReason).toBeDefined();
+    }
+  });
+});
+
+describe('compare contested-file overlap', () => {
+  const wsA = fakeWorkspace('A', 'grp', '2026-01-01T00:00:00Z');
+  const wsB = fakeWorkspace('B', 'grp', '2026-01-01T00:00:01Z');
+  const wsC = fakeWorkspace('C', 'grp', '2026-01-01T00:00:02Z');
+  const members = [wsA, wsB, wsC];
+
+  it('0-overlap across 3 siblings ⇒ contested []', async () => {
+    const deps = fakeCompareDeps(members, {
+      A: { files: ['a.ts'] },
+      B: { files: ['b.ts'] },
+      C: { files: ['c.ts'] },
+    });
+    const view = await compareTaskGroupOp(deps, 'grp');
+    expect(view.contested).toEqual([]);
+  });
+
+  it('pairwise overlap ⇒ one contested file with the 2 workspaceIds', async () => {
+    const deps = fakeCompareDeps(members, {
+      A: { files: ['a.ts', 'shared.ts'] },
+      B: { files: ['shared.ts', 'b.ts'] },
+      C: { files: ['c.ts'] },
+    });
+    const view = await compareTaskGroupOp(deps, 'grp');
+    expect(view.contested).toEqual([{ path: 'shared.ts', workspaceIds: ['A', 'B'] }]);
+  });
+
+  it('all-three overlap ⇒ one contested file with all 3 workspaceIds', async () => {
+    const deps = fakeCompareDeps(members, {
+      A: { files: ['x.ts'] },
+      B: { files: ['x.ts'] },
+      C: { files: ['x.ts'] },
+    });
+    const view = await compareTaskGroupOp(deps, 'grp');
+    expect(view.contested).toEqual([{ path: 'x.ts', workspaceIds: ['A', 'B', 'C'] }]);
+  });
+
+  it('per-sibling changedFiles projected onto each entry', async () => {
+    const deps = fakeCompareDeps(members, {
+      A: { files: ['a.ts', 'shared.ts'] },
+      B: { files: ['shared.ts', 'b.ts'] },
+      C: { files: ['c.ts'] },
+    });
+    const view = await compareTaskGroupOp(deps, 'grp');
+    const byId = Object.fromEntries(view.siblings.map((s) => [s.workspaceId, s.changedFiles]));
+    expect(byId.A).toEqual(['a.ts', 'shared.ts']);
+    expect(byId.B).toEqual(['shared.ts', 'b.ts']);
+    expect(byId.C).toEqual(['c.ts']);
+  });
+
+  it('degrade: an unreadable sibling contributes nothing (changedFilesReason set, no fabricated overlap)', async () => {
+    const deps = fakeCompareDeps(members, {
+      A: { files: ['shared.ts'] },
+      B: { reason: 'no worktree (never launched or already torn down)' },
+      C: { files: ['shared.ts'] },
+    });
+    const view = await compareTaskGroupOp(deps, 'grp');
+    // Overlap is over the READABLE siblings only — never fabricated for B.
+    expect(view.contested).toEqual([{ path: 'shared.ts', workspaceIds: ['A', 'C'] }]);
+    const b = view.siblings.find((s) => s.workspaceId === 'B')!;
+    expect(b.changedFiles).toBeUndefined();
+    expect(b.changedFilesReason).toContain('no worktree');
+  });
 });
 
 describe('compare service pure helpers', () => {
+  it('computeContested: empty input and entries lacking changedFiles ⇒ []', () => {
+    expect(computeContested([])).toEqual([]);
+    // Entries with no changedFiles (unreadable) never contest, even on the same path.
+    expect(computeContested([fakeEntry('A'), fakeEntry('B')])).toEqual([]);
+    // A readable sibling + an unreadable one on the same path ⇒ still no overlap.
+    expect(computeContested([fakeEntry('A', ['shared.ts']), fakeEntry('B')])).toEqual([]);
+  });
+
+  it('computeContested: 0/pairwise/all-three overlap', () => {
+    expect(
+      computeContested([
+        fakeEntry('A', ['a.ts']),
+        fakeEntry('B', ['b.ts']),
+        fakeEntry('C', ['c.ts']),
+      ]),
+    ).toEqual([]);
+    expect(
+      computeContested([
+        fakeEntry('A', ['a.ts', 'shared.ts']),
+        fakeEntry('B', ['shared.ts', 'b.ts']),
+      ]),
+    ).toEqual([{ path: 'shared.ts', workspaceIds: ['A', 'B'] }]);
+    expect(
+      computeContested([
+        fakeEntry('A', ['x.ts']),
+        fakeEntry('B', ['x.ts']),
+        fakeEntry('C', ['x.ts']),
+      ]),
+    ).toEqual([{ path: 'x.ts', workspaceIds: ['A', 'B', 'C'] }]);
+  });
+
   it('parseDiffStat reads insertions/deletions from a --stat summary line', () => {
     expect(parseDiffStat(' 3 files changed, 45 insertions(+), 12 deletions(-)', 3)).toEqual({
       files: 3,
