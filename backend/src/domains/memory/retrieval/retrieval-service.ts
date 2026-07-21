@@ -66,7 +66,7 @@ export function createRetrievalService(deps: RetrievalServiceDeps): RetrievalPor
    */
   async function fuseWithColbert(
     query: string,
-    collection: string,
+    colbertCollection: string,
     topK: number,
     qdrant: SearchResult,
   ): Promise<SearchResult> {
@@ -84,7 +84,7 @@ export function createRetrievalService(deps: RetrievalServiceDeps): RetrievalPor
         ],
       };
     }
-    const colbert = await colbertSearch.search(collection, query, topK);
+    const colbert = await colbertSearch.search(colbertCollection, query, topK);
     if (!colbert.available || colbert.hits.length === 0) {
       return {
         ...qdrant,
@@ -142,6 +142,10 @@ export function createRetrievalService(deps: RetrievalServiceDeps): RetrievalPor
 
     async search(query: string, opts?: SearchOpts): Promise<SearchResult> {
       const collection = opts?.collection?.trim() || defaultCollection;
+      // The ColBERT first-stage can target its OWN collection (e.g. a per-repo
+      // `repo_<id>` PLAID index) without moving the Qdrant single-vector search
+      // off `collection`. Absent → falls back to the Qdrant collection.
+      const colbertCollection = opts?.colbertCollection?.trim() || collection;
       const engine = engineFor(foundation, collection);
       const topK = opts?.topK ?? 8;
       const result = await engine.search(query, topK);
@@ -154,7 +158,7 @@ export function createRetrievalService(deps: RetrievalServiceDeps): RetrievalPor
       };
       // Only fuse a real search (a not_configured Qdrant stays truthfully as-is).
       if (qdrant.status !== 'ok') return qdrant;
-      return fuseWithColbert(query, collection, topK, qdrant);
+      return fuseWithColbert(query, colbertCollection, topK, qdrant);
     },
   };
 }
