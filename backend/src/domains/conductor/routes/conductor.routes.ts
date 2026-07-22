@@ -12,6 +12,7 @@
  *   GET    /api/conductor/workspaces/:id/diff/file   single-file unified patch (?path=)
  *   GET    /api/conductor/workspaces/:id/tree     worktree file list
  *   GET    /api/conductor/workspaces/:id/mergeability  pre-merge conflict + base-divergence probe
+ *   GET    /api/conductor/workspaces/:id/readiness  folded merge-readiness read-model (4 signals + verdict)
  *   GET    /api/conductor/workspaces/:id/dev-command  detected dev command (or null)
  *   GET    /api/conductor/workspaces/:id/preview-verification  last preview verification summary (404 when unverified)
  *   GET    /api/conductor/workspaces/:id/view     attention-enriched view (truthful unknown)
@@ -213,6 +214,22 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
         sendSuccess(res, await module.workspaceMergeability(req.params.id));
       } catch (err) {
         sendError(res, toReadError(err, 'mergeability failed'));
+      }
+    }),
+  );
+
+  // Merge-readiness read-model: fold the four merge-decision signals (lifecycle,
+  // mergeability, PR checks, preview verification) into one truthful verdict.
+  // PURE read (no gate). Each signal degrades INDEPENDENTLY to 'unknown' — never a
+  // fabricated pass — and 'ready' is the hardest gate. "not found" → 404, else → 503.
+  router.get(
+    '/workspaces/:id/readiness',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      try {
+        sendSuccess(res, await module.workspaceReadiness(req.params.id));
+      } catch (err) {
+        sendError(res, toReadError(err, 'readiness failed'));
       }
     }),
   );

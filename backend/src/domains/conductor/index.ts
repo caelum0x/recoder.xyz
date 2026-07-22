@@ -67,6 +67,8 @@ export type {
   WorkspaceFilePatchView,
 } from './review/workspace-review.ops.js';
 import type { MergeabilityView } from './services/mergeability.service.js';
+import type { ReadinessView } from './services/readiness.service.js';
+export type { ReadinessView, ReadinessSignal } from './services/readiness.service.js';
 import type {
   CreatePrInput,
   CreatePrResultView,
@@ -368,6 +370,14 @@ export interface ConductorModule {
   workspaceFilePatch(workspaceId: string, path: string): Promise<WorkspaceFilePatchView>;
   /** Read-only pre-merge conflict + base-divergence probe (git-native, degrade-truthful; never a fabricated clean). */
   workspaceMergeability(workspaceId: string): Promise<MergeabilityView>;
+  /**
+   * Fold the four merge-decision signals (lifecycle, mergeability, PR checks,
+   * preview verification) into ONE truthful read-model (`GET …/readiness`). PURE
+   * read (no gate/audit/mutation); each probe degrades INDEPENDENTLY to an
+   * `'unknown'` signal, and the verdict is never `'ready'` unless the merge gate
+   * is a real `available && clean` pass. A missing workspace throws (→ 404).
+   */
+  workspaceReadiness(workspaceId: string): Promise<ReadinessView>;
   /** Detected dev-server command for the worktree's project (or null). */
   workspaceDevCommand(workspaceId: string): Promise<DevCommandView | null>;
   /** Persist a sniffed loopback preview URL — GATED (`workspace.preview_url`). */
