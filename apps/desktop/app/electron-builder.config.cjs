@@ -69,7 +69,13 @@ const config = {
             filter: ["**/*"],
         },
         {
-            from: "../../../backend/node_modules",
+            // Default = the in-repo pnpm symlink farm. For a SIGNED build this
+            // must instead point at a self-contained deploy whose symlinks all
+            // resolve inside the tree (real native .node binaries built in
+            // place) — the source symlinks escape the .app bundle and dangle,
+            // which aborts codesign with ENOENT. Set
+            // RECODER_BACKEND_NODE_MODULES to the deploy's node_modules.
+            from: process.env.RECODER_BACKEND_NODE_MODULES || "../../../backend/node_modules",
             to: "backend/node_modules",
             filter: ["**/*"],
         },
