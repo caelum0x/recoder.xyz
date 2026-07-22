@@ -19,7 +19,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { ComparePanel } from './ComparePanel';
-import type { CompareView, SiblingCompareEntry } from '../types';
+import { workspaceCodename } from '../lib/workspace-codename';
+import type { CompareView, ContestedFile, SiblingCompareEntry } from '../types';
 
 const BACKEND_URL = 'http://localhost:3100';
 
@@ -257,5 +258,90 @@ describe('ComparePanel', () => {
 
     expect(c.querySelector('.compare-note')?.textContent).toContain('No siblings');
     expect(c.querySelector('.compare-grid')).toBeNull();
+  });
+
+  function contestedView(
+    siblings: SiblingCompareEntry[],
+    contested: ContestedFile[],
+    taskGroup = 'grp_1',
+  ): CompareView {
+    return { taskGroup, count: siblings.length, contested, siblings };
+  }
+
+  it('surfaces the contested strip and a badge on each colliding sibling', async () => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async () =>
+      compareResponse(
+        contestedView(
+          [
+            sibling({ workspaceId: 'ws_a', agent: 'claude' }),
+            sibling({ workspaceId: 'ws_b', agent: 'codex' }),
+          ],
+          [{ path: 'src/a.ts', workspaceIds: ['ws_a', 'ws_b'] }],
+        ),
+      ),
+    );
+
+    const c = mount();
+    await flush(10);
+
+    const strip = c.querySelector('.compare-contested');
+    expect(strip).not.toBeNull();
+    expect(c.querySelector('.compare-contested-path')?.textContent).toBe('src/a.ts');
+    expect(strip?.textContent).toContain(workspaceCodename('ws_a'));
+    expect(strip?.textContent).toContain(workspaceCodename('ws_b'));
+    expect(c.querySelectorAll('.compare-col-contested-badge').length).toBe(2);
+  });
+
+  it('renders no strip and no badges when contested is empty (calm, not a green banner)', async () => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async () =>
+      compareResponse(
+        contestedView([sibling({ workspaceId: 'ws_a', agent: 'claude' })], []),
+      ),
+    );
+
+    const c = mount();
+    await flush(10);
+
+    expect(c.querySelector('.compare-contested')).toBeNull();
+    expect(c.querySelectorAll('.compare-col-contested-badge').length).toBe(0);
+  });
+
+  it('degrades to no strip when an older backend omits contested', async () => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async () =>
+      compareResponse(compareView([sibling({ workspaceId: 'ws_a', agent: 'claude' })])),
+    );
+
+    const c = mount();
+    await flush(10);
+
+    expect(c.querySelector('.compare-col')?.textContent).toBeTruthy();
+    expect(c.querySelector('.compare-contested')).toBeNull();
+    expect(c.querySelectorAll('.compare-col-contested-badge').length).toBe(0);
+  });
+
+  it('badges only the colliding siblings, never a false positive', async () => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async () =>
+      compareResponse(
+        contestedView(
+          [
+            sibling({ workspaceId: 'ws_a', agent: 'claude' }),
+            sibling({ workspaceId: 'ws_b', agent: 'codex' }),
+            sibling({ workspaceId: 'ws_c', agent: 'cursor' }),
+          ],
+          [{ path: 'src/a.ts', workspaceIds: ['ws_a', 'ws_b'] }],
+        ),
+      ),
+    );
+
+    const c = mount();
+    await flush(10);
+
+    const cols = c.querySelectorAll('.compare-col');
+    expect(cols.length).toBe(3);
+    expect(c.querySelectorAll('.compare-col-contested-badge').length).toBe(2);
+    const wsCCol = Array.from(cols).find((col) =>
+      (col.textContent ?? '').includes('cursor'),
+    );
+    expect(wsCCol?.querySelector('.compare-col-contested-badge')).toBeNull();
   });
 });
