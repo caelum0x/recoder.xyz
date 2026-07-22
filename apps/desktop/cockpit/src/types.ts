@@ -472,6 +472,12 @@ export interface DiffStat {
   deletions: number;
 }
 
+/** A file 2+ siblings BOTH touched — where parallel agents will collide.
+ *  Mirrors ContestedFile in compare.service.ts. Server-computed ONLY from
+ *  readable siblings (an unreadable sibling contributes nothing), so the panel
+ *  merely projects a truthful set — it never invents a collision. */
+export interface ContestedFile { path: string; workspaceIds: string[] }
+
 /** One agent's row in the side-by-side compare of a parallel-run group. */
 export interface SiblingCompareEntry {
   workspaceId: string;
@@ -490,6 +496,10 @@ export interface SiblingCompareEntry {
   diffStat?: DiffStat;
   /** Truthful reason `diffStat` is absent (no worktree, substrate fault, …). */
   diffStatReason?: string;
+  /** Tracked changed-file paths vs base — ABSENT (with a reason) when unreadable; `[]` = readable, no changes. */
+  changedFiles?: readonly string[];
+  /** Truthful reason `changedFiles` is absent (no worktree, non-repo, git absent). */
+  changedFilesReason?: string;
 }
 
 /**
@@ -542,6 +552,10 @@ export interface CompareView {
   /** The shared group key, or `null` when the subject workspace is ungrouped. */
   taskGroup: string | null;
   count: number;
+  /** Files 2+ siblings BOTH touched — where parallel agents will collide. The
+   *  backend always emits this (`[]` = no overlap); OPTIONAL here so an older
+   *  backend that omits it degrades to no strip — never a fabricated collision. */
+  contested?: ContestedFile[];
   siblings: SiblingCompareEntry[];
   /**
    * READ-ONLY operator-attach hint for the whole group, enriched by the backend

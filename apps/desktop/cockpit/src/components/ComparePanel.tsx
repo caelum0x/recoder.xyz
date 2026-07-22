@@ -28,7 +28,7 @@ import {
 import { canMerge, statePill, stateTone } from '../lib/workspace-state';
 import { workspaceCodename } from '../lib/workspace-codename';
 import { GroupAttachAction } from './GroupAttachAction';
-import type { AttentionState, DiffStat, SiblingCompareEntry } from '../types';
+import type { AttentionState, ContestedFile, DiffStat, SiblingCompareEntry } from '../types';
 
 interface ComparePanelProps {
   /** The shared parallel-run group key to aggregate. */
@@ -96,14 +96,36 @@ function DiffStatLine({ stat, reason }: { stat?: DiffStat; reason?: string }) {
   );
 }
 
+/**
+ * The contested strip — files 2+ siblings BOTH touched (where parallel agents
+ * will collide). Purely projects the server-computed `contested` set: empty or
+ * absent ⇒ nothing rendered (terminal-plain calm — no collisions is NOT a green
+ * "all clear" banner). Codenames are derived deterministically from the id.
+ */
+function ContestedStrip({ contested }: { contested: ContestedFile[] }) {
+  if (contested.length === 0) return null;
+  return (
+    <div class="compare-contested">
+      {contested.map((c) => (
+        <div key={c.path}>
+          <span class="compare-contested-path">{c.path}</span>
+          {` — ${c.workspaceIds.map(workspaceCodename).join(', ')}`}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SiblingColumn({
   sibling,
   outcome,
   onMerge,
+  contestedPaths,
 }: {
   sibling: SiblingCompareEntry;
   outcome: MergeOutcome | undefined;
   onMerge: (sibling: SiblingCompareEntry) => void;
+  contestedPaths?: string[];
 }) {
   const mergeable = canMerge(sibling.state);
   const busy = outcome?.kind === 'busy';
@@ -116,6 +138,15 @@ function SiblingColumn({
       <div class="compare-col-handle" title={`${sibling.workspaceId} · ${sibling.branch}`}>
         {workspaceCodename(sibling.workspaceId)}
       </div>
+
+      {contestedPaths && contestedPaths.length > 0 && (
+        <span
+          class="compare-col-contested-badge badge tone-warn"
+          title={`Also touched by another agent: ${contestedPaths.join(', ')}`}
+        >
+          {contestedPaths.length} contested
+        </span>
+      )}
 
       {sibling.attention && sibling.attention !== 'unknown' && (
         <span
@@ -194,6 +225,15 @@ export function ComparePanel({ taskGroup, goal, onClose, onChanged }: ComparePan
 
   const compare = poll.data;
   const siblings = compare?.siblings ?? [];
+  const contested = compare?.contested ?? [];
+  const contestedByWorkspace = new Map<string, string[]>();
+  for (const entry of contested) {
+    for (const wsId of entry.workspaceIds) {
+      const list = contestedByWorkspace.get(wsId);
+      if (list) list.push(entry.path);
+      else contestedByWorkspace.set(wsId, [entry.path]);
+    }
+  }
   const empty = !poll.loading && !poll.error && siblings.length === 0;
 
   return (
@@ -222,6 +262,8 @@ export function ComparePanel({ taskGroup, goal, onClose, onChanged }: ComparePan
           </p>
         )}
 
+        <ContestedStrip contested={contested} />
+
         {siblings.length > 0 && (
           <div class="compare-grid">
             {siblings.map((sibling) => (
@@ -230,6 +272,7 @@ export function ComparePanel({ taskGroup, goal, onClose, onChanged }: ComparePan
                 sibling={sibling}
                 outcome={outcomes[sibling.workspaceId]}
                 onMerge={(s) => void merge(s)}
+                contestedPaths={contestedByWorkspace.get(sibling.workspaceId)}
               />
             ))}
           </div>
