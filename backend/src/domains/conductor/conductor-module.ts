@@ -146,6 +146,7 @@ import { buildRepoConfigRoutes } from './routes/repo-config.routes.js';
 import { RepoSetupService, repoKeyFor } from './services/repo-setup.service.js';
 import { PrStatusService } from './services/pr-status.service.js';
 import { MergeabilityService, type MergeabilityView } from './services/mergeability.service.js';
+import { foldReadiness, type ReadinessView } from './services/readiness.service.js';
 import { createInMemoryRepoSetupStore } from './adapters/repo-setup-store.adapter.js';
 import {
   compareTaskGroup as compareTaskGroupOp,
@@ -1520,6 +1521,36 @@ export class ConductorComposer implements ConductorModule {
     const workspace = await this.engine.getWorkspace(workspaceId);
     if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
     return this.mergeability.probe(workspace);
+  }
+
+  /**
+   * Fold the four merge-decision signals (lifecycle, mergeability, PR checks,
+   * preview verification) into ONE truthful read-model (`GET …/readiness`). PURE
+   * read: no gate, no audit, no mutation. Each of the four probes is settled
+   * INDEPENDENTLY via `Promise.allSettled`, so a rejected/hung probe degrades to
+   * an ABSENT input — the corresponding signal reports `'unknown'` and the edge
+   * never 500s, never a fabricated pass. `state` is read from the already-fetched
+   * workspace record (NOT the view probe), so lifecycle stays truthful even if the
+   * view probe rejects. A missing workspace throws (→ 404 at the edge).
+   */
+  async workspaceReadiness(workspaceId: string): Promise<ReadinessView> {
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
+    const [mergeR, prR, previewR, viewR] = await Promise.allSettled([
+      this.mergeability.probe(workspace),
+      this.prStatus.status(workspace),
+      this.getPreviewVerification(workspaceId),
+      this.buildWorkspaceView(workspace),
+    ]);
+    return foldReadiness({
+      state: workspace.state,
+      ...(viewR.status === 'fulfilled' && viewR.value.attention
+        ? { attention: viewR.value.attention }
+        : {}),
+      ...(mergeR.status === 'fulfilled' ? { mergeability: mergeR.value } : {}),
+      ...(prR.status === 'fulfilled' ? { prStatus: prR.value } : {}),
+      ...(previewR.status === 'fulfilled' ? { preview: previewR.value } : {}),
+    });
   }
 
   async workspaceDevCommand(workspaceId: string): Promise<DevCommandView | null> {
