@@ -1267,11 +1267,18 @@ export class BackendSupervisor {
             }
             this.apiKey = apiKey;
 
-            // Fail-closed: when we hold a real minted key, the backend must
-            // REQUIRE it (STRICT_AUTH) — otherwise the key is decorative and any
-            // local process could drive the conductor. The permissive loopback
-            // mode is reserved for the documented mint-failure degrade above.
-            const spawnEnv = apiKey ? { ...env, STRICT_AUTH: "true" } : env;
+            // Fail-closed ONLY when the minted key is actually enforceable. The
+            // greenfield backend validates sk_ keys through the DB-backed
+            // ApiKeyService; without a DATABASE_URL (the embedded desktop
+            // default) that store is empty, so a minted key can NEVER
+            // authenticate — forcing STRICT_AUTH would 401 every route and brick
+            // the app. In that case we stay on the documented permissive
+            // loopback posture (STRICT_AUTH=false; single local user, loopback
+            // bind, RECODER_SOLO_MODE). When a durable store IS configured the
+            // key is required, so it is never decorative. Follow-up: a DB-less
+            // durable key store so the desktop can be strict too.
+            const keyIsEnforceable = Boolean(apiKey && env.DATABASE_URL);
+            const spawnEnv = keyIsEnforceable ? { ...env, STRICT_AUTH: "true" } : env;
             this._env = spawnEnv;
 
             this._appendLog("info", "spawning backend child", {
