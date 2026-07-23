@@ -1282,7 +1282,7 @@ describe("BackendSupervisor crash + stop lifecycle", () => {
 });
 
 describe("BackendSupervisor packaged spawn target", () => {
-    it("runs node dist/server.js from resourcesPath/backend when packaged", async () => {
+    it("runs dist/server.js under tsx from resourcesPath/backend when packaged", async () => {
         const child = makeFakeChild();
         const spawn = vi.fn(() => child);
         const fetchImpl = vi.fn(async () => ({ status: 200, json: async () => ({ success: true }) }));
@@ -1297,7 +1297,9 @@ describe("BackendSupervisor packaged spawn target", () => {
         await sup.start();
         const [command, args, spawnOpts] = spawn.mock.calls[0] as any;
         expect(command).toBe(process.execPath);
-        expect(args[0]).toBe(path.join("/Resources", "backend", "dist", "server.js"));
+        // tsx's in-process loader transpiles the TS-source workspace deps that
+        // dist/server.js require()s (plain node cannot load their src/*.ts).
+        expect(args).toEqual(["--import", "tsx", path.join("/Resources", "backend", "dist", "server.js")]);
         expect(spawnOpts.cwd).toBe(path.join("/Resources", "backend"));
     });
 });

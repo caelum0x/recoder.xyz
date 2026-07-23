@@ -439,7 +439,13 @@ function buildConfig(env: ParsedEnv, rawEnv: EnvSource): AppConfig {
     betterAuthSecretPresent: Boolean(env.BETTER_AUTH_SECRET),
     authDatabaseUrl: env.AUTH_DATABASE_URL ?? null,
     cookieDomain: env.AUTH_COOKIE_DOMAIN ?? null,
-    strict: isProduction || asBool(env.STRICT_AUTH, false),
+    // Strict auth defaults ON in production, but an EXPLICIT STRICT_AUTH wins.
+    // A cloud production deploy never sets it → stays strict. The embedded
+    // desktop backend is a production build that runs loopback-only for one
+    // local user (HOST=127.0.0.1, RECODER_SOLO_MODE) and deliberately sets
+    // STRICT_AUTH=false; without honoring that override it would 401 every
+    // request (no shared key store without a DB), bricking the app.
+    strict: env.STRICT_AUTH !== undefined ? asBool(env.STRICT_AUTH, false) : isProduction,
   };
 
   const internal: InternalConfig = {

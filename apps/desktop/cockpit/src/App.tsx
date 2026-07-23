@@ -120,6 +120,11 @@ export function App() {
   // A sign-in completed this run. Clears the first-run gate even when the auth
   // result carried no display identity (the session is real either way).
   const [signedInThisRun, setSignedInThisRun] = useState(false);
+  // The user dismissed the proactive first-run gate to work offline. Local
+  // agents run without a recoder.xyz session, so this must never trap an air-
+  // gapped user on the sign-in overlay. Distinct from signedInThisRun — no
+  // session was established, so we never imply a signed-in identity.
+  const [firstRunDismissed, setFirstRunDismissed] = useState(false);
   // The redacted embedded-backend supervisor phase, polled ONLY while the board
   // poll is failing (see the effect below). Null when the desktop bridge is
   // absent or the phase is not worth surfacing — the banner then stays generic.
@@ -278,7 +283,8 @@ export function App() {
   // run), the SignIn panel shows PROACTIVELY over the board, not only after a
   // backend 401. Outside the shell (no device-login bridge) there is no gate —
   // the cockpit keeps its truthful reactive behavior.
-  const needsFirstRunSignIn = hasDesktopDeviceLogin() && !config.identity && !signedInThisRun;
+  const needsFirstRunSignIn =
+    hasDesktopDeviceLogin() && !config.identity && !signedInThisRun && !firstRunDismissed;
 
   // The SignIn panel shows on the first-run gate, or after an unauthenticated
   // poll once the silent refresh attempt has resolved (so a recoverable session
@@ -466,6 +472,9 @@ export function App() {
           reason={unauthenticated ? board.error?.message : undefined}
           expired={wasAuthed && unauthenticated}
           firstRun={needsFirstRunSignIn && !unauthenticated}
+          onSkip={
+            needsFirstRunSignIn && !unauthenticated ? () => setFirstRunDismissed(true) : undefined
+          }
           onAuthenticated={onAuthenticated}
         />
       )}
