@@ -186,6 +186,14 @@ export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSub
       // this adapter adds nothing from process.env). tmux only forwards env to a NEW
       // server; when one already runs, also push each var via `set-environment -g` so
       // the fresh pane picks it up regardless of when the server started.
+      // Always propagate the backend's login-shell-merged PATH into the tmux server
+      // env so agent CLIs (claude/codex) resolve; a fresh pane otherwise inherits a
+      // minimal PATH and dies with "command not found". Idempotent, best-effort.
+      try {
+        await exec(tmuxBin, ['set-environment', '-g', 'PATH', process.env.PATH ?? '']);
+      } catch {
+        /* no server yet / unsupported — the exec env below covers cold start */
+      }
       const env = input.env;
       if (env) {
         for (const [key, value] of Object.entries(env)) {
@@ -237,6 +245,14 @@ export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSub
         /* prior session already gone */
       }
       await ensureRemainOnExit();
+      // Always propagate the backend's login-shell-merged PATH into the tmux server
+      // env so agent CLIs (claude/codex) resolve; a fresh pane otherwise inherits a
+      // minimal PATH and dies with "command not found". Idempotent, best-effort.
+      try {
+        await exec(tmuxBin, ['set-environment', '-g', 'PATH', process.env.PATH ?? '']);
+      } catch {
+        /* no server yet / unsupported — the exec env below covers cold start */
+      }
       const env = input.env;
       if (env) {
         for (const [key, value] of Object.entries(env)) {

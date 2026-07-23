@@ -43,6 +43,14 @@ interface SignInProps {
    * welcoming onboarding framing instead of a rejection message.
    */
   firstRun?: boolean;
+  /**
+   * Optional escape hatch for the proactive first-run gate: when provided, a
+   * subtle "Continue without signing in" action is shown so an offline / air-
+   * gapped user can reach the board and run their LOCAL agents (unlimited,
+   * offline-capable — no recoder.xyz session required). Omitted on a real
+   * backend 401, where sign-in is genuinely required.
+   */
+  onSkip?: () => void;
   /** Called after a successful login so the parent can retry its fetches. */
   onAuthenticated: () => void;
 }
@@ -104,7 +112,7 @@ export function describeSignInFailure(reason?: string): { title: string; hint: s
   };
 }
 
-export function SignIn({ backendUrl, reason, expired, firstRun, onAuthenticated }: SignInProps) {
+export function SignIn({ backendUrl, reason, expired, firstRun, onSkip, onAuthenticated }: SignInProps) {
   const canDeviceLogin = hasDesktopDeviceLogin();
   const canWebLogin = hasDesktopLogin();
   const canLogin = canDeviceLogin || canWebLogin;
@@ -237,6 +245,15 @@ export function SignIn({ backendUrl, reason, expired, firstRun, onAuthenticated 
             <p class="signin-error-title">{failure.title}</p>
             <p class="signin-hint">{failure.hint}</p>
           </div>
+        )}
+
+        {/* Offline escape hatch: local agents run without a recoder.xyz session,
+            so the first-run gate must never trap an air-gapped user. Only shown
+            for the proactive first-run gate (onSkip is omitted on a real 401). */}
+        {onSkip && !signingIn && (
+          <button class="signin-skip" onClick={onSkip}>
+            Continue without signing in — your local agents run offline
+          </button>
         )}
       </div>
     </div>

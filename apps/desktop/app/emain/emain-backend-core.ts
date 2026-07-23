@@ -377,6 +377,8 @@ export function assembleBackendEnv(opts: {
     byokSecrets?: Record<string, string>;
     /** Connector addressing secrets (mem0/colbert/qdrant URLs) from the store (fill-only). */
     connectorSecrets?: Record<string, string>;
+    /** Packaged cockpit static build dir the backend serves at /cockpit (fill-only). */
+    cockpitDist?: string;
 }): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = {
         ...opts.baseEnv,
@@ -424,6 +426,13 @@ export function assembleBackendEnv(opts: {
     // of chasing a path the supervisor could not verify.
     if (opts.beadsBin && !env.BEADS_BIN) {
         env.BEADS_BIN = opts.beadsBin;
+    }
+    // Cockpit static dir the backend serves at /cockpit, fill-only. Packaged the
+    // spawn cwd is <resources>/backend so the backend's own default
+    // (../cockpit/dist) already resolves here; set it explicitly so the mount is
+    // independent of cwd. An operator override still wins.
+    if (opts.cockpitDist && !env.COCKPIT_DIST) {
+        env.COCKPIT_DIST = opts.cockpitDist;
     }
     // BYOK provider keys from the desktop secret store, fill-only: an explicit
     // env var (operator/dev-shell override) always wins over the stored key.
@@ -1235,6 +1244,10 @@ export class BackendSupervisor {
                 vector: vectorEnv,
                 byokSecrets,
                 connectorSecrets,
+                cockpitDist:
+                    this.isPackaged && this.resourcesPath
+                        ? nodePath.join(this.resourcesPath, "cockpit", "dist")
+                        : undefined,
             });
 
             this.port = port;
@@ -1411,14 +1424,24 @@ export class BackendSupervisor {
 
     /**
      * Decide what to exec. Dev: tsx src/server.ts from backend in the repo.
-     * Packaged: node <resourcesPath>/backend/dist/server.js.
+     * Packaged: electron-as-node with tsx's in-process loader running
+     * <resourcesPath>/backend/dist/server.js.
+     *
+     * The compiled backend (dist/server.js) require()s ~40 workspace
+     * @recoder/* packages that ship TypeScript source (their package.json
+     * main/exports point at src/*.ts, with no JS build), so a plain
+     * `node dist/server.js` dies with ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING
+     * on the first such require. tsx's `--import` loader transpiles those .ts
+     * deps on demand — the exact runtime dev already uses. tsx and every
+     * workspace source ship inside the bundled backend/node_modules (a
+     * self-contained pnpm deploy), and cwd=backendDir so `tsx` resolves there.
      */
     _resolveSpawnTarget(): { command: string; args: string[]; cwd: string } {
         if (this.isPackaged && this.resourcesPath) {
             const backendDir = nodePath.join(this.resourcesPath, "backend");
             return {
                 command: process.execPath,
-                args: [nodePath.join(backendDir, "dist", "server.js")],
+                args: ["--import", "tsx", nodePath.join(backendDir, "dist", "server.js")],
                 cwd: backendDir,
             };
         }
