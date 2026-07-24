@@ -14,10 +14,9 @@ const QUIET_BTN =
 const STATUS_MESSAGES: Record<EngineStatus, string> = {
     loading: "",
     ok: "",
-    "engine-down":
-        "OpenFang engine not built — run `cargo build -p openfang-napi` in backend/engines/rust/openfang to compile the engine into the backend.",
-    "not-available": "OpenFang not available on this backend.",
-    down: "Not connected — start the Recoder backend to reach OpenFang.",
+    "engine-down": "Engine not available on this backend.",
+    "not-available": "Engine not available on this backend.",
+    down: "Not connected — start the Recoder backend to reach the engine.",
 };
 
 function AgentRow({ agent, model }: { agent: Agent; model: RecoderOpenfangViewModel }) {
@@ -114,7 +113,7 @@ function RecoderOpenfangView({ model }: ViewComponentProps<RecoderOpenfangViewMo
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
-                <span className="font-semibold">OpenFang — Engine</span>
+                <span className="font-semibold">Recoder — Engine</span>
                 <span className="text-xs text-secondary">in-process (NAPI)</span>
             </div>
 

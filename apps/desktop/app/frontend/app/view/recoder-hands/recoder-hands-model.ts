@@ -184,7 +184,7 @@ class RecoderHandsViewModel implements ViewModel {
                 body: "{}",
             });
             if (res.status == 503) {
-                globalStore.set(this.actionStatusAtom, "OpenFang engine not booted (needs config).");
+                globalStore.set(this.actionStatusAtom, "Engine not booted (needs config).");
                 return;
             }
             if (!res.ok) {

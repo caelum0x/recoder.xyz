@@ -73,7 +73,7 @@ class RecoderOpenfangViewModel implements ViewModel {
         this.blockId = initOpts.blockId;
         this.viewType = "recoder-openfang";
         this.viewIcon = atom("robot");
-        this.viewName = atom("OpenFang");
+        this.viewName = atom("Engine");
         this.statusAtom = atom("loading") as PrimitiveAtom<EngineStatus>;
         this.healthAtom = atom(null) as PrimitiveAtom<EngineHealth | null>;
         this.agentsAtom = atom([]) as PrimitiveAtom<Agent[]>;

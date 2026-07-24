@@ -32,6 +32,36 @@ const USER_AGENT_IPHONE =
 const USER_AGENT_ANDROID =
     "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.43 Mobile Safari/537.36";
 
+// Cold start: an embedded widget (e.g. the cockpit) can load before the local
+// backend is listening. Bounded auto-retry lets it recover once the backend is
+// up, but only for loopback URLs so we never hammer arbitrary remote pages.
+const LoopbackRetryMaxAttempts = 15;
+const LoopbackRetryDelayMs = 2000;
+// Chromium net error codes that mean "server not reachable yet".
+const LoopbackConnectionErrorCodes = new Set([
+    -7, // ERR_TIMED_OUT
+    -21, // ERR_NETWORK_CHANGED
+    -101, // ERR_CONNECTION_RESET
+    -102, // ERR_CONNECTION_REFUSED
+    -104, // ERR_CONNECTION_FAILED
+    -105, // ERR_NAME_NOT_RESOLVED
+    -106, // ERR_INTERNET_DISCONNECTED
+    -109, // ERR_ADDRESS_UNREACHABLE
+    -118, // ERR_CONNECTION_TIMED_OUT
+]);
+
+function isLoopbackUrl(url: string): boolean {
+    if (!url) {
+        return false;
+    }
+    try {
+        const hostname = new URL(url).hostname;
+        return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1" || hostname === "[::1]";
+    } catch (_) {
+        return false;
+    }
+}
+
 let webviewPreloadUrl = null;
 
 function getWebviewPreloadUrl(env: WebViewEnv) {
@@ -927,6 +957,8 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
     const domReady = useAtomValue(model.domReady);
 
     const [errorText, setErrorText] = useState("");
+    const loopbackRetryCountRef = useRef(0);
+    const loopbackRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     function setBgColor() {
         const webview = model.webviewRef.current;
@@ -1023,6 +1055,12 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
         }
         const navigateListener = (e: any) => {
             setErrorText("");
+            // A successful navigation means the backend is up; reset the retry budget.
+            loopbackRetryCountRef.current = 0;
+            if (loopbackRetryTimerRef.current != null) {
+                clearTimeout(loopbackRetryTimerRef.current);
+                loopbackRetryTimerRef.current = null;
+            }
             if (e.isMainFrame) {
                 model.handleNavigate(e.url);
             }
@@ -1045,15 +1083,38 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
         const failLoadHandler = (e: any) => {
             if (e.errorCode === -3) {
                 console.warn("Suppressed ERR_ABORTED error", e);
-            } else {
-                const errorMessage = `Failed to load ${e.validatedURL}: ${e.errorDescription}`;
-                console.error(errorMessage);
-                setErrorText(errorMessage);
-                if (onFailLoad) {
-                    const curUrl = model.webviewRef.current.getURL();
-                    onFailLoad(curUrl);
-                }
+                return;
             }
+            const errorMessage = `Failed to load ${e.validatedURL}: ${e.errorDescription}`;
+            console.error(errorMessage);
+            setErrorText(errorMessage);
+            if (onFailLoad) {
+                const curUrl = model.webviewRef.current.getURL();
+                onFailLoad(curUrl);
+            }
+            // Cold start: retry loopback URLs while the embedded backend is still
+            // coming up. Scoped to loopback + connection errors so we never retry
+            // arbitrary remote pages forever.
+            const canRetry =
+                e.isMainFrame &&
+                LoopbackConnectionErrorCodes.has(e.errorCode) &&
+                isLoopbackUrl(e.validatedURL) &&
+                loopbackRetryCountRef.current < LoopbackRetryMaxAttempts;
+            if (!canRetry) {
+                return;
+            }
+            loopbackRetryCountRef.current += 1;
+            if (loopbackRetryTimerRef.current != null) {
+                clearTimeout(loopbackRetryTimerRef.current);
+            }
+            loopbackRetryTimerRef.current = setTimeout(() => {
+                loopbackRetryTimerRef.current = null;
+                try {
+                    model.webviewRef.current?.reload();
+                } catch (err) {
+                    console.warn("webview loopback retry failed", err);
+                }
+            }, LoopbackRetryDelayMs);
         };
         const webviewFocus = () => {
             env.electron.setWebviewFocus(webview.getWebContentsId());
@@ -1098,6 +1159,10 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
 
         // Clean up event listeners on component unmount
         return () => {
+            if (loopbackRetryTimerRef.current != null) {
+                clearTimeout(loopbackRetryTimerRef.current);
+                loopbackRetryTimerRef.current = null;
+            }
             webview.removeEventListener("ipc-message", handleIpcMessage);
             webview.removeEventListener("did-frame-navigate", navigateListener);
             webview.removeEventListener("did-navigate", navigateListener);

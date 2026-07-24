@@ -15,9 +15,9 @@ const STATUS_MESSAGES: Record<HandsStatus, string> = {
     loading: "",
     ok: "",
     empty: "No Hands compiled into the engine.",
-    "not-running": "OpenFang engine not built — run `cargo build -p openfang-napi` in backend/engines/rust/openfang to enable Hands.",
-    "not-available": "OpenFang Hands not available on this backend.",
-    "not-connected": "Not connected — start the Recoder backend to reach OpenFang.",
+    "not-running": "Engine not available on this backend.",
+    "not-available": "Agent Hands not available on this backend.",
+    "not-connected": "Not connected — start the Recoder backend to reach the engine.",
 };
 
 function isPaused(status: string): boolean {
@@ -93,7 +93,7 @@ function RecoderHandsView({ model }: ViewComponentProps<RecoderHandsViewModel>) 
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
-                <span className="font-semibold">OpenFang — Hands</span>
+                <span className="font-semibold">Recoder — Agent Hands</span>
                 <span className="text-xs text-secondary">in-process engine</span>
             </div>
             {loading && hands.length == 0 && <div className="text-secondary text-sm">Loading…</div>}

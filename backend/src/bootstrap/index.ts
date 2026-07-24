@@ -1335,6 +1335,13 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     routerProvider('engines-internal', '/internal/engines', engines.internalRoutes()),
     // Inference LLM-gateway edges: control + OpenAI-compatible surface (self-gated).
     routerProvider('inference', DOMAIN_REGISTRY.inference.mountBase, inference.routes()),
+    // ALIAS: the built-in AI panel POSTs the flat `/api/gateway/v1/chat/completions`.
+    // The canonical mount nests the OpenAI-compatible sub-router under `/gateway`
+    // (→ `/api/gateway/gateway/v1/...`), so mount the SAME memoized gateway
+    // sub-router (same handler instance + self-guard) at `/api/gateway` root so the
+    // un-nested `/api/gateway/v1/chat/completions` (+ `/v1/embeddings`) resolves.
+    // Canonical mount above stays intact; this only ADDS the flat path.
+    routerProvider('inference-gateway-alias', '/api/gateway', inference.gatewayRoutes()),
     // Billing edges: plan/checkout/portal/cancel + RAW-BODY provider webhooks. The
     // global JSON parser stashes `req.rawBody` (chain.ts) so webhook signatures verify.
     routerProvider('billing', DOMAIN_REGISTRY.billing.mountBase, billing.routes()),
