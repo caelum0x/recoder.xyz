@@ -115,10 +115,10 @@ class RecoderLaunchViewModel implements ViewModel {
         }
     }
 
-    // Mirror of POST /api/conductor/workspaces (conductor.routes.ts:375): a simple
-    // local create only needs `{ repoPath, prompt?, runtimeId?, branch?,
-    // interactive? }`; identity fields default server-side. Non-2xx / non-success
-    // is surfaced truthfully; the internal-key path failing is handled the same way.
+    // POST /api/conductor/workspaces requires the identity fields spaceId +
+    // projectId + taskId (they are NOT defaulted server-side — an omitted spaceId
+    // fails validation), so send them explicitly like the Workspaces hub does.
+    // Non-2xx / non-success is surfaced truthfully.
     async launch() {
         const repoPath = globalStore.get(this.repoPathAtom).trim();
         const runtimeId = globalStore.get(this.runtimeIdAtom).trim();
@@ -128,10 +128,14 @@ class RecoderLaunchViewModel implements ViewModel {
         globalStore.set(this.postingAtom, true);
         globalStore.set(this.resultAtom, null);
         try {
+            const taskId = `task_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
             const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/workspaces`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    spaceId: "default",
+                    projectId: "default",
+                    taskId,
                     repoPath,
                     runtimeId: runtimeId || undefined,
                     prompt: prompt || undefined,
