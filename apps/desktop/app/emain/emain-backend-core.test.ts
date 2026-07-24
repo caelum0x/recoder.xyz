@@ -32,7 +32,7 @@ import {
     resolveBeadsBinPath,
     resolveLoginShellPath,
     resolveTmuxBin,
-    writeCockpitWidgetConfig,
+    removeCockpitWidgetConfig,
     writeWaveAIGatewayConfig,
 } from "./emain-backend-core";
 
@@ -667,41 +667,43 @@ describe("writeWaveAIGatewayConfig", () => {
     });
 });
 
-describe("writeCockpitWidgetConfig", () => {
-    it("writes the full cockpit widget object pinned to the live port", () => {
-        const fs = makeMemFs();
-        const { widgetsPath } = writeCockpitWidgetConfig({
-            configDir: "/cfg",
-            port: 3105,
-            fs: fs as unknown as FsLike,
+describe("removeCockpitWidgetConfig", () => {
+    it("neutralizes a stale cockpit widget by pinning the key to null (merge-delete)", () => {
+        const fs = makeMemFs({
+            [path.join("/cfg", "widgets.json")]: JSON.stringify({
+                "defwidget@recoder-cockpit": { label: "cockpit", blockdef: { meta: { view: "web" } } },
+            }),
         });
-        expect(widgetsPath).toBe(path.join("/cfg", "widgets.json"));
+        const { widgetsPath, removed } = removeCockpitWidgetConfig({ configDir: "/cfg", fs: fs as unknown as FsLike });
+        expect(removed).toBe(true);
         const widgets = JSON.parse(fs.files.get(widgetsPath));
-        const entry = widgets["defwidget@recoder-cockpit"];
-        // wconfig simple-merge replaces the whole key, so every field of the
-        // embedded default must be present here.
-        expect(entry.label).toBe("cockpit");
-        expect(entry.icon).toBe("gauge-high");
-        expect(entry["display:order"]).toBe(-5.005);
-        expect(entry.blockdef.meta.view).toBe("web");
-        expect(entry.blockdef.meta.url).toBe("http://127.0.0.1:3105/cockpit/");
+        // null (not absent) so wconfig deletes the DEFAULT's cockpit entry too.
+        expect(widgets["defwidget@recoder-cockpit"]).toBeNull();
     });
 
-    it("merges into an existing widgets.json without clobbering user widgets", () => {
+    it("pins null even when no user file exists (hides the embedded default), preserving other widgets", () => {
         const fs = makeMemFs({
             [path.join("/cfg", "widgets.json")]: JSON.stringify({ "widget@mine": { label: "mine" } }),
         });
-        writeCockpitWidgetConfig({ configDir: "/cfg", port: 3100, fs: fs as unknown as FsLike });
+        const { removed } = removeCockpitWidgetConfig({ configDir: "/cfg", fs: fs as unknown as FsLike });
+        expect(removed).toBe(true);
         const widgets = JSON.parse(fs.files.get(path.join("/cfg", "widgets.json")));
         expect(widgets["widget@mine"]).toEqual({ label: "mine" });
-        expect(widgets["defwidget@recoder-cockpit"].blockdef.meta.url).toBe("http://127.0.0.1:3100/cockpit/");
+        expect(widgets["defwidget@recoder-cockpit"]).toBeNull();
+    });
+
+    it("is a no-op when the key is already null", () => {
+        const fs = makeMemFs({
+            [path.join("/cfg", "widgets.json")]: JSON.stringify({ "defwidget@recoder-cockpit": null }),
+        });
+        const { removed } = removeCockpitWidgetConfig({ configDir: "/cfg", fs: fs as unknown as FsLike });
+        expect(removed).toBe(false);
     });
 
     it("recovers from a corrupt widgets.json instead of throwing", () => {
         const fs = makeMemFs({ [path.join("/cfg", "widgets.json")]: "not-json{" });
-        writeCockpitWidgetConfig({ configDir: "/cfg", port: 3100, fs: fs as unknown as FsLike });
-        const widgets = JSON.parse(fs.files.get(path.join("/cfg", "widgets.json")));
-        expect(widgets["defwidget@recoder-cockpit"].blockdef.meta.url).toBe("http://127.0.0.1:3100/cockpit/");
+        const { removed } = removeCockpitWidgetConfig({ configDir: "/cfg", fs: fs as unknown as FsLike });
+        expect(removed).toBe(false);
     });
 });
 
