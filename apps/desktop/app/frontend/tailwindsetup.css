@@ -13,16 +13,16 @@
     --color-muted-foreground: rgb(195, 200, 194);
     --color-secondary: rgb(195, 200, 194);
     --color-muted: rgb(140, 145, 140);
-    --color-accent-50: rgb(236, 253, 232);
-    --color-accent-100: rgb(209, 250, 202);
-    --color-accent-200: rgb(167, 243, 168);
-    --color-accent-300: rgb(110, 231, 133);
-    --color-accent-400: rgb(88, 193, 66); /* main accent color */
-    --color-accent-500: rgb(63, 162, 51);
-    --color-accent-600: rgb(47, 133, 47);
-    --color-accent-700: rgb(34, 104, 43);
-    --color-accent-800: rgb(22, 81, 35);
-    --color-accent-900: rgb(15, 61, 29);
+    --color-accent-50: rgb(240, 245, 244);
+    --color-accent-100: rgb(224, 234, 233);
+    --color-accent-200: rgb(198, 216, 214);
+    --color-accent-300: rgb(160, 190, 187);
+    --color-accent-400: rgb(122, 162, 160); /* main accent color — restrained sage */
+    --color-accent-500: rgb(100, 140, 138);
+    --color-accent-600: rgb(82, 116, 114);
+    --color-accent-700: rgb(64, 92, 90);
+    --color-accent-800: rgb(48, 70, 68);
+    --color-accent-900: rgb(34, 52, 50);
     --color-error: rgb(229, 77, 46);
     --color-warning: rgb(224, 185, 86);
     --color-success: rgb(78, 154, 6);
