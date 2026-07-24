@@ -18,9 +18,9 @@ type RecoderWorkspace = Pick<Workspace, "workspaceId" | "branch" | "runtimeId" |
     metadata?: Record<string, unknown>;
 };
 
-// First-run readiness surfaced by the conductor /health/full endpoint — which
-// coding agents are installed + whether git is present. Drives the Recoder-first
-// getting-started panel shown when there are no workspaces yet.
+// First-run readiness surfaced by the conductor /health + /runtimes endpoints —
+// which coding agents are installed + whether git is present. Drives the launch
+// picker and the getting-started panel shown when there are no workspaces yet.
 type RecoderSetup = {
     agents: { runtimeId: string; available: boolean }[];
     git: boolean;
@@ -31,6 +31,23 @@ type RecoderSetup = {
     tmuxBin: string;
 };
 
+// A per-workspace changed-line summary, folded from GET /workspaces/:id/diff/files.
+// Binary files (numstat "-") contribute nothing; absent/unavailable diffs yield no
+// entry at all so the board never shows a fabricated count.
+type RecoderDiffSummary = { additions: number; deletions: number; files: number };
+
+// Outcome of an inline launch. `ok` distinguishes a truthful success from a
+// truthful failure whose reason is the backend's verbatim message — never faked.
+type RecoderLaunchResult = { ok: boolean; message?: string; error?: string };
+
+function genTaskId(): string {
+    return `task_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function genTaskGroupId(): string {
+    return `grp_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
 class RecoderViewModel implements ViewModel {
     viewType: string;
     viewIcon: Atom<string>;
@@ -40,6 +57,20 @@ class RecoderViewModel implements ViewModel {
     loadingAtom: PrimitiveAtom<boolean>;
     errorAtom: PrimitiveAtom<string>;
     setupAtom: PrimitiveAtom<RecoderSetup>;
+    diffSummariesAtom: PrimitiveAtom<Record<string, RecoderDiffSummary>>;
+    launchOpenAtom: PrimitiveAtom<boolean>;
+    launchRepoPathAtom: PrimitiveAtom<string>;
+    launchPromptAtom: PrimitiveAtom<string>;
+    launchRuntimeIdAtom: PrimitiveAtom<string>;
+    launchAlsoRunAtom: PrimitiveAtom<string[]>;
+    launchBranchAtom: PrimitiveAtom<string>;
+    launchInteractiveAtom: PrimitiveAtom<boolean>;
+    postingAtom: PrimitiveAtom<boolean>;
+    launchResultAtom: PrimitiveAtom<RecoderLaunchResult>;
+    // Human result of the last per-row action (merge / archive), keyed by id.
+    rowStatusAtom: PrimitiveAtom<Record<string, string>>;
+    // The workspace id whose row action is currently in-flight ("" when idle).
+    busyRowAtom: PrimitiveAtom<string>;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -50,6 +81,22 @@ class RecoderViewModel implements ViewModel {
         this.loadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
         this.setupAtom = atom({ agents: [], git: false, loaded: false, tmuxBin: "" }) as PrimitiveAtom<RecoderSetup>;
+        this.diffSummariesAtom = atom({}) as PrimitiveAtom<Record<string, RecoderDiffSummary>>;
+        this.launchOpenAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.launchRepoPathAtom = atom("") as PrimitiveAtom<string>;
+        this.launchPromptAtom = atom("") as PrimitiveAtom<string>;
+        this.launchRuntimeIdAtom = atom("") as PrimitiveAtom<string>;
+        this.launchAlsoRunAtom = atom([]) as PrimitiveAtom<string[]>;
+        this.launchBranchAtom = atom("") as PrimitiveAtom<string>;
+        this.launchInteractiveAtom = atom(true) as PrimitiveAtom<boolean>;
+        this.postingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.launchResultAtom = atom(null) as PrimitiveAtom<RecoderLaunchResult>;
+        this.rowStatusAtom = atom({}) as PrimitiveAtom<Record<string, string>>;
+        this.busyRowAtom = atom("") as PrimitiveAtom<string>;
+    }
+
+    get viewComponent(): ViewComponent {
+        return RecoderConductorView;
     }
 
     // Degrade-safe: a failed/absent health probe leaves setup unloaded (the panel
@@ -57,10 +104,6 @@ class RecoderViewModel implements ViewModel {
     async refreshSetup() {
         try {
             const base = getRecoderBackendUrl();
-            // Agents come from /api/conductor/runtimes; the substrate (tmux + git
-            // readiness) from /api/conductor/health. The old combined
-            // /api/conductor/health/full was retired in the greenfield backend
-            // (it 404s), which wrongly made this panel report "no agents".
             const [rtRes, hRes] = await Promise.all([
                 fetch(`${base}/api/conductor/runtimes`),
                 fetch(`${base}/api/conductor/health`),
@@ -78,34 +121,208 @@ class RecoderViewModel implements ViewModel {
                       }))
                 : [];
             const tmuxBin = typeof h?.substrate?.tmuxBin == "string" ? h.substrate.tmuxBin : "";
-            // The conductor substrate reports `available` only when its hard
-            // prerequisites (git + tmux) resolve — treat that as git-ready.
             globalStore.set(this.setupAtom, { agents, git: Boolean(h?.available), loaded: true, tmuxBin });
         } catch {
             globalStore.set(this.setupAtom, { agents: [], git: false, loaded: false, tmuxBin: "" });
         }
     }
 
-    get viewComponent(): ViewComponent {
-        return RecoderConductorView;
-    }
-
     async refresh() {
         globalStore.set(this.loadingAtom, true);
         globalStore.set(this.errorAtom, "");
+        let workspaces: RecoderWorkspace[] = [];
         try {
             const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/workspaces`);
             const body = await res.json();
-            const list = body?.data ?? [];
-            globalStore.set(this.workspacesAtom, Array.isArray(list) ? list : []);
+            // The conductor wraps the list as { data: { workspaces: [...] } };
+            // tolerate a bare { data: [...] } too so an older embedded backend
+            // still renders. Never assume a shape we didn't see.
+            const data = body?.data;
+            const list = Array.isArray(data?.workspaces) ? data.workspaces : Array.isArray(data) ? data : [];
+            workspaces = list as RecoderWorkspace[];
+            globalStore.set(this.workspacesAtom, workspaces);
         } catch (e) {
             globalStore.set(this.errorAtom, e instanceof Error ? e.message : String(e));
         } finally {
             globalStore.set(this.loadingAtom, false);
         }
-        // Setup readiness runs alongside (independently degrade-safe).
+        // Setup readiness + per-workspace diff summaries run alongside, each
+        // independently degrade-safe.
         this.refreshSetup();
+        this.loadDiffSummaries(workspaces);
+    }
+
+    // Best-effort per-workspace changed-line summary. Each fetch degrades to "no
+    // entry" on any failure or a non-available diff, and the whole map is rebuilt
+    // from the current list so stale ids are pruned. Never throws, never fabricates.
+    async loadDiffSummaries(workspaces: RecoderWorkspace[]) {
+        const base = getRecoderBackendUrl();
+        const entries = await Promise.all(
+            workspaces.map(async (ws): Promise<[string, RecoderDiffSummary] | null> => {
+                try {
+                    const res = await fetch(
+                        `${base}/api/conductor/workspaces/${encodeURIComponent(ws.workspaceId)}/diff/files`
+                    );
+                    if (!res.ok) {
+                        return null;
+                    }
+                    const data = (await res.json())?.data;
+                    if (data?.available !== true || !Array.isArray(data.files)) {
+                        return null;
+                    }
+                    let additions = 0;
+                    let deletions = 0;
+                    for (const f of data.files) {
+                        if (typeof f?.insertions == "number") additions += f.insertions;
+                        if (typeof f?.deletions == "number") deletions += f.deletions;
+                    }
+                    return [ws.workspaceId, { additions, deletions, files: data.files.length }];
+                } catch {
+                    return null;
+                }
+            })
+        );
+        const next: Record<string, RecoderDiffSummary> = {};
+        for (const e of entries) {
+            if (e) next[e[0]] = e[1];
+        }
+        globalStore.set(this.diffSummariesAtom, next);
+    }
+
+    // Inline launch — the product loop's entry point. Launches the primary agent
+    // plus any deliberately-ticked parallel agents, each in its OWN worktree, all
+    // sharing ONE taskGroup so the compare board can aggregate siblings. Sends the
+    // exact body the POST /workspaces handler requires (spaceId/projectId/taskId/
+    // repoPath/runtimeId). Truthful partial results: each started workspace stays
+    // started; the first failure names its agent and stops. Never fabricates a win.
+    async launch() {
+        const repoPath = globalStore.get(this.launchRepoPathAtom).trim();
+        const primary = globalStore.get(this.launchRuntimeIdAtom).trim();
+        if (repoPath == "" || primary == "") {
+            globalStore.set(this.launchResultAtom, { ok: false, error: "Pick a folder and choose an agent." });
+            return;
+        }
+        const also = globalStore.get(this.launchAlsoRunAtom).filter((id) => id != "" && id != primary);
+        const agents = [primary, ...also];
+        const prompt = globalStore.get(this.launchPromptAtom).trim();
+        const branch = globalStore.get(this.launchBranchAtom).trim();
+        const interactive = globalStore.get(this.launchInteractiveAtom);
+        // A shared branch across siblings would collide across worktrees, so a
+        // user branch is honored only for a solo launch; parallel siblings are
+        // auto-named per agent server-side.
+        const taskGroup = agents.length > 1 ? genTaskGroupId() : "";
+        globalStore.set(this.postingAtom, true);
+        globalStore.set(this.launchResultAtom, null);
+        const base = getRecoderBackendUrl();
+        let started = 0;
+        try {
+            for (const agent of agents) {
+                const reqBody = {
+                    spaceId: "default",
+                    projectId: "default",
+                    taskId: genTaskId(),
+                    repoPath,
+                    runtimeId: agent,
+                    ...(prompt != "" ? { prompt } : {}),
+                    ...(branch != "" && agents.length == 1 ? { branch } : {}),
+                    ...(interactive ? { interactive: true } : {}),
+                    ...(taskGroup != "" ? { taskGroup } : {}),
+                };
+                const res = await fetch(`${base}/api/conductor/workspaces`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(reqBody),
+                });
+                const parsed = await res.json().catch(() => ({}));
+                if (!res.ok || !parsed?.success) {
+                    const reason = (parsed && typeof parsed.error == "string" && parsed.error) || `HTTP ${res.status}`;
+                    throw new Error(reason);
+                }
+                started += 1;
+            }
+            globalStore.set(this.launchResultAtom, {
+                ok: true,
+                message: agents.length > 1 ? `Launched ${started} agents.` : "Workspace created.",
+            });
+            globalStore.set(this.launchOpenAtom, false);
+            globalStore.set(this.launchPromptAtom, "");
+            globalStore.set(this.launchAlsoRunAtom, []);
+            await this.refresh();
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            globalStore.set(this.launchResultAtom, {
+                ok: false,
+                error: started > 0 ? `Started ${started} of ${agents.length} — ${msg}` : msg,
+            });
+            if (started > 0) {
+                await this.refresh();
+            }
+        } finally {
+            globalStore.set(this.postingAtom, false);
+        }
+    }
+
+    setRowStatus(workspaceId: string, text: string) {
+        const cur = globalStore.get(this.rowStatusAtom);
+        globalStore.set(this.rowStatusAtom, { ...cur, [workspaceId]: text });
+    }
+
+    // Merge the workspace into its base — the "review → merge" close of the loop.
+    // Degrade-safe: a gate deny / not-mergeable returns the backend's truthful
+    // reason; success → "Merged." then refresh. In a solo desktop the merge click
+    // IS the approval (server-side). Never fabricates a merge.
+    async mergeWorkspace(workspaceId: string) {
+        if (!workspaceId) {
+            return;
+        }
+        globalStore.set(this.busyRowAtom, workspaceId);
+        this.setRowStatus(workspaceId, "");
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/merge`,
+                { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
+            );
+            const body = await res.json().catch(() => null);
+            if (res.ok) {
+                this.setRowStatus(workspaceId, "Merged.");
+                await this.refresh();
+                return;
+            }
+            const reason = (body && typeof body.error == "string" && body.error) || "";
+            this.setRowStatus(workspaceId, reason || `Merge failed (${res.status}).`);
+        } catch {
+            this.setRowStatus(workspaceId, "Merge unavailable — backend not reachable.");
+        } finally {
+            globalStore.set(this.busyRowAtom, "");
+        }
+    }
+
+    // Archive a finished workspace, then refresh so the row drops out. Degrade-safe:
+    // a non-2xx surfaces the backend's reason; a thrown fetch surfaces "unreachable".
+    async archiveWorkspace(workspaceId: string) {
+        if (!workspaceId) {
+            return;
+        }
+        globalStore.set(this.busyRowAtom, workspaceId);
+        this.setRowStatus(workspaceId, "");
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/archive`,
+                { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
+            );
+            if (res.ok) {
+                await this.refresh();
+                return;
+            }
+            const body = await res.json().catch(() => null);
+            const reason = (body && typeof body.error == "string" && body.error) || "";
+            this.setRowStatus(workspaceId, reason || `Archive failed (${res.status}).`);
+        } catch {
+            this.setRowStatus(workspaceId, "Archive unavailable — backend not reachable.");
+        } finally {
+            globalStore.set(this.busyRowAtom, "");
+        }
     }
 }
 
-export { RecoderViewModel, type RecoderWorkspace, type RecoderSetup };
+export { RecoderViewModel, type RecoderWorkspace, type RecoderSetup, type RecoderDiffSummary, type RecoderLaunchResult };
