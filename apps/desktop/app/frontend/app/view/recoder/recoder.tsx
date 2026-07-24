@@ -6,7 +6,11 @@ import { useAtom, useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { agentLabel } from "./recoder-agent-labels";
 import { RecoderIdentityAffordance } from "./recoder-identity";
-import { RecoderViewModel, type RecoderWorkspace } from "./recoder-model";
+import {
+    RecoderViewModel,
+    type RecoderDiffSummary,
+    type RecoderWorkspace,
+} from "./recoder-model";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
 
 const PRIMARY_BTN =
@@ -40,8 +44,67 @@ function openTerminal(ws: RecoderWorkspace, tmuxBin: string) {
     openWorkspaceTerminal({ sessionName: ws.sessionName, cwd: ws.worktreePath }, tmuxBin || undefined);
 }
 
+// A parallel-run group is keyed by a generated grp_<id>; strip the prefix and
+// clip so the cluster header reads as a short, stable tag rather than raw noise.
+function shortTaskGroup(taskGroup: string): string {
+    const raw = taskGroup ?? "";
+    const trimmed = raw.startsWith("grp_") ? raw.slice(4) : raw;
+    return trimmed.length > 8 ? trimmed.slice(0, 8) : trimmed;
+}
+
+type WorkspaceRowProps = {
+    model: RecoderViewModel;
+    ws: RecoderWorkspace;
+    summary: RecoderDiffSummary;
+    status: string;
+    busy: boolean;
+    tmuxBin: string;
+};
+
+function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin }: WorkspaceRowProps) {
+    return (
+        <div
+            className="flex flex-col gap-0.5 rounded border border-border px-2 py-1"
+            title={`${ws.workspaceId} · ${ws.branch}`}
+        >
+            <div className="flex items-center gap-2">
+                <span className="text-sm truncate">{ws.branch}</span>
+                <span className="text-xs text-secondary">{ws.state}</span>
+                {summary != null && summary.files > 0 && (
+                    <span className="text-xs text-secondary">
+                        +{summary.additions} −{summary.deletions}
+                    </span>
+                )}
+                <span className="text-xs text-secondary ml-auto">{agentLabel(ws.runtimeId)}</span>
+                <button className={QUIET_BTN} onClick={() => openSession(ws.workspaceId)}>
+                    Session
+                </button>
+                {ws.sessionName && (
+                    <button className={QUIET_BTN} onClick={() => openTerminal(ws, tmuxBin)}>
+                        Terminal
+                    </button>
+                )}
+                <button className={QUIET_BTN} onClick={() => openReview()}>
+                    Review
+                </button>
+                <button className={QUIET_BTN} disabled={busy} onClick={() => model.mergeWorkspace(ws.workspaceId)}>
+                    {busy ? "…" : "Merge"}
+                </button>
+                <button className={QUIET_BTN} disabled={busy} onClick={() => model.archiveWorkspace(ws.workspaceId)}>
+                    Archive
+                </button>
+            </div>
+            {status && <div className="text-xs text-secondary">{status}</div>}
+        </div>
+    );
+}
+
+WorkspaceRow.displayName = "WorkspaceRow";
+
 function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const workspaces = useAtomValue(model.workspacesAtom);
+    const groups = useAtomValue(model.groupsAtom);
+    const compare = useAtomValue(model.compareAtom);
     const loading = useAtomValue(model.loadingAtom);
     const error = useAtomValue(model.errorAtom);
     const setup = useAtomValue(model.setupAtom);
@@ -296,52 +359,56 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             )}
 
             <div className="flex flex-col gap-1">
-                {workspaces.map((ws) => {
-                    const summary = diffSummaries[ws.workspaceId];
-                    const status = rowStatus[ws.workspaceId];
-                    const busy = busyRow == ws.workspaceId;
+                {groups.map((group) => {
+                    if (group.workspaces.length <= 1) {
+                        const ws = group.workspaces[0];
+                        return (
+                            <WorkspaceRow
+                                key={ws.workspaceId}
+                                model={model}
+                                ws={ws}
+                                summary={diffSummaries[ws.workspaceId]}
+                                status={rowStatus[ws.workspaceId]}
+                                busy={busyRow == ws.workspaceId}
+                                tmuxBin={setup.tmuxBin}
+                            />
+                        );
+                    }
+                    const taskGroup = group.taskGroup ?? "";
+                    const compareView = compare[taskGroup];
+                    const contested = compareView?.contested ?? [];
                     return (
-                        <div
-                            key={ws.workspaceId}
-                            className="flex flex-col gap-0.5 rounded border border-border px-2 py-1"
-                            title={`${ws.workspaceId} · ${ws.branch}`}
-                        >
+                        <div key={taskGroup} className="flex flex-col gap-1 rounded border border-border p-2">
                             <div className="flex items-center gap-2">
-                                <span className="text-sm truncate">{ws.branch}</span>
-                                <span className="text-xs text-secondary">{ws.state}</span>
-                                {summary != null && summary.files > 0 && (
-                                    <span className="text-xs text-secondary">
-                                        +{summary.additions} −{summary.deletions}
-                                    </span>
-                                )}
-                                <span className="text-xs text-secondary ml-auto">{agentLabel(ws.runtimeId)}</span>
-                                <button className={QUIET_BTN} onClick={() => openSession(ws.workspaceId)}>
-                                    Session
-                                </button>
-                                {ws.sessionName && (
-                                    <button className={QUIET_BTN} onClick={() => openTerminal(ws, setup.tmuxBin)}>
-                                        Terminal
-                                    </button>
-                                )}
-                                <button className={QUIET_BTN} onClick={() => openReview()}>
-                                    Review
-                                </button>
-                                <button
-                                    className={QUIET_BTN}
-                                    disabled={busy}
-                                    onClick={() => model.mergeWorkspace(ws.workspaceId)}
-                                >
-                                    {busy ? "…" : "Merge"}
-                                </button>
-                                <button
-                                    className={QUIET_BTN}
-                                    disabled={busy}
-                                    onClick={() => model.archiveWorkspace(ws.workspaceId)}
-                                >
-                                    Archive
+                                <span className="text-sm">{group.workspaces.length} agents</span>
+                                <span className="text-xs text-secondary" title={taskGroup}>
+                                    {shortTaskGroup(taskGroup)}
+                                </span>
+                                <div className="flex-1" />
+                                <button className={QUIET_BTN} onClick={() => model.loadCompare(taskGroup)}>
+                                    Compare
                                 </button>
                             </div>
-                            {status && <div className="text-xs text-secondary">{status}</div>}
+                            {compareView != null && (
+                                <div className="text-xs text-secondary">
+                                    {contested.length == 0
+                                        ? "No overlapping files across siblings."
+                                        : `${contested.length} contested file${contested.length == 1 ? "" : "s"}: ${contested
+                                              .map((c) => c.path)
+                                              .join(", ")}`}
+                                </div>
+                            )}
+                            {group.workspaces.map((ws) => (
+                                <WorkspaceRow
+                                    key={ws.workspaceId}
+                                    model={model}
+                                    ws={ws}
+                                    summary={diffSummaries[ws.workspaceId]}
+                                    status={rowStatus[ws.workspaceId]}
+                                    busy={busyRow == ws.workspaceId}
+                                    tmuxBin={setup.tmuxBin}
+                                />
+                            ))}
                         </div>
                     );
                 })}
