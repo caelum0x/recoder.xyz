@@ -9,12 +9,15 @@ import { RecoderViewModel, type RecoderWorkspace } from "./recoder-model";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
 
 const AGENT_LABELS: Record<string, string> = {
-    "claude-code": "Claude Code",
+    claude_code: "Claude Code",
     codex: "Codex",
     opencode: "opencode",
     pi: "pi",
-    "recoder-code": "Recoder Code",
+    recoder_code: "Recoder Code",
     cursor: "Cursor",
+    gemini_cli: "Gemini CLI",
+    qwen_code: "Qwen Code",
+    crush: "Crush",
 };
 
 function agentLabel(runtimeId: string): string {

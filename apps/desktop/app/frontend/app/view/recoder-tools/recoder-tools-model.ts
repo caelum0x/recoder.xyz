@@ -34,16 +34,6 @@ const Capabilities: RecoderCapability[] = [
         hasTopK: true,
     },
     {
-        id: "pal.plan",
-        label: "PAL — plan",
-        serverId: "recoder.pal-plan",
-        toolName: "pal.plan",
-        inputLabel: "Goal",
-        inputPlaceholder: "describe the goal to plan…",
-        argKey: "goal",
-        hasTopK: false,
-    },
-    {
         id: "coordination.detect_conflict",
         label: "Coordination — detect conflict",
         serverId: "recoder.coordination",

@@ -49,26 +49,6 @@
             }
         }
     },
-    "defwidget@recoder-board": {
-        "display:order": -5.1,
-        "icon": "clipboard-list",
-        "label": "board",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-board"
-            }
-        }
-    },
-    "defwidget@recoder-tools": {
-        "display:order": -5.05,
-        "icon": "toolbox",
-        "label": "tools",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-tools"
-            }
-        }
-    },
     "defwidget@recoder-memory": {
         "display:order": -5.03,
         "icon": "brain",
@@ -86,26 +66,6 @@
         "blockdef": {
             "meta": {
                 "view": "recoder-runs"
-            }
-        }
-    },
-    "defwidget@recoder-connectors": {
-        "display:order": -5.011,
-        "icon": "plug",
-        "label": "connectors",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-connectors"
-            }
-        }
-    },
-    "defwidget@recoder-settings": {
-        "display:order": -5.01,
-        "icon": "gear",
-        "label": "settings",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-settings"
             }
         }
     },
