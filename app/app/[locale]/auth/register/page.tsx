@@ -177,7 +177,7 @@ function SignUpForm() {
 
               <Link
                 href="/auth/signin"
-                className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
+                className="w-full px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
               >
                 <span>Already verified? Sign in</span>
               </Link>
@@ -198,7 +198,7 @@ function SignUpForm() {
           <div className="space-y-8">
             <div className="space-y-4">
               <h1 className="text-4xl font-bold">
-                Start Building with <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-purple-600">AI</span>
+                Start Building with <span className="text-white">AI</span>
               </h1>
               <p className="text-xl text-gray-400">
                 Build production-ready software with AI-powered tools
@@ -208,7 +208,7 @@ function SignUpForm() {
             <div className="space-y-4">
               {features.map((feature, index) => (
                 <div key={index} className="flex items-center space-x-3 text-gray-300">
-                  <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                  <div className="w-6 h-6 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center flex-shrink-0">
                     <Check className="w-4 h-4 text-white" />
                   </div>
                   <span>{feature}</span>
@@ -216,9 +216,9 @@ function SignUpForm() {
               ))}
             </div>
 
-            <div className="p-6 rounded-2xl border border-orange-500/20 bg-orange-500/5">
+            <div className="p-6 rounded-2xl border border-neutral-700 bg-neutral-800/30">
               <div className="flex items-start space-x-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center flex-shrink-0">
                   <Terminal className="w-6 h-6 text-white" />
                 </div>
                 <div className="space-y-2">
@@ -308,7 +308,7 @@ function SignUpForm() {
                     id="name" 
                     type="text" 
                     placeholder="John Doe"
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent text-white placeholder-gray-500"
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
                     required
@@ -323,7 +323,7 @@ function SignUpForm() {
                     id="email" 
                     type="email" 
                     placeholder="your@email.com"
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent text-white placeholder-gray-500"
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
                     required
@@ -338,7 +338,7 @@ function SignUpForm() {
                     id="password" 
                     type="password" 
                     placeholder="••••••••"
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent text-white placeholder-gray-500"
                     value={formData.password}
                     onChange={(e) => setFormData({...formData, password: e.target.value})}
                     required
@@ -353,7 +353,7 @@ function SignUpForm() {
                     id="confirmPassword" 
                     type="password" 
                     placeholder="••••••••"
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent text-white placeholder-gray-500"
                     value={formData.confirmPassword}
                     onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
                     required
@@ -361,8 +361,8 @@ function SignUpForm() {
                 </div>
 
                 <button 
-                  className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
-                  type="submit" 
+                  className="w-full px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  type="submit"
                   disabled={loading}
                 >
                   {loading ? (
@@ -380,11 +380,11 @@ function SignUpForm() {
 
                 <div className="text-center text-xs text-gray-400">
                   By signing up, you agree to our{' '}
-                  <Link href="/terms" className="text-orange-500 hover:text-orange-400">
+                  <Link href="/terms" className="text-white hover:text-neutral-300">
                     Terms of Service
                   </Link>{' '}
                   and{' '}
-                  <Link href="/privacy" className="text-orange-500 hover:text-orange-400">
+                  <Link href="/privacy" className="text-white hover:text-neutral-300">
                     Privacy Policy
                   </Link>
                 </div>
@@ -392,7 +392,7 @@ function SignUpForm() {
               
               <div className="text-center text-sm pt-4 border-t border-white/10">
                 <span className="text-gray-400">Already have an account? </span>
-                <Link href="/auth/signin" className="text-orange-500 hover:text-orange-400 transition-colors">
+                <Link href="/auth/signin" className="text-white hover:text-neutral-300 transition-colors">
                   Sign in
                 </Link>
               </div>
@@ -408,7 +408,7 @@ export default function SignUpPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
       </div>
     }>
       <SignUpForm />

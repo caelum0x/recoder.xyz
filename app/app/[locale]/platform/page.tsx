@@ -14,14 +14,6 @@ const serviceIcons: Record<string, React.ElementType> = {
   agency: Workflow,
 };
 
-const serviceColors: Record<string, string> = {
-  app: 'from-orange-500 to-red-500',
-  agents: 'from-blue-500 to-cyan-500',
-  web: 'from-orange-500 to-yellow-500',
-  pm: 'from-blue-500 to-indigo-500',
-  agency: 'from-purple-500 to-pink-500',
-};
-
 export default function PlatformPage() {
   const userFacing = RECODER_SERVICES.filter(s => s.showInSwitcher);
 
@@ -33,7 +25,7 @@ export default function PlatformPage() {
       <section className="py-16 px-6">
         <div className="container mx-auto max-w-5xl text-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-4">
-            <span className="bg-gradient-to-r from-orange-500 to-purple-600 bg-clip-text text-transparent">Platform</span> Services
+            <span className="text-white">Platform</span> Services
           </h1>
           <p className="text-lg text-gray-400 max-w-2xl mx-auto">
             {userFacing.length} services powering the Recoder AI development ecosystem.
@@ -48,12 +40,11 @@ export default function PlatformPage() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {userFacing.map((service) => {
               const Icon = serviceIcons[service.id] || Globe;
-              const color = serviceColors[service.id] || 'from-gray-500 to-gray-600';
               const url = getServiceUrlClient(service.id);
               return (
                 <div key={service.id} className="bg-zinc-900 border border-white/10 rounded-xl p-5 hover:border-white/20 transition-all">
                   <div className="flex items-start justify-between mb-3">
-                    <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center`}>
+                    <div className="w-10 h-10 rounded-lg bg-neutral-800 border border-neutral-700 flex items-center justify-center">
                       <Icon className="w-5 h-5 text-white" />
                     </div>
                     <div className="w-2 h-2 bg-green-500 rounded-full mt-2" title="Online" />
@@ -66,7 +57,7 @@ export default function PlatformPage() {
                       href={url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-orange-400 hover:text-orange-300 flex items-center space-x-1 transition-colors"
+                      className="text-sm text-neutral-300 hover:text-white flex items-center space-x-1 transition-colors"
                     >
                       <Globe className="w-3.5 h-3.5" />
                       <span>Open</span>

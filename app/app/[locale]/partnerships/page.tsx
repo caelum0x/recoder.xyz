@@ -11,7 +11,7 @@ export default function PartnershipsPage() {
       <SiteHeader />
       <div className="container mx-auto max-w-3xl px-6 py-24">
         <div className="text-center mb-16">
-          <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-8">
+          <div className="w-16 h-16 bg-neutral-800 border border-neutral-700 rounded-2xl flex items-center justify-center mx-auto mb-8">
             <Handshake className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-4xl font-bold mb-4">Partnerships</h1>
@@ -30,7 +30,7 @@ export default function PartnershipsPage() {
           </p>
           <Link
             href="/integrations"
-            className="inline-flex items-center space-x-2 text-orange-400 hover:text-orange-300 transition-colors"
+            className="inline-flex items-center space-x-2 text-white hover:text-neutral-300 transition-colors"
           >
             <span>View all integrations</span>
             <ArrowRight className="w-4 h-4" />
@@ -47,7 +47,7 @@ export default function PartnershipsPage() {
           </p>
           <a
             href="mailto:partners@recoder.xyz"
-            className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-opacity"
+            className="inline-flex items-center space-x-2 px-6 py-3 bg-white text-black rounded-lg font-medium hover:bg-neutral-200 transition-colors"
           >
             <Mail className="w-5 h-5" />
             <span>partners@recoder.xyz</span>
@@ -58,7 +58,7 @@ export default function PartnershipsPage() {
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Link
             href="/auth/signup"
-            className="px-8 py-3 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-opacity text-center"
+            className="px-8 py-3 bg-white text-black rounded-lg font-medium hover:bg-neutral-200 transition-colors text-center"
           >
             Try Recoder Free
           </Link>

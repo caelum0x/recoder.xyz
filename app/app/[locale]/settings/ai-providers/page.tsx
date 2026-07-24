@@ -209,7 +209,7 @@ export default function AIProvidersPage() {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-orange-500 mx-auto mb-4" />
+          <Loader2 className="w-12 h-12 animate-spin text-white mx-auto mb-4" />
           <p className="text-gray-400">Loading API keys...</p>
         </div>
       </div>
@@ -230,7 +230,7 @@ export default function AIProvidersPage() {
               Back to Settings
             </Link>
             <div className="flex items-center space-x-3 mb-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-purple-600 rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-center">
                 <KeyIcon className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -261,13 +261,13 @@ export default function AIProvidersPage() {
 
           {/* No Keys Warning */}
           {apiKeys.length === 0 && !showAddForm && (
-            <div className="mb-8 p-6 rounded-2xl bg-orange-500/10 border border-orange-500/30">
+            <div className="mb-8 p-6 rounded-2xl bg-white/5 border border-white/10">
               <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-orange-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <KeyIcon className="w-5 h-5 text-orange-400" />
+                <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <KeyIcon className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-orange-400 text-lg mb-1">Add an AI key to get started</h3>
+                  <h3 className="font-semibold text-white text-lg mb-1">Add an AI key to get started</h3>
                   <p className="text-gray-300 text-sm mb-3">
                     Recoder needs an AI provider key to power the AI features across all apps — agents, web IDE, and more.
                     We recommend <strong className="text-white">OpenRouter</strong> for the widest model selection.
@@ -277,7 +277,7 @@ export default function AIProvidersPage() {
                       setShowAddForm(true);
                       setSelectedProvider('openrouter');
                     }}
-                    className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all text-sm flex items-center gap-2"
+                    className="px-5 py-2.5 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all text-sm flex items-center gap-2"
                   >
                     <Plus className="w-4 h-4" />
                     Add OpenRouter Key
@@ -297,7 +297,7 @@ export default function AIProvidersPage() {
                   return (
                     <div
                       key={key.id}
-                      className="p-4 border border-white/10 rounded-xl bg-black/50 backdrop-blur-xl flex items-center justify-between hover:border-orange-500/30 transition-colors"
+                      className="p-4 border border-white/10 rounded-xl bg-black/50 backdrop-blur-xl flex items-center justify-between hover:border-neutral-600 transition-colors"
                     >
                       <div>
                         <div className="font-semibold text-white">{provider?.name || key.provider}</div>
@@ -327,7 +327,7 @@ export default function AIProvidersPage() {
           {!showAddForm && (
             <button
               onClick={() => setShowAddForm(true)}
-              className="mb-8 px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center gap-2"
+              className="mb-8 px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all flex items-center gap-2"
             >
               <Plus className="w-5 h-5" />
               Add API Key
@@ -346,7 +346,7 @@ export default function AIProvidersPage() {
                     value={selectedProvider}
                     onChange={(e) => setSelectedProvider(e.target.value)}
                     required
-                    className="w-full px-4 py-3 border border-white/10 rounded-lg bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className="w-full px-4 py-3 border border-white/10 rounded-lg bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
                   >
                     <option value="">Choose a provider...</option>
                     {PROVIDERS.map(provider => (
@@ -360,7 +360,7 @@ export default function AIProvidersPage() {
                 {selectedProvider && (
                   <>
                     {/* Provider Info */}
-                    <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                    <div className="p-4 rounded-lg bg-white/5 border border-white/10">
                       {(() => {
                         const provider = getProviderInfo(selectedProvider);
                         if (!provider) return null;
@@ -368,7 +368,7 @@ export default function AIProvidersPage() {
                         return (
                           <div className="space-y-3">
                             <div>
-                              <h3 className="font-semibold text-orange-500 mb-1">{provider.name}</h3>
+                              <h3 className="font-semibold text-white mb-1">{provider.name}</h3>
                               <p className="text-sm text-gray-300">{provider.description}</p>
                             </div>
                             <div>
@@ -384,7 +384,7 @@ export default function AIProvidersPage() {
                                 href={provider.getKeyUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-sm text-orange-400 hover:text-orange-300 flex items-center gap-1"
+                                className="text-sm text-neutral-300 hover:text-white flex items-center gap-1"
                               >
                                 Get API Key <ExternalLink className="w-3 h-3" />
                               </a>
@@ -393,7 +393,7 @@ export default function AIProvidersPage() {
                                 href={provider.docs}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-sm text-orange-400 hover:text-orange-300 flex items-center gap-1"
+                                className="text-sm text-neutral-300 hover:text-white flex items-center gap-1"
                               >
                                 Documentation <ExternalLink className="w-3 h-3" />
                               </a>
@@ -416,7 +416,7 @@ export default function AIProvidersPage() {
                         value={keyName}
                         onChange={(e) => setKeyName(e.target.value)}
                         placeholder="My Production Key"
-                        className="w-full px-4 py-3 border border-white/10 rounded-lg bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        className="w-full px-4 py-3 border border-white/10 rounded-lg bg-white/5 text-white focus:outline-none focus:ring-2 focus:ring-white/20"
                       />
                     </div>
 
@@ -430,7 +430,7 @@ export default function AIProvidersPage() {
                           onChange={(e) => setNewApiKey(e.target.value)}
                           required
                           placeholder={getProviderInfo(selectedProvider)?.keyFormat}
-                          className="w-full px-4 py-3 pr-12 border border-white/10 rounded-lg bg-white/5 text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          className="w-full px-4 py-3 pr-12 border border-white/10 rounded-lg bg-white/5 text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-white/20"
                         />
                         <button
                           type="button"
@@ -463,7 +463,7 @@ export default function AIProvidersPage() {
                       <button
                         type="submit"
                         disabled={submitting}
-                        className="px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center gap-2 disabled:opacity-50"
+                        className="px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         {submitting ? (
                           <>
@@ -496,8 +496,8 @@ export default function AIProvidersPage() {
           </div>
 
           {/* AI CLI Tools Section */}
-          <div className="mt-6 p-6 rounded-2xl bg-purple-500/10 border border-purple-500/20">
-            <h3 className="font-semibold text-purple-400 mb-2 flex items-center gap-2">
+          <div className="mt-6 p-6 rounded-2xl bg-white/5 border border-white/10">
+            <h3 className="font-semibold text-white mb-2 flex items-center gap-2">
               <Terminal className="w-5 h-5" />
               AI CLI Tools in Containers
             </h3>
@@ -508,25 +508,25 @@ export default function AIProvidersPage() {
               <div className="p-3 rounded-lg bg-white/5 border border-white/10">
                 <div className="font-medium text-white mb-1">OpenAI Codex</div>
                 <p className="text-xs text-gray-400">AI coding assistant from OpenAI</p>
-                <code className="text-xs text-orange-400">codex</code>
+                <code className="text-xs text-neutral-300">codex</code>
                 <span className="text-xs text-gray-500 ml-2">Uses your BYOK OpenAI key</span>
               </div>
               <div className="p-3 rounded-lg bg-white/5 border border-white/10">
                 <div className="font-medium text-white mb-1">Google Gemini CLI</div>
                 <p className="text-xs text-gray-400">Google&apos;s AI assistant for terminal</p>
-                <code className="text-xs text-orange-400">gemini</code>
+                <code className="text-xs text-neutral-300">gemini</code>
                 <span className="text-xs text-gray-500 ml-2">Uses your BYOK Google key</span>
               </div>
               <div className="p-3 rounded-lg bg-white/5 border border-white/10">
                 <div className="font-medium text-white mb-1">Claude Code</div>
                 <p className="text-xs text-gray-400">Anthropic&apos;s CLI coding assistant</p>
-                <code className="text-xs text-orange-400">claude</code>
+                <code className="text-xs text-neutral-300">claude</code>
                 <span className="text-xs text-gray-500 ml-2">Uses: Claude Code Token</span>
               </div>
               <div className="p-3 rounded-lg bg-white/5 border border-white/10">
                 <div className="font-medium text-white mb-1">OpenCode</div>
                 <p className="text-xs text-gray-400">Multi-provider AI agent</p>
-                <code className="text-xs text-orange-400">opencode</code>
+                <code className="text-xs text-neutral-300">opencode</code>
                 <span className="text-xs text-gray-500 ml-2">Supports multiple providers</span>
               </div>
             </div>

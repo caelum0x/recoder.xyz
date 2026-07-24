@@ -118,12 +118,12 @@ export default function DocsPage() {
       {/* Hero */}
       <section className="pt-32 pb-16 px-6">
         <div className="container mx-auto text-center max-w-4xl">
-          <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full border border-orange-500/20 bg-orange-500/5 mb-6">
-            <BookOpen className="w-4 h-4 text-orange-500" />
-            <span className="text-sm text-orange-500">Documentation</span>
+          <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full border border-neutral-700 bg-neutral-800/50 mb-6">
+            <BookOpen className="w-4 h-4 text-white" />
+            <span className="text-sm text-neutral-300">Documentation</span>
           </div>
           <h1 className="text-5xl md:text-7xl font-bold mb-6">
-            <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
+            <span className="text-white">
               Learn Recoder
             </span>
           </h1>
@@ -139,9 +139,9 @@ export default function DocsPage() {
                 <Link 
                   key={index} 
                   href={link.href}
-                  className="p-4 rounded-lg border border-white/10 bg-white/5 hover:border-orange-500/30 hover:bg-white/10 transition-all flex flex-col items-center text-center space-y-2"
+                  className="p-4 rounded-lg border border-white/10 bg-white/5 hover:border-neutral-600 hover:bg-white/10 transition-all flex flex-col items-center text-center space-y-2"
                 >
-                  <Icon className="w-6 h-6 text-orange-500" />
+                  <Icon className="w-6 h-6 text-white" />
                   <span className="font-medium">{link.title}</span>
                   <span className="text-xs text-gray-400">{link.description}</span>
                 </Link>
@@ -163,7 +163,7 @@ export default function DocsPage() {
                   className="p-6 rounded-2xl border border-white/10 bg-black/50 hover:border-white/20 transition-all"
                 >
                   <div className="flex items-center space-x-3 mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center">
+                    <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center">
                       <Icon className="w-6 h-6 text-white" />
                     </div>
                     <h3 className="text-xl font-bold">{section.title}</h3>
@@ -175,7 +175,7 @@ export default function DocsPage() {
                       <div key={articleIndex} className="flex items-center justify-between py-2 border-b border-white/5">
                         <Link 
                           href={article.href}
-                          className="flex items-center space-x-2 text-sm hover:text-orange-500 transition-colors group"
+                          className="flex items-center space-x-2 text-sm hover:text-white transition-colors group"
                         >
                           <span>{article.title}</span>
                           <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
@@ -230,7 +230,7 @@ export default function DocsPage() {
               </div>
 
               <div className="p-6 rounded-2xl border border-white/10 bg-black/50 text-center space-y-4">
-                <MessageSquare className="w-12 h-12 mx-auto text-purple-500" />
+                <MessageSquare className="w-12 h-12 mx-auto text-neutral-300" />
                 <h3 className="text-xl font-bold">Get in Touch</h3>
                 <p className="text-sm text-gray-400">
                   Email us or message on Twitter

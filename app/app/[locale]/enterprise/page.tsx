@@ -114,14 +114,14 @@ export default function EnterprisePage() {
       {/* Hero Section */}
       <section className="pt-24 pb-16 px-6">
         <div className="container mx-auto max-w-5xl text-center">
-          <div className="inline-flex items-center space-x-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full mb-8">
-            <Building2 className="w-4 h-4 text-purple-400" />
-            <span className="text-sm text-purple-300">Enterprise</span>
+          <div className="inline-flex items-center space-x-2 px-4 py-2 bg-neutral-800/50 border border-neutral-700 rounded-full mb-8">
+            <Building2 className="w-4 h-4 text-neutral-300" />
+            <span className="text-sm text-neutral-300">Enterprise</span>
           </div>
           <h1 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight">
             Enterprise-grade{' '}
             <br className="hidden md:block" />
-            <span className="bg-gradient-to-r from-orange-500 via-purple-500 to-orange-500 bg-clip-text text-transparent">
+            <span className="text-white">
               AI development
             </span>
           </h1>
@@ -147,7 +147,7 @@ export default function EnterprisePage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-12">
             <Link
               href="/contact"
-              className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl transition-all transform hover:scale-105 flex items-center space-x-2 shadow-lg shadow-orange-500/25"
+              className="px-8 py-4 text-lg font-semibold bg-white text-black hover:bg-neutral-200 rounded-xl transition-colors transform hover:scale-105 flex items-center space-x-2 shadow-lg"
             >
               <Phone className="w-5 h-5" />
               <span>Contact Sales</span>
@@ -167,9 +167,9 @@ export default function EnterprisePage() {
       <section className="py-20 px-6">
         <div className="container mx-auto max-w-7xl">
           <div className="text-center mb-16">
-            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-full mb-6">
-              <Zap className="w-4 h-4 text-orange-400" />
-              <span className="text-sm text-orange-300">Enterprise Features</span>
+            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-neutral-800/50 border border-neutral-700 rounded-full mb-6">
+              <Zap className="w-4 h-4 text-neutral-300" />
+              <span className="text-sm text-neutral-300">Enterprise Features</span>
             </div>
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
               Everything your organization needs
@@ -186,8 +186,8 @@ export default function EnterprisePage() {
                 key={feature.title}
                 className="group relative flex flex-col rounded-2xl border border-white/10 bg-white/[0.02] p-6 transition-all hover:border-white/20 hover:bg-white/[0.04]"
               >
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center mb-4 group-hover:border-orange-500/30 transition-colors">
-                  <feature.icon className="w-6 h-6 text-orange-400" />
+                <div className="w-12 h-12 rounded-xl bg-neutral-800 border border-neutral-700 flex items-center justify-center mb-4 group-hover:border-neutral-600 transition-colors">
+                  <feature.icon className="w-6 h-6 text-white" />
                 </div>
                 <h3 className="text-lg font-bold mb-2">{feature.title}</h3>
                 <p className="text-sm text-gray-400 leading-relaxed">{feature.description}</p>
@@ -200,9 +200,9 @@ export default function EnterprisePage() {
       {/* Scale Section */}
       <section className="py-20 px-6">
         <div className="container mx-auto max-w-5xl">
-          <div className="relative rounded-3xl border border-white/10 bg-gradient-to-br from-orange-500/5 via-purple-500/5 to-transparent p-12 overflow-hidden">
+          <div className="relative rounded-3xl border border-white/10 bg-white/[0.02] p-12 overflow-hidden">
             {/* Background glow */}
-            <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 via-transparent to-purple-500/10 blur-3xl pointer-events-none" />
+            <div className="absolute inset-0 bg-white/5 blur-3xl pointer-events-none" />
 
             <div className="relative text-center mb-12">
               <h2 className="text-3xl md:text-4xl font-bold mb-4">Built for teams of any size</h2>
@@ -215,7 +215,7 @@ export default function EnterprisePage() {
             <div className="relative grid grid-cols-1 md:grid-cols-3 gap-8">
               {SCALE_STATS.map((stat) => (
                 <div key={stat.label} className="text-center">
-                  <div className="text-5xl font-bold bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent mb-2">
+                  <div className="text-5xl font-bold text-white mb-2">
                     {stat.value}
                   </div>
                   <div className="text-lg font-semibold text-white mb-1">{stat.label}</div>
@@ -268,7 +268,7 @@ export default function EnterprisePage() {
           <div className="mt-8 text-center">
             <Link
               href="/security"
-              className="inline-flex items-center gap-2 text-sm text-orange-400 hover:text-orange-300 transition-colors"
+              className="inline-flex items-center gap-2 text-sm text-neutral-300 hover:text-white transition-colors"
             >
               View full Security Center
               <ArrowRight className="w-4 h-4" />
@@ -292,10 +292,10 @@ export default function EnterprisePage() {
               <div key={step.step} className="relative">
                 {/* Connector line */}
                 {step.step < 3 && (
-                  <div className="hidden md:block absolute top-8 left-[calc(50%+2rem)] w-[calc(100%-4rem)] h-px bg-gradient-to-r from-orange-500/40 to-purple-500/40" />
+                  <div className="hidden md:block absolute top-8 left-[calc(50%+2rem)] w-[calc(100%-4rem)] h-px bg-neutral-700" />
                 )}
                 <div className="text-center">
-                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-purple-600 text-2xl font-bold mb-6 shadow-lg shadow-orange-500/25">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-neutral-800 border border-neutral-700 text-2xl font-bold mb-6 shadow-lg">
                     {step.step}
                   </div>
                   <h3 className="text-xl font-bold mb-3">{step.title}</h3>
@@ -310,9 +310,9 @@ export default function EnterprisePage() {
       {/* Bottom CTA */}
       <section className="py-24 px-6">
         <div className="container mx-auto max-w-4xl">
-          <div className="relative rounded-3xl border border-orange-500/20 bg-gradient-to-br from-orange-500/10 via-purple-500/10 to-transparent p-12 text-center overflow-hidden">
+          <div className="relative rounded-3xl border border-neutral-800 bg-white/[0.02] p-12 text-center overflow-hidden">
             {/* Background glow */}
-            <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 via-purple-500/10 to-orange-500/5 blur-3xl pointer-events-none" />
+            <div className="absolute inset-0 bg-white/5 blur-3xl pointer-events-none" />
 
             <div className="relative">
               <h2 className="text-3xl md:text-4xl font-bold mb-4">
@@ -325,7 +325,7 @@ export default function EnterprisePage() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link
                   href="/contact"
-                  className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl transition-all transform hover:scale-105 flex items-center justify-center space-x-2 shadow-lg shadow-orange-500/25"
+                  className="px-8 py-4 text-lg font-semibold bg-white text-black hover:bg-neutral-200 rounded-xl transition-colors transform hover:scale-105 flex items-center justify-center space-x-2 shadow-lg"
                 >
                   <Phone className="w-5 h-5" />
                   <span>Contact Sales</span>
@@ -342,7 +342,7 @@ export default function EnterprisePage() {
                 Or email us directly at{' '}
                 <a
                   href="mailto:enterprise@recoder.xyz"
-                  className="text-orange-400 hover:text-orange-300 transition-colors"
+                  className="text-neutral-300 hover:text-white transition-colors"
                 >
                   enterprise@recoder.xyz
                 </a>

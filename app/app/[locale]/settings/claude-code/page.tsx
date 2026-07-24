@@ -125,7 +125,7 @@ export default function ClaudeCodeSettingsPage() {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-orange-500 mx-auto mb-4" />
+          <Loader2 className="w-12 h-12 animate-spin text-white mx-auto mb-4" />
           <p className="text-gray-400">Loading Claude Code settings...</p>
         </div>
       </div>
@@ -146,7 +146,7 @@ export default function ClaudeCodeSettingsPage() {
               Back to Settings
             </Link>
             <div className="flex items-center space-x-3 mb-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-center">
                 <Terminal className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -203,24 +203,24 @@ export default function ClaudeCodeSettingsPage() {
 
             <div className="space-y-4">
               <div className="flex gap-4">
-                <div className="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center text-orange-500 font-bold shrink-0">
+                <div className="w-8 h-8 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-white font-bold shrink-0">
                   1
                 </div>
                 <div>
                   <h3 className="font-medium mb-1">Install Claude Code locally</h3>
-                  <code className="text-sm bg-white/5 px-3 py-1.5 rounded font-mono text-orange-400 block">
+                  <code className="text-sm bg-white/5 px-3 py-1.5 rounded font-mono text-neutral-300 block">
                     npm install -g @anthropic-ai/claude-code
                   </code>
                 </div>
               </div>
 
               <div className="flex gap-4">
-                <div className="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center text-orange-500 font-bold shrink-0">
+                <div className="w-8 h-8 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-white font-bold shrink-0">
                   2
                 </div>
                 <div>
                   <h3 className="font-medium mb-1">Generate a long-lived token (valid 1 year)</h3>
-                  <code className="text-sm bg-white/5 px-3 py-1.5 rounded font-mono text-orange-400 block">
+                  <code className="text-sm bg-white/5 px-3 py-1.5 rounded font-mono text-neutral-300 block">
                     claude setup-token
                   </code>
                   <p className="text-sm text-gray-500 mt-1">
@@ -230,7 +230,7 @@ export default function ClaudeCodeSettingsPage() {
               </div>
 
               <div className="flex gap-4">
-                <div className="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center text-orange-500 font-bold shrink-0">
+                <div className="w-8 h-8 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-white font-bold shrink-0">
                   3
                 </div>
                 <div>
@@ -259,7 +259,7 @@ export default function ClaudeCodeSettingsPage() {
                     onChange={(e) => setToken(e.target.value)}
                     required
                     placeholder="sk-ant-oat01-..."
-                    className="w-full px-4 py-3 pr-12 border border-white/10 rounded-lg bg-white/5 text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className="w-full px-4 py-3 pr-12 border border-white/10 rounded-lg bg-white/5 text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-white/20"
                   />
                   <button
                     type="button"
@@ -277,7 +277,7 @@ export default function ClaudeCodeSettingsPage() {
               <button
                 type="submit"
                 disabled={submitting || !token}
-                className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full px-6 py-3 bg-white text-black hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
               >
                 {submitting ? (
                   <>
@@ -296,10 +296,10 @@ export default function ClaudeCodeSettingsPage() {
 
           {/* Benefits Section */}
           <div className="grid md:grid-cols-2 gap-4 mb-8">
-            <div className="p-5 rounded-xl bg-purple-500/10 border border-purple-500/20">
+            <div className="p-5 rounded-xl bg-neutral-800/50 border border-neutral-700">
               <div className="flex items-center gap-2 mb-2">
-                <Zap className="w-5 h-5 text-purple-400" />
-                <h3 className="font-semibold text-purple-400">Use Your Subscription</h3>
+                <Zap className="w-5 h-5 text-neutral-300" />
+                <h3 className="font-semibold text-neutral-200">Use Your Subscription</h3>
               </div>
               <p className="text-sm text-gray-300">
                 Claude Code in containers uses your Claude Pro/Max subscription. No extra API costs.
@@ -323,7 +323,7 @@ export default function ClaudeCodeSettingsPage() {
               href="https://code.claude.com/docs"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-orange-400 hover:text-orange-300 inline-flex items-center gap-1"
+              className="text-neutral-300 hover:text-white inline-flex items-center gap-1"
             >
               Claude Code Documentation <ExternalLink className="w-4 h-4" />
             </a>

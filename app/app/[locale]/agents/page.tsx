@@ -49,12 +49,12 @@ export default function AgentsPage() {
       {/* Hero */}
       <section className="py-20 px-6">
         <div className="container mx-auto max-w-5xl text-center">
-          <div className="inline-flex items-center space-x-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full mb-8">
-            <Bot className="w-4 h-4 text-purple-400" />
-            <span className="text-sm text-purple-300">AI Agent Ecosystem</span>
+          <div className="inline-flex items-center space-x-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full mb-8">
+            <Bot className="w-4 h-4 text-neutral-300" />
+            <span className="text-sm text-neutral-300">AI Agent Ecosystem</span>
           </div>
           <h1 className="text-5xl md:text-6xl font-bold mb-6">
-            <span className="bg-gradient-to-r from-orange-500 via-purple-500 to-cyan-500 bg-clip-text text-transparent">
+            <span className="text-white">
               AI Agents
             </span>
             {' '}for Every Task
@@ -123,7 +123,7 @@ export default function AgentsPage() {
           <div className="flex items-center justify-center space-x-4">
             <Link
               href="/auth/signup"
-              className="px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-opacity"
+              className="px-6 py-3 bg-white text-black rounded-lg font-medium hover:bg-neutral-200 transition-colors"
             >
               Get Started Free
             </Link>

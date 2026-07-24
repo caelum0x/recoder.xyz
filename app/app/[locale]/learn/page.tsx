@@ -187,7 +187,7 @@ export default function LearnPage() {
               Resources
             </Badge>
           </div>
-          <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-white via-orange-400 to-white bg-clip-text text-transparent">
+          <h1 className="text-4xl md:text-6xl font-bold mb-6 text-white">
             Learn Recoder
           </h1>
           <p className="text-xl text-zinc-400 mb-12 max-w-3xl mx-auto">
@@ -212,7 +212,7 @@ export default function LearnPage() {
               <Card key={index} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
                 <CardHeader>
                   <div className="flex items-center justify-between mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg flex items-center justify-center">
+                    <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center">
                       <guide.icon className="w-6 h-6 text-white" />
                     </div>
                     <Badge className={getLevelColor(guide.level)}>
@@ -268,7 +268,7 @@ export default function LearnPage() {
                   <div className="space-y-2">
                     {tutorial.steps.map((step, stepIndex) => (
                       <div key={stepIndex} className="flex items-start gap-2 text-zinc-300">
-                        <CheckCircle2 className="h-4 w-4 mt-0.5 text-orange-400 shrink-0" />
+                        <CheckCircle2 className="h-4 w-4 mt-0.5 text-neutral-300 shrink-0" />
                         <span>{step}</span>
                       </div>
                     ))}
@@ -301,7 +301,7 @@ export default function LearnPage() {
             {resources.map((resource, index) => (
               <Card key={index} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
                 <CardContent className="p-6 text-center">
-                  <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center mx-auto mb-4">
                     <resource.icon className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="font-semibold text-lg mb-2">{resource.title}</h3>
@@ -334,7 +334,7 @@ export default function LearnPage() {
                 <CardContent className="p-6">
                   <h3 className="text-lg font-semibold mb-2">{doc.title}</h3>
                   <p className="text-zinc-400 mb-4">{doc.description}</p>
-                  <Button variant="ghost" className="p-0 h-auto text-orange-400 hover:text-orange-300" asChild>
+                  <Button variant="ghost" className="p-0 h-auto text-white hover:text-neutral-200" asChild>
                     <Link href={doc.href}>
                       Open
                       <ArrowRight className="w-4 h-4 ml-2" />
@@ -350,7 +350,7 @@ export default function LearnPage() {
       {/* CTA Section */}
       <section className="py-16 px-4">
         <div className="container mx-auto max-w-4xl text-center">
-          <Card className="border-0 shadow-xl bg-gradient-to-r from-orange-500 to-purple-600 text-white">
+          <Card className="border border-neutral-800 shadow-xl bg-neutral-900 text-white">
             <CardContent className="p-12">
               <h2 className="text-3xl font-bold mb-4">Ready to Start Building?</h2>
               <p className="text-lg opacity-90 mb-8">
@@ -363,7 +363,7 @@ export default function LearnPage() {
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Link>
                 </Button>
-                <Button variant="outline" size="lg" className="border-white text-white hover:bg-white hover:text-orange-600" asChild>
+                <Button variant="outline" size="lg" className="border-white text-white hover:bg-white hover:text-black" asChild>
                   <Link href="/about">
                     About Recoder
                   </Link>

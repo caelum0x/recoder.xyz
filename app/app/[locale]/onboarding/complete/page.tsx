@@ -220,7 +220,7 @@ export default function CompletePage() {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-16 h-16 border-4 border-neutral-700 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-400">Loading...</p>
         </div>
       </div>
@@ -267,11 +267,11 @@ export default function CompletePage() {
           {/* Quick Stats */}
           <div className="grid md:grid-cols-3 gap-6 mb-12">
             <div className="p-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl text-center">
-              <div className="text-4xl font-bold text-orange-500 mb-2">50+</div>
+              <div className="text-4xl font-bold text-white mb-2">50+</div>
               <div className="text-gray-400">AI Models</div>
             </div>
             <div className="p-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl text-center">
-              <div className="text-4xl font-bold text-purple-500 mb-2">4</div>
+              <div className="text-4xl font-bold text-white mb-2">4</div>
               <div className="text-gray-400">Platforms</div>
             </div>
             <div className="p-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl text-center">
@@ -283,12 +283,12 @@ export default function CompletePage() {
           {/* Recommended for You - Primary App */}
           <div className="mb-8">
             <div className="flex items-center justify-center space-x-2 mb-6">
-              <Star className="w-5 h-5 text-orange-500" />
+              <Star className="w-5 h-5 text-white" />
               <h2 className="text-2xl font-bold text-center">Recommended for you</h2>
             </div>
-            <div className="p-8 rounded-2xl border-2 border-orange-500/50 bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl hover:border-orange-500 transition-all group relative overflow-hidden">
+            <div className="p-8 rounded-2xl border-2 border-neutral-700 bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl hover:border-neutral-500 transition-all group relative overflow-hidden">
               {/* Subtle glow effect */}
-              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-purple-600/5 pointer-events-none" />
+              <div className="absolute inset-0 bg-white/5 pointer-events-none" />
               <div className="relative">
                 <div className="flex items-start justify-between mb-6">
                   <div className="flex items-center space-x-4">
@@ -345,7 +345,7 @@ export default function CompletePage() {
                       href={app.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center space-x-1.5 text-sm text-orange-500 hover:text-orange-400 font-medium"
+                      className="inline-flex items-center space-x-1.5 text-sm text-neutral-300 hover:text-white font-medium"
                     >
                       <span>{app.action}</span>
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -360,7 +360,7 @@ export default function CompletePage() {
           <div className="text-center">
             <Link
               href="/dashboard"
-              className="inline-flex items-center space-x-2 px-12 py-4 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl font-bold text-lg transition-all transform hover:scale-105"
+              className="inline-flex items-center space-x-2 px-12 py-4 bg-white text-black hover:bg-neutral-200 rounded-xl font-bold text-lg transition-colors transform hover:scale-105"
             >
               <span>Go to Dashboard</span>
               <Sparkles className="w-5 h-5" />

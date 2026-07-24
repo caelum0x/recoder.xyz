@@ -161,7 +161,7 @@ export default function ProfileSettingsPage() {
               <div className="flex items-center space-x-6">
                 <div className="relative">
                   {avatarPreview ? (
-                    <div className="relative w-24 h-24 rounded-full overflow-hidden border-4 border-orange-500">
+                    <div className="relative w-24 h-24 rounded-full overflow-hidden border-4 border-neutral-700">
                       <Image
                         src={avatarPreview}
                         alt="Avatar preview"
@@ -170,7 +170,7 @@ export default function ProfileSettingsPage() {
                       />
                     </div>
                   ) : (
-                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-500 to-purple-600 flex items-center justify-center">
+                    <div className="w-24 h-24 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center">
                       <User className="w-12 h-12 text-white" />
                     </div>
                   )}
@@ -219,7 +219,7 @@ export default function ProfileSettingsPage() {
                     type="text"
                     value={profileData.display_name}
                     onChange={(e) => setProfileData({ ...profileData, display_name: e.target.value })}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                   />
                 </div>
 
@@ -232,7 +232,7 @@ export default function ProfileSettingsPage() {
                     rows={4}
                     value={profileData.bio}
                     onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white resize-none"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white resize-none"
                     placeholder="Tell us about yourself..."
                   />
                   <p className="text-xs text-gray-500">
@@ -251,7 +251,7 @@ export default function ProfileSettingsPage() {
                       type="text"
                       value={profileData.company}
                       onChange={(e) => setProfileData({ ...profileData, company: e.target.value })}
-                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
                 </div>
@@ -267,7 +267,7 @@ export default function ProfileSettingsPage() {
                       type="url"
                       value={profileData.website}
                       onChange={(e) => setProfileData({ ...profileData, website: e.target.value })}
-                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
                 </div>
@@ -281,7 +281,7 @@ export default function ProfileSettingsPage() {
                     type="text"
                     value={profileData.location}
                     onChange={(e) => setProfileData({ ...profileData, location: e.target.value })}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     placeholder="City, Country"
                   />
                 </div>
@@ -306,7 +306,7 @@ export default function ProfileSettingsPage() {
                         ...profileData,
                         github_username: e.target.value
                       })}
-                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                       placeholder="username"
                     />
                   </div>
@@ -326,7 +326,7 @@ export default function ProfileSettingsPage() {
                         ...profileData,
                         twitter_username: e.target.value
                       })}
-                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                       placeholder="username"
                     />
                   </div>
@@ -346,7 +346,7 @@ export default function ProfileSettingsPage() {
                         ...profileData,
                         linkedin_username: e.target.value
                       })}
-                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                       placeholder="username"
                     />
                   </div>
@@ -365,11 +365,13 @@ export default function ProfileSettingsPage() {
                 <button
                   onClick={() => setProfileData({ ...profileData, public_profile: !profileData.public_profile })}
                   className={`relative w-12 h-6 rounded-full transition-colors ${
-                    profileData.public_profile ? 'bg-orange-500' : 'bg-gray-700'
+                    profileData.public_profile ? 'bg-white' : 'bg-neutral-700'
                   }`}
                 >
                   <div
-                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    className={`absolute top-1 w-4 h-4 rounded-full transition-transform ${
+                      profileData.public_profile ? 'bg-black' : 'bg-white'
+                    } ${
                       profileData.public_profile ? 'translate-x-7' : 'translate-x-1'
                     }`}
                   />
@@ -388,7 +390,7 @@ export default function ProfileSettingsPage() {
               <button
                 onClick={handleSave}
                 disabled={saving || loading}
-                className="px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2 disabled:opacity-50"
+                className="px-6 py-3 bg-white text-black hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium transition-all flex items-center space-x-2"
               >
                 {saving ? (
                   <>

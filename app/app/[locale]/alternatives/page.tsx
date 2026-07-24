@@ -174,7 +174,6 @@ interface Differentiator {
   icon: typeof Key;
   title: string;
   description: string;
-  gradient: string;
 }
 
 const differentiators: Differentiator[] = [
@@ -183,28 +182,24 @@ const differentiators: Differentiator[] = [
     title: 'BYOK Freedom',
     description:
       'Bring your own OpenRouter, OpenAI, or Anthropic API key and use Recoder completely free. No middleman markup on API costs. You pay the provider directly at their published rates, giving you full cost transparency and control.',
-    gradient: 'from-orange-500 to-amber-600',
   },
   {
     icon: Cpu,
     title: 'True Multi-Model Access',
     description:
       'Access 40+ AI models through a single interface, including GPT-4, Claude, Gemini, Llama, Mistral, and more. Switch models per task to get the best results. No vendor lock-in to a single AI provider.',
-    gradient: 'from-purple-500 to-pink-600',
   },
   {
     icon: Layers,
     title: 'All-in-One Platform',
     description:
       'Web IDE, CLI tool, multi-agent workflows via Agency, built-in project management with PM, and cloud deployment. Replace multiple subscriptions with a single platform that covers the entire development lifecycle.',
-    gradient: 'from-blue-500 to-cyan-600',
   },
   {
     icon: Server,
     title: 'Self-Hostable & Open',
     description:
       'Deploy Recoder on your own infrastructure for complete data sovereignty. Ideal for enterprises and teams with strict compliance requirements. Select components are open source, so you can inspect and extend the platform.',
-    gradient: 'from-green-500 to-emerald-600',
   },
 ];
 
@@ -246,7 +241,7 @@ function ComparisonTable() {
                 key={p}
                 className={`py-4 px-4 text-sm font-semibold border-b text-center ${
                   p === 'recoder'
-                    ? 'text-orange-400 border-orange-500/30 bg-orange-500/5'
+                    ? 'text-white border-neutral-600 bg-neutral-800/40'
                     : 'text-gray-300 border-white/10'
                 }`}
               >
@@ -272,7 +267,7 @@ function ComparisonTable() {
                     key={p}
                     className={`py-4 px-4 text-sm text-center border-b ${
                       p === 'recoder'
-                        ? 'bg-orange-500/5 border-orange-500/10 text-white font-medium'
+                        ? 'bg-neutral-800/40 border-neutral-700 text-white font-medium'
                         : 'border-white/5 text-gray-400'
                     }`}
                   >
@@ -300,7 +295,7 @@ function DifferentiatorCard({ item }: { item: Differentiator }) {
   return (
     <div className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 transition-all group">
       <div
-        className={`w-12 h-12 bg-gradient-to-br ${item.gradient} rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
+        className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"
       >
         <Icon className="w-6 h-6 text-white" />
       </div>
@@ -324,13 +319,13 @@ export default function AlternativesPage() {
       {/* Hero Section */}
       <section className="pt-32 pb-16 px-4">
         <div className="max-w-5xl mx-auto text-center">
-          <div className="inline-flex items-center space-x-2 px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-full mb-6">
-            <Sparkles className="w-4 h-4 text-orange-500" />
-            <span className="text-sm text-orange-500">Platform Comparison</span>
+          <div className="inline-flex items-center space-x-2 px-4 py-2 bg-neutral-800 border border-neutral-700 rounded-full mb-6">
+            <Sparkles className="w-4 h-4 text-white" />
+            <span className="text-sm text-neutral-300">Platform Comparison</span>
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
             Why developers choose{' '}
-            <span className="bg-gradient-to-r from-orange-500 to-purple-600 bg-clip-text text-transparent">
+            <span className="text-white">
               Recoder
             </span>
           </h1>
@@ -391,7 +386,7 @@ export default function AlternativesPage() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
                 href="/auth/signup"
-                className="inline-flex items-center space-x-2 px-8 py-4 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all"
+                className="inline-flex items-center space-x-2 px-8 py-4 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-colors"
               >
                 <span>Get Started Free</span>
                 <ArrowRight className="w-5 h-5" />

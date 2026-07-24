@@ -6,11 +6,11 @@
 export const theme = {
   // Brand Colors
   colors: {
-    // Primary gradient (orange to purple)
+    // Primary (monochrome white — retired orange→purple brand gradient)
     primary: {
-      orange: '#f97316', // orange-500
-      purple: '#9333ea', // purple-600
-      gradient: 'linear-gradient(to right, #f97316, #9333ea)',
+      orange: '#ffffff', // was orange-500, now white
+      purple: '#e5e5e5', // was purple-600, now neutral-200
+      gradient: 'linear-gradient(to right, #ffffff, #e5e5e5)',
     },
 
     // Neutrals
@@ -98,7 +98,7 @@ export const theme = {
     lg: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
     xl: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
     '2xl': '0 25px 50px -12px rgb(0 0 0 / 0.25)',
-    glow: '0 0 20px rgba(249, 115, 22, 0.5)', // Orange glow
+    glow: '0 0 20px rgba(255, 255, 255, 0.15)', // Subtle white glow
   },
 
   // Animations
@@ -122,16 +122,16 @@ export const theme = {
 
 // CSS Classes (for consistent usage)
 export const themeClasses = {
-  // Gradients
+  // Gradients (retired brand gradient — now monochrome)
   gradient: {
-    primary: 'bg-gradient-to-r from-orange-500 to-purple-600',
-    primaryHover: 'hover:from-orange-600 hover:to-purple-700',
+    primary: 'bg-white text-black',
+    primaryHover: 'hover:bg-neutral-200',
     background: 'bg-gradient-to-br from-gray-900 via-black to-gray-900',
   },
 
   // Buttons
   button: {
-    primary: 'bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-all',
+    primary: 'bg-white text-black hover:bg-neutral-200 font-semibold py-3 px-6 rounded-lg transition-colors',
     secondary: 'bg-gray-800 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-lg transition-all',
     ghost: 'bg-transparent hover:bg-gray-800 text-gray-300 hover:text-white font-semibold py-3 px-6 rounded-lg transition-all',
     danger: 'bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-lg transition-all',
@@ -140,13 +140,13 @@ export const themeClasses = {
   // Cards
   card: {
     base: 'bg-gray-800 rounded-xl p-6 border border-gray-700',
-    hover: 'bg-gray-800 rounded-xl p-6 border border-gray-700 hover:border-orange-500 transition-all cursor-pointer',
-    gradient: 'bg-gradient-to-r from-orange-500/20 to-purple-600/20 rounded-xl p-6 border border-orange-500/50',
+    hover: 'bg-gray-800 rounded-xl p-6 border border-gray-700 hover:border-neutral-500 transition-all cursor-pointer',
+    gradient: 'bg-white/[0.02] rounded-xl p-6 border border-neutral-800',
   },
 
   // Inputs
   input: {
-    base: 'bg-gray-900 border border-gray-600 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500',
+    base: 'bg-gray-900 border border-gray-600 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20',
     error: 'bg-gray-900 border border-red-500 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-500',
   },
 
@@ -155,7 +155,7 @@ export const themeClasses = {
     heading: 'text-white font-bold',
     body: 'text-gray-300',
     muted: 'text-gray-500',
-    link: 'text-orange-500 hover:text-orange-400 transition-colors',
+    link: 'text-neutral-300 hover:text-white transition-colors',
   },
 };
 

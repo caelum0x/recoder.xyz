@@ -120,7 +120,7 @@ export function UpgradeModal({
         }`}
       >
         {/* Decorative gradient top edge */}
-        <div className="absolute -top-px left-6 right-6 h-px bg-gradient-to-r from-transparent via-purple-500 to-transparent" />
+        <div className="absolute -top-px left-6 right-6 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
         {/* Close button */}
         <button
@@ -134,8 +134,8 @@ export function UpgradeModal({
         <div className="p-6">
           {/* Header */}
           <div className="flex items-center gap-3 mb-1">
-            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-orange-500/20 to-purple-600/20">
-              <Sparkles className="w-5 h-5 text-purple-400" />
+            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-neutral-800 border border-neutral-700">
+              <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>
               <h2 className="text-lg font-semibold text-white">Upgrade Your Plan</h2>
@@ -156,13 +156,13 @@ export function UpgradeModal({
 
           {/* Recommended plan */}
           {recommended && (
-            <div className="mt-3 rounded-lg border border-purple-500/30 bg-purple-500/[0.05] p-3">
+            <div className="mt-3 rounded-lg border border-neutral-700 bg-neutral-800/40 p-3">
               <div className="flex items-center justify-between mb-2">
                 <div>
-                  <p className="text-xs text-purple-400 uppercase tracking-wide mb-1">Recommended</p>
+                  <p className="text-xs text-neutral-300 uppercase tracking-wide mb-1">Recommended</p>
                   <span className="text-sm font-semibold text-white">{recommended.name}</span>
                 </div>
-                <span className="text-sm font-semibold text-purple-300">
+                <span className="text-sm font-semibold text-white">
                   {formatPrice(recommended)}
                 </span>
               </div>
@@ -196,7 +196,7 @@ export function UpgradeModal({
                         {isUpgrade && (
                           <>
                             <ArrowRight className="w-3 h-3 text-gray-600" />
-                            <span className="font-medium text-purple-300">{nextVal}</span>
+                            <span className="font-medium text-white">{nextVal}</span>
                           </>
                         )}
                         {!isUpgrade && (
@@ -216,7 +216,7 @@ export function UpgradeModal({
           <div className="mt-6 flex flex-col gap-2">
             <Link
               href="/pricing"
-              className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-orange-500 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              className="flex items-center justify-center gap-2 rounded-lg bg-white text-black px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-neutral-200"
               onClick={onClose}
             >
               Upgrade Now

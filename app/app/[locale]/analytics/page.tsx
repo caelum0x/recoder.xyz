@@ -10,7 +10,7 @@ export default function AnalyticsPage() {
     <div className="min-h-screen bg-black text-white">
       <SiteHeader />
       <div className="container mx-auto max-w-3xl px-6 py-24 text-center">
-        <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-8">
+        <div className="w-16 h-16 bg-neutral-800 border border-neutral-700 rounded-2xl flex items-center justify-center mx-auto mb-8">
           <BarChart3 className="w-8 h-8 text-white" />
         </div>
         <h1 className="text-4xl font-bold mb-4">Analytics</h1>
@@ -24,7 +24,7 @@ export default function AnalyticsPage() {
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Link
             href="/dashboard/usage"
-            className="px-8 py-3 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-opacity"
+            className="px-8 py-3 bg-white text-black rounded-lg font-medium hover:bg-neutral-200 transition-colors"
           >
             View Your Usage
           </Link>

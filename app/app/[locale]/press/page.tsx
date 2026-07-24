@@ -11,7 +11,7 @@ export default function PressPage() {
       <SiteHeader />
       <div className="container mx-auto max-w-3xl px-6 py-24">
         <div className="text-center mb-16">
-          <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-8">
+          <div className="w-16 h-16 bg-neutral-800 border border-neutral-700 rounded-2xl flex items-center justify-center mx-auto mb-8">
             <Newspaper className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-4xl font-bold mb-4">Press &amp; Media</h1>
@@ -42,7 +42,7 @@ export default function PressPage() {
             </div>
             <div className="flex justify-between">
               <span>Website</span>
-              <a href="https://recoder.xyz" className="text-orange-400 hover:text-orange-300">recoder.xyz</a>
+              <a href="https://recoder.xyz" className="text-neutral-300 hover:text-white">recoder.xyz</a>
             </div>
             <div className="flex justify-between">
               <span>Stage</span>
@@ -63,7 +63,7 @@ export default function PressPage() {
           </p>
           <a
             href="mailto:press@recoder.xyz"
-            className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-opacity"
+            className="inline-flex items-center space-x-2 px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-colors"
           >
             <Mail className="w-5 h-5" />
             <span>press@recoder.xyz</span>

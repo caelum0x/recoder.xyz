@@ -122,7 +122,7 @@ function AuthErrorContent() {
   const ErrorIcon = errorDetails.icon;
   const iconColorClass = {
     red: 'bg-red-500/20 text-red-500',
-    orange: 'bg-orange-500/20 text-orange-500',
+    orange: 'bg-neutral-800 text-neutral-300',
     blue: 'bg-blue-500/20 text-blue-500'
   }[errorDetails.color];
 
@@ -157,14 +157,14 @@ function AuthErrorContent() {
                 {errorDetails.action ? (
                   <Link
                     href={errorDetails.action.href}
-                    className="block w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all text-center"
+                    className="block w-full px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all text-center"
                   >
                     {errorDetails.action.text}
                   </Link>
                 ) : (
                   <Link
                     href="/auth/signin"
-                    className="block w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all text-center"
+                    className="block w-full px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all text-center"
                   >
                     Try Again
                   </Link>
@@ -188,7 +188,7 @@ function AuthErrorContent() {
               <div className="space-y-2">
                 <Link
                   href="/auth/signin"
-                  className="block text-sm text-orange-500 hover:text-orange-400 transition-colors"
+                  className="block text-sm text-neutral-300 hover:text-white transition-colors"
                 >
                   → Sign in with Email & Password
                 </Link>
@@ -196,13 +196,13 @@ function AuthErrorContent() {
                   <>
                     <Link
                       href="/auth/signin"
-                      className="block text-sm text-orange-500 hover:text-orange-400 transition-colors"
+                      className="block text-sm text-neutral-300 hover:text-white transition-colors"
                     >
                       → Sign in with GitHub
                     </Link>
                     <Link
                       href="/auth/signin"
-                      className="block text-sm text-orange-500 hover:text-orange-400 transition-colors"
+                      className="block text-sm text-neutral-300 hover:text-white transition-colors"
                     >
                       → Sign in with Google
                     </Link>
@@ -212,10 +212,10 @@ function AuthErrorContent() {
             </div>
 
             {/* Support */}
-            <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
-              <p className="text-sm text-orange-200">
+            <div className="p-4 rounded-lg bg-white/5 border border-white/10">
+              <p className="text-sm text-neutral-300">
                 <strong>Still having trouble?</strong> Our support team is here to help.{' '}
-                <Link href="/support" className="underline hover:text-orange-300">
+                <Link href="/support" className="underline hover:text-white">
                   Contact Support
                 </Link>
               </p>
@@ -243,7 +243,7 @@ export default function AuthErrorPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
       </div>
     }>
       <AuthErrorContent />

@@ -97,7 +97,7 @@ export default function PlanPage() {
         <div className="container mx-auto max-w-5xl text-center">
           <h1 className="text-5xl md:text-6xl font-bold mb-6">
             One Platform,{' '}
-            <span className="bg-gradient-to-r from-orange-500 to-purple-600 bg-clip-text text-transparent">
+            <span className="text-white">
               5 Products
             </span>
           </h1>
@@ -121,16 +121,16 @@ export default function PlanPage() {
                   href={url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center space-x-3 p-4 bg-zinc-900 border border-white/10 rounded-lg hover:border-orange-500/50 transition-all group"
+                  className="flex items-center space-x-3 p-4 bg-zinc-900 border border-white/10 rounded-lg hover:border-neutral-600 transition-all group"
                 >
                   <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
-                    <Icon className="w-5 h-5 text-gray-400 group-hover:text-orange-400 transition-colors" />
+                    <Icon className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
                   </div>
                   <div className="min-w-0">
                     <div className="text-sm font-medium truncate">{service.label}</div>
                     <div className="text-xs text-gray-500 truncate">{service.description}</div>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-orange-400 transition-colors shrink-0 ml-auto" />
+                  <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-white transition-colors shrink-0 ml-auto" />
                 </a>
               );
             })}
@@ -149,12 +149,12 @@ export default function PlanPage() {
                 key={plan.name}
                 className={`relative p-6 rounded-xl border ${
                   plan.highlight
-                    ? 'border-orange-500/50 bg-orange-500/5'
+                    ? 'border-white/30 bg-white/5'
                     : 'border-white/10 bg-zinc-900'
                 }`}
               >
                 {plan.highlight && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-orange-500 rounded-full text-xs font-medium">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-white text-black rounded-full text-xs font-medium">
                     Best Value
                   </div>
                 )}
@@ -186,7 +186,7 @@ export default function PlanPage() {
                     onClick={() => setShowBetaModal(true)}
                     className={`w-full text-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                       plan.highlight
-                        ? 'bg-gradient-to-r from-orange-500 to-purple-600 hover:opacity-90'
+                        ? 'bg-white text-black hover:bg-neutral-200'
                         : 'bg-zinc-800 hover:bg-zinc-700'
                     }`}
                   >
@@ -206,7 +206,7 @@ export default function PlanPage() {
           <p className="text-gray-400 mb-8">100% free with BYOK. No credit card required.</p>
           <Link
             href="/auth/signup"
-            className="inline-flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-opacity"
+            className="inline-flex items-center space-x-2 px-8 py-3 bg-white text-black rounded-lg font-medium hover:bg-neutral-200 transition-colors"
           >
             <span>Get Started Free</span>
             <ArrowRight className="w-4 h-4" />
@@ -217,11 +217,11 @@ export default function PlanPage() {
       {/* Beta Modal */}
       {showBetaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-gradient-to-br from-gray-900 to-black border border-orange-500/30 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+          <div className="bg-gradient-to-br from-gray-900 to-black border border-neutral-700 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
             <div className="p-6 border-b border-white/10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-purple-600 rounded-xl flex items-center justify-center">
+                  <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-center">
                     <Sparkles className="w-6 h-6 text-white" />
                   </div>
                   <h2 className="text-2xl font-bold text-white">Coming Soon</h2>
@@ -248,7 +248,7 @@ export default function PlanPage() {
             <div className="p-6 border-t border-white/10 bg-white/5 flex flex-col sm:flex-row gap-3">
               <Link
                 href="/auth/signup"
-                className="flex-1 text-center px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:opacity-90 rounded-lg font-medium transition-all"
+                className="flex-1 text-center px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all"
               >
                 Get Started Free
               </Link>

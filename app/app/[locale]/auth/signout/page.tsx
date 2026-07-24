@@ -58,9 +58,9 @@ function SignOutContent() {
             {status === 'signing-out' && (
               <div className="text-center space-y-6">
                 <div className="flex justify-center">
-                  <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-purple-600 rounded-full flex items-center justify-center relative">
+                  <div className="w-16 h-16 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center relative">
                     <LogOut className="w-8 h-8 text-white" />
-                    <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-purple-600 rounded-full animate-ping opacity-20"></div>
+                    <div className="absolute inset-0 bg-neutral-700 rounded-full animate-ping opacity-20"></div>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -70,7 +70,7 @@ function SignOutContent() {
                   </p>
                 </div>
                 <div className="flex justify-center pt-4">
-                  <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+                  <Loader2 className="w-8 h-8 text-white animate-spin" />
                 </div>
               </div>
             )}
@@ -118,7 +118,7 @@ function SignOutContent() {
                 <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
                   <button
                     onClick={handleSignOut}
-                    className="px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all"
+                    className="px-6 py-3 bg-white text-black hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium transition-all"
                   >
                     Try Again
                   </button>
@@ -143,10 +143,10 @@ function SignOutContent() {
               </p>
             </div>
 
-            <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
-              <p className="text-sm text-orange-200 text-center">
+            <div className="p-4 rounded-lg bg-white/5 border border-white/10">
+              <p className="text-sm text-neutral-300 text-center">
                 Want to sign back in?{' '}
-                <Link href="/auth/signin" className="underline hover:text-orange-300 font-medium">
+                <Link href="/auth/signin" className="underline hover:text-white font-medium">
                   Sign In
                 </Link>
               </p>
@@ -162,7 +162,7 @@ export default function SignOutPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
       </div>
     }>
       <SignOutContent />

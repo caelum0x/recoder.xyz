@@ -49,7 +49,7 @@ export function PlatformDetailPage({ serviceId, longDescription, features, useCa
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-opacity"
+            className="inline-flex items-center space-x-2 px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-colors"
           >
             <Globe className="w-5 h-5" />
             <span>Launch {service.label}</span>
@@ -68,7 +68,7 @@ export function PlatformDetailPage({ serviceId, longDescription, features, useCa
           <div className="grid gap-3 md:grid-cols-2">
             {features.map((feature) => (
               <div key={feature} className="bg-card/50 border-border/50 flex items-start space-x-3 rounded-lg border p-3">
-                <div className="w-1.5 h-1.5 bg-orange-500 rounded-full mt-2 shrink-0" />
+                <div className="w-1.5 h-1.5 bg-neutral-500 rounded-full mt-2 shrink-0" />
                 <span className="text-sm text-gray-300">{feature}</span>
               </div>
             ))}
@@ -91,7 +91,7 @@ export function PlatformDetailPage({ serviceId, longDescription, features, useCa
         <div className="border-t border-white/10 pt-8">
           <h2 className="text-xl font-semibold mb-4">Quick Links</h2>
           <div className="flex flex-wrap gap-3">
-            <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center space-x-1 text-sm text-orange-400 hover:text-orange-300">
+            <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center space-x-1 text-sm text-neutral-300 hover:text-white">
               <ExternalLink className="w-3.5 h-3.5" />
               <span>Open {service.label}</span>
             </a>

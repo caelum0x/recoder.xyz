@@ -15,22 +15,22 @@ export default function ComingSoon({
   backText = "Back to Dashboard"
 }: ComingSoonProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex items-center justify-center p-4">
+    <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4">
       <div className="max-w-2xl w-full text-center">
         {/* Beta Badge */}
-        <div className="inline-flex items-center px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-sm font-semibold mb-8">
+        <div className="inline-flex items-center px-4 py-2 rounded-full bg-neutral-800 border border-neutral-700 text-neutral-300 text-sm font-semibold mb-8">
           🎉 FREE BETA - No Payment Required
         </div>
 
         {/* Icon */}
         <div className="mb-8 flex justify-center">
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-500/20 to-purple-500/20 border border-orange-500/30 flex items-center justify-center">
-            <Clock className="w-12 h-12 text-orange-400" />
+          <div className="w-24 h-24 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center">
+            <Clock className="w-12 h-12 text-white" />
           </div>
         </div>
 
         {/* Title */}
-        <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-orange-400 to-purple-400 text-transparent bg-clip-text">
+        <h1 className="text-4xl md:text-5xl font-bold mb-4 text-white">
           {title}
         </h1>
 
@@ -77,7 +77,7 @@ export default function ComingSoon({
           </Link>
           <Link
             href="/settings/ai-providers"
-            className="inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-500 hover:from-orange-600 hover:to-purple-600 text-white rounded-lg font-semibold transition-all"
+            className="inline-flex items-center justify-center px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-semibold transition-colors"
           >
             Manage API Keys
           </Link>

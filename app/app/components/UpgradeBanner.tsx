@@ -41,14 +41,14 @@ export function UpgradeBanner({ plan = 'free', onDismiss }: UpgradeBannerProps) 
   if (!visible) return null;
 
   return (
-    <div className="relative rounded-lg p-[1px] bg-gradient-to-r from-orange-500 via-purple-500 to-orange-500">
+    <div className="relative rounded-lg p-[1px] bg-neutral-800">
       <div className="relative flex items-center justify-between gap-4 rounded-lg bg-gray-950 px-4 py-3">
-        {/* Subtle gradient glow behind content */}
-        <div className="pointer-events-none absolute inset-0 rounded-lg bg-gradient-to-r from-orange-500/5 via-purple-500/5 to-orange-500/5" />
+        {/* Subtle glow behind content */}
+        <div className="pointer-events-none absolute inset-0 rounded-lg bg-white/5" />
 
         <div className="relative flex items-center gap-3 min-w-0">
-          <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-purple-500/10">
-            <Sparkles className="w-4 h-4 text-purple-400" />
+          <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-neutral-800">
+            <Sparkles className="w-4 h-4 text-neutral-300" />
           </div>
           <p className="text-sm text-gray-300 truncate">
             You&apos;re on the <span className="font-semibold text-white">Free</span> plan.
@@ -59,7 +59,7 @@ export function UpgradeBanner({ plan = 'free', onDismiss }: UpgradeBannerProps) 
         <div className="relative flex items-center gap-2 flex-shrink-0">
           <Link
             href="/pricing"
-            className="inline-flex items-center gap-1.5 rounded-md bg-gradient-to-r from-orange-500 to-purple-600 px-3.5 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            className="inline-flex items-center gap-1.5 rounded-md bg-white text-black px-3.5 py-1.5 text-sm font-medium transition-colors hover:bg-neutral-200"
           >
             Upgrade
             <ArrowUpRight className="w-3.5 h-3.5" />

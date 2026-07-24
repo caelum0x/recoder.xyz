@@ -166,7 +166,7 @@ export default function SupportPage() {
                 placeholder="Search for help..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 text-white text-lg"
+                className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-white/20 text-white text-lg"
               />
             </div>
           </div>
@@ -181,7 +181,7 @@ export default function SupportPage() {
                   href={link.href}
                   className="p-6 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-xl hover:border-white/20 transition-all group"
                 >
-                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-purple-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                     <Icon className="w-6 h-6 text-white" />
                   </div>
                   <h3 className="font-bold mb-2">{link.title}</h3>
@@ -202,7 +202,7 @@ export default function SupportPage() {
                     key={index}
                     className="p-6 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-xl"
                   >
-                    <Icon className="w-8 h-8 text-orange-500 mb-4" />
+                    <Icon className="w-8 h-8 text-white mb-4" />
                     <h3 className="text-lg font-bold mb-2">{option.title}</h3>
                     <p className="text-sm text-gray-400 mb-4">{option.description}</p>
                     <div className="flex items-center space-x-2 text-sm text-gray-500 mb-4">
@@ -250,7 +250,7 @@ export default function SupportPage() {
                       required
                       value={contactForm.name}
                       onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
 
@@ -263,7 +263,7 @@ export default function SupportPage() {
                       required
                       value={contactForm.email}
                       onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
 
@@ -274,7 +274,7 @@ export default function SupportPage() {
                     <select
                       value={contactForm.priority}
                       onChange={(e) => setContactForm({ ...contactForm, priority: e.target.value })}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white appearance-none"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white appearance-none"
                     >
                       <option value="low" className="bg-gray-900">Low</option>
                       <option value="normal" className="bg-gray-900">Normal</option>
@@ -292,7 +292,7 @@ export default function SupportPage() {
                       required
                       value={contactForm.subject}
                       onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
 
@@ -305,7 +305,7 @@ export default function SupportPage() {
                       rows={6}
                       value={contactForm.message}
                       onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white resize-none"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white resize-none"
                       placeholder="Tell us how we can help..."
                     />
                   </div>
@@ -313,7 +313,7 @@ export default function SupportPage() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="w-full px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Send className="w-4 h-4" />
                     <span>{isSubmitting ? 'Sending...' : 'Send Message'}</span>
@@ -333,7 +333,7 @@ export default function SupportPage() {
                   >
                     <summary className="font-medium cursor-pointer flex items-center justify-between">
                       <span>{faq.question}</span>
-                      <HelpCircle className="w-5 h-5 text-gray-400 group-open:text-orange-500" />
+                      <HelpCircle className="w-5 h-5 text-gray-400 group-open:text-white" />
                     </summary>
                     <p className="mt-3 text-sm text-gray-400 leading-relaxed">
                       {faq.answer}

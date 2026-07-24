@@ -12,7 +12,7 @@ export default function WebCLISyncGuidePage() {
         <div className="container mx-auto max-w-5xl">
           {/* Breadcrumb */}
           <div className="mb-8 flex items-center space-x-2 text-sm text-gray-400">
-            <Link href="/docs/getting-started" className="hover:text-orange-500 transition-colors">
+            <Link href="/docs/getting-started" className="hover:text-white transition-colors">
               Documentation
             </Link>
             <span>/</span>
@@ -22,8 +22,8 @@ export default function WebCLISyncGuidePage() {
           {/* Title Section */}
           <div className="mb-12">
             <div className="flex items-center space-x-3 mb-4">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500/20 to-purple-600/20 border border-orange-500/30">
-                <Repeat className="w-8 h-8 text-orange-500" />
+              <div className="p-3 rounded-xl bg-neutral-800 border border-neutral-700">
+                <Repeat className="w-8 h-8 text-white" />
               </div>
               <h1 className="text-4xl md:text-5xl font-bold">
                 Web ↔ CLI Sync Workflow
@@ -36,7 +36,7 @@ export default function WebCLISyncGuidePage() {
           </div>
 
           {/* Hero Visual */}
-          <section className="mb-12 p-8 rounded-2xl bg-gradient-to-br from-orange-500/10 via-purple-500/10 to-blue-500/10 border border-orange-500/30">
+          <section className="mb-12 p-8 rounded-2xl bg-neutral-900 border border-neutral-800">
             <div className="grid md:grid-cols-3 gap-6 items-center">
               <div className="flex flex-col items-center text-center p-6 rounded-xl bg-black/30 border border-white/10">
                 <Globe className="w-12 h-12 text-blue-400 mb-3" />
@@ -47,7 +47,7 @@ export default function WebCLISyncGuidePage() {
               </div>
 
               <div className="flex flex-col items-center">
-                <Repeat className="w-16 h-16 text-orange-500 animate-pulse" />
+                <Repeat className="w-16 h-16 text-white animate-pulse" />
                 <p className="text-sm text-gray-400 mt-3 font-semibold">Seamless Sync</p>
               </div>
 
@@ -85,7 +85,7 @@ export default function WebCLISyncGuidePage() {
           {/* Setup Guide */}
           <section className="mb-12">
             <h2 className="text-3xl font-bold mb-8 flex items-center space-x-3">
-              <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
+              <span className="text-white">
                 Quick Setup
               </span>
             </h2>
@@ -94,7 +94,7 @@ export default function WebCLISyncGuidePage() {
               {/* Step 1 */}
               <div className="p-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl">
                 <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-purple-600 flex items-center justify-center font-bold text-lg">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-bold text-lg">
                     1
                   </div>
                   <div className="flex-1">
@@ -115,7 +115,7 @@ export default function WebCLISyncGuidePage() {
               {/* Step 2 */}
               <div className="p-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl">
                 <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-purple-600 flex items-center justify-center font-bold text-lg">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-bold text-lg">
                     2
                   </div>
                   <div className="flex-1">
@@ -153,7 +153,7 @@ export default function WebCLISyncGuidePage() {
               {/* Step 3 */}
               <div className="p-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl">
                 <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-purple-600 flex items-center justify-center font-bold text-lg">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-bold text-lg">
                     3
                   </div>
                   <div className="flex-1">
@@ -190,7 +190,7 @@ export default function WebCLISyncGuidePage() {
           {/* Workflow Examples */}
           <section className="mb-12">
             <h2 className="text-3xl font-bold mb-8 flex items-center space-x-3">
-              <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
+              <span className="text-white">
                 Common Workflows
               </span>
             </h2>
@@ -216,7 +216,7 @@ export default function WebCLISyncGuidePage() {
                     <div className="flex-1">
                       <p className="text-white font-semibold mb-1">Create project in Web IDE</p>
                       <p className="text-sm text-gray-400">
-                        Go to <Link href="/dashboard" className="text-orange-500 hover:text-orange-400 underline">dashboard</Link>,
+                        Go to <Link href="/dashboard" className="text-white hover:text-neutral-300 underline">dashboard</Link>,
                         click "New Project", build your initial prototype with AI assistance.
                       </p>
                     </div>
@@ -275,11 +275,11 @@ export default function WebCLISyncGuidePage() {
               </div>
 
               {/* Workflow 2: CLI to Web */}
-              <div className="p-6 rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-transparent">
+              <div className="p-6 rounded-2xl border border-neutral-700 bg-gradient-to-br from-neutral-800/40 to-transparent">
                 <div className="flex items-start space-x-4 mb-6">
-                  <Terminal className="w-8 h-8 text-purple-400 flex-shrink-0 mt-1" />
+                  <Terminal className="w-8 h-8 text-neutral-300 flex-shrink-0 mt-1" />
                   <div>
-                    <h3 className="text-2xl font-bold mb-2 text-purple-400">Workflow 2: Start in Terminal, View in Web</h3>
+                    <h3 className="text-2xl font-bold mb-2 text-white">Workflow 2: Start in Terminal, View in Web</h3>
                     <p className="text-gray-400">
                       Perfect for developers who prefer local development but want visual preview capabilities.
                     </p>
@@ -288,7 +288,7 @@ export default function WebCLISyncGuidePage() {
 
                 <div className="space-y-4">
                   <div className="flex items-start space-x-3">
-                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-xs font-bold">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-neutral-700 flex items-center justify-center text-xs font-bold">
                       1
                     </div>
                     <div className="flex-1">
@@ -301,7 +301,7 @@ export default function WebCLISyncGuidePage() {
                   </div>
 
                   <div className="flex items-start space-x-3">
-                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-xs font-bold">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-neutral-700 flex items-center justify-center text-xs font-bold">
                       2
                     </div>
                     <div className="flex-1">
@@ -314,7 +314,7 @@ export default function WebCLISyncGuidePage() {
                   </div>
 
                   <div className="flex items-start space-x-3">
-                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-xs font-bold">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-neutral-700 flex items-center justify-center text-xs font-bold">
                       3
                     </div>
                     <div className="flex-1">
@@ -323,14 +323,14 @@ export default function WebCLISyncGuidePage() {
                         <span className="text-green-400">recoder push --open</span>
                       </div>
                       <p className="text-sm text-gray-400 mt-2">
-                        The <code className="px-2 py-1 rounded bg-black/30 text-orange-400">--open</code> flag
+                        The <code className="px-2 py-1 rounded bg-black/30 text-neutral-300">--open</code> flag
                         automatically opens the Web IDE with live preview!
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-start space-x-3">
-                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-xs font-bold">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-neutral-700 flex items-center justify-center text-xs font-bold">
                       4
                     </div>
                     <div className="flex-1">
@@ -345,11 +345,11 @@ export default function WebCLISyncGuidePage() {
               </div>
 
               {/* Workflow 3: Hybrid */}
-              <div className="p-6 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-orange-500/5 to-transparent">
+              <div className="p-6 rounded-2xl border border-neutral-700 bg-gradient-to-br from-neutral-800/40 to-transparent">
                 <div className="flex items-start space-x-4 mb-6">
-                  <Zap className="w-8 h-8 text-orange-400 flex-shrink-0 mt-1" />
+                  <Zap className="w-8 h-8 text-neutral-300 flex-shrink-0 mt-1" />
                   <div>
-                    <h3 className="text-2xl font-bold mb-2 text-orange-400">Workflow 3: Hybrid Development (Pro Mode)</h3>
+                    <h3 className="text-2xl font-bold mb-2 text-white">Workflow 3: Hybrid Development (Pro Mode)</h3>
                     <p className="text-gray-400">
                       The ultimate workflow: leverage strengths of both environments simultaneously.
                     </p>
@@ -408,9 +408,9 @@ export default function WebCLISyncGuidePage() {
                   </div>
                 </div>
 
-                <div className="mt-6 p-4 rounded-lg bg-orange-500/10 border border-orange-500/30">
+                <div className="mt-6 p-4 rounded-lg bg-neutral-800/50 border border-neutral-700">
                   <p className="text-sm text-gray-400">
-                    <strong className="text-orange-400">Pro Tip:</strong> Keep both open! Edit in your terminal
+                    <strong className="text-white">Pro Tip:</strong> Keep both open! Edit in your terminal
                     with VSCode, push changes, then instantly see the preview in Web IDE. Best of both worlds.
                   </p>
                 </div>
@@ -421,7 +421,7 @@ export default function WebCLISyncGuidePage() {
           {/* CLI Commands Reference */}
           <section className="mb-12">
             <h2 className="text-3xl font-bold mb-8 flex items-center space-x-3">
-              <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
+              <span className="text-white">
                 Essential CLI Commands
               </span>
             </h2>
@@ -430,7 +430,7 @@ export default function WebCLISyncGuidePage() {
               {/* Project Management */}
               <div className="p-6 rounded-2xl border border-white/10 bg-white/5">
                 <h3 className="font-bold text-white mb-4 flex items-center space-x-2">
-                  <Code className="w-5 h-5 text-orange-500" />
+                  <Code className="w-5 h-5 text-white" />
                   <span>Project Management</span>
                 </h3>
                 <div className="space-y-3">
@@ -456,7 +456,7 @@ export default function WebCLISyncGuidePage() {
               {/* AI & Chat */}
               <div className="p-6 rounded-2xl border border-white/10 bg-white/5">
                 <h3 className="font-bold text-white mb-4 flex items-center space-x-2">
-                  <Sparkles className="w-5 h-5 text-purple-500" />
+                  <Sparkles className="w-5 h-5 text-white" />
                   <span>AI & Chat</span>
                 </h3>
                 <div className="space-y-3">
@@ -484,7 +484,7 @@ export default function WebCLISyncGuidePage() {
           {/* Best Practices */}
           <section className="mb-12">
             <h2 className="text-3xl font-bold mb-8 flex items-center space-x-3">
-              <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
+              <span className="text-white">
                 Best Practices
               </span>
             </h2>
@@ -548,7 +548,7 @@ export default function WebCLISyncGuidePage() {
           {/* Troubleshooting */}
           <section className="mb-12">
             <h2 className="text-3xl font-bold mb-8 flex items-center space-x-3">
-              <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
+              <span className="text-white">
                 Troubleshooting
               </span>
             </h2>
@@ -605,9 +605,9 @@ export default function WebCLISyncGuidePage() {
           </section>
 
           {/* Next Steps */}
-          <section className="p-8 rounded-2xl bg-gradient-to-br from-orange-500/10 to-purple-600/10 border border-orange-500/30">
+          <section className="p-8 rounded-2xl bg-neutral-900 border border-neutral-800">
             <h2 className="text-2xl font-bold mb-4 flex items-center space-x-2">
-              <Sparkles className="w-6 h-6 text-orange-400" />
+              <Sparkles className="w-6 h-6 text-white" />
               <span>Start Syncing Today!</span>
             </h2>
             <p className="text-gray-400 mb-6">
@@ -618,7 +618,7 @@ export default function WebCLISyncGuidePage() {
                 href="/dashboard"
                 className="p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors group"
               >
-                <h3 className="font-semibold mb-2 group-hover:text-orange-500 transition-colors">
+                <h3 className="font-semibold mb-2 group-hover:text-white transition-colors">
                   Try Web IDE →
                 </h3>
                 <p className="text-sm text-gray-400">
@@ -631,7 +631,7 @@ export default function WebCLISyncGuidePage() {
                 rel="noopener noreferrer"
                 className="p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors group"
               >
-                <h3 className="font-semibold mb-2 group-hover:text-orange-500 transition-colors">
+                <h3 className="font-semibold mb-2 group-hover:text-white transition-colors">
                   Install CLI →
                 </h3>
                 <p className="text-sm text-gray-400">
@@ -642,7 +642,7 @@ export default function WebCLISyncGuidePage() {
                 href="/docs/getting-started"
                 className="p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors group"
               >
-                <h3 className="font-semibold mb-2 group-hover:text-orange-500 transition-colors">
+                <h3 className="font-semibold mb-2 group-hover:text-white transition-colors">
                   Full Docs →
                 </h3>
                 <p className="text-sm text-gray-400">

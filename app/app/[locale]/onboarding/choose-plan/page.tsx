@@ -155,7 +155,7 @@ export default function ChoosePlanPage() {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-400">Loading...</p>
         </div>
       </div>
@@ -167,7 +167,7 @@ export default function ChoosePlanPage() {
       {/* Progress Bar */}
       <div className="fixed top-0 w-full h-1 bg-white/10 z-50">
         <div
-          className="h-full bg-gradient-to-r from-orange-500 to-purple-600 transition-all duration-500"
+          className="h-full bg-white transition-all duration-500"
           style={{ width: '60%' }}
         />
       </div>
@@ -187,7 +187,7 @@ export default function ChoosePlanPage() {
                 onClick={() => setBillingCycle('monthly')}
                 className={`px-4 py-2 rounded-md font-medium transition-all ${
                   billingCycle === 'monthly'
-                    ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white'
+                    ? 'bg-white text-black'
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
@@ -197,7 +197,7 @@ export default function ChoosePlanPage() {
                 onClick={() => setBillingCycle('yearly')}
                 className={`px-4 py-2 rounded-md font-medium transition-all ${
                   billingCycle === 'yearly'
-                    ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white'
+                    ? 'bg-white text-black'
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
@@ -220,7 +220,7 @@ export default function ChoosePlanPage() {
                   key={plan.id}
                   className={`relative p-6 rounded-2xl border backdrop-blur-xl transition-all cursor-pointer ${
                     isSelected
-                      ? 'border-orange-500 bg-gradient-to-br from-orange-500/10 to-purple-600/10 scale-105'
+                      ? 'border-white bg-white/5 scale-105'
                       : 'border-white/10 bg-white/5 hover:border-white/20'
                   } ${plan.popular ? 'md:scale-110' : ''}`}
                   onClick={() => setSelectedPlan(plan.id)}
@@ -235,7 +235,7 @@ export default function ChoosePlanPage() {
                   )}
                   {plan.popular && plan.id === 'free' && (
                     <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                      <div className="px-4 py-1 rounded-full bg-gradient-to-r from-orange-500 to-purple-600 text-sm font-medium">
+                      <div className="px-4 py-1 rounded-full bg-white text-black text-sm font-medium">
                         Most Popular
                       </div>
                     </div>
@@ -244,7 +244,7 @@ export default function ChoosePlanPage() {
                   <div className="text-center mb-6">
                     <div className={`w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4 ${
                       isSelected
-                        ? 'bg-gradient-to-br from-orange-500 to-purple-600'
+                        ? 'bg-neutral-800 border border-neutral-700'
                         : 'bg-white/5'
                     }`}>
                       <Icon className="w-8 h-8 text-white" />
@@ -275,7 +275,7 @@ export default function ChoosePlanPage() {
                     onClick={() => setSelectedPlan(plan.id)}
                     className={`w-full py-3 rounded-xl font-medium transition-all ${
                       isSelected
-                        ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white'
+                        ? 'bg-white text-black'
                         : 'bg-white/5 hover:bg-white/10 text-gray-300'
                     }`}
                   >
@@ -311,7 +311,7 @@ export default function ChoosePlanPage() {
 
             <button
               onClick={handleContinue}
-              className="px-8 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl font-medium transition-all flex items-center space-x-2"
+              className="px-8 py-3 bg-white text-black hover:bg-neutral-200 rounded-xl font-medium transition-all flex items-center space-x-2"
             >
               <span>Continue</span>
               <ArrowRight className="w-4 h-4" />

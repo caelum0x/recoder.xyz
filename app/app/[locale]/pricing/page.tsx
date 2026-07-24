@@ -75,7 +75,7 @@ function CTAButton({ plan }: { plan: Plan }) {
       }
       className={`block w-full text-center px-6 py-3 rounded-lg font-semibold transition-all ${
         isHighlighted
-          ? 'bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 text-white'
+          ? 'bg-white text-black hover:bg-neutral-200'
           : 'bg-white text-black hover:bg-gray-200'
       }`}
     >
@@ -92,14 +92,14 @@ function PlanCard({ plan }: { plan: Plan }) {
     <div
       className={`relative flex flex-col rounded-2xl border p-6 transition-all ${
         isHighlighted
-          ? 'border-orange-500/50 bg-gradient-to-b from-orange-500/10 to-purple-500/5 shadow-lg shadow-orange-500/10 scale-[1.02] lg:scale-105'
+          ? 'border-neutral-600 bg-neutral-900 shadow-lg shadow-black/20 scale-[1.02] lg:scale-105'
           : 'border-white/10 bg-white/[0.02] hover:border-white/20'
       }`}
     >
       {/* Recommended badge */}
       {isHighlighted && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <span className="px-4 py-1 text-xs font-bold uppercase tracking-wider bg-gradient-to-r from-orange-500 to-purple-600 text-white rounded-full">
+          <span className="px-4 py-1 text-xs font-bold uppercase tracking-wider bg-white text-black rounded-full">
             Most Popular
           </span>
         </div>
@@ -223,13 +223,13 @@ export default function PricingPage() {
       {/* Hero */}
       <section className="pt-24 pb-12 px-6">
         <div className="container mx-auto max-w-5xl text-center">
-          <div className="inline-flex items-center space-x-2 px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-full mb-8">
-            <Zap className="w-4 h-4 text-orange-400" />
-            <span className="text-sm text-orange-300">Simple, transparent pricing</span>
+          <div className="inline-flex items-center space-x-2 px-4 py-2 bg-neutral-800/50 border border-neutral-700 rounded-full mb-8">
+            <Zap className="w-4 h-4 text-white" />
+            <span className="text-sm text-neutral-300">Simple, transparent pricing</span>
           </div>
           <h1 className="text-5xl md:text-6xl font-bold mb-6">
             Choose your{' '}
-            <span className="bg-gradient-to-r from-orange-500 via-purple-500 to-orange-500 bg-clip-text text-transparent">
+            <span className="text-white">
               plan
             </span>
           </h1>
@@ -256,7 +256,7 @@ export default function PricingPage() {
         <div className="container mx-auto max-w-4xl">
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8">
             <div className="flex items-center gap-3 mb-6">
-              <Shield className="w-6 h-6 text-orange-400" />
+              <Shield className="w-6 h-6 text-white" />
               <h2 className="text-2xl font-bold">All plans include</h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -285,9 +285,9 @@ export default function PricingPage() {
       <section className="pb-24 px-6">
         <div className="container mx-auto max-w-3xl">
           <div className="text-center mb-12">
-            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full mb-6">
-              <HelpCircle className="w-4 h-4 text-purple-400" />
-              <span className="text-sm text-purple-300">FAQ</span>
+            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-neutral-800/50 border border-neutral-700 rounded-full mb-6">
+              <HelpCircle className="w-4 h-4 text-white" />
+              <span className="text-sm text-neutral-300">FAQ</span>
             </div>
             <h2 className="text-3xl font-bold">Frequently asked questions</h2>
           </div>
@@ -309,7 +309,7 @@ export default function PricingPage() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
               href="/auth/signup"
-              className="px-8 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 text-white rounded-lg font-semibold transition-all"
+              className="px-8 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-semibold transition-colors"
             >
               Get Started Free
             </Link>

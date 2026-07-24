@@ -14,7 +14,7 @@ interface LaunchWebIDEButtonProps {
 }
 
 export function LaunchWebIDEButton({
-  className = "px-4 py-2 text-sm bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg transition-colors flex items-center space-x-2",
+  className = "px-4 py-2 text-sm bg-white text-black hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center space-x-2",
   showIcon = true,
   children
 }: LaunchWebIDEButtonProps) {
@@ -102,7 +102,7 @@ export function LaunchWebIDEButton({
       {/* API Key Required Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-          <div className="relative w-full max-w-lg mx-4 p-8 bg-gradient-to-br from-gray-900 to-black border border-orange-500/30 rounded-2xl shadow-2xl">
+          <div className="relative w-full max-w-lg mx-4 p-8 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl">
             <button
               onClick={() => setShowModal(false)}
               className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white transition-colors"
@@ -111,8 +111,8 @@ export function LaunchWebIDEButton({
             </button>
 
             <div className="text-center space-y-6">
-              <div className="w-16 h-16 mx-auto rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-                <Key className="w-8 h-8 text-orange-500" />
+              <div className="w-16 h-16 mx-auto rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center">
+                <Key className="w-8 h-8 text-white" />
               </div>
 
               <div>
@@ -136,7 +136,7 @@ export function LaunchWebIDEButton({
                 <Link
                   href="/settings/ai-providers?redirect=web-ide"
                   onClick={() => setShowModal(false)}
-                  className="block w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all"
+                  className="block w-full px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-colors"
                 >
                   Add API Key Now
                 </Link>
@@ -149,7 +149,7 @@ export function LaunchWebIDEButton({
               </div>
 
               <p className="text-xs text-gray-500">
-                Need help? Check our <Link href="/docs/api-keys" className="text-orange-500 hover:text-orange-400">API Key Setup Guide</Link>
+                Need help? Check our <Link href="/docs/api-keys" className="text-white hover:text-neutral-300">API Key Setup Guide</Link>
               </p>
             </div>
           </div>

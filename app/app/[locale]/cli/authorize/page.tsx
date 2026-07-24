@@ -117,7 +117,7 @@ function CLIAuthorizeContent() {
             </p>
             <button
               onClick={() => router.push('/dashboard')}
-              className="px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 text-white rounded-lg transition-colors"
+              className="px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg transition-colors"
             >
               Go to Dashboard
             </button>
@@ -126,7 +126,7 @@ function CLIAuthorizeContent() {
           <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700 rounded-xl p-8 backdrop-blur-sm">
             {/* User Info */}
             <div className="flex items-center space-x-3 mb-6 p-4 bg-gray-800/50 rounded-lg">
-              <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
+              <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center text-white font-bold text-xl">
                 {session.user.name?.charAt(0).toUpperCase() || session.user.email?.charAt(0).toUpperCase()}
               </div>
               <div>
@@ -154,7 +154,7 @@ function CLIAuthorizeContent() {
               }}
               placeholder="ABC-123"
               maxLength={7}
-              className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-white text-center text-2xl font-mono tracking-wider focus:outline-none focus:border-orange-500 transition-colors mb-2"
+              className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-white text-center text-2xl font-mono tracking-wider focus:outline-none focus:border-neutral-500 transition-colors mb-2"
               disabled={loading}
             />
 
@@ -177,7 +177,7 @@ function CLIAuthorizeContent() {
               <button
                 onClick={() => handleAuthorize('authorize')}
                 disabled={loading || !userCode.trim()}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-600 text-white rounded-lg transition-colors disabled:cursor-not-allowed"
+                className="flex-1 px-6 py-3 bg-white text-black hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
               >
                 {loading ? 'Authorizing...' : 'Authorize'}
               </button>

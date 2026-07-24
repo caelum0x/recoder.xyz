@@ -123,7 +123,7 @@ function DashboardContent() {
   if (isPending) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -144,7 +144,7 @@ function DashboardContent() {
         {/* User Info */}
         <div className="mb-12">
           <h1 className="text-4xl font-bold mb-2">
-            Welcome back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-purple-600">{session?.user?.name || 'Developer'}</span>
+            Welcome back, <span className="text-white">{session?.user?.name || 'Developer'}</span>
           </h1>
           <p className="text-xl text-gray-400">{session?.user?.email}</p>
         </div>
@@ -177,12 +177,12 @@ function DashboardContent() {
               rel="noopener noreferrer"
               className="group p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all"
             >
-              <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <Terminal className="w-6 h-6 text-white" />
               </div>
               <h3 className="font-bold text-lg mb-2">recoder-code CLI</h3>
               <p className="text-sm text-gray-400 mb-4">Terminal-based development</p>
-              <div className="flex items-center text-sm text-orange-500 group-hover:text-orange-400">
+              <div className="flex items-center text-sm text-neutral-300 group-hover:text-white">
                 <span>Launch</span>
                 <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
               </div>
@@ -190,13 +190,13 @@ function DashboardContent() {
 
             {/* Web IDE - with API key check */}
             <div className="group p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all cursor-pointer">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <Globe className="w-6 h-6 text-white" />
               </div>
               <h3 className="font-bold text-lg mb-2">Web IDE</h3>
               <p className="text-sm text-gray-400 mb-4">Browser-based code editor</p>
               <LaunchWebIDEButton
-                className="flex items-center text-sm text-orange-500 hover:text-orange-400 bg-transparent p-0 transition-colors"
+                className="flex items-center text-sm text-neutral-300 hover:text-white bg-transparent p-0 transition-colors"
                 showIcon={false}
               >
                 <span>Launch</span>
@@ -224,15 +224,15 @@ function DashboardContent() {
                   href={getServiceUrlClient(service.id)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group p-5 rounded-2xl border border-white/10 bg-white/5 hover:border-orange-500/40 hover:bg-white/10 transition-all"
+                  className="group p-5 rounded-2xl border border-white/10 bg-white/5 hover:border-neutral-600 hover:bg-white/10 transition-all"
                 >
                   <div className="flex items-start justify-between mb-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-orange-500/20 to-purple-600/20 rounded-xl flex items-center justify-center group-hover:from-orange-500/30 group-hover:to-purple-600/30 transition-colors">
-                      <Icon className="w-5 h-5 text-gray-300 group-hover:text-orange-400 transition-colors" />
+                    <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-center group-hover:bg-neutral-700 transition-colors">
+                      <Icon className="w-5 h-5 text-gray-300 group-hover:text-white transition-colors" />
                     </div>
                     <div className="flex items-center space-x-2">
                       <div className={`w-2 h-2 rounded-full ${statusColor}`} />
-                      <ExternalLink className="w-3.5 h-3.5 text-gray-600 group-hover:text-orange-400 transition-colors" />
+                      <ExternalLink className="w-3.5 h-3.5 text-gray-600 group-hover:text-white transition-colors" />
                     </div>
                   </div>
                   <h3 className="font-semibold text-sm mb-1">{service.label}</h3>
@@ -248,13 +248,13 @@ function DashboardContent() {
           <h2 className="text-2xl font-bold mb-6">Quick Actions</h2>
           <div className="grid md:grid-cols-4 gap-6">
             <Link href="/dashboard/projects" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all group">
-              <FolderOpen className="w-8 h-8 text-purple-500 mb-3 group-hover:scale-110 transition-transform" />
+              <FolderOpen className="w-8 h-8 text-neutral-300 mb-3 group-hover:scale-110 transition-transform" />
               <h3 className="font-bold mb-2">My Projects</h3>
               <p className="text-sm text-gray-400">View and manage your projects</p>
             </Link>
 
-            <Link href="/settings/ai-providers" className="p-6 rounded-2xl border border-orange-500/30 bg-orange-500/5 hover:border-orange-500/50 hover:bg-orange-500/10 transition-all group">
-              <Sparkles className="w-8 h-8 text-orange-500 mb-3 group-hover:scale-110 transition-transform" />
+            <Link href="/settings/ai-providers" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all group">
+              <Sparkles className="w-8 h-8 text-white mb-3 group-hover:scale-110 transition-transform" />
               <h3 className="font-bold mb-2">AI Provider Keys</h3>
               <p className="text-sm text-gray-400">Add your OpenRouter or Anthropic key to use AI</p>
             </Link>
@@ -266,7 +266,7 @@ function DashboardContent() {
             </Link>
 
             <Link href="/dashboard/runs" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all group">
-              <Workflow className="w-8 h-8 text-orange-400 mb-3 group-hover:scale-110 transition-transform" />
+              <Workflow className="w-8 h-8 text-neutral-300 mb-3 group-hover:scale-110 transition-transform" />
               <h3 className="font-bold mb-2">Run Timeline</h3>
               <p className="text-sm text-gray-400">Trace task &rarr; artifact &rarr; PR &rarr; preview &rarr; approval</p>
             </Link>
@@ -282,13 +282,13 @@ function DashboardContent() {
         {/* Platform Activity */}
         <div className="mb-12">
           <div className="flex items-center space-x-3 mb-6">
-            <Activity className="w-6 h-6 text-orange-500" />
+            <Activity className="w-6 h-6 text-white" />
             <h2 className="text-2xl font-bold">Platform Activity</h2>
           </div>
 
           {platformActivityLoading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
             <>
@@ -310,7 +310,7 @@ function DashboardContent() {
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center space-x-2">
-                          <div className="w-8 h-8 bg-gradient-to-br from-orange-500/20 to-purple-600/20 rounded-lg flex items-center justify-center">
+                          <div className="w-8 h-8 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center">
                             <Icon className="w-4 h-4 text-gray-300" />
                           </div>
                           <span className="font-semibold text-sm">{displayName}</span>
@@ -329,7 +329,7 @@ function DashboardContent() {
                             <span className="text-xs text-gray-500">total</span>
                           </div>
                           <div className="flex items-baseline justify-between">
-                            <span className="text-sm text-orange-400">{entry.stats.activeItems} active</span>
+                            <span className="text-sm text-neutral-300">{entry.stats.activeItems} active</span>
                             {entry.stats.lastActivityAt && (
                               <span className="text-xs text-gray-600">
                                 {new Date(entry.stats.lastActivityAt).toLocaleDateString()}
@@ -377,7 +377,7 @@ function DashboardContent() {
                               rel="noopener noreferrer"
                               className="flex items-center px-5 py-3 hover:bg-white/5 transition-colors group"
                             >
-                              <div className="w-7 h-7 bg-gradient-to-br from-orange-500/20 to-purple-600/20 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
+                              <div className="w-7 h-7 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
                                 <Icon className="w-3.5 h-3.5 text-gray-400" />
                               </div>
                               <div className="flex-1 min-w-0">
@@ -391,7 +391,7 @@ function DashboardContent() {
                                 <span className="text-xs text-gray-600">
                                   {new Date(item.timestamp).toLocaleDateString()}
                                 </span>
-                                <ExternalLink className="w-3 h-3 text-gray-700 group-hover:text-orange-400 transition-colors" />
+                                <ExternalLink className="w-3 h-3 text-gray-700 group-hover:text-white transition-colors" />
                               </div>
                             </a>
                           </li>
@@ -484,7 +484,7 @@ export default function DashboardPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
       </div>
     }>
       <DashboardContent />

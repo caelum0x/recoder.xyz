@@ -18,7 +18,7 @@ export function Avatar({
   const textSizes = { sm: 'text-xs', md: 'text-sm', lg: 'text-base' };
 
   return (
-    <div className={`${sizes[size]} rounded-full bg-gradient-to-br from-orange-500 to-purple-600 flex items-center justify-center overflow-hidden`}>
+    <div className={`${sizes[size]} rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center overflow-hidden`}>
       {src && !imageError ? (
         <img
           src={src}

@@ -95,8 +95,8 @@ export default function PlanOverview({ premiumData, onRefresh }: PlanOverviewPro
 
         <div className="flex gap-3 pt-4 border-t">
           {!isPremium ? (
-            <Button 
-              className="w-full bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700"
+            <Button
+              className="w-full bg-white text-black hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
               onClick={() => window.location.href = '/pricing'}
             >
               Upgrade to Premium

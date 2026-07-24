@@ -12,7 +12,7 @@ export default function ModelsGuidePage() {
         <div className="container mx-auto max-w-5xl">
           {/* Breadcrumb */}
           <div className="mb-8 flex items-center space-x-2 text-sm text-gray-400">
-            <Link href="/docs/getting-started" className="hover:text-orange-500 transition-colors">
+            <Link href="/docs/getting-started" className="hover:text-white transition-colors">
               Documentation
             </Link>
             <span>/</span>
@@ -22,8 +22,8 @@ export default function ModelsGuidePage() {
           {/* Title Section */}
           <div className="mb-12">
             <div className="flex items-center space-x-3 mb-4">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500/20 to-purple-600/20 border border-orange-500/30">
-                <Brain className="w-8 h-8 text-orange-500" />
+              <div className="p-3 rounded-xl bg-neutral-800 border border-neutral-700">
+                <Brain className="w-8 h-8 text-white" />
               </div>
               <h1 className="text-4xl md:text-5xl font-bold">
                 Choosing the Right AI Model
@@ -75,7 +75,7 @@ export default function ModelsGuidePage() {
           {/* Model Comparison Table */}
           <section className="mb-12">
             <h2 className="text-3xl font-bold mb-8 flex items-center space-x-3">
-              <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
+              <span className="text-white">
                 Model Comparison
               </span>
             </h2>
@@ -313,7 +313,7 @@ export default function ModelsGuidePage() {
           {/* When to Use Each Model */}
           <section className="mb-12">
             <h2 className="text-3xl font-bold mb-8 flex items-center space-x-3">
-              <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
+              <span className="text-white">
                 Use Case Guide
               </span>
             </h2>
@@ -416,7 +416,7 @@ export default function ModelsGuidePage() {
           {/* Cost Comparison */}
           <section className="mb-12">
             <h2 className="text-3xl font-bold mb-8 flex items-center space-x-3">
-              <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
+              <span className="text-white">
                 Real-World Cost Examples
               </span>
             </h2>
@@ -461,7 +461,7 @@ export default function ModelsGuidePage() {
           {/* Model Switching Tips */}
           <section className="mb-12">
             <h2 className="text-3xl font-bold mb-8 flex items-center space-x-3">
-              <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
+              <span className="text-white">
                 How to Switch Models
               </span>
             </h2>
@@ -473,7 +473,7 @@ export default function ModelsGuidePage() {
 
               <div className="space-y-4">
                 <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-purple-600 flex items-center justify-center font-bold">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-bold">
                     1
                   </div>
                   <div className="flex-1">
@@ -486,13 +486,13 @@ export default function ModelsGuidePage() {
                 </div>
 
                 <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-purple-600 flex items-center justify-center font-bold">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-bold">
                     2
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-white mb-2">In the Terminal CLI</h3>
                     <p className="text-sm text-gray-400 mb-2">
-                      Use the <code className="px-2 py-1 rounded bg-black/30 text-orange-400">--model</code> flag:
+                      Use the <code className="px-2 py-1 rounded bg-black/30 text-neutral-300">--model</code> flag:
                     </p>
                     <div className="p-3 rounded-lg bg-black/30 border border-white/10 font-mono text-sm text-gray-300">
                       recoder chat --model claude-3.5-sonnet
@@ -501,7 +501,7 @@ export default function ModelsGuidePage() {
                 </div>
 
                 <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-purple-600 flex items-center justify-center font-bold">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-bold">
                     3
                   </div>
                   <div className="flex-1">
@@ -519,7 +519,7 @@ export default function ModelsGuidePage() {
           {/* FAQ */}
           <section className="mb-12">
             <h2 className="text-3xl font-bold mb-8 flex items-center space-x-3">
-              <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
+              <span className="text-white">
                 Common Questions
               </span>
             </h2>
@@ -578,7 +578,7 @@ export default function ModelsGuidePage() {
                     Claude and GPT) with just one API key. However, you can also add direct API keys from
                     Anthropic and OpenAI if you prefer.
                   </p>
-                  <Link href="/docs/api-keys/openrouter" className="inline-block mt-2 text-orange-500 hover:text-orange-400 underline">
+                  <Link href="/docs/api-keys/openrouter" className="inline-block mt-2 text-white hover:text-neutral-300 underline">
                     Learn more about OpenRouter →
                   </Link>
                 </div>
@@ -587,7 +587,7 @@ export default function ModelsGuidePage() {
           </section>
 
           {/* Next Steps */}
-          <section className="p-8 rounded-2xl bg-gradient-to-br from-orange-500/10 to-purple-600/10 border border-orange-500/30">
+          <section className="p-8 rounded-2xl bg-neutral-900 border border-neutral-700">
             <h2 className="text-2xl font-bold mb-4 flex items-center space-x-2">
               <CheckCircle className="w-6 h-6 text-green-400" />
               <span>Ready to Start Building?</span>
@@ -600,7 +600,7 @@ export default function ModelsGuidePage() {
                 href="/docs/api-keys/openrouter"
                 className="p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors group"
               >
-                <h3 className="font-semibold mb-2 group-hover:text-orange-500 transition-colors">
+                <h3 className="font-semibold mb-2 group-hover:text-white transition-colors">
                   OpenRouter Setup →
                 </h3>
                 <p className="text-sm text-gray-400">
@@ -611,7 +611,7 @@ export default function ModelsGuidePage() {
                 href="/docs/api-keys/anthropic"
                 className="p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors group"
               >
-                <h3 className="font-semibold mb-2 group-hover:text-orange-500 transition-colors">
+                <h3 className="font-semibold mb-2 group-hover:text-white transition-colors">
                   Anthropic Setup →
                 </h3>
                 <p className="text-sm text-gray-400">
@@ -622,7 +622,7 @@ export default function ModelsGuidePage() {
                 href="/docs/api-keys/openai"
                 className="p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors group"
               >
-                <h3 className="font-semibold mb-2 group-hover:text-orange-500 transition-colors">
+                <h3 className="font-semibold mb-2 group-hover:text-white transition-colors">
                   OpenAI Setup →
                 </h3>
                 <p className="text-sm text-gray-400">

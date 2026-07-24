@@ -300,7 +300,7 @@ export default function IntegrationsSettingsPage() {
                     className={`w-full px-4 py-2 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 disabled:opacity-50 ${
                       integration.connected
                         ? 'bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400'
-                        : 'bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 text-white'
+                        : 'bg-white text-black hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed'
                     }`}
                   >
                     {isLoading ? (
@@ -388,7 +388,7 @@ export default function IntegrationsSettingsPage() {
                     value={newWebhookUrl}
                     onChange={(e) => setNewWebhookUrl(e.target.value)}
                     placeholder="https://example.com/webhook"
-                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
+                    className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent text-white placeholder-gray-500"
                   />
                 </div>
                 <div>
@@ -404,7 +404,7 @@ export default function IntegrationsSettingsPage() {
                         }
                         className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
                           newWebhookEvents.includes(evt.id)
-                            ? 'border-orange-500/50 bg-orange-500/10 text-orange-400'
+                            ? 'border-neutral-600 bg-neutral-800 text-white'
                             : 'border-white/10 bg-white/5 text-gray-400 hover:border-white/20'
                         }`}
                       >
@@ -419,7 +419,7 @@ export default function IntegrationsSettingsPage() {
                 <button
                   onClick={handleAddWebhook}
                   disabled={webhookLoading}
-                  className="px-4 py-2 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 text-white rounded-lg font-medium transition-all text-sm disabled:opacity-50 flex items-center space-x-2"
+                  className="px-4 py-2 bg-white text-black hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium transition-all text-sm flex items-center space-x-2"
                 >
                   {webhookLoading ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -452,7 +452,7 @@ export default function IntegrationsSettingsPage() {
                       </div>
                       <div>
                         <h3 className="font-bold">{item.name}</h3>
-                        <span className="text-xs text-orange-500">Coming Soon</span>
+                        <span className="text-xs text-neutral-400">Coming Soon</span>
                       </div>
                     </div>
                     <p className="text-sm text-gray-500">{item.description}</p>
@@ -480,14 +480,14 @@ export default function IntegrationsSettingsPage() {
           </div>
 
           {/* Help Section */}
-          <div className="mt-6 p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
-            <p className="text-sm text-orange-200">
+          <div className="mt-6 p-4 rounded-lg bg-neutral-800 border border-neutral-700">
+            <p className="text-sm text-neutral-300">
               <strong>Need help?</strong> Check out our{' '}
-              <Link href="/docs/integrations" className="underline hover:text-orange-300">
+              <Link href="/docs/integrations" className="underline hover:text-white">
                 integration guides
               </Link>{' '}
               or{' '}
-              <Link href="/support" className="underline hover:text-orange-300">
+              <Link href="/support" className="underline hover:text-white">
                 contact support
               </Link>
             </p>

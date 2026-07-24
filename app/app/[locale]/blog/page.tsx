@@ -43,7 +43,7 @@ export default async function BlogIndexPage() {
       <section className="pt-20 pb-16 px-6">
         <div className="container mx-auto max-w-5xl text-center">
           <h1 className="text-5xl md:text-6xl font-bold mb-6">
-            <span className="bg-gradient-to-r from-orange-500 via-purple-500 to-cyan-500 bg-clip-text text-transparent">
+            <span className="text-white">
               Blog
             </span>
           </h1>
@@ -64,7 +64,7 @@ export default async function BlogIndexPage() {
                 className="group relative flex flex-col bg-zinc-900 border border-white/10 rounded-xl overflow-hidden hover:border-white/25 transition-all"
               >
                 {/* Gradient banner */}
-                <div className="h-2 w-full bg-gradient-to-r from-orange-500 via-purple-500 to-cyan-500" />
+                <div className="h-2 w-full bg-white/20" />
 
                 <div className="flex flex-col flex-1 p-6">
                   {/* Category + read time */}

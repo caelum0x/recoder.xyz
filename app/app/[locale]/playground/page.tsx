@@ -181,9 +181,10 @@ print(response.json())`;
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
-              <div className="bg-gradient-to-r from-orange-500 to-purple-600 text-white px-3 py-1 rounded-lg font-bold">
-                recoder.xyz
-              </div>
+              <span className="inline-flex items-center gap-2">
+                <span className="h-7 w-7 rounded-md bg-white text-black flex items-center justify-center font-bold text-sm">R</span>
+                <span className="text-white font-semibold tracking-tight">Recoder</span>
+              </span>
               <span className="text-gray-400">/ Playground</span>
             </Link>
             {session ? (
@@ -219,7 +220,7 @@ print(response.json())`;
                     onClick={() => setSelectedEndpoint(ep)}
                     className={`w-full text-left p-3 rounded-lg transition-all ${
                       selectedEndpoint === ep
-                        ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white'
+                        ? 'bg-white text-black'
                         : 'bg-gray-900 text-gray-300 hover:bg-gray-700'
                     }`}
                   >
@@ -271,7 +272,7 @@ print(response.json())`;
                 <select
                   value={method}
                   onChange={(e) => setMethod(e.target.value)}
-                  className="bg-gray-900 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="bg-gray-900 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-white/20"
                 >
                   {HTTP_METHODS.map(m => (
                     <option key={m} value={m}>{m}</option>
@@ -281,13 +282,13 @@ print(response.json())`;
                   type="text"
                   value={endpoint}
                   onChange={(e) => setEndpoint(e.target.value)}
-                  className="flex-1 bg-gray-900 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono"
+                  className="flex-1 bg-gray-900 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-white/20 font-mono"
                   placeholder="/api/endpoint"
                 />
                 <button
                   onClick={sendRequest}
                   disabled={loading}
-                  className="bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-semibold px-8 py-2 rounded-lg transition-all disabled:cursor-not-allowed"
+                  className="bg-white text-black hover:bg-neutral-200 disabled:opacity-40 font-semibold px-8 py-2 rounded-lg transition-colors disabled:cursor-not-allowed"
                 >
                   {loading ? 'Sending...' : 'Send'}
                 </button>
@@ -299,7 +300,7 @@ print(response.json())`;
                 <textarea
                   value={headers}
                   onChange={(e) => setHeaders(e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono text-sm"
+                  className="w-full bg-gray-900 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-white/20 font-mono text-sm"
                   rows={4}
                 />
               </div>
@@ -311,7 +312,7 @@ print(response.json())`;
                   <textarea
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono text-sm"
+                    className="w-full bg-gray-900 border border-gray-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-white/20 font-mono text-sm"
                     rows={8}
                   />
                 </div>
@@ -341,7 +342,7 @@ print(response.json())`;
 
                 {loading ? (
                   <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
                   </div>
                 ) : (
                   <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto font-mono text-sm border border-gray-700">
@@ -360,7 +361,7 @@ print(response.json())`;
                   onClick={() => setCodeTab('curl')}
                   className={`px-4 py-2 rounded-lg font-semibold transition-all ${
                     codeTab === 'curl'
-                      ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white'
+                      ? 'bg-white text-black'
                       : 'bg-gray-900 text-gray-400 hover:bg-gray-700'
                   }`}
                 >
@@ -370,7 +371,7 @@ print(response.json())`;
                   onClick={() => setCodeTab('javascript')}
                   className={`px-4 py-2 rounded-lg font-semibold transition-all ${
                     codeTab === 'javascript'
-                      ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white'
+                      ? 'bg-white text-black'
                       : 'bg-gray-900 text-gray-400 hover:bg-gray-700'
                   }`}
                 >
@@ -380,7 +381,7 @@ print(response.json())`;
                   onClick={() => setCodeTab('python')}
                   className={`px-4 py-2 rounded-lg font-semibold transition-all ${
                     codeTab === 'python'
-                      ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white'
+                      ? 'bg-white text-black'
                       : 'bg-gray-900 text-gray-400 hover:bg-gray-700'
                   }`}
                 >
