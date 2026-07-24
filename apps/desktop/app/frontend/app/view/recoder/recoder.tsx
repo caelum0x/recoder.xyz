@@ -1,7 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { createBlock } from "@/app/store/global";
+import { createBlock, getApi } from "@/app/store/global";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { agentLabel } from "./recoder-agent-labels";
@@ -82,6 +82,14 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const toggleAlso = (id: string, on: boolean) =>
         setAlsoRun(on ? [...alsoRun, id] : alsoRun.filter((x) => x != id));
 
+    const browseFolder = async () => {
+        const picked = await getApi().selectDirectory();
+        if (picked == null || picked == "") {
+            return;
+        }
+        setRepoPath(picked);
+    };
+
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
@@ -119,12 +127,17 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
 
                     <label className="flex flex-col gap-1">
                         <span className={FIELD_LABEL}>Folder</span>
-                        <input
-                            className={INPUT}
-                            placeholder="/path/to/your/repo"
-                            value={repoPath}
-                            onChange={(e) => setRepoPath(e.target.value)}
-                        />
+                        <div className="flex items-center gap-2">
+                            <input
+                                className={`${INPUT} flex-1`}
+                                placeholder="/path/to/your/repo"
+                                value={repoPath}
+                                onChange={(e) => setRepoPath(e.target.value)}
+                            />
+                            <button className={QUIET_BTN} onClick={browseFolder}>
+                                Browse…
+                            </button>
+                        </div>
                     </label>
 
                     <label className="flex flex-col gap-1">
