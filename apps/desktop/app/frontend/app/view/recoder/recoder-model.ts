@@ -67,11 +67,15 @@ class RecoderViewModel implements ViewModel {
             ]);
             const rt = (await rtRes.json())?.data ?? {};
             const h = (await hRes.json())?.data ?? {};
+            // openfang is the in-process engine, not a coding agent the user
+            // launches into a worktree — keep it out of the "ready agents" list.
             const agents = Array.isArray(rt?.runtimes)
-                ? rt.runtimes.map((r: { runtimeId: string; available: boolean }) => ({
-                      runtimeId: r.runtimeId,
-                      available: Boolean(r.available),
-                  }))
+                ? rt.runtimes
+                      .filter((r: { runtimeId: string }) => r.runtimeId !== "openfang")
+                      .map((r: { runtimeId: string; available: boolean }) => ({
+                          runtimeId: r.runtimeId,
+                          available: Boolean(r.available),
+                      }))
                 : [];
             const tmuxBin = typeof h?.substrate?.tmuxBin == "string" ? h.substrate.tmuxBin : "";
             // The conductor substrate reports `available` only when its hard
