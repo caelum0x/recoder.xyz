@@ -69,16 +69,6 @@
             }
         }
     },
-    "defwidget@recoder-health": {
-        "display:order": -5.04,
-        "icon": "heart-pulse",
-        "label": "health",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-health"
-            }
-        }
-    },
     "defwidget@recoder-memory": {
         "display:order": -5.03,
         "icon": "brain",

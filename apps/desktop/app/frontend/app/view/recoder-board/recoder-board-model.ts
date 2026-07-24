@@ -30,8 +30,16 @@ type BoardSignal = {
 //   empty          — bd reachable, nothing ready
 //   unavailable    — bd CLI not installed on this machine
 //   unreachable    — bd present but the governed ready bridge refused us (no key)
+//   not-available  — the ready-issue route is not mounted on this backend (404)
 //   not-connected  — backend down / probe failed
-type BoardStatus = "loading" | "ok" | "empty" | "unavailable" | "unreachable" | "not-connected";
+type BoardStatus =
+    | "loading"
+    | "ok"
+    | "empty"
+    | "unavailable"
+    | "unreachable"
+    | "not-available"
+    | "not-connected";
 
 class RecoderBoardViewModel implements ViewModel {
     viewType: string;
@@ -83,32 +91,28 @@ class RecoderBoardViewModel implements ViewModel {
         return RecoderBoardView;
     }
 
-    // Two-stage, fully degrade-safe: first a cheap unauthenticated availability
-    // probe (is `bd` installed?), then the governed ready-list call. Any failure at
-    // any stage lands on a neutral status; this never throws or fakes data.
+    // Fully degrade-safe: read the ready-list route directly. A 404 means the route
+    // is not mounted on this backend (truthful "not available", never faked); any
+    // other non-OK is treated as an unreachable backend. Never throws or fakes data.
     async refresh() {
         globalStore.set(this.loadingAtom, true);
         globalStore.set(this.statusAtom, "loading");
         // Pickup-able stuck work loads independently of the beads ready-list.
         void this.fetchSignals();
         try {
-            const available = await this.probeAvailability();
-            if (available == null) {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/issues/ready`);
+            if (res.status == 404) {
+                globalStore.set(this.issuesAtom, []);
+                globalStore.set(this.statusAtom, "not-available");
+                return;
+            }
+            if (!res.ok) {
                 globalStore.set(this.issuesAtom, []);
                 globalStore.set(this.statusAtom, "not-connected");
                 return;
             }
-            if (!available) {
-                globalStore.set(this.issuesAtom, []);
-                globalStore.set(this.statusAtom, "unavailable");
-                return;
-            }
-            const issues = await this.fetchReady();
-            if (issues == null) {
-                globalStore.set(this.issuesAtom, []);
-                globalStore.set(this.statusAtom, "unreachable");
-                return;
-            }
+            const body = await res.json();
+            const issues = normalizeIssues(body?.data?.ready);
             globalStore.set(this.issuesAtom, issues);
             globalStore.set(this.statusAtom, issues.length == 0 ? "empty" : "ok");
         } catch {
@@ -116,37 +120,6 @@ class RecoderBoardViewModel implements ViewModel {
             globalStore.set(this.statusAtom, "not-connected");
         } finally {
             globalStore.set(this.loadingAtom, false);
-        }
-    }
-
-    // Returns true/false for bd presence, or null when the backend itself is
-    // unreachable (so the UI can distinguish "no backend" from "no bd").
-    async probeAvailability(): Promise<boolean | null> {
-        try {
-            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/issues/availability`);
-            if (!res.ok) {
-                return null;
-            }
-            const body = await res.json();
-            return Boolean(body?.data?.available);
-        } catch {
-            return null;
-        }
-    }
-
-    // Ready work via the loopback-friendly conductor endpoint (read-only, no gate,
-    // no internal key). Returns the list on success (possibly empty), or null when
-    // the backend is unreachable.
-    async fetchReady(): Promise<BoardIssue[] | null> {
-        try {
-            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/issues/ready`);
-            if (!res.ok) {
-                return null;
-            }
-            const body = await res.json();
-            return normalizeIssues(body?.data?.ready);
-        } catch {
-            return null;
         }
     }
 }

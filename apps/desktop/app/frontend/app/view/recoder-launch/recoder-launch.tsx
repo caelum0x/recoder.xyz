@@ -6,6 +6,13 @@ import { useAtom, useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { RecoderLaunchViewModel } from "./recoder-launch-model";
 
+const REFRESH_MS = 6000;
+
+const PRIMARY_BTN =
+    "bg-accent/80 text-primary rounded px-2 py-1 text-sm hover:bg-accent transition-colors cursor-pointer self-start disabled:opacity-50";
+const QUIET_BTN =
+    "border border-border text-secondary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer";
+
 const AGENT_LABELS: Record<string, string> = {
     "claude-code": "Claude Code",
     codex: "Codex",
@@ -33,6 +40,8 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
 
     useEffect(() => {
         model.refresh();
+        const id = setInterval(() => model.refresh(), REFRESH_MS);
+        return () => clearInterval(id);
     }, [model]);
 
     const readyRuntimes = runtimes.filter((r) => r.available);
@@ -43,12 +52,6 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
         <div className="flex flex-col h-full overflow-auto p-3 gap-3">
             <div className="flex items-center gap-2">
                 <span className="font-semibold">Launch a coding agent</span>
-                <button
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer ml-auto"
-                    onClick={() => model.refresh()}
-                >
-                    Refresh
-                </button>
             </div>
 
             {notConnected && (
@@ -117,11 +120,7 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
                         <span>Interactive session</span>
                     </label>
 
-                    <button
-                        className="bg-accent/80 text-primary rounded px-2 py-1 text-sm hover:bg-accent transition-colors cursor-pointer self-start disabled:opacity-50"
-                        disabled={!canLaunch}
-                        onClick={() => model.launch()}
-                    >
+                    <button className={PRIMARY_BTN} disabled={!canLaunch} onClick={() => model.launch()}>
                         {posting ? "Launching…" : "Launch"}
                     </button>
                 </div>
@@ -141,7 +140,7 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
                     {result.workspaceId != null && (
                         <div className="flex items-center gap-2 mt-2">
                             <button
-                                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
+                                className={QUIET_BTN}
                                 onClick={() =>
                                     createBlock({
                                         meta: {
@@ -153,10 +152,7 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
                             >
                                 Open session
                             </button>
-                            <button
-                                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
-                                onClick={() => createBlock({ meta: { view: "recoder-diff" } })}
-                            >
+                            <button className={QUIET_BTN} onClick={() => createBlock({ meta: { view: "recoder-diff" } })}>
                                 Review
                             </button>
                         </div>

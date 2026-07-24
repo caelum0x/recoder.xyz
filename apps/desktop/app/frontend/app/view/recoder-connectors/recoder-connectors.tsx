@@ -5,6 +5,8 @@ import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { ConnectorChannel, ConnectorsStatus, RecoderConnectorsViewModel } from "./recoder-connectors-model";
 
+const REFRESH_MS = 6000;
+
 const STATUS_MESSAGES: Record<ConnectorsStatus, string> = {
     loading: "",
     ok: "",
@@ -42,12 +44,13 @@ function ChannelRow({ channel }: { channel: ConnectorChannel }) {
 
 function RecoderConnectorsView({ model }: ViewComponentProps<RecoderConnectorsViewModel>) {
     const channels = useAtomValue(model.channelsAtom);
-    const gateway = useAtomValue(model.gatewayAtom);
     const loading = useAtomValue(model.loadingAtom);
     const status = useAtomValue(model.statusAtom);
 
     useEffect(() => {
         model.refresh();
+        const id = setInterval(() => model.refresh(), REFRESH_MS);
+        return () => clearInterval(id);
     }, [model]);
 
     const note = STATUS_MESSAGES[status];
@@ -59,18 +62,6 @@ function RecoderConnectorsView({ model }: ViewComponentProps<RecoderConnectorsVi
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
                 <span className="font-semibold">Connectors</span>
-                {status == "ok" && (
-                    <span className="text-xs text-secondary">
-                        gateway {gateway.active ? "active" : "inert"}
-                        {gateway.dispatchReady ? " · dispatch ready" : ""}
-                    </span>
-                )}
-                <button
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer ml-auto"
-                    onClick={() => model.refresh()}
-                >
-                    Refresh
-                </button>
             </div>
             {loading && channels.length == 0 && <div className="text-secondary text-sm">Loading…</div>}
             {showNote && <div className="text-secondary text-sm">{note}</div>}

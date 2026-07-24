@@ -5,6 +5,8 @@ import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { RecoderApproval, RecoderApprovalsViewModel } from "./recoder-approvals-model";
 
+const REFRESH_MS = 6000;
+
 const REQUIRED_AT_LABELS: Record<string, string> = {
     before_execution: "before execution",
     before_write: "before write",
@@ -46,6 +48,8 @@ function RecoderApprovalsView({ model }: ViewComponentProps<RecoderApprovalsView
 
     useEffect(() => {
         model.refresh();
+        const id = setInterval(() => model.refresh(), REFRESH_MS);
+        return () => clearInterval(id);
     }, [model]);
 
     const showEmpty = connected && !loading && approvals.length == 0;
@@ -55,12 +59,6 @@ function RecoderApprovalsView({ model }: ViewComponentProps<RecoderApprovalsView
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
                 <span className="font-semibold">Recoder — Approvals</span>
-                <button
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
-                    onClick={() => model.refresh()}
-                >
-                    Refresh
-                </button>
             </div>
             {error != "" && <div className="text-error text-sm">{error}</div>}
             {actionError != "" && <div className="text-error text-sm">{actionError}</div>}

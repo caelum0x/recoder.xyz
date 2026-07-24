@@ -28,7 +28,8 @@ type RecoderMemoryCandidate = {
     proposedBy: string;
 };
 
-// Semantic recall record returned by /api/agent-os/memory/search (mem0 engine).
+// Fused recall record projected from POST /api/agent-os/memory/recall
+// (RecalledMemory { id, body, provenance }); only the fields the terminal renders.
 type RecoderMemoryResult = {
     id: string;
     memory: string;
@@ -76,7 +77,7 @@ class RecoderMemoryViewModel implements ViewModel {
         globalStore.set(this.loadingAtom, true);
         globalStore.set(this.errorAtom, "");
         try {
-            const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/memory`);
+            const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/memory/candidates`);
             if (!res.ok) {
                 globalStore.set(this.connectedAtom, false);
                 globalStore.set(this.errorAtom, `backend returned ${res.status}`);
@@ -103,9 +104,9 @@ class RecoderMemoryViewModel implements ViewModel {
         globalStore.set(this.queryAtom, value);
     }
 
-    // Semantic recall via the mem0 engine. Empty query clears results without a
-    // request. Degrade-safe: transport failure or an unavailable engine surfaces
-    // a neutral notice and empty results, never a crash.
+    // Fused recall via POST /memory/recall. Empty query clears results without a
+    // request. Degrade-safe: transport failure or fully-degraded sources surface a
+    // neutral, truthful notice and empty results, never a crash or a fabricated hit.
     async search() {
         const query = globalStore.get(this.queryAtom).trim();
         if (query === "") {
@@ -116,8 +117,11 @@ class RecoderMemoryViewModel implements ViewModel {
         globalStore.set(this.searchingAtom, true);
         globalStore.set(this.searchNoticeAtom, "");
         try {
-            const url = `${getRecoderBackendUrl()}/api/agent-os/memory/search?query=${encodeURIComponent(query)}`;
-            const res = await fetch(url);
+            const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/memory/recall`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ query }),
+            });
             if (!res.ok) {
                 globalStore.set(this.resultsAtom, []);
                 globalStore.set(this.searchNoticeAtom, `search failed (${res.status})`);
@@ -125,12 +129,21 @@ class RecoderMemoryViewModel implements ViewModel {
             }
             const body = await res.json();
             const data = body?.data ?? {};
-            const results = Array.isArray(data?.results) ? (data.results as RecoderMemoryResult[]) : [];
+            const memories = Array.isArray(data?.memories) ? data.memories : [];
+            const results: RecoderMemoryResult[] = memories.map((m: { id?: string; body?: string }) => ({
+                id: String(m?.id ?? ""),
+                memory: String(m?.body ?? ""),
+            }));
             globalStore.set(this.resultsAtom, results);
-            if (data?.available === false) {
-                globalStore.set(this.searchNoticeAtom, data?.reason ? String(data.reason) : "memory engine unavailable");
-            } else if (results.length === 0) {
-                globalStore.set(this.searchNoticeAtom, "No matches.");
+            if (results.length === 0) {
+                const sources = Array.isArray(data?.sources) ? data.sources : [];
+                const down = sources.filter((s: { available?: boolean }) => s?.available === false);
+                if (sources.length > 0 && down.length === sources.length) {
+                    const reason = down.find((s: { reason?: string }) => s?.reason)?.reason;
+                    globalStore.set(this.searchNoticeAtom, reason ? String(reason) : "memory sources unavailable");
+                } else {
+                    globalStore.set(this.searchNoticeAtom, "No matches.");
+                }
             }
         } catch {
             globalStore.set(this.resultsAtom, []);
