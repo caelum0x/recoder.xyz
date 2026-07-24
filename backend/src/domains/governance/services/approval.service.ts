@@ -161,6 +161,18 @@ export class ApprovalService {
 
   /** List approvals matching the filter, newest first. */
   async list(query: ApprovalQuery = {}): Promise<readonly ApprovalRecord[]> {
+    // Solo/desktop mode (RECODER_SOLO_MODE): no durable approval store (no DB),
+    // and governance auto-clears `needs_approval` locally, so there is nothing to
+    // list. Degrade to empty instead of surfacing the store's "database is
+    // unavailable" 503 (which read as a broken Approvals panel). A cloud deploy
+    // never sets RECODER_SOLO_MODE and keeps the truthful failure.
+    if (process.env.RECODER_SOLO_MODE === '1') {
+      try {
+        return await this.repo.list(query);
+      } catch {
+        return [];
+      }
+    }
     return this.repo.list(query);
   }
 
