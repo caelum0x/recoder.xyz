@@ -94,6 +94,11 @@ export class InferenceComposer implements InferenceModule {
   private readonly routingService: InferenceRoutingService;
   private keyWriteGate?: InferenceKeyWriteGate;
   private started = false;
+  // Memoized OpenAI-compatible sub-routers, so the canonical `routes()` mount and
+  // the `/api/gateway` bootstrap alias (`gatewayRoutes()`) share the SAME handler
+  // instances + auth guard — one router, no duplicated logic.
+  private openaiCompatRouter?: Router;
+  private openaiEmbeddingsRouter?: Router;
 
   constructor(deps: InferenceModuleDeps) {
     this.log = deps.logger;
@@ -261,19 +266,49 @@ export class InferenceComposer implements InferenceModule {
       }),
     );
     // OpenAI base-url compatibility: `/inference/v1/...` and `/gateway/v1/...`.
-    const openai = createOpenAiCompatRouter({
-      routing: this.routingService,
-      authenticateRequest: this.middleware.authenticate,
-    });
+    const openai = this.getOpenaiCompatRouter();
     router.use('/inference', openai);
     router.use('/gateway', openai);
     // Embeddings edge: `/inference/v1/embeddings` and `/gateway/v1/embeddings`.
-    const embeddings = createOpenAiEmbeddingsRouter({
-      routing: this.routingService,
-      authenticateRequest: this.middleware.authenticate,
-    });
+    const embeddings = this.getOpenaiEmbeddingsRouter();
     router.use('/inference', embeddings);
     router.use('/gateway', embeddings);
+    return router;
+  }
+
+  /** Memoized OpenAI chat-completion sub-router (`/v1/chat/completions`). */
+  private getOpenaiCompatRouter(): Router {
+    if (!this.openaiCompatRouter) {
+      this.openaiCompatRouter = createOpenAiCompatRouter({
+        routing: this.routingService,
+        authenticateRequest: this.middleware.authenticate,
+      });
+    }
+    return this.openaiCompatRouter;
+  }
+
+  /** Memoized OpenAI embeddings sub-router (`/v1/embeddings`). */
+  private getOpenaiEmbeddingsRouter(): Router {
+    if (!this.openaiEmbeddingsRouter) {
+      this.openaiEmbeddingsRouter = createOpenAiEmbeddingsRouter({
+        routing: this.routingService,
+        authenticateRequest: this.middleware.authenticate,
+      });
+    }
+    return this.openaiEmbeddingsRouter;
+  }
+
+  /**
+   * The OpenAI-compatible gateway sub-router mounted at its OWN base — reuses the
+   * SAME memoized handler instances + auth guard `routes()` mounts under
+   * `/inference` and `/gateway`. Bootstrap mounts this at `/api/gateway` so the
+   * built-in AI panel's `POST /api/gateway/v1/chat/completions` (and
+   * `/v1/embeddings`) resolves WITHOUT a doubled `/gateway/gateway` segment.
+   */
+  gatewayRoutes(): Router {
+    const router = Router();
+    router.use(this.getOpenaiCompatRouter());
+    router.use(this.getOpenaiEmbeddingsRouter());
     return router;
   }
 

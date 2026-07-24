@@ -121,8 +121,8 @@ function RecoderHealthView({ model }: ViewComponentProps<RecoderHealthViewModel>
                                 {health.fleet.summary.available}/{health.fleet.summary.total} up
                             </span>
                         </div>
-                        <CheckRow ok={health.services.beads} label="beads (bd)" />
-                        <CheckRow ok={health.services.colbertRerank} label="colbert rerank" />
+                        <CheckRow ok={health.services.beads} label="issue graph" />
+                        <CheckRow ok={health.services.colbertRerank} label="retrieval rerank" />
                         {health.fleet.services.length == 0 && (
                             <div className="text-sm text-secondary">No fleet services configured.</div>
                         )}

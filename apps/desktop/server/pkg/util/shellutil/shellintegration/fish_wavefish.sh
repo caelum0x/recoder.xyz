@@ -3,11 +3,15 @@
 set -x PATH {{.WSHBINDIR}} $PATH
 
 # Source dynamic script from wsh token (the echo is to prevent fish from complaining about empty input)
-wsh token "$WAVETERM_SWAPTOKEN" fish 2>/dev/null | source
+if type -q wsh
+    wsh token "$WAVETERM_SWAPTOKEN" fish 2>/dev/null | source
+end
 set -e WAVETERM_SWAPTOKEN
 
 # Load Wave completions
-wsh completion fish | source
+if type -q wsh
+    wsh completion fish | source
+end
 
 set -g _WAVETERM_SI_FIRSTPROMPT 1
 

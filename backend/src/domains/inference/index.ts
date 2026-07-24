@@ -161,6 +161,13 @@ export interface InferenceModule {
   generateConfig(): Promise<GeneratedTzConfig>;
   /** The inference control + OpenAI-compatible routers. */
   routes(): Router;
+  /**
+   * The OpenAI-compatible gateway sub-router at its OWN base (no `/gateway` or
+   * `/inference` prefix). Bootstrap mounts this at `/api/gateway` so the built-in
+   * AI panel's `POST /api/gateway/v1/chat/completions` resolves. Reuses the SAME
+   * handler instances + auth guard as the canonical `routes()` mount.
+   */
+  gatewayRoutes(): Router;
   /** The inference MCP tools (models / health / complete / feedback). */
   mcp(): readonly McpToolRegistration[];
   /** Truthful component health. */

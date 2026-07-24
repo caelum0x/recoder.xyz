@@ -10,7 +10,7 @@ WAVETERM_WSHBINDIR={{.WSHBINDIR}}
 export PATH="$WAVETERM_WSHBINDIR:$PATH"
 
 # Source the dynamic script from wsh token
-eval "$(wsh token "$WAVETERM_SWAPTOKEN" bash 2> /dev/null)"
+command -v wsh >/dev/null 2>&1 && eval "$(wsh token "$WAVETERM_SWAPTOKEN" bash 2> /dev/null)"
 unset WAVETERM_SWAPTOKEN
 
 # Source the first of ~/.bash_profile, ~/.bash_login, or ~/.profile that exists
@@ -26,7 +26,7 @@ if [[ ":$PATH:" != *":$WAVETERM_WSHBINDIR:"* ]]; then
     export PATH="$WAVETERM_WSHBINDIR:$PATH"
 fi
 unset WAVETERM_WSHBINDIR
-if type _init_completion &>/dev/null; then
+if type _init_completion &>/dev/null && command -v wsh >/dev/null 2>&1; then
   source <(wsh completion bash)
 fi
 
