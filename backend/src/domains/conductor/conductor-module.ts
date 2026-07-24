@@ -1885,6 +1885,16 @@ export class ConductorComposer implements ConductorModule {
    */
   async workspaceAudit(workspaceId: string, limit?: number): Promise<readonly AuditRecord[]> {
     if (!this.auditReader) return [];
+    // Solo/desktop (RECODER_SOLO_MODE): no durable audit store, so the read hits an
+    // unavailable DB and would 503. Nothing is sealed to read locally — degrade to an
+    // empty trail. Cloud keeps the truthful failure so an audit-DB outage surfaces.
+    if (process.env.RECODER_SOLO_MODE === '1') {
+      try {
+        return await this.auditReader.byWorkspace(workspaceId, limit);
+      } catch {
+        return [];
+      }
+    }
     return this.auditReader.byWorkspace(workspaceId, limit);
   }
 
