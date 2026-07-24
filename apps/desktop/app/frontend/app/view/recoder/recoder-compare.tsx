@@ -3,6 +3,7 @@
 
 import { useAtomValue } from "jotai";
 import { agentLabel } from "./recoder-agent-labels";
+import { buildConvergenceEvidence, saveConvergenceEvidence } from "./recoder-evidence";
 import {
     RecoderViewModel,
     type CompareView,
@@ -132,9 +133,14 @@ function MergeVerdictLine({ record }: { record: RecoderMergeRecord }) {
 
 MergeVerdictLine.displayName = "MergeVerdictLine";
 
+const SAVE_BTN =
+    "border border-accent/40 text-accent rounded px-2 py-0.5 text-xs hover:bg-accent/10 transition-colors cursor-pointer";
+
 type SiblingCompareRowProps = {
     model: RecoderViewModel;
     sibling: SiblingCompareEntry;
+    siblings: SiblingCompareEntry[];
+    taskGroup: string;
     readiness: ReadinessView;
     mergeability: MergeabilityView;
     status: string;
@@ -142,8 +148,30 @@ type SiblingCompareRowProps = {
     busy: boolean;
 };
 
-function SiblingCompareRow({ model, sibling, readiness, mergeability, status, lastMerge, busy }: SiblingCompareRowProps) {
+function SiblingCompareRow({
+    model,
+    sibling,
+    siblings,
+    taskGroup,
+    readiness,
+    mergeability,
+    status,
+    lastMerge,
+    busy,
+}: SiblingCompareRowProps) {
     const stat = sibling.diffStat;
+    const merged = lastMerge != null && lastMerge.status == "merged";
+    const onSaveEvidence = () => {
+        const evidence = buildConvergenceEvidence({
+            winner: sibling,
+            siblings,
+            readiness,
+            mergeability,
+            merge: lastMerge,
+            taskGroup: taskGroup ?? "",
+        });
+        saveConvergenceEvidence(evidence);
+    };
     return (
         <div className="flex flex-col gap-1 rounded border border-border px-2 py-1.5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -172,6 +200,18 @@ function SiblingCompareRow({ model, sibling, readiness, mergeability, status, la
             </div>
             {status && <div className="text-xs text-secondary">{status}</div>}
             {lastMerge != null && <MergeVerdictLine record={lastMerge} />}
+            {merged && (
+                <div className="flex items-center gap-2">
+                    <button
+                        className={SAVE_BTN}
+                        onClick={onSaveEvidence}
+                        title="Download the client-assembled convergence evidence (JSON + Markdown)"
+                    >
+                        Save evidence
+                    </button>
+                    <span className="text-xs text-secondary">JSON + Markdown, saved locally</span>
+                </div>
+            )}
         </div>
     );
 }
@@ -219,6 +259,8 @@ function RecoderComparePanel({ model, compareView }: { model: RecoderViewModel; 
                             key={sibling.workspaceId}
                             model={model}
                             sibling={sibling}
+                            siblings={compareView.siblings}
+                            taskGroup={compareView.taskGroup ?? ""}
                             readiness={merge?.readiness}
                             mergeability={merge?.mergeability}
                             status={rowStatus[sibling.workspaceId]}
