@@ -1,7 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { createBlock } from "@/app/store/global";
+import { createBlock, getApi } from "@/app/store/global";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { agentLabel } from "../recoder/recoder-agent-labels";
@@ -35,6 +35,14 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
     const readyRuntimes = runtimes.filter((r) => r.available);
     const notConnected = !loading && runtimes.length == 0;
     const canLaunch = !posting && repoPath.trim() != "" && runtimeId != "";
+
+    const browseFolder = async () => {
+        const picked = await getApi().selectDirectory();
+        if (picked == null || picked == "") {
+            return;
+        }
+        setRepoPath(picked);
+    };
 
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-3">
@@ -70,12 +78,17 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
 
                     <label className="flex flex-col gap-1">
                         <span className="text-xs uppercase tracking-wide text-secondary">Repository path</span>
-                        <input
-                            className="rounded border border-border bg-transparent px-2 py-1 text-sm"
-                            placeholder="/path/to/your/repo"
-                            value={repoPath}
-                            onChange={(e) => setRepoPath(e.target.value)}
-                        />
+                        <div className="flex items-center gap-2">
+                            <input
+                                className="flex-1 rounded border border-border bg-transparent px-2 py-1 text-sm"
+                                placeholder="/path/to/your/repo"
+                                value={repoPath}
+                                onChange={(e) => setRepoPath(e.target.value)}
+                            />
+                            <button className={QUIET_BTN} onClick={browseFolder}>
+                                Browse…
+                            </button>
+                        </div>
                     </label>
 
                     <label className="flex flex-col gap-1">
@@ -116,7 +129,7 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
 
             {result != null && result.ok && (
                 <div className="rounded border border-border p-3 text-sm">
-                    <div className="font-semibold text-success">Workspace created</div>
+                    <div className="font-semibold text-secondary">Workspace created</div>
                     {result.branch != null && (
                         <div className="text-secondary">
                             branch <span className="text-primary">{result.branch}</span>
