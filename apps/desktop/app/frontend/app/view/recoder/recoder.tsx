@@ -5,6 +5,7 @@ import { createBlock, getApi } from "@/app/store/global";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { agentLabel } from "./recoder-agent-labels";
+import { RecoderComparePanel } from "./recoder-compare";
 import { RecoderIdentityAffordance } from "./recoder-identity";
 import {
     RecoderViewModel,
@@ -105,6 +106,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const workspaces = useAtomValue(model.workspacesAtom);
     const groups = useAtomValue(model.groupsAtom);
     const compare = useAtomValue(model.compareAtom);
+    const compareOpen = useAtomValue(model.compareOpenAtom);
     const loading = useAtomValue(model.loadingAtom);
     const error = useAtomValue(model.errorAtom);
     const setup = useAtomValue(model.setupAtom);
@@ -376,7 +378,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     }
                     const taskGroup = group.taskGroup ?? "";
                     const compareView = compare[taskGroup];
-                    const contested = compareView?.contested ?? [];
+                    const isCompareOpen = compareOpen == taskGroup;
                     return (
                         <div key={taskGroup} className="flex flex-col gap-1 rounded border border-border p-2">
                             <div className="flex items-center gap-2">
@@ -385,18 +387,15 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     {shortTaskGroup(taskGroup)}
                                 </span>
                                 <div className="flex-1" />
-                                <button className={QUIET_BTN} onClick={() => model.loadCompare(taskGroup)}>
-                                    Compare
+                                <button
+                                    className={QUIET_BTN}
+                                    onClick={() => model.toggleCompare(taskGroup, group.workspaces)}
+                                >
+                                    {isCompareOpen ? "Hide compare" : "Compare"}
                                 </button>
                             </div>
-                            {compareView != null && (
-                                <div className="text-xs text-secondary">
-                                    {contested.length == 0
-                                        ? "No overlapping files across siblings."
-                                        : `${contested.length} contested file${contested.length == 1 ? "" : "s"}: ${contested
-                                              .map((c) => c.path)
-                                              .join(", ")}`}
-                                </div>
+                            {isCompareOpen && compareView != null && (
+                                <RecoderComparePanel model={model} compareView={compareView} />
                             )}
                             {group.workspaces.map((ws) => (
                                 <WorkspaceRow

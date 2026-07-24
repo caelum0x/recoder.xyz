@@ -205,6 +205,8 @@ class RecoderViewModel implements ViewModel {
     groupsAtom!: Atom<RecoderWorkspaceGroup[]>;
     // Side-by-side compare view keyed by taskGroup; absent ⇒ never loaded / degraded.
     compareAtom: PrimitiveAtom<Record<string, CompareView>>;
+    // The taskGroup whose full compare panel is expanded; "" ⇒ none open.
+    compareOpenAtom: PrimitiveAtom<string>;
     // Merge-decision views (readiness + mergeability) keyed by workspaceId; each
     // side absent ⇒ that probe degraded, never a fabricated verdict.
     readinessAtom: PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
@@ -232,6 +234,7 @@ class RecoderViewModel implements ViewModel {
         this.rowStatusAtom = atom({}) as PrimitiveAtom<Record<string, string>>;
         this.busyRowAtom = atom("") as PrimitiveAtom<string>;
         this.compareAtom = atom({}) as PrimitiveAtom<Record<string, CompareView>>;
+        this.compareOpenAtom = atom("") as PrimitiveAtom<string>;
         this.readinessAtom = atom({}) as PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
         this.groupsAtom = atom((get) => groupByTaskGroup(get(this.workspacesAtom)));
     }
@@ -355,6 +358,23 @@ class RecoderViewModel implements ViewModel {
         } catch {
             // degrade-safe: an unreachable/failed compare leaves the map unchanged
         }
+    }
+
+    // Toggle the expanded compare panel for a group. Opening a group loads its
+    // side-by-side aggregate AND the per-sibling merge-decision views together, so
+    // the panel renders contested set + readiness + mergeability in one pass. Each
+    // underlying read is independently degrade-safe. Re-toggling collapses it.
+    async toggleCompare(taskGroup: string, siblings: { workspaceId: string }[]) {
+        const tg = taskGroup.trim();
+        if (tg == "") {
+            return;
+        }
+        if (globalStore.get(this.compareOpenAtom) == tg) {
+            globalStore.set(this.compareOpenAtom, "");
+            return;
+        }
+        globalStore.set(this.compareOpenAtom, tg);
+        await Promise.all([this.loadCompare(tg), this.loadGroupReadiness(siblings)]);
     }
 
     // Batch the two merge-decision reads (readiness + mergeability) for every
