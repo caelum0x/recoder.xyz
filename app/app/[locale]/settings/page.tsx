@@ -65,7 +65,7 @@ export default function SettingsPage() {
       description: 'Required — add your OpenRouter, Anthropic, or OpenAI key to use Recoder',
       icon: Key,
       href: '/settings/ai-providers',
-      color: 'from-orange-500 to-purple-600'
+      color: 'from-neutral-700 to-neutral-800'
     },
   ];
 
@@ -76,7 +76,7 @@ export default function SettingsPage() {
           {/* Page Header */}
           <div className="mb-8">
             <div className="flex items-center space-x-3 mb-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-purple-600 rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-center">
                 <SettingsIcon className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -102,7 +102,7 @@ export default function SettingsPage() {
                         <Icon className="w-6 h-6 text-white" />
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-lg font-bold mb-1 group-hover:text-orange-500 transition-colors">
+                        <h3 className="text-lg font-bold mb-1 group-hover:text-white transition-colors">
                           {section.title}
                         </h3>
                         <p className="text-sm text-gray-400">
@@ -110,7 +110,7 @@ export default function SettingsPage() {
                         </p>
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-orange-500 transition-colors flex-shrink-0 ml-2" />
+                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors flex-shrink-0 ml-2" />
                   </div>
                 </Link>
               );
@@ -118,14 +118,14 @@ export default function SettingsPage() {
           </div>
 
           {/* Help Section */}
-          <div className="mt-6 p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
-            <p className="text-sm text-orange-200">
+          <div className="mt-6 p-4 rounded-lg bg-neutral-800/50 border border-neutral-700">
+            <p className="text-sm text-neutral-300">
               <strong>Need help?</strong> Check out our{' '}
-              <Link href="/docs" className="underline hover:text-orange-300">
+              <Link href="/docs" className="underline hover:text-white">
                 documentation
               </Link>{' '}
               or{' '}
-              <Link href="/support" className="underline hover:text-orange-300">
+              <Link href="/support" className="underline hover:text-white">
                 contact support
               </Link>
             </p>

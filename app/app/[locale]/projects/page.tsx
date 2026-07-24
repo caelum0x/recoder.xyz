@@ -59,7 +59,7 @@ export default function ProjectsPage() {
   if (isPending || loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <Loader2 className="w-12 h-12 animate-spin text-orange-500" />
+        <Loader2 className="w-12 h-12 animate-spin text-white" />
       </div>
     );
   }
@@ -101,7 +101,7 @@ export default function ProjectsPage() {
                 href="https://web.recoder.xyz"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 transition-colors"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-white text-black hover:bg-neutral-200 transition-colors"
               >
                 <Globe className="w-5 h-5" />
                 Open Web IDE

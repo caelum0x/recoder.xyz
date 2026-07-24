@@ -22,7 +22,7 @@ export default function GettingStartedPage() {
             <h1 className="text-5xl md:text-6xl font-bold mb-4">
               Get Started with
               <br />
-              <span className="bg-gradient-to-r from-orange-500 via-purple-500 to-orange-500 bg-clip-text text-transparent">
+              <span className="text-white">
                 Recoder.xyz
               </span>
             </h1>

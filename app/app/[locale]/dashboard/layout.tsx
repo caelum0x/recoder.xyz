@@ -58,7 +58,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (isPending || !session?.user) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-2 border-neutral-700 border-t-white rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -94,7 +94,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   href={link.href}
                   className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     active
-                      ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20'
+                      ? 'bg-white/10 text-white border border-white/20'
                       : 'text-gray-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
@@ -117,7 +117,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     href={link.href}
                     className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                       active
-                        ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20'
+                        ? 'bg-white/10 text-white border border-white/20'
                         : 'text-gray-400 hover:text-white hover:bg-white/5'
                     }`}
                   >
@@ -160,7 +160,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg hover:bg-white/5 transition-colors"
             >
-              <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center flex-shrink-0">
                 <User className="w-4 h-4" />
               </div>
               <div className="flex-1 text-left min-w-0">

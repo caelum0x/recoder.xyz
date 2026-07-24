@@ -397,7 +397,7 @@ export default function NotificationSettingsPage() {
                     <div key={notification.id} className="p-4 rounded-lg border border-white/10 bg-white/5">
                       <div className="grid grid-cols-3 gap-4 items-center">
                         <div className="flex items-start space-x-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center flex-shrink-0">
                             <Icon className="w-5 h-5 text-white" />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -410,11 +410,11 @@ export default function NotificationSettingsPage() {
                           <button
                             onClick={() => toggleChannel(notification.id, 'email')}
                             className={`relative w-12 h-6 rounded-full transition-colors ${
-                              notification.channels.email ? 'bg-orange-500' : 'bg-gray-700'
+                              notification.channels.email ? 'bg-white' : 'bg-gray-700'
                             }`}
                           >
                             <div
-                              className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                              className={`absolute top-1 w-4 h-4 bg-black rounded-full transition-transform ${
                                 notification.channels.email ? 'translate-x-7' : 'translate-x-1'
                               }`}
                             />
@@ -425,11 +425,11 @@ export default function NotificationSettingsPage() {
                           <button
                             onClick={() => toggleChannel(notification.id, 'inApp')}
                             className={`relative w-12 h-6 rounded-full transition-colors ${
-                              notification.channels.inApp ? 'bg-orange-500' : 'bg-gray-700'
+                              notification.channels.inApp ? 'bg-white' : 'bg-gray-700'
                             }`}
                           >
                             <div
-                              className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                              className={`absolute top-1 w-4 h-4 bg-black rounded-full transition-transform ${
                                 notification.channels.inApp ? 'translate-x-7' : 'translate-x-1'
                               }`}
                             />
@@ -456,11 +456,11 @@ export default function NotificationSettingsPage() {
                   <button
                     onClick={() => setDigestSettings({ ...digestSettings, enabled: !digestSettings.enabled })}
                     className={`relative w-12 h-6 rounded-full transition-colors ${
-                      digestSettings.enabled ? 'bg-orange-500' : 'bg-gray-700'
+                      digestSettings.enabled ? 'bg-white' : 'bg-gray-700'
                     }`}
                   >
                     <div
-                      className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                      className={`absolute top-1 w-4 h-4 bg-black rounded-full transition-transform ${
                         digestSettings.enabled ? 'translate-x-7' : 'translate-x-1'
                       }`}
                     />
@@ -478,7 +478,7 @@ export default function NotificationSettingsPage() {
                         ...digestSettings, 
                         frequency: e.target.value as 'daily' | 'weekly' | 'monthly' 
                       })}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white appearance-none"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white appearance-none"
                     >
                       <option value="daily" className="bg-gray-900">Daily</option>
                       <option value="weekly" className="bg-gray-900">Weekly</option>
@@ -504,11 +504,11 @@ export default function NotificationSettingsPage() {
                   onClick={handlePushToggle}
                   disabled={!pushSupported || pushLoading}
                   className={`relative w-12 h-6 rounded-full transition-colors disabled:opacity-50 ${
-                    pushEnabled ? 'bg-orange-500' : 'bg-gray-700'
+                    pushEnabled ? 'bg-white' : 'bg-gray-700'
                   }`}
                 >
                   <div
-                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    className={`absolute top-1 w-4 h-4 bg-black rounded-full transition-transform ${
                       pushEnabled ? 'translate-x-7' : 'translate-x-1'
                     }`}
                   />
@@ -540,7 +540,7 @@ export default function NotificationSettingsPage() {
                     <input
                       value={adminPushTitle}
                       onChange={(e) => setAdminPushTitle(e.target.value)}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
                   <div className="space-y-2">
@@ -548,7 +548,7 @@ export default function NotificationSettingsPage() {
                     <input
                       value={adminPushBody}
                       onChange={(e) => setAdminPushBody(e.target.value)}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
                   <div className="space-y-2">
@@ -556,7 +556,7 @@ export default function NotificationSettingsPage() {
                     <input
                       value={adminPushUrl}
                       onChange={(e) => setAdminPushUrl(e.target.value)}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
                   <div className="space-y-2">
@@ -571,7 +571,7 @@ export default function NotificationSettingsPage() {
                         if (Number.isNaN(next)) return;
                         setAdminPushMaxTargets(Math.min(100, Math.max(1, next)));
                       }}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
 
@@ -588,7 +588,7 @@ export default function NotificationSettingsPage() {
                       type="button"
                       onClick={() => runAdminPushTest(false)}
                       disabled={adminPushLoading}
-                      className="px-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg text-sm font-medium disabled:opacity-50"
+                      className="px-4 py-2 bg-white text-black hover:bg-neutral-200 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       Send Direct Test
                     </button>
@@ -616,7 +616,7 @@ export default function NotificationSettingsPage() {
                     <input
                       type="time"
                       defaultValue="22:00"
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
                   <div className="space-y-2">
@@ -626,7 +626,7 @@ export default function NotificationSettingsPage() {
                     <input
                       type="time"
                       defaultValue="08:00"
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
                 </div>
@@ -647,7 +647,7 @@ export default function NotificationSettingsPage() {
               <button
                 onClick={handleSave}
                 disabled={loading}
-                className="px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2 disabled:opacity-50"
+                className="px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all flex items-center space-x-2 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <>

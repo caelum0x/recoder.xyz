@@ -163,13 +163,13 @@ export default function CLIPage() {
             <h1 className="text-6xl md:text-8xl font-bold tracking-tight">
               Terminal + Web
               <br />
-              <span className="bg-gradient-to-r from-orange-500 to-purple-500 bg-clip-text text-transparent">
+              <span className="text-white">
                 In One Platform
               </span>
             </h1>
 
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              The only AI coding platform with <span className="text-orange-500 font-semibold">seamless Web IDE + CLI sync</span>. Start in browser, continue in terminal.
+              The only AI coding platform with <span className="text-white font-semibold">seamless Web IDE + CLI sync</span>. Start in browser, continue in terminal.
             </p>
 
             <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 max-w-2xl mx-auto">
@@ -181,7 +181,7 @@ export default function CLIPage() {
             <div className="flex items-center justify-center space-x-4 pt-8">
               <Link
                 href="/auth/signup"
-                className="group px-8 py-4 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2"
+                className="group px-8 py-4 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all flex items-center space-x-2"
               >
                 <Download className="w-5 h-5" />
                 <span>Get Started Free</span>
@@ -198,7 +198,7 @@ export default function CLIPage() {
       </section>
 
       {/* Web ↔ CLI Flow */}
-      <section className="py-20 px-6 border-t border-white/10 bg-gradient-to-b from-transparent to-orange-500/5">
+      <section className="py-20 px-6 border-t border-white/10 bg-gradient-to-b from-transparent to-white/5">
         <div className="container mx-auto max-w-6xl">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold mb-4">The Web ↔ CLI Workflow</h2>
@@ -211,12 +211,12 @@ export default function CLIPage() {
               return (
                 <div
                   key={index}
-                  className="relative p-6 rounded-2xl border border-white/10 bg-black/50 hover:border-orange-500/30 transition-all"
+                  className="relative p-6 rounded-2xl border border-white/10 bg-black/50 hover:border-white/30 transition-all"
                 >
-                  <div className="absolute -top-3 left-6 w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-xs font-bold text-black">
+                  <div className="absolute -top-3 left-6 w-6 h-6 rounded-full bg-white flex items-center justify-center text-xs font-bold text-black">
                     {index + 1}
                   </div>
-                  <Icon className="w-10 h-10 text-orange-500 mb-4 mt-2" />
+                  <Icon className="w-10 h-10 text-white mb-4 mt-2" />
                   <h3 className="text-lg font-bold mb-2">{feature.title}</h3>
                   <p className="text-sm text-gray-400">{feature.description}</p>
                 </div>
@@ -238,10 +238,10 @@ export default function CLIPage() {
             {installSteps.map((step, index) => (
               <div
                 key={index}
-                className="relative p-6 rounded-2xl border border-white/10 bg-gradient-to-br from-orange-500/5 to-transparent hover:border-orange-500/30 transition-all"
+                className="relative p-6 rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent hover:border-white/30 transition-all"
               >
                 <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-black font-bold">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white flex items-center justify-center text-black font-bold">
                     {index + 1}
                   </div>
                   <div className="flex-1 space-y-2">
@@ -314,9 +314,9 @@ export default function CLIPage() {
               return (
                 <div
                   key={index}
-                  className="p-6 rounded-2xl border border-white/10 bg-black/50 hover:border-orange-500/30 transition-all"
+                  className="p-6 rounded-2xl border border-white/10 bg-black/50 hover:border-white/30 transition-all"
                 >
-                  <Icon className="w-10 h-10 text-orange-500 mb-4" />
+                  <Icon className="w-10 h-10 text-white mb-4" />
                   <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
                   <p className="text-gray-400">{feature.description}</p>
                 </div>
@@ -327,7 +327,7 @@ export default function CLIPage() {
       </section>
 
       {/* Command Reference */}
-      <section className="py-20 px-6 border-t border-white/10 bg-gradient-to-b from-transparent to-purple-500/5">
+      <section className="py-20 px-6 border-t border-white/10 bg-gradient-to-b from-transparent to-white/5">
         <div className="container mx-auto max-w-4xl">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold mb-4">Command Reference</h2>
@@ -338,11 +338,11 @@ export default function CLIPage() {
             {cliCommands.map((item, index) => (
               <div
                 key={index}
-                className="p-6 rounded-2xl border border-white/10 bg-black/50 hover:border-purple-500/30 transition-all"
+                className="p-6 rounded-2xl border border-white/10 bg-black/50 hover:border-white/30 transition-all"
               >
                 <div className="space-y-3">
                   <div className="flex items-center space-x-2 p-3 bg-black border border-white/10 rounded-lg font-mono text-sm">
-                    <Terminal className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                    <Terminal className="w-4 h-4 text-white flex-shrink-0" />
                     <code className="flex-1 text-green-400 overflow-x-auto">{item.command}</code>
                     <button
                       onClick={() => copyToClipboard(item.command, 100 + index)}
@@ -364,8 +364,8 @@ export default function CLIPage() {
           <div className="mt-8 p-6 rounded-lg bg-blue-500/10 border border-blue-500/20">
             <h3 className="font-semibold text-white mb-3">💡 Pro Tip: BYOK Setup</h3>
             <ol className="space-y-2 text-sm text-gray-300">
-              <li>1. Sign up at <a href="/auth/signup" className="text-orange-500 hover:underline">recoder.xyz</a></li>
-              <li>2. Add your API key at <Link href="/settings/ai-providers" className="text-orange-500 hover:underline">Settings → AI Providers</Link></li>
+              <li>1. Sign up at <a href="/auth/signup" className="text-white hover:underline">recoder.xyz</a></li>
+              <li>2. Add your API key at <Link href="/settings/ai-providers" className="text-white hover:underline">Settings → AI Providers</Link></li>
               <li>3. Run <code className="font-mono bg-black/50 px-2 py-1 rounded">recoder auth login</code> in terminal</li>
               <li>4. Start building! Your API key is securely synced.</li>
             </ol>
@@ -389,7 +389,7 @@ export default function CLIPage() {
           <div className="flex items-center justify-center space-x-4">
             <Link
               href="/auth/signup"
-              className="px-8 py-4 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2"
+              className="px-8 py-4 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all flex items-center space-x-2"
             >
               <Download className="w-5 h-5" />
               <span>Get Started Free</span>

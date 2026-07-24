@@ -105,9 +105,9 @@ export default function FeaturesPage() {
       <SiteHeader />
       <div className="max-w-6xl mx-auto px-4 py-20">
         <div className="text-center mb-16">
-          <div className="inline-flex items-center space-x-2 px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-full mb-6">
-            <Sparkles className="w-4 h-4 text-orange-500" />
-            <span className="text-sm text-orange-500">Powerful Features</span>
+          <div className="inline-flex items-center space-x-2 px-4 py-2 bg-neutral-800/50 border border-neutral-700 rounded-full mb-6">
+            <Sparkles className="w-4 h-4 text-neutral-300" />
+            <span className="text-sm text-neutral-300">Powerful Features</span>
           </div>
           <h1 className="text-5xl font-bold mb-6">Everything You Need to Build</h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
@@ -130,7 +130,7 @@ export default function FeaturesPage() {
         <div className="text-center">
           <Link
             href="/auth/signup"
-            className="inline-flex items-center space-x-2 px-8 py-4 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all"
+            className="inline-flex items-center space-x-2 px-8 py-4 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-colors"
           >
             <span>Get Started Free</span>
             <ArrowRight className="w-5 h-5" />

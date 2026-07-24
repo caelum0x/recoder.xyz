@@ -137,7 +137,7 @@ function VerifyCodeContent() {
               <div className="space-y-6">
                 <div className="text-center space-y-2">
                   <div className="flex justify-center mb-4">
-                    <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-purple-600 rounded-full flex items-center justify-center">
+                    <div className="w-16 h-16 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center">
                       <ShieldCheck className="w-8 h-8 text-white" />
                     </div>
                   </div>
@@ -149,7 +149,7 @@ function VerifyCodeContent() {
 
                 {email && (
                   <div className="text-center text-sm text-gray-400">
-                    Sent to: <span className="text-orange-400">{email}</span>
+                    Sent to: <span className="text-white">{email}</span>
                   </div>
                 )}
 
@@ -165,7 +165,7 @@ function VerifyCodeContent() {
                       value={digit}
                       onChange={(e) => handleCodeChange(index, e.target.value)}
                       onKeyDown={(e) => handleKeyDown(index, e)}
-                      className="w-12 h-14 text-center text-2xl font-bold bg-white/5 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white"
+                      className="w-12 h-14 text-center text-2xl font-bold bg-white/5 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent text-white"
                       autoFocus={index === 0}
                     />
                   ))}
@@ -180,7 +180,7 @@ function VerifyCodeContent() {
                 <div className="space-y-3 text-center">
                   <p className="text-sm text-gray-400">
                     Didn't receive the code?{' '}
-                    <Link href="/auth/verify-email" className="text-orange-500 hover:text-orange-400">
+                    <Link href="/auth/verify-email" className="text-white hover:text-neutral-300">
                       Resend Email
                     </Link>
                   </p>
@@ -192,7 +192,7 @@ function VerifyCodeContent() {
             {status === 'verifying' && (
               <div className="text-center space-y-6">
                 <div className="flex justify-center">
-                  <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-purple-600 rounded-full flex items-center justify-center">
+                  <div className="w-16 h-16 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center">
                     <Loader className="w-8 h-8 text-white" />
                   </div>
                 </div>
@@ -220,7 +220,7 @@ function VerifyCodeContent() {
                 <div className="space-y-3">
                   <Link
                     href="/dashboard"
-                    className="block w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all text-center"
+                    className="block w-full px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all text-center"
                   >
                     Go to Dashboard
                   </Link>
@@ -246,7 +246,7 @@ function VerifyCodeContent() {
                 <div className="space-y-3">
                   <button
                     onClick={handleRetry}
-                    className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all"
+                    className="w-full px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all"
                   >
                     Try Again
                   </button>
@@ -265,7 +265,7 @@ function VerifyCodeContent() {
           <div className="mt-6 p-4 rounded-lg bg-white/5 border border-white/10">
             <p className="text-sm text-gray-400 text-center">
               Having trouble?{' '}
-              <Link href="/support" className="text-orange-500 hover:text-orange-400">
+              <Link href="/support" className="text-white hover:text-neutral-300">
                 Contact Support
               </Link>
             </p>
@@ -280,7 +280,7 @@ export default function VerifyPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
       </div>
     }>
       <VerifyCodeContent />

@@ -84,9 +84,9 @@ function OnboardingContent() {
     <div className="min-h-screen bg-black text-white relative overflow-hidden flex items-center justify-center p-4">
       {/* Animated gradient background */}
       <div className="fixed inset-0 z-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-black to-purple-600/5" />
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }} />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '12s' }} />
+        <div className="absolute inset-0 bg-gradient-to-br from-neutral-900 via-black to-neutral-900" />
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-neutral-700/20 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-neutral-700/20 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '12s' }} />
       </div>
       <div className="relative z-10 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl max-w-2xl w-full p-8">
         {/* Progress Bar */}
@@ -97,7 +97,7 @@ function OnboardingContent() {
           </div>
           <div className="h-2 bg-white/10 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-orange-500 to-purple-600 transition-all duration-300"
+              className="h-full bg-white transition-all duration-300"
               style={{ width: `${step === 1 ? 50 : 100}%` }}
             />
           </div>
@@ -107,8 +107,8 @@ function OnboardingContent() {
           <>
             {/* Step 1: API Key Setup */}
             <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-500/10 rounded-full mb-4">
-                <svg className="w-8 h-8 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-neutral-800 border border-neutral-700 rounded-full mb-4">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                 </svg>
               </div>
@@ -129,7 +129,7 @@ function OnboardingContent() {
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="sk-or-v1-..."
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent text-white placeholder-gray-500"
                   required
                 />
                 <p className="mt-2 text-sm text-gray-400">
@@ -138,7 +138,7 @@ function OnboardingContent() {
                     href="https://openrouter.ai/keys"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-orange-500 hover:text-orange-400 font-medium"
+                    className="text-white hover:text-neutral-300 font-medium"
                   >
                     Get one here →
                   </a>
@@ -179,7 +179,7 @@ function OnboardingContent() {
                 <button
                   type="submit"
                   disabled={loading || validating || !apiKey}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 text-white font-medium rounded-lg hover:from-orange-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  className="flex-1 px-6 py-3 bg-white text-black font-medium rounded-lg hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   {validating ? 'Validating...' : loading ? 'Saving...' : 'Continue'}
                 </button>
@@ -215,21 +215,21 @@ function OnboardingContent() {
                 <h3 className="font-semibold text-white mb-4">Next Steps:</h3>
                 <div className="space-y-3">
                   <div className="flex items-start">
-                    <span className="inline-flex items-center justify-center w-6 h-6 bg-gradient-to-br from-orange-500 to-purple-600 text-white rounded-full text-sm font-medium mr-3 flex-shrink-0">1</span>
+                    <span className="inline-flex items-center justify-center w-6 h-6 bg-neutral-800 border border-neutral-700 text-white rounded-full text-sm font-medium mr-3 flex-shrink-0">1</span>
                     <div>
                       <p className="font-medium text-white">Install Recoder CLI</p>
                       <code className="text-sm bg-white/10 text-gray-300 px-2 py-1 rounded mt-1 block">npm install -g recoder-code</code>
                     </div>
                   </div>
                   <div className="flex items-start">
-                    <span className="inline-flex items-center justify-center w-6 h-6 bg-gradient-to-br from-orange-500 to-purple-600 text-white rounded-full text-sm font-medium mr-3 flex-shrink-0">2</span>
+                    <span className="inline-flex items-center justify-center w-6 h-6 bg-neutral-800 border border-neutral-700 text-white rounded-full text-sm font-medium mr-3 flex-shrink-0">2</span>
                     <div>
                       <p className="font-medium text-white">Authenticate</p>
                       <code className="text-sm bg-white/10 text-gray-300 px-2 py-1 rounded mt-1 block">recoder auth login</code>
                     </div>
                   </div>
                   <div className="flex items-start">
-                    <span className="inline-flex items-center justify-center w-6 h-6 bg-gradient-to-br from-orange-500 to-purple-600 text-white rounded-full text-sm font-medium mr-3 flex-shrink-0">3</span>
+                    <span className="inline-flex items-center justify-center w-6 h-6 bg-neutral-800 border border-neutral-700 text-white rounded-full text-sm font-medium mr-3 flex-shrink-0">3</span>
                     <div>
                       <p className="font-medium text-white">Start Building</p>
                       <code className="text-sm bg-white/10 text-gray-300 px-2 py-1 rounded mt-1 block">recoder "build a React app"</code>
@@ -240,7 +240,7 @@ function OnboardingContent() {
 
               <button
                 onClick={() => router.push('/dashboard')}
-                className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 text-white font-medium rounded-lg hover:from-orange-600 hover:to-purple-700 transition-all"
+                className="w-full px-6 py-3 bg-white text-black font-medium rounded-lg hover:bg-neutral-200 transition-all"
               >
                 Go to Dashboard
               </button>
@@ -256,7 +256,7 @@ export default function OnboardingPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
       </div>
     }>
       <OnboardingContent />

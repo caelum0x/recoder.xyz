@@ -167,7 +167,7 @@ export default function FAQPage() {
             <h1 className="text-5xl md:text-6xl font-bold mb-4">
               Got Questions?
               <br />
-              <span className="bg-gradient-to-r from-orange-500 via-purple-500 to-orange-500 bg-clip-text text-transparent">
+              <span className="text-white">
                 We've Got Answers
               </span>
             </h1>
@@ -205,7 +205,7 @@ export default function FAQPage() {
           {faqs.map((category, catIndex) => (
             <div key={catIndex} id={category.category.toLowerCase()} className="mb-12">
               <div className="flex items-center space-x-3 mb-6">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500/20 to-purple-500/20 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-neutral-800 border border-neutral-700 flex items-center justify-center">
                   <category.icon className="w-5 h-5 text-orange-500" />
                 </div>
                 <h2 className="text-3xl font-bold">{category.category}</h2>
@@ -247,7 +247,7 @@ export default function FAQPage() {
           ))}
 
           {/* Still Have Questions? */}
-          <div className="mt-16 p-8 rounded-2xl border-2 border-orange-500/30 bg-gradient-to-br from-orange-500/10 to-purple-600/10">
+          <div className="mt-16 p-8 rounded-2xl border border-neutral-800 bg-white/5">
             <div className="text-center">
               <h2 className="text-3xl font-bold mb-4">Still Have Questions?</h2>
               <p className="text-gray-300 mb-6 max-w-2xl mx-auto">

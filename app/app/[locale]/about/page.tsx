@@ -119,13 +119,13 @@ export default function AboutPage() {
       {/* Hero Section */}
       <section className="pt-20 pb-16 px-4">
         <div className="container mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-orange-900/30 text-orange-300 px-4 py-2 rounded-full text-sm font-medium mb-6">
+          <div className="inline-flex items-center gap-2 bg-neutral-800 text-neutral-300 px-4 py-2 rounded-full text-sm font-medium mb-6">
             <Heart className="w-4 h-4" />
             About Recoder.xyz
           </div>
           <h1 className="text-4xl md:text-5xl font-bold mb-6">
             AI-Powered Development <br />
-            <span className="bg-gradient-to-r from-orange-500 to-purple-600 bg-clip-text text-transparent">
+            <span className="text-white">
               Platform
             </span>
           </h1>
@@ -158,7 +158,7 @@ export default function AboutPage() {
                 <Card key={index} className="group hover:shadow-lg transition-all duration-300">
                   <CardHeader>
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
                         <Icon className="w-6 h-6 text-white" />
                       </div>
                       <CardTitle className="text-xl">{item.title}</CardTitle>
@@ -192,7 +192,7 @@ export default function AboutPage() {
                 <Card key={index} className="group hover:shadow-lg transition-all duration-300">
                   <CardHeader>
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
                         <Icon className="w-6 h-6 text-white" />
                       </div>
                       <CardTitle className="text-xl">{value.title}</CardTitle>
@@ -248,7 +248,7 @@ export default function AboutPage() {
               return (
                 <Card key={index} className="text-center group hover:shadow-lg transition-all duration-300">
                   <CardHeader>
-                    <div className="w-16 h-16 bg-gradient-to-r from-orange-500 to-purple-600 rounded-xl mx-auto mb-4 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <div className="w-16 h-16 bg-neutral-800 border border-neutral-700 rounded-xl mx-auto mb-4 flex items-center justify-center group-hover:scale-110 transition-transform">
                       <Icon className="w-8 h-8 text-white" />
                     </div>
                     <CardTitle>{item.title}</CardTitle>
@@ -259,7 +259,7 @@ export default function AboutPage() {
                       href={item.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-orange-400 hover:text-orange-300 font-medium inline-flex items-center gap-1"
+                      className="text-sm text-neutral-300 hover:text-white font-medium inline-flex items-center gap-1"
                     >
                       Visit <ArrowRight className="w-3 h-3" />
                     </Link>
@@ -279,7 +279,7 @@ export default function AboutPage() {
             Try Recoder free during beta — bring your own API keys, no credit card required.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/auth/signup" className="px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 text-white rounded-md font-medium hover:from-orange-600 hover:to-purple-700 flex items-center gap-2">
+            <Link href="/auth/signup" className="px-6 py-3 bg-white text-black rounded-md font-medium hover:bg-neutral-200 flex items-center gap-2">
               <span>Get Started Free</span>
               <ArrowRight className="w-4 h-4" />
             </Link>

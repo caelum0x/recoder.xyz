@@ -64,9 +64,9 @@ function SignUpForm() {
     <div className="min-h-screen bg-black text-white relative overflow-hidden">
       {/* Animated gradient background */}
       <div className="fixed inset-0 z-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-black to-purple-600/5" />
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }} />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '12s' }} />
+        <div className="absolute inset-0 bg-gradient-to-br from-neutral-900 via-black to-neutral-900" />
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-neutral-700/20 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-neutral-700/20 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '12s' }} />
       </div>
 
       <div className="relative z-10">
@@ -78,7 +78,7 @@ function SignUpForm() {
             <div className="space-y-8">
               <div className="space-y-4">
                 <h1 className="text-4xl font-bold">
-                  Start Building with <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-purple-600">AI</span>
+                  Start Building with <span className="text-white">AI</span>
                 </h1>
                 <p className="text-xl text-gray-400">
                   Build production-ready software with AI-powered tools
@@ -88,7 +88,7 @@ function SignUpForm() {
               <div className="space-y-4">
                 {features.map((feature, index) => (
                   <div key={index} className="flex items-center space-x-3 text-gray-300">
-                    <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <div className="w-6 h-6 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center flex-shrink-0">
                       <Check className="w-4 h-4 text-white" />
                     </div>
                     <span>{feature}</span>
@@ -96,9 +96,9 @@ function SignUpForm() {
                 ))}
               </div>
 
-              <div className="p-6 rounded-2xl border border-orange-500/20 bg-orange-500/5">
+              <div className="p-6 rounded-2xl border border-neutral-700 bg-neutral-900">
                 <div className="flex items-start space-x-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Terminal className="w-6 h-6 text-white" />
                   </div>
                   <div className="space-y-2">
@@ -168,7 +168,7 @@ function SignUpForm() {
 
                 <div className="text-center text-sm pt-4 border-t border-white/10">
                   <span className="text-gray-400">Already have an account? </span>
-                  <Link href="/auth/signin" className="text-orange-500 hover:text-orange-400 transition-colors">
+                  <Link href="/auth/signin" className="text-white hover:text-neutral-300 transition-colors">
                     Sign in
                   </Link>
                 </div>
@@ -185,7 +185,7 @@ export default function SignUpPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
       </div>
     }>
       <SignUpForm />

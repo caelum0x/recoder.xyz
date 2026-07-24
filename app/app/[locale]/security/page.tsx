@@ -214,7 +214,7 @@ export default function SecurityCenterPage() {
               Enterprise Security
             </Badge>
           </div>
-          <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-slate-900 via-orange-600 to-slate-900 dark:from-white dark:via-orange-400 dark:to-white bg-clip-text text-transparent">
+          <h1 className="text-4xl md:text-6xl font-bold mb-6 text-slate-900 dark:text-white">
             Security & Compliance
           </h1>
           <p className="text-xl text-slate-600 dark:text-slate-300 mb-8 max-w-3xl mx-auto">
@@ -258,7 +258,7 @@ export default function SecurityCenterPage() {
             {securityFeatures.map((feature, index) => (
               <Card key={index} className="border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
                 <CardHeader>
-                  <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg flex items-center justify-center mb-4">
+                  <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center mb-4">
                     <feature.icon className="w-6 h-6 text-white" />
                   </div>
                   <CardTitle className="text-xl">{feature.title}</CardTitle>
@@ -294,7 +294,7 @@ export default function SecurityCenterPage() {
             {certifications.map((cert, index) => (
               <Card key={index} className="text-center border-0 shadow-lg">
                 <CardHeader className="pb-4">
-                  <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="w-16 h-16 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center mx-auto mb-4">
                     <cert.icon className="w-8 h-8 text-white" />
                   </div>
                   <CardTitle className="text-lg">{cert.name}</CardTitle>
@@ -365,7 +365,7 @@ export default function SecurityCenterPage() {
             {securityBestPractices.map((practice, index) => (
               <Card key={index} className="border-0 shadow-lg">
                 <CardHeader>
-                  <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center mb-4">
+                  <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center mb-4">
                     <practice.icon className="w-5 h-5 text-white" />
                   </div>
                   <CardTitle className="text-lg">{practice.title}</CardTitle>
@@ -390,7 +390,7 @@ export default function SecurityCenterPage() {
       {/* Contact Security Team */}
       <section className="py-16 px-4">
         <div className="container mx-auto max-w-4xl text-center">
-          <Card className="border-0 shadow-xl bg-gradient-to-r from-orange-500 to-purple-600 text-white">
+          <Card className="border-0 shadow-xl bg-neutral-900 text-white">
             <CardContent className="p-12">
               <h2 className="text-3xl font-bold mb-4">Security Questions?</h2>
               <p className="text-lg opacity-90 mb-8">

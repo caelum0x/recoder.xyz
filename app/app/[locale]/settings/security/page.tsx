@@ -354,7 +354,7 @@ export default function SecuritySettingsPage() {
                       type={showCurrentPassword ? 'text' : 'password'}
                       value={passwordData.currentPassword}
                       onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                      className="w-full pl-12 pr-12 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full pl-12 pr-12 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                     <button
                       type="button"
@@ -377,7 +377,7 @@ export default function SecuritySettingsPage() {
                       type={showNewPassword ? 'text' : 'password'}
                       value={passwordData.newPassword}
                       onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                      className="w-full pl-12 pr-12 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full pl-12 pr-12 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                     <button
                       type="button"
@@ -398,14 +398,14 @@ export default function SecuritySettingsPage() {
                     type="password"
                     value={passwordData.confirmPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                   />
                 </div>
 
                 <button
                   onClick={handleChangePassword}
                   disabled={loading}
-                  className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                  className="w-full px-4 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <>
@@ -471,20 +471,20 @@ export default function SecuritySettingsPage() {
                     </p>
                     <div className="mt-3 p-3 bg-black/50 rounded-lg">
                       <div className="text-xs text-gray-400 mb-1">Or enter this key manually:</div>
-                      <code className="text-xs text-orange-400 break-all">{secret}</code>
+                      <code className="text-xs text-neutral-300 break-all">{secret}</code>
                     </div>
                   </div>
 
                   {/* Step 2: Backup Codes */}
-                  <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-                    <div className="text-sm font-medium mb-2 text-orange-300">Step 2: Save Backup Codes</div>
-                    <p className="text-xs text-orange-200 mb-3">
+                  <div className="p-4 bg-white/5 border border-white/10 rounded-lg">
+                    <div className="text-sm font-medium mb-2 text-neutral-200">Step 2: Save Backup Codes</div>
+                    <p className="text-xs text-neutral-300 mb-3">
                       Store these codes in a safe place. Each code can only be used once.
                     </p>
                     {!showBackupCodes ? (
                       <button
                         onClick={() => setShowBackupCodes(true)}
-                        className="text-xs text-orange-400 hover:text-orange-300 underline"
+                        className="text-xs text-neutral-300 hover:text-white underline"
                       >
                         Show backup codes
                       </button>
@@ -508,13 +508,13 @@ export default function SecuritySettingsPage() {
                       maxLength={6}
                       value={verificationCode}
                       onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white text-center text-lg tracking-widest mb-3"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white text-center text-lg tracking-widest mb-3"
                     />
                     <div className="flex space-x-3">
                       <button
                         onClick={handleVerify2FA}
                         disabled={loading || verificationCode.length !== 6}
-                        className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all disabled:opacity-50 flex items-center justify-center space-x-2"
+                        className="flex-1 px-4 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                       >
                         {loading ? (
                           <>
@@ -556,7 +556,7 @@ export default function SecuritySettingsPage() {
                       placeholder="6-digit code or 8-character backup code"
                       value={disableCode}
                       onChange={(e) => setDisableCode(e.target.value)}
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
                   <button
@@ -587,7 +587,7 @@ export default function SecuritySettingsPage() {
                     className="p-4 rounded-lg border border-white/10 bg-white/5 flex items-start justify-between"
                   >
                     <div className="flex items-start space-x-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
+                      <div className="w-10 h-10 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center">
                         {session.device.includes('iPhone') ? (
                           <Smartphone className="w-5 h-5 text-white" />
                         ) : (
@@ -683,8 +683,8 @@ export default function SecuritySettingsPage() {
             </div>
 
             {/* Security Log */}
-            <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
-              <p className="text-sm text-orange-200">
+            <div className="p-4 rounded-lg bg-white/5 border border-white/10">
+              <p className="text-sm text-neutral-300">
                 <strong>Security Tip:</strong> Regularly review your active sessions and connected accounts. 
                 If you notice any suspicious activity, change your password immediately and contact support.
               </p>

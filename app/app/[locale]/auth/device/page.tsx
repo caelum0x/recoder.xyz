@@ -71,7 +71,7 @@ function DeviceAuthContent() {
         <div className="max-w-md mx-auto">
           <div className="p-8 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-xl">
             <div className="text-center space-y-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-purple-600 rounded-full flex items-center justify-center mx-auto">
+              <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center mx-auto">
                 <Terminal className="w-6 h-6 text-white" />
               </div>
               
@@ -103,7 +103,7 @@ function DeviceAuthContent() {
                         placeholder="XXXX-XXXX"
                         value={userCode}
                         onChange={handleUserCodeChange}
-                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white text-center text-lg font-mono tracking-wider placeholder-gray-500"
+                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent text-white text-center text-lg font-mono tracking-wider placeholder-gray-500"
                         maxLength={9}
                         disabled={isLoading}
                       />
@@ -112,26 +112,26 @@ function DeviceAuthContent() {
                       </p>
                     </div>
 
-                    <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-                      <h3 className="font-semibold text-orange-400 mb-3 flex items-center gap-2">
+                    <div className="p-4 bg-neutral-800/50 border border-neutral-700 rounded-lg">
+                      <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
                         <Terminal className="w-4 h-4" />
                         Permissions Requested
                       </h3>
                       <ul className="space-y-2 text-sm text-gray-300">
                         <li className="flex items-center gap-2">
-                          <CheckCircle className="w-3 h-3 text-orange-500" />
+                          <CheckCircle className="w-3 h-3 text-neutral-300" />
                           Generate and manage code projects
                         </li>
                         <li className="flex items-center gap-2">
-                          <CheckCircle className="w-3 h-3 text-orange-500" />
+                          <CheckCircle className="w-3 h-3 text-neutral-300" />
                           Access your account and subscription info
                         </li>
                         <li className="flex items-center gap-2">
-                          <CheckCircle className="w-3 h-3 text-orange-500" />
+                          <CheckCircle className="w-3 h-3 text-neutral-300" />
                           Sync usage quota and analytics
                         </li>
                         <li className="flex items-center gap-2">
-                          <CheckCircle className="w-3 h-3 text-orange-500" />
+                          <CheckCircle className="w-3 h-3 text-neutral-300" />
                           Enable cross-platform session management
                         </li>
                       </ul>
@@ -141,7 +141,7 @@ function DeviceAuthContent() {
                       <button 
                         onClick={handleAuthorize}
                         disabled={isLoading || !userCode || userCode.length < 8}
-                        className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
+                        className="flex-1 px-6 py-3 bg-white text-black hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
                       >
                         {isLoading ? (
                           <>
@@ -174,7 +174,7 @@ export default function DeviceAuthPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-2 border-neutral-700 border-t-white rounded-full animate-spin"></div>
       </div>
     }>
       <DeviceAuthContent />

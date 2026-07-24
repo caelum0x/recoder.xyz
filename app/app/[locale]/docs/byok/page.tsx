@@ -19,7 +19,7 @@ export default function BYOKPage() {
             <h1 className="text-5xl md:text-6xl font-bold mb-4">
               Why
               <br />
-              <span className="bg-gradient-to-r from-orange-500 via-purple-500 to-orange-500 bg-clip-text text-transparent">
+              <span className="text-white">
                 Bring Your Own Key?
               </span>
             </h1>
@@ -29,7 +29,7 @@ export default function BYOKPage() {
           </div>
 
           {/* TL;DR */}
-          <div className="p-6 rounded-xl border border-orange-500/30 bg-gradient-to-br from-orange-500/10 to-purple-600/10 mb-16">
+          <div className="p-6 rounded-xl border border-neutral-800 bg-neutral-900 mb-16">
             <h2 className="text-2xl font-bold mb-4">TL;DR</h2>
             <p className="text-gray-300 mb-4">
               Instead of charging you $20-50/month for AI features, we let you use your own API key from AI providers.
@@ -108,10 +108,10 @@ export default function BYOKPage() {
             </div>
 
             {/* Benefit 2: Model Choice */}
-            <div className="p-8 rounded-2xl border border-purple-500/20 bg-purple-500/5">
+            <div className="p-8 rounded-2xl border border-neutral-800 bg-neutral-900">
               <div className="flex items-start space-x-4">
-                <div className="w-14 h-14 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center flex-shrink-0">
-                  <Target className="w-7 h-7 text-purple-500" />
+                <div className="w-14 h-14 rounded-xl bg-neutral-800 border border-neutral-700 flex items-center justify-center flex-shrink-0">
+                  <Target className="w-7 h-7 text-white" />
                 </div>
                 <div className="flex-1">
                   <h3 className="text-2xl font-bold mb-3">2. You Choose Models</h3>
@@ -132,7 +132,7 @@ export default function BYOKPage() {
                       <div key={i} className="p-3 rounded-lg border border-white/10 bg-black/40">
                         <div className="flex items-start justify-between mb-1">
                           <div className="font-semibold text-sm">{model.name}</div>
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-300">
                             {model.badge}
                           </span>
                         </div>
@@ -142,7 +142,7 @@ export default function BYOKPage() {
                     ))}
                   </div>
 
-                  <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                  <div className="p-4 rounded-lg bg-white/5 border border-white/10">
                     <p className="text-sm text-gray-300">
                       <strong className="text-white">Traditional platforms:</strong> Force you to use specific models.
                       <strong className="text-white"> BYOK:</strong> You choose the best model for each task and save money using cheaper models when appropriate.
@@ -153,10 +153,10 @@ export default function BYOKPage() {
             </div>
 
             {/* Benefit 3: Privacy & Security */}
-            <div className="p-8 rounded-2xl border border-orange-500/20 bg-orange-500/5">
+            <div className="p-8 rounded-2xl border border-neutral-800 bg-neutral-900">
               <div className="flex items-start space-x-4">
-                <div className="w-14 h-14 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center flex-shrink-0">
-                  <Shield className="w-7 h-7 text-orange-500" />
+                <div className="w-14 h-14 rounded-xl bg-neutral-800 border border-neutral-700 flex items-center justify-center flex-shrink-0">
+                  <Shield className="w-7 h-7 text-white" />
                 </div>
                 <div className="flex-1">
                   <h3 className="text-2xl font-bold mb-3">3. Enhanced Privacy</h3>
@@ -230,7 +230,7 @@ export default function BYOKPage() {
                 }
               ].map((item, i) => (
                 <div key={i} className="flex items-start space-x-4">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-purple-600 flex items-center justify-center flex-shrink-0 font-bold">
+                  <div className="w-10 h-10 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center flex-shrink-0 font-bold">
                     {item.step}
                   </div>
                   <div className="flex-1">
@@ -301,7 +301,7 @@ export default function BYOKPage() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
                 href="/auth/signin"
-                className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl transition-all flex items-center space-x-2"
+                className="px-8 py-4 text-lg font-semibold bg-white text-black hover:bg-neutral-200 rounded-xl transition-all flex items-center space-x-2"
               >
                 <span>Get Started Free</span>
                 <ArrowRight className="w-5 h-5" />

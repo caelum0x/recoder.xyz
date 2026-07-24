@@ -127,7 +127,7 @@ export default function AppearanceSettingsPage() {
           {/* Page Header */}
           <div className="mb-8">
             <div className="flex items-center space-x-3 mb-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-center">
                 <Palette className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -155,7 +155,7 @@ export default function AppearanceSettingsPage() {
             {/* Theme Selection */}
             <div className="p-6 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-xl">
               <h2 className="text-lg font-bold mb-4 flex items-center space-x-2">
-                <Sparkles className="w-5 h-5 text-purple-500" />
+                <Sparkles className="w-5 h-5 text-neutral-300" />
                 <span>Theme</span>
               </h2>
               <div className="grid grid-cols-3 gap-3">
@@ -169,15 +169,15 @@ export default function AppearanceSettingsPage() {
                       onClick={() => setTheme(themeOption.value)}
                       className={`p-4 rounded-xl border-2 transition-all ${
                         isActive
-                          ? 'border-orange-500 bg-orange-500/10'
+                          ? 'border-white bg-white/10'
                           : 'border-white/10 hover:border-white/20 bg-white/5'
                       }`}
                     >
-                      <Icon className={`w-6 h-6 mx-auto mb-2 ${isActive ? 'text-orange-500' : 'text-gray-400'}`} />
+                      <Icon className={`w-6 h-6 mx-auto mb-2 ${isActive ? 'text-white' : 'text-gray-400'}`} />
                       <div className="text-sm font-medium">{themeOption.label}</div>
                       <div className="text-xs text-gray-500">{themeOption.description}</div>
                       {isActive && (
-                        <Check className="w-4 h-4 text-orange-500 absolute top-2 right-2" />
+                        <Check className="w-4 h-4 text-white absolute top-2 right-2" />
                       )}
                     </button>
                   );
@@ -201,7 +201,7 @@ export default function AppearanceSettingsPage() {
                       onClick={() => setFontSize(size.value)}
                       className={`p-4 rounded-xl border-2 transition-all ${
                         isActive
-                          ? 'border-orange-500 bg-orange-500/10'
+                          ? 'border-white bg-white/10'
                           : 'border-white/10 hover:border-white/20 bg-white/5'
                       }`}
                     >
@@ -230,7 +230,7 @@ export default function AppearanceSettingsPage() {
                       onClick={() => setDensity(densityOption.value)}
                       className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
                         isActive
-                          ? 'border-orange-500 bg-orange-500/10'
+                          ? 'border-white bg-white/10'
                           : 'border-white/10 hover:border-white/20 bg-white/5'
                       }`}
                     >
@@ -239,7 +239,7 @@ export default function AppearanceSettingsPage() {
                           <div className="font-medium mb-1">{densityOption.label}</div>
                           <div className="text-sm text-gray-400">{densityOption.description}</div>
                         </div>
-                        {isActive && <Check className="w-5 h-5 text-orange-500" />}
+                        {isActive && <Check className="w-5 h-5 text-white" />}
                       </div>
                     </button>
                   );
@@ -284,11 +284,11 @@ export default function AppearanceSettingsPage() {
                 <button
                   onClick={() => setReduceAnimations(!reduceAnimations)}
                   className={`relative w-12 h-6 rounded-full transition-colors ${
-                    reduceAnimations ? 'bg-orange-500' : 'bg-gray-700'
+                    reduceAnimations ? 'bg-white' : 'bg-gray-700'
                   }`}
                 >
                   <div
-                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    className={`absolute top-1 w-4 h-4 bg-black rounded-full transition-transform ${
                       reduceAnimations ? 'translate-x-7' : 'translate-x-1'
                     }`}
                   />
@@ -307,7 +307,7 @@ export default function AppearanceSettingsPage() {
               <button
                 onClick={handleSave}
                 disabled={saving || loading}
-                className="px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2 disabled:opacity-50"
+                className="px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all flex items-center space-x-2 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {saving ? (
                   <>

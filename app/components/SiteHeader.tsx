@@ -71,7 +71,7 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
 
             {(session?.user || hasCookie) ? (
               <>
-                <LaunchWebIDEButton className="px-4 py-2 text-sm bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg transition-colors flex items-center space-x-2" />
+                <LaunchWebIDEButton className="px-4 py-2 text-sm bg-white text-black hover:bg-neutral-200 rounded-lg transition-colors flex items-center space-x-2" />
                 <Link
                   href="/auth/signout"
                   className="px-3 py-1.5 text-sm text-gray-400 hover:text-red-400 transition-colors"
@@ -89,7 +89,7 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
                 </Link>
                 <Link
                   href="/auth/signup"
-                  className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors text-white"
+                  className="px-4 py-2 text-sm bg-white text-black hover:bg-neutral-200 rounded-lg transition-colors"
                 >
                   Sign Up
                 </Link>
@@ -135,7 +135,7 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
               <div className="border-t border-white/10 pt-3 space-y-3">
                 {(session?.user || hasCookie) ? (
                   <>
-                    <LaunchWebIDEButton className="w-full px-4 py-2.5 text-sm bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg transition-colors flex items-center justify-center space-x-2" />
+                    <LaunchWebIDEButton className="w-full px-4 py-2.5 text-sm bg-white text-black hover:bg-neutral-200 rounded-lg transition-colors flex items-center justify-center space-x-2" />
                     <Link
                       href="/auth/signout"
                       onClick={() => setMobileOpen(false)}
@@ -156,7 +156,7 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
                     <Link
                       href="/auth/signup"
                       onClick={() => setMobileOpen(false)}
-                      className="block w-full text-center px-4 py-2.5 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors text-white"
+                      className="block w-full text-center px-4 py-2.5 text-sm bg-white text-black hover:bg-neutral-200 rounded-lg transition-colors"
                     >
                       Sign Up
                     </Link>

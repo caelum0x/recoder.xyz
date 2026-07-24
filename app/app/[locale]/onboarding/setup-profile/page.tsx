@@ -103,7 +103,7 @@ export default function SetupProfilePage() {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-400">Loading...</p>
         </div>
       </div>
@@ -115,7 +115,7 @@ export default function SetupProfilePage() {
       {/* Progress Bar */}
       <div className="fixed top-0 w-full h-1 bg-white/10 z-50">
         <div
-          className="h-full bg-gradient-to-r from-orange-500 to-purple-600 transition-all duration-500"
+          className="h-full bg-white transition-all duration-500"
           style={{ width: '40%' }}
         />
       </div>
@@ -147,14 +147,14 @@ export default function SetupProfilePage() {
                       onClick={() => setFormData({ ...formData, role: role.id })}
                       className={`p-4 rounded-xl border backdrop-blur-xl text-left transition-all ${
                         isSelected
-                          ? 'border-orange-500 bg-gradient-to-br from-orange-500/10 to-purple-600/10'
+                          ? 'border-white bg-white/10'
                           : 'border-white/10 bg-white/5 hover:border-white/20'
                       }`}
                     >
                       <div className="flex items-center space-x-3">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                           isSelected
-                            ? 'bg-gradient-to-br from-orange-500 to-purple-600'
+                            ? 'bg-neutral-700'
                             : 'bg-white/5'
                         }`}>
                           <RoleIcon className="w-5 h-5 text-white" />
@@ -162,7 +162,7 @@ export default function SetupProfilePage() {
                         <div className="flex-1">
                           <div className="font-medium">{role.label}</div>
                         </div>
-                        {isSelected && <Check className="w-5 h-5 text-orange-500" />}
+                        {isSelected && <Check className="w-5 h-5 text-white" />}
                       </div>
                     </button>
                   );
@@ -180,7 +180,7 @@ export default function SetupProfilePage() {
                 value={formData.company}
                 onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                 placeholder="Acme Inc."
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 text-white placeholder-gray-500"
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-white/20 text-white placeholder-gray-500"
               />
             </div>
 
@@ -198,7 +198,7 @@ export default function SetupProfilePage() {
                       onClick={() => setFormData({ ...formData, teamSize: size.id })}
                       className={`p-4 rounded-xl border transition-all ${
                         isSelected
-                          ? 'border-orange-500 bg-gradient-to-br from-orange-500/10 to-purple-600/10'
+                          ? 'border-white bg-white/10'
                           : 'border-white/10 bg-white/5 hover:border-white/20'
                       }`}
                     >
@@ -223,7 +223,7 @@ export default function SetupProfilePage() {
                       onClick={() => setFormData({ ...formData, useCase: useCase.id })}
                       className={`p-4 rounded-xl border transition-all ${
                         isSelected
-                          ? 'border-orange-500 bg-gradient-to-br from-orange-500/10 to-purple-600/10'
+                          ? 'border-white bg-white/10'
                           : 'border-white/10 bg-white/5 hover:border-white/20'
                       }`}
                     >
@@ -248,7 +248,7 @@ export default function SetupProfilePage() {
                       onClick={() => setFormData({ ...formData, experience: level.id })}
                       className={`p-4 rounded-xl border transition-all ${
                         isSelected
-                          ? 'border-orange-500 bg-gradient-to-br from-orange-500/10 to-purple-600/10'
+                          ? 'border-white bg-white/10'
                           : 'border-white/10 bg-white/5 hover:border-white/20'
                       }`}
                     >
@@ -273,11 +273,11 @@ export default function SetupProfilePage() {
             <button
               onClick={handleContinue}
               disabled={!canProceed() || saving}
-              className="px-8 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl font-medium transition-all flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-8 py-3 bg-white text-black hover:bg-neutral-200 rounded-xl font-medium transition-all flex items-center space-x-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {saving ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
                   <span>Saving...</span>
                 </>
               ) : (

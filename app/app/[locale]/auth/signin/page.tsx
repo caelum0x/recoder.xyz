@@ -232,9 +232,9 @@ function SignInForm() {
     <div className="min-h-screen bg-black text-white relative overflow-hidden">
       {/* Animated gradient background */}
       <div className="fixed inset-0 z-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-black to-purple-600/5" />
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }} />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '12s' }} />
+        <div className="absolute inset-0 bg-gradient-to-br from-neutral-900/40 via-black to-neutral-900/40" />
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-white/5 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-white/5 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '12s' }} />
       </div>
 
       <div className="relative z-10">
@@ -303,7 +303,7 @@ function SignInForm() {
                               type="button"
                               onClick={handleResendVerification}
                               disabled={resendingEmail}
-                              className="mt-2 block w-full text-center text-orange-400 hover:text-orange-300 underline"
+                              className="mt-2 block w-full text-center text-white hover:text-neutral-300 underline"
                             >
                               {resendingEmail ? 'Sending...' : 'Resend verification email'}
                             </button>
@@ -328,7 +328,7 @@ function SignInForm() {
                           id="email"
                           type="email"
                           placeholder="your@email.com"
-                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
+                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent text-white placeholder-gray-500"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           required
@@ -341,7 +341,7 @@ function SignInForm() {
                           </label>
                           <Link
                             href="/auth/forgot-password"
-                            className="text-sm text-orange-500 hover:text-orange-400 transition-colors"
+                            className="text-sm text-neutral-300 hover:text-white transition-colors"
                           >
                             Forgot password?
                           </Link>
@@ -350,7 +350,7 @@ function SignInForm() {
                           id="password"
                           type="password"
                           placeholder="••••••••"
-                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
+                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent text-white placeholder-gray-500"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           required
@@ -362,7 +362,7 @@ function SignInForm() {
                           type="checkbox"
                           checked={rememberMe}
                           onChange={(e) => setRememberMe(e.target.checked)}
-                          className="w-4 h-4 bg-white/5 border border-white/10 rounded text-orange-500 focus:ring-2 focus:ring-orange-500"
+                          className="w-4 h-4 bg-white/5 border border-white/10 rounded text-white focus:ring-2 focus:ring-white/20"
                         />
                         <label htmlFor="rememberMe" className="ml-2 text-sm text-gray-300">
                           Remember me for 30 days
@@ -376,22 +376,22 @@ function SignInForm() {
                           type="checkbox"
                           checked={gdprConsent}
                           onChange={(e) => setGdprConsent(e.target.checked)}
-                          className="w-4 h-4 mt-0.5 bg-white/5 border border-white/10 rounded text-orange-500 focus:ring-2 focus:ring-orange-500"
+                          className="w-4 h-4 mt-0.5 bg-white/5 border border-white/10 rounded text-white focus:ring-2 focus:ring-white/20"
                         />
                         <label htmlFor="gdprConsent" className="ml-2 text-xs text-gray-400">
                           I agree to the{' '}
-                          <Link href="/privacy" className="text-orange-500 hover:text-orange-400 underline">
+                          <Link href="/privacy" className="text-neutral-300 hover:text-white underline">
                             Privacy Policy
                           </Link>{' '}
                           and{' '}
-                          <Link href="/cookies" className="text-orange-500 hover:text-orange-400 underline">
+                          <Link href="/cookies" className="text-neutral-300 hover:text-white underline">
                             Cookie Policy
                           </Link>
                         </label>
                       </div>
 
                       <button
-                        className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                        className="w-full px-6 py-3 bg-white text-black hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
                         type="submit"
                         disabled={loading || !gdprConsent}
                       >
@@ -434,7 +434,7 @@ function SignInForm() {
                           type="text"
                           placeholder="000000"
                           maxLength={8}
-                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white text-center text-2xl tracking-widest placeholder-gray-500"
+                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent text-white text-center text-2xl tracking-widest placeholder-gray-500"
                           value={twoFactorCode}
                           onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
                           required
@@ -458,7 +458,7 @@ function SignInForm() {
                           Back
                         </button>
                         <button
-                          className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
+                          className="flex-1 px-6 py-3 bg-white text-black hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
                           type="submit"
                           disabled={loading || twoFactorCode.length < 6}
                         >
@@ -478,7 +478,7 @@ function SignInForm() {
                   {!requires2FA && (
                     <div className="text-center text-sm pt-4">
                       <span className="text-gray-400">Don&apos;t have an account? </span>
-                      <Link href="/auth/signup" className="text-orange-500 hover:text-orange-400 transition-colors">
+                      <Link href="/auth/signup" className="text-neutral-300 hover:text-white transition-colors">
                         Sign up
                       </Link>
                     </div>
@@ -502,7 +502,7 @@ function SignInForm() {
                     const Icon = platform.icon;
                     return (
                       <div key={platform.name} className="flex items-center space-x-3 p-3 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 transition-colors">
-                        <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <div className="w-8 h-8 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center flex-shrink-0">
                           <Icon className="w-4 h-4 text-white" />
                         </div>
                         <div className="min-w-0">
@@ -514,9 +514,9 @@ function SignInForm() {
                   })}
                 </div>
 
-                <div className="mt-6 p-4 rounded-lg border border-orange-500/20 bg-orange-500/5">
+                <div className="mt-6 p-4 rounded-lg border border-neutral-700 bg-neutral-800/50">
                   <p className="text-sm text-gray-300">
-                    <span className="text-orange-400 font-medium">Unified SSO</span> — Sign in once and access all Recoder apps seamlessly.
+                    <span className="text-white font-medium">Unified SSO</span> — Sign in once and access all Recoder apps seamlessly.
                   </p>
                 </div>
               </div>
@@ -535,7 +535,7 @@ function SignInForm() {
                   const Icon = platform.icon;
                   return (
                     <div key={platform.name} className="flex items-center space-x-3 p-3 rounded-lg border border-white/5 bg-white/5">
-                      <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <div className="w-8 h-8 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center flex-shrink-0">
                         <Icon className="w-4 h-4 text-white" />
                       </div>
                       <div className="min-w-0">
@@ -558,7 +558,7 @@ export default function SignInPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
       </div>
     }>
       <SignInForm />

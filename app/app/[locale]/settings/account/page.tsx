@@ -214,7 +214,7 @@ export default function AccountSettingsPage() {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-orange-500 mx-auto mb-4" />
+          <Loader2 className="w-12 h-12 animate-spin text-white mx-auto mb-4" />
           <p className="text-gray-400">Loading account settings...</p>
         </div>
       </div>
@@ -270,7 +270,7 @@ export default function AccountSettingsPage() {
                       type="email"
                       value={accountData.email}
                       onChange={(e) => setAccountData({ ...accountData, email: e.target.value })}
-                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
                   <p className="text-xs text-gray-500">
@@ -295,7 +295,7 @@ export default function AccountSettingsPage() {
                       type="text"
                       value={accountData.username}
                       onChange={(e) => setAccountData({ ...accountData, username: e.target.value })}
-                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                     />
                   </div>
                 </div>
@@ -309,7 +309,7 @@ export default function AccountSettingsPage() {
                     type="text"
                     value={accountData.name}
                     onChange={(e) => setAccountData({ ...accountData, name: e.target.value })}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white"
                   />
                 </div>
               </div>
@@ -329,7 +329,7 @@ export default function AccountSettingsPage() {
                       id="timezone"
                       value={accountData.timezone}
                       onChange={(e) => setAccountData({ ...accountData, timezone: e.target.value })}
-                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white appearance-none"
+                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white appearance-none"
                     >
                       {timezones.map((tz) => (
                         <option key={tz} value={tz} className="bg-gray-900">
@@ -350,7 +350,7 @@ export default function AccountSettingsPage() {
                       id="language"
                       value={accountData.language}
                       onChange={(e) => setAccountData({ ...accountData, language: e.target.value })}
-                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white appearance-none"
+                      className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white appearance-none"
                     >
                       {languages.map((lang) => (
                         <option key={lang.code} value={lang.code} className="bg-gray-900">
@@ -417,7 +417,7 @@ export default function AccountSettingsPage() {
               <button
                 onClick={handleSave}
                 disabled={loading}
-                className="px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2 disabled:opacity-50"
+                className="px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-colors flex items-center space-x-2 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <>

@@ -173,11 +173,11 @@ export default function APISettingsPage() {
                   <button
                     onClick={() => setApiConfig({ ...apiConfig, useOwnKey: !apiConfig.useOwnKey })}
                     className={`relative w-12 h-6 rounded-full transition-colors ${
-                      apiConfig.useOwnKey ? 'bg-orange-500' : 'bg-gray-700'
+                      apiConfig.useOwnKey ? 'bg-white' : 'bg-gray-700'
                     }`}
                   >
                     <div
-                      className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                      className={`absolute top-1 w-4 h-4 bg-neutral-950 rounded-full transition-transform ${
                         apiConfig.useOwnKey ? 'translate-x-7' : 'translate-x-1'
                       }`}
                     />
@@ -185,7 +185,7 @@ export default function APISettingsPage() {
                 </div>
 
                 {apiConfig.useOwnKey && (
-                  <div className="space-y-4 p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                  <div className="space-y-4 p-4 rounded-lg bg-white/5 border border-white/10">
                     <div className="space-y-2">
                       <label htmlFor="apiKey" className="block text-sm font-medium text-gray-300">
                         OpenRouter API Key
@@ -201,7 +201,7 @@ export default function APISettingsPage() {
                             setApiKeyValid(null);
                           }}
                           placeholder="sk-or-v1-..."
-                          className="w-full pl-12 pr-24 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white font-mono text-sm"
+                          className="w-full pl-12 pr-24 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white font-mono text-sm"
                         />
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center space-x-2">
                           {apiKeyValid !== null && (
@@ -288,7 +288,7 @@ export default function APISettingsPage() {
                     id="defaultModel"
                     value={apiConfig.defaultModel}
                     onChange={(e) => setApiConfig({ ...apiConfig, defaultModel: e.target.value })}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 text-white appearance-none"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-white/20 text-white appearance-none"
                   >
                     {models.map((model) => (
                       <option key={model.id} value={model.id} className="bg-gray-900">
@@ -345,10 +345,10 @@ export default function APISettingsPage() {
             {/* Documentation */}
             <div className="p-4 rounded-lg bg-white/5 border border-white/10">
               <div className="flex items-start space-x-3">
-                <AlertCircle className="w-5 h-5 text-orange-500 mt-0.5 flex-shrink-0" />
+                <AlertCircle className="w-5 h-5 text-neutral-300 mt-0.5 flex-shrink-0" />
                 <div className="text-sm text-gray-400">
                   <strong className="text-white">Need help?</strong> Check out the{' '}
-                  <Link href="/docs/api-reference" className="text-orange-500 hover:text-orange-400 underline">
+                  <Link href="/docs/api-reference" className="text-white hover:text-neutral-300 underline">
                     API documentation
                   </Link>{' '}
                   for more information about OpenRouter and model configuration.
@@ -367,7 +367,7 @@ export default function APISettingsPage() {
               <button
                 onClick={handleSave}
                 disabled={loading}
-                className="px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2 disabled:opacity-50"
+                className="px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all flex items-center space-x-2 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <>

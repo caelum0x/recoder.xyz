@@ -7,7 +7,7 @@ export default function CLIDocsPage() {
       <div className="max-w-4xl mx-auto px-4 py-20">
         <div className="mb-12">
           <div className="flex items-center space-x-3 mb-6">
-            <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-center">
               <Terminal className="w-6 h-6 text-white" />
             </div>
             <h1 className="text-4xl font-bold">CLI Documentation</h1>
@@ -68,13 +68,13 @@ export default function CLIDocsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
-                  <tr><td className="p-4 font-mono text-orange-400">recoder-code</td><td className="p-4 text-gray-300">Start interactive mode</td></tr>
-                  <tr><td className="p-4 font-mono text-orange-400">recoder-code "prompt"</td><td className="p-4 text-gray-300">Generate code from prompt</td></tr>
-                  <tr><td className="p-4 font-mono text-orange-400">recoder-code login</td><td className="p-4 text-gray-300">Authenticate with recoder.xyz</td></tr>
-                  <tr><td className="p-4 font-mono text-orange-400">recoder-code logout</td><td className="p-4 text-gray-300">Sign out</td></tr>
-                  <tr><td className="p-4 font-mono text-orange-400">recoder-code config</td><td className="p-4 text-gray-300">View/edit configuration</td></tr>
-                  <tr><td className="p-4 font-mono text-orange-400">recoder-code models</td><td className="p-4 text-gray-300">List available AI models</td></tr>
-                  <tr><td className="p-4 font-mono text-orange-400">recoder-code --help</td><td className="p-4 text-gray-300">Show help</td></tr>
+                  <tr><td className="p-4 font-mono text-white">recoder-code</td><td className="p-4 text-gray-300">Start interactive mode</td></tr>
+                  <tr><td className="p-4 font-mono text-white">recoder-code "prompt"</td><td className="p-4 text-gray-300">Generate code from prompt</td></tr>
+                  <tr><td className="p-4 font-mono text-white">recoder-code login</td><td className="p-4 text-gray-300">Authenticate with recoder.xyz</td></tr>
+                  <tr><td className="p-4 font-mono text-white">recoder-code logout</td><td className="p-4 text-gray-300">Sign out</td></tr>
+                  <tr><td className="p-4 font-mono text-white">recoder-code config</td><td className="p-4 text-gray-300">View/edit configuration</td></tr>
+                  <tr><td className="p-4 font-mono text-white">recoder-code models</td><td className="p-4 text-gray-300">List available AI models</td></tr>
+                  <tr><td className="p-4 font-mono text-white">recoder-code --help</td><td className="p-4 text-gray-300">Show help</td></tr>
                 </tbody>
               </table>
             </div>
@@ -114,7 +114,7 @@ export default function CLIDocsPage() {
           <div className="flex space-x-4">
             <Link
               href="/cli"
-              className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all"
+              className="inline-flex items-center space-x-2 px-6 py-3 bg-white text-black hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium transition-all"
             >
               <Download className="w-5 h-5" />
               <span>Download CLI</span>

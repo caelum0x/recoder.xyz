@@ -54,8 +54,9 @@ export default function CLISetupPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
-              <div className="bg-gradient-to-r from-orange-500 to-purple-600 text-white px-3 py-1 rounded-lg font-bold">
-                recoder.xyz
+              <div className="inline-flex items-center gap-2">
+                <div className="h-7 w-7 rounded-md bg-white text-black flex items-center justify-center font-bold text-sm">R</div>
+                <span className="text-white font-semibold tracking-tight">Recoder</span>
               </div>
             </Link>
             {session ? (
@@ -94,7 +95,7 @@ export default function CLISetupPage() {
             onClick={() => setOS('mac')}
             className={`px-6 py-3 rounded-lg font-semibold transition-all ${
               os === 'mac'
-                ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white'
+                ? 'bg-white text-black'
                 : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
             }`}
           >
@@ -104,7 +105,7 @@ export default function CLISetupPage() {
             onClick={() => setOS('linux')}
             className={`px-6 py-3 rounded-lg font-semibold transition-all ${
               os === 'linux'
-                ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white'
+                ? 'bg-white text-black'
                 : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
             }`}
           >
@@ -114,7 +115,7 @@ export default function CLISetupPage() {
             onClick={() => setOS('windows')}
             className={`px-6 py-3 rounded-lg font-semibold transition-all ${
               os === 'windows'
-                ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white'
+                ? 'bg-white text-black'
                 : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
             }`}
           >
@@ -127,7 +128,7 @@ export default function CLISetupPage() {
           {/* Step 1: Installation */}
           <section className="bg-gray-800 rounded-2xl p-8 border border-gray-700">
             <div className="flex items-start gap-4 mb-6">
-              <div className="bg-gradient-to-r from-orange-500 to-purple-600 text-white font-bold w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="bg-neutral-800 border border-neutral-700 text-white font-bold w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0">
                 1
               </div>
               <div className="flex-1">
@@ -186,7 +187,7 @@ export default function CLISetupPage() {
                     <p className="text-gray-400 text-sm mb-2">{installCommands.windows.installer}</p>
                     <a
                       href="https://recoder.xyz/downloads/windows"
-                      className="inline-block bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 text-white font-semibold px-6 py-2 rounded-lg transition-all"
+                      className="inline-block bg-white text-black hover:bg-neutral-200 font-semibold px-6 py-2 rounded-lg transition-colors"
                     >
                       Download Installer
                     </a>
@@ -199,7 +200,7 @@ export default function CLISetupPage() {
           {/* Step 2: Verify Installation */}
           <section className="bg-gray-800 rounded-2xl p-8 border border-gray-700">
             <div className="flex items-start gap-4 mb-6">
-              <div className="bg-gradient-to-r from-orange-500 to-purple-600 text-white font-bold w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="bg-neutral-800 border border-neutral-700 text-white font-bold w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0">
                 2
               </div>
               <div className="flex-1">
@@ -217,7 +218,7 @@ export default function CLISetupPage() {
           {/* Step 3: Authenticate */}
           <section className="bg-gray-800 rounded-2xl p-8 border border-gray-700">
             <div className="flex items-start gap-4 mb-6">
-              <div className="bg-gradient-to-r from-orange-500 to-purple-600 text-white font-bold w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="bg-neutral-800 border border-neutral-700 text-white font-bold w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0">
                 3
               </div>
               <div className="flex-1">
@@ -240,7 +241,7 @@ export default function CLISetupPage() {
                 <CodeBlock code="recoder auth login --api-key YOUR_API_KEY" id="api-key" />
                 <p className="text-gray-400 text-sm mt-2">
                   Create an API key from your{' '}
-                  <Link href="/dashboard/api-keys" className="text-orange-500 hover:underline">
+                  <Link href="/dashboard/api-keys" className="text-white hover:underline">
                     dashboard
                   </Link>
                 </p>
@@ -251,7 +252,7 @@ export default function CLISetupPage() {
           {/* Step 4: Test It Out */}
           <section className="bg-gray-800 rounded-2xl p-8 border border-gray-700">
             <div className="flex items-start gap-4 mb-6">
-              <div className="bg-gradient-to-r from-orange-500 to-purple-600 text-white font-bold w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="bg-neutral-800 border border-neutral-700 text-white font-bold w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0">
                 4
               </div>
               <div className="flex-1">
@@ -286,27 +287,27 @@ export default function CLISetupPage() {
             <h2 className="text-2xl font-bold text-white mb-6">Common Commands</h2>
             <div className="grid md:grid-cols-2 gap-4">
               <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
-                <code className="text-orange-500">recoder help</code>
+                <code className="text-neutral-300">recoder help</code>
                 <p className="text-gray-400 text-sm mt-2">Show all available commands</p>
               </div>
               <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
-                <code className="text-orange-500">recoder status</code>
+                <code className="text-neutral-300">recoder status</code>
                 <p className="text-gray-400 text-sm mt-2">Check your account status</p>
               </div>
               <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
-                <code className="text-orange-500">recoder chat</code>
+                <code className="text-neutral-300">recoder chat</code>
                 <p className="text-gray-400 text-sm mt-2">Start interactive chat</p>
               </div>
               <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
-                <code className="text-orange-500">recoder generate</code>
+                <code className="text-neutral-300">recoder generate</code>
                 <p className="text-gray-400 text-sm mt-2">Generate code from prompt</p>
               </div>
               <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
-                <code className="text-orange-500">recoder plan</code>
+                <code className="text-neutral-300">recoder plan</code>
                 <p className="text-gray-400 text-sm mt-2">Create a project plan</p>
               </div>
               <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
-                <code className="text-orange-500">recoder validate</code>
+                <code className="text-neutral-300">recoder validate</code>
                 <p className="text-gray-400 text-sm mt-2">Validate generated code</p>
               </div>
             </div>
@@ -359,7 +360,7 @@ export default function CLISetupPage() {
                 <h3 className="text-white font-semibold mb-2">Quota exceeded</h3>
                 <p className="text-gray-400 text-sm">
                   Check your usage and consider{' '}
-                  <Link href="/pricing" className="text-orange-500 hover:underline">
+                  <Link href="/pricing" className="text-white hover:underline">
                     upgrading your plan
                   </Link>
                 </p>
@@ -368,24 +369,24 @@ export default function CLISetupPage() {
           </section>
 
           {/* Next Steps */}
-          <section className="bg-gradient-to-r from-orange-500/20 to-purple-600/20 rounded-2xl p-8 border border-orange-500/50">
+          <section className="bg-white/[0.02] rounded-2xl p-8 border border-neutral-800">
             <h2 className="text-2xl font-bold text-white mb-4">Next Steps</h2>
             <div className="space-y-3">
               <Link
                 href="/docs"
-                className="block text-orange-400 hover:text-orange-300 transition-colors"
+                className="block text-neutral-300 hover:text-white transition-colors"
               >
                 → Read the full documentation
               </Link>
               <Link
                 href="/playground"
-                className="block text-orange-400 hover:text-orange-300 transition-colors"
+                className="block text-neutral-300 hover:text-white transition-colors"
               >
                 → Try the API playground
               </Link>
               <Link
                 href="/dashboard"
-                className="block text-orange-400 hover:text-orange-300 transition-colors"
+                className="block text-neutral-300 hover:text-white transition-colors"
               >
                 → View your dashboard
               </Link>
@@ -393,7 +394,7 @@ export default function CLISetupPage() {
                 href="https://github.com/recoder-xyz/cli"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block text-orange-400 hover:text-orange-300 transition-colors"
+                className="block text-neutral-300 hover:text-white transition-colors"
               >
                 → Star us on GitHub ⭐
               </a>

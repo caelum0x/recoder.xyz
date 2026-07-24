@@ -65,9 +65,9 @@ function VerifyEmailContent() {
     <div className="min-h-screen bg-black text-white relative overflow-hidden">
       {/* Animated gradient background */}
       <div className="fixed inset-0 z-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-black to-purple-600/5" />
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }} />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '12s' }} />
+        <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-black to-white/5" />
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-white/5 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-white/5 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '12s' }} />
       </div>
 
       <div className="relative z-10">
@@ -80,7 +80,7 @@ function VerifyEmailContent() {
             {status === 'verifying' && (
               <div className="text-center space-y-6">
                 <div className="flex justify-center">
-                  <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-purple-600 rounded-full flex items-center justify-center">
+                  <div className="w-16 h-16 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center">
                     <Loader2 className="w-8 h-8 text-white animate-spin" />
                   </div>
                 </div>
@@ -108,7 +108,7 @@ function VerifyEmailContent() {
                 <div className="space-y-3">
                   <Link 
                     href="/dashboard"
-                    className="block w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all text-center"
+                    className="block w-full px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all text-center"
                   >
                     Go to Dashboard
                   </Link>
@@ -147,7 +147,7 @@ function VerifyEmailContent() {
               <div className="space-y-6">
                 <div className="text-center space-y-2">
                   <div className="flex justify-center mb-4">
-                    <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-purple-600 rounded-full flex items-center justify-center">
+                    <div className="w-16 h-16 bg-neutral-800 border border-neutral-700 rounded-full flex items-center justify-center">
                       <Mail className="w-8 h-8 text-white" />
                     </div>
                   </div>
@@ -158,7 +158,7 @@ function VerifyEmailContent() {
                 </div>
 
                 <div className="text-center text-sm">
-                  <Link href="/auth/signin" className="block w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all text-white">
+                  <Link href="/auth/signin" className="block w-full px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all text-center">
                     Go to Sign In
                   </Link>
                 </div>
@@ -170,7 +170,7 @@ function VerifyEmailContent() {
           <div className="mt-6 p-4 rounded-lg bg-white/5 border border-white/10">
             <p className="text-sm text-gray-400 text-center">
               Need help?{' '}
-              <Link href="/support" className="text-orange-500 hover:text-orange-400">
+              <Link href="/support" className="text-white hover:text-neutral-300">
                 Contact Support
               </Link>
             </p>
@@ -186,7 +186,7 @@ export default function VerifyEmailPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
       </div>
     }>
       <VerifyEmailContent />

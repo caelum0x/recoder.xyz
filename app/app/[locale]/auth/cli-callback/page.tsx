@@ -98,7 +98,7 @@ function CLICallbackContent() {
         <div className="text-center space-y-6">
           {/* Logo */}
           <div className="flex items-center justify-center space-x-2 mb-8">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-neutral-800 border border-neutral-700 rounded-lg flex items-center justify-center">
               <Terminal className="w-5 h-5 text-white" />
             </div>
             <span className="text-xl font-bold">recoder</span>
@@ -106,7 +106,7 @@ function CLICallbackContent() {
 
           {status === 'loading' && (
             <>
-              <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto"></div>
               <h2 className="text-2xl font-bold">Processing Authentication</h2>
               <p className="text-gray-400">Completing CLI authentication...</p>
             </>
@@ -133,7 +133,7 @@ function CLICallbackContent() {
               <div className="space-y-2 mt-4">
                 <button
                   onClick={() => window.location.href = '/auth/signin'}
-                  className="w-full px-6 py-2 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg transition-colors"
+                  className="w-full px-6 py-2 bg-white text-black hover:bg-neutral-200 rounded-lg transition-colors"
                 >
                   Try Again
                 </button>
@@ -156,7 +156,7 @@ export default function CLICallbackPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
       </div>
     }>
       <CLICallbackContent />
