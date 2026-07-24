@@ -105,7 +105,7 @@ function RecoderToolsView({ model }: ViewComponentProps<RecoderToolsViewModel>) 
 
             {unregistered && (
                 <div className="text-xs text-secondary">
-                    {cap.serverId} is not registered on the connected backend — running it may report not available.
+                    {cap.label} is not registered on the connected backend — running it may report not available.
                 </div>
             )}
 

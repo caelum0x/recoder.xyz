@@ -4,25 +4,10 @@
 import { createBlock } from "@/app/store/global";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
+import { agentLabel } from "./recoder-agent-labels";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { RecoderViewModel, type RecoderWorkspace } from "./recoder-model";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
-
-const AGENT_LABELS: Record<string, string> = {
-    claude_code: "Claude Code",
-    codex: "Codex",
-    opencode: "opencode",
-    pi: "pi",
-    recoder_code: "Recoder Code",
-    cursor: "Cursor",
-    gemini_cli: "Gemini CLI",
-    qwen_code: "Qwen Code",
-    crush: "Crush",
-};
-
-function agentLabel(runtimeId: string): string {
-    return AGENT_LABELS[runtimeId] ?? runtimeId;
-}
 
 // createBlock is fire-and-forget from event handlers; a failed cross-block open
 // must never crash the view, so every call is wrapped and errors are swallowed.
@@ -157,7 +142,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     >
                         <span className="text-sm truncate">{ws.branch}</span>
                         <span className="text-xs text-secondary">{ws.state}</span>
-                        <span className="text-xs text-secondary ml-auto">{ws.runtimeId}</span>
+                        <span className="text-xs text-secondary ml-auto">{agentLabel(ws.runtimeId)}</span>
                         <button
                             className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
                             onClick={() => openSession(ws.workspaceId)}
