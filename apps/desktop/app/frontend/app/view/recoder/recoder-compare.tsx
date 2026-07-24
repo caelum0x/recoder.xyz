@@ -9,6 +9,7 @@ import {
     type MergeabilityView,
     type ReadinessSignal,
     type ReadinessView,
+    type RecoderMergeRecord,
     type SiblingCompareEntry,
 } from "./recoder-model";
 
@@ -96,16 +97,52 @@ function MergeabilityBadge({ mergeability }: { mergeability: MergeabilityView })
 
 MergeabilityBadge.displayName = "MergeabilityBadge";
 
+// The captured governance verdict of the last merge attempt — the truthful record
+// the evidence step reads. Only a real `allow` that actually merged earns accent;
+// a blocked/failed attempt reads error, an allowed-but-nothing-to-merge stays
+// neutral. Absent record ⇒ nothing rendered (no merge attempted yet).
+function MergeVerdictLine({ record }: { record: RecoderMergeRecord }) {
+    if (record == null) {
+        return null;
+    }
+    const merged = record.status == "merged";
+    const tone = merged ? "text-accent" : record.status == "no_change" ? "text-secondary" : "text-error";
+    const verdict = record.verdict;
+    const parts: string[] = [];
+    if (verdict?.effect) parts.push(`gate ${verdict.effect}`);
+    if (verdict?.tier) parts.push(`tier ${verdict.tier}`);
+    if (verdict?.engine) parts.push(verdict.engine);
+    if (verdict?.degraded) parts.push("degraded");
+    const meta = parts.join(" · ");
+    const head =
+        record.status == "merged"
+            ? "merged"
+            : record.status == "no_change"
+              ? "nothing to merge"
+              : record.status == "blocked"
+                ? "blocked"
+                : "could not complete";
+    return (
+        <div className={`text-xs ${tone}`} title={record.reason || meta || head}>
+            merge verdict: {head}
+            {meta ? ` — ${meta}` : ""}
+        </div>
+    );
+}
+
+MergeVerdictLine.displayName = "MergeVerdictLine";
+
 type SiblingCompareRowProps = {
     model: RecoderViewModel;
     sibling: SiblingCompareEntry;
     readiness: ReadinessView;
     mergeability: MergeabilityView;
     status: string;
+    lastMerge: RecoderMergeRecord;
     busy: boolean;
 };
 
-function SiblingCompareRow({ model, sibling, readiness, mergeability, status, busy }: SiblingCompareRowProps) {
+function SiblingCompareRow({ model, sibling, readiness, mergeability, status, lastMerge, busy }: SiblingCompareRowProps) {
     const stat = sibling.diffStat;
     return (
         <div className="flex flex-col gap-1 rounded border border-border px-2 py-1.5">
@@ -134,6 +171,7 @@ function SiblingCompareRow({ model, sibling, readiness, mergeability, status, bu
                 <MergeabilityBadge mergeability={mergeability} />
             </div>
             {status && <div className="text-xs text-secondary">{status}</div>}
+            {lastMerge != null && <MergeVerdictLine record={lastMerge} />}
         </div>
     );
 }
@@ -169,6 +207,7 @@ function RecoderComparePanel({ model, compareView }: { model: RecoderViewModel; 
     const readinessMap = useAtomValue(model.readinessAtom);
     const rowStatus = useAtomValue(model.rowStatusAtom);
     const busyRow = useAtomValue(model.busyRowAtom);
+    const lastMergeMap = useAtomValue(model.lastMergeAtom);
     return (
         <div className="flex flex-col gap-1.5 rounded border border-border p-2">
             <ContestedSet compareView={compareView} />
@@ -183,6 +222,7 @@ function RecoderComparePanel({ model, compareView }: { model: RecoderViewModel; 
                             readiness={merge?.readiness}
                             mergeability={merge?.mergeability}
                             status={rowStatus[sibling.workspaceId]}
+                            lastMerge={lastMergeMap[sibling.workspaceId]}
                             busy={busyRow == sibling.workspaceId}
                         />
                     );

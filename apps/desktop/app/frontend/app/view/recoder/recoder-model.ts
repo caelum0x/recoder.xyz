@@ -118,6 +118,48 @@ type ReadinessView = {
 // or was unreachable, never a fabricated verdict.
 type RecoderWorkspaceReadiness = { readiness?: ReadinessView; mergeability?: MergeabilityView };
 
+// The governance verdict the merge endpoint returns alongside the effect — a
+// lenient mirror of the backend verdictView ({ effect, tier, degraded, engine }).
+// Present ONLY on a 200 (the gate allowed and the op ran); an absent verdict on a
+// blocked/failed attempt is truthful, never coerced to a pass.
+type RecoderMergeVerdict = { effect: string; tier?: string; degraded?: boolean; engine?: string };
+
+// The merge op's own result (backend MergeResultView). `merged` is false when the
+// gate allowed and the merge ran but there was nothing to merge (already up to date).
+type RecoderMergeOutcome = { workspaceId: string; branch: string; merged: boolean };
+
+// The retained truthful record of the last merge attempt for one workspace, read
+// by the compare panel + the evidence step. `merge`/`verdict` are present only on
+// a 200; a blocked (403) or could-not-complete (503) attempt retains only its
+// truthful status + the backend's verbatim reason. Never fabricates a merge.
+type RecoderMergeRecord = {
+    status: "merged" | "no_change" | "blocked" | "failed";
+    reason?: string;
+    merge?: RecoderMergeOutcome;
+    verdict?: RecoderMergeVerdict;
+    at: string;
+};
+
+// Degrade-safe reason read tolerant of BOTH envelope shapes: the real error body
+// is { error: { message } }, but an older/leaner backend may send a bare string
+// error. Missing/odd shapes fall to "" so the caller shows a truthful fallback.
+function readErrorReason(body: unknown): string {
+    if (body == null || typeof body != "object") {
+        return "";
+    }
+    const err = (body as { error?: unknown }).error;
+    if (typeof err == "string") {
+        return err;
+    }
+    if (err != null && typeof err == "object") {
+        const msg = (err as { message?: unknown }).message;
+        if (typeof msg == "string") {
+            return msg;
+        }
+    }
+    return "";
+}
+
 // A parallel-run group derived from workspaces sharing a metadata.taskGroup. A
 // solo (ungrouped) workspace is its own group of 1 with taskGroup null.
 type RecoderWorkspaceGroup = { taskGroup: string | null; workspaces: RecoderWorkspace[] };
@@ -210,6 +252,10 @@ class RecoderViewModel implements ViewModel {
     // Merge-decision views (readiness + mergeability) keyed by workspaceId; each
     // side absent ⇒ that probe degraded, never a fabricated verdict.
     readinessAtom: PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
+    // The last merge attempt's truthful record keyed by workspaceId — the captured
+    // governance verdict (effect/tier/engine) + merge outcome, read by the compare
+    // panel and the evidence step. Absent ⇒ no merge attempted yet.
+    lastMergeAtom: PrimitiveAtom<Record<string, RecoderMergeRecord>>;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -236,6 +282,7 @@ class RecoderViewModel implements ViewModel {
         this.compareAtom = atom({}) as PrimitiveAtom<Record<string, CompareView>>;
         this.compareOpenAtom = atom("") as PrimitiveAtom<string>;
         this.readinessAtom = atom({}) as PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
+        this.lastMergeAtom = atom({}) as PrimitiveAtom<Record<string, RecoderMergeRecord>>;
         this.groupsAtom = atom((get) => groupByTaskGroup(get(this.workspacesAtom)));
     }
 
@@ -535,16 +582,24 @@ class RecoderViewModel implements ViewModel {
         globalStore.set(this.rowStatusAtom, { ...cur, [workspaceId]: text });
     }
 
+    setLastMerge(workspaceId: string, record: RecoderMergeRecord) {
+        const cur = globalStore.get(this.lastMergeAtom);
+        globalStore.set(this.lastMergeAtom, { ...cur, [workspaceId]: record });
+    }
+
     // Merge the workspace into its base — the "review → merge" close of the loop.
-    // Degrade-safe: a gate deny / not-mergeable returns the backend's truthful
-    // reason; success → "Merged." then refresh. In a solo desktop the merge click
-    // IS the approval (server-side). Never fabricates a merge.
+    // Captures the governance verdict TRUTHFULLY: a 200 parses { merge, verdict }
+    // and stashes the exact effect/tier/engine for the evidence step; a 403 surfaces
+    // the gate's reason (needs approval / denied); a 503 surfaces "merge could not
+    // complete — <reason>". In a solo desktop the merge click IS the approval
+    // (server-side). Never fabricates a merge — every branch reads the real body.
     async mergeWorkspace(workspaceId: string) {
         if (!workspaceId) {
             return;
         }
         globalStore.set(this.busyRowAtom, workspaceId);
         this.setRowStatus(workspaceId, "");
+        const at = new Date().toISOString();
         try {
             const res = await fetch(
                 `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/merge`,
@@ -552,11 +607,34 @@ class RecoderViewModel implements ViewModel {
             );
             const body = await res.json().catch(() => null);
             if (res.ok) {
-                this.setRowStatus(workspaceId, "Merged.");
+                const data = (body as { data?: unknown })?.data as
+                    | { merge?: RecoderMergeOutcome; verdict?: RecoderMergeVerdict }
+                    | undefined;
+                const merge = data?.merge;
+                const verdict = data?.verdict;
+                const merged = merge?.merged == true;
+                this.setLastMerge(workspaceId, {
+                    status: merged ? "merged" : "no_change",
+                    ...(merge != null ? { merge } : {}),
+                    ...(verdict != null ? { verdict } : {}),
+                    at,
+                });
+                this.setRowStatus(workspaceId, merged ? "Merged." : "Already up to date — nothing to merge.");
                 await this.refresh();
                 return;
             }
-            const reason = (body && typeof body.error == "string" && body.error) || "";
+            const reason = readErrorReason(body);
+            if (res.status == 403) {
+                this.setLastMerge(workspaceId, { status: "blocked", ...(reason ? { reason } : {}), at });
+                this.setRowStatus(workspaceId, reason || "Merge blocked — needs approval.");
+                return;
+            }
+            if (res.status == 503) {
+                this.setLastMerge(workspaceId, { status: "failed", ...(reason ? { reason } : {}), at });
+                this.setRowStatus(workspaceId, `Merge could not complete — ${reason || "operation failed"}.`);
+                return;
+            }
+            this.setLastMerge(workspaceId, { status: "failed", ...(reason ? { reason } : {}), at });
             this.setRowStatus(workspaceId, reason || `Merge failed (${res.status}).`);
         } catch {
             this.setRowStatus(workspaceId, "Merge unavailable — backend not reachable.");
@@ -610,4 +688,7 @@ export {
     type ReadinessSignal,
     type ReadinessView,
     type RecoderWorkspaceReadiness,
+    type RecoderMergeVerdict,
+    type RecoderMergeOutcome,
+    type RecoderMergeRecord,
 };
