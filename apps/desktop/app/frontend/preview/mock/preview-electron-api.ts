@@ -60,6 +60,10 @@ const previewElectronApi: ElectronApi = {
     doRefresh: () => {},
     saveTextFile: (_fileName: string, _content: string) => Promise.resolve(false),
     setIsActive: async () => {},
+    getRecoderIdentity: () => Promise.resolve(null),
+    recoderSignIn: () => Promise.resolve({ ok: false }),
+    recoderSignOut: () => Promise.resolve({ ok: true }),
+    onRecoderSignInPrompt: (_callback: (prompt: RecoderSignInPrompt) => void) => {},
 };
 
 function installPreviewElectronApi() {

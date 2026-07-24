@@ -77,6 +77,26 @@ declare global {
         windowId: string;
     };
 
+    type RecoderIdentity = {
+        name?: string;
+        email?: string;
+        plan?: string;
+        avatarUrl?: string;
+    };
+
+    type RecoderSignInPrompt = {
+        userCode: string;
+        verificationUri: string;
+        verificationUriComplete?: string;
+        expiresIn: number;
+    };
+
+    type RecoderSignInResult = {
+        ok: boolean;
+        reason?: string;
+        identity?: RecoderIdentity;
+    };
+
     type ElectronApi = {
         getAuthKey(): string; // get-auth-key
         getIsDev(): boolean; // get-is-dev
@@ -136,6 +156,10 @@ declare global {
         getPathForFile: (file: File) => string; // webUtils.getPathForFile
         saveTextFile: (fileName: string, content: string) => Promise<boolean>; // save-text-file
         setIsActive: () => Promise<void>; // set-is-active
+        getRecoderIdentity: () => Promise<RecoderIdentity>; // recoder:get-identity
+        recoderSignIn: () => Promise<RecoderSignInResult>; // recoder:sign-in
+        recoderSignOut: () => Promise<{ ok: boolean }>; // recoder:sign-out
+        onRecoderSignInPrompt: (callback: (prompt: RecoderSignInPrompt) => void) => void; // recoder:device-login-prompt
     };
 
     type ElectronContextMenuItem = {
