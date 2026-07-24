@@ -276,10 +276,12 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                 </div>
                             ))}
                         </div>
-                    ) : (
+                    ) : setup.probed ? (
                         <div className="text-sm text-secondary">
-                            No workspaces yet. Start the Recoder backend to see agent readiness and launch a workspace.
+                            Couldn't reach the local Recoder backend yet — it may still be starting.
                         </div>
+                    ) : (
+                        <div className="text-sm text-secondary">Checking local setup…</div>
                     )}
                     {setup.loaded && readyAgents.length > 0 && (
                         <div className="text-sm text-secondary">

@@ -25,6 +25,11 @@ type RecoderSetup = {
     agents: { runtimeId: string; available: boolean }[];
     git: boolean;
     loaded: boolean;
+    // True once refreshSetup has completed at least one attempt (success OR
+    // failure). Distinguishes "still probing on cold launch" from a genuinely
+    // failed probe so the getting-started panel never falsely claims the backend
+    // is down while the first /health request is still in flight.
+    probed: boolean;
     // The conductor-pinned tmux binary (CONDUCTOR_TMUX_BIN / engines tmux) from
     // substrate health; "" when unknown. Used so "Open terminal" attaches with
     // the SAME tmux server the conductor's sessions live on.
@@ -96,7 +101,7 @@ class RecoderViewModel implements ViewModel {
         this.workspacesAtom = atom([]) as PrimitiveAtom<RecoderWorkspace[]>;
         this.loadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
-        this.setupAtom = atom({ agents: [], git: false, loaded: false, tmuxBin: "" }) as PrimitiveAtom<RecoderSetup>;
+        this.setupAtom = atom({ agents: [], git: false, loaded: false, probed: false, tmuxBin: "" }) as PrimitiveAtom<RecoderSetup>;
         this.diffSummariesAtom = atom({}) as PrimitiveAtom<Record<string, RecoderDiffSummary>>;
         this.launchOpenAtom = atom(false) as PrimitiveAtom<boolean>;
         this.launchRepoPathAtom = atom(loadRecentRepos()[0] ?? "") as PrimitiveAtom<string>;
@@ -138,9 +143,9 @@ class RecoderViewModel implements ViewModel {
                       }))
                 : [];
             const tmuxBin = typeof h?.substrate?.tmuxBin == "string" ? h.substrate.tmuxBin : "";
-            globalStore.set(this.setupAtom, { agents, git: Boolean(h?.available), loaded: true, tmuxBin });
+            globalStore.set(this.setupAtom, { agents, git: Boolean(h?.available), loaded: true, probed: true, tmuxBin });
         } catch {
-            globalStore.set(this.setupAtom, { agents: [], git: false, loaded: false, tmuxBin: "" });
+            globalStore.set(this.setupAtom, { agents: [], git: false, loaded: false, probed: true, tmuxBin: "" });
         }
     }
 
