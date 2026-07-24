@@ -30,6 +30,9 @@ export const INTERNAL_SERVICE_USER_ID = 'internal-service';
 /** The sentinel id of the anonymous fallback identity. */
 export const ANONYMOUS_USER_ID = 'anonymous';
 
+/** Stable owner id for the single local user in RECODER_SOLO_MODE (desktop). */
+export const SOLO_OWNER_USER_ID = 'recoder-solo-owner';
+
 /** Scopes granted to a verified internal service caller. */
 const INTERNAL_SCOPES: readonly string[] = ['internal', 'read', 'write', 'admin'];
 
@@ -156,6 +159,23 @@ export class PrincipalService implements SessionVerifier {
       kind: 'anonymous',
       isAnonymous: true,
       raw: null,
+    };
+  }
+
+  /**
+   * The single local user on an embedded desktop (RECODER_SOLO_MODE). There is
+   * no sign-in plane and the minted sk_ key can't validate without a DB, so
+   * mutating routes would 401 forever. This synthetic NON-anonymous owner lets
+   * the local user create/run/merge workspaces on their own machine. A cloud
+   * deploy never sets RECODER_SOLO_MODE, so it never uses this.
+   */
+  getSoloOwnerIdentity(): Principal {
+    return {
+      userId: SOLO_OWNER_USER_ID,
+      scopes: [],
+      kind: 'session',
+      isAnonymous: false,
+      raw: { kind: 'solo-owner' },
     };
   }
 

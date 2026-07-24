@@ -94,7 +94,6 @@ function RecoderHandsView({ model }: ViewComponentProps<RecoderHandsViewModel>) 
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
                 <span className="font-semibold">Recoder — Agent Hands</span>
-                <span className="text-xs text-secondary">in-process engine</span>
             </div>
             {loading && hands.length == 0 && <div className="text-secondary text-sm">Loading…</div>}
             {showNote && <div className="text-secondary text-sm">{note}</div>}
