@@ -45,6 +45,115 @@ type RecoderDiffSummary = { additions: number; deletions: number; files: number 
 // truthful failure whose reason is the backend's verbatim message — never faked.
 type RecoderLaunchResult = { ok: boolean; message?: string; error?: string };
 
+// One agent's row in the side-by-side compare of a parallel-run group. A lenient
+// mirror of the backend SiblingCompareEntry — `diffStat`/`changedFiles` are ABSENT
+// (never a fabricated 0/0/0) when uncomputable, each carrying a truthful reason.
+type SiblingCompareEntry = {
+    workspaceId: string;
+    // agent === runtimeId — the compare key.
+    agent: string;
+    runtimeId: string;
+    runId?: string;
+    branch: string;
+    state: string;
+    attention?: string;
+    attentionReason?: string;
+    createdAt: string;
+    updatedAt: string;
+    diffStat?: RecoderDiffSummary;
+    diffStatReason?: string;
+    changedFiles?: string[];
+    changedFilesReason?: string;
+    sessionName?: string;
+    worktreePath?: string;
+};
+
+// A file 2+ siblings BOTH touched — where parallel agents will collide.
+type ContestedFile = { path: string; workspaceIds: string[] };
+
+// Read-only operator-attach hint for a group; absent for singleton/no-dmux groups.
+type GroupAttachHint = { attachCommand?: string; visibleSessions: string[] };
+
+// The aggregate of one parallel-run group for side-by-side review. `taskGroup` is
+// null when the subject workspace is ungrouped (a singleton set of 1).
+type CompareView = {
+    taskGroup: string | null;
+    count: number;
+    siblings: SiblingCompareEntry[];
+    contested: ContestedFile[];
+    grid?: GroupAttachHint;
+};
+
+// Read-only pre-merge preflight. `available:false` ⇒ no git / no worktree / git
+// too old; the verdict is NEVER a fabricated 'clean' when it could not judge.
+type MergeabilityView = {
+    available: boolean;
+    verdict: "clean" | "conflicting" | "unknown";
+    conflicts: string[];
+    ahead: number;
+    behind: number;
+    base: string;
+    branch: string;
+    reason?: string;
+};
+
+// One of the four merge-decision signals, in fixed order. `unknown` is a real
+// value (we could not judge) — never coerced to a pass.
+type ReadinessSignal = {
+    id: "lifecycle" | "merge" | "checks" | "preview";
+    status: "pass" | "fail" | "pending" | "unknown";
+    detail: string;
+};
+
+// The folded merge-readiness read-model. `ready` is the hardest gate; `signals`
+// is ALWAYS 4, in order: lifecycle, merge, checks, preview.
+type ReadinessView = {
+    verdict: "ready" | "blocked" | "not_ready" | "unknown";
+    signals: ReadinessSignal[];
+    blockers: string[];
+};
+
+// The two independently-probed merge-decision views for one workspace. Each side
+// is optional so it degrades on its own — an absent side means that probe failed
+// or was unreachable, never a fabricated verdict.
+type RecoderWorkspaceReadiness = { readiness?: ReadinessView; mergeability?: MergeabilityView };
+
+// A parallel-run group derived from workspaces sharing a metadata.taskGroup. A
+// solo (ungrouped) workspace is its own group of 1 with taskGroup null.
+type RecoderWorkspaceGroup = { taskGroup: string | null; workspaces: RecoderWorkspace[] };
+
+// The confirmed metadata key the launch path stamps to bind sibling workspaces.
+const TASK_GROUP_METADATA_KEY = "taskGroup";
+
+function readTaskGroup(ws: RecoderWorkspace): string | null {
+    const raw = ws.metadata?.[TASK_GROUP_METADATA_KEY];
+    return typeof raw == "string" && raw != "" ? raw : null;
+}
+
+// Group workspaces by their shared taskGroup, preserving first-seen order. A
+// workspace with no taskGroup becomes its own singleton group (never invented
+// siblings). Pure + degrade-safe: missing/blank metadata simply falls to solo.
+function groupByTaskGroup(workspaces: RecoderWorkspace[]): RecoderWorkspaceGroup[] {
+    const groups: RecoderWorkspaceGroup[] = [];
+    const byGroup = new Map<string, RecoderWorkspaceGroup>();
+    for (const ws of workspaces) {
+        const tg = readTaskGroup(ws);
+        if (tg == null) {
+            groups.push({ taskGroup: null, workspaces: [ws] });
+            continue;
+        }
+        const existing = byGroup.get(tg);
+        if (existing) {
+            existing.workspaces.push(ws);
+            continue;
+        }
+        const group: RecoderWorkspaceGroup = { taskGroup: tg, workspaces: [ws] };
+        byGroup.set(tg, group);
+        groups.push(group);
+    }
+    return groups;
+}
+
 function genTaskId(): string {
     return `task_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
@@ -92,6 +201,13 @@ class RecoderViewModel implements ViewModel {
     rowStatusAtom: PrimitiveAtom<Record<string, string>>;
     // The workspace id whose row action is currently in-flight ("" when idle).
     busyRowAtom: PrimitiveAtom<string>;
+    // Parallel-run groups derived from the current workspaces (metadata.taskGroup).
+    groupsAtom!: Atom<RecoderWorkspaceGroup[]>;
+    // Side-by-side compare view keyed by taskGroup; absent ⇒ never loaded / degraded.
+    compareAtom: PrimitiveAtom<Record<string, CompareView>>;
+    // Merge-decision views (readiness + mergeability) keyed by workspaceId; each
+    // side absent ⇒ that probe degraded, never a fabricated verdict.
+    readinessAtom: PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -115,6 +231,9 @@ class RecoderViewModel implements ViewModel {
         this.launchResultAtom = atom(null) as PrimitiveAtom<RecoderLaunchResult>;
         this.rowStatusAtom = atom({}) as PrimitiveAtom<Record<string, string>>;
         this.busyRowAtom = atom("") as PrimitiveAtom<string>;
+        this.compareAtom = atom({}) as PrimitiveAtom<Record<string, CompareView>>;
+        this.readinessAtom = atom({}) as PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
+        this.groupsAtom = atom((get) => groupByTaskGroup(get(this.workspacesAtom)));
     }
 
     get viewComponent(): ViewComponent {
@@ -209,6 +328,95 @@ class RecoderViewModel implements ViewModel {
             if (e) next[e[0]] = e[1];
         }
         globalStore.set(this.diffSummariesAtom, next);
+    }
+
+    // Load the side-by-side compare aggregate for one parallel-run group, keyed by
+    // taskGroup. Reads { data: { compare } }. Degrade-safe: any failure / non-2xx /
+    // missing shape leaves the prior entry untouched (absent → neutral), never
+    // throws, never fabricates a compare.
+    async loadCompare(taskGroup: string) {
+        const tg = taskGroup.trim();
+        if (tg == "") {
+            return;
+        }
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/compare?taskGroup=${encodeURIComponent(tg)}`
+            );
+            if (!res.ok) {
+                return;
+            }
+            const compare = (await res.json())?.data?.compare;
+            if (compare == null || typeof compare != "object") {
+                return;
+            }
+            const cur = globalStore.get(this.compareAtom);
+            globalStore.set(this.compareAtom, { ...cur, [tg]: compare as CompareView });
+        } catch {
+            // degrade-safe: an unreachable/failed compare leaves the map unchanged
+        }
+    }
+
+    // Batch the two merge-decision reads (readiness + mergeability) for every
+    // sibling of a group, keyed by workspaceId. Each read is INDEPENDENTLY
+    // degrade-safe: an absent side means that probe failed, never a fabricated
+    // verdict. Merges into the existing map so unrelated groups keep their views.
+    async loadGroupReadiness(siblings: { workspaceId: string }[]) {
+        const base = getRecoderBackendUrl();
+        const entries = await Promise.all(
+            siblings.map(async (s): Promise<[string, RecoderWorkspaceReadiness] | null> => {
+                const id = s?.workspaceId;
+                if (!id) {
+                    return null;
+                }
+                const [readiness, mergeability] = await Promise.all([
+                    this.fetchReadiness(base, id),
+                    this.fetchMergeability(base, id),
+                ]);
+                if (readiness == null && mergeability == null) {
+                    return null;
+                }
+                const entry: RecoderWorkspaceReadiness = {};
+                if (readiness != null) entry.readiness = readiness;
+                if (mergeability != null) entry.mergeability = mergeability;
+                return [id, entry];
+            })
+        );
+        const next: Record<string, RecoderWorkspaceReadiness> = { ...globalStore.get(this.readinessAtom) };
+        for (const e of entries) {
+            if (e) next[e[0]] = e[1];
+        }
+        globalStore.set(this.readinessAtom, next);
+    }
+
+    // GET /workspaces/:id/readiness → { data: ReadinessView }. Degrade-safe: any
+    // failure / non-2xx / missing shape yields null (the caller drops the side).
+    async fetchReadiness(base: string, workspaceId: string): Promise<ReadinessView> {
+        try {
+            const res = await fetch(`${base}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/readiness`);
+            if (!res.ok) {
+                return null;
+            }
+            const data = (await res.json())?.data;
+            return data != null && typeof data == "object" ? (data as ReadinessView) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    // GET /workspaces/:id/mergeability → { data: MergeabilityView }. Degrade-safe:
+    // any failure / non-2xx / missing shape yields null (the caller drops the side).
+    async fetchMergeability(base: string, workspaceId: string): Promise<MergeabilityView> {
+        try {
+            const res = await fetch(`${base}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/mergeability`);
+            if (!res.ok) {
+                return null;
+            }
+            const data = (await res.json())?.data;
+            return data != null && typeof data == "object" ? (data as MergeabilityView) : null;
+        } catch {
+            return null;
+        }
     }
 
     // Inline launch — the product loop's entry point. Launches the primary agent
@@ -365,4 +573,21 @@ class RecoderViewModel implements ViewModel {
     }
 }
 
-export { RecoderViewModel, type RecoderWorkspace, type RecoderSetup, type RecoderDiffSummary, type RecoderLaunchResult };
+export {
+    RecoderViewModel,
+    groupByTaskGroup,
+    TASK_GROUP_METADATA_KEY,
+    type RecoderWorkspace,
+    type RecoderSetup,
+    type RecoderDiffSummary,
+    type RecoderLaunchResult,
+    type RecoderWorkspaceGroup,
+    type SiblingCompareEntry,
+    type ContestedFile,
+    type GroupAttachHint,
+    type CompareView,
+    type MergeabilityView,
+    type ReadinessSignal,
+    type ReadinessView,
+    type RecoderWorkspaceReadiness,
+};
