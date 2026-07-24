@@ -5,11 +5,18 @@ import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { Agent, EngineStatus, RecoderOpenfangViewModel } from "./recoder-openfang-model";
 
+const REFRESH_MS = 6000;
+
+// Quiet secondary control (matches recoder-approvals' Reject button).
+const QUIET_BTN =
+    "border border-border text-primary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer shrink-0";
+
 const STATUS_MESSAGES: Record<EngineStatus, string> = {
     loading: "",
     ok: "",
     "engine-down":
         "OpenFang engine not built — run `cargo build -p openfang-napi` in backend/engines/rust/openfang to compile the engine into the backend.",
+    "not-available": "OpenFang not available on this backend.",
     down: "Not connected — start the Recoder backend to reach OpenFang.",
 };
 
@@ -28,10 +35,7 @@ function AgentRow({ agent, model }: { agent: Agent; model: RecoderOpenfangViewMo
             <span className="text-xs text-secondary font-mono ml-auto shrink-0 hidden sm:inline">
                 {agent.id.slice(0, 8)}
             </span>
-            <button
-                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer shrink-0"
-                onClick={() => model.openChat(agent.id)}
-            >
+            <button className={QUIET_BTN} onClick={() => model.openChat(agent.id)}>
                 Message
             </button>
             <button
@@ -40,16 +44,10 @@ function AgentRow({ agent, model }: { agent: Agent; model: RecoderOpenfangViewMo
             >
                 Activate
             </button>
-            <button
-                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer shrink-0"
-                onClick={() => model.stopAgent(agent.id)}
-            >
+            <button className={QUIET_BTN} onClick={() => model.stopAgent(agent.id)}>
                 Stop
             </button>
-            <button
-                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer shrink-0"
-                onClick={() => model.killAgent(agent.id)}
-            >
+            <button className={QUIET_BTN} onClick={() => model.killAgent(agent.id)}>
                 Kill
             </button>
         </div>
@@ -106,6 +104,8 @@ function RecoderOpenfangView({ model }: ViewComponentProps<RecoderOpenfangViewMo
 
     useEffect(() => {
         model.refresh();
+        const id = setInterval(() => model.refresh(), REFRESH_MS);
+        return () => clearInterval(id);
     }, [model]);
 
     const note = STATUS_MESSAGES[status];
@@ -116,12 +116,6 @@ function RecoderOpenfangView({ model }: ViewComponentProps<RecoderOpenfangViewMo
             <div className="flex items-center gap-2">
                 <span className="font-semibold">OpenFang — Engine</span>
                 <span className="text-xs text-secondary">in-process (NAPI)</span>
-                <button
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer ml-auto"
-                    onClick={() => model.refresh()}
-                >
-                    Refresh
-                </button>
             </div>
 
             {loading && agents.length == 0 && <div className="text-secondary text-sm">Loading…</div>}

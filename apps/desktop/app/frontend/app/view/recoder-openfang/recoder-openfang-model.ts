@@ -21,8 +21,9 @@ type Agent = {
     state: string;
 };
 
-// engine-down = native addon not built (503); down = backend unreachable.
-type EngineStatus = "loading" | "ok" | "engine-down" | "down";
+// engine-down = native addon not built (503); not-available = the openfang HTTP edge
+// is not mounted on this backend (404); down = backend unreachable.
+type EngineStatus = "loading" | "ok" | "engine-down" | "not-available" | "down";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
     return typeof v === "object" && v != null && !Array.isArray(v);
@@ -103,6 +104,11 @@ class RecoderOpenfangViewModel implements ViewModel {
             if (res.status == 503) {
                 this.clear();
                 globalStore.set(this.statusAtom, "engine-down");
+                return;
+            }
+            if (res.status == 404) {
+                this.clear();
+                globalStore.set(this.statusAtom, "not-available");
                 return;
             }
             if (!res.ok) {

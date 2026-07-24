@@ -46,11 +46,14 @@ function asBool(v: unknown): boolean {
 
 // Unwraps the { success, data } envelope and rebuilds each channel from an explicit
 // field allowlist (no spread of the raw object), defending against schema drift and
-// guaranteeing no credential-shaped field ever reaches the view.
+// guaranteeing no credential-shaped field ever reaches the view. The social read
+// model reports per-channel `status` ('up' | 'down') rather than a `connected`
+// boolean, so we derive connected/available from it.
 function normalizeChannels(raw: unknown): ConnectorChannel[] {
     const data = isRecord(raw) && isRecord(raw.data) ? raw.data : raw;
     let list: unknown[] = [];
-    if (isRecord(data) && Array.isArray(data.channels)) list = data.channels;
+    if (isRecord(data) && Array.isArray(data.connectors)) list = data.connectors;
+    else if (isRecord(data) && Array.isArray(data.channels)) list = data.channels;
     else if (Array.isArray(data)) list = data;
     return list
         .map((c) => {
@@ -68,12 +71,13 @@ function normalizeChannels(raw: unknown): ConnectorChannel[] {
                 };
             }
             const channel = firstString(c.channel);
+            const up = firstString(c.status) == "up";
             return {
                 channel,
                 accountId: firstString(c.accountId, c.account_id),
                 configured: asBool(c.configured),
-                available: asBool(c.available),
-                connected: asBool(c.connected),
+                available: asBool(c.available) || up,
+                connected: asBool(c.connected) || up,
                 requiresExternal: asBool(c.requiresExternal) || asBool(c.requires_external),
                 identity: firstString(c.identity),
                 reason: firstString(c.reason),
@@ -117,14 +121,14 @@ class RecoderConnectorsViewModel implements ViewModel {
         return RecoderConnectorsView;
     }
 
-    // Read-only per-channel health from GET /api/connectors. The endpoint is
-    // truthful even when the gateway is inert (config-derived snapshot), so any
-    // non-OK response means the backend itself is unreachable. Degrade-safe.
+    // Read-only per-channel health from GET /api/social. The endpoint is truthful
+    // even when a channel is disabled (config-derived snapshot with a reason), so
+    // any non-OK response means the backend itself is unreachable. Degrade-safe.
     async refresh() {
         globalStore.set(this.loadingAtom, true);
         globalStore.set(this.statusAtom, "loading");
         try {
-            const res = await fetch(`${getRecoderBackendUrl()}/api/connectors`);
+            const res = await fetch(`${getRecoderBackendUrl()}/api/social`);
             if (!res.ok) {
                 globalStore.set(this.channelsAtom, []);
                 globalStore.set(this.gatewayAtom, { active: false, dispatchReady: false });

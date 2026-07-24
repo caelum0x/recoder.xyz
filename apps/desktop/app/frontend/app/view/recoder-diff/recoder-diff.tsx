@@ -6,6 +6,13 @@ import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { RecoderDiffViewModel } from "./recoder-diff-model";
 
+const REFRESH_MS = 6000;
+
+const PRIMARY_BTN =
+    "bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50";
+const QUIET_BTN =
+    "border border-border text-secondary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer disabled:opacity-50";
+
 // Classify a single unified-diff line for coloring. File headers ("+++"/"---"
 // / "diff "/"index ") are checked before the generic +/- so they render neutral.
 function diffLineClass(line: string): string {
@@ -52,6 +59,8 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
 
     useEffect(() => {
         model.refresh();
+        const id = setInterval(() => model.refresh(), REFRESH_MS);
+        return () => clearInterval(id);
     }, [model]);
 
     const showNotConnected = !loading && !connected;
@@ -62,12 +71,6 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
         <div className="flex flex-col h-full overflow-hidden p-3 gap-2">
             <div className="flex items-center gap-2">
                 <span className="font-semibold">Recoder — Review</span>
-                <button
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
-                    onClick={() => model.refresh()}
-                >
-                    Refresh
-                </button>
                 {workspaces.length > 0 && (
                     <select
                         className="ml-auto bg-panel text-primary border border-border rounded px-2 py-0.5 text-sm cursor-pointer"
@@ -82,20 +85,12 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                     </select>
                 )}
                 {selectedId != "" && (
-                    <button
-                        className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
-                        disabled={merging}
-                        onClick={() => model.mergeSelected()}
-                    >
+                    <button className={PRIMARY_BTN} disabled={merging} onClick={() => model.mergeSelected()}>
                         {merging ? "Merging…" : "Merge"}
                     </button>
                 )}
                 {selectedId != "" && (
-                    <button
-                        className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
-                        disabled={prCreating}
-                        onClick={() => model.createPr()}
-                    >
+                    <button className={QUIET_BTN} disabled={prCreating} onClick={() => model.createPr()}>
                         {prCreating ? "Creating PR…" : "Create PR"}
                     </button>
                 )}

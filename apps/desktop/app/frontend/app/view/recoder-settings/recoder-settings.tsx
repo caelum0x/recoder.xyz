@@ -6,8 +6,10 @@ import { useAtom, useAtomValue } from "jotai";
 import { RecoderSettingsViewModel } from "./recoder-settings-model";
 import { DefaultRecoderBackend } from "../recoder/recoder-endpoints";
 
-const ACCENT_BTN =
+const PRIMARY_BTN =
     "bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer";
+const QUIET_BTN =
+    "border border-border text-secondary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer";
 
 function RecoderSettingsView({ model }: ViewComponentProps<RecoderSettingsViewModel>) {
     const [url, setUrl] = useAtom(model.urlAtom);
@@ -36,13 +38,13 @@ function RecoderSettingsView({ model }: ViewComponentProps<RecoderSettingsViewMo
                 </div>
             </div>
             <div className="flex items-center gap-2">
-                <button className={ACCENT_BTN} onClick={() => model.save(url)}>
+                <button className={PRIMARY_BTN} onClick={() => model.save(url)}>
                     Save
                 </button>
-                <button className={ACCENT_BTN} onClick={() => model.test(url)}>
+                <button className={QUIET_BTN} onClick={() => model.test(url)}>
                     Test connection
                 </button>
-                <button className={ACCENT_BTN} onClick={() => model.resetDefault()}>
+                <button className={QUIET_BTN} onClick={() => model.resetDefault()}>
                     Reset to default
                 </button>
             </div>

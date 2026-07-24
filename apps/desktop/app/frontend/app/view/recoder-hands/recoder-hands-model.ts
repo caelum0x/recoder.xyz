@@ -23,8 +23,9 @@ type ActiveHand = {
     status: string;
 };
 
-// not-running = engine not booted (503); not-connected = backend unreachable.
-type HandsStatus = "loading" | "ok" | "empty" | "not-running" | "not-connected";
+// not-running = engine not booted (503); not-available = the openfang HTTP edge is
+// not mounted on this backend (404); not-connected = backend unreachable.
+type HandsStatus = "loading" | "ok" | "empty" | "not-running" | "not-available" | "not-connected";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
     return typeof v === "object" && v != null && !Array.isArray(v);
@@ -116,6 +117,12 @@ class RecoderHandsViewModel implements ViewModel {
                 globalStore.set(this.handsAtom, []);
                 globalStore.set(this.activeAtom, []);
                 globalStore.set(this.statusAtom, "not-running");
+                return;
+            }
+            if (res.status == 404) {
+                globalStore.set(this.handsAtom, []);
+                globalStore.set(this.activeAtom, []);
+                globalStore.set(this.statusAtom, "not-available");
                 return;
             }
             if (!res.ok) {

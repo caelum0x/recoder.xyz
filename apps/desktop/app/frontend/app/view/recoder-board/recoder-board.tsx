@@ -6,6 +6,8 @@ import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { BoardStatus, RecoderBoardViewModel } from "./recoder-board-model";
 
+const REFRESH_MS = 6000;
+
 async function pickUpIssue(title: string) {
     const meta: Record<string, unknown> = { view: "recoder-launch" };
     if (title != "") {
@@ -24,6 +26,7 @@ const STATUS_MESSAGES: Record<BoardStatus, string> = {
     empty: "Nothing pending — no ready issues on the board.",
     unavailable: "Issue board not available — the `bd` CLI is not installed on this machine.",
     unreachable: "Issue board not available — the ready-issue bridge is not reachable from here.",
+    "not-available": "Issue board not available on this backend.",
     "not-connected": "Not connected — start the Recoder backend to see ready work.",
 };
 
@@ -35,6 +38,8 @@ function RecoderBoardView({ model }: ViewComponentProps<RecoderBoardViewModel>) 
 
     useEffect(() => {
         model.refresh();
+        const id = setInterval(() => model.refresh(), REFRESH_MS);
+        return () => clearInterval(id);
     }, [model]);
 
     const note = STATUS_MESSAGES[status];
@@ -44,12 +49,6 @@ function RecoderBoardView({ model }: ViewComponentProps<RecoderBoardViewModel>) 
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
                 <span className="font-semibold">Recoder — Board</span>
-                <button
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
-                    onClick={() => model.refresh()}
-                >
-                    Refresh
-                </button>
             </div>
             {loading && issues.length == 0 && <div className="text-secondary text-sm">Loading…</div>}
             {showNote && <div className="text-secondary text-sm">{note}</div>}

@@ -5,6 +5,8 @@ import { useAtom, useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { Capabilities, RecoderToolsViewModel, type RecoderToolResult } from "./recoder-tools-model";
 
+const REFRESH_MS = 6000;
+
 function resultText(result: unknown): string {
     if (result == null) {
         return "";
@@ -71,6 +73,8 @@ function RecoderToolsView({ model }: ViewComponentProps<RecoderToolsViewModel>) 
 
     useEffect(() => {
         model.refresh();
+        const id = setInterval(() => model.refresh(), REFRESH_MS);
+        return () => clearInterval(id);
     }, [model]);
 
     const cap = Capabilities.find((c) => c.id === capabilityId) ?? Capabilities[0];

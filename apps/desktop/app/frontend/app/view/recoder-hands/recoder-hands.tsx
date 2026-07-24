@@ -5,11 +5,18 @@ import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { ActiveHand, Hand, HandsStatus, RecoderHandsViewModel } from "./recoder-hands-model";
 
+const REFRESH_MS = 6000;
+
+// Quiet secondary control (matches recoder-approvals' Reject button).
+const QUIET_BTN =
+    "border border-border text-primary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer shrink-0";
+
 const STATUS_MESSAGES: Record<HandsStatus, string> = {
     loading: "",
     ok: "",
     empty: "No Hands compiled into the engine.",
     "not-running": "OpenFang engine not built — run `cargo build -p openfang-napi` in backend/engines/rust/openfang to enable Hands.",
+    "not-available": "OpenFang Hands not available on this backend.",
     "not-connected": "Not connected — start the Recoder backend to reach OpenFang.",
 };
 
@@ -31,24 +38,15 @@ function ActiveRow({ hand, model }: { hand: ActiveHand; model: RecoderHandsViewM
             <span className="text-sm truncate">{hand.name}</span>
             <span className="text-xs text-secondary font-mono ml-auto shrink-0">{hand.handId}</span>
             {paused ? (
-                <button
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer shrink-0"
-                    onClick={() => model.resume(hand.instanceId)}
-                >
+                <button className={QUIET_BTN} onClick={() => model.resume(hand.instanceId)}>
                     Resume
                 </button>
             ) : (
-                <button
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer shrink-0"
-                    onClick={() => model.pause(hand.instanceId)}
-                >
+                <button className={QUIET_BTN} onClick={() => model.pause(hand.instanceId)}>
                     Pause
                 </button>
             )}
-            <button
-                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer shrink-0"
-                onClick={() => model.deactivate(hand.instanceId)}
-            >
+            <button className={QUIET_BTN} onClick={() => model.deactivate(hand.instanceId)}>
                 Stop
             </button>
         </div>
@@ -85,6 +83,8 @@ function RecoderHandsView({ model }: ViewComponentProps<RecoderHandsViewModel>) 
 
     useEffect(() => {
         model.refresh();
+        const id = setInterval(() => model.refresh(), REFRESH_MS);
+        return () => clearInterval(id);
     }, [model]);
 
     const note = STATUS_MESSAGES[status];
@@ -95,12 +95,6 @@ function RecoderHandsView({ model }: ViewComponentProps<RecoderHandsViewModel>) 
             <div className="flex items-center gap-2">
                 <span className="font-semibold">OpenFang — Hands</span>
                 <span className="text-xs text-secondary">in-process engine</span>
-                <button
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer ml-auto"
-                    onClick={() => model.refresh()}
-                >
-                    Refresh
-                </button>
             </div>
             {loading && hands.length == 0 && <div className="text-secondary text-sm">Loading…</div>}
             {showNote && <div className="text-secondary text-sm">{note}</div>}

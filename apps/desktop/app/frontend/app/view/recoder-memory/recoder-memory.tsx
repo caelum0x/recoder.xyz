@@ -10,6 +10,8 @@ import {
     RecoderMemoryViewModel,
 } from "./recoder-memory-model";
 
+const REFRESH_MS = 6000;
+
 function MemoryItemRow({ item }: { item: RecoderMemoryItem }) {
     return (
         <div className="flex flex-col gap-0.5 rounded border border-border p-2" title={item.memoryId}>
@@ -61,6 +63,8 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
 
     useEffect(() => {
         model.refresh();
+        const id = setInterval(() => model.refresh(), REFRESH_MS);
+        return () => clearInterval(id);
     }, [model]);
 
     const hasQuery = query.trim() != "";
@@ -71,12 +75,6 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
                 <span className="font-semibold">Recoder — Memory</span>
-                <button
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
-                    onClick={() => model.refresh()}
-                >
-                    Refresh
-                </button>
             </div>
             <div className="flex items-center gap-2">
                 <input

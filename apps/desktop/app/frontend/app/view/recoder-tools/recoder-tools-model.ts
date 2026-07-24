@@ -139,7 +139,7 @@ class RecoderToolsViewModel implements ViewModel {
                 return;
             }
             const body = await res.json();
-            const list = Array.isArray(body?.data) ? body.data : [];
+            const list = Array.isArray(body?.data?.servers) ? body.data.servers : [];
             const ids = list
                 .map((s: { serverId?: unknown }) => String(s?.serverId ?? ""))
                 .filter((x: string) => x !== "");

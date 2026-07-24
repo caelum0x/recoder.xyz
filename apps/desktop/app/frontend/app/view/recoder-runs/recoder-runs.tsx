@@ -6,6 +6,8 @@ import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { RecoderRun, RecoderRunEvent, RecoderRunsViewModel } from "./recoder-runs-model";
 
+const REFRESH_MS = 6000;
+
 // Terminal (settled) states render muted; active states get the accent tint so a
 // live run is obvious at a glance. Unknown states fall back to neutral.
 const TERMINAL_STATES = new Set(["completed", "failed", "cancelled", "rejected"]);
@@ -78,6 +80,8 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
 
     useEffect(() => {
         model.refresh();
+        const id = setInterval(() => model.refresh(), REFRESH_MS);
+        return () => clearInterval(id);
     }, [model]);
 
     const showDisconnected = !connected && !loading;
@@ -87,12 +91,6 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
         <div className="flex flex-col h-full overflow-auto p-3 gap-3">
             <div className="flex items-center gap-2">
                 <span className="font-semibold">Recoder — Runs</span>
-                <button
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
-                    onClick={() => model.refresh()}
-                >
-                    Refresh
-                </button>
             </div>
             {error != "" && <div className="text-error text-sm">{error}</div>}
             {loading && runs.length == 0 && events.length == 0 && (
