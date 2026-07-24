@@ -79,6 +79,9 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const showGettingStarted = !loading && workspaces.length == 0 && error == "" && !launchOpen;
     const canLaunch = !posting && repoPath.trim() != "" && runtimeId != "";
     const parallelAgents = readyAgents.filter((a) => a.runtimeId != runtimeId);
+    const allParallelSelected =
+        parallelAgents.length > 0 && parallelAgents.every((a) => alsoRun.includes(a.runtimeId));
+    const parallelCount = alsoRun.filter((id) => id != runtimeId && id != "").length;
 
     const toggleAlso = (id: string, on: boolean) =>
         setAlsoRun(on ? [...alsoRun, id] : alsoRun.filter((x) => x != id));
@@ -169,7 +172,19 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
 
                     {parallelAgents.length > 0 && (
                         <div className="flex flex-col gap-1">
-                            <span className={FIELD_LABEL}>Also run in parallel (optional)</span>
+                            <div className="flex items-center justify-between">
+                                <span className={FIELD_LABEL}>Also run in parallel (optional)</span>
+                                <button
+                                    className={QUIET_BTN}
+                                    onClick={() =>
+                                        setAlsoRun(
+                                            allParallelSelected ? [] : parallelAgents.map((a) => a.runtimeId)
+                                        )
+                                    }
+                                >
+                                    {allParallelSelected ? "Clear" : "Select all"}
+                                </button>
+                            </div>
                             <div className="flex flex-wrap gap-3">
                                 {parallelAgents.map((a) => (
                                     <label
@@ -212,9 +227,16 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         <span>Interactive session — run the real agent TUI</span>
                     </label>
 
-                    <button className={`${PRIMARY_BTN} self-start`} disabled={!canLaunch} onClick={() => model.launch()}>
-                        {posting ? "Launching…" : "Launch"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button className={PRIMARY_BTN} disabled={!canLaunch} onClick={() => model.launch()}>
+                            {posting ? "Launching…" : "Launch"}
+                        </button>
+                        {parallelCount > 0 && (
+                            <span className="text-xs text-secondary">
+                                Launches {1 + parallelCount} agents, each in its own worktree.
+                            </span>
+                        )}
+                    </div>
 
                     {launchResult != null && !launchResult.ok && (
                         <div className="text-error text-sm">{launchResult.error || "Launch failed"}</div>
