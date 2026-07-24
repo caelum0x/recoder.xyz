@@ -73,6 +73,11 @@ contextBridge.exposeInMainWorld("api", {
     getPathForFile: (file: File): string => webUtils.getPathForFile(file),
     saveTextFile: (fileName: string, content: string) => ipcRenderer.invoke("save-text-file", fileName, content),
     setIsActive: () => ipcRenderer.invoke("set-is-active"),
+    getRecoderIdentity: () => ipcRenderer.invoke("recoder:get-identity"),
+    recoderSignIn: () => ipcRenderer.invoke("recoder:sign-in"),
+    recoderSignOut: () => ipcRenderer.invoke("recoder:sign-out"),
+    onRecoderSignInPrompt: (callback) =>
+        ipcRenderer.on("recoder:device-login-prompt", (_event, prompt) => callback(prompt)),
 });
 
 // Custom event for "new-window"

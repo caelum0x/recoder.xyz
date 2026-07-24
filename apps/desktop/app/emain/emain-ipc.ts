@@ -263,6 +263,26 @@ export function initIpcHandlers() {
         }
         return getDeviceAuthManager().signOut();
     });
+    // Wave-frontend sign-in bridge (optional, offline-safe). Unlike the cockpit
+    // handlers above, these serve the trusted app window (preload.ts `api`), whose
+    // frame is not the backend origin — so they are not origin-gated; the curated
+    // preload surface is the boundary. They reuse the SAME device-auth manager, so
+    // recoder.xyz stays the auth source of truth and the renderer only ever sees
+    // the display identity, never the token.
+    electron.ipcMain.handle("recoder:get-identity", () => {
+        return getDeviceAuthManager().getIdentity();
+    });
+    electron.ipcMain.handle("recoder:sign-in", async (event) => {
+        const sender = event.sender;
+        return getDeviceAuthManager().deviceLogin((prompt) => {
+            if (!sender.isDestroyed()) {
+                sender.send("recoder:device-login-prompt", prompt);
+            }
+        });
+    });
+    electron.ipcMain.handle("recoder:sign-out", () => {
+        return getDeviceAuthManager().signOut();
+    });
     electron.ipcMain.on("open-external", (event, url) => {
         if (url && typeof url === "string") {
             fireAndForget(() =>

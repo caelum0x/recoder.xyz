@@ -6,6 +6,7 @@ import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { agentLabel } from "./recoder-agent-labels";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
+import { RecoderIdentityAffordance } from "./recoder-identity";
 import { RecoderViewModel, type RecoderWorkspace } from "./recoder-model";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
 
@@ -77,6 +78,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             <div className="flex items-center gap-2">
                 <span className="font-semibold">Recoder — Workspaces</span>
                 <div className="flex-1" />
+                <RecoderIdentityAffordance />
                 <button
                     className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
                     onClick={() => openLaunch()}
