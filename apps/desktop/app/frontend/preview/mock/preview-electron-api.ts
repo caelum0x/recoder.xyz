@@ -63,6 +63,7 @@ const previewElectronApi: ElectronApi = {
     getRecoderIdentity: () => Promise.resolve(null),
     recoderSignIn: () => Promise.resolve({ ok: false }),
     recoderSignOut: () => Promise.resolve({ ok: true }),
+    selectDirectory: () => Promise.resolve(null),
     onRecoderSignInPrompt: (_callback: (prompt: RecoderSignInPrompt) => void) => {},
 };
 
