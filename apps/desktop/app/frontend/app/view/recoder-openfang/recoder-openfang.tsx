@@ -114,7 +114,6 @@ function RecoderOpenfangView({ model }: ViewComponentProps<RecoderOpenfangViewMo
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
                 <span className="font-semibold">Recoder — Engine</span>
-                <span className="text-xs text-secondary">in-process (NAPI)</span>
             </div>
 
             {loading && agents.length == 0 && <div className="text-secondary text-sm">Loading…</div>}
