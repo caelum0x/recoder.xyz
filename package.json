@@ -238,6 +238,8 @@
   "pnpm": {
     "overrides": {
       "roo-code-types": "^1.0.1",
+      "react": "19.2.7",
+      "react-dom": "19.2.7",
       "@types/react": "19.2.7",
       "@types/react-dom": "19.2.3",
       "@codemirror/state": "6.5.4",
