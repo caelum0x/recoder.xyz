@@ -4,28 +4,16 @@
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
+import { agentLabel } from "../recoder/recoder-agent-labels";
 import { FleetService, HealthStatus, RecoderHealthViewModel } from "./recoder-health-model";
 
 const REFRESH_MS = 10000;
-
-const AGENT_LABELS: Record<string, string> = {
-    "claude-code": "Claude Code",
-    codex: "Codex",
-    opencode: "opencode",
-    pi: "pi",
-    "recoder-code": "Recoder Code",
-    cursor: "Cursor",
-};
 
 const STATUS_LABELS: Record<HealthStatus, string> = {
     healthy: "Healthy",
     degraded: "Degraded",
     unhealthy: "Unhealthy",
 };
-
-function agentLabel(runtimeId: string): string {
-    return AGENT_LABELS[runtimeId] ?? runtimeId;
-}
 
 function statusClass(status: HealthStatus): string {
     if (status == "healthy") {

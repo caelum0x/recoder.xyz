@@ -4,6 +4,7 @@
 import { createBlock } from "@/app/store/global";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect } from "react";
+import { agentLabel } from "../recoder/recoder-agent-labels";
 import { RecoderLaunchViewModel } from "./recoder-launch-model";
 
 const REFRESH_MS = 6000;
@@ -12,19 +13,6 @@ const PRIMARY_BTN =
     "bg-accent/80 text-primary rounded px-2 py-1 text-sm hover:bg-accent transition-colors cursor-pointer self-start disabled:opacity-50";
 const QUIET_BTN =
     "border border-border text-secondary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer";
-
-const AGENT_LABELS: Record<string, string> = {
-    "claude-code": "Claude Code",
-    codex: "Codex",
-    opencode: "opencode",
-    pi: "pi",
-    "recoder-code": "Recoder Code",
-    cursor: "Cursor",
-};
-
-function agentLabel(runtimeId: string): string {
-    return AGENT_LABELS[runtimeId] ?? runtimeId;
-}
 
 function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>) {
     const runtimes = useAtomValue(model.runtimesAtom);

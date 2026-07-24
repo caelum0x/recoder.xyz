@@ -44,10 +44,12 @@ function parseHealth(data: unknown): RecoderHealth {
     const h = (data ?? {}) as Record<string, any>;
     const substrate = (h.substrate ?? {}) as Record<string, unknown>;
     const runtimes = Array.isArray(h.runtimes)
-        ? h.runtimes.map((r: { runtimeId: string; available: boolean }) => ({
-              runtimeId: String(r?.runtimeId ?? ""),
-              available: Boolean(r?.available),
-          }))
+        ? h.runtimes
+              .map((r: { runtimeId: string; available: boolean }) => ({
+                  runtimeId: String(r?.runtimeId ?? ""),
+                  available: Boolean(r?.available),
+              }))
+              .filter((r: { runtimeId: string }) => r.runtimeId !== "openfang")
         : [];
     const svc = (h.services ?? {}) as Record<string, any>;
     const fleet = (h.fleet ?? {}) as Record<string, any>;
