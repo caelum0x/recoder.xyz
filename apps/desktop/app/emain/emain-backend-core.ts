@@ -876,15 +876,19 @@ export function writeWaveAIGatewayConfig(opts: {
 export const CockpitWidgetKey = "defwidget@recoder-cockpit";
 
 /**
- * Write the config-dir widgets.json override pinning the cockpit widget at the
- * LIVE backend port. The embedded default (server/pkg/wconfig/defaultconfig/
- * widgets.json) hardcodes :3100; wconfig merges the config-dir file over the
- * defaults per top-level key with the whole value replaced, so the full widget
- * object is written (not just the url). Rewritten on every onReady, it is
- * self-healing across port changes; other user-defined widgets are preserved.
+ * Self-heal the config-dir widgets.json so the dropped cockpit widget stays gone.
+ * The cockpit surface was dropped (Wave-canonical), but the embedded default
+ * (server/pkg/wconfig/defaultconfig/widgets.json) in an already-shipped Go binary
+ * may still declare defwidget@recoder-cockpit, and earlier builds also pinned the
+ * full widget object into the user config. wconfig SIMPLE-merges the config-dir
+ * file over the defaults, treating a `null` value as "delete this key from the
+ * merged result". So force the key to `null` (not just remove it) on every
+ * onReady — that neutralizes both a stale user entry AND the default's entry,
+ * self-healing across installs. Idempotent; other user widgets are untouched.
  */
-export function writeCockpitWidgetConfig(opts: { configDir: string; port: number; fs?: FsLike }): {
+export function removeCockpitWidgetConfig(opts: { configDir: string; fs?: FsLike }): {
     widgetsPath: string;
+    removed: boolean;
 } {
     const fs: FsLike = opts.fs || (nodeFs as unknown as FsLike);
     const widgetsPath = nodePath.join(opts.configDir, "widgets.json");
@@ -897,22 +901,15 @@ export function writeCockpitWidgetConfig(opts: { configDir: string; port: number
             }
         }
     } catch {
-        // unreadable/corrupt user file — merge onto a fresh object
+        return { widgetsPath, removed: false };
     }
+    if (CockpitWidgetKey in widgets && widgets[CockpitWidgetKey] === null) {
+        return { widgetsPath, removed: false };
+    }
+    widgets[CockpitWidgetKey] = null;
     fs.mkdirSync(opts.configDir, { recursive: true });
-    widgets[CockpitWidgetKey] = {
-        "display:order": -5.005,
-        icon: "gauge-high",
-        label: "cockpit",
-        blockdef: {
-            meta: {
-                view: "web",
-                url: `${backendUrlForPort(opts.port)}/cockpit/`,
-            },
-        },
-    };
     fs.writeFileSync(widgetsPath, JSON.stringify(widgets, null, 4) + "\n");
-    return { widgetsPath };
+    return { widgetsPath, removed: true };
 }
 
 // ---------------------------------------------------------------------------
