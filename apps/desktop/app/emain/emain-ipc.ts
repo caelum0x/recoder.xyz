@@ -598,6 +598,22 @@ export function initIpcHandlers() {
         event.sender.reloadIgnoringCache();
     });
 
+    electron.ipcMain.handle("recoder:select-directory", async (event) => {
+        const ww = electron.BrowserWindow.fromWebContents(event.sender);
+        if (ww == null) {
+            return null;
+        }
+        const result = await electron.dialog.showOpenDialog(ww, {
+            title: "Choose a repository folder",
+            defaultPath: electron.app.getPath("home"),
+            properties: ["openDirectory", "createDirectory"],
+        });
+        if (result.canceled || result.filePaths.length == 0) {
+            return null;
+        }
+        return result.filePaths[0];
+    });
+
     electron.ipcMain.handle("save-text-file", async (event, fileName: string, content: string) => {
         const ww = electron.BrowserWindow.fromWebContents(event.sender);
         if (ww == null) {

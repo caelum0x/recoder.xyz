@@ -76,6 +76,7 @@ contextBridge.exposeInMainWorld("api", {
     getRecoderIdentity: () => ipcRenderer.invoke("recoder:get-identity"),
     recoderSignIn: () => ipcRenderer.invoke("recoder:sign-in"),
     recoderSignOut: () => ipcRenderer.invoke("recoder:sign-out"),
+    selectDirectory: () => ipcRenderer.invoke("recoder:select-directory"),
     onRecoderSignInPrompt: (callback) =>
         ipcRenderer.on("recoder:device-login-prompt", (_event, prompt) => callback(prompt)),
 });

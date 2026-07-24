@@ -159,6 +159,7 @@ declare global {
         getRecoderIdentity: () => Promise<RecoderIdentity>; // recoder:get-identity
         recoderSignIn: () => Promise<RecoderSignInResult>; // recoder:sign-in
         recoderSignOut: () => Promise<{ ok: boolean }>; // recoder:sign-out
+        selectDirectory: () => Promise<string>; // recoder:select-directory
         onRecoderSignInPrompt: (callback: (prompt: RecoderSignInPrompt) => void) => void; // recoder:device-login-prompt
     };
 
