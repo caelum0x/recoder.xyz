@@ -163,6 +163,15 @@ export function createEntitlementService(deps: EntitlementServiceDeps): Entitlem
       return { ...base, allowed: true, limit: 0, remaining: 0, byokBypass: false };
     }
 
+    // Solo/desktop mode (RECODER_SOLO_MODE): a single local user on their own
+    // machine with no billing plane. There is nothing to meter, so an
+    // unreachable metering repo fails OPEN instead of denying — otherwise a
+    // DB-less desktop would 429 every AI request. A cloud deploy never sets
+    // RECODER_SOLO_MODE, so it keeps the fail-safe deny below.
+    if (!repo.isAvailable() && process.env.RECODER_SOLO_MODE === '1') {
+      return { ...base, allowed: true, limit, remaining: limit, byokBypass: false };
+    }
+
     // Fail-safe DENY when metering is unreachable — never allow-by-default.
     if (!repo.isAvailable()) {
       return {
