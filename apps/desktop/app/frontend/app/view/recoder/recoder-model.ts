@@ -48,6 +48,21 @@ function genTaskGroupId(): string {
     return `grp_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
+const RECENT_REPOS_KEY = "recoder:recent-repos";
+const RECENT_REPOS_CAP = 8;
+
+// Degrade-safe: a corrupt/absent store must never break launch, so every read
+// tolerates bad JSON and non-string entries and falls back to an empty list.
+function loadRecentRepos(): string[] {
+    try {
+        const raw = localStorage.getItem(RECENT_REPOS_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr.filter((x): x is string => typeof x == "string") : [];
+    } catch {
+        return [];
+    }
+}
+
 class RecoderViewModel implements ViewModel {
     viewType: string;
     viewIcon: Atom<string>;
@@ -60,6 +75,7 @@ class RecoderViewModel implements ViewModel {
     diffSummariesAtom: PrimitiveAtom<Record<string, RecoderDiffSummary>>;
     launchOpenAtom: PrimitiveAtom<boolean>;
     launchRepoPathAtom: PrimitiveAtom<string>;
+    recentReposAtom: PrimitiveAtom<string[]>;
     launchPromptAtom: PrimitiveAtom<string>;
     launchRuntimeIdAtom: PrimitiveAtom<string>;
     launchAlsoRunAtom: PrimitiveAtom<string[]>;
@@ -83,7 +99,8 @@ class RecoderViewModel implements ViewModel {
         this.setupAtom = atom({ agents: [], git: false, loaded: false, tmuxBin: "" }) as PrimitiveAtom<RecoderSetup>;
         this.diffSummariesAtom = atom({}) as PrimitiveAtom<Record<string, RecoderDiffSummary>>;
         this.launchOpenAtom = atom(false) as PrimitiveAtom<boolean>;
-        this.launchRepoPathAtom = atom("") as PrimitiveAtom<string>;
+        this.launchRepoPathAtom = atom(loadRecentRepos()[0] ?? "") as PrimitiveAtom<string>;
+        this.recentReposAtom = atom(loadRecentRepos()) as PrimitiveAtom<string[]>;
         this.launchPromptAtom = atom("") as PrimitiveAtom<string>;
         this.launchRuntimeIdAtom = atom("") as PrimitiveAtom<string>;
         this.launchAlsoRunAtom = atom([]) as PrimitiveAtom<string[]>;
@@ -240,6 +257,7 @@ class RecoderViewModel implements ViewModel {
                 }
                 started += 1;
             }
+            this.rememberRepo(repoPath);
             globalStore.set(this.launchResultAtom, {
                 ok: true,
                 message: agents.length > 1 ? `Launched ${started} agents.` : "Workspace created.",
@@ -259,6 +277,23 @@ class RecoderViewModel implements ViewModel {
             }
         } finally {
             globalStore.set(this.postingAtom, false);
+        }
+    }
+
+    // Persist a successfully-launched repo so returning users one-click it back.
+    // De-duplicated, most-recent-first, capped. Degrade-safe: a corrupt/absent
+    // store must never break launch, so the whole write is guarded.
+    rememberRepo(repoPath: string) {
+        const p = repoPath.trim();
+        if (p == "") {
+            return;
+        }
+        try {
+            const next = [p, ...loadRecentRepos().filter((x) => x != p)].slice(0, RECENT_REPOS_CAP);
+            localStorage.setItem(RECENT_REPOS_KEY, JSON.stringify(next));
+            globalStore.set(this.recentReposAtom, next);
+        } catch {
+            // degrade-safe: a corrupt/absent store must never break launch
         }
     }
 

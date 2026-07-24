@@ -50,6 +50,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const busyRow = useAtomValue(model.busyRowAtom);
     const [launchOpen, setLaunchOpen] = useAtom(model.launchOpenAtom);
     const [repoPath, setRepoPath] = useAtom(model.launchRepoPathAtom);
+    const recentRepos = useAtomValue(model.recentReposAtom);
     const [prompt, setPrompt] = useAtom(model.launchPromptAtom);
     const [runtimeId, setRuntimeId] = useAtom(model.launchRuntimeIdAtom);
     const [alsoRun, setAlsoRun] = useAtom(model.launchAlsoRunAtom);
@@ -138,6 +139,22 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                 Browse…
                             </button>
                         </div>
+                        {recentRepos.filter((r) => r != repoPath).length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                                {recentRepos
+                                    .filter((r) => r != repoPath)
+                                    .map((r) => (
+                                        <button
+                                            key={r}
+                                            className="border border-border text-secondary rounded px-2 py-0.5 text-xs hover:bg-border/40 transition-colors cursor-pointer truncate max-w-[16rem]"
+                                            title={r}
+                                            onClick={() => setRepoPath(r)}
+                                        >
+                                            {r}
+                                        </button>
+                                    ))}
+                            </div>
+                        )}
                     </label>
 
                     <label className="flex flex-col gap-1">
