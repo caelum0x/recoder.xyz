@@ -4,7 +4,7 @@
  * that mirror the frozen repository/kernel ports (no Postgres, no native kernel).
  */
 import { AUDIT_GENESIS_HASH } from '../types.js';
-import type { AuditRepository, AuditSealer } from '../ports/audit-repo.port.js';
+import type { AuditRepository, AuditRangeQuery, AuditSealer } from '../ports/audit-repo.port.js';
 import type { GovernanceKernelPort, ReloadPoliciesResult } from '../ports/kernel.port.js';
 import type { ApprovalRepository, ApprovalQuery } from '../ports/approval-repo.port.js';
 import type { WorkLockRepository, WorkLockAcquireInput, WorkLockAcquireResult } from '../ports/worklock-repo.port.js';
@@ -54,8 +54,14 @@ export class InMemoryAuditRepository implements AuditRepository {
     return this.rows[this.rows.length - 1] ?? null;
   }
 
-  async range(): Promise<readonly AuditRecord[]> {
-    return [...this.rows];
+  async range(query: AuditRangeQuery = {}): Promise<readonly AuditRecord[]> {
+    let rows = [...this.rows];
+    if (typeof query.fromSeq === 'number') rows = rows.filter((r) => r.seq >= query.fromSeq!);
+    if (typeof query.toSeq === 'number') rows = rows.filter((r) => r.seq <= query.toSeq!);
+    if (query.actorId) rows = rows.filter((r) => r.actorId === query.actorId);
+    if (query.workspaceId) rows = rows.filter((r) => r.payload.workspaceId === query.workspaceId);
+    if (typeof query.limit === 'number') rows = rows.slice(0, query.limit);
+    return rows;
   }
 
   async verifyChain(seal: AuditSealer): Promise<AuditVerification> {

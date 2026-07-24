@@ -31,7 +31,7 @@ import type { ComponentHealth } from '../../shared/health-types.js';
 import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { Principal } from '../identity/types.js';
 import { sliceConductorConfig, type ConductorConfig } from './config.js';
-import type { GateVerdict, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView, SteerTransportPort } from './ports/index.js';
+import type { GateVerdict, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView, SteerTransportPort, AuditReaderPort, AuditRecord } from './ports/index.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { RunSignalPushPort } from './ports/run-signal-push.port.js';
@@ -281,6 +281,12 @@ export class ConductorComposer implements ConductorModule {
    * conductor value-importing the engines domain. Absent ⇒ the bridge lists `[]`.
    */
   private readonly tmuxIntrospect?: ConductorModuleDeps['tmuxIntrospect'];
+  /**
+   * OPTIONAL read seam over the durable governance audit chain, scoped by
+   * workspace. Backs `GET …/audit`. Absent ⇒ the edge degrades to a truthful
+   * empty trail (`[]`), never a fabricated record.
+   */
+  private readonly auditReader?: AuditReaderPort;
   private started = false;
 
   constructor(deps: ConductorModuleDeps) {
@@ -300,6 +306,7 @@ export class ConductorComposer implements ConductorModule {
     this.onDeliveryFeedback = deps.onDeliveryFeedback;
     this.workspaceGrid = deps.workspaceGrid;
     this.tmuxIntrospect = deps.tmuxIntrospect;
+    this.auditReader = deps.auditReader;
     this.checkpointStore = deps.checkpointStore ?? createInMemoryCheckpointStore();
 
     // Per-repo setup script: config seam (governed setScript/getScript) + the
@@ -1769,10 +1776,19 @@ export class ConductorComposer implements ConductorModule {
     try {
       const deps: PublishOpsDeps = this.reviewDeps();
       const result = await mergeWorkspaceOp(deps, workspaceId, input);
-      await recordConductorAudit(
+      // Seal the merge into the durable Merkle audit chain and CAPTURE the record
+      // so the merge result carries its queryable audit id (increment-2 close).
+      // A best-effort sealing failure ⇒ `null` ids — truthful, never fabricated.
+      const sealed = await recordConductorAudit(
         this.gate,
         conductorAuditEntry(action, principal, verdict, { workspaceId, merged: result.merged }),
       );
+      const value: MergeResultView = {
+        ...result,
+        auditId: sealed?.id ?? null,
+        auditSeq: sealed?.seq ?? null,
+        auditEntryHash: sealed?.entryHash ?? null,
+      };
       // Delivery-feedback fusion: a MERGED workspace is THE positive delivery
       // outcome. When the run's routed inference_id was persisted onto the record
       // (`metadata.inferenceId`), fire the inference routing feedback seam so the
@@ -1784,7 +1800,7 @@ export class ConductorComposer implements ConductorModule {
           this.onDeliveryFeedback(inferenceId, principal.userId, true);
         }
       }
-      return { ok: true, verdict, value: result };
+      return { ok: true, verdict, value };
     } catch (err) {
       return { ok: false, verdict, reason: err instanceof Error ? err.message : 'merge failed' };
     }
@@ -1857,6 +1873,19 @@ export class ConductorComposer implements ConductorModule {
 
   async listReconcileFindings(workspaceId?: string): Promise<readonly ReconcileFindingView[]> {
     return this.repository.listReconcileFindings(workspaceId);
+  }
+
+  /**
+   * The durable governance-audit trail for one workspace — the sealed
+   * control-plane events (merge/pr/advance/stop) whose payload carries this
+   * `workspaceId`, ascending by chain `seq`. Read-only (no gate/mutation). The
+   * READ half of the merge→audit seam: `POST …/merge` returns the sealed id and
+   * this edge lets the cockpit pull the full queryable trail. Absent reader ⇒ a
+   * truthful empty trail, never a fabricated record.
+   */
+  async workspaceAudit(workspaceId: string, limit?: number): Promise<readonly AuditRecord[]> {
+    if (!this.auditReader) return [];
+    return this.auditReader.byWorkspace(workspaceId, limit);
   }
 
   terminal(): TerminalStreamPort {

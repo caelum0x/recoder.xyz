@@ -89,6 +89,11 @@ class SqlAuditRepository implements AuditRepository {
       conditions.push('actor_id = :actor_id');
       params.actor_id = query.actorId;
     }
+    if (query.workspaceId) {
+      // Sealed `payload.workspaceId` is a jsonb text member; `->>` extracts it.
+      conditions.push("payload->>'workspaceId' = :workspace_id");
+      params.workspace_id = query.workspaceId;
+    }
     const where = conditions.length ? ` where ${conditions.join(' and ')}` : '';
     params.limit = Math.max(1, Math.min(query.limit ?? DEFAULT_RANGE_LIMIT, 1000));
     const rows = await this.qe.read<QueryRow>(

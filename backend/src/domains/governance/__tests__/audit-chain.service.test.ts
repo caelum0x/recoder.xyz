@@ -79,6 +79,18 @@ describe('AuditChainService — tamper-evident Merkle chain', () => {
     expect((await svc.verify()).ok).toBe(false);
   });
 
+  it('range() scopes the durable chain by workspaceId (per-workspace trail)', async () => {
+    const repo = new InMemoryAuditRepository();
+    const svc = new AuditChainService(repo);
+    await svc.append(makeEntry({ action: 'workspace.merge', payload: { workspaceId: 'ws_a' } }));
+    await svc.append(makeEntry({ action: 'workspace.pr', payload: { workspaceId: 'ws_b' } }));
+    await svc.append(makeEntry({ action: 'workspace.advance', payload: { workspaceId: 'ws_a' } }));
+
+    const trail = await svc.range({ workspaceId: 'ws_a' });
+    expect(trail.map((r) => r.action)).toEqual(['workspace.merge', 'workspace.advance']);
+    expect((await svc.range({ workspaceId: 'ws_none' })).length).toBe(0);
+  });
+
   it('cross-checks the kernel tip and reports a match', async () => {
     const repo = new InMemoryAuditRepository();
     const dbTipHolder = { tip: '' };

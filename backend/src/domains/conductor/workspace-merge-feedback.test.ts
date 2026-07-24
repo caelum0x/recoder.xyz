@@ -125,6 +125,12 @@ describe('conductor delivery-feedback fusion (real git merge)', () => {
     expect(result.value?.merged).toBe(true);
     // THE FUSION: the merge delivered → the inference routing feedback seam fired.
     expect(feedback).toEqual([{ inferenceId: 'inf-abc123', userId: 'user_test', success: true }]);
+    // increment-2 close: POST /merge surfaces the sealed durable audit chain id
+    // (id/seq/entryHash) so the cockpit evidence artifact cites a queryable entry.
+    expect(typeof result.value?.auditId).toBe('string');
+    expect(result.value?.auditId?.length ?? 0).toBeGreaterThan(0);
+    expect(result.value?.auditSeq).toBeGreaterThan(0);
+    expect((result.value?.auditEntryHash ?? '').length).toBe(64);
   });
 
   it('does NOT fire feedback when no inference_id was persisted (degrade-truthful)', async () => {

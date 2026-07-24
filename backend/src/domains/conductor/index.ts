@@ -26,7 +26,7 @@ import type { QueryExecutor } from '../persistence/ports/query-executor.port.js'
 import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
 import type { Principal } from '../identity/types.js';
 import type { ConductorConfigOverrides } from './config.js';
-import type { GovernanceGatePort, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView, SteerTransportPort } from './ports/index.js';
+import type { GovernanceGatePort, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView, SteerTransportPort, AuditReaderPort, AuditRecord } from './ports/index.js';
 import type { McpInjectPort } from './ports/mcp-inject.port.js';
 import type { CoordinationAdmissionPort } from './ports/coordination-admission.port.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
@@ -271,6 +271,15 @@ export interface ConductorModuleDeps {
    * (never a fabricated live session). See `adapters/recoder-session-lister.adapter.ts`.
    */
   readonly tmuxIntrospect?: TmuxIntrospectPort;
+  /**
+   * Optional READ seam over the durable governance audit chain, scoped by
+   * workspace (`GET …/audit`). Bootstrap injects an adapter over
+   * `governance.audit().range({ workspaceId })` — the READ half of the
+   * merge→audit seam whose WRITE half (`recordAudit`) already seals every
+   * conductor mutation. Absent ⇒ the edge degrades to a truthful empty trail
+   * (`[]`), never a fabricated record. See `adapters/audit-reader.adapter.ts`.
+   */
+  readonly auditReader?: AuditReaderPort;
 }
 
 /** The public surface bootstrap registers and the edge/interop consume. */
@@ -513,6 +522,14 @@ export interface ConductorModule {
   githubRepos(): Promise<readonly GithubRepoView[]>;
   /** Reconcile findings for operator/policy review. */
   listReconcileFindings(workspaceId?: string): Promise<readonly ReconcileFindingView[]>;
+  /**
+   * The durable governance-audit trail for one workspace (`GET …/audit`) — the
+   * sealed control-plane events whose payload carries this `workspaceId`,
+   * ascending by chain `seq`. Read-only. The READ half of the merge→audit seam:
+   * `mergeWorkspace` returns the sealed audit id, this returns the queryable
+   * trail. No reader wired ⇒ a truthful empty trail, never a fabricated record.
+   */
+  workspaceAudit(workspaceId: string, limit?: number): Promise<readonly AuditRecord[]>;
   /** The terminal WS surface (edge registers `terminalBackends()`). */
   terminal(): TerminalStreamPort;
   /** The `/api/conductor` router. */
