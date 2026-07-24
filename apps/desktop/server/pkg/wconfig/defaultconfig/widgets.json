@@ -89,26 +89,6 @@
             }
         }
     },
-    "defwidget@recoder-hands": {
-        "display:order": -5.015,
-        "icon": "hand",
-        "label": "hands",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-hands"
-            }
-        }
-    },
-    "defwidget@recoder-openfang": {
-        "display:order": -5.012,
-        "icon": "robot",
-        "label": "openfang",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-openfang"
-            }
-        }
-    },
     "defwidget@recoder-connectors": {
         "display:order": -5.011,
         "icon": "plug",
