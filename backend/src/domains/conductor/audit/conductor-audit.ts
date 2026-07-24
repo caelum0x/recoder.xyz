@@ -16,6 +16,7 @@
 import type { Principal } from '../../identity/types.js';
 import type {
   AuditEntryInput,
+  AuditRecord,
   GateDecisionContext,
   GovernanceAction,
   GovernanceGatePort,
@@ -48,15 +49,20 @@ export async function guardConductorWrite(
  * write. Degrade-safe: a governance-unavailable failure is swallowed (best-effort
  * sealing) so a mutation that already succeeded is never rolled back by an audit
  * write failure — the failure surfaces in governance health, not as a lost write.
+ *
+ * Returns the persisted {@link AuditRecord} so a caller (e.g. `mergeWorkspace`)
+ * can surface the durable audit id to the client, or `null` when sealing failed
+ * (truthful: the write happened but its audit entry is not durable this time).
  */
 export async function recordConductorAudit(
   gate: GovernanceGatePort,
   entry: AuditEntryInput,
-): Promise<void> {
+): Promise<AuditRecord | null> {
   try {
-    await gate.recordAudit(entry);
+    return await gate.recordAudit(entry);
   } catch {
     // Best-effort: governance health reports the sealing failure truthfully.
+    return null;
   }
 }
 

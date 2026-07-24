@@ -28,6 +28,12 @@ export interface AuditRangeQuery {
   readonly toSeq?: number;
   /** Restrict to a single actor (actor-scoped reads). */
   readonly actorId?: string;
+  /**
+   * Restrict to entries whose sealed `payload.workspaceId` equals this id — the
+   * per-workspace audit trail read (conductor merge/pr/advance seal `workspaceId`
+   * into `payload`). Filters on `payload->>'workspaceId'`; never mutates the chain.
+   */
+  readonly workspaceId?: string;
   /** Max rows (default bounded by the impl). */
   readonly limit?: number;
 }

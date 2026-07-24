@@ -14,7 +14,7 @@
 import { createHash } from 'node:crypto';
 import type { Logger } from '../../../shared/logger.js';
 import type { GovernanceKernelPort } from '../ports/kernel.port.js';
-import type { AuditRepository, AuditSealer } from '../ports/audit-repo.port.js';
+import type { AuditRepository, AuditRangeQuery, AuditSealer } from '../ports/audit-repo.port.js';
 import type { AuditEntryInput, AuditRecord, AuditVerification } from '../types.js';
 
 export class AuditChainService {
@@ -36,6 +36,15 @@ export class AuditChainService {
   /** The current durable chain tip, or `null` when empty. */
   async tip(): Promise<AuditRecord | null> {
     return this.repo.tip();
+  }
+
+  /**
+   * A read-only page of the durable chain (ascending `seq`), scoped by the given
+   * filters — e.g. `{ workspaceId }` for the per-workspace audit trail. Never
+   * mutates the chain; the append-only invariant is untouched.
+   */
+  async range(query?: AuditRangeQuery): Promise<readonly AuditRecord[]> {
+    return this.repo.range(query);
   }
 
   /**

@@ -52,6 +52,17 @@ export interface MergeResultView {
   workspaceId: string;
   branch: string;
   merged: boolean;
+  /**
+   * The durable governance-audit chain id this merge was sealed into (the
+   * increment-2 close: POST /merge now returns its audit id so the cockpit's
+   * evidence artifact cites a queryable chain entry). `null` when sealing was
+   * best-effort-skipped (governance unavailable) — truthful, never fabricated.
+   */
+  auditId?: string | null;
+  /** The sealed entry's chain sequence number (companion to {@link auditId}). */
+  auditSeq?: number | null;
+  /** The sealed entry hash (tamper-evident chain leaf for the merge). */
+  auditEntryHash?: string | null;
 }
 
 async function requireWorktree(

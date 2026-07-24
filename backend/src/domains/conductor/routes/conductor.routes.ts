@@ -234,6 +234,27 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     }),
   );
 
+  // Durable governance-audit trail for one workspace — the sealed control-plane
+  // events (merge/pr/advance/stop) whose payload carries this `workspaceId`,
+  // ascending by chain `seq`. PURE read (no gate). The READ half of the
+  // merge→audit seam: `POST …/merge` returns the sealed `auditId` and this edge
+  // returns the queryable trail (each entry: id/seq/prevHash/entryHash/action/
+  // effect/riskTier/degraded/createdAt). No reader wired ⇒ a truthful empty
+  // trail, never a fabricated record.
+  router.get(
+    '/workspaces/:id/audit',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      try {
+        const limit = readPositiveIntQuery(req.query.limit);
+        const audit = await module.workspaceAudit(req.params.id, limit);
+        sendSuccess(res, { audit });
+      } catch (err) {
+        sendError(res, toReadError(err, 'audit read failed'));
+      }
+    }),
+  );
+
   router.get(
     '/workspaces/:id/dev-command',
     middleware.authenticate,
@@ -672,6 +693,13 @@ const MERGE_STRATEGIES = ['squash', 'merge', 'rebase'] as const;
 
 function isMergeStrategy(value: unknown): value is (typeof MERGE_STRATEGIES)[number] {
   return typeof value === 'string' && (MERGE_STRATEGIES as readonly string[]).includes(value);
+}
+
+/** A positive-integer query param (e.g. `?limit=50`), or `undefined` when absent/invalid. */
+function readPositiveIntQuery(value: unknown): number | undefined {
+  if (value == null) return undefined;
+  const n = Number.parseInt(String(value), 10);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
 /** Map a read-op failure to the truthful error: "not found" → 404, else 503. */

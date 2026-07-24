@@ -58,6 +58,7 @@ import { createTmuxSteerTransport } from '../domains/conductor/adapters/steer-tr
 import { createTmuxScanSource } from '../domains/conductor/adapters/tmux-scan-source.adapter.js';
 import { createDmuxGridAdapter } from '../domains/conductor/adapters/dmux-grid.adapter.js';
 import { createRecoderMcpInjector } from '../domains/conductor/adapters/mcp-inject.adapter.js';
+import { createConductorAuditReader } from '../domains/conductor/adapters/audit-reader.adapter.js';
 import { createCloudSandboxSubstrate } from '../domains/conductor/adapters/cloud-sandbox-substrate.adapter.js';
 import { createEnginesModule, createOpenfangWorkflowDriver } from '../domains/engines/index.js';
 import { createInferenceModule } from '../domains/inference/index.js';
@@ -797,6 +798,12 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // surfaces its live `recoder-*` sessions WITHOUT value-importing the engines
     // domain. Absent ⇒ the lister degrades truthfully to an empty list.
     ...(conductorTmuxIntrospect ? { tmuxIntrospect: conductorTmuxIntrospect } : {}),
+    // READ seam over the durable governance audit chain, scoped by workspace
+    // (`GET …/audit`). The READ half of the merge→audit seam: `recordAudit` seals
+    // every conductor mutation with the `workspaceId` in payload, and this reader
+    // (over `governance.audit().range({ workspaceId })`) returns the queryable
+    // trail so the cockpit evidence artifact cites durable chain ids. Read-only.
+    auditReader: createConductorAuditReader(governance.audit()),
     // Delivery-feedback seam: a MERGED workspace fires the inference routing
     // feedback sink (`task_success` on the run's persisted inference_id) so the
     // BYOK LLM gateway learns from real deliveries. Degrade-truthful: the merge
