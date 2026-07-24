@@ -69,17 +69,6 @@
             }
         }
     },
-    "defwidget@recoder-cockpit": {
-        "display:order": -5.005,
-        "icon": "gauge-high",
-        "label": "cockpit",
-        "blockdef": {
-            "meta": {
-                "view": "web",
-                "url": "http://127.0.0.1:3100/cockpit/"
-            }
-        }
-    },
     "defwidget@terminal": {
         "display:order": -5,
         "icon": "square-terminal",

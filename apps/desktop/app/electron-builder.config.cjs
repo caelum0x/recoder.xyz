@@ -149,12 +149,6 @@ const config = {
             from: "../../../backend/engines/rust/tensorzero/crates/target/release/tensorzero_gateway_napi.node",
             to: "native/tensorzero_gateway_napi.node",
         },
-        // Cockpit SPA served by the embedded backend in packaged builds (W3).
-        {
-            from: "../cockpit/dist",
-            to: "cockpit/dist",
-            filter: ["**/*"],
-        },
     ],
     directories: {
         output: "make",
