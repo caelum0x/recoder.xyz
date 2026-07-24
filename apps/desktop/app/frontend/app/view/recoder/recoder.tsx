@@ -2,13 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createBlock } from "@/app/store/global";
-import { useAtomValue } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { agentLabel } from "./recoder-agent-labels";
-import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { RecoderIdentityAffordance } from "./recoder-identity";
 import { RecoderViewModel, type RecoderWorkspace } from "./recoder-model";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
+
+const PRIMARY_BTN =
+    "bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50";
+const QUIET_BTN =
+    "border border-border text-secondary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer disabled:opacity-50";
+const FIELD_LABEL = "text-xs uppercase tracking-wide text-secondary";
+const INPUT = "rounded border border-border bg-transparent px-2 py-1 text-sm";
 
 // createBlock is fire-and-forget from event handlers; a failed cross-block open
 // must never crash the view, so every call is wrapped and errors are swallowed.
@@ -34,34 +40,23 @@ function openTerminal(ws: RecoderWorkspace, tmuxBin: string) {
     openWorkspaceTerminal({ sessionName: ws.sessionName, cwd: ws.worktreePath }, tmuxBin || undefined);
 }
 
-function openLaunch() {
-    openBlock({ meta: { view: "recoder-launch" } });
-}
-
-// Archive a finished workspace: POST to the conductor, then refresh so the row
-// drops out of the list. Degrade-safe: a non-2xx response or a thrown fetch is
-// swallowed and the list is left untouched — archiving must never crash the hub.
-async function archiveWorkspace(model: RecoderViewModel, workspaceId: string) {
-    try {
-        const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/workspaces/${workspaceId}/archive`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: "{}",
-        });
-        if (!res.ok) {
-            return;
-        }
-        model.refresh();
-    } catch {
-        // degrade-safe: a failed archive leaves the list as-is
-    }
-}
-
 function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const workspaces = useAtomValue(model.workspacesAtom);
     const loading = useAtomValue(model.loadingAtom);
     const error = useAtomValue(model.errorAtom);
     const setup = useAtomValue(model.setupAtom);
+    const diffSummaries = useAtomValue(model.diffSummariesAtom);
+    const rowStatus = useAtomValue(model.rowStatusAtom);
+    const busyRow = useAtomValue(model.busyRowAtom);
+    const [launchOpen, setLaunchOpen] = useAtom(model.launchOpenAtom);
+    const [repoPath, setRepoPath] = useAtom(model.launchRepoPathAtom);
+    const [prompt, setPrompt] = useAtom(model.launchPromptAtom);
+    const [runtimeId, setRuntimeId] = useAtom(model.launchRuntimeIdAtom);
+    const [alsoRun, setAlsoRun] = useAtom(model.launchAlsoRunAtom);
+    const [branch, setBranch] = useAtom(model.launchBranchAtom);
+    const [interactive, setInteractive] = useAtom(model.launchInteractiveAtom);
+    const posting = useAtomValue(model.postingAtom);
+    const launchResult = useAtomValue(model.launchResultAtom);
 
     useEffect(() => {
         model.refresh();
@@ -70,8 +65,22 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         return () => clearInterval(id);
     }, [model]);
 
-    const showGettingStarted = !loading && workspaces.length == 0 && error == "";
     const readyAgents = setup.agents.filter((a) => a.available);
+
+    // Zero-config: preselect the first installed agent so the launch panel opens
+    // ready to submit. Only fills an untouched field — a deliberate choice stays.
+    useEffect(() => {
+        if (runtimeId == "" && readyAgents.length > 0) {
+            setRuntimeId(readyAgents[0].runtimeId);
+        }
+    }, [readyAgents.length]);
+
+    const showGettingStarted = !loading && workspaces.length == 0 && error == "" && !launchOpen;
+    const canLaunch = !posting && repoPath.trim() != "" && runtimeId != "";
+    const parallelAgents = readyAgents.filter((a) => a.runtimeId != runtimeId);
+
+    const toggleAlso = (id: string, on: boolean) =>
+        setAlsoRun(on ? [...alsoRun, id] : alsoRun.filter((x) => x != id));
 
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
@@ -79,15 +88,114 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                 <span className="font-semibold">Recoder — Workspaces</span>
                 <div className="flex-1" />
                 <RecoderIdentityAffordance />
-                <button
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
-                    onClick={() => openLaunch()}
-                >
-                    New agent
+                <button className={PRIMARY_BTN} onClick={() => setLaunchOpen(!launchOpen)}>
+                    {launchOpen ? "Close" : "New agent"}
                 </button>
             </div>
+
             {error != "" && <div className="text-error text-sm">{error}</div>}
             {loading && workspaces.length == 0 && <div className="text-secondary text-sm">Loading…</div>}
+
+            {launchOpen && (
+                <div className="flex flex-col gap-3 rounded border border-border p-3 mt-1">
+                    <div className="text-sm font-semibold">Launch a coding agent</div>
+
+                    <label className="flex flex-col gap-1">
+                        <span className={FIELD_LABEL}>Agent</span>
+                        <select
+                            className={`${INPUT} cursor-pointer`}
+                            value={runtimeId}
+                            onChange={(e) => setRuntimeId(e.target.value)}
+                        >
+                            {readyAgents.length == 0 && <option value="">No agents available</option>}
+                            {setup.agents.map((a) => (
+                                <option key={a.runtimeId} value={a.runtimeId} disabled={!a.available}>
+                                    {agentLabel(a.runtimeId)}
+                                    {a.available ? "" : " (not installed)"}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+
+                    <label className="flex flex-col gap-1">
+                        <span className={FIELD_LABEL}>Folder</span>
+                        <input
+                            className={INPUT}
+                            placeholder="/path/to/your/repo"
+                            value={repoPath}
+                            onChange={(e) => setRepoPath(e.target.value)}
+                        />
+                    </label>
+
+                    <label className="flex flex-col gap-1">
+                        <span className={FIELD_LABEL}>First message (optional)</span>
+                        <textarea
+                            className={`${INPUT} min-h-16 resize-y`}
+                            placeholder="Optionally start the agent with a message — or leave empty and chat once it's running…"
+                            value={prompt}
+                            onChange={(e) => setPrompt(e.target.value)}
+                        />
+                    </label>
+
+                    {parallelAgents.length > 0 && (
+                        <div className="flex flex-col gap-1">
+                            <span className={FIELD_LABEL}>Also run in parallel (optional)</span>
+                            <div className="flex flex-wrap gap-3">
+                                {parallelAgents.map((a) => (
+                                    <label
+                                        key={a.runtimeId}
+                                        className="flex items-center gap-1.5 text-sm cursor-pointer"
+                                        title={`Also run this task with ${agentLabel(a.runtimeId)} in its own worktree`}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            className="cursor-pointer"
+                                            checked={alsoRun.includes(a.runtimeId)}
+                                            onChange={(e) => toggleAlso(a.runtimeId, e.target.checked)}
+                                        />
+                                        <span>{agentLabel(a.runtimeId)}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {alsoRun.filter((id) => id != runtimeId).length == 0 && (
+                        <label className="flex flex-col gap-1">
+                            <span className={FIELD_LABEL}>Branch (optional)</span>
+                            <input
+                                className={INPUT}
+                                placeholder="auto-named if empty"
+                                value={branch}
+                                onChange={(e) => setBranch(e.target.value)}
+                            />
+                        </label>
+                    )}
+
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                            type="checkbox"
+                            className="cursor-pointer"
+                            checked={interactive}
+                            onChange={(e) => setInteractive(e.target.checked)}
+                        />
+                        <span>Interactive session — run the real agent TUI</span>
+                    </label>
+
+                    <button className={`${PRIMARY_BTN} self-start`} disabled={!canLaunch} onClick={() => model.launch()}>
+                        {posting ? "Launching…" : "Launch"}
+                    </button>
+
+                    {launchResult != null && !launchResult.ok && (
+                        <div className="text-error text-sm">{launchResult.error || "Launch failed"}</div>
+                    )}
+                </div>
+            )}
+
+            {launchResult != null && launchResult.ok && !launchOpen && (
+                <div className="text-secondary text-sm">{launchResult.message}</div>
+            )}
+
             {showGettingStarted && (
                 <div className="flex flex-col gap-3 rounded border border-border p-4 mt-1">
                     <div>
@@ -124,10 +232,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     {setup.loaded && readyAgents.length > 0 && (
                         <div className="text-sm text-secondary">
                             You're set up —{" "}
-                            <button
-                                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
-                                onClick={() => openLaunch()}
-                            >
+                            <button className={PRIMARY_BTN} onClick={() => setLaunchOpen(true)}>
                                 create a workspace
                             </button>{" "}
                             to run {agentLabel(readyAgents[0].runtimeId)} on a task.
@@ -135,44 +240,57 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     )}
                 </div>
             )}
+
             <div className="flex flex-col gap-1">
-                {workspaces.map((ws) => (
-                    <div
-                        key={ws.workspaceId}
-                        className="flex items-center gap-2 rounded border border-border px-2 py-1"
-                        title={`${ws.workspaceId} · ${ws.branch}`}
-                    >
-                        <span className="text-sm truncate">{ws.branch}</span>
-                        <span className="text-xs text-secondary">{ws.state}</span>
-                        <span className="text-xs text-secondary ml-auto">{agentLabel(ws.runtimeId)}</span>
-                        <button
-                            className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
-                            onClick={() => openSession(ws.workspaceId)}
+                {workspaces.map((ws) => {
+                    const summary = diffSummaries[ws.workspaceId];
+                    const status = rowStatus[ws.workspaceId];
+                    const busy = busyRow == ws.workspaceId;
+                    return (
+                        <div
+                            key={ws.workspaceId}
+                            className="flex flex-col gap-0.5 rounded border border-border px-2 py-1"
+                            title={`${ws.workspaceId} · ${ws.branch}`}
                         >
-                            Session
-                        </button>
-                        {ws.sessionName && (
-                            <button
-                                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
-                                onClick={() => openTerminal(ws, setup.tmuxBin)}
-                            >
-                                Terminal
-                            </button>
-                        )}
-                        <button
-                            className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
-                            onClick={() => openReview()}
-                        >
-                            Review
-                        </button>
-                        <button
-                            className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
-                            onClick={() => archiveWorkspace(model, ws.workspaceId)}
-                        >
-                            Archive
-                        </button>
-                    </div>
-                ))}
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm truncate">{ws.branch}</span>
+                                <span className="text-xs text-secondary">{ws.state}</span>
+                                {summary != null && summary.files > 0 && (
+                                    <span className="text-xs text-secondary">
+                                        +{summary.additions} −{summary.deletions}
+                                    </span>
+                                )}
+                                <span className="text-xs text-secondary ml-auto">{agentLabel(ws.runtimeId)}</span>
+                                <button className={QUIET_BTN} onClick={() => openSession(ws.workspaceId)}>
+                                    Session
+                                </button>
+                                {ws.sessionName && (
+                                    <button className={QUIET_BTN} onClick={() => openTerminal(ws, setup.tmuxBin)}>
+                                        Terminal
+                                    </button>
+                                )}
+                                <button className={QUIET_BTN} onClick={() => openReview()}>
+                                    Review
+                                </button>
+                                <button
+                                    className={QUIET_BTN}
+                                    disabled={busy}
+                                    onClick={() => model.mergeWorkspace(ws.workspaceId)}
+                                >
+                                    {busy ? "…" : "Merge"}
+                                </button>
+                                <button
+                                    className={QUIET_BTN}
+                                    disabled={busy}
+                                    onClick={() => model.archiveWorkspace(ws.workspaceId)}
+                                >
+                                    Archive
+                                </button>
+                            </div>
+                            {status && <div className="text-xs text-secondary">{status}</div>}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
