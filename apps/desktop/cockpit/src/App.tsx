@@ -15,7 +15,6 @@ import { usePoll } from './lib/usePoll';
 import { useWorkspaceWaits } from './lib/useWorkspaceWaits';
 import {
   readConfig,
-  configWasInjected,
   readInitialView,
   hasDesktopDeviceLogin,
   hasDesktopSignOut,
@@ -483,8 +482,7 @@ export function App() {
         <div class="banner banner-error">
           {backendPhaseLine(backendPhase) ?? (
             <span>
-              <strong>Backend unreachable.</strong> Can't reach the backend at {config.backendUrl}.
-              {!configWasInjected() && ' (No shell config injected — using default localhost:3100.)'}
+              <strong>Backend unreachable.</strong> Can't reach the backend at {config.backendUrl}. It may still be starting — this clears automatically once it's up.
             </span>
           )}
         </div>
