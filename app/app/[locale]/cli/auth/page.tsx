@@ -4,6 +4,26 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSession } from '@/lib/session-provider';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+// Clean, monochrome brand chrome shared across every state of this page. The old
+// orange→purple gradient was the retired (Kortix/recortix) look; the current
+// Recoder brand is restrained and dark, so this page is white-on-near-black with
+// a single white primary action.
+function Wordmark() {
+  return (
+    <div className="inline-flex items-center gap-2 mb-6">
+      <div className="h-7 w-7 rounded-md bg-white text-black flex items-center justify-center font-bold text-sm">R</div>
+      <span className="text-white font-semibold text-lg tracking-tight">Recoder</span>
+    </div>
+  );
+}
+
+const PRIMARY_BTN =
+  'w-full bg-white text-black font-medium py-3 px-6 rounded-lg transition-colors hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed';
+const SECONDARY_BTN =
+  'flex-1 bg-neutral-800 text-white font-medium py-3 px-6 rounded-lg border border-neutral-700 transition-colors hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed';
+const SHELL = 'min-h-screen bg-neutral-950 flex items-center justify-center p-4';
+const CARD = 'w-full bg-neutral-900 rounded-2xl border border-neutral-800 p-8';
+
 function CLIAuthContent() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
@@ -18,7 +38,6 @@ function CLIAuthContent() {
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [needsAuth, setNeedsAuth] = useState(false);
 
-  // Check auth status
   useEffect(() => {
     if (!isPending && !session) {
       setNeedsAuth(true);
@@ -27,7 +46,6 @@ function CLIAuthContent() {
     }
   }, [session, isPending]);
 
-  // Load device code info when user code is provided and authenticated
   useEffect(() => {
     if (userCode && session && !isPending) {
       loadDeviceCodeInfo();
@@ -39,7 +57,6 @@ function CLIAuthContent() {
     router.push(`/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`);
   };
 
-  // Countdown timer
   useEffect(() => {
     if (deviceCodeInfo?.expiresAt) {
       const interval = setInterval(() => {
@@ -47,12 +64,10 @@ function CLIAuthContent() {
         const expiry = new Date(deviceCodeInfo.expiresAt).getTime();
         const remaining = Math.max(0, Math.floor((expiry - now) / 1000));
         setTimeRemaining(remaining);
-
         if (remaining === 0) {
           setError('This code has expired. Please generate a new one from your CLI.');
         }
       }, 1000);
-
       return () => clearInterval(interval);
     }
   }, [deviceCodeInfo]);
@@ -62,12 +77,10 @@ function CLIAuthContent() {
       setError('');
       const response = await fetch(`/api/auth/cli/authorize?user_code=${userCode}`);
       const data = await response.json();
-
       if (!response.ok) {
         setError(data.message || 'Invalid or expired code');
         return;
       }
-
       setDeviceCodeInfo(data);
     } catch (err: any) {
       setError('Failed to load code information');
@@ -78,22 +91,15 @@ function CLIAuthContent() {
     try {
       setLoading(true);
       setError('');
-
       const response = await fetch('/api/auth/cli/authorize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_code: userCode,
-          action,
-        }),
+        body: JSON.stringify({ user_code: userCode, action }),
       });
-
       const data = await response.json();
-
       if (!response.ok) {
         throw new Error(data.message || 'Authorization failed');
       }
-
       if (action === 'approve') {
         setSuccess(true);
       } else {
@@ -112,44 +118,33 @@ function CLIAuthContent() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Loading state
   if (isPending) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
-        <div className="text-white">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
-          <p className="mt-4">Loading...</p>
+      <div className={SHELL}>
+        <div className="text-center text-neutral-400">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-neutral-700 border-t-white mx-auto"></div>
+          <p className="mt-4 text-sm">Loading…</p>
         </div>
       </div>
     );
   }
 
-  // Not authenticated - show sign in prompt
   if (needsAuth) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-gray-800 rounded-2xl shadow-2xl p-8 border border-gray-700">
+      <div className={SHELL}>
+        <div className={`max-w-md ${CARD}`}>
           <div className="text-center">
-            <div className="inline-block bg-gradient-to-r from-orange-500 to-purple-600 text-white px-4 py-2 rounded-lg font-bold text-xl mb-6">
-              recoder.xyz
-            </div>
-            <h1 className="text-2xl font-bold text-white mb-4">
-              Sign In Required
-            </h1>
-            <p className="text-gray-400 mb-6">
-              Please sign in to authorize your CLI device.
-            </p>
+            <Wordmark />
+            <h1 className="text-2xl font-semibold text-white mb-2">Sign in required</h1>
+            <p className="text-neutral-400 mb-6">Sign in to authorize your CLI device.</p>
             {userCode && (
-              <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 mb-6">
-                <p className="text-sm text-gray-400 mb-2">Device Code:</p>
-                <p className="text-2xl font-mono font-bold text-orange-500">{userCode}</p>
+              <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 mb-6">
+                <p className="text-xs uppercase tracking-wide text-neutral-500 mb-2">Device code</p>
+                <p className="text-2xl font-mono font-semibold text-white tracking-widest">{userCode}</p>
               </div>
             )}
-            <button
-              onClick={handleSignIn}
-              className="w-full bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-all"
-            >
-              Sign In to Continue
+            <button onClick={handleSignIn} className={PRIMARY_BTN}>
+              Sign in to continue
             </button>
           </div>
         </div>
@@ -157,32 +152,26 @@ function CLIAuthContent() {
     );
   }
 
-  // Success state
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-gray-800 rounded-2xl shadow-2xl p-8 border border-gray-700">
+      <div className={SHELL}>
+        <div className={`max-w-md ${CARD}`}>
           <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-green-500/20 border-2 border-green-500 mb-6">
-              <svg className="h-10 w-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-white/10 border border-white/20 mb-6">
+              <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-3xl font-bold text-white mb-4">
-              Authorization Successful!
-            </h1>
-            <p className="text-gray-400 mb-6">
-              You can now return to your terminal. The CLI has been successfully authenticated.
+            <h1 className="text-2xl font-semibold text-white mb-2">Device authorized</h1>
+            <p className="text-neutral-400 mb-6">
+              You can return to your terminal — the CLI is now signed in.
             </p>
-            <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700 mb-6">
-              <p className="text-sm text-gray-400 mb-2">Authenticated as:</p>
+            <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-4 mb-6">
+              <p className="text-xs uppercase tracking-wide text-neutral-500 mb-2">Signed in as</p>
               <p className="text-white font-medium">{session?.user?.email}</p>
             </div>
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="w-full bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-all"
-            >
-              Go to Dashboard
+            <button onClick={() => router.push('/dashboard')} className={PRIMARY_BTN}>
+              Go to dashboard
             </button>
           </div>
         </div>
@@ -190,35 +179,25 @@ function CLIAuthContent() {
     );
   }
 
-  // Main authorization flow
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full bg-gray-800 rounded-2xl shadow-2xl p-8 border border-gray-700">
-        {/* Header */}
+    <div className={SHELL}>
+      <div className={`max-w-2xl ${CARD}`}>
         <div className="text-center mb-8">
-          <div className="inline-block bg-gradient-to-r from-orange-500 to-purple-600 text-white px-4 py-2 rounded-lg font-bold text-xl mb-4">
-            recoder.xyz
-          </div>
-          <h1 className="text-3xl font-bold text-white mb-2">
-            Authorize CLI Access
-          </h1>
-          <p className="text-gray-400">
-            Authenticate your Recoder CLI with your account
-          </p>
+          <Wordmark />
+          <h1 className="text-2xl font-semibold text-white mb-2">Authorize CLI access</h1>
+          <p className="text-neutral-400">Connect your Recoder CLI to your account.</p>
         </div>
 
-        {/* Error message */}
         {error && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/50 rounded-lg p-4">
-            <p className="text-red-400 text-sm">{error}</p>
+          <div className="mb-6 bg-red-500/10 border border-red-500/40 rounded-lg p-4">
+            <p className="text-red-300 text-sm">{error}</p>
           </div>
         )}
 
-        {/* Code input */}
         {!deviceCodeInfo && (
           <div className="mb-8">
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Enter the code from your terminal:
+            <label className="block text-sm font-medium text-neutral-300 mb-2">
+              Enter the code from your terminal
             </label>
             <div className="flex gap-3">
               <input
@@ -226,59 +205,57 @@ function CLIAuthContent() {
                 value={userCode}
                 onChange={(e) => setUserCode(e.target.value.toUpperCase())}
                 placeholder="ABCD-1234"
-                className="flex-1 bg-gray-900 border border-gray-600 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono text-lg tracking-wider text-center"
+                className="flex-1 bg-neutral-950 border border-neutral-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-white/20 font-mono text-lg tracking-widest text-center"
                 maxLength={9}
               />
               <button
                 onClick={loadDeviceCodeInfo}
                 disabled={!userCode || loading}
-                className="bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-semibold px-6 py-3 rounded-lg transition-all disabled:cursor-not-allowed"
+                className="bg-white text-black font-medium px-6 py-3 rounded-lg transition-colors hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {loading ? 'Loading...' : 'Continue'}
+                {loading ? 'Loading…' : 'Continue'}
               </button>
             </div>
-            <p className="text-gray-500 text-sm mt-2">
-              The code is shown in your terminal after running <code className="bg-gray-900 px-2 py-1 rounded">recoder auth login</code>
+            <p className="text-neutral-500 text-sm mt-2">
+              The code is shown in your terminal after running{' '}
+              <code className="bg-neutral-950 border border-neutral-800 px-2 py-1 rounded text-neutral-300">recoder auth login</code>
             </p>
           </div>
         )}
 
-        {/* Device code info and authorization */}
         {deviceCodeInfo && !success && (
           <>
-            {/* Timer */}
             {timeRemaining > 0 && (
-              <div className="mb-6 bg-gray-900/50 border border-gray-700 rounded-lg p-4">
+              <div className="mb-6 bg-neutral-950 border border-neutral-800 rounded-lg p-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">Time remaining:</span>
-                  <span className={`font-mono font-bold ${timeRemaining < 60 ? 'text-red-500' : 'text-orange-500'}`}>
+                  <span className="text-neutral-400 text-sm">Time remaining</span>
+                  <span className={`font-mono font-semibold ${timeRemaining < 60 ? 'text-red-400' : 'text-white'}`}>
                     {formatTime(timeRemaining)}
                   </span>
                 </div>
-                <div className="mt-2 bg-gray-800 rounded-full h-2 overflow-hidden">
+                <div className="mt-2 bg-neutral-800 rounded-full h-1.5 overflow-hidden">
                   <div
-                    className="bg-gradient-to-r from-orange-500 to-purple-600 h-full transition-all duration-1000"
+                    className="bg-white h-full transition-all duration-1000"
                     style={{ width: `${(timeRemaining / 600) * 100}%` }}
                   />
                 </div>
               </div>
             )}
 
-            {/* User info */}
-            <div className="mb-6 bg-gray-900/50 border border-gray-700 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">Authorizing as:</h3>
+            <div className="mb-6 bg-neutral-950 border border-neutral-800 rounded-lg p-6">
+              <h3 className="text-sm uppercase tracking-wide text-neutral-500 mb-4">Authorizing as</h3>
               <div className="flex items-center gap-4">
                 {session?.user?.image ? (
                   <img
                     src={session.user.image}
                     alt={session.user.name || ''}
-                    className="w-12 h-12 rounded-full border-2 border-orange-500"
+                    className="w-11 h-11 rounded-full border border-neutral-700"
                     onError={(e) => {
                       e.currentTarget.style.display = 'none';
                     }}
                   />
                 ) : (
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-purple-600 flex items-center justify-center border-2 border-orange-500">
+                  <div className="w-11 h-11 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center">
                     <span className="text-white font-semibold text-sm">
                       {session?.user?.name?.charAt(0).toUpperCase() || session?.user?.email?.charAt(0).toUpperCase() || 'U'}
                     </span>
@@ -286,62 +263,57 @@ function CLIAuthContent() {
                 )}
                 <div>
                   <p className="text-white font-medium">{session?.user?.name}</p>
-                  <p className="text-gray-400 text-sm">{session?.user?.email}</p>
+                  <p className="text-neutral-400 text-sm">{session?.user?.email}</p>
                 </div>
               </div>
             </div>
 
-            {/* Code display */}
-            <div className="mb-6 bg-gray-900/50 border border-gray-700 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">Device Code:</h3>
-              <div className="bg-gray-800 rounded-lg p-4 border border-gray-600">
-                <p className="text-4xl font-mono font-bold text-orange-500 text-center tracking-wider">
+            <div className="mb-6 bg-neutral-950 border border-neutral-800 rounded-lg p-6">
+              <h3 className="text-sm uppercase tracking-wide text-neutral-500 mb-4">Device code</h3>
+              <div className="bg-neutral-900 rounded-lg p-4 border border-neutral-800">
+                <p className="text-4xl font-mono font-semibold text-white text-center tracking-widest">
                   {userCode}
                 </p>
               </div>
             </div>
 
-            {/* Warning */}
-            <div className="mb-6 bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-4">
+            <div className="mb-6 bg-neutral-950 border border-neutral-800 rounded-lg p-4">
               <div className="flex gap-3">
-                <svg className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-5 h-5 text-neutral-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
                 <div>
-                  <h4 className="text-yellow-500 font-semibold text-sm mb-1">Important</h4>
-                  <p className="text-yellow-200 text-sm">
-                    Only authorize this device if you initiated this request from your terminal.
-                    This will grant full access to your Recoder account.
+                  <h4 className="text-white font-medium text-sm mb-1">Only authorize if you started this</h4>
+                  <p className="text-neutral-400 text-sm">
+                    Authorizing grants this device full access to your Recoder account.
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Action buttons */}
             <div className="flex gap-4">
               <button
                 onClick={() => handleAuthorize('deny')}
                 disabled={loading || timeRemaining === 0}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white font-semibold py-3 px-6 rounded-lg transition-all disabled:cursor-not-allowed"
+                className={SECONDARY_BTN}
               >
                 Deny
               </button>
               <button
                 onClick={() => handleAuthorize('approve')}
                 disabled={loading || timeRemaining === 0}
-                className="flex-1 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-semibold py-3 px-6 rounded-lg transition-all disabled:cursor-not-allowed"
+                className="flex-1 bg-white text-black font-medium py-3 px-6 rounded-lg transition-colors hover:bg-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {loading ? 'Authorizing...' : 'Authorize Device'}
+                {loading ? 'Authorizing…' : 'Authorize device'}
               </button>
             </div>
           </>
         )}
 
-        {/* Help text */}
-        <div className="mt-8 pt-8 border-t border-gray-700">
-          <h3 className="text-sm font-semibold text-gray-400 mb-3">Need help?</h3>
-          <div className="space-y-2 text-sm text-gray-500">
-            <p>• Make sure you've run <code className="bg-gray-900 px-2 py-1 rounded text-orange-500">recoder auth login</code> in your terminal</p>
+        <div className="mt-8 pt-6 border-t border-neutral-800">
+          <h3 className="text-sm font-medium text-neutral-400 mb-3">Need help?</h3>
+          <div className="space-y-2 text-sm text-neutral-500">
+            <p>• Run <code className="bg-neutral-950 border border-neutral-800 px-2 py-1 rounded text-neutral-300">recoder auth login</code> in your terminal first</p>
             <p>• The code expires after 10 minutes</p>
           </div>
         </div>
@@ -352,14 +324,16 @@ function CLIAuthContent() {
 
 export default function CLIAuthPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
-        <div className="text-white">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
-          <p className="mt-4">Loading...</p>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+          <div className="text-center text-neutral-400">
+            <div className="animate-spin rounded-full h-8 w-8 border-2 border-neutral-700 border-t-white mx-auto"></div>
+            <p className="mt-4 text-sm">Loading…</p>
+          </div>
         </div>
-      </div>
-    }>
+      }
+    >
       <CLIAuthContent />
     </Suspense>
   );
