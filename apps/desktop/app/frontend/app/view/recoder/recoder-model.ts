@@ -56,17 +56,27 @@ class RecoderViewModel implements ViewModel {
     // simply shows a neutral getting-started message), never throwing.
     async refreshSetup() {
         try {
-            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/health/full`);
-            const body = await res.json();
-            const h = body?.data ?? {};
-            const agents = Array.isArray(h?.runtimes)
-                ? h.runtimes.map((r: { runtimeId: string; available: boolean }) => ({
+            const base = getRecoderBackendUrl();
+            // Agents come from /api/conductor/runtimes; the substrate (tmux + git
+            // readiness) from /api/conductor/health. The old combined
+            // /api/conductor/health/full was retired in the greenfield backend
+            // (it 404s), which wrongly made this panel report "no agents".
+            const [rtRes, hRes] = await Promise.all([
+                fetch(`${base}/api/conductor/runtimes`),
+                fetch(`${base}/api/conductor/health`),
+            ]);
+            const rt = (await rtRes.json())?.data ?? {};
+            const h = (await hRes.json())?.data ?? {};
+            const agents = Array.isArray(rt?.runtimes)
+                ? rt.runtimes.map((r: { runtimeId: string; available: boolean }) => ({
                       runtimeId: r.runtimeId,
                       available: Boolean(r.available),
                   }))
                 : [];
             const tmuxBin = typeof h?.substrate?.tmuxBin == "string" ? h.substrate.tmuxBin : "";
-            globalStore.set(this.setupAtom, { agents, git: Boolean(h?.substrate?.git), loaded: true, tmuxBin });
+            // The conductor substrate reports `available` only when its hard
+            // prerequisites (git + tmux) resolve — treat that as git-ready.
+            globalStore.set(this.setupAtom, { agents, git: Boolean(h?.available), loaded: true, tmuxBin });
         } catch {
             globalStore.set(this.setupAtom, { agents: [], git: false, loaded: false, tmuxBin: "" });
         }

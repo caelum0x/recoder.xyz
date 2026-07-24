@@ -42,7 +42,7 @@
     --header-icon-width: 16px;
     --header-height: 30px;
 
-    --tab-green: rgb(88, 193, 66);
+    --tab-green: rgb(122, 162, 160);
 
     /* z-index values */
     --zindex-header-hover: 100;
@@ -90,7 +90,7 @@
     --toggle-checked-bg-color: var(--accent-color);
 
     // link color
-    --link-color: #58c142;
+    --link-color: rgb(122, 162, 160);
 
     // form colors
     --form-element-border-color: rgba(241, 246, 243, 0.15);
@@ -145,7 +145,7 @@
 
     // button colors
     --button-text-color: #000000;
-    --button-green-bg: var(--term-green);
+    --button-green-bg: var(--accent-color);
     --button-green-border-color: rgb(142, 182, 180);
     --button-grey-bg: rgba(255, 255, 255, 0.04);
     --button-grey-hover-bg: rgba(255, 255, 255, 0.09);

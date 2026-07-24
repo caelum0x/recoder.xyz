@@ -76,6 +76,9 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
 
     useEffect(() => {
         model.refresh();
+        // Auto-poll (replaces the removed manual Refresh button).
+        const id = setInterval(() => model.refresh(), 6000);
+        return () => clearInterval(id);
     }, [model]);
 
     const showGettingStarted = !loading && workspaces.length == 0 && error == "";
@@ -85,12 +88,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
                 <span className="font-semibold">Recoder — Workspaces</span>
-                <button
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
-                    onClick={() => model.refresh()}
-                >
-                    Refresh
-                </button>
+                <div className="flex-1" />
                 <button
                     className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
                     onClick={() => openLaunch()}
