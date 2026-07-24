@@ -87,14 +87,19 @@ class RecoderLaunchViewModel implements ViewModel {
         try {
             const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/runtimes`);
             const body = await res.json();
-            const list = body?.data ?? [];
+            // GET /api/conductor/runtimes returns { data: { runtimes: [...] } } —
+            // read the nested array, not `data` itself (which is the object). openfang
+            // is the in-process engine, not a launchable coding agent, so drop it.
+            const list = body?.data?.runtimes ?? [];
             const runtimes: RecoderRuntime[] = Array.isArray(list)
-                ? list.map((r: RecoderRuntime) => ({
-                      runtimeId: String(r?.runtimeId ?? ""),
-                      bin: String(r?.bin ?? ""),
-                      available: Boolean(r?.available),
-                      path: r?.path,
-                  }))
+                ? list
+                      .filter((r: RecoderRuntime) => String(r?.runtimeId ?? "") !== "openfang")
+                      .map((r: RecoderRuntime) => ({
+                          runtimeId: String(r?.runtimeId ?? ""),
+                          bin: String(r?.bin ?? ""),
+                          available: Boolean(r?.available),
+                          path: r?.path,
+                      }))
                 : [];
             globalStore.set(this.runtimesAtom, runtimes);
             const current = globalStore.get(this.runtimeIdAtom);
