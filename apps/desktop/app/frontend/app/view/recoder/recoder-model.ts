@@ -914,6 +914,31 @@ class RecoderViewModel implements ViewModel {
         globalStore.set(this.lastMergeAtom, { ...cur, [workspaceId]: record });
     }
 
+    // After a workspace's delivered state changes (a merge), re-read the compare
+    // aggregate + per-sibling readiness/mergeability for whichever loaded group
+    // contains it, so its badges reflect the post-merge truth instead of the
+    // once-loaded pre-merge verdict. Degrade-safe: if no loaded compare group
+    // holds this workspace (e.g. a solo board-row merge), there is nothing to
+    // refresh and it returns without a network call. Each underlying read is
+    // itself degrade-safe and never fabricates a verdict.
+    async refreshCompareForWorkspace(workspaceId: string) {
+        if (!workspaceId) {
+            return;
+        }
+        const compare = globalStore.get(this.compareAtom);
+        for (const [tg, view] of Object.entries(compare)) {
+            const siblings = view?.siblings ?? [];
+            if (!siblings.some((s) => s.workspaceId == workspaceId)) {
+                continue;
+            }
+            await Promise.all([
+                this.loadCompare(tg),
+                this.loadGroupReadiness(siblings.map((s) => ({ workspaceId: s.workspaceId }))),
+            ]);
+            return;
+        }
+    }
+
     // Merge the workspace into its base â the "review â merge" close of the loop.
     // Captures the governance verdict TRUTHFULLY: a 200 parses { merge, verdict }
     // and stashes the exact effect/tier/engine for the evidence step; a 403 surfaces
@@ -948,6 +973,11 @@ class RecoderViewModel implements ViewModel {
                 });
                 this.setRowStatus(workspaceId, merged ? "Merged." : "Already up to date â nothing to merge.");
                 await this.refresh();
+                // A merge flips this sibling's delivered state, so the compare
+                // panel's readiness/mergeability badges (loaded once at open) go
+                // stale. Re-read them for the whole group so the merged branch
+                // stops reading a pre-merge 'ready'/'clean' next to a Merged marker.
+                await this.refreshCompareForWorkspace(workspaceId);
                 return;
             }
             const reason = readErrorReason(body);
