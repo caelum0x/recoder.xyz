@@ -170,6 +170,24 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         return () => clearInterval(id);
     }, [model]);
 
+    // A SINGLE interactive launch drops the user straight into the session. Guard
+    // on the workspace id so a re-render / poll can never reopen it, and never
+    // auto-open parallel launches (that would spawn N terminals at once).
+    const lastAutoOpenedRef = useRef<string>("");
+    useEffect(() => {
+        if (!launchResult?.ok || !launchResult.workspaceId || !launchResult.interactive) {
+            return;
+        }
+        if ((launchResult.parallelCount ?? 0) != 0) {
+            return;
+        }
+        if (lastAutoOpenedRef.current == launchResult.workspaceId) {
+            return;
+        }
+        lastAutoOpenedRef.current = launchResult.workspaceId;
+        openSession(launchResult.workspaceId);
+    }, [launchResult]);
+
     const readyAgents = setup.agents.filter((a) => a.available);
 
     // Zero-config: the ctor seeds the last-used agent from localStorage. If none
@@ -426,7 +444,32 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             )}
 
             {launchResult != null && launchResult.ok && !launchOpen && (
-                <div className="text-secondary text-sm">{launchResult.message}</div>
+                <div className="flex flex-wrap items-center gap-2 text-secondary text-sm">
+                    <span>{launchResult.message}</span>
+                    {launchResult.workspaceId && (
+                        <>
+                            <button className={QUIET_BTN} onClick={() => openSession(launchResult.workspaceId)}>
+                                Open session
+                            </button>
+                            {launchResult.sessionName && (
+                                <button
+                                    className={QUIET_BTN}
+                                    onClick={() =>
+                                        openWorkspaceTerminal(
+                                            { sessionName: launchResult.sessionName, cwd: launchResult.worktreePath },
+                                            setup.tmuxBin || undefined
+                                        )
+                                    }
+                                >
+                                    Terminal
+                                </button>
+                            )}
+                            <button className={QUIET_BTN} onClick={() => openReview()}>
+                                Review
+                            </button>
+                        </>
+                    )}
+                </div>
             )}
 
             {showGettingStarted && (
