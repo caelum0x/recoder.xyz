@@ -178,6 +178,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     // on the workspace id so a re-render / poll can never reopen it, and never
     // auto-open parallel launches (that would spawn N terminals at once).
     const lastAutoOpenedRef = useRef<string>("");
+    const messageRef = useRef<HTMLTextAreaElement>(null);
+    const folderBtnRef = useRef<HTMLButtonElement>(null);
     useEffect(() => {
         if (!launchResult?.ok || !launchResult.workspaceId || !launchResult.interactive) {
             return;
@@ -191,6 +193,20 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         lastAutoOpenedRef.current = launchResult.workspaceId;
         openSession(launchResult.workspaceId);
     }, [launchResult]);
+
+    // Land focus on the most-actionable field when the panel opens: the first
+    // message for returning users (repo already seeded), else the folder picker
+    // for first-run. Keyed on launchOpen only so typing the path never steals focus.
+    useEffect(() => {
+        if (!launchOpen) {
+            return;
+        }
+        if (repoPath.trim() != "") {
+            messageRef.current?.focus();
+            return;
+        }
+        folderBtnRef.current?.focus();
+    }, [launchOpen]);
 
     const readyAgents = setup.agents.filter((a) => a.available);
 
@@ -320,7 +336,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     <label className="flex flex-col gap-1">
                         <span className={FIELD_LABEL}>Folder</span>
                         {repoPath.trim() == "" ? (
-                            <button className={`${PRIMARY_BTN} w-full`} onClick={browseFolder}>
+                            <button ref={folderBtnRef} className={`${PRIMARY_BTN} w-full`} onClick={browseFolder}>
                                 Choose folder...
                             </button>
                         ) : (
@@ -355,6 +371,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     <label className="flex flex-col gap-1">
                         <span className={FIELD_LABEL}>First message{interactive ? " (optional)" : " (required)"}</span>
                         <textarea
+                            ref={messageRef}
                             className={`${INPUT} min-h-16 resize-y`}
                             placeholder={
                                 interactive
