@@ -74,9 +74,23 @@ export type {
   ConvergenceEvidence,
   ConvergenceEvidenceRecord,
   EvidenceCandidate,
+  EvidenceConvergence,
+  EvidenceFileSelection,
   EvidenceGovernance,
   EvidenceVerification,
 } from './evidence/convergence-evidence.js';
+import type { ConvergencePlan } from './converge/converge-plan.service.js';
+export type {
+  ConvergencePlan,
+  ConvergenceFileWinner,
+  ConvergenceUnresolved,
+  ConvergencePlanSource,
+} from './converge/converge-plan.service.js';
+import type {
+  ComposeConvergenceInput,
+  ComposeConvergenceResult,
+} from './converge/converge.ops.js';
+export type { ComposeConvergenceInput, ComposeConvergenceResult } from './converge/converge.ops.js';
 import type {
   CreatePrInput,
   CreatePrResultView,
@@ -566,6 +580,27 @@ export interface ConductorModule {
    * evidence-less) workspace is a truthful `null` (⇒ 404), never a fabricated record.
    */
   getConvergenceEvidence(workspaceId: string): Promise<ConvergenceEvidenceRecord | null>;
+  /**
+   * PLAN a convergence (`GET …/converge-plan`) — the PURE fold of a parallel-run
+   * group's N sibling diffs + a per-contested-file selection into a resolved
+   * file→source map (step 2). Read-only. Non-contested paths auto-resolve to their
+   * sole author; contested paths resolve to a valid selection or surface as
+   * `unresolved` (never an invented winner). `complete` ⇒ compose-ready.
+   */
+  planConvergence(
+    taskGroup: string,
+    selection: Readonly<Record<string, string>>,
+  ): Promise<ConvergencePlan>;
+  /**
+   * COMPOSE a convergence (`POST …/converge`) — GATED (`workspace.branch`).
+   * Materializes a COMPLETE plan into a NEW convergence worktree/branch (whole-file
+   * pick, no agent launched) and registers it as a reviewable workspace that then
+   * flows through the existing governed merge + evidence record. Degrade-truthful.
+   */
+  composeConvergence(
+    input: ComposeConvergenceInput,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<ComposeConvergenceResult>>;
   /** The terminal WS surface (edge registers `terminalBackends()`). */
   terminal(): TerminalStreamPort;
   /** The `/api/conductor` router. */
