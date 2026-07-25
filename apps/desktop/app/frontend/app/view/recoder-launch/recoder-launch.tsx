@@ -40,7 +40,8 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
 
     const readyRuntimes = runtimes.filter((r) => r.available);
     const notConnected = !loading && runtimes.length == 0;
-    const canLaunch = !posting && repoPath.trim() != "" && runtimeId != "";
+    const needsPrompt = !interactive && prompt.trim() == "";
+    const canLaunch = !posting && repoPath.trim() != "" && runtimeId != "" && !needsPrompt;
 
     const browseFolder = async () => {
         const picked = await getApi().selectDirectory();
@@ -144,6 +145,12 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
                         </button>
                         {canLaunch && <span className="text-xs text-secondary">Cmd+Enter to launch</span>}
                     </div>
+
+                    {needsPrompt && repoPath.trim() != "" && runtimeId != "" && (
+                        <span className="text-xs text-secondary">
+                            Add a first message, or turn on interactive session.
+                        </span>
+                    )}
                 </div>
             )}
 
