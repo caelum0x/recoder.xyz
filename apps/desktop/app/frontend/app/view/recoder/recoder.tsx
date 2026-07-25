@@ -389,7 +389,15 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             {loading && workspaces.length == 0 && error == "" && <RecoderSkeleton rows={3} />}
 
             {launchOpen && (
-                <div className="flex flex-col gap-3 rounded border border-white/8 p-3 mt-1 recoder-enter">
+                <div
+                    className="flex flex-col gap-3 rounded border border-white/8 p-3 mt-1 recoder-enter"
+                    onKeyDown={(e) => {
+                        if (e.key == "Escape") {
+                            setLaunchOpen(false);
+                            e.stopPropagation();
+                        }
+                    }}
+                >
                     <div className={SECTION_TITLE}>Launch a coding agent</div>
 
                     <label className="flex flex-col gap-1">
