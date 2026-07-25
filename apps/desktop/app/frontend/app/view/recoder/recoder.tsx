@@ -406,9 +406,17 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                 <div
                     className="flex flex-col gap-3 rounded border border-white/8 p-3 mt-1 recoder-enter"
                     onKeyDown={(e) => {
+                        // launch chord lives here (not on a single field) so keydown bubbling from
+                        // any inner select/input/textarea fires it - one owner avoids a double-launch
+
                         if (e.key == "Escape") {
                             setLaunchOpen(false);
                             e.stopPropagation();
+                            return;
+                        }
+                        if ((e.metaKey || e.ctrlKey) && e.key == "Enter" && canLaunch) {
+                            e.preventDefault();
+                            model.launch();
                         }
                     }}
                 >
@@ -480,13 +488,6 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             }
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (!((e.metaKey || e.ctrlKey) && e.key == "Enter" && canLaunch)) {
-                                    return;
-                                }
-                                e.preventDefault();
-                                model.launch();
-                            }}
                         />
                     </label>
 
