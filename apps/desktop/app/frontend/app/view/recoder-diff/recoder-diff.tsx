@@ -5,7 +5,7 @@ import { RecoderEmpty, RecoderSkeleton } from "@/app/view/recoder/recoder-states
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
-import { RecoderDiffViewModel } from "./recoder-diff-model";
+import { RecoderDiffViewModel, type RecoderCheckRow, type RecoderWorkspaceChecks } from "./recoder-diff-model";
 
 const REFRESH_MS = 6000;
 
@@ -90,6 +90,51 @@ function DiffBody({ patch }: { patch: string }) {
     );
 }
 
+// gh conclusions that mean the check actually failed — the ONLY places red
+// appears in the strip; everything else stays graphite.
+const FailedConclusions = new Set(["failure", "error", "timed_out", "startup_failure", "action_required", "cancelled"]);
+
+function checkDotClass(row: RecoderCheckRow): string {
+    if (FailedConclusions.has(row.conclusion.toLowerCase())) {
+        return "bg-error";
+    }
+    if (row.status.toLowerCase() != "completed") {
+        return "border border-secondary/70";
+    }
+    return "bg-secondary/70";
+}
+
+function checkLabel(value: string): string {
+    return value.toLowerCase().replace(/_/g, " ");
+}
+
+function ChecksStrip({ checks }: { checks: RecoderWorkspaceChecks }) {
+    if (checks == null) {
+        return null;
+    }
+    if (!checks.available) {
+        return <div className="text-xs text-secondary/70">checks: {checks.reason || "unavailable"}</div>;
+    }
+    const rows = checks.checks ?? [];
+    return (
+        <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-xs text-secondary">
+            {checks.mergeable != "" && (
+                <span className="border border-border rounded px-1">{checkLabel(checks.mergeable)}</span>
+            )}
+            {checks.reviewDecision != "" && (
+                <span className="border border-border rounded px-1">{checkLabel(checks.reviewDecision)}</span>
+            )}
+            {rows.map((row, i) => (
+                <span key={`${row.name}-${i}`} className="flex items-center gap-1" title={checkLabel(row.conclusion || row.status)}>
+                    <span className={cn("inline-block w-2 h-2 rounded-full shrink-0", checkDotClass(row))} />
+                    <span>{row.name}</span>
+                </span>
+            ))}
+            {rows.length == 0 && <span>no checks reported</span>}
+        </div>
+    );
+}
+
 function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     const workspaces = useAtomValue(model.workspacesAtom);
     const selectedId = useAtomValue(model.selectedIdAtom);
@@ -102,6 +147,7 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     const mergeStatus = useAtomValue(model.mergeStatusAtom);
     const prCreating = useAtomValue(model.prCreatingAtom);
     const prStatus = useAtomValue(model.prStatusAtom);
+    const checks = useAtomValue(model.checksAtom);
 
     useEffect(() => {
         model.refresh();
@@ -141,6 +187,7 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                     </button>
                 )}
             </div>
+            {selectedId != "" && <ChecksStrip checks={checks} />}
             {mergeStatus != "" && <div className="text-xs text-secondary">{mergeStatus}</div>}
             {prStatus != "" && <div className="text-xs text-secondary">{prStatus}</div>}
 

@@ -37,6 +37,59 @@ type RecoderWorkspaceDiff = {
     changedFiles: number;
 };
 
+type RecoderCheckRow = {
+    name: string;
+    status: string;
+    conclusion: string;
+};
+
+// Shape of GET /api/conductor/workspaces/:id/checks → data (see conductor
+// pr-checks.service.ts WorkspaceChecksView). available:false is a NORMAL state
+// (local-only repo, no PR yet, no gh) with a truthful reason, never an error.
+type RecoderWorkspaceChecks = {
+    available: boolean;
+    reason?: string;
+    mergeable?: string;
+    reviewDecision?: string;
+    checks?: RecoderCheckRow[];
+};
+
+// Coerce the checks payload into the view shape without ever trusting it.
+// Anything that isn't the documented shape degrades to a truthful
+// unavailable-with-reason, never a crash or a fabricated green.
+function parseChecksData(data: unknown): RecoderWorkspaceChecks {
+    if (data == null || typeof data != "object") {
+        return { available: false, reason: "checks unavailable" };
+    }
+    const d = data as Record<string, unknown>;
+    if (d.available !== true) {
+        const reason = typeof d.reason == "string" && d.reason.trim() != "" ? d.reason : "checks unavailable";
+        return { available: false, reason };
+    }
+    const rawChecks = Array.isArray(d.checks) ? d.checks : [];
+    const checks: RecoderCheckRow[] = [];
+    for (const entry of rawChecks) {
+        if (entry == null || typeof entry != "object") {
+            continue;
+        }
+        const e = entry as Record<string, unknown>;
+        if (typeof e.name != "string" || e.name == "") {
+            continue;
+        }
+        checks.push({
+            name: e.name,
+            status: typeof e.status == "string" ? e.status : "",
+            conclusion: typeof e.conclusion == "string" ? e.conclusion : "",
+        });
+    }
+    return {
+        available: true,
+        mergeable: typeof d.mergeable == "string" ? d.mergeable : "",
+        reviewDecision: typeof d.reviewDecision == "string" ? d.reviewDecision : "",
+        checks,
+    };
+}
+
 class RecoderDiffViewModel implements ViewModel {
     viewType: string;
     viewIcon: Atom<string>;
@@ -58,6 +111,12 @@ class RecoderDiffViewModel implements ViewModel {
     prCreatingAtom: PrimitiveAtom<boolean>;
     // Human result of the last PR action ("PR created: <url>", approval reason, …).
     prStatusAtom: PrimitiveAtom<string>;
+    checksAtom: PrimitiveAtom<RecoderWorkspaceChecks>;
+    checksLoadingAtom: PrimitiveAtom<boolean>;
+    // Which workspace checksAtom describes — lets the 6s refresh poll skip
+    // re-probing gh (the checks edge shells out per call) unless the selection
+    // actually changed.
+    checksWorkspaceId: string;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -76,6 +135,9 @@ class RecoderDiffViewModel implements ViewModel {
         this.mergeStatusAtom = atom("") as PrimitiveAtom<string>;
         this.prCreatingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.prStatusAtom = atom("") as PrimitiveAtom<string>;
+        this.checksAtom = atom(null) as PrimitiveAtom<RecoderWorkspaceChecks>;
+        this.checksLoadingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.checksWorkspaceId = "";
     }
 
     get viewComponent(): ViewComponent {
@@ -118,9 +180,12 @@ class RecoderDiffViewModel implements ViewModel {
         if (!selected) {
             globalStore.set(this.diffAtom, null);
             globalStore.set(this.diffStatusAtom, "");
+            globalStore.set(this.checksAtom, null);
+            this.checksWorkspaceId = "";
             return;
         }
-        await this.loadDiff(selected);
+        const checksStale = this.checksWorkspaceId != selected;
+        await Promise.all([this.loadDiff(selected), checksStale ? this.fetchChecks(selected) : Promise.resolve()]);
     }
 
     async selectWorkspace(workspaceId: string) {
@@ -128,9 +193,11 @@ class RecoderDiffViewModel implements ViewModel {
         if (!workspaceId) {
             globalStore.set(this.diffAtom, null);
             globalStore.set(this.diffStatusAtom, "");
+            globalStore.set(this.checksAtom, null);
+            this.checksWorkspaceId = "";
             return;
         }
-        await this.loadDiff(workspaceId);
+        await Promise.all([this.loadDiff(workspaceId), this.fetchChecks(workspaceId)]);
     }
 
     // Degrade-safe: 404 → "no diff", other non-2xx → "diff unavailable", thrown
@@ -165,6 +232,59 @@ class RecoderDiffViewModel implements ViewModel {
             globalStore.set(this.diffStatusAtom, "diff endpoint not available");
         } finally {
             globalStore.set(this.diffLoadingAtom, false);
+        }
+    }
+
+    // PR checks / merge-readiness for the selected workspace. Unavailability is
+    // a NORMAL state here (local-only repo, no PR, no gh) — every failure path
+    // lands on available:false with a truthful reason, never a thrown error.
+    async fetchChecks(workspaceId: string) {
+        this.checksWorkspaceId = workspaceId;
+        globalStore.set(this.checksAtom, null);
+        globalStore.set(this.checksLoadingAtom, true);
+        // A newer fetch supersedes this one by overwriting checksWorkspaceId;
+        // stale resolvers must not write atoms the newer call now owns.
+        const current = () => this.checksWorkspaceId == workspaceId;
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/checks`
+            );
+            if (!current()) {
+                return;
+            }
+            if (!res.ok) {
+                if (res.status == 404) {
+                    globalStore.set(this.checksAtom, { available: false, reason: "checks endpoint not available" });
+                    return;
+                }
+                const detail = await readFetchError(res);
+                if (!current()) {
+                    return;
+                }
+                // transient server failure: drop the poll-skip latch so the
+                // next refresh retries instead of sticking on the error
+                this.checksWorkspaceId = "";
+                globalStore.set(this.checksAtom, {
+                    available: false,
+                    reason: detail || `checks unavailable (${res.status})`,
+                });
+                return;
+            }
+            const body = await res.json();
+            if (!current()) {
+                return;
+            }
+            globalStore.set(this.checksAtom, parseChecksData(body?.data));
+        } catch {
+            if (!current()) {
+                return;
+            }
+            this.checksWorkspaceId = "";
+            globalStore.set(this.checksAtom, { available: false, reason: "checks endpoint not available" });
+        } finally {
+            if (current() || this.checksWorkspaceId == "") {
+                globalStore.set(this.checksLoadingAtom, false);
+            }
         }
     }
 
@@ -261,4 +381,11 @@ class RecoderDiffViewModel implements ViewModel {
     }
 }
 
-export { RecoderDiffViewModel, type RecoderWorkspace, type RecoderWorkspaceDiff };
+export {
+    parseChecksData,
+    RecoderDiffViewModel,
+    type RecoderCheckRow,
+    type RecoderWorkspace,
+    type RecoderWorkspaceChecks,
+    type RecoderWorkspaceDiff,
+};
