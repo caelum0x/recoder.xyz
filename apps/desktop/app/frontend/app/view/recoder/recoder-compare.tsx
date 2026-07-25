@@ -34,9 +34,9 @@ const VERDICT_STYLE: Record<string, string> = {
     ready: "bg-accent/20 text-accent",
     delivered: "bg-accent/20 text-accent",
     blocked: "bg-error/20 text-error",
-    not_ready: "border border-border text-secondary",
-    terminal: "border border-border text-secondary",
-    unknown: "border border-border text-secondary",
+    not_ready: "border border-white/8 text-secondary",
+    terminal: "border border-white/8 text-secondary",
+    unknown: "border border-white/8 text-secondary",
 };
 
 // Per-signal chrome mirrors the verdict palette: only a real pass earns accent,
@@ -204,7 +204,7 @@ function SiblingCompareRow({
         saveConvergenceEvidence(evidence);
     };
     return (
-        <div className="flex flex-col gap-1 rounded border border-border px-2 py-1.5 transition-colors duration-150 ease-out hover:bg-border/20">
+        <div className="flex flex-col gap-1 rounded border border-white/8 px-2 py-2 transition-colors duration-150 ease-out hover:bg-border/20">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <div className="flex items-center gap-1">
                     <button
@@ -225,7 +225,7 @@ function SiblingCompareRow({
                 <span className="text-sm">{agentLabel(sibling.agent)}</span>
                 {suggestedReason != "" && (
                     <span
-                        className="rounded border border-border px-1.5 py-0.5 text-xs text-secondary"
+                        className="rounded border border-white/8 px-1.5 py-0.5 text-xs text-secondary"
                         title={`Suggested by the loaded data (${suggestedReason}) — a non-binding hint. You still choose and click Merge.`}
                     >
                         suggested · {suggestedReason}
@@ -233,7 +233,7 @@ function SiblingCompareRow({
                 )}
                 <span className={META}>{sibling.state}</span>
                 {stat != null ? (
-                    <span className={META}>
+                    <span className={`${META} font-mono`}>
                         +{stat.additions} −{stat.deletions} · {stat.files} file{stat.files == 1 ? "" : "s"}
                     </span>
                 ) : (
@@ -289,13 +289,13 @@ function ContestedSet({ compareView }: { compareView: CompareView }) {
         return <div className={META}>No overlapping files across siblings — no contested set.</div>;
     }
     return (
-        <div className="flex flex-col gap-1 rounded border border-border px-2 py-1.5">
+        <div className="flex flex-col gap-1 rounded border border-white/8 px-2 py-2">
             <div className={FIELD_LABEL}>
                 Contested — {contested.length} file{contested.length == 1 ? "" : "s"} touched by 2+ agents
             </div>
             {contested.map((c) => (
                 <div key={c.path} className="flex flex-wrap items-center gap-x-2 text-sm">
-                    <span className="truncate">{c.path}</span>
+                    <span className="truncate font-mono">{c.path}</span>
                     <span className={META}>
                         {c.workspaceIds.map((id) => agentLabel(agentByWs.get(id) ?? id)).join(" · ")}
                     </span>
@@ -312,7 +312,7 @@ function PairwiseStatLine({ label, stat, reason }: { label: string; stat: Recode
         <div className="flex items-center gap-2 text-xs">
             <span className="text-secondary">{label}</span>
             {stat != null ? (
-                <span className="text-secondary">
+                <span className="text-secondary font-mono">
                     +{stat.additions} −{stat.deletions} · {stat.files} file{stat.files == 1 ? "" : "s"}
                 </span>
             ) : (
@@ -333,7 +333,7 @@ function PairwisePanel({ pair }: { pair: PairwiseCompareView }) {
     const b = pair.b;
     const delta = pair.delta;
     return (
-        <div className="flex flex-col gap-1.5 rounded border border-accent/30 px-2 py-1.5">
+        <div className="flex flex-col gap-1.5 rounded border border-accent/30 px-2 py-2">
             <div className={FIELD_LABEL}>
                 A vs B — {agentLabel(a.agent)} vs {agentLabel(b.agent)}
             </div>
@@ -342,7 +342,7 @@ function PairwisePanel({ pair }: { pair: PairwiseCompareView }) {
             {delta != null ? (
                 <div className="flex items-center gap-2 text-xs">
                     <span className="text-secondary">Δ A−B</span>
-                    <span className="text-primary">
+                    <span className="text-primary font-mono">
                         {fmtSigned(delta.additions)} add · {fmtSigned(delta.deletions)} del · {fmtSigned(delta.files)}{" "}
                         file{delta.files == 1 || delta.files == -1 ? "" : "s"}
                     </span>
@@ -357,7 +357,7 @@ function PairwisePanel({ pair }: { pair: PairwiseCompareView }) {
                         {pair.sharedReason ? ` (${pair.sharedReason})` : ""}
                     </div>
                     {pair.shared.map((path) => (
-                        <span key={path} className="text-sm truncate">
+                        <span key={path} className="text-sm truncate font-mono">
                             {path}
                         </span>
                     ))}
@@ -390,13 +390,13 @@ function RecoderComparePanel({ model, compareView }: { model: RecoderViewModel; 
     const suggested = computeSuggestedWinner(compareView.siblings, readinessMap);
     if (compareView.siblings.length == 0) {
         return (
-            <div className="rounded border border-border p-2">
+            <div className="rounded border border-white/8 p-2">
                 <div className={META}>No sibling agents to compare yet.</div>
             </div>
         );
     }
     return (
-        <div className="flex flex-col gap-1.5 rounded border border-border p-2">
+        <div className="flex flex-col gap-1.5 rounded border border-white/8 p-2">
             <ContestedSet compareView={compareView} />
             {pair != null && <PairwisePanel pair={pair} />}
             <div className="flex flex-col gap-1">
