@@ -27,8 +27,12 @@ import type { GovernanceEffect, RiskTier } from '../ports/index.js';
 import type { ReadinessSignal, ReadinessView } from '../services/readiness.service.js';
 import type { DiffStat } from '../services/compare.service.js';
 
-/** Versioned schema tag — bump when the record shape changes (exportable-artifact contract). */
-export const CONVERGENCE_EVIDENCE_SCHEMA = 'recoder.convergence-evidence/v1' as const;
+/**
+ * Versioned schema tag — bump when the record shape changes (exportable-artifact
+ * contract). v2 adds the optional {@link EvidenceConvergence} block, present ONLY
+ * for a merge of a COMPOSED convergence workspace (step-2 per-file selections).
+ */
+export const CONVERGENCE_EVIDENCE_SCHEMA = 'recoder.convergence-evidence/v2' as const;
 
 /** One candidate run's contribution, as gathered from the compare/sibling read. */
 export interface EvidenceCandidateInput {
@@ -82,6 +86,27 @@ export interface EvidenceVerification {
   readonly reason?: string;
 }
 
+/** One converged file's provenance: which sibling's version won this path. */
+export interface EvidenceFileSelection {
+  readonly path: string;
+  readonly sourceWorkspaceId: string;
+  /** True when 2+ siblings authored this path (the winner came from a human selection). */
+  readonly contested: boolean;
+}
+
+/**
+ * The step-2 convergence provenance — present ONLY when the merged workspace was
+ * COMPOSED from a parallel-run group (whole-file pick per path). Records which
+ * source group it converged, how many sources/files, and the per-file winners, so
+ * the evidence shows WHICH sibling won each contested file.
+ */
+export interface EvidenceConvergence {
+  readonly fromTaskGroup: string | null;
+  readonly sourceCount: number;
+  readonly fileCount: number;
+  readonly selections: readonly EvidenceFileSelection[];
+}
+
 /** The content-hashed, exportable convergence evidence record (the sealed artifact). */
 export interface ConvergenceEvidence {
   readonly schema: typeof CONVERGENCE_EVIDENCE_SCHEMA;
@@ -95,6 +120,8 @@ export interface ConvergenceEvidence {
   readonly candidates: readonly EvidenceCandidate[];
   readonly governance: EvidenceGovernance;
   readonly verification: EvidenceVerification;
+  /** Step-2 per-file convergence provenance — ABSENT for a plain single-agent merge. */
+  readonly convergence?: EvidenceConvergence;
   readonly provenance: {
     readonly actorId: string;
     readonly mergedAt: string;
@@ -133,6 +160,8 @@ export interface EvidenceAssemblyInput {
   readonly governance: EvidenceGovernance;
   /** The folded readiness view, or `undefined`/`{reason}` when it could not be computed. */
   readonly verification?: { readonly view?: ReadinessView; readonly reason?: string };
+  /** Step-2 per-file convergence provenance (only for a composed convergence merge). */
+  readonly convergence?: EvidenceConvergence;
   readonly actorId: string;
   readonly mergedAt: string;
   /** Injectable clock (defaults to `Date.now`) so the emitted timestamp is testable. */
@@ -232,6 +261,7 @@ export function assembleConvergenceEvidence(input: EvidenceAssemblyInput): Conve
     candidates,
     governance: input.governance,
     verification,
+    ...(input.convergence ? { convergence: input.convergence } : {}),
     provenance: {
       actorId: input.actorId,
       mergedAt: input.mergedAt,

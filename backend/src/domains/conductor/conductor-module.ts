@@ -159,8 +159,19 @@ import {
   assembleConvergenceEvidence,
   type ConvergenceEvidenceRecord,
   type EvidenceCandidateInput,
+  type EvidenceConvergence,
   type EvidenceGovernance,
 } from './evidence/convergence-evidence.js';
+import {
+  planConvergence as planConvergenceOp,
+  type ConvergencePlan,
+} from './converge/converge-plan.service.js';
+import {
+  composeConvergence as composeConvergenceOp,
+  type ComposeConvergenceInput,
+  type ComposeConvergenceResult,
+  type ConvergeOpsDeps,
+} from './converge/converge.ops.js';
 import { createInMemoryRepoSetupStore } from './adapters/repo-setup-store.adapter.js';
 import {
   compareTaskGroup as compareTaskGroupOp,
@@ -1985,6 +1996,11 @@ export class ConductorComposer implements ConductorModule {
       ...(verdict.approvalId ? { approvalId: verdict.approvalId } : {}),
     };
     const mergedAtRaw = workspace?.metadata?.mergedAt;
+    // Step-2 provenance: a COMPOSED convergence workspace carries its per-file
+    // selection block on `metadata.convergence` (stamped by `composeConvergence`).
+    // Present ⇒ the evidence shows WHICH sibling won each contested file; a plain
+    // single-agent merge has none (absent, never fabricated).
+    const convergence = this.readConvergenceProvenance(workspace);
     const evidence = assembleConvergenceEvidence({
       chosenWorkspaceId: result.workspaceId,
       ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
@@ -1993,6 +2009,7 @@ export class ConductorComposer implements ConductorModule {
       candidates: preMerge.candidates,
       governance,
       ...(preMerge.verification ? { verification: preMerge.verification } : {}),
+      ...(convergence ? { convergence } : {}),
       actorId: principal.userId,
       mergedAt: typeof mergedAtRaw === 'string' ? mergedAtRaw : new Date().toISOString(),
     });
@@ -2047,6 +2064,101 @@ export class ConductorComposer implements ConductorModule {
     const raw = (workspace.metadata as Record<string, unknown> | undefined)?.convergenceEvidence;
     if (!raw || typeof raw !== 'object') return null;
     return raw as ConvergenceEvidenceRecord;
+  }
+
+  /** The raw compare read (no grid enrichment) — the pure sibling aggregate. */
+  private async rawCompare(taskGroup: string): Promise<CompareView> {
+    return compareTaskGroupOp(this.compareDeps(), taskGroup);
+  }
+
+  /**
+   * Read the step-2 convergence provenance a composed workspace carries on
+   * `metadata.convergence`, narrowed to {@link EvidenceConvergence}. Absent /
+   * malformed ⇒ `undefined` (a plain single-agent merge has none — never fabricated).
+   */
+  private readConvergenceProvenance(workspace: Workspace | null): EvidenceConvergence | undefined {
+    const raw = (workspace?.metadata as Record<string, unknown> | undefined)?.convergence;
+    if (!raw || typeof raw !== 'object') return undefined;
+    const value = raw as Partial<EvidenceConvergence>;
+    if (!Array.isArray(value.selections) || typeof value.fileCount !== 'number') return undefined;
+    return {
+      fromTaskGroup: typeof value.fromTaskGroup === 'string' ? value.fromTaskGroup : null,
+      sourceCount: typeof value.sourceCount === 'number' ? value.sourceCount : 0,
+      fileCount: value.fileCount,
+      selections: value.selections,
+    };
+  }
+
+  /**
+   * PLAN a convergence (`GET …/converge-plan`) — the PURE fold of the group's N
+   * sibling diffs + a per-contested-file selection into a resolved file→source map.
+   * Read-only: no gate, no mutation. Non-contested paths auto-resolve; contested
+   * paths resolve to a VALID selection or surface as `unresolved` (a truthful
+   * "you must decide", never an invented winner). An empty/absent group is a
+   * truthful empty plan (`complete:false`).
+   */
+  async planConvergence(
+    taskGroup: string,
+    selection: Readonly<Record<string, string>>,
+  ): Promise<ConvergencePlan> {
+    const view = await this.rawCompare(taskGroup);
+    const siblings = view.siblings.map((s) => ({
+      workspaceId: s.workspaceId,
+      agent: s.agent,
+      ...(s.changedFiles ? { changedFiles: s.changedFiles } : {}),
+    }));
+    return planConvergenceOp({ taskGroup: view.taskGroup, siblings, selection });
+  }
+
+  /**
+   * COMPOSE a convergence (`POST …/converge`) — GATED (`workspace.branch`).
+   * Materializes a complete plan into a NEW convergence worktree/branch (whole-file
+   * pick, no agent launched), registers it as a reviewable workspace, and stamps
+   * the per-file provenance so the LATER governed merge emits an evidence record
+   * that shows which sibling won each contested file. The caller must have a
+   * COMPLETE plan (the route pre-validates); the op re-checks and throws a truthful
+   * error otherwise. Degrade-truthful: a git/compose fault returns `ok:false` with
+   * the real reason (never a fabricated success), and the gate deny short-circuits.
+   */
+  async composeConvergence(
+    input: ComposeConvergenceInput,
+    principal: Principal,
+  ): Promise<ConductorWriteResult<ComposeConvergenceResult>> {
+    const action = 'workspace.branch';
+    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
+      target: { environment: 'conductor' },
+      metadata: { taskGroup: input.taskGroup },
+    });
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    try {
+      const deps: ConvergeOpsDeps = {
+        compare: (taskGroup) => this.rawCompare(taskGroup),
+        getWorkspace: (id) => this.engine.getWorkspace(id),
+        registerWorkspace: (workspace) => this.repository.upsertWorkspace(workspace),
+        logger: this.log,
+      };
+      const result = await composeConvergenceOp(deps, {
+        ...input,
+        createdBy: input.createdBy || principal.userId,
+      });
+      await recordConductorAudit(
+        this.gate,
+        conductorAuditEntry(action, principal, verdict, {
+          taskGroup: input.taskGroup,
+          workspaceId: result.workspaceId,
+          branch: result.branch,
+          fileCount: result.fileCount,
+          sourceCount: result.plan.sources.length,
+        }),
+      );
+      return { ok: true, verdict, value: result };
+    } catch (err) {
+      return {
+        ok: false,
+        verdict,
+        reason: err instanceof Error ? err.message : 'convergence compose failed',
+      };
+    }
   }
 
   /**
