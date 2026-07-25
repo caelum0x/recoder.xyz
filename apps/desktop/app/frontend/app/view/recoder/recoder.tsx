@@ -5,6 +5,7 @@ import { createBlock, getApi } from "@/app/store/global";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useMemo, useRef } from "react";
 import { agentLabel } from "./recoder-agent-labels";
+import { RecoderCloneModal } from "./recoder-clone";
 import { RecoderCommandPalette, type RecoderCommand } from "./recoder-command-palette";
 import { RecoderComparePanel } from "./recoder-compare";
 import { isConnectivityError } from "./recoder-errors";
@@ -195,6 +196,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const [launchOpen, setLaunchOpen] = useAtom(model.launchOpenAtom);
     const [paletteOpen, setPaletteOpen] = useAtom(model.commandPaletteOpenAtom);
     const [shortcutsOpen, setShortcutsOpen] = useAtom(model.shortcutsOpenAtom);
+    const [cloneOpen, setCloneOpen] = useAtom(model.cloneOpenAtom);
     const identity = useAtomValue(RecoderIdentityModel.getInstance().identityAtom);
     const [selectedId, setSelectedId] = useAtom(model.selectedWorkspaceIdAtom);
     const [repoPath, setRepoPath] = useAtom(model.launchRepoPathAtom);
@@ -260,7 +262,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             }
             // Gate on open panels so N typed into the launch panel/palette does nothing
             // global; their own Escape/typing still work.
-            if (launchOpen || paletteOpen || shortcutsOpen) {
+            if (launchOpen || paletteOpen || shortcutsOpen || cloneOpen) {
                 return;
             }
             e.preventDefault();
@@ -268,7 +270,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         };
         document.addEventListener("keydown", handler, true);
         return () => document.removeEventListener("keydown", handler, true);
-    }, [launchOpen, paletteOpen, shortcutsOpen, setLaunchOpen]);
+    }, [launchOpen, paletteOpen, shortcutsOpen, cloneOpen, setLaunchOpen]);
 
     // A SINGLE interactive launch drops the user straight into the session. Guard
     // on the workspace id so a re-render / poll can never reopen it, and never
@@ -440,6 +442,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     browseFolder();
                 },
             },
+            { id: "clone-github", title: "Open GitHub project (clone)", run: () => setCloneOpen(true) },
             { id: "review", title: "Review workspace diff", run: openReview },
             { id: "shortcuts", title: "Show keyboard shortcuts", shortcut: "⌘/", run: () => setShortcutsOpen(true) },
         ];
@@ -488,7 +491,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             });
         }
         return list;
-    }, [workspaces, groups, identity, model, setup.tmuxBin, setLaunchOpen, setShortcutsOpen]);
+    }, [workspaces, groups, identity, model, setup.tmuxBin, setLaunchOpen, setShortcutsOpen, setCloneOpen]);
 
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2" onKeyDown={onBoardKeyDown}>
@@ -746,6 +749,12 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                 Pick a git repo folder and launch a coding agent in a fresh worktree.
                             </span>
                         </button>
+                        <button className={ENTRY_CARD} onClick={() => setCloneOpen(true)}>
+                            <span className={ROW_TITLE}>Open GitHub project</span>
+                            <span className={META}>
+                                Clone a repository from GitHub, then launch a coding agent into it.
+                            </span>
+                        </button>
                         {quickStartRepo != "" && (
                             <button
                                 className={ENTRY_CARD}
@@ -812,6 +821,9 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             <option value="archived">Archived</option>
                         </select>
                     </label>
+                    <button className={QUIET_BTN} onClick={() => setCloneOpen(true)}>
+                        Clone repo
+                    </button>
                 </div>
             )}
             {allWorkspaces.length > 0 && (
@@ -905,6 +917,9 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                 ))}
             </div>
 
+            {/* Rendered before the palette/shortcuts so those paint above it; its
+                Escape handler stands down while either of them is open. */}
+            {cloneOpen && <RecoderCloneModal model={model} onClose={() => setCloneOpen(false)} />}
             {paletteOpen && <RecoderCommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
             {shortcutsOpen && <RecoderShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
         </div>

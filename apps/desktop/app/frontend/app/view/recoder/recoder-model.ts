@@ -23,6 +23,7 @@ import {
     type RecoderWorkspaceGroup,
     type RecoderWorkspaceReadiness,
 } from "./recoder-board-logic";
+import { isGitHubRepoUrl, parseCloneResponse } from "./recoder-clone-logic";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { readErrorReason } from "./recoder-errors";
 import { RecoderConductorView } from "./recoder";
@@ -193,6 +194,14 @@ class RecoderViewModel implements ViewModel {
     // The workspaceId of the keyboard-focused board row; "" means none selected.
     // Drives j/k navigation and Enter-to-open; the view syncs it with the list.
     selectedWorkspaceIdAtom: PrimitiveAtom<string>;
+    // "Open GitHub project" clone modal state. destDir "" means "use the
+    // backend's default repos folder" (the POST omits it) — the client never
+    // fabricates the conductor's configured base dir.
+    cloneOpenAtom: PrimitiveAtom<boolean>;
+    cloneUrlAtom: PrimitiveAtom<string>;
+    cloneDestDirAtom: PrimitiveAtom<string>;
+    cloningAtom: PrimitiveAtom<boolean>;
+    cloneErrorAtom: PrimitiveAtom<string>;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -227,6 +236,11 @@ class RecoderViewModel implements ViewModel {
         this.readinessAtom = atom({}) as PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
         this.lastMergeAtom = atom({}) as PrimitiveAtom<Record<string, RecoderMergeRecord>>;
         this.selectedWorkspaceIdAtom = atom("") as PrimitiveAtom<string>;
+        this.cloneOpenAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.cloneUrlAtom = atom("") as PrimitiveAtom<string>;
+        this.cloneDestDirAtom = atom("") as PrimitiveAtom<string>;
+        this.cloningAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.cloneErrorAtom = atom("") as PrimitiveAtom<string>;
         this.boardFilterAtom = atom("") as PrimitiveAtom<string>;
         this.boardShowAtom = atom("active") as PrimitiveAtom<RecoderBoardShow>;
         this.workspacesAtom = atom((get) =>
@@ -631,6 +645,48 @@ class RecoderViewModel implements ViewModel {
         } finally {
             globalStore.set(this.postingAtom, false);
             globalStore.set(this.launchProgressAtom, "");
+        }
+    }
+
+    // Clone a GitHub repo through POST /api/conductor/repos/clone — the "Open
+    // GitHub project" entry. Pre-validates with the pure URL mirror (the backend
+    // still owns the truth), then renders exactly what the edge reported: no fake
+    // progress, no fabricated success. On success the modal closes and the launch
+    // panel opens seeded with the cloned folder, so the next step is one click.
+    async cloneRepo(url: string, destDir?: string) {
+        const trimmed = (url ?? "").trim();
+        if (!isGitHubRepoUrl(trimmed)) {
+            globalStore.set(
+                this.cloneErrorAtom,
+                "Enter a GitHub repository URL like https://github.com/owner/repo."
+            );
+            return;
+        }
+        globalStore.set(this.cloningAtom, true);
+        globalStore.set(this.cloneErrorAtom, "");
+        try {
+            const dest = (destDir ?? "").trim();
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/repos/clone`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: trimmed, ...(dest != "" ? { destDir: dest } : {}) }),
+            });
+            const body = await res.json().catch(() => null);
+            const parsed = parseCloneResponse(res.status, body);
+            if (!parsed.ok) {
+                globalStore.set(this.cloneErrorAtom, parsed.error);
+                return;
+            }
+            globalStore.set(this.cloneOpenAtom, false);
+            globalStore.set(this.cloneUrlAtom, "");
+            globalStore.set(this.launchRepoPathAtom, parsed.repoPath);
+            globalStore.set(this.launchRepoIsGitAtom, true);
+            this.rememberRepo(parsed.repoPath);
+            globalStore.set(this.launchOpenAtom, true);
+        } catch {
+            globalStore.set(this.cloneErrorAtom, "Clone unavailable - Recoder isn’t reachable.");
+        } finally {
+            globalStore.set(this.cloningAtom, false);
         }
     }
 
