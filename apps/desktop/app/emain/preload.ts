@@ -80,6 +80,10 @@ contextBridge.exposeInMainWorld("api", {
     isGitRepo: (dirPath) => ipcRenderer.invoke("recoder:is-git-repo", dirPath),
     onRecoderSignInPrompt: (callback) =>
         ipcRenderer.on("recoder:device-login-prompt", (_event, prompt) => callback(prompt)),
+    showAttentionNotification: (workspaceId: string, title: string, body: string) =>
+        ipcRenderer.send("recoder:attention-notify", workspaceId, title, body),
+    onAttentionNotificationClick: (callback) =>
+        ipcRenderer.on("recoder:attention-click", (_event, workspaceId: string) => callback(workspaceId)),
 });
 
 // Custom event for "new-window"

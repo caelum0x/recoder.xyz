@@ -193,6 +193,47 @@ function saveImageFileWithNativeDialog(
         });
 }
 
+let attentionBadgeCount = 0;
+
+function clearAttentionBadge() {
+    if (attentionBadgeCount == 0) {
+        return;
+    }
+    attentionBadgeCount = 0;
+    electron.app.setBadgeCount(0);
+}
+
+// Main-process Notification (not the renderer's web Notification) so the click
+// handler survives renderer GC and can natively restore/focus the window before
+// routing the workspaceId back to the exact webContents that asked for it.
+function showAttentionNotification(sender: Electron.WebContents, workspaceId: string, title: string, body: string) {
+    if (!electron.Notification.isSupported()) {
+        return;
+    }
+    const notification = new electron.Notification({ title, body });
+    notification.on("click", () => {
+        clearAttentionBadge();
+        if (sender.isDestroyed()) {
+            return;
+        }
+        const ww = electron.BrowserWindow.fromWebContents(sender);
+        if (ww != null) {
+            if (ww.isMinimized()) {
+                ww.restore();
+            }
+            ww.show();
+            ww.focus();
+        }
+        electron.app.focus({ steal: true });
+        sender.send("recoder:attention-click", workspaceId);
+    });
+    notification.show();
+    if (electron.BrowserWindow.getFocusedWindow() == null) {
+        attentionBadgeCount++;
+        electron.app.setBadgeCount(attentionBadgeCount);
+    }
+}
+
 export function initIpcHandlers() {
     // Wave-frontend sign-in bridge (optional, offline-safe). These serve the
     // trusted app window (preload.ts `api`), whose frame is not the backend
@@ -566,6 +607,15 @@ export function initIpcHandlers() {
             );
         });
     });
+
+    electron.ipcMain.on("recoder:attention-notify", (event, workspaceId: string, title: string, body: string) => {
+        if (typeof workspaceId != "string" || workspaceId == "" || typeof title != "string" || title == "") {
+            return;
+        }
+        showAttentionNotification(event.sender, workspaceId, title, typeof body == "string" ? body : "");
+    });
+
+    electron.app.on("browser-window-focus", clearAttentionBadge);
 
     electron.ipcMain.handle("save-text-file", async (event, fileName: string, content: string) => {
         const ww = electron.BrowserWindow.fromWebContents(event.sender);
