@@ -17,13 +17,7 @@ import {
     type RecoderMergeRecord,
     type SiblingCompareEntry,
 } from "./recoder-model";
-
-const MERGE_BTN =
-    "border border-border text-secondary rounded px-2 py-0.5 text-xs hover:bg-border/40 transition-colors cursor-pointer disabled:opacity-50";
-
-const PICK_BTN =
-    "border border-border text-secondary rounded px-1.5 py-0.5 text-xs hover:bg-border/40 transition-colors cursor-pointer";
-const PICK_BTN_ON = "border border-accent/40 bg-accent/20 text-accent rounded px-1.5 py-0.5 text-xs cursor-pointer";
+import { FIELD_LABEL, META, PICK_BTN_ON, QUIET_BTN_XS, SAVE_BTN } from "./recoder-styles";
 
 // Explicit sign so a pairwise delta can never be mistaken for an absolute count;
 // a negative already carries its own "-".
@@ -63,7 +57,7 @@ function verdictLabel(verdict: string): string {
 
 function ReadinessBadge({ readiness }: { readiness: ReadinessView }) {
     if (readiness == null) {
-        return <span className="text-xs text-secondary">readiness unavailable</span>;
+        return <span className={META}>readiness unavailable</span>;
     }
     const style = VERDICT_STYLE[readiness.verdict] ?? VERDICT_STYLE.unknown;
     return (
@@ -88,11 +82,11 @@ ReadinessBadge.displayName = "ReadinessBadge";
 
 function MergeabilityBadge({ mergeability }: { mergeability: MergeabilityView }) {
     if (mergeability == null) {
-        return <span className="text-xs text-secondary">mergeability unavailable</span>;
+        return <span className={META}>mergeability unavailable</span>;
     }
     if (!mergeability.available) {
         return (
-            <span className="text-xs text-secondary" title={mergeability.reason || "not available"}>
+            <span className={META} title={mergeability.reason || "not available"}>
                 merge: {mergeability.reason || "unavailable"}
             </span>
         );
@@ -147,9 +141,6 @@ function MergeVerdictLine({ record }: { record: RecoderMergeRecord }) {
 
 MergeVerdictLine.displayName = "MergeVerdictLine";
 
-const SAVE_BTN =
-    "border border-accent/40 text-accent rounded px-2 py-0.5 text-xs hover:bg-accent/10 transition-colors cursor-pointer";
-
 type SiblingCompareRowProps = {
     model: RecoderViewModel;
     sibling: SiblingCompareEntry;
@@ -202,14 +193,14 @@ function SiblingCompareRow({
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <div className="flex items-center gap-1">
                     <button
-                        className={pickedA ? PICK_BTN_ON : PICK_BTN}
+                        className={pickedA ? PICK_BTN_ON : QUIET_BTN_XS}
                         onClick={() => model.pickPair("A", sibling.workspaceId)}
                         title={`Pick ${agentLabel(sibling.agent)} as A for the pairwise compare`}
                     >
                         A
                     </button>
                     <button
-                        className={pickedB ? PICK_BTN_ON : PICK_BTN}
+                        className={pickedB ? PICK_BTN_ON : QUIET_BTN_XS}
                         onClick={() => model.pickPair("B", sibling.workspaceId)}
                         title={`Pick ${agentLabel(sibling.agent)} as B for the pairwise compare`}
                     >
@@ -225,17 +216,17 @@ function SiblingCompareRow({
                         suggested · {suggestedReason}
                     </span>
                 )}
-                <span className="text-xs text-secondary">{sibling.state}</span>
+                <span className={META}>{sibling.state}</span>
                 {stat != null ? (
-                    <span className="text-xs text-secondary">
+                    <span className={META}>
                         +{stat.additions} −{stat.deletions} · {stat.files} file{stat.files == 1 ? "" : "s"}
                     </span>
                 ) : (
-                    <span className="text-xs text-secondary">{sibling.diffStatReason || "diff unavailable"}</span>
+                    <span className={META}>{sibling.diffStatReason || "diff unavailable"}</span>
                 )}
                 <div className="flex-1" />
                 <button
-                    className={MERGE_BTN}
+                    className={QUIET_BTN_XS}
                     disabled={busy}
                     onClick={() => model.mergeWorkspace(sibling.workspaceId)}
                     title={`Merge ${agentLabel(sibling.agent)}'s branch ${sibling.branch}`}
@@ -247,7 +238,7 @@ function SiblingCompareRow({
                 <ReadinessBadge readiness={readiness} />
                 <MergeabilityBadge mergeability={mergeability} />
             </div>
-            {status && <div className="text-xs text-secondary">{status}</div>}
+            {status && <div className={META}>{status}</div>}
             {lastMerge != null && <MergeVerdictLine record={lastMerge} />}
             {merged && (
                 <div className="flex items-center gap-2">
@@ -258,7 +249,7 @@ function SiblingCompareRow({
                     >
                         Save evidence
                     </button>
-                    <span className="text-xs text-secondary">Sealed audit + JSON + Markdown, saved locally</span>
+                    <span className={META}>Sealed audit + JSON + Markdown, saved locally</span>
                 </div>
             )}
         </div>
@@ -271,17 +262,17 @@ function ContestedSet({ compareView }: { compareView: CompareView }) {
     const contested = compareView.contested ?? [];
     const agentByWs = new Map(compareView.siblings.map((s) => [s.workspaceId, s.agent]));
     if (contested.length == 0) {
-        return <div className="text-xs text-secondary">No overlapping files across siblings — no contested set.</div>;
+        return <div className={META}>No overlapping files across siblings — no contested set.</div>;
     }
     return (
         <div className="flex flex-col gap-1 rounded border border-border px-2 py-1.5">
-            <div className="text-xs uppercase tracking-wide text-secondary">
+            <div className={FIELD_LABEL}>
                 Contested — {contested.length} file{contested.length == 1 ? "" : "s"} touched by 2+ agents
             </div>
             {contested.map((c) => (
                 <div key={c.path} className="flex flex-wrap items-center gap-x-2 text-sm">
                     <span className="truncate">{c.path}</span>
-                    <span className="text-xs text-secondary">
+                    <span className={META}>
                         {c.workspaceIds.map((id) => agentLabel(agentByWs.get(id) ?? id)).join(" · ")}
                     </span>
                 </div>
@@ -319,7 +310,7 @@ function PairwisePanel({ pair }: { pair: PairwiseCompareView }) {
     const delta = pair.delta;
     return (
         <div className="flex flex-col gap-1.5 rounded border border-accent/30 px-2 py-1.5">
-            <div className="text-xs uppercase tracking-wide text-secondary">
+            <div className={FIELD_LABEL}>
                 A vs B — {agentLabel(a.agent)} vs {agentLabel(b.agent)}
             </div>
             <PairwiseStatLine label={`A · ${agentLabel(a.agent)}`} stat={a.diffStat} reason={a.diffStatReason} />
@@ -333,11 +324,11 @@ function PairwisePanel({ pair }: { pair: PairwiseCompareView }) {
                     </span>
                 </div>
             ) : (
-                <div className="text-xs text-secondary">Δ unavailable — a diffStat is missing on one side.</div>
+                <div className={META}>Δ unavailable — a diffStat is missing on one side.</div>
             )}
             {pair.shared.length > 0 ? (
                 <div className="flex flex-col gap-0.5">
-                    <div className="text-xs text-secondary">
+                    <div className={META}>
                         Both touched — {pair.shared.length} file{pair.shared.length == 1 ? "" : "s"}
                         {pair.sharedReason ? ` (${pair.sharedReason})` : ""}
                     </div>
@@ -348,12 +339,12 @@ function PairwisePanel({ pair }: { pair: PairwiseCompareView }) {
                     ))}
                 </div>
             ) : (
-                <div className="text-xs text-secondary">
+                <div className={META}>
                     No files touched by both {agentLabel(a.agent)} and {agentLabel(b.agent)}
                     {pair.sharedReason ? ` (${pair.sharedReason})` : ""}.
                 </div>
             )}
-            <div className="text-xs text-secondary">
+            <div className={META}>
                 Client-side delta + shared-file view — a true line-level pairwise diff needs a backend edge (backlog).
             </div>
         </div>

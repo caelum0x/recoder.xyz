@@ -13,13 +13,17 @@ import {
     type RecoderWorkspace,
 } from "./recoder-model";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
-
-const PRIMARY_BTN =
-    "bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50";
-const QUIET_BTN =
-    "border border-border text-secondary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer disabled:opacity-50";
-const FIELD_LABEL = "text-xs uppercase tracking-wide text-secondary";
-const INPUT = "rounded border border-border bg-transparent px-2 py-1 text-sm";
+import {
+    FIELD_LABEL,
+    INPUT,
+    META,
+    PAGE_TITLE,
+    PRIMARY_BTN,
+    QUIET_BTN,
+    QUIET_BTN_XS,
+    ROW_TITLE,
+    SECTION_TITLE,
+} from "./recoder-styles";
 
 // createBlock is fire-and-forget from event handlers; a failed cross-block open
 // must never crash the view, so every call is wrapped and errors are swallowed.
@@ -65,18 +69,18 @@ type WorkspaceRowProps = {
 function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin }: WorkspaceRowProps) {
     return (
         <div
-            className="flex flex-col gap-0.5 rounded border border-border px-2 py-1"
+            className="flex flex-col gap-1 rounded border border-border px-2.5 py-1.5 transition-colors duration-150 ease-out"
             title={`${ws.workspaceId} · ${ws.branch}`}
         >
             <div className="flex items-center gap-2">
-                <span className="text-sm truncate">{ws.branch}</span>
-                <span className="text-xs text-secondary">{ws.state}</span>
+                <span className={`${ROW_TITLE} truncate`}>{ws.branch}</span>
+                <span className={META}>{ws.state}</span>
                 {summary != null && summary.files > 0 && (
-                    <span className="text-xs text-secondary">
+                    <span className={META}>
                         +{summary.additions} −{summary.deletions}
                     </span>
                 )}
-                <span className="text-xs text-secondary ml-auto">{agentLabel(ws.runtimeId)}</span>
+                <span className={`${META} ml-auto`}>{agentLabel(ws.runtimeId)}</span>
                 <button className={QUIET_BTN} onClick={() => openSession(ws.workspaceId)}>
                     Session
                 </button>
@@ -95,7 +99,7 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin }: WorkspaceRo
                     Archive
                 </button>
             </div>
-            {status && <div className="text-xs text-secondary">{status}</div>}
+            {status && <div className={META}>{status}</div>}
         </div>
     );
 }
@@ -162,7 +166,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
-                <span className="font-semibold">Recoder — Workspaces</span>
+                <span className={PAGE_TITLE}>Recoder — Workspaces</span>
                 <div className="flex-1" />
                 <RecoderIdentityAffordance />
                 <button className={PRIMARY_BTN} onClick={() => setLaunchOpen(!launchOpen)}>
@@ -175,7 +179,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
 
             {launchOpen && (
                 <div className="flex flex-col gap-3 rounded border border-border p-3 mt-1">
-                    <div className="text-sm font-semibold">Launch a coding agent</div>
+                    <div className={SECTION_TITLE}>Launch a coding agent</div>
 
                     <label className="flex flex-col gap-1">
                         <span className={FIELD_LABEL}>Agent</span>
@@ -214,7 +218,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     .map((r) => (
                                         <button
                                             key={r}
-                                            className="border border-border text-secondary rounded px-2 py-0.5 text-xs hover:bg-border/40 transition-colors cursor-pointer truncate max-w-[16rem]"
+                                            className={`${QUIET_BTN_XS} truncate max-w-[16rem]`}
                                             title={r}
                                             onClick={() => setRepoPath(r)}
                                         >
@@ -315,21 +319,21 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
 
             {showGettingStarted && (
                 <div className="flex flex-col gap-3 rounded border border-border p-4 mt-1">
-                    <div>
-                        <div className="text-base font-semibold">Welcome to Recoder</div>
-                        <div className="text-sm text-secondary">
+                    <div className="flex flex-col gap-1">
+                        <div className={SECTION_TITLE}>Welcome to Recoder</div>
+                        <div className={META}>
                             Run your coding agents in parallel isolated worktrees, then review and merge.
                         </div>
                     </div>
                     {setup.loaded ? (
                         <div className="flex flex-col gap-1">
-                            <div className="text-xs uppercase tracking-wide text-secondary">Ready on this machine</div>
+                            <div className={FIELD_LABEL}>Ready on this machine</div>
                             <div className="flex items-center gap-2 text-sm">
                                 <span>{setup.git ? "✓" : "—"}</span>
                                 <span className={setup.git ? "" : "text-secondary"}>git</span>
                             </div>
                             {setup.agents.length == 0 && (
-                                <div className="text-sm text-secondary">
+                                <div className={META}>
                                     No coding agents detected on PATH — install Claude Code (or Codex / opencode) to
                                     launch a workspace.
                                 </div>
@@ -342,14 +346,14 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             ))}
                         </div>
                     ) : setup.probed ? (
-                        <div className="text-sm text-secondary">
+                        <div className={META}>
                             Couldn't reach the local Recoder backend yet — it may still be starting.
                         </div>
                     ) : (
-                        <div className="text-sm text-secondary">Checking local setup…</div>
+                        <div className={META}>Checking local setup…</div>
                     )}
                     {setup.loaded && readyAgents.length > 0 && (
-                        <div className="text-sm text-secondary">
+                        <div className={META}>
                             You're set up —{" "}
                             <button className={PRIMARY_BTN} onClick={() => setLaunchOpen(true)}>
                                 create a workspace
@@ -382,8 +386,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     return (
                         <div key={taskGroup} className="flex flex-col gap-1 rounded border border-border p-2">
                             <div className="flex items-center gap-2">
-                                <span className="text-sm">{group.workspaces.length} agents</span>
-                                <span className="text-xs text-secondary" title={taskGroup}>
+                                <span className={ROW_TITLE}>{group.workspaces.length} agents</span>
+                                <span className={META} title={taskGroup}>
                                     {shortTaskGroup(taskGroup)}
                                 </span>
                                 <div className="flex-1" />
