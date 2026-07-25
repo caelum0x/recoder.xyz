@@ -1,16 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("@/app/store/global", async () => {
-    const { createStore } = await import("jotai");
-    return { globalStore: createStore() };
-});
-
-vi.mock("./recoder", () => ({
-    RecoderConductorView: () => null,
-}));
+import { describe, expect, it } from "vitest";
 
 import {
     bucketWorkspaceGroups,
@@ -27,7 +18,7 @@ import {
     type RecoderWorkspaceGroup,
     type RecoderWorkspaceReadiness,
     type SiblingCompareEntry,
-} from "./recoder-model";
+} from "./recoder-board-logic";
 
 let wsSeq = 0;
 
