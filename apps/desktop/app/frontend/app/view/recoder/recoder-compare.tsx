@@ -181,7 +181,11 @@ function SiblingCompareRow({
 }: SiblingCompareRowProps) {
     const stat = sibling.diffStat;
     const merged = lastMerge != null && lastMerge.status == "merged";
-    const onSaveEvidence = () => {
+    // Fetch the durable sealed audit trail first so the exported artifact prefers
+    // the server record; an empty trail (solo) falls back to client assembly inside
+    // the builder. Degrade-safe: fetchWorkspaceAudit never throws (returns []).
+    const onSaveEvidence = async () => {
+        const audit = await model.fetchWorkspaceAudit(sibling.workspaceId);
         const evidence = buildConvergenceEvidence({
             winner: sibling,
             siblings,
@@ -189,6 +193,7 @@ function SiblingCompareRow({
             mergeability,
             merge: lastMerge,
             taskGroup: taskGroup ?? "",
+            audit,
         });
         saveConvergenceEvidence(evidence);
     };
@@ -249,11 +254,11 @@ function SiblingCompareRow({
                     <button
                         className={SAVE_BTN}
                         onClick={onSaveEvidence}
-                        title="Download the client-assembled convergence evidence (JSON + Markdown)"
+                        title="Fetch the sealed governance audit trail, then download the convergence evidence (JSON + Markdown). Falls back to client-assembled fields when no durable trail exists."
                     >
                         Save evidence
                     </button>
-                    <span className="text-xs text-secondary">JSON + Markdown, saved locally</span>
+                    <span className="text-xs text-secondary">Sealed audit + JSON + Markdown, saved locally</span>
                 </div>
             )}
         </div>
