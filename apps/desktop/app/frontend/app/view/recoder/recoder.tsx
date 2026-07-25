@@ -15,6 +15,7 @@ import {
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
 import { RecoderErrorRow, RecoderSkeleton } from "./recoder-states";
 import {
+    CHIP,
     ERROR_ROW,
     FIELD_LABEL,
     INPUT,
@@ -22,7 +23,6 @@ import {
     PAGE_TITLE,
     PRIMARY_BTN,
     QUIET_BTN,
-    QUIET_BTN_XS,
     ROW_TITLE,
     SECTION_TITLE,
 } from "./recoder-styles";
@@ -49,6 +49,24 @@ function openReview() {
 // conductor-pinned tmux (from setup health) so we hit the same tmux server.
 function openTerminal(ws: RecoderWorkspace, tmuxBin: string) {
     openWorkspaceTerminal({ sessionName: ws.sessionName, cwd: ws.worktreePath }, tmuxBin || undefined);
+}
+
+// The picker is the only entry path for a repo, so paths are always absolute;
+// show just the leaf folder name and keep the full path on hover/title.
+function folderName(repoPath: string): string {
+    return repoPath.split(/[\\/]/).filter(Boolean).pop() ?? repoPath;
+}
+
+// Self-explains the greyed Launch button: empty string means nothing to say
+// (either ready to launch, or already posting).
+function launchDisabledReason(repoPath: string, runtimeId: string): string {
+    if (repoPath.trim() == "") {
+        return "Choose a folder to launch.";
+    }
+    if (runtimeId == "") {
+        return "Choose an agent to launch.";
+    }
+    return "";
 }
 
 // A parallel-run group is keyed by a generated grp_<id>; strip the prefix and
@@ -202,17 +220,21 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
 
                     <label className="flex flex-col gap-1">
                         <span className={FIELD_LABEL}>Folder</span>
-                        <div className="flex items-center gap-2">
-                            <input
-                                className={`${INPUT} flex-1`}
-                                placeholder="/path/to/your/repo"
-                                value={repoPath}
-                                onChange={(e) => setRepoPath(e.target.value)}
-                            />
-                            <button className={QUIET_BTN} onClick={browseFolder}>
-                                Browse…
+                        {repoPath.trim() == "" ? (
+                            <button className={`${PRIMARY_BTN} w-full`} onClick={browseFolder}>
+                                Choose folder…
                             </button>
-                        </div>
+                        ) : (
+                            <div className="flex items-center gap-2" title={repoPath}>
+                                <div className="flex min-w-0 flex-1 flex-col">
+                                    <span className={`${ROW_TITLE} truncate`}>{folderName(repoPath)}</span>
+                                    <span className={`${META} truncate`}>{repoPath}</span>
+                                </div>
+                                <button className={QUIET_BTN} onClick={browseFolder}>
+                                    Change
+                                </button>
+                            </div>
+                        )}
                         {recentRepos.filter((r) => r != repoPath).length > 0 && (
                             <div className="flex flex-wrap gap-1.5">
                                 {recentRepos
@@ -220,11 +242,11 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     .map((r) => (
                                         <button
                                             key={r}
-                                            className={`${QUIET_BTN_XS} truncate max-w-[16rem]`}
+                                            className={CHIP}
                                             title={r}
                                             onClick={() => setRepoPath(r)}
                                         >
-                                            {r}
+                                            {folderName(r)}
                                         </button>
                                     ))}
                             </div>
@@ -308,6 +330,10 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             </span>
                         )}
                     </div>
+
+                    {!canLaunch && launchDisabledReason(repoPath, runtimeId) != "" && (
+                        <div className={META}>{launchDisabledReason(repoPath, runtimeId)}</div>
+                    )}
 
                     {launchResult != null && !launchResult.ok && (
                         <div className={ERROR_ROW}>{launchResult.error || "Launch failed"}</div>

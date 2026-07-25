@@ -13,6 +13,9 @@ const QUIET_BTN =
 const QUIET_BTN_XS =
     "border border-border text-secondary rounded px-1.5 py-0.5 text-xs hover:bg-border/40 hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border active:bg-border/60 transition-all duration-150 ease-out cursor-pointer disabled:opacity-50 disabled:cursor-default";
 
+const CHIP =
+    "border border-border text-secondary rounded px-2 py-0.5 text-xs hover:bg-border/40 hover:text-primary transition-all duration-150 ease-out cursor-pointer truncate max-w-[16rem]";
+
 const PICK_BTN_ON =
     "border border-accent/50 bg-accent/25 text-accent rounded px-1.5 py-0.5 text-xs transition-all duration-150 ease-out cursor-pointer";
 
@@ -34,6 +37,7 @@ const ROW_TITLE = "text-sm text-primary";
 const META = "text-xs text-secondary";
 
 export {
+    CHIP,
     ERROR_ROW,
     FIELD_LABEL,
     INPUT,

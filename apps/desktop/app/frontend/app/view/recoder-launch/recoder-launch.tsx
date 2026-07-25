@@ -14,6 +14,12 @@ const PRIMARY_BTN =
 const QUIET_BTN =
     "border border-border text-secondary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer";
 
+// The picker is the only entry path, so paths are always absolute; show just the
+// leaf folder name and keep the full path on hover/title.
+function folderName(repoPath: string): string {
+    return repoPath.split(/[\\/]/).filter(Boolean).pop() ?? repoPath;
+}
+
 function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>) {
     const runtimes = useAtomValue(model.runtimesAtom);
     const loading = useAtomValue(model.loadingAtom);
@@ -77,18 +83,22 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
                     </label>
 
                     <label className="flex flex-col gap-1">
-                        <span className="text-xs uppercase tracking-wide text-secondary">Repository path</span>
-                        <div className="flex items-center gap-2">
-                            <input
-                                className="flex-1 rounded border border-border bg-transparent px-2 py-1 text-sm"
-                                placeholder="/path/to/your/repo"
-                                value={repoPath}
-                                onChange={(e) => setRepoPath(e.target.value)}
-                            />
-                            <button className={QUIET_BTN} onClick={browseFolder}>
-                                Browse…
+                        <span className="text-xs uppercase tracking-wide text-secondary">Folder</span>
+                        {repoPath.trim() == "" ? (
+                            <button className={`${PRIMARY_BTN} w-full`} onClick={browseFolder}>
+                                Choose folder…
                             </button>
-                        </div>
+                        ) : (
+                            <div className="flex items-center gap-2" title={repoPath}>
+                                <div className="flex min-w-0 flex-1 flex-col">
+                                    <span className="truncate text-sm text-primary">{folderName(repoPath)}</span>
+                                    <span className="truncate text-xs text-secondary">{repoPath}</span>
+                                </div>
+                                <button className={QUIET_BTN} onClick={browseFolder}>
+                                    Change
+                                </button>
+                            </div>
+                        )}
                     </label>
 
                     <label className="flex flex-col gap-1">
