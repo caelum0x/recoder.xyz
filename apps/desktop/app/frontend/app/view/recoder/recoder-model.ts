@@ -4,6 +4,7 @@
 import { globalStore } from "@/app/store/global";
 import type { Workspace } from "@recoder/conductor-ui";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
+import { agentLabel } from "./recoder-agent-labels";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { readErrorReason } from "./recoder-errors";
 import { RecoderConductorView } from "./recoder";
@@ -456,6 +457,9 @@ class RecoderViewModel implements ViewModel {
     launchInteractiveAtom: PrimitiveAtom<boolean>;
     postingAtom: PrimitiveAtom<boolean>;
     launchResultAtom: PrimitiveAtom<RecoderLaunchResult>;
+    // Live per-agent progress during a multi-agent launch (workspaces POST serially,
+    // each a worktree + tmux session that takes seconds); "" when idle/single-agent.
+    launchProgressAtom: PrimitiveAtom<string>;
     // Human result of the last per-row action (merge / archive), keyed by id.
     rowStatusAtom: PrimitiveAtom<Record<string, string>>;
     // The workspace id whose row action is currently in-flight ("" when idle).
@@ -501,6 +505,7 @@ class RecoderViewModel implements ViewModel {
         this.launchInteractiveAtom = atom(loadLastInteractive()) as PrimitiveAtom<boolean>;
         this.postingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.launchResultAtom = atom(null) as PrimitiveAtom<RecoderLaunchResult>;
+        this.launchProgressAtom = atom("") as PrimitiveAtom<string>;
         this.rowStatusAtom = atom({}) as PrimitiveAtom<Record<string, string>>;
         this.busyRowAtom = atom("") as PrimitiveAtom<string>;
         this.compareAtom = atom({}) as PrimitiveAtom<Record<string, CompareView>>;
@@ -803,6 +808,12 @@ class RecoderViewModel implements ViewModel {
         let firstStarted: { workspaceId: string; sessionName?: string; worktreePath?: string; runtimeId: string } = null;
         try {
             for (const agent of agents) {
+                if (agents.length > 1) {
+                    globalStore.set(
+                        this.launchProgressAtom,
+                        `Launching ${agentLabel(agent)} (${started + degraded + 1} of ${agents.length})…`
+                    );
+                }
                 const reqBody = {
                     spaceId: "default",
                     projectId: "default",
@@ -892,6 +903,7 @@ class RecoderViewModel implements ViewModel {
             }
         } finally {
             globalStore.set(this.postingAtom, false);
+            globalStore.set(this.launchProgressAtom, "");
         }
     }
 
