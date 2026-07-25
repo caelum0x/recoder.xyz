@@ -32,7 +32,7 @@ import type { ComponentHealth } from '../../shared/health-types.js';
 import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { Principal } from '../identity/types.js';
 import { sliceConductorConfig, type ConductorConfig } from './config.js';
-import type { GateVerdict, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView, SteerTransportPort, AuditReaderPort, AuditRecord } from './ports/index.js';
+import type { GateVerdict, GovernanceAction, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView, SteerTransportPort, AuditReaderPort, AuditRecord } from './ports/index.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { RunSignalPushPort } from './ports/run-signal-push.port.js';
@@ -155,11 +155,18 @@ import {
 import { PrChecksService, type WorkspaceChecksView } from './services/pr-checks.service.js';
 import { MergeabilityService, type MergeabilityView } from './services/mergeability.service.js';
 import { foldReadiness, type ReadinessView } from './services/readiness.service.js';
+import {
+  assembleConvergenceEvidence,
+  type ConvergenceEvidenceRecord,
+  type EvidenceCandidateInput,
+  type EvidenceGovernance,
+} from './evidence/convergence-evidence.js';
 import { createInMemoryRepoSetupStore } from './adapters/repo-setup-store.adapter.js';
 import {
   compareTaskGroup as compareTaskGroupOp,
   workspaceSiblings as workspaceSiblingsOp,
   parseDiffStat,
+  taskGroupOf,
   type CompareDeps,
   type CompareView,
 } from './services/compare.service.js';
@@ -1843,20 +1850,47 @@ export class ConductorComposer implements ConductorModule {
     });
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
     try {
+      // Gather the convergence-evidence inputs at DECISION TIME (before the merge
+      // mutates state): the candidate siblings + the folded pre-merge verification.
+      // Degrade-truthful — never throws, so a compare/readiness fault never blocks
+      // the merge (the evidence just records the parts it could truthfully gather).
+      const preMerge = await this.gatherConvergenceInputs(workspaceId, workspace);
+
       const deps: PublishOpsDeps = this.reviewDeps();
       const result = await mergeWorkspaceOp(deps, workspaceId, input);
-      // Seal the merge into the durable Merkle audit chain and CAPTURE the record
-      // so the merge result carries its queryable audit id (increment-2 close).
-      // A best-effort sealing failure ⇒ `null` ids — truthful, never fabricated.
-      const sealed = await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, { workspaceId, merged: result.merged }),
-      );
+
+      // Assemble the exportable convergence evidence record (step-3 headline
+      // artifact), seal its hash into the durable Merkle chain, and persist the
+      // full record for `GET …/evidence`. Never blocks/rolls back the merge:
+      // the merge already happened above, so ANY throw here degrades to a null
+      // record (truthful) rather than misreporting the succeeded merge as failed
+      // via the outer catch.
+      let emitted: { record: ConvergenceEvidenceRecord | null; sealed: AuditRecord | null } = {
+        record: null,
+        sealed: null,
+      };
+      try {
+        emitted = await this.emitConvergenceEvidence({
+          action,
+          principal,
+          verdict,
+          workspace,
+          result,
+          preMerge,
+        });
+      } catch (err) {
+        this.log.warn(
+          { err, workspaceId },
+          'convergence evidence emission failed (merge succeeded, unaffected)',
+        );
+      }
+
       const value: MergeResultView = {
         ...result,
-        auditId: sealed?.id ?? null,
-        auditSeq: sealed?.seq ?? null,
-        auditEntryHash: sealed?.entryHash ?? null,
+        auditId: emitted.sealed?.id ?? null,
+        auditSeq: emitted.sealed?.seq ?? null,
+        auditEntryHash: emitted.sealed?.entryHash ?? null,
+        evidenceHash: emitted.record?.evidence.contentHash ?? null,
       };
       // Delivery-feedback fusion: a MERGED workspace is THE positive delivery
       // outcome. When the run's routed inference_id was persisted onto the record
@@ -1873,6 +1907,146 @@ export class ConductorComposer implements ConductorModule {
     } catch (err) {
       return { ok: false, verdict, reason: err instanceof Error ? err.message : 'merge failed' };
     }
+  }
+
+  /**
+   * Gather the convergence-evidence inputs at DECISION TIME — the candidate
+   * siblings (the compare read) and the folded pre-merge verification (readiness).
+   * Both are settled INDEPENDENTLY so a rejected/hung probe degrades to an absent
+   * input (never throws). Candidates always include at least the merged workspace
+   * (`workspaceSiblings` returns a singleton for an ungrouped one; a bare fallback
+   * covers a compare fault) so the record can never be candidate-less.
+   */
+  private async gatherConvergenceInputs(
+    workspaceId: string,
+    workspace: Workspace | null,
+  ): Promise<{ candidates: readonly EvidenceCandidateInput[]; verification?: { view?: ReadinessView; reason?: string } }> {
+    const [siblingsR, readinessR] = await Promise.allSettled([
+      this.workspaceSiblings(workspaceId),
+      this.workspaceReadiness(workspaceId),
+    ]);
+
+    const candidates: EvidenceCandidateInput[] = [];
+    if (siblingsR.status === 'fulfilled' && siblingsR.value) {
+      for (const sibling of siblingsR.value.siblings) {
+        candidates.push({
+          workspaceId: sibling.workspaceId,
+          agent: sibling.agent,
+          branch: sibling.branch,
+          ...(sibling.runId ? { runId: sibling.runId } : {}),
+          state: sibling.state,
+          ...(sibling.diffStat ? { diffStat: sibling.diffStat } : {}),
+          ...(sibling.changedFiles ? { changedFiles: sibling.changedFiles } : {}),
+        });
+      }
+    }
+    // Fallback: a compare fault must not produce a candidate-less record — record
+    // at least the chosen workspace from the record we already hold.
+    if (candidates.length === 0 && workspace) {
+      candidates.push({
+        workspaceId: workspace.workspaceId,
+        agent: workspace.runtimeId,
+        branch: workspace.branch,
+        ...(workspace.runId ? { runId: workspace.runId } : {}),
+        state: workspace.state,
+      });
+    }
+
+    const verification =
+      readinessR.status === 'fulfilled'
+        ? { view: readinessR.value }
+        : { reason: 'readiness probe unavailable' };
+    return { candidates, verification };
+  }
+
+  /**
+   * Assemble + seal + persist the exportable convergence evidence record for a
+   * merge. The evidence `contentHash` is sealed INTO the durable Merkle chain
+   * payload (so the tamper-evident audit leaf commits to the exact evidence), then
+   * the full record (evidence + the returned chain pointer) is persisted onto the
+   * workspace for `GET …/evidence`. DEGRADE-TRUTHFUL: a sealing/persist fault
+   * degrades to `null` ids (the merge already succeeded and is never rolled back).
+   */
+  private async emitConvergenceEvidence(args: {
+    action: GovernanceAction;
+    principal: Principal;
+    verdict: GateVerdict;
+    workspace: Workspace | null;
+    result: MergeResultView;
+    preMerge: { candidates: readonly EvidenceCandidateInput[]; verification?: { view?: ReadinessView; reason?: string } };
+  }): Promise<{ record: ConvergenceEvidenceRecord | null; sealed: AuditRecord | null }> {
+    const { action, principal, verdict, workspace, result, preMerge } = args;
+    const governance: EvidenceGovernance = {
+      action,
+      effect: verdict.effect,
+      riskTier: verdict.tier,
+      degraded: verdict.degraded,
+      ...(verdict.reason ? { reason: verdict.reason } : {}),
+      ...(verdict.approvalId ? { approvalId: verdict.approvalId } : {}),
+    };
+    const mergedAtRaw = workspace?.metadata?.mergedAt;
+    const evidence = assembleConvergenceEvidence({
+      chosenWorkspaceId: result.workspaceId,
+      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+      taskGroup: workspace ? taskGroupOf(workspace) ?? null : null,
+      ...(typeof result.mergeMode === 'string' ? { mergeMode: result.mergeMode } : {}),
+      candidates: preMerge.candidates,
+      governance,
+      ...(preMerge.verification ? { verification: preMerge.verification } : {}),
+      actorId: principal.userId,
+      mergedAt: typeof mergedAtRaw === 'string' ? mergedAtRaw : new Date().toISOString(),
+    });
+
+    // Seal the evidence hash into the Merkle chain (the audit leaf commits to it).
+    const sealed = await recordConductorAudit(
+      this.gate,
+      conductorAuditEntry(action, principal, verdict, {
+        workspaceId: result.workspaceId,
+        merged: result.merged,
+        evidenceHash: evidence.contentHash,
+        taskGroup: evidence.taskGroup,
+        candidateCount: evidence.candidateCount,
+        verificationVerdict: evidence.verification.verdict ?? 'unavailable',
+      }),
+    );
+
+    const record: ConvergenceEvidenceRecord = {
+      evidence,
+      seal: {
+        auditId: sealed?.id ?? null,
+        auditSeq: sealed?.seq ?? null,
+        auditEntryHash: sealed?.entryHash ?? null,
+      },
+    };
+    // Persist for retrieval via the SAME same-state metadata-merge idiom
+    // `previewVerification` uses (advanceWorkspace MERGES the patch, never replaces).
+    // Best-effort: a persist fault never rolls back the merge.
+    try {
+      const current = await this.engine.getWorkspace(result.workspaceId);
+      if (current) {
+        await this.engine.advanceWorkspace(result.workspaceId, current.state, undefined, {
+          convergenceEvidence: record,
+        });
+      }
+    } catch (err) {
+      this.log.warn({ err, workspaceId: result.workspaceId }, 'convergence evidence persist failed (merge unaffected)');
+    }
+    return { record, sealed };
+  }
+
+  /**
+   * The persisted exportable convergence evidence record for a workspace's merge
+   * (`GET …/evidence`) — a PURE projection over `metadata.convergenceEvidence`, or
+   * `null` when the workspace does not exist OR was never merged with evidence.
+   * Read-only: no gate, no audit, no mutation. A never-merged workspace is a
+   * truthful `null` (⇒ 404 at the edge), never a fabricated record.
+   */
+  async getConvergenceEvidence(workspaceId: string): Promise<ConvergenceEvidenceRecord | null> {
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    if (!workspace) return null;
+    const raw = (workspace.metadata as Record<string, unknown> | undefined)?.convergenceEvidence;
+    if (!raw || typeof raw !== 'object') return null;
+    return raw as ConvergenceEvidenceRecord;
   }
 
   /**

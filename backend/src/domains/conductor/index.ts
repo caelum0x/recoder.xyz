@@ -69,6 +69,14 @@ export type {
 import type { MergeabilityView } from './services/mergeability.service.js';
 import type { ReadinessView } from './services/readiness.service.js';
 export type { ReadinessView, ReadinessSignal } from './services/readiness.service.js';
+import type { ConvergenceEvidenceRecord } from './evidence/convergence-evidence.js';
+export type {
+  ConvergenceEvidence,
+  ConvergenceEvidenceRecord,
+  EvidenceCandidate,
+  EvidenceGovernance,
+  EvidenceVerification,
+} from './evidence/convergence-evidence.js';
 import type {
   CreatePrInput,
   CreatePrResultView,
@@ -549,6 +557,15 @@ export interface ConductorModule {
    * trail. No reader wired ⇒ a truthful empty trail, never a fabricated record.
    */
   workspaceAudit(workspaceId: string, limit?: number): Promise<readonly AuditRecord[]>;
+  /**
+   * The exportable convergence evidence record a governed merge produced
+   * (`GET …/evidence`) — the step-3 headline artifact: task + the N candidate runs
+   * and their diff hashes + which was chosen + the governance verdict/approval +
+   * the pre-merge verification + provenance, sealed with a SHA-256 `contentHash`
+   * and pointing at its durable Merkle audit leaf. Read-only. A never-merged (or
+   * evidence-less) workspace is a truthful `null` (⇒ 404), never a fabricated record.
+   */
+  getConvergenceEvidence(workspaceId: string): Promise<ConvergenceEvidenceRecord | null>;
   /** The terminal WS surface (edge registers `terminalBackends()`). */
   terminal(): TerminalStreamPort;
   /** The `/api/conductor` router. */

@@ -68,6 +68,8 @@ export interface MergeResultView {
   workspaceId: string;
   branch: string;
   merged: boolean;
+  /** How the merge was delivered: `github` (`gh pr merge`) or `local` (on-disk `git merge`). */
+  mergeMode?: 'github' | 'local';
   /**
    * The durable governance-audit chain id this merge was sealed into (the
    * increment-2 close: POST /merge now returns its audit id so the cockpit's
@@ -79,6 +81,13 @@ export interface MergeResultView {
   auditSeq?: number | null;
   /** The sealed entry hash (tamper-evident chain leaf for the merge). */
   auditEntryHash?: string | null;
+  /**
+   * The `contentHash` of the exportable convergence evidence record emitted for
+   * this merge (step-3 headline artifact) — the client cites it and pulls the full
+   * record from `GET …/evidence`. `null`/absent when evidence emission was
+   * best-effort-skipped (truthful, never fabricated).
+   */
+  evidenceHash?: string | null;
 }
 
 async function requireWorktree(
@@ -364,5 +373,5 @@ export async function mergeWorkspace(
     mergeMode,
   });
   deps.logger.info({ workspaceId, branch: workspace.branch, strategy }, 'workspace merged');
-  return { workspaceId, branch: workspace.branch, merged: true };
+  return { workspaceId, branch: workspace.branch, merged: true, mergeMode };
 }
