@@ -5,6 +5,8 @@ import { cn } from "@/util/util";
 import { useEffect, useMemo, useState } from "react";
 import { agentLabel } from "./recoder-agent-labels";
 import {
+    autoResolvableCount,
+    autoResolveSynthesizable,
     composeConvergence,
     fetchConvergePlan,
     SYNTHESIZE_VALUE,
@@ -238,6 +240,12 @@ function ConvergePanel({ taskGroup, contested, siblings, onReview }: ConvergePan
         setSelection((cur) => toggleSelection(cur, path, value));
     };
 
+    const onAutoResolve = () => {
+        setComposeError("");
+        setComposedId("");
+        setSelection((cur) => autoResolveSynthesizable(cur, synthMap));
+    };
+
     const onCompose = async () => {
         setComposing(true);
         setComposeError("");
@@ -253,12 +261,25 @@ function ConvergePanel({ taskGroup, contested, siblings, onReview }: ConvergePan
 
     const composeReady = plan != null && plan.complete && !composing;
     const anySynth = Object.values(synthMap).some((s) => s.synthesizable);
+    const autoResolvable = autoResolvableCount(selection, synthMap);
 
     return (
         <div className="flex flex-col gap-1.5 rounded border border-accent/30 px-2 py-2">
-            <div className={FIELD_LABEL}>
-                Converge — pick a winner{anySynth ? " or Synthesize" : ""} per contested file, then compose one reviewable
-                workspace
+            <div className="flex items-center justify-between gap-2">
+                <div className={FIELD_LABEL}>
+                    Converge — pick a winner{anySynth ? " or Synthesize" : ""} per contested file, then compose one
+                    reviewable workspace
+                </div>
+                {autoResolvable > 0 ? (
+                    <button
+                        className={QUIET_BTN_XS}
+                        disabled={composing}
+                        onClick={onAutoResolve}
+                        title={`Set the ${autoResolvable} cleanly auto-mergeable file(s) to Synthesize; conflicting files still need a pick`}
+                    >
+                        Auto-resolve {autoResolvable}
+                    </button>
+                ) : null}
             </div>
             <div className="flex flex-col gap-1">
                 {contested.map((c) => (
