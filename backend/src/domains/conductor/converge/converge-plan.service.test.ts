@@ -13,6 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   planConvergence,
+  SYNTHESIZE_SELECTION,
   type ConvergencePlanInput,
   type ConvergencePlanSiblingInput,
 } from './converge-plan.service.js';
@@ -54,17 +55,43 @@ describe('planConvergence', () => {
     expect(plan.changedFiles).toEqual(['src/a.ts', 'src/b.ts']);
   });
 
-  it('resolves a contested path to a VALID selection (a real author)', () => {
+  it('resolves a contested path to a VALID pick selection (a real author)', () => {
     const plan = planConvergence(input({ selection: { 'src/shared.ts': 'ws-b' } }));
     const shared = plan.files.find((f) => f.path === 'src/shared.ts');
     expect(shared).toEqual({
       path: 'src/shared.ts',
+      mode: 'pick',
       sourceWorkspaceId: 'ws-b',
       contested: true,
       candidates: ['ws-a', 'ws-b'],
     });
     expect(plan.unresolved).toEqual([]);
     expect(plan.complete).toBe(true);
+  });
+
+  it('resolves a contested path to SYNTHESIZE (optimistic) when the sentinel is selected', () => {
+    const plan = planConvergence(input({ selection: { 'src/shared.ts': SYNTHESIZE_SELECTION } }));
+    const shared = plan.files.find((f) => f.path === 'src/shared.ts');
+    expect(shared).toEqual({
+      path: 'src/shared.ts',
+      mode: 'synthesize',
+      contributors: ['ws-a', 'ws-b'],
+      contested: true,
+      candidates: ['ws-a', 'ws-b'],
+    });
+    expect(shared?.sourceWorkspaceId).toBeUndefined();
+    // The pure fold is OPTIMISTIC — it does no git; the ops layer proves cleanliness.
+    expect(plan.complete).toBe(true);
+  });
+
+  it('non-contested paths are always pick (the sentinel only applies to contested)', () => {
+    const plan = planConvergence(
+      input({
+        siblings: [sibling('ws-a', ['a.ts']), sibling('ws-b', ['b.ts'])],
+        selection: { 'a.ts': SYNTHESIZE_SELECTION },
+      }),
+    );
+    expect(plan.files.every((f) => f.mode === 'pick')).toBe(true);
   });
 
   it('flags a contested path with NO selection as unresolved (no-selection)', () => {

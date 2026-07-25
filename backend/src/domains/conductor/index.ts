@@ -80,9 +80,11 @@ export type {
   EvidenceVerification,
 } from './evidence/convergence-evidence.js';
 import type { ConvergencePlan } from './converge/converge-plan.service.js';
+export { SYNTHESIZE_SELECTION } from './converge/converge-plan.service.js';
 export type {
   ConvergencePlan,
   ConvergenceFileWinner,
+  ConvergenceMode,
   ConvergenceUnresolved,
   ConvergencePlanSource,
 } from './converge/converge-plan.service.js';

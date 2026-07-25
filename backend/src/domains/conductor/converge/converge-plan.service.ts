@@ -10,14 +10,21 @@
  * group it resolves which sibling's version wins —
  *
  *  - a NON-CONTESTED path (exactly one author) auto-resolves to that sole author;
- *  - a CONTESTED path (≥2 authors) resolves to the caller's SELECTION, and only
- *    when the selection names a real author of that path; otherwise it is
- *    UNRESOLVED (a truthful "you must decide", never an invented winner).
+ *  - a CONTESTED path (≥2 authors) resolves to the caller's SELECTION per file, one of:
+ *      · a real author's workspaceId ⇒ `pick` (that sibling's whole file wins);
+ *      · the {@link SYNTHESIZE_SELECTION} sentinel ⇒ `synthesize` (an automatic
+ *        line-level 3-way merge of the contesting siblings against base — run in the
+ *        ops layer, NOT here; see below);
+ *    else it is UNRESOLVED (a truthful "you must decide", never an invented winner).
  *
- * This is a whole-file pick (the correct first cut) — it selects a winning sibling
- * PER FILE, not a semantic/AST merge WITHIN a file (see the deferred note in the
- * ops). Mirrors `readiness.service.ts` foldReadiness: no I/O, no mutation, and
- * degrade-truthful — a sibling whose changed-file list is UNREADABLE contributes
+ * WHOLE-FILE PICK is the safe default; SYNTHESIZE is the line-level refinement. This
+ * pure fold is OPTIMISTIC about synthesize — it records the requested `mode` but
+ * runs NO git (it stays pure, mirroring `readiness.service.ts` foldReadiness). The
+ * real 3-way merge happens in `converge.ops.ts`; if it CONFLICTS, compose flips that
+ * path back to UNRESOLVED with reason `synthesize-conflict` (never a marker-poisoned
+ * "trusted" branch), so `complete` is only truly final after compose has merged.
+ *
+ * Degrade-truthful — a sibling whose changed-file list is UNREADABLE contributes
  * nothing (never a fabricated authorship), exactly as `computeContested` degrades.
  */
 
@@ -34,27 +41,49 @@ export interface ConvergencePlanSiblingInput {
   readonly changedFiles?: readonly string[];
 }
 
+/**
+ * The reserved selection VALUE that requests an automatic line-level 3-way merge of
+ * a contested path (instead of picking one sibling's whole file). Chosen as an
+ * `@`-prefixed sentinel that can never collide with a real workspaceId (`ws_…`).
+ */
+export const SYNTHESIZE_SELECTION = '@synthesize' as const;
+
+/** How a contested path's winner is produced: a whole-file `pick` or a 3-way `synthesize`. */
+export type ConvergenceMode = 'pick' | 'synthesize';
+
 /** The read-only inputs the pure plan folds over. */
 export interface ConvergencePlanInput {
   readonly taskGroup: string | null;
   readonly siblings: readonly ConvergencePlanSiblingInput[];
-  /** Contested path → chosen sibling workspaceId. Non-contested paths ignore this. */
+  /**
+   * Contested path → either a chosen sibling workspaceId (`pick`) or the
+   * {@link SYNTHESIZE_SELECTION} sentinel (`synthesize`). Non-contested paths ignore this.
+   */
   readonly selection: Readonly<Record<string, string>>;
 }
 
-/** A resolved winning file in the plan: the sibling whose version will be materialized. */
+/** A resolved winning file in the plan: how its content will be materialized. */
 export interface ConvergenceFileWinner {
   readonly path: string;
-  /** The workspaceId whose version wins this path. */
-  readonly sourceWorkspaceId: string;
+  /** `pick` (a sibling's whole file) or `synthesize` (an automatic 3-way merge). */
+  readonly mode: ConvergenceMode;
+  /** For `pick`: the workspaceId whose whole file wins. ABSENT for `synthesize`. */
+  readonly sourceWorkspaceId?: string;
+  /** For `synthesize`: the sibling ids whose versions are 3-way merged (sorted). ABSENT for `pick`. */
+  readonly contributors?: readonly string[];
   /** True when 2+ siblings authored this path (the winner came from the selection). */
   readonly contested: boolean;
   /** Every sibling that authored this path (sorted, deduped) — the choosable set. */
   readonly candidates: readonly string[];
 }
 
-/** Why a contested path could not be resolved (surfaced to the caller as a decision to make). */
-export type UnresolvedReason = 'no-selection' | 'invalid-selection';
+/**
+ * Why a contested path could not be resolved (surfaced to the caller as a decision):
+ *  - `no-selection` / `invalid-selection` — from the pure fold (no/bad pick);
+ *  - `synthesize-conflict` — from the OPS layer only: a requested 3-way merge
+ *    conflicted, so the caller must fall back to an explicit `pick`.
+ */
+export type UnresolvedReason = 'no-selection' | 'invalid-selection' | 'synthesize-conflict';
 
 /** A contested path with no valid selection — the caller must choose among `candidates`. */
 export interface ConvergenceUnresolved {
@@ -122,19 +151,23 @@ export function planConvergence(input: ConvergencePlanInput): ConvergencePlan {
   for (const [path, authorSet] of authorship) {
     const candidates = [...authorSet].sort();
     if (candidates.length === 1) {
-      // Non-contested: exactly one author wins automatically.
-      files.push({ path, sourceWorkspaceId: candidates[0], contested: false, candidates });
+      // Non-contested: exactly one author wins automatically (always a pick).
+      files.push({ path, mode: 'pick', sourceWorkspaceId: candidates[0], contested: false, candidates });
       continue;
     }
-    // Contested: the caller must have selected a real author of this path.
+    // Contested: the caller must select a real author (pick) or request a synthesize.
     const chosen = input.selection[path];
-    if (!chosen) {
+    if (chosen === SYNTHESIZE_SELECTION) {
+      // OPTIMISTIC: the pure fold records the requested 3-way; the ops layer runs it
+      // and flips this to `synthesize-conflict` if the merge does not come out clean.
+      files.push({ path, mode: 'synthesize', contributors: candidates, contested: true, candidates });
+    } else if (!chosen) {
       unresolved.push({ path, candidates, reason: 'no-selection' });
     } else if (!authorSet.has(chosen)) {
       // A selection that names a non-author is invalid (never silently accepted).
       unresolved.push({ path, candidates, reason: 'invalid-selection' });
     } else {
-      files.push({ path, sourceWorkspaceId: chosen, contested: true, candidates });
+      files.push({ path, mode: 'pick', sourceWorkspaceId: chosen, contested: true, candidates });
     }
   }
 
@@ -156,7 +189,22 @@ export function planConvergence(input: ConvergencePlanInput): ConvergencePlan {
   };
 }
 
-/** Tally each winning source's file count, joined to its agent, sorted by workspaceId. */
+/**
+ * The workspaceIds a winning file draws from: `[sourceWorkspaceId]` for a `pick`,
+ * or every `contributor` for a `synthesize`. Used both to tally sources and (in the
+ * ops layer) to know which worktrees a file must materialize from.
+ */
+export function winnerSources(file: ConvergenceFileWinner): readonly string[] {
+  if (file.mode === 'synthesize') return file.contributors ?? file.candidates;
+  return file.sourceWorkspaceId ? [file.sourceWorkspaceId] : [];
+}
+
+/**
+ * Tally each winning source's file count, joined to its agent, sorted by workspaceId.
+ * A `synthesize` file counts toward EACH contributing sibling (all its versions feed
+ * the merge), so `sum(fileCount)` can exceed the file total — a truthful contribution
+ * measure, not a partition.
+ */
 function computeSources(
   files: readonly ConvergenceFileWinner[],
   siblings: readonly ConvergencePlanSiblingInput[],
@@ -164,7 +212,9 @@ function computeSources(
   const agentOf = new Map(siblings.map((s) => [s.workspaceId, s.agent]));
   const counts = new Map<string, number>();
   for (const file of files) {
-    counts.set(file.sourceWorkspaceId, (counts.get(file.sourceWorkspaceId) ?? 0) + 1);
+    for (const workspaceId of winnerSources(file)) {
+      counts.set(workspaceId, (counts.get(workspaceId) ?? 0) + 1);
+    }
   }
   return [...counts.entries()]
     .map(([workspaceId, fileCount]) => ({

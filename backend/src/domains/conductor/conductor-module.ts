@@ -168,6 +168,8 @@ import {
 } from './converge/converge-plan.service.js';
 import {
   composeConvergence as composeConvergenceOp,
+  EmptyConvergenceError,
+  UnresolvedConvergenceError,
   type ComposeConvergenceInput,
   type ComposeConvergenceResult,
   type ConvergeOpsDeps,
@@ -202,6 +204,13 @@ export interface ConductorWriteResult<T> {
   readonly verdict: GateVerdict;
   readonly value?: T;
   readonly reason?: string;
+  /**
+   * OPTIONAL failure discriminator for a `ok:false` result whose cause is a CLIENT
+   * input error (a 4xx), NOT a governance deny or a service fault — e.g. a
+   * convergence that cannot be resolved as requested (`unresolved`) or has nothing
+   * to converge (`empty`). Absent ⇒ the caller maps deny→403 / allow-fail→503 as usual.
+   */
+  readonly code?: 'unresolved' | 'empty';
 }
 
 /** States a `stop` may act on — exactly those with a legal `→ cancelled` transition. */
@@ -2153,6 +2162,15 @@ export class ConductorComposer implements ConductorModule {
       );
       return { ok: true, verdict, value: result };
     } catch (err) {
+      // A CLIENT-input failure (nothing to converge / a requested path could not be
+      // resolved — incl. a `synthesize-conflict` discovered during the 3-way merge)
+      // is a 4xx, not a governance/service fault. Tag it so the edge maps it to 400.
+      if (err instanceof EmptyConvergenceError) {
+        return { ok: false, verdict, reason: err.message, code: 'empty' };
+      }
+      if (err instanceof UnresolvedConvergenceError) {
+        return { ok: false, verdict, reason: err.message, code: 'unresolved' };
+      }
       return {
         ok: false,
         verdict,
