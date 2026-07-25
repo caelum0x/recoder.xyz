@@ -22,6 +22,9 @@ const PICK_BTN_ON =
 const SAVE_BTN =
     "border border-accent/40 text-accent rounded px-2 py-0.5 text-xs hover:bg-accent/10 focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-white/50 recoder-transition cursor-pointer";
 
+const ENTRY_CARD =
+    "flex min-w-[15rem] flex-1 basis-60 flex-col items-start gap-1 rounded border border-white/8 p-3 text-left hover:border-white/12 hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-white/50 recoder-transition cursor-pointer";
+
 const INPUT =
     "rounded border border-white/8 bg-transparent px-2 py-1 text-sm focus:outline-none focus:border-accent/60 recoder-transition";
 
@@ -38,6 +41,7 @@ const META = "text-xs text-meta tracking-tight";
 
 export {
     CHIP,
+    ENTRY_CARD,
     ERROR_ROW,
     FIELD_LABEL,
     INPUT,

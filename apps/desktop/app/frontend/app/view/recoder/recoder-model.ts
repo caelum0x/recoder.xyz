@@ -13,12 +13,13 @@ import { RecoderConductorView } from "./recoder";
 // client package the cockpit shares) instead of a hand-rolled local mirror. The
 // shell renders a lenient subset — the backend may be older/newer, so state stays
 // a plain string here and everything beyond the picked fields remains optional.
-type RecoderWorkspace = Pick<Workspace, "workspaceId" | "branch" | "runtimeId" | "worktreePath"> & {
-    state: string;
-    substrate?: string;
-    sessionName?: string;
-    metadata?: Record<string, unknown>;
-};
+type RecoderWorkspace = Pick<Workspace, "workspaceId" | "branch" | "runtimeId" | "worktreePath"> &
+    Partial<Pick<Workspace, "createdAt">> & {
+        state: string;
+        substrate?: string;
+        sessionName?: string;
+        metadata?: Record<string, unknown>;
+    };
 
 // First-run readiness surfaced by the conductor /health + /runtimes endpoints —
 // which coding agents are installed + whether git is present. Drives the launch
@@ -424,6 +425,152 @@ function groupByTaskGroup(workspaces: RecoderWorkspace[]): RecoderWorkspaceGroup
     return groups;
 }
 
+// Terminal-dead states: history, not live work. The default Active board view
+// hides them; the Archived view shows exactly them.
+function isTerminalWorkspaceState(state: string): boolean {
+    return state == "archived" || state == "failed";
+}
+
+type RecoderBoardShow = "active" | "all" | "archived";
+
+function workspaceMatchesQuery(ws: RecoderWorkspace, q: string): boolean {
+    if ((ws.branch ?? "").toLowerCase().includes(q)) {
+        return true;
+    }
+    if ((ws.runtimeId ?? "").toLowerCase().includes(q)) {
+        return true;
+    }
+    if (agentLabel(ws.runtimeId).toLowerCase().includes(q)) {
+        return true;
+    }
+    const meta = ws.metadata;
+    const title = typeof meta?.title == "string" ? meta.title : typeof meta?.prompt == "string" ? meta.prompt : "";
+    return title.toLowerCase().includes(q);
+}
+
+// Pure board filter: the Show dropdown picks the state slice, the text query
+// matches task title / branch / agent label. Operates on the UNFILTERED list so
+// switching views never refetches.
+function filterWorkspaces(workspaces: RecoderWorkspace[], show: RecoderBoardShow, query: string): RecoderWorkspace[] {
+    const q = query.trim().toLowerCase();
+    return workspaces.filter((ws) => {
+        if (show == "active" && isTerminalWorkspaceState(ws.state)) {
+            return false;
+        }
+        if (show == "archived" && !isTerminalWorkspaceState(ws.state)) {
+            return false;
+        }
+        if (q == "") {
+            return true;
+        }
+        return workspaceMatchesQuery(ws, q);
+    });
+}
+
+const DAY_MS = 86400000;
+
+// null ⇒ no trustworthy timestamp; callers must degrade (bucket "older", no
+// label) rather than fabricate an age.
+function workspaceTimestamp(ws: RecoderWorkspace): number {
+    const raw = ws.createdAt;
+    if (typeof raw != "string" || raw == "") {
+        return null;
+    }
+    const t = Date.parse(raw);
+    return Number.isNaN(t) ? null : t;
+}
+
+function groupTimestamp(group: RecoderWorkspaceGroup): number {
+    let latest: number = null;
+    for (const ws of group.workspaces) {
+        const t = workspaceTimestamp(ws);
+        if (t != null && (latest == null || t > latest)) {
+            latest = t;
+        }
+    }
+    return latest;
+}
+
+type RecoderBoardBucketId = "today" | "yesterday" | "week" | "older";
+type RecoderBoardBucket = { id: RecoderBoardBucketId; label: string; groups: RecoderWorkspaceGroup[] };
+
+const BOARD_BUCKET_DEFS: { id: RecoderBoardBucketId; label: string }[] = [
+    { id: "today", label: "Today" },
+    { id: "yesterday", label: "Yesterday" },
+    { id: "week", label: "This week" },
+    { id: "older", label: "Older" },
+];
+
+function bucketForTimestamp(t: number, now: Date): RecoderBoardBucketId {
+    if (t == null) {
+        return "older";
+    }
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    if (t >= startOfToday) {
+        return "today";
+    }
+    if (t >= startOfToday - DAY_MS) {
+        return "yesterday";
+    }
+    if (t >= startOfToday - 6 * DAY_MS) {
+        return "week";
+    }
+    return "older";
+}
+
+// Fold task groups into fixed recency buckets (newest bucket first, newest group
+// first within a bucket). A group's age is its newest sibling's createdAt; a
+// group with no parseable createdAt lands in "older" — never a fabricated age.
+function bucketWorkspaceGroups(groups: RecoderWorkspaceGroup[], now: Date): RecoderBoardBucket[] {
+    const byBucket = new Map<RecoderBoardBucketId, { group: RecoderWorkspaceGroup; ts: number }[]>();
+    for (const group of groups) {
+        const ts = groupTimestamp(group);
+        const id = bucketForTimestamp(ts, now);
+        const list = byBucket.get(id) ?? [];
+        list.push({ group, ts });
+        byBucket.set(id, list);
+    }
+    const result: RecoderBoardBucket[] = [];
+    for (const def of BOARD_BUCKET_DEFS) {
+        const entries = byBucket.get(def.id);
+        if (entries == null || entries.length == 0) {
+            continue;
+        }
+        entries.sort((a, b) => (b.ts ?? Number.NEGATIVE_INFINITY) - (a.ts ?? Number.NEGATIVE_INFINITY));
+        result.push({ id: def.id, label: def.label, groups: entries.map((e) => e.group) });
+    }
+    return result;
+}
+
+// "" ⇒ no trustworthy createdAt; the row simply shows no age.
+function formatRelativeAge(createdAt: string, now: Date = new Date()): string {
+    if (typeof createdAt != "string" || createdAt == "") {
+        return "";
+    }
+    const t = Date.parse(createdAt);
+    if (Number.isNaN(t)) {
+        return "";
+    }
+    const diff = now.getTime() - t;
+    if (diff < 60000) {
+        return "just now";
+    }
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 60) {
+        return `${minutes}m ago`;
+    }
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) {
+        return `${hours}h ago`;
+    }
+    const days = Math.floor(hours / 24);
+    if (days < 7) {
+        return `${days}d ago`;
+    }
+    const weeks = Math.floor(days / 7);
+    return `${weeks}w ago`;
+}
+
 function genTaskId(): string {
     return `task_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
@@ -473,13 +620,19 @@ class RecoderViewModel implements ViewModel {
     viewIcon: Atom<string>;
     viewName: Atom<string>;
     blockId: string;
-    workspacesAtom: PrimitiveAtom<RecoderWorkspace[]>;
+    // Every workspace the backend returned, INCLUDING archived + failed, so the
+    // board's Show views (Active / All / Archived) switch without a refetch.
+    allWorkspacesAtom: PrimitiveAtom<RecoderWorkspace[]>;
+    // The live (non-terminal) workspaces — what the palette and getting-started
+    // logic reason over regardless of the board's current Show filter.
+    workspacesAtom!: Atom<RecoderWorkspace[]>;
     loadingAtom: PrimitiveAtom<boolean>;
     errorAtom: PrimitiveAtom<string>;
     setupAtom: PrimitiveAtom<RecoderSetup>;
     diffSummariesAtom: PrimitiveAtom<Record<string, RecoderDiffSummary>>;
     launchOpenAtom: PrimitiveAtom<boolean>;
     commandPaletteOpenAtom: PrimitiveAtom<boolean>;
+    shortcutsOpenAtom: PrimitiveAtom<boolean>;
     launchRepoPathAtom: PrimitiveAtom<string>;
     // Advance, non-blocking hint: false once the picked folder is confirmed NOT a
     // git repo (checked read-only at pick time). Launch stays enabled — the backend
@@ -502,6 +655,14 @@ class RecoderViewModel implements ViewModel {
     busyRowAtom: PrimitiveAtom<string>;
     // Parallel-run groups derived from the current workspaces (metadata.taskGroup).
     groupsAtom!: Atom<RecoderWorkspaceGroup[]>;
+    // Board filter bar state: free-text query + the Show view.
+    boardFilterAtom: PrimitiveAtom<string>;
+    boardShowAtom: PrimitiveAtom<RecoderBoardShow>;
+    // The board's visible rows: Show view + text query applied to the unfiltered list.
+    boardWorkspacesAtom!: Atom<RecoderWorkspace[]>;
+    // The visible rows grouped by taskGroup and folded into recency buckets —
+    // exactly the order the board renders and keyboard nav walks.
+    boardBucketsAtom!: Atom<RecoderBoardBucket[]>;
     // Side-by-side compare view keyed by taskGroup; absent ⇒ never loaded / degraded.
     compareAtom: PrimitiveAtom<Record<string, CompareView>>;
     // The taskGroup whose full compare panel is expanded; "" ⇒ none open.
@@ -526,13 +687,14 @@ class RecoderViewModel implements ViewModel {
         this.viewType = "recoder";
         this.viewIcon = atom("layer-group");
         this.viewName = atom("Recoder");
-        this.workspacesAtom = atom([]) as PrimitiveAtom<RecoderWorkspace[]>;
+        this.allWorkspacesAtom = atom([]) as PrimitiveAtom<RecoderWorkspace[]>;
         this.loadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
         this.setupAtom = atom({ agents: [], git: false, loaded: false, probed: false, tmuxBin: "" }) as PrimitiveAtom<RecoderSetup>;
         this.diffSummariesAtom = atom({}) as PrimitiveAtom<Record<string, RecoderDiffSummary>>;
         this.launchOpenAtom = atom(false) as PrimitiveAtom<boolean>;
         this.commandPaletteOpenAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.shortcutsOpenAtom = atom(false) as PrimitiveAtom<boolean>;
         this.launchRepoPathAtom = atom(loadRecentRepos()[0] ?? "") as PrimitiveAtom<string>;
         this.launchRepoIsGitAtom = atom(true) as PrimitiveAtom<boolean>;
         this.recentReposAtom = atom(loadRecentRepos()) as PrimitiveAtom<string[]>;
@@ -553,7 +715,20 @@ class RecoderViewModel implements ViewModel {
         this.readinessAtom = atom({}) as PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
         this.lastMergeAtom = atom({}) as PrimitiveAtom<Record<string, RecoderMergeRecord>>;
         this.selectedWorkspaceIdAtom = atom("") as PrimitiveAtom<string>;
+        this.boardFilterAtom = atom("") as PrimitiveAtom<string>;
+        this.boardShowAtom = atom("active") as PrimitiveAtom<RecoderBoardShow>;
+        this.workspacesAtom = atom((get) =>
+            get(this.allWorkspacesAtom).filter((w) => !isTerminalWorkspaceState(w.state))
+        );
         this.groupsAtom = atom((get) => groupByTaskGroup(get(this.workspacesAtom)));
+        this.boardWorkspacesAtom = atom((get) =>
+            filterWorkspaces(get(this.allWorkspacesAtom), get(this.boardShowAtom), get(this.boardFilterAtom))
+        );
+        // `new Date()` at compute time is fresh enough: the 6s poll re-sets
+        // allWorkspacesAtom, which recomputes the buckets.
+        this.boardBucketsAtom = atom((get) =>
+            bucketWorkspaceGroups(groupByTaskGroup(get(this.boardWorkspacesAtom)), new Date())
+        );
     }
 
     get viewComponent(): ViewComponent {
@@ -600,11 +775,12 @@ class RecoderViewModel implements ViewModel {
             // still renders. Never assume a shape we didn't see.
             const data = body?.data;
             const list = Array.isArray(data?.workspaces) ? data.workspaces : Array.isArray(data) ? data : [];
-            // Archived + failed workspaces are terminal history, not live work — the
-            // board shows only active ones so it never clutters with dead runs. A
-            // failed launch is already surfaced truthfully in the launch panel itself.
-            workspaces = (list as RecoderWorkspace[]).filter((w) => w.state != "archived" && w.state != "failed");
-            globalStore.set(this.workspacesAtom, workspaces);
+            // Keep the UNFILTERED list: archived + failed workspaces are terminal
+            // history, hidden by the board's default Active view, but retained here
+            // so the All / Archived views switch without a refetch.
+            const all = list as RecoderWorkspace[];
+            globalStore.set(this.allWorkspacesAtom, all);
+            workspaces = all.filter((w) => !isTerminalWorkspaceState(w.state));
         } catch (e) {
             globalStore.set(this.errorAtom, e instanceof Error ? e.message : String(e));
         } finally {
@@ -1111,7 +1287,13 @@ export {
     computePairwise,
     computeSiblingOverlap,
     computeSuggestedWinner,
+    filterWorkspaces,
+    bucketWorkspaceGroups,
+    formatRelativeAge,
+    isTerminalWorkspaceState,
     TASK_GROUP_METADATA_KEY,
+    type RecoderBoardShow,
+    type RecoderBoardBucket,
     type RecoderWorkspace,
     type RecoderSetup,
     type RecoderDiffSummary,

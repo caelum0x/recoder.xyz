@@ -11,14 +11,19 @@ import { isConnectivityError } from "./recoder-errors";
 import { RecoderIdentityAffordance } from "./recoder-identity";
 import { RecoderIdentityModel } from "./recoder-identity-model";
 import {
+    formatRelativeAge,
+    isTerminalWorkspaceState,
     RecoderViewModel,
+    type RecoderBoardShow,
     type RecoderDiffSummary,
     type RecoderWorkspace,
 } from "./recoder-model";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
+import { RecoderShortcutsOverlay } from "./recoder-shortcuts";
 import { RecoderErrorRow, RecoderSkeleton } from "./recoder-states";
 import {
     CHIP,
+    ENTRY_CARD,
     ERROR_ROW,
     FIELD_LABEL,
     INPUT,
@@ -114,6 +119,8 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
         }
         ref.current?.scrollIntoView({ block: "nearest" });
     }, [selected]);
+    const terminal = isTerminalWorkspaceState(ws.state);
+    const age = formatRelativeAge(ws.createdAt);
     return (
         <div
             ref={ref}
@@ -121,7 +128,7 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
             data-selected={selected}
             onClick={onSelect}
             onFocus={onSelect}
-            className={`flex flex-col gap-1 rounded border border-white/8 px-3 py-2 recoder-transition hover:border-white/12 cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-white/50 ${selected ? "bg-accent" : "hover:bg-white/[0.04]"}`}
+            className={`flex flex-col gap-1 rounded border border-white/8 px-3 py-2 recoder-transition hover:border-white/12 cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-white/50 ${selected ? "bg-accent" : "hover:bg-white/[0.04]"} ${terminal ? "opacity-60" : ""}`}
             title={`${ws.workspaceId} - ${ws.branch}`}
         >
             <div className="flex items-center gap-2">
@@ -133,10 +140,13 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
                     </span>
                 )}
                 <span className={`${META} ml-auto`}>{agentLabel(ws.runtimeId)}</span>
-                <button className={QUIET_BTN} onClick={() => openSession(ws.workspaceId)}>
-                    Session
-                </button>
-                {ws.sessionName && (
+                {age != "" && <span className={META}>{age}</span>}
+                {!terminal && (
+                    <button className={QUIET_BTN} onClick={() => openSession(ws.workspaceId)}>
+                        Session
+                    </button>
+                )}
+                {!terminal && ws.sessionName && (
                     <button className={QUIET_BTN} onClick={() => openTerminal(ws, tmuxBin)}>
                         Terminal
                     </button>
@@ -144,17 +154,21 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
                 <button className={QUIET_BTN} onClick={() => openReview(ws.workspaceId)}>
                     Review
                 </button>
-                <button
-                    className={QUIET_BTN}
-                    disabled={busy || ws.state != "awaiting_review"}
-                    title={ws.state != "awaiting_review" ? "Review first to enable merge" : undefined}
-                    onClick={() => model.mergeWorkspace(ws.workspaceId)}
-                >
-                    {busy ? "..." : "Merge"}
-                </button>
-                <button className={QUIET_BTN} disabled={busy} onClick={() => model.archiveWorkspace(ws.workspaceId)}>
-                    Archive
-                </button>
+                {!terminal && (
+                    <button
+                        className={QUIET_BTN}
+                        disabled={busy || ws.state != "awaiting_review"}
+                        title={ws.state != "awaiting_review" ? "Review first to enable merge" : undefined}
+                        onClick={() => model.mergeWorkspace(ws.workspaceId)}
+                    >
+                        {busy ? "..." : "Merge"}
+                    </button>
+                )}
+                {ws.state != "archived" && (
+                    <button className={QUIET_BTN} disabled={busy} onClick={() => model.archiveWorkspace(ws.workspaceId)}>
+                        Archive
+                    </button>
+                )}
             </div>
             {status && <div className={META}>{status}</div>}
         </div>
@@ -165,7 +179,11 @@ WorkspaceRow.displayName = "WorkspaceRow";
 
 function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const workspaces = useAtomValue(model.workspacesAtom);
+    const allWorkspaces = useAtomValue(model.allWorkspacesAtom);
     const groups = useAtomValue(model.groupsAtom);
+    const buckets = useAtomValue(model.boardBucketsAtom);
+    const [boardFilter, setBoardFilter] = useAtom(model.boardFilterAtom);
+    const [boardShow, setBoardShow] = useAtom(model.boardShowAtom);
     const compare = useAtomValue(model.compareAtom);
     const compareOpen = useAtomValue(model.compareOpenAtom);
     const loading = useAtomValue(model.loadingAtom);
@@ -176,6 +194,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const busyRow = useAtomValue(model.busyRowAtom);
     const [launchOpen, setLaunchOpen] = useAtom(model.launchOpenAtom);
     const [paletteOpen, setPaletteOpen] = useAtom(model.commandPaletteOpenAtom);
+    const [shortcutsOpen, setShortcutsOpen] = useAtom(model.shortcutsOpenAtom);
     const identity = useAtomValue(RecoderIdentityModel.getInstance().identityAtom);
     const [selectedId, setSelectedId] = useAtom(model.selectedWorkspaceIdAtom);
     const [repoPath, setRepoPath] = useAtom(model.launchRepoPathAtom);
@@ -197,21 +216,30 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         return () => clearInterval(id);
     }, [model]);
 
-    // Capture-phase so it beats Wave's window keyhandler; ⌘P is not bound in
-    // keymodel.ts globalKeyMap, so there is no conflict to arbitrate. preventDefault
-    // also suppresses the OS print dialog.
+    // Capture-phase so it beats Wave's window keyhandler; ⌘P, ⌘K, and ⌘/ are not
+    // bound in keymodel.ts globalKeyMap, so there is no conflict to arbitrate.
+    // preventDefault also suppresses the OS print dialog on ⌘P.
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
-            if (!((e.metaKey || e.ctrlKey) && e.key.toLowerCase() == "p" && !e.shiftKey && !e.altKey)) {
+            if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) {
                 return;
             }
-            e.preventDefault();
-            e.stopPropagation();
-            setPaletteOpen((v) => !v);
+            const key = e.key.toLowerCase();
+            if (key == "p" || key == "k") {
+                e.preventDefault();
+                e.stopPropagation();
+                setPaletteOpen((v) => !v);
+                return;
+            }
+            if (key == "/") {
+                e.preventDefault();
+                e.stopPropagation();
+                setShortcutsOpen((v) => !v);
+            }
         };
         document.addEventListener("keydown", handler, true);
         return () => document.removeEventListener("keydown", handler, true);
-    }, [setPaletteOpen]);
+    }, [setPaletteOpen, setShortcutsOpen]);
 
     // Own the global "new agent" chord at the document level (same capture-phase
     // rationale as ⌘P above) so it fires on a fresh launch when the empty board has
@@ -232,7 +260,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             }
             // Gate on open panels so N typed into the launch panel/palette does nothing
             // global; their own Escape/typing still work.
-            if (launchOpen || paletteOpen) {
+            if (launchOpen || paletteOpen || shortcutsOpen) {
                 return;
             }
             e.preventDefault();
@@ -240,7 +268,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         };
         document.addEventListener("keydown", handler, true);
         return () => document.removeEventListener("keydown", handler, true);
-    }, [launchOpen, paletteOpen, setLaunchOpen]);
+    }, [launchOpen, paletteOpen, shortcutsOpen, setLaunchOpen]);
 
     // A SINGLE interactive launch drops the user straight into the session. Guard
     // on the workspace id so a re-render / poll can never reopen it, and never
@@ -295,9 +323,11 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         }
     }, [readyAgents.length, runtimeId]);
 
-    // Flat, render-order list of the visible board rows (singleton + parallel-group
-    // rows, top-to-bottom) so keyboard nav walks the board exactly as it reads.
-    const orderedIds = groups.flatMap((g) => g.workspaces.map((w) => w.workspaceId));
+    // Flat, render-order list of the visible board rows (recency buckets, then
+    // singleton + parallel-group rows) so keyboard nav walks the FILTERED board
+    // exactly as it reads.
+    const boardRows = buckets.flatMap((b) => b.groups.flatMap((g) => g.workspaces));
+    const orderedIds = boardRows.map((w) => w.workspaceId);
 
     // Keep the selection anchored to a live row: seed the first row when nothing is
     // selected, and re-seed if a refresh dropped the previously-selected workspace.
@@ -341,7 +371,12 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             return;
         }
         if (e.key == "Enter" && selectedId != "") {
-            openSession(selectedId);
+            const selectedWs = boardRows.find((w) => w.workspaceId == selectedId);
+            if (selectedWs != null && isTerminalWorkspaceState(selectedWs.state)) {
+                openReview(selectedId);
+            } else {
+                openSession(selectedId);
+            }
             e.preventDefault();
             return;
         }
@@ -350,8 +385,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     // First launch: the embedded backend on :3100 may not be up yet, so refresh()
     // surfaces a raw transport error on an empty board. Treat that as the calm
     // still-starting state rather than an alarming failure row.
-    const coldStart = workspaces.length == 0 && isConnectivityError(error);
-    const showGettingStarted = !loading && workspaces.length == 0 && (error == "" || coldStart) && !launchOpen;
+    const coldStart = allWorkspaces.length == 0 && isConnectivityError(error);
+    const showGettingStarted = !loading && allWorkspaces.length == 0 && (error == "" || coldStart) && !launchOpen;
     const needsPrompt = !interactive && prompt.trim() == "";
     // Block launch into a confirmed non-git folder — the worktree add would fail. The
     // inline "Not a git repository" warning below explains it; repoIsGit is optimistic
@@ -363,6 +398,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         parallelAgents.length > 0 && parallelAgents.every((a) => alsoRun.includes(a.runtimeId));
     const parallelCount = alsoRun.filter((id) => id != runtimeId && id != "").length;
     const isGitError = /git|worktree|repositor/i.test(launchResult?.error ?? "");
+    const quickStartRepo = recentRepos.find((r) => r.trim() != "") ?? "";
 
     const toggleAlso = (id: string, on: boolean) =>
         setAlsoRun(on ? [...alsoRun, id] : alsoRun.filter((x) => x != id));
@@ -395,7 +431,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     // runtime ids reach the palette.
     const commands = useMemo<RecoderCommand[]>(() => {
         const list: RecoderCommand[] = [
-            { id: "launch", title: "Launch a coding agent", run: () => setLaunchOpen(true) },
+            { id: "launch", title: "Launch a coding agent", shortcut: "N", run: () => setLaunchOpen(true) },
             {
                 id: "browse",
                 title: "Browse folder…",
@@ -405,12 +441,33 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                 },
             },
             { id: "review", title: "Review workspace diff", run: openReview },
+            { id: "shortcuts", title: "Show keyboard shortcuts", shortcut: "⌘/", run: () => setShortcutsOpen(true) },
         ];
         for (const ws of workspaces) {
+            const wsLabel = `${agentLabel(ws.runtimeId)} · ${ws.branch}`;
             list.push({
                 id: `session-${ws.workspaceId}`,
-                title: `Open session — ${agentLabel(ws.runtimeId)} · ${ws.branch}`,
+                title: `Open session — ${wsLabel}`,
                 run: () => openSession(ws.workspaceId),
+            });
+            if (ws.sessionName) {
+                list.push({
+                    id: `terminal-${ws.workspaceId}`,
+                    title: `Open terminal — ${wsLabel}`,
+                    run: () => openTerminal(ws, setup.tmuxBin),
+                });
+            }
+            if (ws.state == "awaiting_review") {
+                list.push({
+                    id: `merge-${ws.workspaceId}`,
+                    title: `Merge — ${wsLabel}`,
+                    run: () => model.mergeWorkspace(ws.workspaceId),
+                });
+            }
+            list.push({
+                id: `archive-${ws.workspaceId}`,
+                title: `Archive — ${wsLabel}`,
+                run: () => model.archiveWorkspace(ws.workspaceId),
             });
         }
         for (const group of groups) {
@@ -431,7 +488,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             });
         }
         return list;
-    }, [workspaces, groups, identity, model, setLaunchOpen]);
+    }, [workspaces, groups, identity, model, setup.tmuxBin, setLaunchOpen, setShortcutsOpen]);
 
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2" onKeyDown={onBoardKeyDown}>
@@ -675,30 +732,55 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         <div className={META}>
                             Run your coding agents in parallel isolated worktrees, then review and merge.
                         </div>
-                        <div className={META}>
-                            Press <span className="font-mono">⌘P</span> for commands ·{" "}
-                            <span className="font-mono">N</span> for a new agent
-                        </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            className={ENTRY_CARD}
+                            onClick={() => {
+                                setLaunchOpen(true);
+                                browseFolder();
+                            }}
+                        >
+                            <span className={ROW_TITLE}>Open project</span>
+                            <span className={META}>
+                                Pick a git repo folder and launch a coding agent in a fresh worktree.
+                            </span>
+                        </button>
+                        {quickStartRepo != "" && (
+                            <button
+                                className={ENTRY_CARD}
+                                title={quickStartRepo}
+                                onClick={() => {
+                                    setRepoPath(quickStartRepo);
+                                    checkRepo(quickStartRepo);
+                                    setLaunchOpen(true);
+                                }}
+                            >
+                                <span className={ROW_TITLE}>Quick start</span>
+                                <span className={META}>
+                                    Launch into {folderName(quickStartRepo)} with your last agent.
+                                </span>
+                            </button>
+                        )}
+                    </div>
+                    <div className={META}>
+                        Press <span className="font-mono">⌘P</span> for commands ·{" "}
+                        <span className="font-mono">N</span> for a new agent
                     </div>
                     {setup.loaded ? (
-                        <div className="flex flex-col gap-1">
-                            <div className={FIELD_LABEL}>Ready on this machine</div>
-                            <div className="flex items-center gap-2 text-sm">
-                                <span>{setup.git ? "✓" : "✗"}</span>
-                                <span className={setup.git ? "" : "text-secondary"}>git</span>
-                            </div>
+                        <div className={`${META} flex flex-wrap items-center gap-x-3 gap-y-1`}>
+                            <span className={setup.git ? "" : "opacity-60"}>{setup.git ? "✓" : "✗"} git</span>
+                            {setup.agents.map((a) => (
+                                <span key={a.runtimeId} className={a.available ? "" : "opacity-60"}>
+                                    {a.available ? "✓" : "✗"} {agentLabel(a.runtimeId)}
+                                </span>
+                            ))}
                             {setup.agents.length == 0 && (
-                                <div className={META}>
+                                <span>
                                     No coding agents detected on PATH - install Claude Code (or Codex / opencode) to
                                     launch a workspace.
-                                </div>
+                                </span>
                             )}
-                            {setup.agents.map((a) => (
-                                <div key={a.runtimeId} className="flex items-center gap-2 text-sm">
-                                    <span>{a.available ? "✓" : "✗"}</span>
-                                    <span className={a.available ? "" : "text-secondary"}>{agentLabel(a.runtimeId)}</span>
-                                </div>
-                            ))}
                         </div>
                     ) : setup.probed ? (
                         <div className={META}>
@@ -707,113 +789,124 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     ) : (
                         <div className={META}>Checking local setup...</div>
                     )}
-                    {setup.loaded && readyAgents.length > 0 && (
-                        <div className="flex flex-col gap-2">
-                            <button className={PRIMARY_BTN} onClick={() => setLaunchOpen(true)}>
-                                Launch your first agent
-                            </button>
-                            {recentRepos.filter((r) => r.trim() != "").length > 0 && (
-                                <div className="flex flex-col gap-1">
-                                    <div className={FIELD_LABEL}>Recent repos</div>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {recentRepos
-                                            .filter((r) => r.trim() != "")
-                                            .map((r) => (
-                                                <button
-                                                    key={r}
-                                                    className={CHIP}
-                                                    title={r}
-                                                    onClick={() => {
-                                                        setRepoPath(r);
-                                                        checkRepo(r);
-                                                        setLaunchOpen(true);
-                                                    }}
-                                                >
-                                                    {folderName(r)}
-                                                </button>
-                                            ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
                 </div>
             )}
 
-            <div className="flex flex-col gap-1">
-                {groups.map((group) => {
-                    if (group.workspaces.length <= 1) {
-                        const ws = group.workspaces[0];
-                        return (
-                            <WorkspaceRow
-                                key={ws.workspaceId}
-                                model={model}
-                                ws={ws}
-                                summary={diffSummaries[ws.workspaceId]}
-                                status={rowStatus[ws.workspaceId]}
-                                busy={busyRow == ws.workspaceId}
-                                tmuxBin={setup.tmuxBin}
-                                selected={selectedId == ws.workspaceId}
-                                onSelect={() => setSelectedId(ws.workspaceId)}
-                            />
-                        );
-                    }
-                    const taskGroup = group.taskGroup ?? "";
-                    const compareView = compare[taskGroup];
-                    const isCompareOpen = compareOpen == taskGroup;
-                    return (
-                        <div key={taskGroup} className="flex flex-col gap-1 rounded border border-white/8 p-2">
-                            <div className="flex items-center gap-2">
-                                <span className={ROW_TITLE}>{group.workspaces.length} agents</span>
-                                <span className={`${META} font-mono`} title={taskGroup}>
-                                    {shortTaskGroup(taskGroup)}
-                                </span>
-                                <div className="flex-1" />
-                                {/* explicit click, not an auto-open — parallel launches never AUTO-open */}
-                                <button
-                                    className={QUIET_BTN}
-                                    onClick={() => group.workspaces.forEach((ws) => openSession(ws.workspaceId))}
-                                    title={`Open a session for each of the ${group.workspaces.length} agents`}
-                                >
-                                    Open all
-                                </button>
-                                <button
-                                    className={QUIET_BTN}
-                                    onClick={() => model.toggleCompare(taskGroup, group.workspaces)}
-                                >
-                                    {isCompareOpen ? "Hide compare" : "Compare"}
-                                </button>
-                            </div>
-                            {isCompareOpen && (
-                                <div className="recoder-enter">
-                                    {compareView != null ? (
-                                        <RecoderComparePanel model={model} compareView={compareView} />
-                                    ) : (
-                                        <div className="rounded border border-white/8 p-2">
-                                            <RecoderSkeleton rows={2} />
+            {allWorkspaces.length > 0 && (
+                <div className="flex items-center gap-2">
+                    <input
+                        className={`${INPUT} min-w-0 flex-1`}
+                        placeholder="Filter by task, branch, or agent..."
+                        value={boardFilter}
+                        onChange={(e) => setBoardFilter(e.target.value)}
+                    />
+                    <label className="flex items-center gap-1.5">
+                        <span className={FIELD_LABEL}>Show</span>
+                        <select
+                            className={`${INPUT} cursor-pointer`}
+                            value={boardShow}
+                            onChange={(e) => setBoardShow(e.target.value as RecoderBoardShow)}
+                        >
+                            <option value="active">Active</option>
+                            <option value="all">All</option>
+                            <option value="archived">Archived</option>
+                        </select>
+                    </label>
+                </div>
+            )}
+            {allWorkspaces.length > 0 && (
+                <div className={META}>
+                    <span className="font-mono">N</span> new · <span className="font-mono">⌘P</span>/
+                    <span className="font-mono">⌘K</span> commands · <span className="font-mono">j</span>/
+                    <span className="font-mono">k</span> select · <span className="font-mono">↵</span> open ·{" "}
+                    <span className="font-mono">⌘/</span> shortcuts
+                </div>
+            )}
+            {allWorkspaces.length > 0 && boardRows.length == 0 && !loading && (
+                <div className={META}>No workspaces match this filter.</div>
+            )}
+            <div className="flex flex-col gap-2">
+                {buckets.map((bucket) => (
+                    <div key={bucket.id} className="flex flex-col gap-1">
+                        <div className={FIELD_LABEL}>
+                            {bucket.label} · {bucket.groups.reduce((n, g) => n + g.workspaces.length, 0)}
+                        </div>
+                        {bucket.groups.map((group) => {
+                            if (group.workspaces.length <= 1) {
+                                const ws = group.workspaces[0];
+                                return (
+                                    <WorkspaceRow
+                                        key={ws.workspaceId}
+                                        model={model}
+                                        ws={ws}
+                                        summary={diffSummaries[ws.workspaceId]}
+                                        status={rowStatus[ws.workspaceId]}
+                                        busy={busyRow == ws.workspaceId}
+                                        tmuxBin={setup.tmuxBin}
+                                        selected={selectedId == ws.workspaceId}
+                                        onSelect={() => setSelectedId(ws.workspaceId)}
+                                    />
+                                );
+                            }
+                            const taskGroup = group.taskGroup ?? "";
+                            const compareView = compare[taskGroup];
+                            const isCompareOpen = compareOpen == taskGroup;
+                            return (
+                                <div key={taskGroup} className="flex flex-col gap-1 rounded border border-white/8 p-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className={ROW_TITLE}>{group.workspaces.length} agents</span>
+                                        <span className={`${META} font-mono`} title={taskGroup}>
+                                            {shortTaskGroup(taskGroup)}
+                                        </span>
+                                        <div className="flex-1" />
+                                        {/* explicit click, not an auto-open — parallel launches never AUTO-open */}
+                                        <button
+                                            className={QUIET_BTN}
+                                            onClick={() => group.workspaces.forEach((ws) => openSession(ws.workspaceId))}
+                                            title={`Open a session for each of the ${group.workspaces.length} agents`}
+                                        >
+                                            Open all
+                                        </button>
+                                        <button
+                                            className={QUIET_BTN}
+                                            onClick={() => model.toggleCompare(taskGroup, group.workspaces)}
+                                        >
+                                            {isCompareOpen ? "Hide compare" : "Compare"}
+                                        </button>
+                                    </div>
+                                    {isCompareOpen && (
+                                        <div className="recoder-enter">
+                                            {compareView != null ? (
+                                                <RecoderComparePanel model={model} compareView={compareView} />
+                                            ) : (
+                                                <div className="rounded border border-white/8 p-2">
+                                                    <RecoderSkeleton rows={2} />
+                                                </div>
+                                            )}
                                         </div>
                                     )}
+                                    {group.workspaces.map((ws) => (
+                                        <WorkspaceRow
+                                            key={ws.workspaceId}
+                                            model={model}
+                                            ws={ws}
+                                            summary={diffSummaries[ws.workspaceId]}
+                                            status={rowStatus[ws.workspaceId]}
+                                            busy={busyRow == ws.workspaceId}
+                                            tmuxBin={setup.tmuxBin}
+                                            selected={selectedId == ws.workspaceId}
+                                            onSelect={() => setSelectedId(ws.workspaceId)}
+                                        />
+                                    ))}
                                 </div>
-                            )}
-                            {group.workspaces.map((ws) => (
-                                <WorkspaceRow
-                                    key={ws.workspaceId}
-                                    model={model}
-                                    ws={ws}
-                                    summary={diffSummaries[ws.workspaceId]}
-                                    status={rowStatus[ws.workspaceId]}
-                                    busy={busyRow == ws.workspaceId}
-                                    tmuxBin={setup.tmuxBin}
-                                    selected={selectedId == ws.workspaceId}
-                                    onSelect={() => setSelectedId(ws.workspaceId)}
-                                />
-                            ))}
-                        </div>
-                    );
-                })}
+                            );
+                        })}
+                    </div>
+                ))}
             </div>
 
             {paletteOpen && <RecoderCommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
+            {shortcutsOpen && <RecoderShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
         </div>
     );
 }
