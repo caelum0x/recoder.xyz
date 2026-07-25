@@ -164,6 +164,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const [branch, setBranch] = useAtom(model.launchBranchAtom);
     const [interactive, setInteractive] = useAtom(model.launchInteractiveAtom);
     const posting = useAtomValue(model.postingAtom);
+    const launchProgress = useAtomValue(model.launchProgressAtom);
     const launchResult = useAtomValue(model.launchResultAtom);
 
     useEffect(() => {
@@ -438,6 +439,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                 Launches {1 + parallelCount} agents, each in its own worktree.
                             </span>
                         )}
+                        {posting && launchProgress != "" && <span className={META}>{launchProgress}</span>}
                         {canLaunch && <span className={`${META} ml-auto`}>Cmd+Enter to launch</span>}
                     </div>
 
