@@ -5,9 +5,12 @@ import { useAtomValue } from "jotai";
 import { agentLabel } from "./recoder-agent-labels";
 import { buildConvergenceEvidence, saveConvergenceEvidence } from "./recoder-evidence";
 import {
+    computePairwise,
     RecoderViewModel,
     type CompareView,
     type MergeabilityView,
+    type PairwiseCompareView,
+    type RecoderDiffSummary,
     type ReadinessSignal,
     type ReadinessView,
     type RecoderMergeRecord,
@@ -16,6 +19,16 @@ import {
 
 const MERGE_BTN =
     "border border-border text-secondary rounded px-2 py-0.5 text-xs hover:bg-border/40 transition-colors cursor-pointer disabled:opacity-50";
+
+const PICK_BTN =
+    "border border-border text-secondary rounded px-1.5 py-0.5 text-xs hover:bg-border/40 transition-colors cursor-pointer";
+const PICK_BTN_ON = "border border-accent/40 bg-accent/20 text-accent rounded px-1.5 py-0.5 text-xs cursor-pointer";
+
+// Explicit sign so a pairwise delta can never be mistaken for an absolute count;
+// a negative already carries its own "-".
+function fmtSigned(n: number): string {
+    return n >= 0 ? `+${n}` : String(n);
+}
 
 // Truthful, never-green verdict chrome: the graphite accent marks a real pass,
 // error marks a real block, everything unproven stays neutral so an `unknown`
@@ -146,6 +159,8 @@ type SiblingCompareRowProps = {
     status: string;
     lastMerge: RecoderMergeRecord;
     busy: boolean;
+    pickedA: boolean;
+    pickedB: boolean;
 };
 
 function SiblingCompareRow({
@@ -158,6 +173,8 @@ function SiblingCompareRow({
     status,
     lastMerge,
     busy,
+    pickedA,
+    pickedB,
 }: SiblingCompareRowProps) {
     const stat = sibling.diffStat;
     const merged = lastMerge != null && lastMerge.status == "merged";
@@ -175,6 +192,22 @@ function SiblingCompareRow({
     return (
         <div className="flex flex-col gap-1 rounded border border-border px-2 py-1.5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <div className="flex items-center gap-1">
+                    <button
+                        className={pickedA ? PICK_BTN_ON : PICK_BTN}
+                        onClick={() => model.pickPair("A", sibling.workspaceId)}
+                        title={`Pick ${agentLabel(sibling.agent)} as A for the pairwise compare`}
+                    >
+                        A
+                    </button>
+                    <button
+                        className={pickedB ? PICK_BTN_ON : PICK_BTN}
+                        onClick={() => model.pickPair("B", sibling.workspaceId)}
+                        title={`Pick ${agentLabel(sibling.agent)} as B for the pairwise compare`}
+                    >
+                        B
+                    </button>
+                </div>
                 <span className="text-sm">{agentLabel(sibling.agent)}</span>
                 <span className="text-xs text-secondary">{sibling.state}</span>
                 {stat != null ? (
@@ -243,14 +276,90 @@ function ContestedSet({ compareView }: { compareView: CompareView }) {
 
 ContestedSet.displayName = "ContestedSet";
 
+function PairwiseStatLine({ label, stat, reason }: { label: string; stat: RecoderDiffSummary; reason: string }) {
+    return (
+        <div className="flex items-center gap-2 text-xs">
+            <span className="text-secondary">{label}</span>
+            {stat != null ? (
+                <span className="text-secondary">
+                    +{stat.additions} −{stat.deletions} · {stat.files} file{stat.files == 1 ? "" : "s"}
+                </span>
+            ) : (
+                <span className="text-secondary">{reason || "diff unavailable"}</span>
+            )}
+        </div>
+    );
+}
+
+PairwiseStatLine.displayName = "PairwiseStatLine";
+
+// The focused A-vs-B view: the honest diffStat delta (A minus B) and the files
+// BOTH picked agents touched. There is no true line-level pairwise diff — that
+// needs a backend edge the conductor does not expose yet — so this stays a
+// truthful client-side delta + shared-file view, and says so.
+function PairwisePanel({ pair }: { pair: PairwiseCompareView }) {
+    const a = pair.a;
+    const b = pair.b;
+    const delta = pair.delta;
+    return (
+        <div className="flex flex-col gap-1.5 rounded border border-accent/30 px-2 py-1.5">
+            <div className="text-xs uppercase tracking-wide text-secondary">
+                A vs B — {agentLabel(a.agent)} vs {agentLabel(b.agent)}
+            </div>
+            <PairwiseStatLine label={`A · ${agentLabel(a.agent)}`} stat={a.diffStat} reason={a.diffStatReason} />
+            <PairwiseStatLine label={`B · ${agentLabel(b.agent)}`} stat={b.diffStat} reason={b.diffStatReason} />
+            {delta != null ? (
+                <div className="flex items-center gap-2 text-xs">
+                    <span className="text-secondary">Δ A−B</span>
+                    <span className="text-primary">
+                        {fmtSigned(delta.additions)} add · {fmtSigned(delta.deletions)} del · {fmtSigned(delta.files)}{" "}
+                        file{delta.files == 1 || delta.files == -1 ? "" : "s"}
+                    </span>
+                </div>
+            ) : (
+                <div className="text-xs text-secondary">Δ unavailable — a diffStat is missing on one side.</div>
+            )}
+            {pair.shared.length > 0 ? (
+                <div className="flex flex-col gap-0.5">
+                    <div className="text-xs text-secondary">
+                        Both touched — {pair.shared.length} file{pair.shared.length == 1 ? "" : "s"}
+                        {pair.sharedReason ? ` (${pair.sharedReason})` : ""}
+                    </div>
+                    {pair.shared.map((path) => (
+                        <span key={path} className="text-sm truncate">
+                            {path}
+                        </span>
+                    ))}
+                </div>
+            ) : (
+                <div className="text-xs text-secondary">
+                    No files touched by both {agentLabel(a.agent)} and {agentLabel(b.agent)}
+                    {pair.sharedReason ? ` (${pair.sharedReason})` : ""}.
+                </div>
+            )}
+            <div className="text-xs text-secondary">
+                Client-side delta + shared-file view — a true line-level pairwise diff needs a backend edge (backlog).
+            </div>
+        </div>
+    );
+}
+
+PairwisePanel.displayName = "PairwisePanel";
+
 function RecoderComparePanel({ model, compareView }: { model: RecoderViewModel; compareView: CompareView }) {
     const readinessMap = useAtomValue(model.readinessAtom);
     const rowStatus = useAtomValue(model.rowStatusAtom);
     const busyRow = useAtomValue(model.busyRowAtom);
     const lastMergeMap = useAtomValue(model.lastMergeAtom);
+    const pairA = useAtomValue(model.pairAAtom);
+    const pairB = useAtomValue(model.pairBAtom);
+    const aEntry = compareView.siblings.find((s) => s.workspaceId == pairA);
+    const bEntry = compareView.siblings.find((s) => s.workspaceId == pairB);
+    const pair = aEntry != null && bEntry != null ? computePairwise(aEntry, bEntry, compareView.contested ?? []) : null;
     return (
         <div className="flex flex-col gap-1.5 rounded border border-border p-2">
             <ContestedSet compareView={compareView} />
+            {pair != null && <PairwisePanel pair={pair} />}
             <div className="flex flex-col gap-1">
                 {compareView.siblings.map((sibling) => {
                     const merge = readinessMap[sibling.workspaceId];
@@ -266,6 +375,8 @@ function RecoderComparePanel({ model, compareView }: { model: RecoderViewModel; 
                             status={rowStatus[sibling.workspaceId]}
                             lastMerge={lastMergeMap[sibling.workspaceId]}
                             busy={busyRow == sibling.workspaceId}
+                            pickedA={pairA == sibling.workspaceId}
+                            pickedB={pairB == sibling.workspaceId}
                         />
                     );
                 })}

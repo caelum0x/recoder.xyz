@@ -71,6 +71,55 @@ type SiblingCompareEntry = {
 // A file 2+ siblings BOTH touched — where parallel agents will collide.
 type ContestedFile = { path: string; workspaceIds: string[] };
 
+// A focused A-vs-B pairwise read, assembled CLIENT-SIDE from the two picked
+// siblings' already-loaded data. `delta` is the honest diffStat difference
+// (A minus B) — ABSENT when either side's diffStat is uncomputable, never a
+// fabricated 0. `shared` is the set of files BOTH picked agents touched: the
+// intersection of their changedFiles when both lists are present, else a
+// fallback projected from the group's contested set (with `sharedReason`
+// recording that the per-agent lists were unavailable). A true line-level
+// pairwise diff (A's hunks vs B's) needs a backend edge that does not exist
+// yet and is filed to the backlog.
+type PairwiseDiffDelta = { additions: number; deletions: number; files: number };
+type PairwiseCompareView = {
+    a: SiblingCompareEntry;
+    b: SiblingCompareEntry;
+    delta?: PairwiseDiffDelta;
+    shared: string[];
+    sharedReason?: string;
+};
+
+// Pure: derive the A-vs-B pairwise view from two siblings + the group contested
+// set. Degrade-safe — an absent diffStat drops `delta` (never a fabricated 0),
+// and an absent changedFiles list on either side falls back to the group
+// contested set restricted to this pair.
+function computePairwise(
+    a: SiblingCompareEntry,
+    b: SiblingCompareEntry,
+    contested: ContestedFile[]
+): PairwiseCompareView {
+    const view: PairwiseCompareView = { a, b, shared: [] };
+    if (a.diffStat != null && b.diffStat != null) {
+        view.delta = {
+            additions: a.diffStat.additions - b.diffStat.additions,
+            deletions: a.diffStat.deletions - b.diffStat.deletions,
+            files: a.diffStat.files - b.diffStat.files,
+        };
+    }
+    const aFiles = a.changedFiles;
+    const bFiles = b.changedFiles;
+    if (aFiles != null && bFiles != null) {
+        const bSet = new Set(bFiles);
+        view.shared = aFiles.filter((f) => bSet.has(f));
+        return view;
+    }
+    view.shared = (contested ?? [])
+        .filter((c) => c.workspaceIds.includes(a.workspaceId) && c.workspaceIds.includes(b.workspaceId))
+        .map((c) => c.path);
+    view.sharedReason = "from group contested set — per-agent changed-file lists unavailable";
+    return view;
+}
+
 // Read-only operator-attach hint for a group; absent for singleton/no-dmux groups.
 type GroupAttachHint = { attachCommand?: string; visibleSessions: string[] };
 
@@ -249,6 +298,10 @@ class RecoderViewModel implements ViewModel {
     compareAtom: PrimitiveAtom<Record<string, CompareView>>;
     // The taskGroup whose full compare panel is expanded; "" ⇒ none open.
     compareOpenAtom: PrimitiveAtom<string>;
+    // The two workspaceIds picked for the focused A-vs-B pairwise compare inside
+    // the open panel; "" ⇒ that slot is unpicked. Reset whenever the panel toggles.
+    pairAAtom: PrimitiveAtom<string>;
+    pairBAtom: PrimitiveAtom<string>;
     // Merge-decision views (readiness + mergeability) keyed by workspaceId; each
     // side absent ⇒ that probe degraded, never a fabricated verdict.
     readinessAtom: PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
@@ -281,6 +334,8 @@ class RecoderViewModel implements ViewModel {
         this.busyRowAtom = atom("") as PrimitiveAtom<string>;
         this.compareAtom = atom({}) as PrimitiveAtom<Record<string, CompareView>>;
         this.compareOpenAtom = atom("") as PrimitiveAtom<string>;
+        this.pairAAtom = atom("") as PrimitiveAtom<string>;
+        this.pairBAtom = atom("") as PrimitiveAtom<string>;
         this.readinessAtom = atom({}) as PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
         this.lastMergeAtom = atom({}) as PrimitiveAtom<Record<string, RecoderMergeRecord>>;
         this.groupsAtom = atom((get) => groupByTaskGroup(get(this.workspacesAtom)));
@@ -418,12 +473,46 @@ class RecoderViewModel implements ViewModel {
         if (tg == "") {
             return;
         }
+        // A fresh open (or a collapse) always starts the pairwise picker clean so a
+        // stale A/B from another group can never bleed into this panel.
+        globalStore.set(this.pairAAtom, "");
+        globalStore.set(this.pairBAtom, "");
         if (globalStore.get(this.compareOpenAtom) == tg) {
             globalStore.set(this.compareOpenAtom, "");
             return;
         }
         globalStore.set(this.compareOpenAtom, tg);
         await Promise.all([this.loadCompare(tg), this.loadGroupReadiness(siblings)]);
+    }
+
+    // Toggle a workspace into the A or B pairwise slot. Re-picking the same slot's
+    // current pick clears it; picking a workspace already held by the OTHER slot
+    // moves it (the same sibling can never be both A and B).
+    pickPair(slot: "A" | "B", workspaceId: string) {
+        if (!workspaceId) {
+            return;
+        }
+        const a = globalStore.get(this.pairAAtom);
+        const b = globalStore.get(this.pairBAtom);
+        if (slot == "A") {
+            if (a == workspaceId) {
+                globalStore.set(this.pairAAtom, "");
+                return;
+            }
+            globalStore.set(this.pairAAtom, workspaceId);
+            if (b == workspaceId) {
+                globalStore.set(this.pairBAtom, "");
+            }
+            return;
+        }
+        if (b == workspaceId) {
+            globalStore.set(this.pairBAtom, "");
+            return;
+        }
+        globalStore.set(this.pairBAtom, workspaceId);
+        if (a == workspaceId) {
+            globalStore.set(this.pairAAtom, "");
+        }
     }
 
     // Batch the two merge-decision reads (readiness + mergeability) for every
@@ -676,6 +765,7 @@ class RecoderViewModel implements ViewModel {
 export {
     RecoderViewModel,
     groupByTaskGroup,
+    computePairwise,
     TASK_GROUP_METADATA_KEY,
     type RecoderWorkspace,
     type RecoderSetup,
@@ -684,6 +774,8 @@ export {
     type RecoderWorkspaceGroup,
     type SiblingCompareEntry,
     type ContestedFile,
+    type PairwiseDiffDelta,
+    type PairwiseCompareView,
     type GroupAttachHint,
     type CompareView,
     type MergeabilityView,
