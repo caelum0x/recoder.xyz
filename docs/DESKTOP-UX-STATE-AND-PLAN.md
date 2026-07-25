@@ -75,9 +75,9 @@ standing OSS-name-leak risk.
 | # | Flaw | Evidence | Kind |
 |---|------|----------|------|
 | F1 | **Sign-in wall on a solo desktop.** Backend NEVER 401s in solo — the wall is a *client-side* first-run gate: `needsFirstRunSignIn = hasDesktopDeviceLogin() && !config.identity && …` fires because desktop has the device-login bridge but no captured identity. | `cockpit/src/App.tsx:285`; backend fail-open `authenticate.middleware.ts:127` | client gate, not backend |
-| F2 | **Launch Agent (Wave) falsely says "Start the Recoder backend"** while backend is up. Reads `body.data` (object) as the array; should read `body.data.runtimes`. | `recoder-launch-model.ts` refresh(); `GET /api/conductor/runtimes` → `{data:{runtimes:[…]}}` | bug (fixable) |
+| F2 | **Launch Agent (Wave) falsely says "Start the Recoder backend"** while backend is up. Reads `body.data` (object) as the array; should read `body.data.runtimes`. | *fixed* `3606e9fbc`, then tab retired into hub redirect `bc2b7d85e` | done |
 | F3 | **Board dead.** `GET /api/conductor/work-signals` + `/issues/ready` → **404**. But these differ: work-signals **exists** at `/api/agent-os/observability/signals` (wrong path — cheap); `issues/ready` has **no HTTP edge** and needs the `bd`/beads substrate (real work). | agent audit #5/#6 | 1 cheap, 1 costly |
-| F4 | **Two web tiles / recoder.xyz inside the app.** Default web url is the marketing site. | `defaultconfig/settings.json:21 web:defaulturl=https://recoder.xyz`; `webview.tsx:119` | config |
+| F4 | **Two web tiles / recoder.xyz inside the app.** Default web url was the marketing site. | *fixed* `3606e9fbc` — `settings.json:21 web:defaulturl` now `""` | done |
 | F5 | **OSS names leak in BOTH frontends.** Wave: openfang (ready-list/Engine/Hands), PAL (palette) — *fixed*. Cockpit LIVE: `WorkspaceDetail.tsx:181` "PAL plan"; raw `runtimeId` (no friendly labels); openfang as a parallel-run checkbox (runtimes list includes it). Dead panels ship openfang/tensorzero/multica/ziti strings. | agent audit §4 | rule violation |
 | F6 | **Green buttons** (bright `bg-accent`). | *fixed* `dcd6d6a86` | done |
 | F7 | **Double settings gear.** | *fixed* `dcd6d6a86` | done |
@@ -231,8 +231,8 @@ only bug is that it's presented as a *forced wall* in the wrong frontend.
      `device_code` + `verification_uri=https://recoder.xyz/cli/auth`, `expires_in:600`.
    So the backend half of "Sign in with Recoder → Google/GitHub" is fully
    functional; only the Wave client UI needs wiring to the existing device flow.
-4. **Remove the marketing homepage tile** — `defaultconfig/settings.json:21`
-   `web:defaulturl` off recoder.xyz (unrelated to auth; just declutter).
+4. **Remove the marketing homepage tile** — DONE (`3606e9fbc`):
+   `settings.json:21` `web:defaulturl` is now `""`.
 5. Verify: fresh launch → no forced wall; "Sign in with Recoder" → browser →
    Google/GitHub on recoder.xyz → back in the app with identity shown; offline
    path still works.
@@ -257,7 +257,10 @@ openfang/PAL removed in Wave; labels; launcher trim), `3c1028963` (Approvals
 solo→empty), plus the earlier solo-mode gate cascade (memory
 `project_desktop_solo_mode_gates`).
 
-**Staged, uncommitted:** Launch Agent shape fix (`recoder-launch-model.ts`).
+**Shipped (was staged):** Launch Agent shape fix landed (`3606e9fbc` — reads
+`data.runtimes`, drops the recoder.xyz default homepage), then the tab was
+retired outright: `recoder-launch-model.ts` is now a redirect into the
+Workspaces hub (`bc2b7d85e`) — it no longer posts anything.
 
 **2026-07-25 rail trim (this doc's §5 revision):** default widgets cut to 5
 (`defaultconfig/widgets.json`), `removeCockpitWidgetConfig` generalized to
@@ -266,13 +269,15 @@ start), board "Pick up" retargeted to the hub, webview devtools unmount crash
 fixed (`webview.tsx` cleanup guarded — the "WebView must be attached to the
 DOM" error on leaving the web tab). Audit found 3 NEW broken wirings (session
 stream frame shape; approvals list shape + decide endpoints; memory list
-shape) — bd issues filed; fix before any resurfacing. NOTE: the Go server must
+shape) — FIXED in `8597b41ee` (unit tests added for terminal-model +
+memory-model; tsc clean, 97/97). NOTE: the Go server must
 be rebuilt for the defaults to ship (`task build:backend:quickdev --force` —
 the task cache does NOT invalidate on defaultconfig JSON edits).
 
 **Pending (needs your decision, §9):** frontend consolidation; cockpit auth
-solo-bypass + PAL/openfang scrub + label map; remove recoder.xyz default url;
-Board (repoint work-signals / defer issues-ready).
+solo-bypass + PAL/openfang scrub + label map; Board (repoint work-signals /
+defer issues-ready). (recoder.xyz default url: DONE — `settings.json:21`
+`web:defaulturl` is now `""`, `3606e9fbc`.)
 
 ---
 
@@ -300,9 +305,11 @@ dashboards + sign-in wall + OSS names are removed.
 
 ## 10. Implementation roadmap (phased; no code changes made in the planning turn)
 
-**Phase 1 — Quick wins (low-risk):**
-- Ship the staged Launch Agent shape fix (F2) — reads `data.runtimes`, filters openfang.
-- Remove the marketing homepage: `defaultconfig/settings.json:21` `web:defaulturl` off recoder.xyz (F4).
+**Phase 1 — Quick wins (low-risk): SHIPPED.**
+- Launch Agent shape fix (F2) shipped (`3606e9fbc`); the tab was later retired
+  into a Workspaces-hub redirect (`bc2b7d85e`, see Phase 3 gap note).
+- Marketing homepage removed (F4): `defaultconfig/settings.json:21`
+  `web:defaulturl` is now `""` (`3606e9fbc`).
 
 **Phase 2 — Drop the cockpit + REAL optional sign-in in Wave (F1, §6):**
 - Remove `defwidget@recoder-cockpit` from the launcher (source + live override);
@@ -332,13 +339,13 @@ dashboards + sign-in wall + OSS names are removed.
   `spaceId/projectId/taskId/repoPath/runtimeId` + optional `taskGroup`),
   `POST …/:id/merge` (gated; solo click IS the approval), `POST …/:id/archive`.
 
-**Gap discovered (tracked):** the separate **Launch Agent** tab
-(`recoder-launch/recoder-launch-model.ts`) posts a MINIMAL body
-(`{repoPath, runtimeId, prompt, branch, interactive}`) that is missing the
-`spaceId/projectId/taskId` the `POST /workspaces` handler hard-requires
-(`conductor.routes.ts` `requireString`), so that tab's launch likely 400s. The
-hub's inline Launch sends the correct body and supersedes it. Fix or retire the
-Launch Agent tab in a follow-up (out of this chunk's scope).
+**Gap discovered — RESOLVED (retired):** the separate **Launch Agent** tab used
+to post a MINIMAL body missing the `spaceId/projectId/taskId` that the
+`POST /workspaces` handler hard-requires (`conductor.routes.ts`
+`requireString`), so its launch likely 400'd. Resolved by retiring the tab:
+`recoder-launch/recoder-launch-model.ts` is now a redirect into the Workspaces
+hub (`bc2b7d85e`) — no POST body exists anymore; the hub's inline Launch is the
+only launch path.
 
 **Phase 4 — Loop-core launcher + default layout:**
 - Launcher rail = Workspaces, Session, Launch, Review, Runs, Approvals, Memory +
