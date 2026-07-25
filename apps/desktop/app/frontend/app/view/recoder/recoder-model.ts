@@ -387,6 +387,8 @@ function genTaskGroupId(): string {
 
 const RECENT_REPOS_KEY = "recoder:recent-repos";
 const RECENT_REPOS_CAP = 8;
+const LAST_AGENT_KEY = "recoder:last-agent";
+const LAST_INTERACTIVE_KEY = "recoder:last-interactive";
 
 // Degrade-safe: a corrupt/absent store must never break launch, so every read
 // tolerates bad JSON and non-string entries and falls back to an empty list.
@@ -397,6 +399,25 @@ function loadRecentRepos(): string[] {
         return Array.isArray(arr) ? arr.filter((x): x is string => typeof x == "string") : [];
     } catch {
         return [];
+    }
+}
+
+// Seed the launch form from the dev's last choice so we stop re-forcing the first
+// ready agent every open. Degrade-safe: a corrupt/absent store falls back to the
+// zero-config defaults (empty agent ⇒ preselect first ready; interactive on).
+function loadLastAgent(): string {
+    try {
+        return localStorage.getItem(LAST_AGENT_KEY) ?? "";
+    } catch {
+        return "";
+    }
+}
+
+function loadLastInteractive(): boolean {
+    try {
+        return localStorage.getItem(LAST_INTERACTIVE_KEY) != "false";
+    } catch {
+        return true;
     }
 }
 
@@ -456,10 +477,10 @@ class RecoderViewModel implements ViewModel {
         this.launchRepoPathAtom = atom(loadRecentRepos()[0] ?? "") as PrimitiveAtom<string>;
         this.recentReposAtom = atom(loadRecentRepos()) as PrimitiveAtom<string[]>;
         this.launchPromptAtom = atom("") as PrimitiveAtom<string>;
-        this.launchRuntimeIdAtom = atom("") as PrimitiveAtom<string>;
+        this.launchRuntimeIdAtom = atom(loadLastAgent()) as PrimitiveAtom<string>;
         this.launchAlsoRunAtom = atom([]) as PrimitiveAtom<string[]>;
         this.launchBranchAtom = atom("") as PrimitiveAtom<string>;
-        this.launchInteractiveAtom = atom(true) as PrimitiveAtom<boolean>;
+        this.launchInteractiveAtom = atom(loadLastInteractive()) as PrimitiveAtom<boolean>;
         this.postingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.launchResultAtom = atom(null) as PrimitiveAtom<RecoderLaunchResult>;
         this.rowStatusAtom = atom({}) as PrimitiveAtom<Record<string, string>>;
@@ -784,6 +805,7 @@ class RecoderViewModel implements ViewModel {
                 started += 1;
             }
             this.rememberRepo(repoPath);
+            this.rememberAgent(primary, interactive);
             globalStore.set(this.launchResultAtom, {
                 ok: true,
                 message: agents.length > 1 ? `Launched ${started} agents.` : "Workspace created.",
@@ -820,6 +842,20 @@ class RecoderViewModel implements ViewModel {
             globalStore.set(this.recentReposAtom, next);
         } catch {
             // degrade-safe: a corrupt/absent store must never break launch
+        }
+    }
+
+    // Persist the last-used agent + interactive choice so the next launch panel
+    // seeds from the dev's real preference instead of re-forcing the first ready
+    // agent. Degrade-safe: a corrupt store must never break launch.
+    rememberAgent(runtimeId: string, interactive: boolean) {
+        try {
+            if (runtimeId != "") {
+                localStorage.setItem(LAST_AGENT_KEY, runtimeId);
+            }
+            localStorage.setItem(LAST_INTERACTIVE_KEY, interactive ? "true" : "false");
+        } catch {
+            // degrade-safe: a corrupt store must never break launch
         }
     }
 

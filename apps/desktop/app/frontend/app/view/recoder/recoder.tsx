@@ -157,13 +157,22 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
 
     const readyAgents = setup.agents.filter((a) => a.available);
 
-    // Zero-config: preselect the first installed agent so the launch panel opens
-    // ready to submit. Only fills an untouched field — a deliberate choice stays.
+    // Zero-config: the ctor seeds the last-used agent from localStorage. If none
+    // is remembered, preselect the first installed agent. If a remembered agent is
+    // no longer installed, fall back to the first ready one rather than leaving an
+    // unavailable selection. A live deliberate choice otherwise stays.
     useEffect(() => {
-        if (runtimeId == "" && readyAgents.length > 0) {
+        if (readyAgents.length == 0) {
+            return;
+        }
+        if (runtimeId == "") {
+            setRuntimeId(readyAgents[0].runtimeId);
+            return;
+        }
+        if (!readyAgents.some((a) => a.runtimeId == runtimeId)) {
             setRuntimeId(readyAgents[0].runtimeId);
         }
-    }, [readyAgents.length]);
+    }, [readyAgents.length, runtimeId]);
 
     const showGettingStarted = !loading && workspaces.length == 0 && error == "" && !launchOpen;
     const canLaunch = !posting && repoPath.trim() != "" && runtimeId != "";
