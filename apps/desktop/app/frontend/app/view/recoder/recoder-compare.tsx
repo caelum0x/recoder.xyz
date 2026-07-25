@@ -94,22 +94,27 @@ function MergeabilityBadge({ mergeability }: { mergeability: MergeabilityView })
     if (mergeability == null) {
         return <span className={META}>mergeability unavailable</span>;
     }
+    const base = mergeability.base?.trim();
     if (!mergeability.available) {
         return (
             <span className={META} title={mergeability.reason || "not available"}>
                 merge: {mergeability.reason || "unavailable"}
+                {base ? ` (base ${base})` : ""}
             </span>
         );
     }
     const count = mergeability.conflicts?.length ?? 0;
     const tone = mergeability.verdict == "conflicting" ? "text-error" : "text-secondary";
     return (
-        <span
-            className={`text-xs ${tone}`}
-            title={count > 0 ? mergeability.conflicts.join(", ") : `base ${mergeability.base} ← ${mergeability.branch}`}
-        >
-            merge: {mergeability.verdict}
-            {mergeability.verdict == "conflicting" ? ` (${count} conflict${count == 1 ? "" : "s"})` : ""}
+        <span className="inline-flex items-center gap-1.5">
+            <span
+                className={`text-xs ${tone}`}
+                title={count > 0 ? mergeability.conflicts.join(", ") : `base ${mergeability.base} ← ${mergeability.branch}`}
+            >
+                merge: {mergeability.verdict}
+                {mergeability.verdict == "conflicting" ? ` (${count} conflict${count == 1 ? "" : "s"})` : ""}
+            </span>
+            {base ? <span className={META}>base {base}</span> : null}
         </span>
     );
 }
