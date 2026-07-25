@@ -45,12 +45,14 @@ capabilities → **[RECODER-MODULES.md](./RECODER-MODULES.md)** + **[RECODER-ARC
    `prisma generate` ✓, `tsc` resolves, `next build` ✓ (BUILD_ID + `.next/standalone`).
    Backend: `tsc` 0 · 2554 tests green. The APFS pressure that used to compound this
    is clear (~14 GB free). Build-time secrets still come from the deploy env.
-2. **Convergence loop** — steps 1–3 now shipped end-to-end: parallel worktrees →
-   **per-file converge/compose** (step 2, `converge` engine) → **governed merge +
-   exportable evidence record** (step 3). The remaining differentiator refinement
-   is **line-level/AST synthesis within a single file** (two agents editing the
-   same file are resolved by whole-file pick today) + an auto-"best" heuristic and
-   a desktop converge surface.
+2. **Convergence loop — shipped end-to-end** (backend + desktop): parallel
+   worktrees → **converge** (whole-file pick **or** intra-file `git merge-file`
+   3-way synthesis; conflicts truthfully surface as `unresolved`/400, never a
+   marker-poisoned branch) → **governed merge + exportable evidence record** (with
+   per-file `mode`/contributors provenance). Usable from the desktop via a
+   terminal-plain Converge panel in the compare view. Remaining refinements:
+   AST/semantic (not line-level) merge, an auto-"best" heuristic, and a plan-preview
+   dry-run of synthesizability.
 3. **Desktop distribution** — no signed/notarized dmg, arm64-only; Lance vector
    store + Python sidecars ship dead-by-design (owner-gated packaging Bucket B).
 4. **Phase A auth consolidation** — `users → user` backfill written but unrun on
