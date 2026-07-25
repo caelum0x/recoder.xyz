@@ -7,26 +7,20 @@ import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readFetchError } from "../recoder/recoder-errors";
 import { RecoderApprovalsView } from "./recoder-approvals";
 
-// Mirrors the Agent OS Approval domain type (packages/agent-os/src/domain/approval.ts).
-// Only the fields the terminal renders/acts on are declared.
+// Mirrors the governance ApprovalRecord actually served at /api/agent-os/approvals
+// (backend/src/domains/governance/types.ts) — the governance router shadows the
+// agent-os one for these paths. Only the fields the terminal renders/acts on are declared.
 type RecoderApproval = {
-    approvalId: string;
-    taskId: string;
+    id: string;
+    taskId?: string;
     runId?: string;
-    status: "pending" | "approved" | "rejected" | "expired" | "escalated";
-    reason: string;
+    action: string;
+    riskTier: "low" | "medium" | "high" | "critical";
+    status: "pending" | "approved" | "denied" | "expired";
     requestedBy: string;
-    requestedAt: string;
-    requiredAt: string;
-    target?: {
-        path?: string;
-        command?: string;
-        toolName?: string;
-    };
+    reason?: string;
+    createdAt: string;
 };
-
-// The decider identity attached to approve/reject actions from the terminal.
-const TerminalDecider = "recoder-terminal";
 
 class RecoderApprovalsViewModel implements ViewModel {
     viewType: string;
@@ -72,8 +66,13 @@ class RecoderApprovalsViewModel implements ViewModel {
                 return;
             }
             const body = await res.json();
-            const list = Array.isArray(body?.data) ? (body.data as RecoderApproval[]) : [];
-            const pending = list.filter((a) => a?.status === "pending" || a?.status === "escalated");
+            const data = body?.data;
+            const list = Array.isArray(data?.approvals)
+                ? (data.approvals as RecoderApproval[])
+                : Array.isArray(data)
+                  ? (data as RecoderApproval[])
+                  : [];
+            const pending = list.filter((a) => a?.status == "pending");
             globalStore.set(this.approvalsAtom, pending);
             globalStore.set(this.connectedAtom, true);
         } catch {
@@ -88,10 +87,12 @@ class RecoderApprovalsViewModel implements ViewModel {
         globalStore.set(this.actingAtom, approvalId);
         globalStore.set(this.actionErrorAtom, "");
         try {
-            const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/approvals/${approvalId}/${action}`, {
+            // The backend resolves the decider from the authenticated principal;
+            // an identity sent in the body would never be trusted, so none is sent.
+            const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/approvals/${approvalId}/decide`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ decidedBy: TerminalDecider }),
+                body: JSON.stringify({ decision: action == "approve" ? "approved" : "denied" }),
             });
             if (!res.ok) {
                 const detail = await readFetchError(res);
