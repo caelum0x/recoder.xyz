@@ -211,6 +211,35 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         return () => document.removeEventListener("keydown", handler, true);
     }, [setPaletteOpen]);
 
+    // Own the global "new agent" chord at the document level (same capture-phase
+    // rationale as ⌘P above) so it fires on a fresh launch when the empty board has
+    // no focused descendant — the local onBoardKeyDown never sees keys until a row
+    // is focused, which made the advertised "N" onboarding hint dead on first run.
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key != "n" && e.key != "N") {
+                return;
+            }
+            if (e.metaKey || e.ctrlKey || e.altKey) {
+                return;
+            }
+            const t = e.target as HTMLElement;
+            const tag = t?.tagName;
+            if (tag == "INPUT" || tag == "TEXTAREA" || tag == "SELECT" || t?.isContentEditable) {
+                return;
+            }
+            // Gate on open panels so N typed into the launch panel/palette does nothing
+            // global; their own Escape/typing still work.
+            if (launchOpen || paletteOpen) {
+                return;
+            }
+            e.preventDefault();
+            setLaunchOpen(true);
+        };
+        document.addEventListener("keydown", handler, true);
+        return () => document.removeEventListener("keydown", handler, true);
+    }, [launchOpen, paletteOpen, setLaunchOpen]);
+
     // A SINGLE interactive launch drops the user straight into the session. Guard
     // on the workspace id so a re-render / poll can never reopen it, and never
     // auto-open parallel launches (that would spawn N terminals at once).
@@ -292,11 +321,6 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                 setLaunchOpen(false);
                 e.preventDefault();
             }
-            return;
-        }
-        if ((e.key == "n" || e.key == "N") && !launchOpen) {
-            setLaunchOpen(true);
-            e.preventDefault();
             return;
         }
         if (orderedIds.length == 0) {
