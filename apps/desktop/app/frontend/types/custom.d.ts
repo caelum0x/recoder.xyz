@@ -160,6 +160,7 @@ declare global {
         recoderSignIn: () => Promise<RecoderSignInResult>; // recoder:sign-in
         recoderSignOut: () => Promise<{ ok: boolean }>; // recoder:sign-out
         selectDirectory: () => Promise<string>; // recoder:select-directory
+        isGitRepo: (dirPath: string) => Promise<boolean>; // recoder:is-git-repo
         onRecoderSignInPrompt: (callback: (prompt: RecoderSignInPrompt) => void) => void; // recoder:device-login-prompt
     };
 
