@@ -92,6 +92,15 @@ Bing of changed URLs once `INDEXNOW_KEY` is set — even without this property
 claim. The property claim is for Bing's dashboard/analytics and manual submits,
 not a prerequisite for IndexNow crawl.
 
+**Decision — we do NOT use Bing's separate "URL Submission API".** Bing offers
+two automation paths: (a) IndexNow (what we use — §4) and (b) the older Bing
+Webmaster **Submission API** (`ssl.bing.com/webmaster/api.svc/.../SubmitUrlbatch`,
+needs a secret `apikey`, capped at **100 URLs/day**). IndexNow already delivers
+changed URLs to Bing with no daily quota and no secret, so the Submission API is
+intentionally not wired — it would be redundant and quota-limited. The "100 quota
+left today" shown in Bing Webmaster Tools applies only to that Submission API and
+is irrelevant to our IndexNow path. Revisit only if a Bing-specific need arises.
+
 ---
 
 ## 3. Brave Search
