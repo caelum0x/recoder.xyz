@@ -33,4 +33,15 @@ async function readFetchError(res: Response): Promise<string> {
     }
 }
 
-export { readErrorReason, readFetchError };
+// A cold-start backend on loopback :3100 surfaces as a raw transport failure
+// (fetch/network/ECONNREFUSED) rather than a structured error body. On an empty
+// board that means "still starting", not a real failure, so the caller can show
+// the calm getting-started state instead of an alarming error row.
+function isConnectivityError(message: string): boolean {
+    if (message == null || message == "") {
+        return false;
+    }
+    return /failed to fetch|networkerror|econnrefused|network request failed|load failed|fetch failed/i.test(message);
+}
+
+export { isConnectivityError, readErrorReason, readFetchError };
