@@ -13,6 +13,7 @@ import { execFileSafe } from '@recoder/substrate';
 import type { Workspace, WorkspaceState, WorkspaceSubstrate } from '@recoder/agent-os';
 import type { Logger } from '../../../shared/logger.js';
 import type { ConductorSubstrate, WorkLockPort } from '../ports/index.js';
+import { resolveRepoDefaultBranch } from '../git-default-branch.js';
 
 export interface WorkspaceDiffView {
   workspaceId: string;
@@ -109,6 +110,27 @@ export function resolveReviewBase(ws: Pick<Workspace, 'baseRef'>): string {
   const baseRef = ws.baseRef;
   if (!baseRef || baseRef === 'HEAD' || baseRef.startsWith('-')) return 'main';
   return baseRef;
+}
+
+/**
+ * The RESOLVING form of {@link resolveReviewBase}: when the workspace only carries
+ * the detached `HEAD` sentinel (or an unset / option-poisoned ref), probe the
+ * worktree git-native for the repo's REAL integration base instead of the literal
+ * `main` — so the per-file diff edges compute against the branch that actually
+ * exists (`master` / `develop` / …). Falls back to the sync `resolveReviewBase`
+ * literal only when there is no worktree or git cannot answer. Never throws.
+ */
+export async function resolveReviewBaseResolved(
+  deps: Pick<ReviewOpsDeps, 'exec'>,
+  ws: Pick<Workspace, 'baseRef' | 'worktreePath'>,
+): Promise<string> {
+  const baseRef = ws.baseRef;
+  if (baseRef && baseRef !== 'HEAD' && !baseRef.startsWith('-')) return baseRef;
+  if (ws.worktreePath) {
+    const resolved = await resolveRepoDefaultBranch(deps.exec ?? execFileSafe, ws.worktreePath);
+    if (resolved) return resolved;
+  }
+  return resolveReviewBase(ws);
 }
 
 /** Map a git status letter to a stable label (R/C → renamed; M/T/U/other → modified). */
@@ -224,7 +246,7 @@ export async function workspaceDiffFiles(
 ): Promise<WorkspaceDiffFilesView> {
   const workspace = await deps.getWorkspace(workspaceId);
   if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
-  const base = resolveReviewBase(workspace);
+  const base = await resolveReviewBaseResolved(deps, workspace);
   const branch = workspace.branch ?? '';
   if (!workspace.worktreePath) {
     return { workspaceId, base, branch, available: false, files: [] };
@@ -276,7 +298,7 @@ export async function workspaceFilePatch(
 ): Promise<WorkspaceFilePatchView> {
   const workspace = await deps.getWorkspace(workspaceId);
   if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
-  const base = resolveReviewBase(workspace);
+  const base = await resolveReviewBaseResolved(deps, workspace);
   const branch = workspace.branch ?? '';
 
   // Path guard (defense-in-depth, BEFORE any spawn): a poisoned path can never

@@ -18,6 +18,7 @@
 import { Router } from 'express';
 import {
   WorkspaceEngine,
+  execFileSafe,
   reconcile as substrateReconcile,
   systemClock,
   uuidId,
@@ -62,6 +63,7 @@ import {
 } from './adapters/runtime-substrate-selector.js';
 import { createCompletionHookSink } from './adapters/completion-hook.adapter.js';
 import { readRepoPassages } from './adapters/repo-passages.adapter.js';
+import { resolveRepoDefaultBranch } from './git-default-branch.js';
 import { toLoggerPort } from './adapters/logger.adapter.js';
 import { createRecoderSessionLister } from './adapters/recoder-session-lister.adapter.js';
 import { createConductorRegistry, type ConductorRegistry } from './adapters/substrate-registry.adapter.js';
@@ -649,6 +651,23 @@ export class ConductorComposer implements ConductorModule {
     return this.engine.getWorkspace(workspaceId);
   }
 
+  /**
+   * Resolve the concrete baseRef to persist for a launch. An explicit, concrete
+   * caller `baseRef` (e.g. the checkpoint-branch tag) always wins. Otherwise, when
+   * the caller left it unset or passed the detached `HEAD` sentinel, probe the repo
+   * git-native for its REAL integration base. Never throws; when git cannot answer
+   * it returns the caller's value unchanged (the engine then keeps `HEAD`, and the
+   * read/merge edges resolve git-native as defense-in-depth).
+   */
+  private async resolveLaunchBaseRef(
+    input: CreateConductorWorkspaceInput,
+  ): Promise<string | undefined> {
+    if (input.baseRef && input.baseRef !== 'HEAD') return input.baseRef;
+    if (!input.repoPath) return input.baseRef;
+    const resolved = await resolveRepoDefaultBranch(execFileSafe, input.repoPath);
+    return resolved ?? input.baseRef;
+  }
+
   async createWorkspace(
     input: CreateConductorWorkspaceInput,
     principal: Principal,
@@ -777,8 +796,19 @@ export class ConductorComposer implements ConductorModule {
         command = await this.enrichOpenfangCommand(input, principal);
       }
 
+      // Resolve the repo's REAL integration base ONCE at launch so the workspace
+      // is persisted with a concrete baseRef (e.g. `master`/`develop`/a feature
+      // branch) instead of the detached `HEAD` sentinel. The worktree is then cut
+      // off that ref, and every downstream read/merge edge (mergeability, review
+      // diff, publish) reuses it directly rather than falling back to a hardcoded
+      // `main`. Degrade-truthful: an unset caller baseRef that git cannot resolve
+      // stays `HEAD` (the edges still resolve git-native as defense-in-depth); an
+      // explicit caller baseRef always wins.
+      const baseRef = await this.resolveLaunchBaseRef(input);
+
       const workspace = await this.engine.createWorkspace({
         ...input,
+        ...(baseRef !== undefined ? { baseRef } : {}),
         substrate,
         ...(command !== undefined ? { command } : {}),
         // Tag the run with its task id so the in-process substrate + tailer can

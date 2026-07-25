@@ -18,6 +18,22 @@ import { execFileSafe } from '@recoder/substrate';
 import type { Workspace } from '@recoder/agent-os';
 import type { Logger } from '../../../shared/logger.js';
 import type { AdvanceWorkspaceFn } from './workspace-review.ops.js';
+import { resolveRepoDefaultBranch } from '../git-default-branch.js';
+
+/**
+ * Resolve the base branch a workspace's branch merges into: the persisted
+ * `baseRef` when it is a concrete ref, else the repo's REAL integration base
+ * resolved git-native from the worktree (NOT a hardcoded `main`), else — only
+ * when git cannot answer — the literal `main` last resort. Never throws.
+ */
+async function resolvePublishBase(
+  deps: PublishOpsDeps,
+  workspace: Workspace & { worktreePath: string },
+): Promise<string> {
+  if (workspace.baseRef && workspace.baseRef !== 'HEAD') return workspace.baseRef;
+  const resolved = await resolveRepoDefaultBranch(deps.exec ?? execFileSafe, workspace.worktreePath);
+  return resolved ?? 'main';
+}
 
 export interface PublishOpsDeps {
   readonly getWorkspace: (workspaceId: string) => Promise<Workspace | null>;
@@ -226,8 +242,7 @@ export async function createWorkspacePr(
   const run = makeRun(deps);
   const cwd = workspace.worktreePath;
   const remote = input.remote || 'origin';
-  const base =
-    input.base || (workspace.baseRef && workspace.baseRef !== 'HEAD' ? workspace.baseRef : 'main');
+  const base = input.base || (await resolvePublishBase(deps, workspace));
   if (!input.title?.trim()) throw new Error('PR title is required');
 
   // Land the agent's pending edits on the branch so the PR carries them.
@@ -285,7 +300,7 @@ export async function mergeWorkspace(
   const cwd = workspace.worktreePath;
   const strategy = input.strategy || 'squash';
   const remote = 'origin';
-  const base = workspace.baseRef && workspace.baseRef !== 'HEAD' ? workspace.baseRef : 'main';
+  const base = await resolvePublishBase(deps, workspace);
 
   // RE-MERGEABLE: a workspace that previously FAILED at the delivery (merge) step
   // can be re-merged once the cause is fixed. `failed -> merging` is illegal, so

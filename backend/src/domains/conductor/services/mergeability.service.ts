@@ -30,6 +30,7 @@ import { execFileSafe, which, ExecError } from '@recoder/substrate';
 import type { ExecOptions, ExecResult } from '@recoder/substrate';
 import type { Workspace } from '@recoder/agent-os';
 import type { Logger } from '../../../shared/logger.js';
+import { resolveRepoDefaultBranch } from '../git-default-branch.js';
 
 /** `merge-tree` + `rev-list` are local — allow them the same bound as a PR probe. */
 const MERGE_PREFLIGHT_TIMEOUT_MS = 6_000;
@@ -142,10 +143,13 @@ export class MergeabilityService {
   /** Resolve the workspace's merge preflight. Never throws. */
   async probe(workspace: Workspace): Promise<MergeabilityView> {
     const branch = workspace.branch;
-    // Mirror the publish base rule (workspace-publish.ops.ts): baseRef unless it
-    // is unset or the detached `HEAD`, in which case fall back to `main`.
-    const base =
-      workspace.baseRef && workspace.baseRef !== 'HEAD' ? workspace.baseRef : 'main';
+    // Mirror the publish base rule (workspace-publish.ops.ts): the persisted
+    // baseRef unless it is unset or the detached `HEAD` sentinel. When it IS the
+    // sentinel we resolve the repo's REAL integration base from the worktree below
+    // (once git + a worktree are confirmed); until then this literal is only the
+    // last-resort placeholder the no-worktree early-returns carry.
+    const baseUnresolved = !workspace.baseRef || workspace.baseRef === 'HEAD';
+    let base = baseUnresolved ? 'main' : workspace.baseRef;
 
     if (!workspace.worktreePath) {
       return {
@@ -195,6 +199,16 @@ export class MergeabilityService {
         branch,
         reason: 'git CLI not found',
       };
+    }
+
+    // Resolve the repo's REAL integration base when the workspace only carries the
+    // detached `HEAD` sentinel (legacy launches never persisted a concrete ref).
+    // Probes the worktree git-native; if git can't answer, `base` stays the literal
+    // last resort rather than a fabricated match. New launches persist a concrete
+    // baseRef, so they skip this and use it directly.
+    if (baseUnresolved) {
+      const resolved = await resolveRepoDefaultBranch(this.exec.execFile, worktreePath);
+      if (resolved) base = resolved;
     }
 
     // --- mergeability: a side-effect-free trial merge -------------------------
