@@ -204,7 +204,7 @@ function SiblingCompareRow({
         saveConvergenceEvidence(evidence);
     };
     return (
-        <div className="flex flex-col gap-1 rounded border border-white/8 px-2 py-2 transition-colors duration-150 ease-out hover:bg-border/20">
+        <div className="flex flex-col gap-1 rounded border border-white/8 px-2 py-2 recoder-transition hover:bg-white/[0.04] hover:border-white/12">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <div className="flex items-center gap-1">
                     <button
