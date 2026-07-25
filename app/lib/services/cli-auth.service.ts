@@ -136,6 +136,7 @@ export class CLIAuthService {
             email: true,
             name: true,
             subscriptionPlan: true,
+            image: true,
           },
         },
       },
@@ -192,6 +193,7 @@ export class CLIAuthService {
           email: record.user.email,
           name: record.user.name,
           plan: record.user.subscriptionPlan,
+          ...(record.user.image ? { avatarUrl: record.user.image } : {}),
         },
       };
     }
@@ -250,6 +252,7 @@ export class CLIAuthService {
             subscriptionPlan: true,
             subscriptionStatus: true,
             emailVerified: true,
+            image: true,
           },
         },
       },
@@ -285,6 +288,7 @@ export class CLIAuthService {
       plan: session.users.subscriptionPlan,
       status: session.users.subscriptionStatus,
       sessionId: session.id,
+      ...(session.users.image ? { avatarUrl: session.users.image } : {}),
     };
   }
 
@@ -294,6 +298,17 @@ export class CLIAuthService {
   static async refreshAccessToken(refreshToken: string) {
     const session = await prisma.cli_sessions.findUnique({
       where: { refreshToken },
+      include: {
+        users: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            subscriptionPlan: true,
+            image: true,
+          },
+        },
+      },
     });
 
     if (!session || !session.isActive) {
@@ -317,6 +332,19 @@ export class CLIAuthService {
       access_token: newAccessToken,
       token_type: 'Bearer',
       expires_in: ACCESS_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
+      // Carry the display identity so refresh clients don't drop the name
+      // (desktop refresh() reads body.user; absent user meant a stale identity).
+      ...(session.users
+        ? {
+            user: {
+              id: session.users.id,
+              email: session.users.email,
+              name: session.users.name,
+              plan: session.users.subscriptionPlan,
+              ...(session.users.image ? { avatarUrl: session.users.image } : {}),
+            },
+          }
+        : {}),
     };
   }
 
@@ -431,6 +459,7 @@ export class CLIAuthService {
             subscriptionPlan: true,
             subscriptionStatus: true,
             emailVerified: true,
+            image: true,
           },
         },
       },
@@ -470,6 +499,7 @@ export class CLIAuthService {
       status: key.users.subscriptionStatus,
       scopes: key.permissions,
       keyId: key.id,
+      ...(key.users.image ? { avatarUrl: key.users.image } : {}),
     };
   }
 
