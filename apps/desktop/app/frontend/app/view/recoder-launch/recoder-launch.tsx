@@ -58,7 +58,7 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
 
             {notConnected && (
                 <div className="rounded border border-border p-4 text-sm text-secondary">
-                    Start the Recoder backend to launch an agent.
+                    Starting Recoder…
                     {error != "" && <div className="text-error mt-1">{error}</div>}
                 </div>
             )}
@@ -86,7 +86,7 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
                         <span className="text-xs uppercase tracking-wide text-secondary">Folder</span>
                         {repoPath.trim() == "" ? (
                             <button className={`${PRIMARY_BTN} w-full`} onClick={browseFolder}>
-                                Choose folder…
+                                Choose folderâ¦
                             </button>
                         ) : (
                             <div className="flex items-center gap-2" title={repoPath}>
@@ -140,9 +140,9 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
 
                     <div className="flex items-center gap-2">
                         <button className={PRIMARY_BTN} disabled={!canLaunch} onClick={() => model.launch()}>
-                            {posting ? "Launching…" : "Launch"}
+                            {posting ? "Launchingâ¦" : "Launch"}
                         </button>
-                        {canLaunch && <span className="text-xs text-secondary">⌘↵ to launch</span>}
+                        {canLaunch && <span className="text-xs text-secondary">ââµ to launch</span>}
                     </div>
                 </div>
             )}

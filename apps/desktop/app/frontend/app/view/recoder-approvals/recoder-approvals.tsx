@@ -58,14 +58,14 @@ function RecoderApprovalsView({ model }: ViewComponentProps<RecoderApprovalsView
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
-                <span className="font-semibold">Recoder — Approvals</span>
+                <span className="font-semibold">Recoder â Approvals</span>
             </div>
             {error != "" && <div className="text-error text-sm">{error}</div>}
             {actionError != "" && <div className="text-error text-sm">{actionError}</div>}
-            {loading && approvals.length == 0 && <div className="text-secondary text-sm">Loading…</div>}
+            {loading && approvals.length == 0 && <div className="text-secondary text-sm">Loadingâ¦</div>}
             {showDisconnected && (
                 <div className="text-secondary text-sm">
-                    Not connected — start the Recoder backend to review pending approvals.
+                    Not connected â Recoder is starting…
                 </div>
             )}
             {showEmpty && <div className="text-secondary text-sm">No approvals waiting.</div>}
@@ -99,14 +99,14 @@ function RecoderApprovalsView({ model }: ViewComponentProps<RecoderApprovalsView
                                     className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
                                     onClick={() => model.decide(a.approvalId, "approve")}
                                 >
-                                    {busy ? "…" : "Approve"}
+                                    {busy ? "â¦" : "Approve"}
                                 </button>
                                 <button
                                     disabled={busy}
                                     className="border border-border text-primary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer disabled:opacity-50"
                                     onClick={() => model.decide(a.approvalId, "reject")}
                                 >
-                                    {busy ? "…" : "Reject"}
+                                    {busy ? "â¦" : "Reject"}
                                 </button>
                             </div>
                         </div>

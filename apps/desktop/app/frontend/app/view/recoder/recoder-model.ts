@@ -9,7 +9,7 @@ import { RecoderConductorView } from "./recoder";
 
 // SHELL FUSION: the workspace shape comes from @recoder/conductor-ui (the typed
 // client package the cockpit shares) instead of a hand-rolled local mirror. The
-// shell renders a lenient subset — the backend may be older/newer, so state stays
+// shell renders a lenient subset â the backend may be older/newer, so state stays
 // a plain string here and everything beyond the picked fields remains optional.
 type RecoderWorkspace = Pick<Workspace, "workspaceId" | "branch" | "runtimeId" | "worktreePath"> & {
     state: string;
@@ -18,7 +18,7 @@ type RecoderWorkspace = Pick<Workspace, "workspaceId" | "branch" | "runtimeId" |
     metadata?: Record<string, unknown>;
 };
 
-// First-run readiness surfaced by the conductor /health + /runtimes endpoints —
+// First-run readiness surfaced by the conductor /health + /runtimes endpoints â
 // which coding agents are installed + whether git is present. Drives the launch
 // picker and the getting-started panel shown when there are no workspaces yet.
 type RecoderSetup = {
@@ -42,15 +42,15 @@ type RecoderSetup = {
 type RecoderDiffSummary = { additions: number; deletions: number; files: number };
 
 // Outcome of an inline launch. `ok` distinguishes a truthful success from a
-// truthful failure whose reason is the backend's verbatim message — never faked.
+// truthful failure whose reason is the backend's verbatim message â never faked.
 type RecoderLaunchResult = { ok: boolean; message?: string; error?: string };
 
 // One agent's row in the side-by-side compare of a parallel-run group. A lenient
-// mirror of the backend SiblingCompareEntry — `diffStat`/`changedFiles` are ABSENT
+// mirror of the backend SiblingCompareEntry â `diffStat`/`changedFiles` are ABSENT
 // (never a fabricated 0/0/0) when uncomputable, each carrying a truthful reason.
 type SiblingCompareEntry = {
     workspaceId: string;
-    // agent === runtimeId — the compare key.
+    // agent === runtimeId â the compare key.
     agent: string;
     runtimeId: string;
     runId?: string;
@@ -68,12 +68,12 @@ type SiblingCompareEntry = {
     worktreePath?: string;
 };
 
-// A file 2+ siblings BOTH touched — where parallel agents will collide.
+// A file 2+ siblings BOTH touched â where parallel agents will collide.
 type ContestedFile = { path: string; workspaceIds: string[] };
 
 // A focused A-vs-B pairwise read, assembled CLIENT-SIDE from the two picked
 // siblings' already-loaded data. `delta` is the honest diffStat difference
-// (A minus B) — ABSENT when either side's diffStat is uncomputable, never a
+// (A minus B) â ABSENT when either side's diffStat is uncomputable, never a
 // fabricated 0. `shared` is the set of files BOTH picked agents touched: the
 // intersection of their changedFiles when both lists are present, else a
 // fallback projected from the group's contested set (with `sharedReason`
@@ -90,7 +90,7 @@ type PairwiseCompareView = {
 };
 
 // Pure: derive the A-vs-B pairwise view from two siblings + the group contested
-// set. Degrade-safe — an absent diffStat drops `delta` (never a fabricated 0),
+// set. Degrade-safe â an absent diffStat drops `delta` (never a fabricated 0),
 // and an absent changedFiles list on either side falls back to the group
 // contested set restricted to this pair.
 function computePairwise(
@@ -116,14 +116,14 @@ function computePairwise(
     view.shared = (contested ?? [])
         .filter((c) => c.workspaceIds.includes(a.workspaceId) && c.workspaceIds.includes(b.workspaceId))
         .map((c) => c.path);
-    view.sharedReason = "from group contested set — per-agent changed-file lists unavailable";
+    view.sharedReason = "from group contested set â per-agent changed-file lists unavailable";
     return view;
 }
 
 // A truthful, NON-BINDING hint at the sibling the already-loaded data favors. It
-// never selects, picks, or merges — the dev still clicks Merge. `reason` is the
+// never selects, picks, or merges â the dev still clicks Merge. `reason` is the
 // single criterion that decided it (the deciding datum is always REAL, never the
-// unknown sentinel). Absent ⇒ no sibling had any scoreable data, or the field is
+// unknown sentinel). Absent â no sibling had any scoreable data, or the field is
 // a genuine tie, so we show nothing rather than guess.
 type SuggestedWinner = { workspaceId: string; reason: string };
 
@@ -198,7 +198,7 @@ function decideReason(winner: WinnerMetrics, runnerUp: WinnerMetrics): string {
 
 // Pure + degrade-safe: score every sibling from data ALREADY loaded (mergeability
 // conflicts, readiness passes, diffStat size) and name the one the data favors. It
-// is a hint only — it selects nothing. Returns null when no sibling has scoreable
+// is a hint only â it selects nothing. Returns null when no sibling has scoreable
 // data, or when the top two tie on every criterion (the field genuinely favors no
 // one), so the UI shows no badge rather than fabricate a preference.
 function computeSuggestedWinner(
@@ -238,7 +238,7 @@ type CompareView = {
     grid?: GroupAttachHint;
 };
 
-// Read-only pre-merge preflight. `available:false` ⇒ no git / no worktree / git
+// Read-only pre-merge preflight. `available:false` â no git / no worktree / git
 // too old; the verdict is NEVER a fabricated 'clean' when it could not judge.
 type MergeabilityView = {
     available: boolean;
@@ -252,7 +252,7 @@ type MergeabilityView = {
 };
 
 // One of the four merge-decision signals, in fixed order. `unknown` is a real
-// value (we could not judge) — never coerced to a pass.
+// value (we could not judge) â never coerced to a pass.
 type ReadinessSignal = {
     id: "lifecycle" | "merge" | "checks" | "preview";
     status: "pass" | "fail" | "pending" | "unknown";
@@ -268,11 +268,11 @@ type ReadinessView = {
 };
 
 // The two independently-probed merge-decision views for one workspace. Each side
-// is optional so it degrades on its own — an absent side means that probe failed
+// is optional so it degrades on its own â an absent side means that probe failed
 // or was unreachable, never a fabricated verdict.
 type RecoderWorkspaceReadiness = { readiness?: ReadinessView; mergeability?: MergeabilityView };
 
-// The governance verdict the merge endpoint returns alongside the effect — a
+// The governance verdict the merge endpoint returns alongside the effect â a
 // lenient mirror of the backend verdictView ({ effect, tier, degraded, engine }).
 // Present ONLY on a 200 (the gate allowed and the op ran); an absent verdict on a
 // blocked/failed attempt is truthful, never coerced to a pass.
@@ -281,7 +281,7 @@ type RecoderMergeVerdict = { effect: string; tier?: string; degraded?: boolean; 
 // The merge op's own result (backend MergeResultView). `merged` is false when the
 // gate allowed and the merge ran but there was nothing to merge (already up to date).
 // `auditId`/`auditSeq`/`auditEntryHash` are the SEALED governance Merkle entry the
-// merge produced — captured verbatim from the 200 body so the evidence step can
+// merge produced â captured verbatim from the 200 body so the evidence step can
 // cite it and query the durable trail. `null` when sealing degraded (never faked).
 type RecoderMergeOutcome = {
     workspaceId: string;
@@ -293,10 +293,10 @@ type RecoderMergeOutcome = {
 };
 
 // One entry of the durable governance Merkle chain returned by GET
-// /workspaces/:id/audit — a lenient mirror of the backend AuditRecord. We surface
+// /workspaces/:id/audit â a lenient mirror of the backend AuditRecord. We surface
 // only the structural chain fields (never the opaque payload, which may carry
 // engine internals). Every field optional so an older/leaner backend degrades and
-// nothing is fabricated. Solo desktop seals no local store ⇒ the trail is [].
+// nothing is fabricated. Solo desktop seals no local store â the trail is [].
 type RecoderAuditEntry = {
     id?: string;
     seq?: number;
@@ -404,7 +404,7 @@ function loadRecentRepos(): string[] {
 
 // Seed the launch form from the dev's last choice so we stop re-forcing the first
 // ready agent every open. Degrade-safe: a corrupt/absent store falls back to the
-// zero-config defaults (empty agent ⇒ preselect first ready; interactive on).
+// zero-config defaults (empty agent â preselect first ready; interactive on).
 function loadLastAgent(): string {
     try {
         return localStorage.getItem(LAST_AGENT_KEY) ?? "";
@@ -447,20 +447,20 @@ class RecoderViewModel implements ViewModel {
     busyRowAtom: PrimitiveAtom<string>;
     // Parallel-run groups derived from the current workspaces (metadata.taskGroup).
     groupsAtom!: Atom<RecoderWorkspaceGroup[]>;
-    // Side-by-side compare view keyed by taskGroup; absent ⇒ never loaded / degraded.
+    // Side-by-side compare view keyed by taskGroup; absent â never loaded / degraded.
     compareAtom: PrimitiveAtom<Record<string, CompareView>>;
-    // The taskGroup whose full compare panel is expanded; "" ⇒ none open.
+    // The taskGroup whose full compare panel is expanded; "" â none open.
     compareOpenAtom: PrimitiveAtom<string>;
     // The two workspaceIds picked for the focused A-vs-B pairwise compare inside
-    // the open panel; "" ⇒ that slot is unpicked. Reset whenever the panel toggles.
+    // the open panel; "" â that slot is unpicked. Reset whenever the panel toggles.
     pairAAtom: PrimitiveAtom<string>;
     pairBAtom: PrimitiveAtom<string>;
     // Merge-decision views (readiness + mergeability) keyed by workspaceId; each
-    // side absent ⇒ that probe degraded, never a fabricated verdict.
+    // side absent â that probe degraded, never a fabricated verdict.
     readinessAtom: PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
-    // The last merge attempt's truthful record keyed by workspaceId — the captured
+    // The last merge attempt's truthful record keyed by workspaceId â the captured
     // governance verdict (effect/tier/engine) + merge outcome, read by the compare
-    // panel and the evidence step. Absent ⇒ no merge attempted yet.
+    // panel and the evidence step. Absent â no merge attempted yet.
     lastMergeAtom: PrimitiveAtom<Record<string, RecoderMergeRecord>>;
 
     constructor(initOpts: ViewModelInitType) {
@@ -510,7 +510,7 @@ class RecoderViewModel implements ViewModel {
             const rt = (await rtRes.json())?.data ?? {};
             const h = (await hRes.json())?.data ?? {};
             // openfang is the in-process engine, not a coding agent the user
-            // launches into a worktree — keep it out of the "ready agents" list.
+            // launches into a worktree â keep it out of the "ready agents" list.
             const agents = Array.isArray(rt?.runtimes)
                 ? rt.runtimes
                       .filter((r: { runtimeId: string }) => r.runtimeId !== "openfang")
@@ -538,7 +538,7 @@ class RecoderViewModel implements ViewModel {
             // still renders. Never assume a shape we didn't see.
             const data = body?.data;
             const list = Array.isArray(data?.workspaces) ? data.workspaces : Array.isArray(data) ? data : [];
-            // Archived workspaces are terminal history, not live work — the board
+            // Archived workspaces are terminal history, not live work â the board
             // shows only active ones so it never clutters with dead/merged runs.
             workspaces = (list as RecoderWorkspace[]).filter((w) => w.state != "archived");
             globalStore.set(this.workspacesAtom, workspaces);
@@ -592,7 +592,7 @@ class RecoderViewModel implements ViewModel {
 
     // Load the side-by-side compare aggregate for one parallel-run group, keyed by
     // taskGroup. Reads { data: { compare } }. Degrade-safe: any failure / non-2xx /
-    // missing shape leaves the prior entry untouched (absent → neutral), never
+    // missing shape leaves the prior entry untouched (absent â neutral), never
     // throws, never fabricates a compare.
     async loadCompare(taskGroup: string) {
         const tg = taskGroup.trim();
@@ -700,7 +700,7 @@ class RecoderViewModel implements ViewModel {
         globalStore.set(this.readinessAtom, next);
     }
 
-    // GET /workspaces/:id/readiness → { data: ReadinessView }. Degrade-safe: any
+    // GET /workspaces/:id/readiness â { data: ReadinessView }. Degrade-safe: any
     // failure / non-2xx / missing shape yields null (the caller drops the side).
     async fetchReadiness(base: string, workspaceId: string): Promise<ReadinessView> {
         try {
@@ -715,7 +715,7 @@ class RecoderViewModel implements ViewModel {
         }
     }
 
-    // GET /workspaces/:id/mergeability → { data: MergeabilityView }. Degrade-safe:
+    // GET /workspaces/:id/mergeability â { data: MergeabilityView }. Degrade-safe:
     // any failure / non-2xx / missing shape yields null (the caller drops the side).
     async fetchMergeability(base: string, workspaceId: string): Promise<MergeabilityView> {
         try {
@@ -730,7 +730,7 @@ class RecoderViewModel implements ViewModel {
         }
     }
 
-    // GET /workspaces/:id/audit → { data: { audit: AuditRecord[] } } — the queryable
+    // GET /workspaces/:id/audit â { data: { audit: AuditRecord[] } } â the queryable
     // durable governance Merkle trail sealed by the merge gate. Degrade-safe: any
     // failure / non-2xx / missing shape yields [] (also the truthful solo-desktop
     // result, which seals no local store). Read by the evidence step so an exported
@@ -753,7 +753,7 @@ class RecoderViewModel implements ViewModel {
         }
     }
 
-    // Inline launch — the product loop's entry point. Launches the primary agent
+    // Inline launch â the product loop's entry point. Launches the primary agent
     // plus any deliberately-ticked parallel agents, each in its OWN worktree, all
     // sharing ONE taskGroup so the compare board can aggregate siblings. Sends the
     // exact body the POST /workspaces handler requires (spaceId/projectId/taskId/
@@ -818,7 +818,7 @@ class RecoderViewModel implements ViewModel {
             const msg = e instanceof Error ? e.message : String(e);
             globalStore.set(this.launchResultAtom, {
                 ok: false,
-                error: started > 0 ? `Started ${started} of ${agents.length} — ${msg}` : msg,
+                error: started > 0 ? `Started ${started} of ${agents.length} â ${msg}` : msg,
             });
             if (started > 0) {
                 await this.refresh();
@@ -869,12 +869,12 @@ class RecoderViewModel implements ViewModel {
         globalStore.set(this.lastMergeAtom, { ...cur, [workspaceId]: record });
     }
 
-    // Merge the workspace into its base — the "review → merge" close of the loop.
+    // Merge the workspace into its base â the "review â merge" close of the loop.
     // Captures the governance verdict TRUTHFULLY: a 200 parses { merge, verdict }
     // and stashes the exact effect/tier/engine for the evidence step; a 403 surfaces
     // the gate's reason (needs approval / denied); a 503 surfaces "merge could not
-    // complete — <reason>". In a solo desktop the merge click IS the approval
-    // (server-side). Never fabricates a merge — every branch reads the real body.
+    // complete â <reason>". In a solo desktop the merge click IS the approval
+    // (server-side). Never fabricates a merge â every branch reads the real body.
     async mergeWorkspace(workspaceId: string) {
         if (!workspaceId) {
             return;
@@ -901,25 +901,25 @@ class RecoderViewModel implements ViewModel {
                     ...(verdict != null ? { verdict } : {}),
                     at,
                 });
-                this.setRowStatus(workspaceId, merged ? "Merged." : "Already up to date — nothing to merge.");
+                this.setRowStatus(workspaceId, merged ? "Merged." : "Already up to date â nothing to merge.");
                 await this.refresh();
                 return;
             }
             const reason = readErrorReason(body);
             if (res.status == 403) {
                 this.setLastMerge(workspaceId, { status: "blocked", ...(reason ? { reason } : {}), at });
-                this.setRowStatus(workspaceId, reason || "Merge blocked — needs approval.");
+                this.setRowStatus(workspaceId, reason || "Merge blocked â needs approval.");
                 return;
             }
             if (res.status == 503) {
                 this.setLastMerge(workspaceId, { status: "failed", ...(reason ? { reason } : {}), at });
-                this.setRowStatus(workspaceId, `Merge could not complete — ${reason || "operation failed"}.`);
+                this.setRowStatus(workspaceId, `Merge could not complete â ${reason || "operation failed"}.`);
                 return;
             }
             this.setLastMerge(workspaceId, { status: "failed", ...(reason ? { reason } : {}), at });
             this.setRowStatus(workspaceId, reason || `Merge failed (${res.status}).`);
         } catch {
-            this.setRowStatus(workspaceId, "Merge unavailable — backend not reachable.");
+            this.setRowStatus(workspaceId, "Merge unavailable â Recoder isn’t reachable.");
         } finally {
             globalStore.set(this.busyRowAtom, "");
         }
@@ -946,7 +946,7 @@ class RecoderViewModel implements ViewModel {
             const reason = (body && typeof body.error == "string" && body.error) || "";
             this.setRowStatus(workspaceId, reason || `Archive failed (${res.status}).`);
         } catch {
-            this.setRowStatus(workspaceId, "Archive unavailable — backend not reachable.");
+            this.setRowStatus(workspaceId, "Archive unavailable â Recoder isn’t reachable.");
         } finally {
             globalStore.set(this.busyRowAtom, "");
         }
