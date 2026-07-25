@@ -17,6 +17,13 @@ import { shellQuote } from './shell-quote.js';
 import { modelFlag } from './model-flag.js';
 import { extraArgs } from './extra-args.js';
 
+// The initial prompt for an interactive TUI is OPTIONAL — when empty the TUI opens
+// bare and the user types their first message in it. Emit the quoted prompt + a
+// trailing space so following flags stay separated; emit nothing (never an empty
+// '' positional arg) when absent.
+const initialPrompt = (o: { prompt?: string }): string =>
+  o.prompt && o.prompt.trim() ? `${shellQuote(o.prompt)} ` : '';
+
 export const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
   claude_code: {
     bin: 'claude',
@@ -25,7 +32,7 @@ export const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
     // Interactive: the real Claude Code TUI, opened with the initial prompt (no
     // `-p`, so it stays live). Edits auto-accepted in the isolated worktree.
     buildInteractive: (o) =>
-      `claude ${shellQuote(o.prompt)} --permission-mode acceptEdits${modelFlag('--model', o.model)}${extraArgs(o)}`,
+      `claude ${initialPrompt(o)}--permission-mode acceptEdits${modelFlag('--model', o.model)}${extraArgs(o)}`,
   },
   codex: {
     // `codex exec` defaults to a read-only sandbox, which blocks the agent from
@@ -36,13 +43,13 @@ export const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
       `codex exec ${shellQuote(o.prompt)} --sandbox workspace-write${modelFlag('--model', o.model)}${extraArgs(o)}`,
     // Interactive: the Codex TUI (no `exec`), started with the prompt.
     buildInteractive: (o) =>
-      `codex ${shellQuote(o.prompt)} --sandbox workspace-write${modelFlag('--model', o.model)}${extraArgs(o)}`,
+      `codex ${initialPrompt(o)}--sandbox workspace-write${modelFlag('--model', o.model)}${extraArgs(o)}`,
   },
   opencode: {
     bin: 'opencode',
     build: (o) => `opencode run ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${extraArgs(o)}`,
     // Interactive: the opencode TUI (no `run`), started with the prompt.
-    buildInteractive: (o) => `opencode ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${extraArgs(o)}`,
+    buildInteractive: (o) => `opencode ${initialPrompt(o)}${modelFlag('--model', o.model)}${extraArgs(o)}`.trimEnd(),
   },
   recoder_code: {
     bin: 'recoder-code',
@@ -58,7 +65,7 @@ export const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
       `pi --print ${shellQuote(o.prompt)} -ne${modelFlag('--model', o.model)}${extraArgs(o)}`,
     // Interactive: the pi TUI, started with the prompt (drop `--print`).
     buildInteractive: (o) =>
-      `pi ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${extraArgs(o)}`,
+      `pi ${initialPrompt(o)}${modelFlag('--model', o.model)}${extraArgs(o)}`.trimEnd(),
   },
   gemini_cli: {
     bin: 'gemini',
