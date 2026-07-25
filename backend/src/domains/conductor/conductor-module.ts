@@ -163,6 +163,8 @@ import {
   type EvidenceGovernance,
 } from './evidence/convergence-evidence.js';
 import { renderEvidenceExport, type EvidenceExport } from './evidence/evidence-export.js';
+import { loadEvidenceSigningKey, signEvidenceExport } from './evidence/evidence-signing.js';
+import type { KeyObject } from 'node:crypto';
 import {
   planConvergence as planConvergenceOp,
   type ConvergencePlan,
@@ -249,6 +251,8 @@ export class ConductorComposer implements ConductorModule {
 
   private readonly log: Logger;
   private readonly cfg: ConductorConfig;
+  /** Memoized Ed25519 evidence-signing key (`undefined` = not resolved; `null` = unsigned). */
+  private evidenceSigningKey: KeyObject | null | undefined;
   private readonly gate: ConductorModuleDeps['gate'];
   private readonly middleware: ConductorModuleDeps['middleware'];
   private readonly registry: ConductorRegistry;
@@ -2088,7 +2092,19 @@ export class ConductorComposer implements ConductorModule {
    */
   async getConvergenceEvidenceExport(workspaceId: string): Promise<EvidenceExport | null> {
     const record = await this.getConvergenceEvidence(workspaceId);
-    return record ? renderEvidenceExport(record) : null;
+    if (!record) return null;
+    // PURE render first (deterministic hash/controls), THEN a thin detached-signature
+    // step — signing the stable contentHash, never mutating it. Unsigned when no key.
+    const pack = renderEvidenceExport(record);
+    return signEvidenceExport(pack, { privateKey: this.resolveEvidenceSigningKey(), logger: this.log });
+  }
+
+  /** Load + memoize the Ed25519 signing key from config (degrade-truthful: `null` = unsigned). */
+  private resolveEvidenceSigningKey(): KeyObject | null {
+    if (this.evidenceSigningKey === undefined) {
+      this.evidenceSigningKey = loadEvidenceSigningKey(this.cfg.evidenceSigningKey, this.log);
+    }
+    return this.evidenceSigningKey;
   }
 
   /** The raw compare read (no grid enrichment) — the pure sibling aggregate. */

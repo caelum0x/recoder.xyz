@@ -66,6 +66,15 @@ export const conductorConfigSchema = z.object({
   /** Solo/desktop mode — degrade the audit-trail read to empty on a DB fault (see `RuntimeConfig.soloMode`). */
   soloMode: z.boolean(),
   isProduction: z.boolean(),
+  /**
+   * The Ed25519 evidence-signing SECRET (was `EVIDENCE_SIGNING_KEY`): a PKCS8 PEM or
+   * bare base64-DER private key used to sign exported evidence packs. `null` -> packs
+   * are exported UNSIGNED (degrade-truthful). NOTE (bootstrap wiring needed):
+   * `bootstrap/config.ts` must read `EVIDENCE_SIGNING_KEY` and pass it through
+   * {@link ConductorConfigOverrides.evidenceSigningKey}; until then the fail-safe
+   * `null` (unsigned) holds. The value is a secret — never logged, never committed.
+   */
+  evidenceSigningKey: z.string().nullable(),
 });
 
 export type ConductorConfig = z.infer<typeof conductorConfigSchema>;
@@ -94,6 +103,8 @@ export interface ConductorConfigOverrides {
   readonly caps?: Partial<ConductorConfig['caps']>;
   readonly daytonaCredsPresent?: boolean;
   readonly sshCredsPresent?: boolean;
+  /** The Ed25519 evidence-signing secret (PKCS8 PEM or base64-DER); `null`/absent -> unsigned. */
+  readonly evidenceSigningKey?: string | null;
 }
 
 /**
@@ -116,6 +127,7 @@ export function sliceConductorConfig(
     sshCredsPresent: overrides.sshCredsPresent ?? false,
     soloMode: app.runtime.soloMode === true,
     isProduction: app.runtime.isProduction,
+    evidenceSigningKey: overrides.evidenceSigningKey ?? null,
   });
 }
 

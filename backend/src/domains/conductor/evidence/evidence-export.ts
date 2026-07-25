@@ -63,6 +63,23 @@ export interface EvidenceExportSubject {
   readonly auditEntryHash: string | null;
 }
 
+/**
+ * A DETACHED Ed25519 signature over the pack's {@link EvidenceExport.contentHash}.
+ * Attached AFTER the pack (and its contentHash) is fully rendered, so signing does
+ * NOT change the contentHash — the signature is over the stable hash, not part of it.
+ * `null`/absent ⇒ the pack is unsigned (no key configured) — never a fabricated sig.
+ */
+export interface EvidenceSignature {
+  readonly algorithm: 'ed25519';
+  /** SPKI PEM of the signer's public key — verifiers use this (self-verifying pack). */
+  readonly publicKeyPem: string;
+  /** The pack `contentHash` that was signed (must equal the pack's contentHash). */
+  readonly signedContentHash: string;
+  /** The detached signature, base64. */
+  readonly signature: string;
+  readonly signedAt: string;
+}
+
 /** The portable, control-mapped export pack. */
 export interface EvidenceExport {
   readonly schema: typeof EVIDENCE_EXPORT_SCHEMA;
@@ -76,8 +93,14 @@ export interface EvidenceExport {
   /** A human-readable (markdown) rendering for an auditor. */
   readonly summary: string;
   readonly generatedAt: string;
-  /** SHA-256 over this pack MINUS `contentHash` — the pack's own integrity seal. */
+  /** SHA-256 over this pack MINUS `contentHash` AND `signature` — the pack's integrity seal. */
   readonly contentHash: string;
+  /**
+   * OPTIONAL detached Ed25519 signature over {@link contentHash}. Present only when a
+   * signing key is configured; `null`/absent otherwise. NOT part of `contentHash`
+   * (it signs the hash), so an unsigned and a signed pack share the same contentHash.
+   */
+  readonly signature?: EvidenceSignature | null;
 }
 
 function sha256Hex(input: string): string {
@@ -314,9 +337,10 @@ export function renderEvidenceExport(
 
 /**
  * Re-verify an export pack's own `contentHash` (tamper check): recompute over the
- * pack minus `contentHash` and compare. Mirrors `verifyEvidenceHash`.
+ * pack minus `contentHash` AND the detached `signature` (which signs the hash and is
+ * attached afterward), and compare. Mirrors `verifyEvidenceHash`.
  */
 export function verifyExportHash(pack: EvidenceExport): boolean {
-  const { contentHash, ...rest } = pack;
+  const { contentHash, signature, ...rest } = pack;
   return sha256Hex(canonicalJson(rest)) === contentHash;
 }

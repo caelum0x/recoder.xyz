@@ -131,6 +131,11 @@ export interface ConductorSliceConfig {
    * attach hint here + the control-mode default the supervisor also flips).
    */
   readonly desktopSingleTenant: boolean;
+  /**
+   * Ed25519 signing key (PKCS8 PEM or base64 DER) for the convergence evidence
+   * export pack — a SECRET from the deploy env. `null` ⇒ packs export unsigned.
+   */
+  readonly evidenceSigningKey: string | null;
   /** Resource-governor admission caps. */
   readonly caps: ConductorCapsConfig;
 }

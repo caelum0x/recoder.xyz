@@ -79,6 +79,10 @@ const envSchema = z.object({
   LOG_LEVEL: z.string().default('info'),
 
   // --- Conductor (terminal product) slice ---
+  // Ed25519 signing key (PKCS8 PEM or bare base64 DER) for the convergence evidence
+  // export pack. A SECRET — set in the deploy env only, never committed. Absent ⇒
+  // packs are exported unsigned (truthful), never a fabricated signature.
+  EVIDENCE_SIGNING_KEY: z.string().optional(),
   CONDUCTOR_TMUX_BIN: z.string().optional(),
   RECODER_TMUX_BUILD_PATH: z.string().optional(),
   CONDUCTOR_WORKTREE_ROOT: z.string().optional(),
@@ -478,6 +482,8 @@ function buildConfig(env: ParsedEnv, rawEnv: EnvSource): AppConfig {
     // Single-tenant desktop composition (the supervisor sets it) — gates the
     // box-wide dmux `attachCommand` on the compare read model. Shared/prod: false.
     desktopSingleTenant: asBool(env.CONDUCTOR_DESKTOP_SINGLE_TENANT, false),
+    // Absent ⇒ null ⇒ evidence packs export unsigned (loadEvidenceSigningKey no-ops).
+    evidenceSigningKey: env.EVIDENCE_SIGNING_KEY ?? null,
     caps: {
       maxConcurrentWorkspaces: env.CONDUCTOR_MAX_CONCURRENT ?? 10,
       maxConcurrentPerUser: env.CONDUCTOR_MAX_CONCURRENT_PER_USER ?? 5,

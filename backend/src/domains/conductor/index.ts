@@ -80,7 +80,17 @@ export type {
   EvidenceVerification,
 } from './evidence/convergence-evidence.js';
 import type { EvidenceExport } from './evidence/evidence-export.js';
-export type { EvidenceExport, EvidenceControl, ControlStatus, ControlCoverage } from './evidence/evidence-export.js';
+export type {
+  EvidenceExport,
+  EvidenceControl,
+  ControlStatus,
+  ControlCoverage,
+  EvidenceSignature,
+} from './evidence/evidence-export.js';
+export {
+  verifyEvidenceSignature,
+  type EvidenceSignatureVerification,
+} from './evidence/evidence-signing.js';
 import type { ConvergencePlan } from './converge/converge-plan.service.js';
 export { SYNTHESIZE_SELECTION } from './converge/converge-plan.service.js';
 export type {
