@@ -13,6 +13,7 @@
  *   GET    /api/conductor/workspaces/:id/tree     worktree file list
  *   GET    /api/conductor/workspaces/:id/mergeability  pre-merge conflict + base-divergence probe
  *   GET    /api/conductor/workspaces/:id/readiness  folded merge-readiness read-model (4 signals + verdict)
+ *   GET    /api/conductor/workspaces/:id/evidence  exportable convergence evidence record (404 when unmerged)
  *   GET    /api/conductor/workspaces/:id/dev-command  detected dev command (or null)
  *   GET    /api/conductor/workspaces/:id/preview-verification  last preview verification summary (404 when unverified)
  *   GET    /api/conductor/workspaces/:id/view     attention-enriched view (truthful unknown)
@@ -254,6 +255,35 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
         sendSuccess(res, { audit });
       } catch (err) {
         sendError(res, toReadError(err, 'audit read failed'));
+      }
+    }),
+  );
+
+  // The exportable convergence evidence record a governed merge produced — the
+  // step-3 headline artifact (task + N candidate diff hashes + chosen + governance
+  // verdict/approval + pre-merge verification + provenance, sealed with a SHA-256
+  // `contentHash` pointing at its durable Merkle audit leaf). PURE read (no gate).
+  // A never-merged / evidence-less workspace is a truthful 404, never a fabrication.
+  router.get(
+    '/workspaces/:id/evidence',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      try {
+        const evidence = await module.getConvergenceEvidence(req.params.id);
+        if (evidence) {
+          sendSuccess(res, { evidence });
+          return;
+        }
+        const workspace = await module.getWorkspace(req.params.id);
+        sendError(
+          res,
+          createError(
+            ErrorCode.NOT_FOUND,
+            workspace ? 'no convergence evidence (not merged)' : 'workspace not found',
+          ),
+        );
+      } catch (err) {
+        sendError(res, toReadError(err, 'evidence read failed'));
       }
     }),
   );

@@ -21,6 +21,8 @@ export type {
   GovernanceAction,
   GateDecisionContext,
   GateVerdict,
+  GovernanceEffect,
+  RiskTier,
   AuditEntryInput,
   AuditRecord,
 } from '../../governance/types.js';
