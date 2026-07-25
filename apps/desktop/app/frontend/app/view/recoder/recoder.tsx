@@ -106,14 +106,14 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
             data-selected={selected}
             onClick={onSelect}
             onFocus={onSelect}
-            className={`flex flex-col gap-1 rounded border border-border px-2.5 py-1.5 transition-colors duration-150 ease-out hover:bg-border/20 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/70 ${selected ? "ring-1 ring-accent/60 bg-border/20" : ""}`}
+            className={`flex flex-col gap-1 rounded border border-white/8 px-3 py-2 transition-colors duration-150 ease-out hover:bg-border/20 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/70 ${selected ? "ring-1 ring-accent/60 bg-border/20" : ""}`}
             title={`${ws.workspaceId} - ${ws.branch}`}
         >
             <div className="flex items-center gap-2">
-                <span className={`${ROW_TITLE} truncate`}>{ws.branch}</span>
+                <span className={`${ROW_TITLE} truncate font-mono`}>{ws.branch}</span>
                 <span className={META}>{ws.state}</span>
                 {summary != null && summary.files > 0 && (
-                    <span className={META}>
+                    <span className={`${META} font-mono`}>
                         +{summary.additions} -{summary.deletions}
                     </span>
                 )}
@@ -296,7 +296,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             {loading && workspaces.length == 0 && error == "" && <RecoderSkeleton rows={3} />}
 
             {launchOpen && (
-                <div className="flex flex-col gap-3 rounded border border-border p-3 mt-1 recoder-enter">
+                <div className="flex flex-col gap-3 rounded border border-white/8 p-3 mt-1 recoder-enter">
                     <div className={SECTION_TITLE}>Launch a coding agent</div>
 
                     <label className="flex flex-col gap-1">
@@ -326,7 +326,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             <div className="flex items-center gap-2" title={repoPath}>
                                 <div className="flex min-w-0 flex-1 flex-col">
                                     <span className={`${ROW_TITLE} truncate`}>{folderName(repoPath)}</span>
-                                    <span className={`${META} truncate`}>{repoPath}</span>
+                                    <span className={`${META} truncate font-mono`}>{repoPath}</span>
                                 </div>
                                 <button className={QUIET_BTN} onClick={browseFolder}>
                                     Change
@@ -477,7 +477,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             )}
 
             {showGettingStarted && (
-                <div className="flex flex-col gap-3 rounded border border-border p-4 mt-1 recoder-enter">
+                <div className="flex flex-col gap-3 rounded border border-white/8 p-4 mt-1 recoder-enter">
                     <div className="flex flex-col gap-1">
                         <div className={SECTION_TITLE}>Welcome to Recoder</div>
                         <div className={META}>
@@ -545,10 +545,10 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     const compareView = compare[taskGroup];
                     const isCompareOpen = compareOpen == taskGroup;
                     return (
-                        <div key={taskGroup} className="flex flex-col gap-1 rounded border border-border p-2">
+                        <div key={taskGroup} className="flex flex-col gap-1 rounded border border-white/8 p-2">
                             <div className="flex items-center gap-2">
                                 <span className={ROW_TITLE}>{group.workspaces.length} agents</span>
-                                <span className={META} title={taskGroup}>
+                                <span className={`${META} font-mono`} title={taskGroup}>
                                     {shortTaskGroup(taskGroup)}
                                 </span>
                                 <div className="flex-1" />
@@ -564,7 +564,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     {compareView != null ? (
                                         <RecoderComparePanel model={model} compareView={compareView} />
                                     ) : (
-                                        <div className="rounded border border-border p-2">
+                                        <div className="rounded border border-white/8 p-2">
                                             <RecoderSkeleton rows={2} />
                                         </div>
                                     )}
