@@ -240,14 +240,23 @@ function SiblingCompareRow({
                     <span className={META}>{sibling.diffStatReason || "diff unavailable"}</span>
                 )}
                 <div className="flex-1" />
-                <button
-                    className={QUIET_BTN_XS}
-                    disabled={busy}
-                    onClick={() => model.mergeWorkspace(sibling.workspaceId)}
-                    title={`Merge ${agentLabel(sibling.agent)}'s branch ${sibling.branch}`}
-                >
-                    {busy ? "…" : "Merge this"}
-                </button>
+                {merged ? (
+                    <span
+                        className="rounded bg-accent/20 px-1.5 py-0.5 text-xs text-accent"
+                        title={`${agentLabel(sibling.agent)}'s branch ${sibling.branch} is merged — nothing left to merge`}
+                    >
+                        Merged
+                    </span>
+                ) : (
+                    <button
+                        className={QUIET_BTN_XS}
+                        disabled={busy}
+                        onClick={() => model.mergeWorkspace(sibling.workspaceId)}
+                        title={`Merge ${agentLabel(sibling.agent)}'s branch ${sibling.branch}`}
+                    >
+                        {busy ? "…" : "Merge this"}
+                    </button>
+                )}
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <ReadinessBadge readiness={readiness} />
