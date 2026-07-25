@@ -440,7 +440,7 @@ function workspaceMatchesQuery(ws: RecoderWorkspace, q: string): boolean {
     if ((ws.runtimeId ?? "").toLowerCase().includes(q)) {
         return true;
     }
-    if (agentLabel(ws.runtimeId).toLowerCase().includes(q)) {
+    if (agentLabel(ws.runtimeId ?? "").toLowerCase().includes(q)) {
         return true;
     }
     const meta = ws.metadata;
