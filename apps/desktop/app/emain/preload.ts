@@ -77,6 +77,7 @@ contextBridge.exposeInMainWorld("api", {
     recoderSignIn: () => ipcRenderer.invoke("recoder:sign-in"),
     recoderSignOut: () => ipcRenderer.invoke("recoder:sign-out"),
     selectDirectory: () => ipcRenderer.invoke("recoder:select-directory"),
+    isGitRepo: (dirPath) => ipcRenderer.invoke("recoder:is-git-repo", dirPath),
     onRecoderSignInPrompt: (callback) =>
         ipcRenderer.on("recoder:device-login-prompt", (_event, prompt) => callback(prompt)),
 });

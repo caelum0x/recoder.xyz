@@ -614,6 +614,28 @@ export function initIpcHandlers() {
         return result.filePaths[0];
     });
 
+    electron.ipcMain.handle("recoder:is-git-repo", async (_event, dirPath: string) => {
+        if (dirPath == null || dirPath == "") {
+            return true;
+        }
+        return await new Promise<boolean>((resolve) => {
+            child_process.execFile(
+                "git",
+                ["-C", dirPath, "rev-parse", "--is-inside-work-tree"],
+                { timeout: 4000 },
+                (err, stdout) => {
+                    if (err != null) {
+                        // Fail OPEN when git itself is absent (ENOENT): we cannot know, so
+                        // never warn; a real non-repo returns a non-zero exit (err.code != ENOENT).
+                        resolve((err as NodeJS.ErrnoException).code == "ENOENT" ? true : false);
+                        return;
+                    }
+                    resolve(stdout.trim() == "true");
+                }
+            );
+        });
+    });
+
     electron.ipcMain.handle("save-text-file", async (event, fileName: string, content: string) => {
         const ww = electron.BrowserWindow.fromWebContents(event.sender);
         if (ww == null) {

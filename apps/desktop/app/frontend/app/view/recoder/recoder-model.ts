@@ -481,6 +481,10 @@ class RecoderViewModel implements ViewModel {
     launchOpenAtom: PrimitiveAtom<boolean>;
     commandPaletteOpenAtom: PrimitiveAtom<boolean>;
     launchRepoPathAtom: PrimitiveAtom<string>;
+    // Advance, non-blocking hint: false once the picked folder is confirmed NOT a
+    // git repo (checked read-only at pick time). Launch stays enabled — the backend
+    // owns the truth; this only warns before the round trip. Default true = no warning.
+    launchRepoIsGitAtom: PrimitiveAtom<boolean>;
     recentReposAtom: PrimitiveAtom<string[]>;
     launchPromptAtom: PrimitiveAtom<string>;
     launchRuntimeIdAtom: PrimitiveAtom<string>;
@@ -530,6 +534,7 @@ class RecoderViewModel implements ViewModel {
         this.launchOpenAtom = atom(false) as PrimitiveAtom<boolean>;
         this.commandPaletteOpenAtom = atom(false) as PrimitiveAtom<boolean>;
         this.launchRepoPathAtom = atom(loadRecentRepos()[0] ?? "") as PrimitiveAtom<string>;
+        this.launchRepoIsGitAtom = atom(true) as PrimitiveAtom<boolean>;
         this.recentReposAtom = atom(loadRecentRepos()) as PrimitiveAtom<string[]>;
         this.launchPromptAtom = atom("") as PrimitiveAtom<string>;
         this.launchRuntimeIdAtom = atom(loadLastAgent()) as PrimitiveAtom<string>;

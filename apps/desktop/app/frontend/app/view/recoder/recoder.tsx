@@ -179,6 +179,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const identity = useAtomValue(RecoderIdentityModel.getInstance().identityAtom);
     const [selectedId, setSelectedId] = useAtom(model.selectedWorkspaceIdAtom);
     const [repoPath, setRepoPath] = useAtom(model.launchRepoPathAtom);
+    const [repoIsGit, setLaunchRepoIsGit] = useAtom(model.launchRepoIsGitAtom);
     const recentRepos = useAtomValue(model.recentReposAtom);
     const [prompt, setPrompt] = useAtom(model.launchPromptAtom);
     const [runtimeId, setRuntimeId] = useAtom(model.launchRuntimeIdAtom);
@@ -363,12 +364,26 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const toggleAlso = (id: string, on: boolean) =>
         setAlsoRun(on ? [...alsoRun, id] : alsoRun.filter((x) => x != id));
 
+    // Read-only, non-blocking pre-launch check: warn inline the moment a folder is
+    // chosen if it isn't a git repo, instead of after a failed worktree add. Fails
+    // open (assumes ok) so we never false-warn when git is absent or unreachable.
+    const checkRepo = async (path: string) => {
+        setLaunchRepoIsGit(true);
+        try {
+            const ok = await getApi().isGitRepo(path);
+            setLaunchRepoIsGit(ok);
+        } catch {
+            setLaunchRepoIsGit(true);
+        }
+    };
+
     const browseFolder = async () => {
         const picked = await getApi().selectDirectory();
         if (picked == null || picked == "") {
             return;
         }
         setRepoPath(picked);
+        checkRepo(picked);
     };
 
     // Live command list for ⌘P: primary hub actions first, then a dynamic row per
@@ -500,12 +515,18 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                             key={r}
                                             className={CHIP}
                                             title={r}
-                                            onClick={() => setRepoPath(r)}
+                                            onClick={() => {
+                                                setRepoPath(r);
+                                                checkRepo(r);
+                                            }}
                                         >
                                             {folderName(r)}
                                         </button>
                                     ))}
                             </div>
+                        )}
+                        {repoPath.trim() != "" && !repoIsGit && (
+                            <div className={META}>Not a git repository — run `git init` here, or choose a repo folder.</div>
                         )}
                     </label>
 
@@ -701,6 +722,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                                     title={r}
                                                     onClick={() => {
                                                         setRepoPath(r);
+                                                        checkRepo(r);
                                                         setLaunchOpen(true);
                                                     }}
                                                 >
