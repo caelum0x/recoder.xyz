@@ -59,12 +59,15 @@ function folderName(repoPath: string): string {
 
 // Self-explains the greyed Launch button: empty string means nothing to say
 // (either ready to launch, or already posting).
-function launchDisabledReason(repoPath: string, runtimeId: string): string {
+function launchDisabledReason(repoPath: string, runtimeId: string, needsPrompt: boolean): string {
     if (repoPath.trim() == "") {
         return "Choose a folder to launch.";
     }
     if (runtimeId == "") {
         return "Choose an agent to launch.";
+    }
+    if (needsPrompt) {
+        return "Add a first message, or turn on interactive session.";
     }
     return "";
 }
@@ -260,7 +263,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     };
 
     const showGettingStarted = !loading && workspaces.length == 0 && error == "" && !launchOpen;
-    const canLaunch = !posting && repoPath.trim() != "" && runtimeId != "";
+    const needsPrompt = !interactive && prompt.trim() == "";
+    const canLaunch = !posting && repoPath.trim() != "" && runtimeId != "" && !needsPrompt;
     const parallelAgents = readyAgents.filter((a) => a.runtimeId != runtimeId);
     const allParallelSelected =
         parallelAgents.length > 0 && parallelAgents.every((a) => alsoRun.includes(a.runtimeId));
@@ -433,8 +437,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         {canLaunch && <span className={`${META} ml-auto`}>Cmd+Enter to launch</span>}
                     </div>
 
-                    {!canLaunch && launchDisabledReason(repoPath, runtimeId) != "" && (
-                        <div className={META}>{launchDisabledReason(repoPath, runtimeId)}</div>
+                    {!canLaunch && launchDisabledReason(repoPath, runtimeId, needsPrompt) != "" && (
+                        <div className={META}>{launchDisabledReason(repoPath, runtimeId, needsPrompt)}</div>
                     )}
 
                     {launchResult != null && !launchResult.ok && (
