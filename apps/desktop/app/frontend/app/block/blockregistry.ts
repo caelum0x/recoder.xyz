@@ -26,8 +26,8 @@ import { RecoderToolsViewModel } from "@/app/view/recoder-tools/recoder-tools-mo
 import { RecoderMemoryViewModel } from "@/app/view/recoder-memory/recoder-memory-model";
 import { RecoderRunsViewModel } from "@/app/view/recoder-runs/recoder-runs-model";
 import { RecoderHandsViewModel } from "@/app/view/recoder-hands/recoder-hands-model";
-import { RecoderOpenfangViewModel } from "@/app/view/recoder-openfang/recoder-openfang-model";
 import { RecoderConnectorsViewModel } from "@/app/view/recoder-connectors/recoder-connectors-model";
+import { RetiredViewModel } from "@/app/view/retired/retired";
 import { RecoderSettingsViewModel } from "@/app/view/recoder-settings/recoder-settings-model";
 import { TermViewModel } from "@/view/term/term-model";
 import { WaveAiModel } from "@/view/waveai/waveai";
@@ -58,7 +58,7 @@ BlockRegistry.set("recoder-tools", RecoderToolsViewModel);
 BlockRegistry.set("recoder-memory", RecoderMemoryViewModel);
 BlockRegistry.set("recoder-runs", RecoderRunsViewModel);
 BlockRegistry.set("recoder-hands", RecoderHandsViewModel);
-BlockRegistry.set("recoder-openfang", RecoderOpenfangViewModel);
+BlockRegistry.set("recoder-openfang", RetiredViewModel);
 BlockRegistry.set("recoder-connectors", RecoderConnectorsViewModel);
 BlockRegistry.set("recoder-settings", RecoderSettingsViewModel);
 
