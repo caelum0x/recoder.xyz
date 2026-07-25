@@ -92,7 +92,7 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                     <div className="text-secondary">Disconnected — press Reconnect to resume the stream.</div>
                 )}
                 {empty && status == "error" && (
-                    <div className="text-secondary">Not connected. Check that the Recoder backend is reachable.</div>
+                    <div className="text-secondary">Not connected. Check that Recoder is running.</div>
                 )}
                 {lines.map((line, i) => (
                     <div key={i} className="whitespace-pre-wrap break-words">

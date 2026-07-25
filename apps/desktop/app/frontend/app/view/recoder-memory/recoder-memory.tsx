@@ -74,12 +74,12 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
-                <span className="font-semibold">Recoder — Memory</span>
+                <span className="font-semibold">Recoder â Memory</span>
             </div>
             <div className="flex items-center gap-2">
                 <input
                     className="flex-1 rounded border border-border bg-transparent px-2 py-0.5 text-sm outline-none focus:border-accent"
-                    placeholder="Search memory…"
+                    placeholder="Search memoryâ¦"
                     value={query}
                     onChange={(e) => model.setQuery(e.target.value)}
                     onKeyDown={(e) => {
@@ -93,14 +93,14 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
                     className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
                     onClick={() => model.search()}
                 >
-                    {searching ? "…" : "Search"}
+                    {searching ? "â¦" : "Search"}
                 </button>
             </div>
             {error != "" && <div className="text-error text-sm">{error}</div>}
-            {loading && items.length == 0 && <div className="text-secondary text-sm">Loading…</div>}
+            {loading && items.length == 0 && <div className="text-secondary text-sm">Loadingâ¦</div>}
             {showDisconnected && (
                 <div className="text-secondary text-sm">
-                    Not connected — start the Recoder backend to browse durable memory.
+                    Not connected â Recoder is starting…
                 </div>
             )}
 

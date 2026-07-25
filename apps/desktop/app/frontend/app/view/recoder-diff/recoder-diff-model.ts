@@ -13,7 +13,7 @@ type RecoderWorkspace = {
     runtimeId: string;
 };
 
-// Shape of GET /api/conductor/workspaces/:id/diff → data (see conductor review.ts
+// Shape of GET /api/conductor/workspaces/:id/diff â data (see conductor review.ts
 // WorkspaceDiff). `patch` is a raw unified git diff; the view renders it line-by-line.
 type RecoderWorkspaceDiff = {
     workspaceId: string;
@@ -33,17 +33,17 @@ class RecoderDiffViewModel implements ViewModel {
     workspacesAtom: PrimitiveAtom<RecoderWorkspace[]>;
     selectedIdAtom: PrimitiveAtom<string>;
     diffAtom: PrimitiveAtom<RecoderWorkspaceDiff>;
-    // False once a workspace-list fetch fails (backend down) → "not connected".
+    // False once a workspace-list fetch fails (backend down) â "not connected".
     connectedAtom: PrimitiveAtom<boolean>;
     loadingAtom: PrimitiveAtom<boolean>;
     diffLoadingAtom: PrimitiveAtom<boolean>;
-    // Neutral, human diff status ("no diff", "diff endpoint not available", …).
+    // Neutral, human diff status ("no diff", "diff endpoint not available", â¦).
     diffStatusAtom: PrimitiveAtom<string>;
     mergingAtom: PrimitiveAtom<boolean>;
-    // Human result of the last merge action ("Merged.", approval reason, …).
+    // Human result of the last merge action ("Merged.", approval reason, â¦).
     mergeStatusAtom: PrimitiveAtom<string>;
     prCreatingAtom: PrimitiveAtom<boolean>;
-    // Human result of the last PR action ("PR created: <url>", approval reason, …).
+    // Human result of the last PR action ("PR created: <url>", approval reason, â¦).
     prStatusAtom: PrimitiveAtom<string>;
 
     constructor(initOpts: ViewModelInitType) {
@@ -111,8 +111,8 @@ class RecoderDiffViewModel implements ViewModel {
         await this.loadDiff(workspaceId);
     }
 
-    // Degrade-safe: 404 → "no diff", other non-2xx → "diff unavailable", thrown
-    // (backend unreachable) → "diff endpoint not available". Never a crash or a
+    // Degrade-safe: 404 â "no diff", other non-2xx â "diff unavailable", thrown
+    // (backend unreachable) â "diff endpoint not available". Never a crash or a
     // fabricated diff.
     async loadDiff(workspaceId: string) {
         globalStore.set(this.diffLoadingAtom, true);
@@ -141,9 +141,9 @@ class RecoderDiffViewModel implements ViewModel {
         }
     }
 
-    // Merge the selected workspace — the "review → merge" close. Degrade-safe:
-    // 409 (delivery gate / awaiting approval) → the backend's truthful reason;
-    // other non-2xx → truthful failure; success → "Merged." then refresh. In a
+    // Merge the selected workspace â the "review â merge" close. Degrade-safe:
+    // 409 (delivery gate / awaiting approval) â the backend's truthful reason;
+    // other non-2xx â truthful failure; success â "Merged." then refresh. In a
     // solo desktop the merge click IS the approval (server-side). Never fabricates.
     async mergeSelected() {
         const workspaceId = globalStore.get(this.selectedIdAtom);
@@ -174,15 +174,15 @@ class RecoderDiffViewModel implements ViewModel {
             }
             globalStore.set(this.mergeStatusAtom, reason || `Merge failed (${res.status}).`);
         } catch {
-            globalStore.set(this.mergeStatusAtom, "Merge unavailable — backend not reachable.");
+            globalStore.set(this.mergeStatusAtom, "Merge unavailable â Recoder isn’t reachable.");
         } finally {
             globalStore.set(this.mergingAtom, false);
         }
     }
 
     // Open a PR for the selected workspace branch. Degrade-safe: 409 (delivery
-    // gate / awaiting approval) → the backend's truthful reason; other non-2xx →
-    // truthful failure; success → "PR created: <url>" (or "PR created." when the
+    // gate / awaiting approval) â the backend's truthful reason; other non-2xx â
+    // truthful failure; success â "PR created: <url>" (or "PR created." when the
     // backend returns no url). Never fabricates a PR.
     async createPr() {
         const workspaceId = globalStore.get(this.selectedIdAtom);
@@ -214,7 +214,7 @@ class RecoderDiffViewModel implements ViewModel {
             }
             globalStore.set(this.prStatusAtom, reason || `PR failed (${res.status}).`);
         } catch {
-            globalStore.set(this.prStatusAtom, "PR unavailable — backend not reachable.");
+            globalStore.set(this.prStatusAtom, "PR unavailable â Recoder isn’t reachable.");
         } finally {
             globalStore.set(this.prCreatingAtom, false);
         }

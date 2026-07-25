@@ -42,7 +42,7 @@ function RunRow({ run }: { run: RecoderRun }) {
     return (
         <div
             className="flex items-center gap-2 rounded border border-border px-2 py-1"
-            title={`${run.runId} · ${run.taskId}`}
+            title={`${run.runId} Â· ${run.taskId}`}
         >
             <span
                 className={cn(
@@ -90,15 +90,15 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-3">
             <div className="flex items-center gap-2">
-                <span className="font-semibold">Recoder — Runs</span>
+                <span className="font-semibold">Recoder â Runs</span>
             </div>
             {error != "" && <div className="text-error text-sm">{error}</div>}
             {loading && runs.length == 0 && events.length == 0 && (
-                <div className="text-secondary text-sm">Loading…</div>
+                <div className="text-secondary text-sm">Loadingâ¦</div>
             )}
             {showDisconnected && (
                 <div className="text-secondary text-sm">
-                    Not connected — start the Recoder backend to see agent runs.
+                    Not connected â Recoder is starting…
                 </div>
             )}
             {connected && (

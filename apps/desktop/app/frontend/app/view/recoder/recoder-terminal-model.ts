@@ -145,7 +145,7 @@ class RecoderTerminalViewModel implements ViewModel {
             if (this.socket !== socket) return;
             globalStore.set(this.statusAtom, "error");
             if (globalStore.get(this.errorAtom) == "") {
-                globalStore.set(this.errorAtom, "connection error — is the Recoder backend running?");
+                globalStore.set(this.errorAtom, "connection error — is Recoder running?");
             }
         };
         socket.onclose = () => {
