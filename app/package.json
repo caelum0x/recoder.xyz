@@ -30,6 +30,7 @@
     "test:debug": "pnpm exec playwright test --debug",
     "test:report": "pnpm exec playwright show-report",
     "test:codegen": "pnpm exec playwright codegen",
+    "seo:indexnow": "node scripts/ping-indexnow.mjs",
     "smoke:static": "bash scripts/smoke-static-assets.sh",
     "smoke:admin-push": "bash scripts/smoke-admin-push.sh",
     "load-test": "k6 run k6-load-test.js",

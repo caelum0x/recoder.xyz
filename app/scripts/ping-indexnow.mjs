@@ -6,18 +6,19 @@
  * feeds Bing crawl. Intended to run from a deploy hook AFTER the new build is
  * live so the crawled URLs reflect the shipped content.
  *
- * Truthfulness contract (load-bearing):
- * - If `INDEXNOW_KEY` is unset/empty the script logs `skipped: no key` and
- *   exits 0 WITHOUT making any network call. It never fabricates a ping.
- * - Otherwise it performs the real HTTP POST to IndexNow and prints the upstream
- *   status verbatim. A non-2xx upstream is reported as a failure, not success.
+ * Truthfulness contract (load-bearing): it performs the real HTTP POST to
+ * IndexNow and prints the upstream status verbatim. A non-2xx upstream is
+ * reported as a failure, not success. Nothing is ever fabricated.
  *
- * The IndexNow key validation file must be served at `${origin}/${key}.txt`
- * with a body equal to the key. That file is generated from `INDEXNOW_KEY` at
- * deploy time — the committed `public/INDEXNOW_KEY.txt` is only a placeholder.
+ * Key: the committed public default (`DEFAULT_INDEXNOW_KEY` in
+ * app/lib/seo/indexnow.ts, also served at `public/<key>.txt`) is used unless a
+ * valid `INDEXNOW_KEY` env value overrides it (rotation). The constant below
+ * MUST stay in lockstep with that module and the committed key file. This script
+ * is plain `.mjs` so it can run in a bare deploy hook without a TS build step,
+ * which is why the constant is duplicated rather than imported.
  *
  * Env:
- *   INDEXNOW_KEY          (required to do anything; absent ⇒ no-op)
+ *   INDEXNOW_KEY          (optional rotation override; must be 8-128 [a-zA-Z0-9-])
  *   NEXT_PUBLIC_SITE_URL  (optional origin override; falls back to SITE_URL)
  *   SITE_URL              (optional origin override)
  *
@@ -27,6 +28,14 @@
 const INDEXNOW_ENDPOINT = 'https://api.indexnow.org/indexnow';
 const CANONICAL_ORIGIN = 'https://recoder.xyz';
 const MAX_URLS_PER_REQUEST = 10_000;
+// Keep in lockstep with DEFAULT_INDEXNOW_KEY in app/lib/seo/indexnow.ts.
+const DEFAULT_INDEXNOW_KEY = 'fc855a24fb8ed402c70b39f17fe8b444';
+const KEY_PATTERN = /^[A-Za-z0-9-]{8,128}$/;
+
+function resolveIndexNowKey() {
+  const fromEnv = (process.env.INDEXNOW_KEY || '').trim();
+  return fromEnv && KEY_PATTERN.test(fromEnv) ? fromEnv : DEFAULT_INDEXNOW_KEY;
+}
 
 function resolveSiteOrigin() {
   const fromEnv = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL;
@@ -55,13 +64,7 @@ function extractSitemapUrls(xml, host) {
 }
 
 async function main() {
-  const key = (process.env.INDEXNOW_KEY || '').trim();
-  if (!key) {
-    // Degrade-truthful no-op. No key ⇒ no ping, no fake submission.
-    console.log('[indexnow] skipped: no key (INDEXNOW_KEY not set)');
-    process.exit(0);
-  }
-
+  const key = resolveIndexNowKey();
   const origin = resolveSiteOrigin();
   const host = new URL(origin).host;
 

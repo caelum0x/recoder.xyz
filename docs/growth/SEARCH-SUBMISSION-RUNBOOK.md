@@ -5,8 +5,10 @@ Scope: the one-time / occasional **manual** steps an owner must perform to get
 already-shipped code reads. Everything here is **Bucket B** — it needs an owner
 account, a self-generated key, or a search-engine console toggle. None of it can
 be done autonomously by an agent, and **no code in `app/` ever claims one of
-these submissions happened** (the IndexNow path degrades to a truthful no-op
-until `INDEXNOW_KEY` is set — see §4).
+these submissions happened** — IndexNow performs only real POSTs and reports the
+upstream status verbatim (see §4). IndexNow itself now ships live-by-default with
+a committed **public** key, so no owner step is required to enable it; the owner
+steps below are for rotation and the other search consoles.
 
 This runbook is the counterpart to the shipped Bucket-A code:
 
@@ -16,7 +18,7 @@ This runbook is the counterpart to the shipped Bucket-A code:
 | `app/app/sitemap.ts` | Emits `sitemap.xml` (real routes + hreflang) | Submit its URL to GSC / Bing (§1, §2) |
 | `app/lib/analytics/ga.ts` `resolveSiteVerification()` | Renders GSC/Bing verification `<meta>` from env | Provide the tokens (§1, §2) |
 | `app/lib/analytics/ga.ts` `resolveGaMeasurementId()` | Loads GA4 from `NEXT_PUBLIC_GA_ID` | Confirm/rotate id + mark conversions (§5) |
-| `app/app/api/indexnow/route.ts` + `app/scripts/ping-indexnow.mjs` | Pings IndexNow (feeds Bing) | Generate key, deploy `<key>.txt`, set env (§4) |
+| `app/lib/seo/indexnow.ts` (+ `app/app/api/indexnow/route.ts`, `app/scripts/ping-indexnow.mjs`) | Submits URLs to IndexNow (fans out to Bing/Yandex/Seznam) with a committed public key | Nothing to enable; only **rotate** the key if desired (§4) |
 
 **Honesty contract:** these are the *manual* halves of otherwise-automated flows.
 Do not mark a step done until the search-engine console itself confirms it. The
@@ -108,68 +110,77 @@ not a prerequisite for IndexNow crawl.
 
 ---
 
-## 4. IndexNow (generate key, deploy validation file, verify the ping)
+## 4. IndexNow (live by default; only rotate if you want a new key)
 
-**Goal:** make the shipped IndexNow ping live. Until `INDEXNOW_KEY` is set, the
-endpoint and script are truthful **no-ops** (they never fabricate a submission).
+**Goal:** notify participating search engines (Bing, Yandex, Seznam, …) when
+URLs change. A single POST to `https://api.indexnow.org/indexnow` fans out to
+all participating engines. This is **already live** — no owner setup required.
 
-1. **Generate a key.** IndexNow keys are hex/UUID-like strings (8–128 chars,
-   `[a-zA-Z0-9-]`). A UUID works:
+### What ships (and why the key is committed)
 
-   ```bash
-   uuidgen | tr 'A-Z' 'a-z'
-   # e.g. 3f8c1e42-9a7b-4c1d-8e2f-6b0a5d9c7e11
-   ```
+The IndexNow key is **public by design**: the protocol requires it to be served
+at `https://recoder.xyz/<key>.txt` for anyone to read. So it is committed, and
+the site works out of the box. The committed artifacts are:
 
-2. **Set the env** in the deploy environment (do **not** commit the real value):
+| File | Role |
+|---|---|
+| `app/lib/seo/indexnow.ts` | Single source of truth: `DEFAULT_INDEXNOW_KEY`, key/origin resolution, payload builder, `submitUrls`/`submitUrl` (real POST, verbatim status, never throws) |
+| `app/public/fc855a24fb8ed402c70b39f17fe8b444.txt` | The key validation file (body = the key exactly), served at `https://recoder.xyz/fc855a24fb8ed402c70b39f17fe8b444.txt` |
+| `app/public/INDEXNOW_KEY.txt` | Human-readable pointer only — **not** a key file |
+| `app/app/api/indexnow/route.ts` | `POST /api/indexnow` (auth-gated) so a content-change flow or owner can trigger a submit |
+| `app/scripts/ping-indexnow.mjs` | Post-deploy sitemap-driven submit (also `pnpm seo:indexnow`) |
 
-   ```
-   INDEXNOW_KEY=<the-generated-key>
-   ```
+**Current committed key:** `fc855a24fb8ed402c70b39f17fe8b444`
 
-3. **Deploy the key validation file.** IndexNow requires a file served at
-   `https://recoder.xyz/<key>.txt` whose **body is exactly the key**. The repo
-   ships only a documented placeholder:
+### Verify it is live
 
-   ```
-   app/public/INDEXNOW_KEY.txt
-     └─ body: INDEXNOW_KEY_PLACEHOLDER_DO_NOT_USE_GENERATE_A_REAL_KEY
-   ```
+```bash
+curl -s https://recoder.xyz/fc855a24fb8ed402c70b39f17fe8b444.txt
+# must print exactly: fc855a24fb8ed402c70b39f17fe8b444
+```
 
-   At deploy time, generate the real file from `INDEXNOW_KEY` — e.g. write
-   `public/<key>.txt` containing just the key — so it is served at
-   `https://recoder.xyz/<key>.txt`. **Never commit the real `<key>.txt` or the
-   real key value to git.** (The placeholder filename `INDEXNOW_KEY.txt` is not
-   a valid key file itself — IndexNow expects the file named after the actual
-   key.)
+### Trigger a submission
 
-4. **Verify the file** is public and correct:
+- **Post-deploy script** (reads the live sitemap and submits every URL):
 
-   ```bash
-   curl -s https://recoder.xyz/<key>.txt   # must print exactly the key
-   ```
+  ```bash
+  pnpm --dir app seo:indexnow      # or: node app/scripts/ping-indexnow.mjs
+  # real POST to https://api.indexnow.org/indexnow; prints the upstream status
+  # verbatim (non-2xx = failure, not success). Origin override:
+  # NEXT_PUBLIC_SITE_URL / SITE_URL (must be https://…; default https://recoder.xyz)
+  ```
 
-5. **Verify the ping.** Two entry points, both degrade-truthful:
-   - Post-deploy script (reads the live sitemap's URL list and submits):
+- **API route** (`POST /api/indexnow`), for server-side content-change flows:
 
-     ```bash
-     node app/scripts/ping-indexnow.mjs
-     # key unset  → logs "skipped: no key", exits 0, NO network call
-     # key set    → real POST to https://api.indexnow.org/indexnow, prints
-     #              the upstream status verbatim (non-2xx = failure, not success)
-     ```
+  ```
+  Body: { "urls": ["https://recoder.xyz/pricing", ...] }   # legacy "urlList" also accepted
+  Auth (required): one of
+    - internal service signature headers (x-internal-service-key + x-internal-timestamp
+      + x-internal-nonce + x-internal-signature), OR
+    - x-admin-secret: <ADMIN_SECRET>
+  ```
 
-     Optional origin override for the script: `NEXT_PUBLIC_SITE_URL` or
-     `SITE_URL` (must be `https://…`; falls back to `https://recoder.xyz`).
-   - Route (`app/app/api/indexnow/route.ts`): `POST /api/indexnow` with a JSON
-     `urlList`. With the key unset it returns
-     `501 { submitted: false, reason: "INDEXNOW_KEY not configured" }` and makes
-     no network call. `submitted: true` is returned **only** on a real 2xx from
-     IndexNow.
+  Unauthenticated ⇒ `401 { submitted: false, reason: "Unauthorized" }`, no
+  network call. Invalid/empty body ⇒ `400` (zod-validated). `submitted: true` is
+  returned **only** on a real 2xx from IndexNow; upstream failures return the
+  upstream status verbatim.
 
-**Truthfulness:** neither path claims a submission that did not happen. If the
-key is absent, both are silent no-ops; the owner is responsible for the key,
-the file, and running the ping (typically wired into the deploy hook).
+### Rotate the key
+
+1. Pick a new key (8–128 chars, `[a-zA-Z0-9-]`), e.g. `openssl rand -hex 16`.
+2. Set it in the deploy env: `INDEXNOW_KEY=<new-key>` (a valid value here wins
+   over the committed default — see `resolveIndexNowKey()`).
+3. Serve a matching file: replace `app/public/<new-key>.txt` (body = the new key
+   exactly) and remove the old one. If you want the new key to also be the
+   committed default, update `DEFAULT_INDEXNOW_KEY` in `app/lib/seo/indexnow.ts`
+   **and** the duplicated constant in `app/scripts/ping-indexnow.mjs` (kept in
+   lockstep on purpose — the `.mjs` runs without a TS build).
+4. `curl` the new file to confirm it serves the exact key, then run the script.
+
+**Truthfulness:** every path performs a real HTTP POST and reports the upstream
+status verbatim; nothing is ever fabricated. There is no longer an "unset ⇒
+no-op" state because the key always resolves (env override or committed public
+default).
 
 ---
 
@@ -243,13 +254,16 @@ conversions so the funnel is countable in GA4.
 | `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` | `resolveSiteVerification()` → layout metadata | GSC meta tag omitted |
 | `NEXT_PUBLIC_BING_SITE_VERIFICATION` | `resolveSiteVerification()` → `msvalidate.01` | Bing meta tag omitted |
 | `NEXT_PUBLIC_GA_ID` | `resolveGaMeasurementId()` | Falls back to `G-V0G79DP41C` |
-| `INDEXNOW_KEY` | indexnow route + `ping-indexnow.mjs` | Truthful no-op (no ping) |
+| `INDEXNOW_KEY` | `resolveIndexNowKey()` (route + `ping-indexnow.mjs`) | Falls back to the committed public default `fc855a24fb8ed402c70b39f17fe8b444` |
+| `ADMIN_SECRET` | `POST /api/indexnow` auth (also internal-service signature) | Route rejects owner-triggered submits with 401 |
 | `NEXT_PUBLIC_SITE_URL` / `SITE_URL` | robots / sitemap origin / ping script | Falls back to `https://recoder.xyz` |
 | `ANALYTICS_INGEST_URL` | `trackServerEvent` | Log-only (no external POST) |
 
-**Never commit** any of these real values, and never commit a real
-`<key>.txt`. The only committed artifact is the documented placeholder
-`app/public/INDEXNOW_KEY.txt`.
+**Never commit** GSC/Bing/GA verification tokens or `ADMIN_SECRET`. The IndexNow
+key is the one deliberate exception — it is **public by design** and is committed
+(`DEFAULT_INDEXNOW_KEY` + `app/public/fc855a24fb8ed402c70b39f17fe8b444.txt`). If
+you rotate via `INDEXNOW_KEY` env, commit the matching `<key>.txt` too (it must
+be publicly served) — that is expected, not a leak.
 
 ---
 
@@ -260,5 +274,6 @@ conversions so the funnel is countable in GA4.
   endpoint + ping script, LTV aggregation view.
 - **Manual (owner, this runbook):** creating GSC/Bing/Brave properties, pasting
   verification tokens into env, submitting the sitemap, the Brave web-form
-  submit, generating the IndexNow key + deploying `<key>.txt`, and marking GA4
-  conversions. These cannot be automated and are not claimed done by any code.
+  submit, and marking GA4 conversions. IndexNow is no longer a manual step — it
+  ships live with a committed public key; only key **rotation** is manual (§4).
+  These cannot be automated and are not claimed done by any code.
