@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { RecoderEmpty, RecoderErrorRow, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
@@ -42,7 +43,7 @@ function RunRow({ run }: { run: RecoderRun }) {
     return (
         <div
             className="flex items-center gap-2 rounded border border-border px-2 py-1"
-            title={`${run.runId} Â· ${run.taskId}`}
+            title={`${run.runId} · ${run.taskId}`}
         >
             <span
                 className={cn(
@@ -90,21 +91,22 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-3">
             <div className="flex items-center gap-2">
-                <span className="font-semibold">Recoder â Runs</span>
+                <span className="font-semibold">Recoder - Runs</span>
             </div>
-            {error != "" && <div className="text-error text-sm">{error}</div>}
-            {loading && runs.length == 0 && events.length == 0 && (
-                <div className="text-secondary text-sm">Loadingâ¦</div>
-            )}
+            <RecoderErrorRow message={error} />
+            {loading && runs.length == 0 && events.length == 0 && <RecoderSkeleton rows={4} />}
             {showDisconnected && (
-                <div className="text-secondary text-sm">
-                    Not connected â Recoder is starting…
-                </div>
+                <RecoderEmpty title="Recoder is still starting…" hint="Runs will appear here once it is ready." />
             )}
             {connected && (
                 <div className="flex flex-col gap-1">
                     <div className="text-xs uppercase tracking-wide text-secondary">Runs</div>
-                    {showEmptyRuns && <div className="text-secondary text-sm">No runs yet.</div>}
+                    {showEmptyRuns && (
+                        <RecoderEmpty
+                            title="No runs yet"
+                            hint="Launch a coding agent to start one — press ⌘P for commands."
+                        />
+                    )}
                     {runs.map((run) => (
                         <RunRow key={run.runId} run={run} />
                     ))}

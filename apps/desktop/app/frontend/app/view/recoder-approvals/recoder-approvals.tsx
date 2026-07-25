@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { RecoderEmpty, RecoderErrorRow, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { RecoderApproval, RecoderApprovalsViewModel } from "./recoder-approvals-model";
@@ -58,17 +59,20 @@ function RecoderApprovalsView({ model }: ViewComponentProps<RecoderApprovalsView
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
-                <span className="font-semibold">Recoder â Approvals</span>
+                <span className="font-semibold">Recoder - Approvals</span>
             </div>
-            {error != "" && <div className="text-error text-sm">{error}</div>}
-            {actionError != "" && <div className="text-error text-sm">{actionError}</div>}
-            {loading && approvals.length == 0 && <div className="text-secondary text-sm">Loadingâ¦</div>}
+            <RecoderErrorRow message={error} />
+            <RecoderErrorRow message={actionError} />
+            {loading && approvals.length == 0 && <RecoderSkeleton rows={3} />}
             {showDisconnected && (
-                <div className="text-secondary text-sm">
-                    Not connected â Recoder is starting…
-                </div>
+                <RecoderEmpty title="Recoder is still starting…" hint="Pending approvals load once it is ready." />
             )}
-            {showEmpty && <div className="text-secondary text-sm">No approvals waiting.</div>}
+            {showEmpty && (
+                <RecoderEmpty
+                    title="No approvals waiting"
+                    hint="Risky actions pause here for your OK before they run."
+                />
+            )}
             <div className="flex flex-col gap-2">
                 {approvals.map((a) => {
                     const target = targetLabel(a);
@@ -99,14 +103,14 @@ function RecoderApprovalsView({ model }: ViewComponentProps<RecoderApprovalsView
                                     className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
                                     onClick={() => model.decide(a.approvalId, "approve")}
                                 >
-                                    {busy ? "â¦" : "Approve"}
+                                    {busy ? "…" : "Approve"}
                                 </button>
                                 <button
                                     disabled={busy}
                                     className="border border-border text-primary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer disabled:opacity-50"
                                     onClick={() => model.decide(a.approvalId, "reject")}
                                 >
-                                    {busy ? "â¦" : "Reject"}
+                                    {busy ? "…" : "Reject"}
                                 </button>
                             </div>
                         </div>

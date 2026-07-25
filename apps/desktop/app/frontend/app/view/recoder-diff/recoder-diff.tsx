@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { RecoderEmpty, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
@@ -144,12 +145,15 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
             {prStatus != "" && <div className="text-xs text-secondary">{prStatus}</div>}
 
             {showNotConnected && (
-                <div className="text-secondary text-sm">Not connected — Recoder is starting…</div>
+                <RecoderEmpty title="Recoder is still starting…" hint="Your workspace diffs load once it is ready." />
             )}
             {showNoWorkspaces && (
-                <div className="text-secondary text-sm">No workspaces yet — nothing to review.</div>
+                <RecoderEmpty
+                    title="No workspaces yet"
+                    hint="Press N in Workspaces to launch an agent, then review its diff here."
+                />
             )}
-            {loading && workspaces.length == 0 && <div className="text-secondary text-sm">Loading…</div>}
+            {loading && workspaces.length == 0 && <RecoderSkeleton rows={5} />}
 
             {selectedId != "" && (
                 <div className="flex flex-col gap-2 overflow-hidden">
@@ -166,7 +170,7 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                             )}
                         </div>
                     )}
-                    {diffLoading && <div className="text-secondary text-sm">Loading diff…</div>}
+                    {diffLoading && <RecoderSkeleton rows={8} />}
                     {!diffLoading && !hasPatch && (
                         <div className="text-secondary text-sm">{diffStatus != "" ? diffStatus : "No diff — the worktree matches its base."}</div>
                     )}
