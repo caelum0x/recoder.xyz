@@ -147,6 +147,12 @@ import { buildWorkspaceQueryRoutes } from './routes/workspaces-query.routes.js';
 import { buildRepoConfigRoutes } from './routes/repo-config.routes.js';
 import { RepoSetupService, repoKeyFor } from './services/repo-setup.service.js';
 import { PrStatusService } from './services/pr-status.service.js';
+import {
+  RepoCloneService,
+  type CloneRepoInput,
+  type CloneRepoOutcome,
+} from './services/repo-clone.service.js';
+import { PrChecksService, type WorkspaceChecksView } from './services/pr-checks.service.js';
 import { MergeabilityService, type MergeabilityView } from './services/mergeability.service.js';
 import { foldReadiness, type ReadinessView } from './services/readiness.service.js';
 import { createInMemoryRepoSetupStore } from './adapters/repo-setup-store.adapter.js';
@@ -267,6 +273,10 @@ export class ConductorComposer implements ConductorModule {
   private readonly repoSetup: RepoSetupService;
   /** Workspace pull-request status via the `gh` CLI (degrade-truthful, read-only). */
   private readonly prStatus: PrStatusService;
+  /** Per-check PR rollup via the same `gh` seam (`GET …/checks`; degrade-truthful). */
+  private readonly prChecks: PrChecksService;
+  /** GitHub repo clone seam (`POST /repos/clone`): gh-first, git fallback, never faked. */
+  private readonly repoClone: RepoCloneService;
   /** Read-only pre-merge conflict + base-divergence probe (git-native, degrade-truthful). */
   private readonly mergeability: MergeabilityService;
   /**
@@ -323,6 +333,12 @@ export class ConductorComposer implements ConductorModule {
     // Workspace PR status over the shared `gh` CLI seam (never throws; truthful
     // `available:false` when gh/worktree/branch is absent).
     this.prStatus = new PrStatusService({ logger: this.log });
+    // Per-check PR rollup over the SAME gh seam (never throws; truthful
+    // `available:false` when gh/auth/PR/GitHub-remote is absent).
+    this.prChecks = new PrChecksService({ logger: this.log });
+    // GitHub clone seam: `gh repo clone` first (inherits gh auth for private
+    // repos), plain `git clone` fallback; never throws, never a faked clone.
+    this.repoClone = new RepoCloneService({ logger: this.log });
     // Read-only merge preflight over the SAME git seam (never throws; truthful
     // `available:false` when git/worktree/branch is absent — never a fake clean).
     this.mergeability = new MergeabilityService({ logger: this.log });
@@ -1224,6 +1240,29 @@ export class ConductorComposer implements ConductorModule {
   async githubRepos(): Promise<readonly GithubRepoView[]> {
     if (!this.github) return [];
     return this.github.repos();
+  }
+
+  /**
+   * Clone a GitHub repo onto the box (`POST /repos/clone`). Ungated like the
+   * other local-box reads/probes on this surface: it writes only a fresh
+   * directory under the caller-chosen (or default) repos dir — every workspace
+   * launched FROM it still passes the governed `workspace.create` gate. Never
+   * throws: every failure is a typed, truthful outcome.
+   */
+  async cloneRepo(input: CloneRepoInput): Promise<CloneRepoOutcome> {
+    return this.repoClone.clone(input);
+  }
+
+  /**
+   * The workspace's per-check PR rollup (`GET …/checks`) via `gh pr view` run
+   * in the worktree. Null when the workspace does not exist (→ 404 at the
+   * edge); otherwise ALWAYS a truthful view (`available:false` + reason when
+   * gh/auth/PR/GitHub-remote is absent — never fabricated).
+   */
+  async workspaceChecks(workspaceId: string): Promise<WorkspaceChecksView | null> {
+    const workspace = await this.getWorkspace(workspaceId);
+    if (!workspace) return null;
+    return this.prChecks.checks(workspace);
   }
 
   // --- workspace detail (the run screen): reads --------------------------------

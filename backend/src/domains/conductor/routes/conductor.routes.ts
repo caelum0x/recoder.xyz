@@ -29,6 +29,8 @@
  *   GET    /api/conductor/runtimes                installed agent CLIs (PATH-probed)
  *   GET    /api/conductor/github/status           GitHub connection + identity (token-free)
  *   GET    /api/conductor/github/repos            detected account's repos via gh (empty when gh absent)
+ *   POST   /api/conductor/repos/clone             clone a GitHub repo (gh-first, git fallback)
+ *   GET    /api/conductor/workspaces/:id/checks   per-check PR rollup via gh (truthful degrade)
  *   GET    /api/conductor/health                  conductor readiness summary + substrate.tmuxBin/tmuxSocket
  *   GET    /api/conductor/reconcile/findings      reconcile findings (operator review)
  *   GET    /api/conductor/sessions                live recoder-* tmux sessions (read-only attach list)
@@ -49,6 +51,7 @@ import type { WorkspaceState, WorkspaceSubstrate } from '@recoder/agent-os';
 import type { ConductorModule } from '../index.js';
 import type { CreateConductorWorkspaceInput, ConductorWriteResult } from '../conductor-module.js';
 import type { PreviewVerifyOptions } from '../services/preview-verify.service.js';
+import type { CloneRepoErrorCode } from '../services/repo-clone.service.js';
 import type { PreviewVerifyAssertion } from '../ports/preview-verify.port.js';
 import { resolveConductorTmuxSocket } from '../tmux-socket.js';
 import { createRecoderSessionLister } from '../adapters/recoder-session-lister.adapter.js';
@@ -497,6 +500,47 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     }),
   );
 
+  // Clone a GitHub repo onto the box ("New from GitHub"): `gh repo clone` when
+  // gh is present (inherits gh auth for private repos), plain `git clone`
+  // fallback. Only GitHub https/SSH urls pass validation (400 INVALID_INPUT);
+  // an existing non-empty target dir is a truthful 409; neither tool on PATH
+  // is a truthful 503; a clone failure surfaces the tool's stderr tail
+  // (credential fragments scrubbed) — never a fabricated clone.
+  router.post(
+    '/repos/clone',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const url = requireString(body, 'url');
+      const destDir =
+        typeof body.destDir === 'string' && body.destDir.length > 0 ? body.destDir : undefined;
+      const result = await module.cloneRepo({ url, ...(destDir ? { destDir } : {}) });
+      if (result.ok) {
+        sendSuccess(res, { repoPath: result.repoPath, clonedWith: result.clonedWith });
+        return;
+      }
+      sendError(res, createError(CLONE_ERROR_CODE[result.code], result.message));
+    }),
+  );
+
+  // Per-check PR rollup via `gh pr view --json statusCheckRollup,mergeable,
+  // reviewDecision` run in the workspace worktree (gh resolves the branch's PR
+  // itself). Degrade-truthful: gh missing / unauthenticated / no PR / not a
+  // GitHub remote is a 200 with `available:false` + a truthful reason — NEVER
+  // fabricated. A missing workspace is a truthful 404.
+  router.get(
+    '/workspaces/:id/checks',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      const view = await module.workspaceChecks(req.params.id);
+      if (!view) {
+        sendError(res, createError(ErrorCode.NOT_FOUND, 'workspace not found'));
+        return;
+      }
+      sendSuccess(res, view);
+    }),
+  );
+
   // Conductor readiness summary the cockpit polls: can work be launched here.
   // Also carries `substrate.tmuxBin` — the effective pinned tmux binary (config
   // pin, else PATH `tmux`; durable-shell unify §A1a) — and `substrate.tmuxSocket`
@@ -688,6 +732,14 @@ function optionalString(value: unknown): string | undefined {
 function isSubstrate(value: unknown): value is WorkspaceSubstrate {
   return typeof value === 'string' && (SUBSTRATES as readonly string[]).includes(value);
 }
+
+/** Clone outcome → the contract's error code (400 / 409 / 503). */
+const CLONE_ERROR_CODE: Readonly<Record<CloneRepoErrorCode, ErrorCode>> = {
+  invalid_input: ErrorCode.INVALID_INPUT,
+  dest_exists: ErrorCode.CONFLICT,
+  no_tool: ErrorCode.SERVICE_UNAVAILABLE,
+  clone_failed: ErrorCode.SERVICE_UNAVAILABLE,
+};
 
 const MERGE_STRATEGIES = ['squash', 'merge', 'rebase'] as const;
 

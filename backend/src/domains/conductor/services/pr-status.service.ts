@@ -74,8 +74,12 @@ const defaultExec: PrStatusExec = {
   which,
 };
 
-/** Does a gh failure mean "this branch has no PR" (vs. an auth/network error)? */
-function isNoPrError(err: ExecError): boolean {
+/**
+ * Does a gh failure mean "this branch has no PR" (vs. an auth/network error)?
+ * Exported for the sibling `pr-checks.service.ts` so the classification lives
+ * in exactly one place.
+ */
+export function isNoPrError(err: ExecError): boolean {
   const text = `${err.message}\n${err.stderr}`.toLowerCase();
   return (
     /no (open )?pull requests? found/.test(text) ||
