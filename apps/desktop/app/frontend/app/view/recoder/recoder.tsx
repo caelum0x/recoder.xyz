@@ -353,7 +353,10 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const coldStart = workspaces.length == 0 && isConnectivityError(error);
     const showGettingStarted = !loading && workspaces.length == 0 && (error == "" || coldStart) && !launchOpen;
     const needsPrompt = !interactive && prompt.trim() == "";
-    const canLaunch = !posting && repoPath.trim() != "" && runtimeId != "" && !needsPrompt;
+    // Block launch into a confirmed non-git folder — the worktree add would fail. The
+    // inline "Not a git repository" warning below explains it; repoIsGit is optimistic
+    // (true until the async check confirms otherwise) so this never blocks prematurely.
+    const canLaunch = !posting && repoPath.trim() != "" && runtimeId != "" && !needsPrompt && repoIsGit;
     const disabledReason = launchDisabledReason(repoPath, runtimeId, needsPrompt, setup.probed, readyAgents.length);
     const parallelAgents = readyAgents.filter((a) => a.runtimeId != runtimeId);
     const allParallelSelected =
