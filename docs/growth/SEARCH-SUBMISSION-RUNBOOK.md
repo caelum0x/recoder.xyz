@@ -18,7 +18,7 @@ This runbook is the counterpart to the shipped Bucket-A code:
 | `app/app/sitemap.ts` | Emits `sitemap.xml` (real routes + hreflang) | Submit its URL to GSC / Bing (§1, §2) |
 | `app/lib/analytics/ga.ts` `resolveSiteVerification()` | Renders GSC/Bing verification `<meta>` from env | Provide the tokens (§1, §2) |
 | `app/lib/analytics/ga.ts` `resolveGaMeasurementId()` | Loads GA4 from `NEXT_PUBLIC_GA_ID` | Confirm/rotate id + mark conversions (§5) |
-| `app/lib/seo/indexnow.ts` (+ `app/app/api/indexnow/route.ts`, `app/scripts/ping-indexnow.mjs`) | Submits URLs to IndexNow (fans out to Bing/Yandex/Seznam) with a committed public key | Nothing to enable; only **rotate** the key if desired (§4) |
+| `app/lib/seo/indexnow.ts` (+ route, `ping-indexnow.mjs`, CMS `afterChange`/`afterDelete` hooks, guarded `postbuild`) | Submits URLs to IndexNow (fans out to Bing/Yandex/Seznam) with a committed public key — **automatically** on CMS publish and full deploy (§4) | Nothing to enable; only **rotate** the key if desired (§4) |
 
 **Honesty contract:** these are the *manual* halves of otherwise-automated flows.
 Do not mark a step done until the search-engine console itself confirms it. The
@@ -124,13 +124,57 @@ the site works out of the box. The committed artifacts are:
 
 | File | Role |
 |---|---|
-| `app/lib/seo/indexnow.ts` | Single source of truth: `DEFAULT_INDEXNOW_KEY`, key/origin resolution, payload builder, `submitUrls`/`submitUrl` (real POST, verbatim status, never throws) |
+| `app/lib/seo/indexnow.ts` | Single source of truth: `DEFAULT_INDEXNOW_KEY`, key/origin resolution, payload builder, `submitUrls`/`submitUrl` (real POST, verbatim status, never throws), plus `siteUrlForPath()` + `isIndexNowSubmissionEnabled()` used by the automatic triggers |
 | `app/public/fc855a24fb8ed402c70b39f17fe8b444.txt` | The key validation file (body = the key exactly), served at `https://recoder.xyz/fc855a24fb8ed402c70b39f17fe8b444.txt` |
 | `app/public/INDEXNOW_KEY.txt` | Human-readable pointer only — **not** a key file |
 | `app/app/api/indexnow/route.ts` | `POST /api/indexnow` (auth-gated) so a content-change flow or owner can trigger a submit |
-| `app/scripts/ping-indexnow.mjs` | Post-deploy sitemap-driven submit (also `pnpm seo:indexnow`) |
+| `app/lib/cms/hooks/indexnow.ts` | Payload `afterChange`/`afterDelete` hook factories — the **per-content** trigger (wired into `BlogPosts` + `ChangelogEntries`) |
+| `app/scripts/ping-indexnow.mjs` | Sitemap-driven submit of every URL (also `pnpm seo:indexnow`) |
+| `app/scripts/postbuild-indexnow.mjs` | Guarded `postbuild` wrapper — the **full-deploy** trigger (off unless `INDEXNOW_ON_BUILD=1`; never fails the build) |
 
 **Current committed key:** `fc855a24fb8ed402c70b39f17fe8b444`
+
+### Automatic triggers (wired — no manual step)
+
+Submission is now automatic on the real content-change / deploy path. Two
+independent, degrade-safe triggers exist; both reuse the same truthful core:
+
+1. **Per-content — Payload CMS hooks (primary).**
+   `app/lib/cms/hooks/indexnow.ts` provides `indexNowAfterChange` /
+   `indexNowAfterDelete`, wired into the two published collections:
+   - `BlogPosts` (`app/lib/cms/collections/BlogPosts.ts`) → on publish/update or
+     delete, submits `https://recoder.xyz/blog/<slug>` **and** the `/blog` index.
+   - `ChangelogEntries` (`app/lib/cms/collections/ChangelogEntries.ts`) → submits
+     the single `/changelog` listing page (changelog has no per-entry route).
+
+   Guarantees:
+   - **Published-only.** Draft/autosave saves (`_status !== 'published'`) are
+     skipped, so unpublished content is never announced.
+   - **Never blocks/fails the write.** The submit is fire-and-forget,
+     `submitUrls` never throws, and every path is wrapped.
+   - **Prod-gated.** Only POSTs when `isIndexNowSubmissionEnabled()` is true —
+     i.e. `NODE_ENV === 'production'` (or `INDEXNOW_ENABLE_IN_DEV=1` for testing)
+     — so local/CI CMS edits never ping live search engines.
+   - Requires the CMS to be live (`PAYLOAD_CMS_ENABLED=true`); when the CMS is
+     disabled these collections aren't loaded and no hook fires.
+
+2. **Full-deploy — `postbuild` sitemap ping (belt-and-braces).**
+   `postbuild` npm script → `app/scripts/postbuild-indexnow.mjs`, a guarded
+   wrapper around `ping-indexnow.mjs` that re-pings **every** sitemap URL after a
+   build:
+   - **Off by default.** Runs only when `INDEXNOW_ON_BUILD=1` is set in the
+     environment. This is required because `pnpm build` also runs inside the
+     Docker image build and in CI — contexts where the site isn't live yet, so a
+     ping would announce stale/undeployed content. The deploy host sets
+     `INDEXNOW_ON_BUILD=1` only for a real production build that goes live.
+   - **Never fails the build.** Any IndexNow error is logged and swallowed; the
+     wrapper always exits 0.
+   - Because the underlying ping reads the **live** sitemap, it is only
+     meaningful once the new build is serving. Note the current production app
+     deploy invokes `next build` directly / builds via Docker (`pnpm build`
+     inside the image) — the in-Docker `postbuild` is intentionally a no-op
+     (gate unset). For those paths, either export `INDEXNOW_ON_BUILD=1` in a
+     post-go-live build step, or run the explicit post-deploy submit below.
 
 ### Verify it is live
 
@@ -139,7 +183,10 @@ curl -s https://recoder.xyz/fc855a24fb8ed402c70b39f17fe8b444.txt
 # must print exactly: fc855a24fb8ed402c70b39f17fe8b444
 ```
 
-### Trigger a submission
+### Trigger a submission manually
+
+The triggers above are automatic; these manual entry points remain for ad-hoc
+re-submits and server-side flows.
 
 - **Post-deploy script** (reads the live sitemap and submits every URL):
 
@@ -257,6 +304,8 @@ conversions so the funnel is countable in GA4.
 | `INDEXNOW_KEY` | `resolveIndexNowKey()` (route + `ping-indexnow.mjs`) | Falls back to the committed public default `fc855a24fb8ed402c70b39f17fe8b444` |
 | `ADMIN_SECRET` | `POST /api/indexnow` auth (also internal-service signature) | Route rejects owner-triggered submits with 401 |
 | `NEXT_PUBLIC_SITE_URL` / `SITE_URL` | robots / sitemap origin / ping script | Falls back to `https://recoder.xyz` |
+| `INDEXNOW_ON_BUILD` | `postbuild` wrapper (`postbuild-indexnow.mjs`) | `postbuild` ping is skipped (safe in dev/CI/Docker builds); set `=1` on a live production build to enable |
+| `INDEXNOW_ENABLE_IN_DEV` | `isIndexNowSubmissionEnabled()` (CMS hooks) | CMS hooks submit only in `NODE_ENV=production`; set `=1` to force submits in dev for testing |
 | `ANALYTICS_INGEST_URL` | `trackServerEvent` | Log-only (no external POST) |
 
 **Never commit** GSC/Bing/GA verification tokens or `ADMIN_SECRET`. The IndexNow
@@ -271,7 +320,9 @@ be publicly served) — that is expected, not a leak.
 
 - **Automatic (code, already shipped):** `robots.txt`, `sitemap.xml` with
   hreflang, GSC/Bing verification meta rendering, GA4 loader, IndexNow
-  endpoint + ping script, LTV aggregation view.
+  endpoint + ping script, **IndexNow content-change hooks** (Payload
+  `afterChange`/`afterDelete` on BlogPosts + ChangelogEntries) and the guarded
+  `postbuild` full-deploy re-ping, LTV aggregation view.
 - **Manual (owner, this runbook):** creating GSC/Bing/Brave properties, pasting
   verification tokens into env, submitting the sitemap, the Brave web-form
   submit, and marking GA4 conversions. IndexNow is no longer a manual step — it

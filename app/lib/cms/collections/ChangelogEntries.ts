@@ -1,4 +1,9 @@
 import type { CollectionConfig } from 'payload';
+import { indexNowAfterChange, indexNowAfterDelete } from '../hooks/indexnow';
+
+// Changelog entries have no per-entry route; they render on the single
+// /changelog listing page, so any change re-pings that one URL.
+const changelogPaths = (): string[] => ['/changelog'];
 
 export const ChangelogEntries: CollectionConfig = {
   slug: 'changelog-entries',
@@ -11,6 +16,12 @@ export const ChangelogEntries: CollectionConfig = {
   },
   versions: {
     drafts: true,
+  },
+  hooks: {
+    // Notify search engines the moment the changelog listing changes.
+    // Degrade-safe + fire-and-forget: never blocks or fails the CMS write.
+    afterChange: [indexNowAfterChange('changelog-entries', changelogPaths)],
+    afterDelete: [indexNowAfterDelete('changelog-entries', changelogPaths)],
   },
   fields: [
     {

@@ -6,6 +6,7 @@
     "dev": "next dev",
     "prebuild": "node scripts/verify-next-security.js",
     "build": "pnpm exec prisma generate && next build",
+    "postbuild": "node scripts/postbuild-indexnow.mjs",
     "start": "next start",
     "cms:importmap": "payload generate:importmap",
     "cms:migrate": "payload migrate",
