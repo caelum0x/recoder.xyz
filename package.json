@@ -76,6 +76,10 @@
     "production:package": "npm-run-all production:package:extension production:package:docker",
     "production:package:extension": "echo 'Deprecated: extension packaging is not configured in this repo'",
     "production:package:docker": "docker-compose build",
+    "changeset": "changeset",
+    "changeset:status": "changeset status",
+    "version-packages": "changeset version",
+    "release:tag": "changeset tag",
     "format": "prettier --write . || echo 'Prettier not configured'",
     "format:check": "prettier --check . || echo 'Prettier not configured'",
     "check-types": "pnpm run typecheck",
@@ -186,6 +190,7 @@
   "author": "Recoder Team",
   "license": "MIT",
   "devDependencies": {
+    "@changesets/cli": "^2.29.5",
     "@types/glob": "^8.1.0",
     "@types/node": "^20.19.11",
     "@types/react": "^19.1.10",
