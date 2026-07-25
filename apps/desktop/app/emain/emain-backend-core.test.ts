@@ -32,7 +32,8 @@ import {
     resolveBeadsBinPath,
     resolveLoginShellPath,
     resolveTmuxBin,
-    removeCockpitWidgetConfig,
+    removeRetiredWidgetConfig,
+    RetiredWidgetKeys,
     writeWaveAIGatewayConfig,
 } from "./emain-backend-core";
 
@@ -667,42 +668,47 @@ describe("writeWaveAIGatewayConfig", () => {
     });
 });
 
-describe("removeCockpitWidgetConfig", () => {
-    it("neutralizes a stale cockpit widget by pinning the key to null (merge-delete)", () => {
+describe("removeRetiredWidgetConfig", () => {
+    it("neutralizes stale retired widgets by pinning every retired key to null (merge-delete)", () => {
         const fs = makeMemFs({
             [path.join("/cfg", "widgets.json")]: JSON.stringify({
                 "defwidget@recoder-cockpit": { label: "cockpit", blockdef: { meta: { view: "web" } } },
+                "defwidget@recoder-approvals": { label: "approvals", blockdef: { meta: { view: "recoder-approvals" } } },
             }),
         });
-        const { widgetsPath, removed } = removeCockpitWidgetConfig({ configDir: "/cfg", fs: fs as unknown as FsLike });
+        const { widgetsPath, removed } = removeRetiredWidgetConfig({ configDir: "/cfg", fs: fs as unknown as FsLike });
         expect(removed).toBe(true);
         const widgets = JSON.parse(fs.files.get(widgetsPath));
-        // null (not absent) so wconfig deletes the DEFAULT's cockpit entry too.
-        expect(widgets["defwidget@recoder-cockpit"]).toBeNull();
+        // null (not absent) so wconfig deletes the DEFAULT's entry too.
+        for (const key of RetiredWidgetKeys) {
+            expect(widgets[key]).toBeNull();
+        }
     });
 
-    it("pins null even when no user file exists (hides the embedded default), preserving other widgets", () => {
+    it("pins null even when no user file exists (hides embedded defaults from stale binaries), preserving other widgets", () => {
         const fs = makeMemFs({
             [path.join("/cfg", "widgets.json")]: JSON.stringify({ "widget@mine": { label: "mine" } }),
         });
-        const { removed } = removeCockpitWidgetConfig({ configDir: "/cfg", fs: fs as unknown as FsLike });
+        const { removed } = removeRetiredWidgetConfig({ configDir: "/cfg", fs: fs as unknown as FsLike });
         expect(removed).toBe(true);
         const widgets = JSON.parse(fs.files.get(path.join("/cfg", "widgets.json")));
         expect(widgets["widget@mine"]).toEqual({ label: "mine" });
         expect(widgets["defwidget@recoder-cockpit"]).toBeNull();
+        expect(widgets["defwidget@sysinfo"]).toBeNull();
     });
 
-    it("is a no-op when the key is already null", () => {
+    it("is a no-op when every retired key is already null", () => {
+        const allNull = Object.fromEntries(RetiredWidgetKeys.map((key) => [key, null]));
         const fs = makeMemFs({
-            [path.join("/cfg", "widgets.json")]: JSON.stringify({ "defwidget@recoder-cockpit": null }),
+            [path.join("/cfg", "widgets.json")]: JSON.stringify(allNull),
         });
-        const { removed } = removeCockpitWidgetConfig({ configDir: "/cfg", fs: fs as unknown as FsLike });
+        const { removed } = removeRetiredWidgetConfig({ configDir: "/cfg", fs: fs as unknown as FsLike });
         expect(removed).toBe(false);
     });
 
     it("recovers from a corrupt widgets.json instead of throwing", () => {
         const fs = makeMemFs({ [path.join("/cfg", "widgets.json")]: "not-json{" });
-        const { removed } = removeCockpitWidgetConfig({ configDir: "/cfg", fs: fs as unknown as FsLike });
+        const { removed } = removeRetiredWidgetConfig({ configDir: "/cfg", fs: fs as unknown as FsLike });
         expect(removed).toBe(false);
     });
 });
