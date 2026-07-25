@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { agentLabel } from "./recoder-agent-labels";
 import { RecoderCommandPalette, type RecoderCommand } from "./recoder-command-palette";
 import { RecoderComparePanel } from "./recoder-compare";
+import { isConnectivityError } from "./recoder-errors";
 import { RecoderIdentityAffordance } from "./recoder-identity";
 import { RecoderIdentityModel } from "./recoder-identity-model";
 import {
@@ -345,7 +346,11 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         }
     };
 
-    const showGettingStarted = !loading && workspaces.length == 0 && error == "" && !launchOpen;
+    // First launch: the embedded backend on :3100 may not be up yet, so refresh()
+    // surfaces a raw transport error on an empty board. Treat that as the calm
+    // still-starting state rather than an alarming failure row.
+    const coldStart = workspaces.length == 0 && isConnectivityError(error);
+    const showGettingStarted = !loading && workspaces.length == 0 && (error == "" || coldStart) && !launchOpen;
     const needsPrompt = !interactive && prompt.trim() == "";
     const canLaunch = !posting && repoPath.trim() != "" && runtimeId != "" && !needsPrompt;
     const disabledReason = launchDisabledReason(repoPath, runtimeId, needsPrompt, setup.probed, readyAgents.length);
@@ -428,7 +433,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                 </button>
             </div>
 
-            <RecoderErrorRow message={error} />
+            <RecoderErrorRow message={coldStart ? "" : error} />
             {loading && workspaces.length == 0 && error == "" && <RecoderSkeleton rows={3} />}
 
             {launchOpen && (
