@@ -20,16 +20,19 @@ export function resolveRuntimeCommand(
       `unsupported conductor runtime: ${runtimeId} (supported: ${CONDUCTOR_RUNTIME_IDS.join(', ')})`,
     );
   }
-  if (!opts.prompt || !opts.prompt.trim()) {
+  const spec = RUNTIME_SPECS[runtimeId];
+  // Interactive request → the TUI variant when the runtime has one; otherwise the
+  // headless command (degrade-safe).
+  const useInteractive = Boolean(opts.interactive && spec.buildInteractive);
+  // A prompt is REQUIRED for a headless run — it executes the task and exits, so an
+  // empty prompt has nothing to do. An interactive TUI opens fine with NO prompt
+  // (the user types their first message in it), so allow an empty one there.
+  if ((!opts.prompt || !opts.prompt.trim()) && !useInteractive) {
     throw new SubstrateError(
       SubstrateErrorCode.INVALID_INPUT,
       'prompt is required to resolve a runtime command',
     );
   }
-  const spec = RUNTIME_SPECS[runtimeId];
-  // Interactive request → the TUI variant when the runtime has one; otherwise the
-  // headless command (degrade-safe).
-  const commandLine =
-    opts.interactive && spec.buildInteractive ? spec.buildInteractive(opts) : spec.build(opts);
+  const commandLine = useInteractive ? spec.buildInteractive!(opts) : spec.build(opts);
   return { runtimeId, bin: spec.bin, commandLine };
 }
