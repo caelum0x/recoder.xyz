@@ -3,10 +3,12 @@
 
 import { createBlock, getApi } from "@/app/store/global";
 import { useAtom, useAtomValue } from "jotai";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { agentLabel } from "./recoder-agent-labels";
+import { RecoderCommandPalette, type RecoderCommand } from "./recoder-command-palette";
 import { RecoderComparePanel } from "./recoder-compare";
 import { RecoderIdentityAffordance } from "./recoder-identity";
+import { RecoderIdentityModel } from "./recoder-identity-model";
 import {
     RecoderViewModel,
     type RecoderDiffSummary,
@@ -155,6 +157,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const rowStatus = useAtomValue(model.rowStatusAtom);
     const busyRow = useAtomValue(model.busyRowAtom);
     const [launchOpen, setLaunchOpen] = useAtom(model.launchOpenAtom);
+    const [paletteOpen, setPaletteOpen] = useAtom(model.commandPaletteOpenAtom);
+    const identity = useAtomValue(RecoderIdentityModel.getInstance().identityAtom);
     const [selectedId, setSelectedId] = useAtom(model.selectedWorkspaceIdAtom);
     const [repoPath, setRepoPath] = useAtom(model.launchRepoPathAtom);
     const recentRepos = useAtomValue(model.recentReposAtom);
@@ -173,6 +177,22 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         const id = setInterval(() => model.refresh(), 6000);
         return () => clearInterval(id);
     }, [model]);
+
+    // Capture-phase so it beats Wave's window keyhandler; ⌘P is not bound in
+    // keymodel.ts globalKeyMap, so there is no conflict to arbitrate. preventDefault
+    // also suppresses the OS print dialog.
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (!((e.metaKey || e.ctrlKey) && e.key.toLowerCase() == "p" && !e.shiftKey && !e.altKey)) {
+                return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            setPaletteOpen((v) => !v);
+        };
+        document.addEventListener("keydown", handler, true);
+        return () => document.removeEventListener("keydown", handler, true);
+    }, [setPaletteOpen]);
 
     // A SINGLE interactive launch drops the user straight into the session. Guard
     // on the workspace id so a re-render / poll can never reopen it, and never
@@ -297,6 +317,50 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         }
         setRepoPath(picked);
     };
+
+    // Live command list for ⌘P: primary hub actions first, then a dynamic row per
+    // running workspace and per parallel group, then an optional sign-in when
+    // signed out. Every agent/workspace name routes through agentLabel — no raw
+    // runtime ids reach the palette.
+    const commands = useMemo<RecoderCommand[]>(() => {
+        const list: RecoderCommand[] = [
+            { id: "launch", title: "Launch a coding agent", run: () => setLaunchOpen(true) },
+            {
+                id: "browse",
+                title: "Browse folder…",
+                run: () => {
+                    setLaunchOpen(true);
+                    browseFolder();
+                },
+            },
+            { id: "review", title: "Review workspace diff", run: openReview },
+        ];
+        for (const ws of workspaces) {
+            list.push({
+                id: `session-${ws.workspaceId}`,
+                title: `Open session — ${agentLabel(ws.runtimeId)} · ${ws.branch}`,
+                run: () => openSession(ws.workspaceId),
+            });
+        }
+        for (const group of groups) {
+            if (group.workspaces.length <= 1) {
+                continue;
+            }
+            list.push({
+                id: `compare-${group.taskGroup}`,
+                title: `Compare parallel group — ${group.workspaces.length} agents`,
+                run: () => model.toggleCompare(group.taskGroup ?? "", group.workspaces),
+            });
+        }
+        if (identity == null) {
+            list.push({
+                id: "signin",
+                title: "Sign in with Recoder",
+                run: () => RecoderIdentityModel.getInstance().signIn(),
+            });
+        }
+        return list;
+    }, [workspaces, groups, identity, model, setLaunchOpen]);
 
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2" onKeyDown={onBoardKeyDown}>
@@ -610,6 +674,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     );
                 })}
             </div>
+
+            {paletteOpen && <RecoderCommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
         </div>
     );
 }
