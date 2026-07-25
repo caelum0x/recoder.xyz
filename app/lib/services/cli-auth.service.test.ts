@@ -59,6 +59,7 @@ describe('pollDeviceCode identity payload', () => {
     const result = await CLIAuthService.pollDeviceCode('device_code_1');
 
     expect(result.status).toBe('authorized');
+    if (!('user' in result)) throw new Error('Expected authorized result with user');
     expect(result.user).toMatchObject({
       email: 'arhan@recoder.xyz',
       name: 'Arhan Subasi',
@@ -79,6 +80,7 @@ describe('pollDeviceCode identity payload', () => {
 
     const result = await CLIAuthService.pollDeviceCode('device_code_1');
 
+    if (!('user' in result)) throw new Error('Expected authorized result with user');
     expect(result.user).toMatchObject({ name: 'Arhan Subasi' });
     expect(result.user).not.toHaveProperty('avatarUrl');
   });

@@ -3,7 +3,8 @@ export type EcosystemAppId =
   | "agency"
   | "pm"
   | "ui"
-  | "agents";
+  | "agents"
+  | "web";
 
 export interface EcosystemApp {
   id: EcosystemAppId;
@@ -81,6 +82,10 @@ export const RECODER_ECOSYSTEM_URLS = {
   home: "https://recoder.xyz",
   ui: "https://ui.recoder.xyz",
   stagingHome: "https://staging.recoder.xyz",
+  agents: "https://agents.recoder.xyz",
+  web: "https://web.recoder.xyz",
+  pm: "https://pm.recoder.xyz",
+  agency: "https://agency.recoder.xyz",
 } as const;
 
 export const RECODER_SETTINGS_URLS = {
