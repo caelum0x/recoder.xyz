@@ -744,6 +744,14 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     {shortTaskGroup(taskGroup)}
                                 </span>
                                 <div className="flex-1" />
+                                {/* explicit click, not an auto-open — parallel launches never AUTO-open */}
+                                <button
+                                    className={QUIET_BTN}
+                                    onClick={() => group.workspaces.forEach((ws) => openSession(ws.workspaceId))}
+                                    title={`Open a session for each of the ${group.workspaces.length} agents`}
+                                >
+                                    Open all
+                                </button>
                                 <button
                                     className={QUIET_BTN}
                                     onClick={() => model.toggleCompare(taskGroup, group.workspaces)}
