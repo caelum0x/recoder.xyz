@@ -185,6 +185,57 @@ describe('foldReadiness', () => {
     expect(signalOf(view, 'preview')?.status).toBe('fail');
   });
 
+  it('(j) merged → delivered (lifecycle pass "workspace merged"), never not_ready/still-working', () => {
+    const view = foldReadiness({ state: 'merged' as WorkspaceState });
+    expect(view.verdict).toBe('delivered');
+    expect(view.verdict).not.toBe('not_ready');
+    const lifecycle = signalOf(view, 'lifecycle');
+    expect(lifecycle?.status).toBe('pass');
+    expect(lifecycle?.detail).toBe('workspace merged');
+    expect(lifecycle?.detail).not.toContain('still working');
+    expect(view.blockers).toEqual([]);
+  });
+
+  it('(k) merged + a stale conflicting merge probe → still delivered (lifecycle truth wins)', () => {
+    const view = foldReadiness({
+      state: 'merged' as WorkspaceState,
+      mergeability: conflictingMerge(['src/a.ts']),
+    });
+    expect(view.verdict).toBe('delivered');
+    expect(view.blockers).toEqual([]);
+  });
+
+  it('(l) archived → terminal (lifecycle unknown "workspace archived"), never still-working', () => {
+    const view = foldReadiness({ state: 'archived' as WorkspaceState });
+    expect(view.verdict).toBe('terminal');
+    const lifecycle = signalOf(view, 'lifecycle');
+    expect(lifecycle?.status).toBe('unknown');
+    expect(lifecycle?.detail).toBe('workspace archived');
+    expect(lifecycle?.detail).not.toContain('still working');
+  });
+
+  it('(m) cancelled → terminal (lifecycle unknown "workspace cancelled")', () => {
+    const view = foldReadiness({ state: 'cancelled' as WorkspaceState });
+    expect(view.verdict).toBe('terminal');
+    expect(signalOf(view, 'lifecycle')?.detail).toBe('workspace cancelled');
+  });
+
+  it('(n) failed → blocked with a truthful delivery-failed blocker + lifecycle fail', () => {
+    const view = foldReadiness({ state: 'failed' as WorkspaceState });
+    expect(view.verdict).toBe('blocked');
+    expect(view.blockers).toEqual(['workspace delivery failed']);
+    const lifecycle = signalOf(view, 'lifecycle');
+    expect(lifecycle?.status).toBe('fail');
+    expect(lifecycle?.detail).not.toContain('still working');
+  });
+
+  it('(o) changes_requested (pre-review rework) → not_ready and lifecycle still working', () => {
+    const view = foldReadiness({ state: 'changes_requested' as WorkspaceState });
+    expect(view.verdict).toBe('not_ready');
+    expect(signalOf(view, 'lifecycle')?.status).toBe('pending');
+    expect(signalOf(view, 'lifecycle')?.detail).toContain('still working');
+  });
+
   it('(i) all signals absent (running) → 4 unknown/pending signals, empty blockers, not_ready', () => {
     const input: ReadinessInput = { state: 'running' as WorkspaceState };
     const view = foldReadiness(input);

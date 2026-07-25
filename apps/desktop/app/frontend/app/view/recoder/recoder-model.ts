@@ -262,7 +262,7 @@ type ReadinessSignal = {
 // The folded merge-readiness read-model. `ready` is the hardest gate; `signals`
 // is ALWAYS 4, in order: lifecycle, merge, checks, preview.
 type ReadinessView = {
-    verdict: "ready" | "blocked" | "not_ready" | "unknown";
+    verdict: "ready" | "blocked" | "not_ready" | "unknown" | "delivered" | "terminal";
     signals: ReadinessSignal[];
     blockers: string[];
 };
