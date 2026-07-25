@@ -29,10 +29,11 @@ import type { DiffStat } from '../services/compare.service.js';
 
 /**
  * Versioned schema tag — bump when the record shape changes (exportable-artifact
- * contract). v2 adds the optional {@link EvidenceConvergence} block, present ONLY
- * for a merge of a COMPOSED convergence workspace (step-2 per-file selections).
+ * contract). v2 added the optional {@link EvidenceConvergence} block (step-2 per-file
+ * selections). v3 adds `mode` (`pick`|`synthesize`) + optional `contributors` to each
+ * {@link EvidenceFileSelection} — line-level 3-way synthesis provenance.
  */
-export const CONVERGENCE_EVIDENCE_SCHEMA = 'recoder.convergence-evidence/v2' as const;
+export const CONVERGENCE_EVIDENCE_SCHEMA = 'recoder.convergence-evidence/v3' as const;
 
 /** One candidate run's contribution, as gathered from the compare/sibling read. */
 export interface EvidenceCandidateInput {
@@ -86,11 +87,16 @@ export interface EvidenceVerification {
   readonly reason?: string;
 }
 
-/** One converged file's provenance: which sibling's version won this path. */
+/** One converged file's provenance: how (and from which sibling[s]) this path was resolved. */
 export interface EvidenceFileSelection {
   readonly path: string;
-  readonly sourceWorkspaceId: string;
-  /** True when 2+ siblings authored this path (the winner came from a human selection). */
+  /** `pick` (a sibling's whole file) or `synthesize` (a clean line-level 3-way merge). */
+  readonly mode: 'pick' | 'synthesize';
+  /** For `pick`: the winning sibling. ABSENT for `synthesize`. */
+  readonly sourceWorkspaceId?: string;
+  /** For `synthesize`: the sibling ids whose versions were 3-way merged (sorted). ABSENT for `pick`. */
+  readonly contributors?: readonly string[];
+  /** True when 2+ siblings authored this path (resolved by a human pick or a synthesize). */
   readonly contested: boolean;
 }
 

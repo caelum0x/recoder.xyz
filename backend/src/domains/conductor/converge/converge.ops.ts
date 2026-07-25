@@ -6,31 +6,42 @@
  * governed merge + exportable evidence path (nothing new is invented downstream).
  *
  * Git-native + reuse-only: it drives the SAME host `git` seam (`execFileSafe`) the
- * merge/checkpoint ops already use — `git worktree add` for the fresh worktree, a
- * plain file copy from each winning sibling's worktree for the whole-file pick, and
+ * merge/checkpoint ops already use — `git worktree add` for the fresh worktree, and
  * an identity-scoped commit (mirroring `commitWorktreeChanges`). It invents NO new
  * git layer and launches NO agent (unlike `engine.createWorkspace`, which spawns a
  * CLI): compose produces only a reviewable branch.
  *
- * Whole-file pick (the correct first cut): a winning file is taken verbatim from the
- * chosen sibling's worktree; there is NO semantic/AST merge WITHIN a file. Line-level
- * synthesis of two siblings' edits to the SAME file is explicitly deferred.
+ * Two materialization MODES per winning file (from the plan):
+ *  - `pick`: the winning file is copied verbatim from the chosen sibling's worktree
+ *    (the safe whole-file default);
+ *  - `synthesize`: an automatic LINE-LEVEL 3-way merge of the contesting siblings'
+ *    versions against the task BASE via `git merge-file` (the standard 3-way). For
+ *    N>2 contributors it folds PAIRWISE in workspaceId order — the running result is
+ *    `ours`, the next sibling is `theirs`, and the ORIGINAL base is the common
+ *    ancestor at every step (deterministic). A CLEAN merge is written; a CONFLICT is
+ *    NEVER written as markers into a "trusted" branch — the path flips to UNRESOLVED
+ *    (`synthesize-conflict`) and the whole compose aborts so the caller falls back to
+ *    an explicit `pick` (preserving the "one TRUSTED change" invariant).
  *
  * Truthful throughout: an incomplete plan (unresolved contested paths) throws BEFORE
- * any git runs (the composer maps it to a 4xx with the unresolved paths); a missing
- * source worktree / git failure surfaces its real message — nothing is faked, and a
- * half-created worktree is cleaned up on failure so a retry is never wedged.
+ * any git runs; a missing source worktree / git failure surfaces its real message —
+ * nothing is faked, and a half-created worktree is cleaned up on failure so a retry
+ * is never wedged.
  */
-import { execFileSafe } from '@recoder/substrate';
+import { execFileSafe, ExecError } from '@recoder/substrate';
 import path from 'node:path';
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import type { Workspace } from '@recoder/agent-os';
 import type { Logger } from '../../../shared/logger.js';
 import { resolveRepoDefaultBranch } from '../git-default-branch.js';
 import {
   planConvergence,
+  winnerSources,
+  type ConvergenceMode,
   type ConvergencePlan,
   type ConvergencePlanSiblingInput,
+  type ConvergenceUnresolved,
 } from './converge-plan.service.js';
 
 /** Thrown when the plan still has unresolved contested paths — mapped to a 4xx. */
@@ -52,16 +63,23 @@ export class EmptyConvergenceError extends Error {
   }
 }
 
+/** One converged file's provenance entry (matches the evidence `EvidenceFileSelection`). */
+export interface ConvergenceSelectionRecord {
+  readonly path: string;
+  readonly mode: ConvergenceMode;
+  /** For `pick`: the winning sibling. ABSENT for `synthesize`. */
+  readonly sourceWorkspaceId?: string;
+  /** For `synthesize`: the sibling ids whose versions were 3-way merged. ABSENT for `pick`. */
+  readonly contributors?: readonly string[];
+  readonly contested: boolean;
+}
+
 /** The convergence provenance stamped onto the composed workspace's metadata (→ evidence). */
 export interface ConvergenceProvenance {
   readonly fromTaskGroup: string | null;
   readonly sourceCount: number;
   readonly fileCount: number;
-  readonly selections: readonly {
-    readonly path: string;
-    readonly sourceWorkspaceId: string;
-    readonly contested: boolean;
-  }[];
+  readonly selections: readonly ConvergenceSelectionRecord[];
 }
 
 /** Input to compose a convergence from a parallel-run group + a per-contested-file selection. */
@@ -218,16 +236,42 @@ export async function composeConvergence(
   // --- create the fresh worktree off base ------------------------------------
   await git(repoPath, ['worktree', 'add', '-b', branch, newWorktree, base]);
 
+  // Scratch space for the 3-way `git merge-file` operands (base/ours/theirs).
+  const tmpDir = await mkdtemp(path.join(tmpdir(), 'recoder-3way-'));
   try {
-    // --- materialize each winning file (whole-file pick) ---------------------
+    // --- materialize each winning file (pick = copy, synthesize = 3-way) ------
+    const synthConflicts: ConvergenceUnresolved[] = [];
     for (const file of plan.files) {
       if (!isSafeRelPath(file.path)) {
         throw new Error(`unsafe convergence path rejected: ${file.path}`);
       }
-      const sourceWt = sourceWorktrees.get(file.sourceWorkspaceId);
-      if (!sourceWt) throw new Error(`missing source worktree for ${file.sourceWorkspaceId}`);
-      const from = path.join(sourceWt, file.path);
       const to = path.join(newWorktree, file.path);
+
+      if (file.mode === 'synthesize') {
+        // The pristine worktree copy IS the base version (the worktree was created
+        // off base and this path is not overwritten yet) — the 3-way common ancestor.
+        const result = await synthesizeFile(deps, {
+          basePath: to,
+          relPath: file.path,
+          contributors: winnerSources(file),
+          sourceWorktrees,
+          tmpDir,
+        });
+        if (!result.clean) {
+          // NEVER write conflict markers into a "trusted" branch — flip to unresolved.
+          synthConflicts.push({ path: file.path, candidates: file.candidates, reason: 'synthesize-conflict' });
+          continue;
+        }
+        await mkdir(path.dirname(to), { recursive: true });
+        await writeFile(to, result.content);
+        continue;
+      }
+
+      // pick: copy the chosen sibling's whole file (a deletion ⇒ remove the base copy).
+      const sourceId = file.sourceWorkspaceId;
+      const sourceWt = sourceId ? sourceWorktrees.get(sourceId) : undefined;
+      if (!sourceWt) throw new Error(`missing source worktree for ${sourceId ?? '(none)'}`);
+      const from = path.join(sourceWt, file.path);
       try {
         await mkdir(path.dirname(to), { recursive: true });
         // `recursive` copies a file or a (renamed-to) dir; overwrites the base copy.
@@ -237,6 +281,13 @@ export async function composeConvergence(
         // reflect the deletion in the convergence (remove the base's copy).
         await rm(to, { recursive: true, force: true });
       }
+    }
+
+    // A synthesize CONFLICT means the convergence is not trustworthy as requested —
+    // abort the whole compose (no partial/marker-poisoned branch) so the caller
+    // re-picks those paths. UnresolvedConvergenceError → the composer maps it to 4xx.
+    if (synthConflicts.length > 0) {
+      throw new UnresolvedConvergenceError(withSynthesizeConflicts(plan, synthConflicts));
     }
 
     // --- commit the converged tree ------------------------------------------
@@ -259,6 +310,9 @@ export async function composeConvergence(
     // Clean up the partial worktree so a retry is never wedged, then re-throw.
     await abortWorktree(deps, repoPath, newWorktree);
     throw err;
+  } finally {
+    // The 3-way scratch dir is always disposable.
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
 
   // --- register the composed workspace record (no agent launched) -------------
@@ -270,7 +324,9 @@ export async function composeConvergence(
     fileCount: plan.files.length,
     selections: plan.files.map((f) => ({
       path: f.path,
-      sourceWorkspaceId: f.sourceWorkspaceId,
+      mode: f.mode,
+      ...(f.sourceWorkspaceId ? { sourceWorkspaceId: f.sourceWorkspaceId } : {}),
+      ...(f.contributors ? { contributors: f.contributors } : {}),
       contested: f.contested,
     })),
   };
@@ -308,6 +364,113 @@ export async function composeConvergence(
     plan,
     workspace,
   };
+}
+
+/** Rebuild a plan with the synthesize-conflicted paths moved from `files` to `unresolved`. */
+function withSynthesizeConflicts(
+  plan: ConvergencePlan,
+  conflicts: readonly ConvergenceUnresolved[],
+): ConvergencePlan {
+  const conflictPaths = new Set(conflicts.map((c) => c.path));
+  return {
+    ...plan,
+    files: plan.files.filter((f) => !conflictPaths.has(f.path)),
+    unresolved: [...plan.unresolved, ...conflicts].sort((a, b) => a.path.localeCompare(b.path)),
+    complete: false,
+  };
+}
+
+/** Read a file as UTF-8, or `null` when it does not exist (a truthful absence, not a throw). */
+async function readOptional(filePath: string): Promise<string | null> {
+  try {
+    return await readFile(filePath, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * LINE-LEVEL 3-way synthesis of a contested path across its contributors, against
+ * the base (common ancestor). Folds pairwise in the given (workspaceId-sorted)
+ * order: `running := contributor[0]`, then for each next contributor `running :=
+ * merge-file(ours=running, base, theirs=next)`, base fixed as the ancestor. A clean
+ * fold returns the merged content; ANY conflict (or a contributor that DELETED the
+ * path — a delete/modify that cannot auto-merge) returns `{clean:false}` so the
+ * caller flips the path to `synthesize-conflict`. Never throws for a merge conflict.
+ */
+async function synthesizeFile(
+  deps: ConvergeOpsDeps,
+  args: {
+    readonly basePath: string;
+    readonly relPath: string;
+    readonly contributors: readonly string[];
+    readonly sourceWorktrees: Map<string, string>;
+    readonly tmpDir: string;
+  },
+): Promise<{ clean: true; content: string } | { clean: false }> {
+  const { basePath, relPath, contributors, sourceWorktrees, tmpDir } = args;
+  if (contributors.length === 0) return { clean: false };
+
+  // Base = the pristine worktree copy; absent (added-by-both) ⇒ an empty ancestor.
+  const baseContent = (await readOptional(basePath)) ?? '';
+
+  // Each contributor's version; a MISSING one is a delete/modify — cannot synthesize.
+  const versions: string[] = [];
+  for (const workspaceId of contributors) {
+    const wt = sourceWorktrees.get(workspaceId);
+    if (!wt) return { clean: false };
+    const content = await readOptional(path.join(wt, relPath));
+    if (content === null) return { clean: false }; // deletion vs edit ⇒ conflict
+    versions.push(content);
+  }
+
+  const baseFile = path.join(tmpDir, 'base');
+  const oursFile = path.join(tmpDir, 'ours');
+  const theirsFile = path.join(tmpDir, 'theirs');
+  await writeFile(baseFile, baseContent);
+
+  let running = versions[0];
+  for (let i = 1; i < versions.length; i += 1) {
+    await writeFile(oursFile, running);
+    await writeFile(theirsFile, versions[i]);
+    const merged = await mergeFile(deps, oursFile, baseFile, theirsFile);
+    if (!merged.clean) return { clean: false };
+    running = merged.content;
+  }
+  return { clean: true, content: running };
+}
+
+/**
+ * Run `git merge-file -p ours base theirs` (a pure 3-way merge to stdout — it never
+ * mutates the operands). Exit 0 ⇒ clean; a small positive exit with a non-empty
+ * stdout is git's truthful "N conflicts" (the merged-with-markers content) ⇒
+ * `{clean:false}`. Any OTHER failure (git absent, unreadable operand) re-throws so a
+ * real fault surfaces truthfully instead of masquerading as a merge conflict.
+ */
+async function mergeFile(
+  deps: ConvergeOpsDeps,
+  oursFile: string,
+  baseFile: string,
+  theirsFile: string,
+): Promise<{ clean: boolean; content: string }> {
+  const exec = deps.exec ?? execFileSafe;
+  try {
+    const { stdout } = await exec('git', ['merge-file', '-p', oursFile, baseFile, theirsFile], {
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    return { clean: true, content: stdout };
+  } catch (err) {
+    if (
+      err instanceof ExecError &&
+      typeof err.code === 'number' &&
+      err.code > 0 &&
+      err.code < 128 &&
+      err.stdout.length > 0
+    ) {
+      return { clean: false, content: err.stdout };
+    }
+    throw err;
+  }
 }
 
 /** Best-effort removal of a half-created worktree (a failure here is only logged). */

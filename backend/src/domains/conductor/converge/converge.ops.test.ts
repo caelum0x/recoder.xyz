@@ -25,6 +25,7 @@ import {
   UnresolvedConvergenceError,
   type ConvergeOpsDeps,
 } from './converge.ops.js';
+import { SYNTHESIZE_SELECTION } from './converge-plan.service.js';
 
 const noopLogger: Logger = {
   info: () => {},
@@ -223,13 +224,223 @@ describe('composeConvergence (real git materialize)', () => {
       fromTaskGroup: string;
       sourceCount: number;
       fileCount: number;
-      selections: { path: string; sourceWorkspaceId: string; contested: boolean }[];
+      selections: {
+        path: string;
+        mode: 'pick' | 'synthesize';
+        sourceWorkspaceId?: string;
+        contributors?: string[];
+        contested: boolean;
+      }[];
     };
     expect(conv.fromTaskGroup).toBe('grp-1');
     expect(conv.fileCount).toBe(4);
     const shared = conv.selections.find((s) => s.path === 'shared.ts');
-    expect(shared).toEqual({ path: 'shared.ts', sourceWorkspaceId: 'ws-a', contested: true });
+    expect(shared).toEqual({ path: 'shared.ts', mode: 'pick', sourceWorkspaceId: 'ws-a', contested: true });
     const aFile = conv.selections.find((s) => s.path === 'a.ts');
-    expect(aFile).toEqual({ path: 'a.ts', sourceWorkspaceId: 'ws-a', contested: false });
+    expect(aFile).toEqual({ path: 'a.ts', mode: 'pick', sourceWorkspaceId: 'ws-a', contested: false });
+  });
+});
+
+/**
+ * Intra-file 3-way SYNTHESIS — two (or more) agents editing the SAME file are
+ * line-level merged against base, not whole-file-picked.
+ *
+ * Proves (real git): non-overlapping edits to one file → CLEAN synthesize (both
+ * edits present, no markers, committed); overlapping edits to the same lines →
+ * `synthesize-conflict` → the compose aborts (nothing registered, worktree cleaned)
+ * so the caller re-picks; a mixed pick+synthesize plan composes; and the N-way fold
+ * (sorted by workspaceId) cleanly folds 3 non-overlapping siblings.
+ */
+describe('composeConvergence (intra-file 3-way synthesize, real git)', () => {
+  let root: string;
+  let repo: string;
+  const BASE_LINES = ['l1', 'l2', 'l3', 'l4', 'l5', ''];
+
+  beforeEach(() => {
+    root = mkdtempSync(path.join(tmpdir(), 'recoder-synth-'));
+    repo = path.join(root, 'repo');
+    mkdirSync(repo, { recursive: true });
+    git(repo, ['init', '-b', 'main']);
+    writeFileSync(path.join(repo, 'shared.ts'), BASE_LINES.join('\n'));
+    writeFileSync(path.join(repo, 'keep.ts'), 'keep\n');
+    git(repo, ['add', '-A']);
+    git(repo, ['commit', '-m', 'base']);
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  /** Add a sibling worktree off main and apply a line mutation to shared.ts. */
+  function addSibling(id: string, mutate: (lines: string[]) => void, extra?: Record<string, string>): string {
+    const wt = path.join(root, id);
+    git(repo, ['worktree', 'add', '-b', `agent-${id}`, wt, 'main']);
+    const lines = [...BASE_LINES];
+    mutate(lines);
+    writeFileSync(path.join(wt, 'shared.ts'), lines.join('\n'));
+    for (const [rel, content] of Object.entries(extra ?? {})) writeFileSync(path.join(wt, rel), content);
+    return wt;
+  }
+
+  function deps(
+    siblings: readonly { id: string; wt: string; changed: readonly string[] }[],
+    registered: { ws?: Workspace },
+  ): ConvergeOpsDeps {
+    const workspaces: Record<string, Workspace> = Object.fromEntries(
+      siblings.map((s) => [s.id, makeWs({ workspaceId: s.id, worktreePath: s.wt, branch: `agent-${s.id}` })]),
+    );
+    return {
+      compare: async () => ({
+        count: siblings.length,
+        siblings: siblings.map((s) => ({ workspaceId: s.id, agent: 'a', changedFiles: s.changed })),
+      }),
+      getWorkspace: async (id) => workspaces[id] ?? null,
+      registerWorkspace: async (ws) => {
+        registered.ws = ws;
+        return ws;
+      },
+      logger: noopLogger,
+      newId: () => 'synth000',
+    };
+  }
+
+  it('cleanly synthesizes non-overlapping edits to the same file (both edits, no markers)', async () => {
+    const wtA = addSibling('ws-a', (L) => (L[0] = 'l1-from-A'));
+    const wtB = addSibling('ws-b', (L) => (L[4] = 'l5-from-B'));
+    const registered: { ws?: Workspace } = {};
+
+    const result = await composeConvergence(
+      deps(
+        [
+          { id: 'ws-a', wt: wtA, changed: ['shared.ts'] },
+          { id: 'ws-b', wt: wtB, changed: ['shared.ts'] },
+        ],
+        registered,
+      ),
+      { taskGroup: 'g', selection: { 'shared.ts': SYNTHESIZE_SELECTION }, createdBy: 'u' },
+    );
+
+    const wt = result.workspace.worktreePath!;
+    const content = readFileSync(path.join(wt, 'shared.ts'), 'utf8');
+    expect(content).toContain('l1-from-A');
+    expect(content).toContain('l5-from-B');
+    expect(content).not.toContain('<<<<<<<');
+    // Committed clean (no lingering worktree changes).
+    expect(execFileSync('git', ['-C', wt, 'status', '--porcelain'], { encoding: 'utf8' }).trim()).toBe('');
+
+    const sel = (
+      (registered.ws!.metadata as Record<string, unknown>).convergence as {
+        selections: { path: string; mode: string; contributors?: string[]; sourceWorkspaceId?: string }[];
+      }
+    ).selections.find((s) => s.path === 'shared.ts')!;
+    expect(sel.mode).toBe('synthesize');
+    expect(sel.contributors).toEqual(['ws-a', 'ws-b']);
+    expect(sel.sourceWorkspaceId).toBeUndefined();
+  });
+
+  it('flips overlapping same-line edits to synthesize-conflict and aborts (nothing written)', async () => {
+    const wtA = addSibling('ws-a', (L) => (L[2] = 'l3-from-A'));
+    const wtB = addSibling('ws-b', (L) => (L[2] = 'l3-from-B'));
+    const registered: { ws?: Workspace } = {};
+
+    await expect(
+      composeConvergence(
+        deps(
+          [
+            { id: 'ws-a', wt: wtA, changed: ['shared.ts'] },
+            { id: 'ws-b', wt: wtB, changed: ['shared.ts'] },
+          ],
+          registered,
+        ),
+        { taskGroup: 'g', selection: { 'shared.ts': SYNTHESIZE_SELECTION }, createdBy: 'u' },
+      ),
+    ).rejects.toMatchObject({
+      name: 'UnresolvedConvergenceError',
+      plan: { complete: false },
+    });
+
+    // Nothing registered, and the partial convergence worktree was cleaned up.
+    expect(registered.ws).toBeUndefined();
+    expect(existsSync(path.join(root, 'repo-converge-synth000'))).toBe(false);
+  });
+
+  it('carries the synthesize-conflict reason on the thrown plan', async () => {
+    const wtA = addSibling('ws-a', (L) => (L[2] = 'x'));
+    const wtB = addSibling('ws-b', (L) => (L[2] = 'y'));
+    const registered: { ws?: Workspace } = {};
+    try {
+      await composeConvergence(
+        deps(
+          [
+            { id: 'ws-a', wt: wtA, changed: ['shared.ts'] },
+            { id: 'ws-b', wt: wtB, changed: ['shared.ts'] },
+          ],
+          registered,
+        ),
+        { taskGroup: 'g', selection: { 'shared.ts': SYNTHESIZE_SELECTION }, createdBy: 'u' },
+      );
+      throw new Error('expected a synthesize conflict');
+    } catch (err) {
+      expect(err).toBeInstanceOf(UnresolvedConvergenceError);
+      const plan = (err as UnresolvedConvergenceError).plan;
+      const u = plan.unresolved.find((x) => x.path === 'shared.ts');
+      expect(u?.reason).toBe('synthesize-conflict');
+      expect(u?.candidates).toEqual(['ws-a', 'ws-b']);
+    }
+  });
+
+  it('composes a MIXED plan: one synthesize + one pick', async () => {
+    const wtA = addSibling('ws-a', (L) => (L[0] = 'l1-A'), { 'a.ts': 'only-in-a\n' });
+    const wtB = addSibling('ws-b', (L) => (L[4] = 'l5-B'));
+    const registered: { ws?: Workspace } = {};
+
+    const result = await composeConvergence(
+      deps(
+        [
+          { id: 'ws-a', wt: wtA, changed: ['shared.ts', 'a.ts'] },
+          { id: 'ws-b', wt: wtB, changed: ['shared.ts'] },
+        ],
+        registered,
+      ),
+      { taskGroup: 'g', selection: { 'shared.ts': SYNTHESIZE_SELECTION }, createdBy: 'u' },
+    );
+
+    const wt = result.workspace.worktreePath!;
+    const shared = readFileSync(path.join(wt, 'shared.ts'), 'utf8');
+    expect(shared).toContain('l1-A');
+    expect(shared).toContain('l5-B');
+    expect(readFileSync(path.join(wt, 'a.ts'), 'utf8')).toBe('only-in-a\n'); // non-contested pick
+  });
+
+  it('N-way fold (sorted by workspaceId) cleanly merges 3 non-overlapping siblings', async () => {
+    const wtA = addSibling('ws-a', (L) => (L[0] = 'l1-A'));
+    const wtB = addSibling('ws-b', (L) => (L[2] = 'l3-B'));
+    const wtC = addSibling('ws-c', (L) => (L[4] = 'l5-C'));
+    const registered: { ws?: Workspace } = {};
+
+    const result = await composeConvergence(
+      deps(
+        [
+          { id: 'ws-a', wt: wtA, changed: ['shared.ts'] },
+          { id: 'ws-b', wt: wtB, changed: ['shared.ts'] },
+          { id: 'ws-c', wt: wtC, changed: ['shared.ts'] },
+        ],
+        registered,
+      ),
+      { taskGroup: 'g', selection: { 'shared.ts': SYNTHESIZE_SELECTION }, createdBy: 'u' },
+    );
+
+    const content = readFileSync(path.join(result.workspace.worktreePath!, 'shared.ts'), 'utf8');
+    expect(content).toContain('l1-A');
+    expect(content).toContain('l3-B');
+    expect(content).toContain('l5-C');
+    expect(content).not.toContain('<<<<<<<');
+
+    const sel = (
+      (registered.ws!.metadata as Record<string, unknown>).convergence as {
+        selections: { path: string; contributors?: string[] }[];
+      }
+    ).selections.find((s) => s.path === 'shared.ts')!;
+    expect(sel.contributors).toEqual(['ws-a', 'ws-b', 'ws-c']); // deterministic sorted fold order
   });
 });

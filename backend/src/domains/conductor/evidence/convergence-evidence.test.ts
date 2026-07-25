@@ -103,21 +103,22 @@ describe('assembleConvergenceEvidence', () => {
   it('omits the step-2 convergence block for a plain single-agent merge', () => {
     const ev = assembleConvergenceEvidence(baseInput());
     expect(ev.convergence).toBeUndefined();
-    expect(ev.schema).toBe('recoder.convergence-evidence/v2');
+    expect(ev.schema).toBe('recoder.convergence-evidence/v3');
   });
 
-  it('includes + hashes the step-2 convergence block for a composed merge', () => {
+  it('includes + hashes the step-2 convergence block with pick + synthesize modes', () => {
     const convergence = {
       fromTaskGroup: 'grp-1',
       sourceCount: 2,
       fileCount: 2,
       selections: [
-        { path: 'src/a.ts', sourceWorkspaceId: 'ws-a', contested: false },
-        { path: 'src/shared.ts', sourceWorkspaceId: 'ws-b', contested: true },
+        { path: 'src/a.ts', mode: 'pick' as const, sourceWorkspaceId: 'ws-a', contested: false },
+        { path: 'src/shared.ts', mode: 'synthesize' as const, contributors: ['ws-a', 'ws-b'], contested: true },
       ],
     };
     const ev = assembleConvergenceEvidence(baseInput({ convergence }));
     expect(ev.convergence).toEqual(convergence);
+    expect(ev.convergence?.selections[1].mode).toBe('synthesize');
     expect(verifyEvidenceHash(ev)).toBe(true);
     // The convergence block is part of the sealed content (tamper-evident).
     const base = assembleConvergenceEvidence(baseInput());

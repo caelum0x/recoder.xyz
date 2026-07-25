@@ -165,7 +165,7 @@ export function buildCompareRoutes(deps: CompareRouterDeps): Router {
   return router;
 }
 
-/** Map the governed compose result onto the response envelope (deny ⇒ 403, fault ⇒ 503). */
+/** Map the governed compose result onto the envelope (client-input ⇒ 400, deny ⇒ 403, fault ⇒ 503). */
 function finishConvergeWrite<T>(res: import('express').Response, result: ConductorWriteResult<T>): void {
   if (result.ok) {
     sendSuccess(res, {
@@ -177,6 +177,13 @@ function finishConvergeWrite<T>(res: import('express').Response, result: Conduct
         engine: result.verdict.engine,
       },
     });
+    return;
+  }
+  // A CLIENT-input failure (nothing to converge, or a path unresolvable — incl. a
+  // `synthesize-conflict` surfaced by the 3-way merge) is a truthful 400 telling the
+  // caller to re-pick, NOT a service fault (503) or a governance deny (403).
+  if (result.code) {
+    sendError(res, createError(ErrorCode.VALIDATION_ERROR, result.reason ?? 'convergence not resolvable'));
     return;
   }
   if (result.verdict.effect === 'allow') {
