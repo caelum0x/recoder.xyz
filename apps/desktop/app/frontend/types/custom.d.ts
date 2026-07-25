@@ -162,6 +162,8 @@ declare global {
         selectDirectory: () => Promise<string>; // recoder:select-directory
         isGitRepo: (dirPath: string) => Promise<boolean>; // recoder:is-git-repo
         onRecoderSignInPrompt: (callback: (prompt: RecoderSignInPrompt) => void) => void; // recoder:device-login-prompt
+        showAttentionNotification: (workspaceId: string, title: string, body: string) => void; // recoder:attention-notify
+        onAttentionNotificationClick: (callback: (workspaceId: string) => void) => void; // recoder:attention-click
     };
 
     type ElectronContextMenuItem = {

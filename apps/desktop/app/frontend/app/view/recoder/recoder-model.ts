@@ -1,7 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { globalStore } from "@/app/store/global";
+import { getApi, globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { agentLabel } from "./recoder-agent-labels";
 import {
@@ -139,6 +139,30 @@ function loadNotifyOnAttention(): boolean {
         return localStorage.getItem(NOTIFY_ATTENTION_KEY) != "false";
     } catch {
         return true;
+    }
+}
+
+// One module-level ipc listener retargeted to the most-recently-constructed
+// model: the preload bridge has no unsubscribe, so per-instance registration
+// would route OS-notification clicks to closed boards and pile up listeners.
+let attentionClickModel: RecoderViewModel = null;
+let attentionClickWired = false;
+
+function wireAttentionClicks(model: RecoderViewModel) {
+    attentionClickModel = model;
+    if (attentionClickWired) {
+        return;
+    }
+    try {
+        getApi().onAttentionNotificationClick((workspaceId) => {
+            if (attentionClickModel == null || typeof workspaceId != "string" || workspaceId == "") {
+                return;
+            }
+            globalStore.set(attentionClickModel.selectedWorkspaceIdAtom, workspaceId);
+        });
+        attentionClickWired = true;
+    } catch {
+        // No bridge (preview/test) — a click still focuses the window via main.
     }
 }
 
@@ -280,6 +304,13 @@ class RecoderViewModel implements ViewModel {
         this.boardBucketsAtom = atom((get) =>
             bucketWorkspaceGroups(groupByTaskGroup(get(this.boardWorkspacesAtom)), new Date())
         );
+        wireAttentionClicks(this);
+    }
+
+    dispose() {
+        if (attentionClickModel == this) {
+            attentionClickModel = null;
+        }
     }
 
     get viewComponent(): ViewComponent {
@@ -365,19 +396,31 @@ class RecoderViewModel implements ViewModel {
         }
     }
 
-    // Renderer-side web Notification (granted by default in this shell; no RPC
-    // round trip) so onclick can select the workspace row in THIS view. Degrade-
-    // safe: an absent/denied Notification API or a throwing constructor is a
-    // silent no-op — the board itself still shows the state truthfully.
+    // Prefer the Electron main-process Notification (native OS delivery; the
+    // click handler lives in main so it survives renderer GC, restores/focuses
+    // the window natively, and badges the dock while the app is unfocused).
+    // Falls back to the renderer web Notification when the bridge is absent.
+    // Degrade-safe either way: a notification that can't show is a silent no-op
+    // — the board itself still shows the state truthfully.
     showAttentionNotification(event: RecoderAttentionEvent) {
+        const name = event.branch != "" ? event.branch : event.workspaceId;
+        const title = event.kind == "review" ? `${name} is ready for review` : `${name} failed`;
+        const body = event.runtimeId != "" ? agentLabel(event.runtimeId) : "";
+        try {
+            const api = getApi();
+            if (api?.showAttentionNotification != null) {
+                api.showAttentionNotification(event.workspaceId, title, body);
+                return;
+            }
+        } catch {
+            // fall through to the web Notification path
+        }
         if (typeof Notification == "undefined" || Notification.permission == "denied") {
             return;
         }
-        const name = event.branch != "" ? event.branch : event.workspaceId;
-        const title = event.kind == "review" ? `${name} is ready for review` : `${name} failed`;
         try {
             const notification = new Notification(title, {
-                body: event.runtimeId != "" ? agentLabel(event.runtimeId) : "",
+                body,
                 tag: event.key,
             });
             notification.onclick = () => {

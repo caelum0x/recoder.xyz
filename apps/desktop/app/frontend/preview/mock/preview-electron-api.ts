@@ -66,6 +66,8 @@ const previewElectronApi: ElectronApi = {
     selectDirectory: () => Promise.resolve(null),
     isGitRepo: (_dirPath: string) => Promise.resolve(true),
     onRecoderSignInPrompt: (_callback: (prompt: RecoderSignInPrompt) => void) => {},
+    showAttentionNotification: (_workspaceId: string, _title: string, _body: string) => {},
+    onAttentionNotificationClick: (_callback: (workspaceId: string) => void) => {},
 };
 
 function installPreviewElectronApi() {
