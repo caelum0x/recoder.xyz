@@ -3,9 +3,11 @@ import {
   DEFAULT_INDEXNOW_KEY,
   buildIndexNowPayload,
   filterUrlsForHost,
+  isIndexNowSubmissionEnabled,
   isValidIndexNowKey,
   resolveIndexNowKey,
   resolveSiteOrigin,
+  siteUrlForPath,
   submitUrls,
 } from '../indexnow';
 
@@ -78,6 +80,35 @@ describe('seo/indexnow', () => {
         'recoder.xyz',
       );
       expect(out).toEqual(['https://recoder.xyz/a']);
+    });
+  });
+
+  describe('siteUrlForPath', () => {
+    it('builds an absolute URL on the canonical origin, adding a leading slash', () => {
+      expect(siteUrlForPath('blog/foo')).toBe('https://recoder.xyz/blog/foo');
+      expect(siteUrlForPath('/changelog')).toBe('https://recoder.xyz/changelog');
+    });
+    it('honors an https origin override', () => {
+      process.env.SITE_URL = 'https://staging.recoder.xyz';
+      expect(siteUrlForPath('/blog')).toBe('https://staging.recoder.xyz/blog');
+    });
+  });
+
+  describe('isIndexNowSubmissionEnabled', () => {
+    it('is enabled in production', () => {
+      process.env = { ...process.env, NODE_ENV: 'production' };
+      delete process.env.INDEXNOW_ENABLE_IN_DEV;
+      expect(isIndexNowSubmissionEnabled()).toBe(true);
+    });
+    it('is disabled outside production by default', () => {
+      process.env = { ...process.env, NODE_ENV: 'test' };
+      delete process.env.INDEXNOW_ENABLE_IN_DEV;
+      expect(isIndexNowSubmissionEnabled()).toBe(false);
+    });
+    it('can be forced on outside production via INDEXNOW_ENABLE_IN_DEV=1', () => {
+      process.env = { ...process.env, NODE_ENV: 'development' };
+      process.env.INDEXNOW_ENABLE_IN_DEV = '1';
+      expect(isIndexNowSubmissionEnabled()).toBe(true);
     });
   });
 

@@ -1,4 +1,11 @@
 import type { CollectionConfig } from 'payload';
+import { indexNowAfterChange, indexNowAfterDelete } from '../hooks/indexnow';
+
+/** Public URL(s) a blog-post doc maps to: its own page plus the /blog index. */
+function blogPostPaths(doc: Record<string, unknown>): string[] {
+  const slug = typeof doc.slug === 'string' ? doc.slug : '';
+  return slug ? [`/blog/${slug}`, '/blog'] : ['/blog'];
+}
 
 export const BlogPosts: CollectionConfig = {
   slug: 'blog-posts',
@@ -11,6 +18,12 @@ export const BlogPosts: CollectionConfig = {
   },
   versions: {
     drafts: true,
+  },
+  hooks: {
+    // Notify search engines the moment a post is published/updated or removed.
+    // Degrade-safe + fire-and-forget: never blocks or fails the CMS write.
+    afterChange: [indexNowAfterChange('blog-posts', blogPostPaths)],
+    afterDelete: [indexNowAfterDelete('blog-posts', blogPostPaths)],
   },
   fields: [
     {

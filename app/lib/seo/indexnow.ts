@@ -80,6 +80,38 @@ export function resolveSiteHost(): string {
   return new URL(resolveSiteOrigin()).host;
 }
 
+/**
+ * Build an absolute site URL for a path (e.g. `/blog/foo`) on the resolved
+ * origin. A leading slash is optional; the result is always `${origin}/${path}`.
+ * Used by content-change hooks to turn a changed doc's route into a submittable
+ * absolute https URL (which `submitUrls` then re-validates against the host).
+ */
+export function siteUrlForPath(path: string): string {
+  const origin = resolveSiteOrigin();
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return `${origin}${normalized}`;
+}
+
+/**
+ * Whether a runtime IndexNow submission (e.g. a CMS content-change hook) should
+ * actually POST. The key and host always resolve, so this env gate — not the
+ * key — is the meaningful on/off switch for runtime pings:
+ *
+ * - In production (`NODE_ENV === 'production'`) submissions are enabled, so a
+ *   real content publish in the live CMS notifies search engines immediately.
+ * - Elsewhere (dev, test, CI) they are skipped so local edits never ping live
+ *   search engines. Set `INDEXNOW_ENABLE_IN_DEV=1` to force it on for testing.
+ *
+ * This never throws and makes no network call — it only decides whether the
+ * caller should submit.
+ */
+export function isIndexNowSubmissionEnabled(): boolean {
+  if ((process.env.INDEXNOW_ENABLE_IN_DEV || '').trim() === '1') {
+    return true;
+  }
+  return process.env.NODE_ENV === 'production';
+}
+
 export interface IndexNowPayload {
   /** Bare hostname of the site being submitted, e.g. `recoder.xyz`. */
   host: string;
