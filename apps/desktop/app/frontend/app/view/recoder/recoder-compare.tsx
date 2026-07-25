@@ -27,11 +27,15 @@ function fmtSigned(n: number): string {
 
 // Truthful, never-green verdict chrome: the graphite accent marks a real pass,
 // error marks a real block, everything unproven stays neutral so an `unknown`
-// verdict can never read as a win.
+// verdict can never read as a win. `delivered` (already merged) is a real
+// positive → graphite accent; `terminal` (archived/cancelled) is a closed,
+// unjudged outcome → neutral.
 const VERDICT_STYLE: Record<string, string> = {
     ready: "bg-accent/20 text-accent",
+    delivered: "bg-accent/20 text-accent",
     blocked: "bg-error/20 text-error",
     not_ready: "border border-border text-secondary",
+    terminal: "border border-border text-secondary",
     unknown: "border border-border text-secondary",
 };
 
@@ -51,8 +55,14 @@ const SIGNAL_GLYPH: Record<string, string> = {
     unknown: "?",
 };
 
+const VERDICT_LABEL: Record<string, string> = {
+    not_ready: "not ready",
+    delivered: "merged",
+    terminal: "closed",
+};
+
 function verdictLabel(verdict: string): string {
-    return verdict == "not_ready" ? "not ready" : verdict;
+    return VERDICT_LABEL[verdict] ?? verdict;
 }
 
 function ReadinessBadge({ readiness }: { readiness: ReadinessView }) {

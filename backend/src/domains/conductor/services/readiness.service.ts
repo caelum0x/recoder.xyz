@@ -33,8 +33,13 @@ export interface ReadinessSignal {
 
 /** The folded read-model the `GET /workspaces/:id/readiness` edge returns. */
 export interface ReadinessView {
-  /** The overall merge verdict — `'ready'` is the hardest gate (see the fold rules). */
-  readonly verdict: 'ready' | 'blocked' | 'not_ready' | 'unknown';
+  /**
+   * The overall merge verdict — `'ready'` is the hardest gate (see the fold
+   * rules). `'delivered'` (already merged) and `'terminal'` (archived/cancelled)
+   * are decided by lifecycle truth: a converged/closed workspace is NEVER folded
+   * to `'not_ready'` with an "agent still working" detail.
+   */
+  readonly verdict: 'ready' | 'blocked' | 'not_ready' | 'unknown' | 'delivered' | 'terminal';
   /** ALWAYS 4 signals, fixed order: lifecycle, merge, checks, preview. */
   readonly signals: readonly ReadinessSignal[];
   /** Populated ONLY on hard blockers (a real merge conflict or a failing check). */
@@ -53,6 +58,20 @@ export interface ReadinessInput {
 }
 
 /**
+ * The lifecycle bucket a state falls in — the fold reads this instead of a bare
+ * "reviewable | not" boolean so that DELIVERED and closed TERMINAL states are told
+ * apart from a genuinely pre-review "still working" state.
+ *
+ * - `reviewable`  the work is reviewable (review → merge flow);
+ * - `delivered`   already merged (the convergence completed) — a real positive;
+ * - `terminal`    archived/cancelled (closed) — neither working nor a merge target;
+ * - `failed`      the delivery failed (recoverable, but a real negative);
+ * - `working`     genuinely pre-review (created/setting_up/ready/running/
+ *                 awaiting_approval/changes_requested) — the agent is still working.
+ */
+type LifecycleClass = 'reviewable' | 'delivered' | 'terminal' | 'failed' | 'working';
+
+/**
  * REVIEW-TERMINAL: the work is reviewable (review → merge flow). True when the
  * durable state is `awaiting_review`/`merging`, OR the live attention classifier
  * says `review_ready` (the agent settled with reviewable work).
@@ -61,14 +80,33 @@ function isReviewTerminal(state: WorkspaceState, attention?: AttentionState): bo
   return state === 'awaiting_review' || state === 'merging' || attention === 'review_ready';
 }
 
-/** Lifecycle signal — a review-terminal workspace passes; otherwise the agent is still working. */
-function deriveLifecycle(
-  state: WorkspaceState,
-  reviewTerminal: boolean,
-): ReadinessSignal {
-  return reviewTerminal
-    ? { id: 'lifecycle', status: 'pass', detail: `workspace is reviewable (state '${state}')` }
-    : { id: 'lifecycle', status: 'pending', detail: `agent still working (state '${state}')` };
+/** Bucket a workspace state into its {@link LifecycleClass} (reviewable wins over all). */
+function classifyLifecycle(state: WorkspaceState, attention?: AttentionState): LifecycleClass {
+  if (isReviewTerminal(state, attention)) return 'reviewable';
+  if (state === 'merged') return 'delivered';
+  if (state === 'archived' || state === 'cancelled') return 'terminal';
+  if (state === 'failed') return 'failed';
+  return 'working';
+}
+
+/**
+ * Lifecycle signal — a reviewable OR delivered (merged) workspace passes; a closed
+ * terminal state is `'unknown'` (nothing to judge); a failed delivery is a hard
+ * `'fail'`; only a genuinely pre-review state reports the agent is still working.
+ */
+function deriveLifecycle(state: WorkspaceState, lifecycleClass: LifecycleClass): ReadinessSignal {
+  switch (lifecycleClass) {
+    case 'reviewable':
+      return { id: 'lifecycle', status: 'pass', detail: `workspace is reviewable (state '${state}')` };
+    case 'delivered':
+      return { id: 'lifecycle', status: 'pass', detail: 'workspace merged' };
+    case 'failed':
+      return { id: 'lifecycle', status: 'fail', detail: 'workspace failed' };
+    case 'terminal':
+      return { id: 'lifecycle', status: 'unknown', detail: `workspace ${state}` };
+    default:
+      return { id: 'lifecycle', status: 'pending', detail: `agent still working (state '${state}')` };
+  }
 }
 
 /** Merge signal — NEVER a pass on an unavailable/unknown preflight (the truthful degrade). */
@@ -179,26 +217,43 @@ function deriveBlockers(
  * PURE — no I/O, no mutation. The verdict priority (degrade-truthful, `ready` is
  * the hardest gate):
  *
- *   1. a hard merge conflict OR a failing check ⇒ BLOCKED (with the blockers);
- *   2. else not review-terminal ⇒ NOT_READY (the agent is still working);
- *   3. else merge is a real clean pass AND preview is not a hard fail ⇒ READY;
- *   4. else the merge signal is unknown ⇒ UNKNOWN (crux gate unjudgeable, no
+ *   1. already merged ⇒ DELIVERED (the convergence completed — decided by
+ *      lifecycle truth, never re-litigated by a stale merge/checks probe);
+ *   2. archived/cancelled ⇒ TERMINAL (closed — neither working nor a merge target);
+ *   3. failed ⇒ BLOCKED (a real delivery failure, not "still working");
+ *   4. a hard merge conflict OR a failing check ⇒ BLOCKED (with the blockers);
+ *   5. else still pre-review (working) ⇒ NOT_READY (the agent is still working);
+ *   6. else merge is a real clean pass AND preview is not a hard fail ⇒ READY;
+ *   7. else the merge signal is unknown ⇒ UNKNOWN (crux gate unjudgeable, no
  *      hard blocker — we could not judge, so we say so, never a blind green);
- *   5. else ⇒ NOT_READY (review-terminal + clean merge, but a hard preview fail —
+ *   8. else ⇒ NOT_READY (review-terminal + clean merge, but a hard preview fail —
  *      a real negative that is not a merge/checks blocker).
  */
 export function foldReadiness(input: ReadinessInput): ReadinessView {
-  const reviewTerminal = isReviewTerminal(input.state, input.attention);
-  const lifecycle = deriveLifecycle(input.state, reviewTerminal);
+  const lifecycleClass = classifyLifecycle(input.state, input.attention);
+  const lifecycle = deriveLifecycle(input.state, lifecycleClass);
   const merge = deriveMerge(input.mergeability);
   const checks = deriveChecks(input.prStatus);
   const preview = derivePreview(input.preview);
   const signals: readonly ReadinessSignal[] = [lifecycle, merge, checks, preview];
 
+  // Delivered/closed states are decided by lifecycle truth BEFORE the merge/checks
+  // fold: an already-merged or closed workspace is never reported as blocked or
+  // "agent still working" on the panel meant to prove its convergence.
+  if (lifecycleClass === 'delivered') {
+    return { verdict: 'delivered', signals, blockers: [] };
+  }
+  if (lifecycleClass === 'terminal') {
+    return { verdict: 'terminal', signals, blockers: [] };
+  }
+  if (lifecycleClass === 'failed') {
+    return { verdict: 'blocked', signals, blockers: ['workspace delivery failed'] };
+  }
+
   if (merge.status === 'fail' || checks.status === 'fail') {
     return { verdict: 'blocked', signals, blockers: deriveBlockers(merge, checks, input) };
   }
-  if (!reviewTerminal) {
+  if (lifecycleClass === 'working') {
     return { verdict: 'not_ready', signals, blockers: [] };
   }
   if (merge.status === 'pass' && preview.status !== 'fail') {
