@@ -34,6 +34,7 @@ export const ErrorCode = {
   MISSING_REQUIRED_FIELD: 'MISSING_REQUIRED_FIELD',
   // Resource / rate
   NOT_FOUND: 'NOT_FOUND',
+  CONFLICT: 'CONFLICT',
   RATE_LIMITED: 'RATE_LIMITED',
   QUOTA_EXCEEDED: 'QUOTA_EXCEEDED',
   RESOURCE_EXHAUSTED: 'RESOURCE_EXHAUSTED',
@@ -60,6 +61,7 @@ const ERROR_STATUS: Readonly<Record<ErrorCode, number>> = {
   [ErrorCode.INVALID_INPUT]: 400,
   [ErrorCode.MISSING_REQUIRED_FIELD]: 400,
   [ErrorCode.NOT_FOUND]: 404,
+  [ErrorCode.CONFLICT]: 409,
   [ErrorCode.RATE_LIMITED]: 429,
   [ErrorCode.QUOTA_EXCEEDED]: 429,
   [ErrorCode.RESOURCE_EXHAUSTED]: 503,
@@ -83,6 +85,7 @@ const ERROR_MESSAGE: Readonly<Record<ErrorCode, string>> = {
   [ErrorCode.INVALID_INPUT]: 'Invalid input provided.',
   [ErrorCode.MISSING_REQUIRED_FIELD]: 'A required field is missing.',
   [ErrorCode.NOT_FOUND]: 'Resource not found.',
+  [ErrorCode.CONFLICT]: 'Resource already exists.',
   [ErrorCode.RATE_LIMITED]: 'Too many requests. Please slow down.',
   [ErrorCode.QUOTA_EXCEEDED]: 'Quota exceeded.',
   [ErrorCode.RESOURCE_EXHAUSTED]: 'System resources exhausted. Please try again later.',

@@ -92,6 +92,10 @@ import type { CheckpointRecord, CheckpointStorePort } from './ports/checkpoint-s
 import type { BranchResultView, RestoreResultView } from './services/checkpoint.service.js';
 import type { RepoSetupStorePort } from './ports/repo-setup-store.port.js';
 import type { RepoSetupExec } from './services/repo-setup.service.js';
+import type { CloneRepoInput, CloneRepoOutcome } from './services/repo-clone.service.js';
+import type { WorkspaceChecksView } from './services/pr-checks.service.js';
+export type { CloneRepoInput, CloneRepoOutcome } from './services/repo-clone.service.js';
+export type { WorkspaceChecksView, WorkspaceCheckRow } from './services/pr-checks.service.js';
 
 /** Dependencies injected by bootstrap (after persistence + identity + governance). */
 export interface ConductorModuleDeps {
@@ -520,6 +524,21 @@ export interface ConductorModule {
    * truthful EMPTY list, never an error.
    */
   githubRepos(): Promise<readonly GithubRepoView[]>;
+  /**
+   * Clone a GitHub repo onto the box (`POST /repos/clone`) — `gh repo clone`
+   * first (inherits gh auth for private repos), plain `git clone` fallback.
+   * Never throws: bad url / existing non-empty dir / no tool / a failed clone
+   * are all typed, truthful outcomes (never a fabricated clone).
+   */
+  cloneRepo(input: CloneRepoInput): Promise<CloneRepoOutcome>;
+  /**
+   * The workspace's per-check PR rollup (`GET …/checks`) via `gh pr view` in
+   * the worktree (gh resolves the branch's PR itself). Degrade-truthful:
+   * gh missing / unauthenticated / no PR / non-GitHub remote ⇒ a 200 with
+   * `available:false` + a truthful reason — NEVER fabricated. Null when the
+   * workspace does not exist (→ 404 at the edge).
+   */
+  workspaceChecks(workspaceId: string): Promise<WorkspaceChecksView | null>;
   /** Reconcile findings for operator/policy review. */
   listReconcileFindings(workspaceId?: string): Promise<readonly ReconcileFindingView[]>;
   /**
