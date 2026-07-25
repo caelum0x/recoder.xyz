@@ -408,7 +408,6 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     onKeyDown={(e) => {
                         // launch chord lives here (not on a single field) so keydown bubbling from
                         // any inner select/input/textarea fires it - one owner avoids a double-launch
-
                         if (e.key == "Escape") {
                             setLaunchOpen(false);
                             e.stopPropagation();
