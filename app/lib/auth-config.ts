@@ -152,6 +152,17 @@ export const auth = betterAuth({
     },
   },
   socialProviders,
+  account: {
+    // Trust Google/GitHub (verified-email providers) to link into an existing
+    // account with the same email. Without this, signing in with Google/GitHub
+    // when an account already exists for that email (e.g. created via
+    // email+password or the other provider) fails with `account_not_linked`.
+    // Mirrors @recoder/auth (packages/auth), which the two configs must stay in sync on.
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ["github", "google"],
+    },
+  },
   session: {
     expiresIn: 60 * 60 * 24 * 30, // 30 days
     updateAge: 60 * 60 * 24, // Update session every 24 hours
