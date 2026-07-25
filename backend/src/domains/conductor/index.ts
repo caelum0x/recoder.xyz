@@ -79,6 +79,8 @@ export type {
   EvidenceGovernance,
   EvidenceVerification,
 } from './evidence/convergence-evidence.js';
+import type { EvidenceExport } from './evidence/evidence-export.js';
+export type { EvidenceExport, EvidenceControl, ControlStatus, ControlCoverage } from './evidence/evidence-export.js';
 import type { ConvergencePlan } from './converge/converge-plan.service.js';
 export { SYNTHESIZE_SELECTION } from './converge/converge-plan.service.js';
 export type {
@@ -583,6 +585,14 @@ export interface ConductorModule {
    * evidence-less) workspace is a truthful `null` (⇒ 404), never a fabricated record.
    */
   getConvergenceEvidence(workspaceId: string): Promise<ConvergenceEvidenceRecord | null>;
+  /**
+   * The framework-mapped, exportable evidence PACK (`GET …/evidence/export`) —
+   * renders the stored convergence evidence record into a control-mapped artifact
+   * (SOC 2 / EU AI Act / DORA / Recoder) + a human-readable markdown summary,
+   * content-hashed. Read-only, pure over the record; every control status is derived
+   * from the backing fields (never a fabricated `met`). `null` ⇒ 404 (no evidence).
+   */
+  getConvergenceEvidenceExport(workspaceId: string): Promise<EvidenceExport | null>;
   /**
    * PLAN a convergence (`GET …/converge-plan`) — the PURE fold of a parallel-run
    * group's N sibling diffs + a per-contested-file selection into a resolved

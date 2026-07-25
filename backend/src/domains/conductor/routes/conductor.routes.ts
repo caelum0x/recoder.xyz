@@ -14,6 +14,7 @@
  *   GET    /api/conductor/workspaces/:id/mergeability  pre-merge conflict + base-divergence probe
  *   GET    /api/conductor/workspaces/:id/readiness  folded merge-readiness read-model (4 signals + verdict)
  *   GET    /api/conductor/workspaces/:id/evidence  exportable convergence evidence record (404 when unmerged)
+ *   GET    /api/conductor/workspaces/:id/evidence/export  framework-mapped evidence pack (`?format=md` for text)
  *   GET    /api/conductor/workspaces/:id/dev-command  detected dev command (or null)
  *   GET    /api/conductor/workspaces/:id/preview-verification  last preview verification summary (404 when unverified)
  *   GET    /api/conductor/workspaces/:id/view     attention-enriched view (truthful unknown)
@@ -284,6 +285,40 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
         );
       } catch (err) {
         sendError(res, toReadError(err, 'evidence read failed'));
+      }
+    }),
+  );
+
+  // The framework-mapped, exportable evidence PACK rendered from that record — a
+  // control-mapped artifact (SOC 2 / EU AI Act / DORA / Recoder) an auditor/CI can
+  // read. PURE read (no gate). `?format=md` returns the human-readable markdown
+  // summary as text; default `json` returns the structured pack. Every control
+  // status is DERIVED from the record's fields (never a fabricated `met`). A
+  // never-merged / evidence-less workspace is a truthful 404.
+  router.get(
+    '/workspaces/:id/evidence/export',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      try {
+        const pack = await module.getConvergenceEvidenceExport(req.params.id);
+        if (pack) {
+          if (String(req.query.format).toLowerCase() === 'md') {
+            res.type('text/markdown').send(pack.summary);
+            return;
+          }
+          sendSuccess(res, { export: pack });
+          return;
+        }
+        const workspace = await module.getWorkspace(req.params.id);
+        sendError(
+          res,
+          createError(
+            ErrorCode.NOT_FOUND,
+            workspace ? 'no convergence evidence (not merged)' : 'workspace not found',
+          ),
+        );
+      } catch (err) {
+        sendError(res, toReadError(err, 'evidence export failed'));
       }
     }),
   );
