@@ -71,7 +71,7 @@ type WorkspaceRowProps = {
 function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin }: WorkspaceRowProps) {
     return (
         <div
-            className="flex flex-col gap-1 rounded border border-border px-2.5 py-1.5 transition-colors duration-150 ease-out"
+            className="flex flex-col gap-1 rounded border border-border px-2.5 py-1.5 transition-colors duration-150 ease-out hover:bg-border/20"
             title={`${ws.workspaceId} · ${ws.branch}`}
         >
             <div className="flex items-center gap-2">
@@ -180,7 +180,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             {loading && workspaces.length == 0 && error == "" && <RecoderSkeleton rows={3} />}
 
             {launchOpen && (
-                <div className="flex flex-col gap-3 rounded border border-border p-3 mt-1">
+                <div className="flex flex-col gap-3 rounded border border-border p-3 mt-1 recoder-enter">
                     <div className={SECTION_TITLE}>Launch a coding agent</div>
 
                     <label className="flex flex-col gap-1">
@@ -320,7 +320,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             )}
 
             {showGettingStarted && (
-                <div className="flex flex-col gap-3 rounded border border-border p-4 mt-1">
+                <div className="flex flex-col gap-3 rounded border border-border p-4 mt-1 recoder-enter">
                     <div className="flex flex-col gap-1">
                         <div className={SECTION_TITLE}>Welcome to Recoder</div>
                         <div className={META}>
@@ -400,14 +400,17 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     {isCompareOpen ? "Hide compare" : "Compare"}
                                 </button>
                             </div>
-                            {isCompareOpen &&
-                                (compareView != null ? (
-                                    <RecoderComparePanel model={model} compareView={compareView} />
-                                ) : (
-                                    <div className="rounded border border-border p-2">
-                                        <RecoderSkeleton rows={2} />
-                                    </div>
-                                ))}
+                            {isCompareOpen && (
+                                <div className="recoder-enter">
+                                    {compareView != null ? (
+                                        <RecoderComparePanel model={model} compareView={compareView} />
+                                    ) : (
+                                        <div className="rounded border border-border p-2">
+                                            <RecoderSkeleton rows={2} />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             {group.workspaces.map((ws) => (
                                 <WorkspaceRow
                                     key={ws.workspaceId}
