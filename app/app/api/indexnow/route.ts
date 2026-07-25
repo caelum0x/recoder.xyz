@@ -57,7 +57,10 @@ function authorize(request: NextRequest, rawBody: string): { ok: true } | { ok: 
     return { ok: true };
   }
 
-  return { ok: false, reason: internal.reason || 'unauthorized' };
+  // `in`-narrowing (robust under the app's non-strict tsconfig, where boolean
+  // discriminant narrowing on `internal.ok` does not narrow the union).
+  const internalReason = 'reason' in internal ? internal.reason : 'unauthorized';
+  return { ok: false, reason: internalReason };
 }
 
 /**
@@ -73,7 +76,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!auth.ok) {
     logger.warn('IndexNow ping rejected: unauthorized', {
       route: '/api/indexnow',
-      reason: auth.reason,
+      reason: 'reason' in auth ? auth.reason : 'unauthorized',
     });
     return NextResponse.json({ submitted: false, reason: 'Unauthorized' }, { status: 401 });
   }
@@ -99,7 +102,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!result.submitted) {
     logger.info('IndexNow ping not accepted', {
       route: '/api/indexnow',
-      reason: result.reason,
+      reason: 'reason' in result ? result.reason : 'unknown',
       upstreamStatus: result.upstreamStatus,
       urlCount: result.urlCount,
     });

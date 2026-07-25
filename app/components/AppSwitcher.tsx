@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { getSwitcherApps, RECODER_SETTINGS_URLS } from '@recoder/ecosystem-config';
-import { NotificationBell } from '@recoder/ui/notification-bell';
-import { SubscriptionBadge } from '@recoder/ui/subscription-badge';
+import { NotificationBell } from './platform/notification-bell';
+import { SubscriptionBadge } from './platform/subscription-badge';
 import { Key, Settings, Shield } from 'lucide-react';
 
 export function AppSwitcher() {
