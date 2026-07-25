@@ -19,6 +19,7 @@ import {
     type RecoderMergeRecord,
     type SiblingCompareEntry,
 } from "./recoder-model";
+import { RecoderEmpty } from "./recoder-states";
 import { FIELD_LABEL, META, PICK_BTN_ON, QUIET_BTN_XS, SAVE_BTN } from "./recoder-styles";
 
 // Explicit sign so a pairwise delta can never be mistaken for an absolute count;
@@ -457,7 +458,10 @@ function RecoderComparePanel({ model, compareView }: { model: RecoderViewModel; 
     if (compareView.siblings.length == 0) {
         return (
             <div className="rounded border border-white/8 p-2">
-                <div className={META}>No sibling agents to compare yet.</div>
+                <RecoderEmpty
+                    title="No parallel agents to compare yet."
+                    hint="Launch a task across multiple agents to see them side by side."
+                />
             </div>
         );
     }
