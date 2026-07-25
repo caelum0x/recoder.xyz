@@ -6,6 +6,7 @@ import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { RecoderDiffViewModel, type RecoderCheckRow, type RecoderWorkspaceChecks } from "./recoder-diff-model";
+import { EvidencePanel } from "./recoder-evidence-panel";
 
 const REFRESH_MS = 6000;
 
@@ -190,6 +191,7 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
             {selectedId != "" && <ChecksStrip checks={checks} />}
             {mergeStatus != "" && <div className="text-xs text-secondary">{mergeStatus}</div>}
             {prStatus != "" && <div className="text-xs text-secondary">{prStatus}</div>}
+            {selectedId != "" && <EvidencePanel workspaceId={selectedId} />}
 
             {showNotConnected && (
                 <RecoderEmpty title="Recoder is still starting…" hint="Your workspace diffs load once it is ready." />
