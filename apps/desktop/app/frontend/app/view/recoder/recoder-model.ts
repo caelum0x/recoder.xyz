@@ -1055,6 +1055,10 @@ class RecoderViewModel implements ViewModel {
             }
             if (res.status == 503) {
                 this.setLastMerge(workspaceId, { status: "failed", ...(reason ? { reason } : {}), at });
+                if (reason != null && /invalid workspace transition/i.test(reason)) {
+                    this.setRowStatus(workspaceId, "Merge isn’t available yet — review this workspace first.");
+                    return;
+                }
                 this.setRowStatus(workspaceId, `Merge could not complete - ${reason || "operation failed"}.`);
                 return;
             }

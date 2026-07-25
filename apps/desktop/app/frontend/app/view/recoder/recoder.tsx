@@ -43,8 +43,8 @@ function openSession(workspaceId: string) {
     openBlock({ meta: { view: "recoder-terminal", "recoder:workspaceid": workspaceId } });
 }
 
-function openReview() {
-    openBlock({ meta: { view: "recoder-diff" } });
+function openReview(workspaceId?: string) {
+    openBlock({ meta: { view: "recoder-diff", ...(workspaceId ? { "recoder:workspaceid": workspaceId } : {}) } });
 }
 
 // Attach the workspace's live tmux session as a real wave term block, using the
@@ -140,10 +140,15 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
                         Terminal
                     </button>
                 )}
-                <button className={QUIET_BTN} onClick={() => openReview()}>
+                <button className={QUIET_BTN} onClick={() => openReview(ws.workspaceId)}>
                     Review
                 </button>
-                <button className={QUIET_BTN} disabled={busy} onClick={() => model.mergeWorkspace(ws.workspaceId)}>
+                <button
+                    className={QUIET_BTN}
+                    disabled={busy || ws.state != "awaiting_review"}
+                    title={ws.state != "awaiting_review" ? "Review first to enable merge" : undefined}
+                    onClick={() => model.mergeWorkspace(ws.workspaceId)}
+                >
                     {busy ? "..." : "Merge"}
                 </button>
                 <button className={QUIET_BTN} disabled={busy} onClick={() => model.archiveWorkspace(ws.workspaceId)}>
@@ -602,7 +607,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     Terminal
                                 </button>
                             )}
-                            <button className={QUIET_BTN} onClick={() => openReview()}>
+                            <button className={QUIET_BTN} onClick={() => openReview(launchResult.workspaceId)}>
                                 Review
                             </button>
                         </>
