@@ -125,3 +125,23 @@ svg [aria-label="tip"] g path {
         opacity: 0;
     }
 }
+
+@keyframes recoder-enter {
+    0% {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+.recoder-enter {
+    animation: recoder-enter 180ms ease-out both;
+}
+/* Reduced-motion guard is required so the entrance stays opt-out for users who request less motion. */
+@media (prefers-reduced-motion: reduce) {
+    .recoder-enter {
+        animation: none;
+    }
+}
