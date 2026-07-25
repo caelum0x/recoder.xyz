@@ -6,6 +6,7 @@ import { agentLabel } from "./recoder-agent-labels";
 import { buildConvergenceEvidence, saveConvergenceEvidence } from "./recoder-evidence";
 import {
     computePairwise,
+    computeSuggestedWinner,
     RecoderViewModel,
     type CompareView,
     type MergeabilityView,
@@ -161,6 +162,7 @@ type SiblingCompareRowProps = {
     busy: boolean;
     pickedA: boolean;
     pickedB: boolean;
+    suggestedReason: string;
 };
 
 function SiblingCompareRow({
@@ -175,6 +177,7 @@ function SiblingCompareRow({
     busy,
     pickedA,
     pickedB,
+    suggestedReason,
 }: SiblingCompareRowProps) {
     const stat = sibling.diffStat;
     const merged = lastMerge != null && lastMerge.status == "merged";
@@ -209,6 +212,14 @@ function SiblingCompareRow({
                     </button>
                 </div>
                 <span className="text-sm">{agentLabel(sibling.agent)}</span>
+                {suggestedReason != "" && (
+                    <span
+                        className="rounded border border-border px-1.5 py-0.5 text-xs text-secondary"
+                        title={`Suggested by the loaded data (${suggestedReason}) — a non-binding hint. You still choose and click Merge.`}
+                    >
+                        suggested · {suggestedReason}
+                    </span>
+                )}
                 <span className="text-xs text-secondary">{sibling.state}</span>
                 {stat != null ? (
                     <span className="text-xs text-secondary">
@@ -356,6 +367,7 @@ function RecoderComparePanel({ model, compareView }: { model: RecoderViewModel; 
     const aEntry = compareView.siblings.find((s) => s.workspaceId == pairA);
     const bEntry = compareView.siblings.find((s) => s.workspaceId == pairB);
     const pair = aEntry != null && bEntry != null ? computePairwise(aEntry, bEntry, compareView.contested ?? []) : null;
+    const suggested = computeSuggestedWinner(compareView.siblings, readinessMap);
     return (
         <div className="flex flex-col gap-1.5 rounded border border-border p-2">
             <ContestedSet compareView={compareView} />
@@ -377,6 +389,7 @@ function RecoderComparePanel({ model, compareView }: { model: RecoderViewModel; 
                             busy={busyRow == sibling.workspaceId}
                             pickedA={pairA == sibling.workspaceId}
                             pickedB={pairB == sibling.workspaceId}
+                            suggestedReason={suggested?.workspaceId == sibling.workspaceId ? suggested.reason : ""}
                         />
                     );
                 })}
