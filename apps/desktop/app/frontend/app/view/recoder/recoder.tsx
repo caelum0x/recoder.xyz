@@ -352,10 +352,14 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     </label>
 
                     <label className="flex flex-col gap-1">
-                        <span className={FIELD_LABEL}>First message (optional)</span>
+                        <span className={FIELD_LABEL}>First message{interactive ? " (optional)" : " (required)"}</span>
                         <textarea
                             className={`${INPUT} min-h-16 resize-y`}
-                            placeholder="Optionally start the agent with a message - or leave empty and chat once it's running..."
+                            placeholder={
+                                interactive
+                                    ? "Optionally start the agent with a message - or leave empty and chat once it's running..."
+                                    : "Describe the task - required for a non-interactive run."
+                            }
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
                             onKeyDown={(e) => {
