@@ -9,7 +9,7 @@ import { BoardStatus, RecoderBoardViewModel } from "./recoder-board-model";
 const REFRESH_MS = 6000;
 
 async function pickUpIssue(title: string) {
-    const meta: Record<string, unknown> = { view: "recoder-launch" };
+    const meta: Record<string, unknown> = { view: "recoder" };
     if (title != "") {
         meta["recoder:prefilltask"] = title;
     }

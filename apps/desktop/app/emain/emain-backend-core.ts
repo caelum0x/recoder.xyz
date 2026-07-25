@@ -873,20 +873,43 @@ export function writeWaveAIGatewayConfig(opts: {
     return { waveaiPath, settingsPath, defaultModeSet };
 }
 
-export const CockpitWidgetKey = "defwidget@recoder-cockpit";
+/**
+ * Rail widgets retired from the default launcher (2026-07-25 Conductor-grade
+ * trim; decisions recorded in docs/DESKTOP-UX-STATE-AND-PLAN.md §5):
+ * cockpit (dropped UI), session/launch/review (hub owns those entry paths),
+ * approvals/memory (broken wiring — resurface after fix), sysinfo/processes
+ * (infra dashboards), plus the earlier-hidden infra views whose keys may still
+ * be pinned in old user configs.
+ */
+export const RetiredWidgetKeys = [
+    "defwidget@recoder-cockpit",
+    "defwidget@recoder-terminal",
+    "defwidget@recoder-launch",
+    "defwidget@recoder-diff",
+    "defwidget@recoder-approvals",
+    "defwidget@recoder-memory",
+    "defwidget@sysinfo",
+    "defwidget@processviewer",
+    "defwidget@recoder-board",
+    "defwidget@recoder-tools",
+    "defwidget@recoder-connectors",
+    "defwidget@recoder-openfang",
+    "defwidget@recoder-hands",
+    "defwidget@recoder-settings",
+] as const;
 
 /**
- * Self-heal the config-dir widgets.json so the dropped cockpit widget stays gone.
- * The cockpit surface was dropped (Wave-canonical), but the embedded default
- * (server/pkg/wconfig/defaultconfig/widgets.json) in an already-shipped Go binary
- * may still declare defwidget@recoder-cockpit, and earlier builds also pinned the
- * full widget object into the user config. wconfig SIMPLE-merges the config-dir
- * file over the defaults, treating a `null` value as "delete this key from the
- * merged result". So force the key to `null` (not just remove it) on every
- * onReady — that neutralizes both a stale user entry AND the default's entry,
- * self-healing across installs. Idempotent; other user widgets are untouched.
+ * Self-heal the config-dir widgets.json so retired rail widgets stay gone.
+ * The embedded default (server/pkg/wconfig/defaultconfig/widgets.json) in an
+ * already-shipped Go binary may still declare these keys, and earlier builds
+ * also pinned full widget objects into the user config. wconfig SIMPLE-merges
+ * the config-dir file over the defaults, treating a `null` value as "delete
+ * this key from the merged result". So force each retired key to `null` (not
+ * just remove it) on every onReady — that neutralizes both a stale user entry
+ * AND the default's entry, self-healing across installs. Idempotent; other
+ * user widgets are untouched.
  */
-export function removeCockpitWidgetConfig(opts: { configDir: string; fs?: FsLike }): {
+export function removeRetiredWidgetConfig(opts: { configDir: string; fs?: FsLike }): {
     widgetsPath: string;
     removed: boolean;
 } {
@@ -903,12 +926,13 @@ export function removeCockpitWidgetConfig(opts: { configDir: string; fs?: FsLike
     } catch {
         return { widgetsPath, removed: false };
     }
-    if (CockpitWidgetKey in widgets && widgets[CockpitWidgetKey] === null) {
+    const stale = RetiredWidgetKeys.filter((key) => !(key in widgets) || widgets[key] !== null);
+    if (stale.length === 0) {
         return { widgetsPath, removed: false };
     }
-    widgets[CockpitWidgetKey] = null;
+    const healed = { ...widgets, ...Object.fromEntries(stale.map((key) => [key, null])) };
     fs.mkdirSync(opts.configDir, { recursive: true });
-    fs.writeFileSync(widgetsPath, JSON.stringify(widgets, null, 4) + "\n");
+    fs.writeFileSync(widgetsPath, JSON.stringify(healed, null, 4) + "\n");
     return { widgetsPath, removed: true };
 }
 

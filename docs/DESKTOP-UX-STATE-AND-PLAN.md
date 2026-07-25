@@ -158,15 +158,25 @@ terminal, kept and made prominent.
 
 ## 5. Tab-by-tab plan (the record)
 
+**REVISED 2026-07-25 (Conductor-grade rail trim; owner directive "more like
+Conductor/Cursor" + 3-agent wiring audit).** Default rail is now ONLY:
+**workspaces (`recoder`), runs, terminal, files, web.** Every removal below is
+rail-entry-only — the views stay registered and reachable from the hub. A
+startup self-heal (`removeRetiredWidgetConfig`, `emain-backend-core.ts`) nulls
+all retired keys in the user config so stale binaries/configs can't resurrect
+them.
+
 | Tab | View | Backend edge | True status | Decision | Action |
 |---|---|---|---|---|---|
-| **Workspaces** | `recoder` | `GET /api/conductor/workspaces` 200 | works | **KEEP** | — |
-| **Session** | `recoder-terminal` | tmux attach | works | **KEEP** | — |
-| **Launch Agent** | `recoder-launch` | `GET /api/conductor/runtimes` 200 | **BUG** (shape) → empty → false "start backend" | **FIX** | read `data.runtimes`, filter openfang (staged) |
-| **Review** | `recoder-diff` | `GET /api/conductor/workspaces` 200 | works (empty) | **KEEP** | — |
-| **Runs** | `recoder-runs` | `/api/agent-os/runs` + `/events` 200 | works (empty) | **KEEP** | — |
-| **Approvals** | `recoder-approvals` | `/api/agent-os/approvals` | 503 → **FIXED** 200 | **KEEP** | done |
-| **Memory** | `recoder-memory` | `candidates` 200; `recall` POST 200 | works (recall is POST; earlier "404" was wrong-method probe) | **KEEP** | verify search in UI |
+| **Workspaces** | `recoder` | `GET /api/conductor/workspaces` 200 | works (audit: all 10+ edges shape-verified) | **KEEP** (relabeled "workspaces") | — |
+| **Session** | `recoder-terminal` | WS `/:id/stream` | **BROKEN twice**: model expects wrapped `{type:"event"}` frames but backend sends BARE RunEvents → every frame silently dropped ("Waiting for session output…" forever); rail-opened block has no `recoder:workspaceid` → permanent "no workspace" | **REMOVE from rail** | hub per-row Session is the only working entry; fix frame parse (bd) then keep as hub-opened view |
+| **Launch Agent** | `recoder-launch` | none (redirect stub) | self-declared "Launch moved into Workspaces." placeholder | **REMOVE from rail** | hub inline launch owns it; board "Pick up" retargeted `recoder-launch`→`recoder` |
+| **Review** | `recoder-diff` | diff/merge/pr edges verified | works — but rail entry just auto-selects `workspaces[0]`; hub per-row Review opens it seeded | **REMOVE from rail** (view stays — unique line-level patch + Create-PR) | — |
+| **Runs** | `recoder-runs` | `/api/agent-os/runs` + `/events` 200 | works (empty until agent-os runs exist); sole agent-os history surface, NOT hub-redundant | **KEEP** | — |
+| **Approvals** | `recoder-approvals` | `/api/agent-os/approvals` | **BROKEN twice**: governance router returns `{approvals:[…]}` but model requires bare array → always empty-while-"connected"; Approve/Reject POST `/approve\|/reject` → 404 (real route is `/decide` with `{decision}`) | **REMOVE from rail** | fix wiring (bd) before resurfacing |
+| **Memory** | `recoder-memory` | `candidates` / `recall` | **BROKEN list**: model wants `{items,candidates}` object, no route returns that shape → permanently empty; recall/search half is correct | **REMOVE from rail** | fix list wiring (bd) before resurfacing |
+| **sysinfo** | `sysinfo` | local | works | **REMOVE from rail** | infra dashboard — against north star; view reachable via launcher/palette |
+| **processes** | `processviewer` | local | works | **REMOVE from rail** | same |
 | **Board** | `recoder-board` | work-signals + issues/ready → 404 | work-signals = wrong path (cheap); issues/ready = no edge (costly) | **HIDE now** | repoint work-signals to `/observability/signals` later; issues/ready needs bd |
 | **Engine** | `recoder-openfang` | none | N/A on desktop | **HIDE** | done |
 | **Agent Hands** | `recoder-hands` | none | N/A on desktop | **HIDE** | done |
@@ -232,9 +242,11 @@ only bug is that it's presented as a *forced wall* in the wrong frontend.
 ## 7. Target layout
 
 - **Default tab** = terminal + Workspaces hub. Nothing else auto-seeded.
-- **Launcher rail** = only working, terminal-relevant surfaces: Workspaces,
-  Session, Launch, Review, Runs, Approvals, Memory + built-in terminal/files/web/
-  sysinfo/processes. Nothing that renders "not available"/"503"/empty-infra.
+- **Launcher rail (REVISED 2026-07-25, Conductor-grade)** = **workspaces, runs,
+  terminal, files, web** — nothing else. The hub owns session/launch/review
+  entry; approvals/memory return only after their wiring is fixed; sysinfo/
+  processes are infra dashboards (north star: none). Nothing that renders
+  "not available"/"503"/empty-infra — and nothing that duplicates the hub.
 
 ---
 
@@ -246,6 +258,17 @@ solo→empty), plus the earlier solo-mode gate cascade (memory
 `project_desktop_solo_mode_gates`).
 
 **Staged, uncommitted:** Launch Agent shape fix (`recoder-launch-model.ts`).
+
+**2026-07-25 rail trim (this doc's §5 revision):** default widgets cut to 5
+(`defaultconfig/widgets.json`), `removeCockpitWidgetConfig` generalized to
+`removeRetiredWidgetConfig` (nulls all 14 retired keys in user config on every
+start), board "Pick up" retargeted to the hub, webview devtools unmount crash
+fixed (`webview.tsx` cleanup guarded — the "WebView must be attached to the
+DOM" error on leaving the web tab). Audit found 3 NEW broken wirings (session
+stream frame shape; approvals list shape + decide endpoints; memory list
+shape) — bd issues filed; fix before any resurfacing. NOTE: the Go server must
+be rebuilt for the defaults to ship (`task build:backend:quickdev --force` —
+the task cache does NOT invalidate on defaultconfig JSON edits).
 
 **Pending (needs your decision, §9):** frontend consolidation; cockpit auth
 solo-bypass + PAL/openfang scrub + label map; remove recoder.xyz default url;

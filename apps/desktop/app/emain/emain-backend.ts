@@ -28,7 +28,7 @@ import {
     portIsFree,
     resolveTmuxBin,
     SupervisorStatus,
-    removeCockpitWidgetConfig,
+    removeRetiredWidgetConfig,
     writeWaveAIGatewayConfig,
 } from "./emain-backend-core";
 import { CONNECTOR_SECRET_ENV_NAMES, readByokSecretsFromStore } from "./emain-backend-runtime-env";
@@ -135,12 +135,12 @@ export async function startBackendSupervisor(): Promise<void> {
                     console.log("[backend-supervisor] failed to write AI gateway config", e);
                 }
                 try {
-                    const { widgetsPath, removed } = removeCockpitWidgetConfig({ configDir: getWaveConfigDir() });
+                    const { widgetsPath, removed } = removeRetiredWidgetConfig({ configDir: getWaveConfigDir() });
                     if (removed) {
-                        console.log(`[backend-supervisor] removed stale cockpit widget from ${widgetsPath}`);
+                        console.log(`[backend-supervisor] removed retired rail widgets from ${widgetsPath}`);
                     }
                 } catch (e) {
-                    console.log("[backend-supervisor] failed to remove cockpit widget config", e);
+                    console.log("[backend-supervisor] failed to remove retired widget config", e);
                 }
             },
         });

@@ -2,60 +2,10 @@
     "defwidget@recoder": {
         "display:order": -6,
         "icon": "layer-group",
-        "label": "recoder",
+        "label": "workspaces",
         "blockdef": {
             "meta": {
                 "view": "recoder"
-            }
-        }
-    },
-    "defwidget@recoder-terminal": {
-        "display:order": -5.5,
-        "icon": "terminal",
-        "label": "session",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-terminal"
-            }
-        }
-    },
-    "defwidget@recoder-launch": {
-        "display:order": -5.4,
-        "icon": "rocket",
-        "label": "launch",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-launch"
-            }
-        }
-    },
-    "defwidget@recoder-diff": {
-        "display:order": -5.3,
-        "icon": "code-compare",
-        "label": "review",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-diff"
-            }
-        }
-    },
-    "defwidget@recoder-approvals": {
-        "display:order": -5.2,
-        "icon": "shield-halved",
-        "label": "approvals",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-approvals"
-            }
-        }
-    },
-    "defwidget@recoder-memory": {
-        "display:order": -5.03,
-        "icon": "brain",
-        "label": "memory",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-memory"
             }
         }
     },
@@ -98,26 +48,6 @@
         "blockdef": {
             "meta": {
                 "view": "web"
-            }
-        }
-    },
-    "defwidget@sysinfo": {
-        "display:order": -2,
-        "icon": "chart-line",
-        "label": "sysinfo",
-        "blockdef": {
-            "meta": {
-                "view": "sysinfo"
-            }
-        }
-    },
-    "defwidget@processviewer": {
-        "display:order": -1,
-        "icon": "list-tree",
-        "label": "processes",
-        "blockdef": {
-            "meta": {
-                "view": "processviewer"
             }
         }
     }
