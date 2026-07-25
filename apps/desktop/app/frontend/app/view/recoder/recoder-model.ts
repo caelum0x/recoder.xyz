@@ -44,7 +44,21 @@ type RecoderDiffSummary = { additions: number; deletions: number; files: number 
 
 // Outcome of an inline launch. `ok` distinguishes a truthful success from a
 // truthful failure whose reason is the backend's verbatim message — never faked.
-type RecoderLaunchResult = { ok: boolean; message?: string; error?: string };
+// On success it optionally carries the FIRST started workspace so the hub can
+// offer a real next step (open session / terminal / review) and, for a single
+// interactive launch, auto-jump into the session. `sessionName`/`worktreePath`
+// are read leniently (absent on an older backend) and never fabricated.
+type RecoderLaunchResult = {
+    ok: boolean;
+    message?: string;
+    error?: string;
+    workspaceId?: string;
+    sessionName?: string;
+    worktreePath?: string;
+    runtimeId?: string;
+    interactive?: boolean;
+    parallelCount?: number;
+};
 
 // One agent's row in the side-by-side compare of a parallel-run group. A lenient
 // mirror of the backend SiblingCompareEntry — `diffStat`/`changedFiles` are ABSENT
@@ -786,6 +800,7 @@ class RecoderViewModel implements ViewModel {
         let started = 0;
         let degraded = 0;
         let lastDegradedReason = "";
+        let firstStarted: { workspaceId: string; sessionName?: string; worktreePath?: string; runtimeId: string } = null;
         try {
             for (const agent of agents) {
                 const reqBody = {
@@ -820,6 +835,18 @@ class RecoderViewModel implements ViewModel {
                     continue;
                 }
                 started += 1;
+                if (firstStarted == null) {
+                    const wsId = typeof workspace?.workspaceId == "string" ? workspace.workspaceId : "";
+                    if (wsId != "") {
+                        firstStarted = { workspaceId: wsId, runtimeId: agent };
+                        if (typeof workspace.sessionName == "string") {
+                            firstStarted.sessionName = workspace.sessionName;
+                        }
+                        if (typeof workspace.worktreePath == "string") {
+                            firstStarted.worktreePath = workspace.worktreePath;
+                        }
+                    }
+                }
             }
             this.rememberRepo(repoPath);
             this.rememberAgent(primary, interactive);
@@ -839,6 +866,16 @@ class RecoderViewModel implements ViewModel {
             globalStore.set(this.launchResultAtom, {
                 ok: true,
                 message: total > 1 ? `Launched ${started} agents.` : "Workspace created.",
+                ...(firstStarted != null
+                    ? {
+                          workspaceId: firstStarted.workspaceId,
+                          runtimeId: firstStarted.runtimeId,
+                          ...(firstStarted.sessionName != null ? { sessionName: firstStarted.sessionName } : {}),
+                          ...(firstStarted.worktreePath != null ? { worktreePath: firstStarted.worktreePath } : {}),
+                      }
+                    : {}),
+                interactive,
+                parallelCount: also.length,
             });
             globalStore.set(this.launchOpenAtom, false);
             globalStore.set(this.launchPromptAtom, "");
