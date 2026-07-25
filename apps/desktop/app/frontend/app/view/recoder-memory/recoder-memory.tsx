@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { RecoderEmpty, RecoderErrorRow, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import {
@@ -74,12 +75,12 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
-                <span className="font-semibold">Recoder â Memory</span>
+                <span className="font-semibold">Recoder - Memory</span>
             </div>
             <div className="flex items-center gap-2">
                 <input
                     className="flex-1 rounded border border-border bg-transparent px-2 py-0.5 text-sm outline-none focus:border-accent"
-                    placeholder="Search memoryâ¦"
+                    placeholder="Search memory…"
                     value={query}
                     onChange={(e) => model.setQuery(e.target.value)}
                     onKeyDown={(e) => {
@@ -93,15 +94,13 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
                     className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
                     onClick={() => model.search()}
                 >
-                    {searching ? "â¦" : "Search"}
+                    {searching ? "…" : "Search"}
                 </button>
             </div>
-            {error != "" && <div className="text-error text-sm">{error}</div>}
-            {loading && items.length == 0 && <div className="text-secondary text-sm">Loadingâ¦</div>}
+            <RecoderErrorRow message={error} />
+            {loading && items.length == 0 && <RecoderSkeleton rows={4} />}
             {showDisconnected && (
-                <div className="text-secondary text-sm">
-                    Not connected â Recoder is starting…
-                </div>
+                <RecoderEmpty title="Recoder is still starting…" hint="Memory loads once it is ready." />
             )}
 
             {hasQuery && (
@@ -116,7 +115,12 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
 
             {!hasQuery && (
                 <>
-                    {showEmpty && <div className="text-secondary text-sm">No memories yet.</div>}
+                    {showEmpty && (
+                        <RecoderEmpty
+                            title="No memories yet"
+                            hint="Facts and conventions are captured here as agents complete work."
+                        />
+                    )}
                     {items.length > 0 && (
                         <div className="flex flex-col gap-1">
                             <div className="text-xs uppercase tracking-wide text-secondary">Memory ({items.length})</div>
