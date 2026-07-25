@@ -49,6 +49,8 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   SERVICE_NAME: z.string().min(1).default('recoder-backend'),
   INSTANCE_ID: z.string().min(1).optional(),
+  // Solo/desktop mode — set to '1' by the embedded desktop supervisor only.
+  RECODER_SOLO_MODE: z.string().optional(),
 
   // 0 = bind an OS-assigned ephemeral port (used by tests / dynamic binding).
   PORT: z.coerce.number().int().min(0).max(65535).default(3100),
@@ -415,6 +417,8 @@ function buildConfig(env: ParsedEnv, rawEnv: EnvSource): AppConfig {
     isProduction,
     serviceName: env.SERVICE_NAME,
     instanceId: env.INSTANCE_ID ?? randomUUID(),
+    // The ONLY read of RECODER_SOLO_MODE (§10.8) — every domain gets it injected.
+    soloMode: env.RECODER_SOLO_MODE === '1',
   };
 
   const server: ServerConfig = {

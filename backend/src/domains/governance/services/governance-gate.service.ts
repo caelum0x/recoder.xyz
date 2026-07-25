@@ -70,6 +70,14 @@ export interface GovernanceGateDeps {
    * composed AFTER governance at bootstrap.
    */
   readonly consensus?: ConsensusReviewPort;
+  /**
+   * Solo/desktop mode (bootstrap-injected from `RECODER_SOLO_MODE`, §10.8 — the
+   * gate never reads the environment): the local user's own action IS the
+   * approval, so a `needs_approval` verdict is cleared to `allow` and a failed
+   * audit seal on an allow degrades to a logged gap instead of a refusal.
+   * Default `false` keeps every cloud deploy fail-closed.
+   */
+  readonly soloMode?: boolean;
   readonly logger?: Logger;
 }
 
@@ -78,6 +86,7 @@ export class GovernanceGateService implements GovernanceGate {
   private readonly audit: AuditChainService;
   private readonly approvals?: ApprovalRepository;
   private consensus?: ConsensusReviewPort;
+  private readonly soloMode: boolean;
   private readonly log?: Logger;
 
   constructor(deps: GovernanceGateDeps) {
@@ -85,6 +94,7 @@ export class GovernanceGateService implements GovernanceGate {
     this.audit = deps.audit;
     this.approvals = deps.approvals;
     this.consensus = deps.consensus;
+    this.soloMode = deps.soloMode === true;
     this.log = deps.logger;
   }
 
@@ -111,16 +121,16 @@ export class GovernanceGateService implements GovernanceGate {
     //    into the audit chain below (step 4). Fail-closed everywhere else: the
     //    kernel's bare `approvalGateId` never clears, a lookup fault never clears.
     const clearedByApprovalId = await this.resolveApprovalClearance(action, kernelVerdict, ctx);
-    // Solo/desktop mode (RECODER_SOLO_MODE): a single local user on their own
-    // machine with NO human-approval plane to route a `needs_approval` verdict
-    // to — the user's own action IS the approval. Clear it to `allow` (sealed
-    // below as a solo-mode clearance, and still subject to the high-risk
+    // Solo/desktop mode (bootstrap-injected `soloMode`): a single local user on
+    // their own machine with NO human-approval plane to route a `needs_approval`
+    // verdict to — the user's own action IS the approval. Clear it to `allow`
+    // (sealed below as a solo-mode clearance, and still subject to the high-risk
     // consensus review). Only clears the approval gate — a hard policy `deny`
-    // stays denied. A cloud deploy never sets RECODER_SOLO_MODE.
+    // stays denied. A cloud deploy never enables solo mode.
     const soloCleared =
       !clearedByApprovalId &&
       kernelVerdict.effect === 'needs_approval' &&
-      process.env.RECODER_SOLO_MODE === '1';
+      this.soloMode;
     const verdict: KernelVerdict = clearedByApprovalId
       ? {
           ...kernelVerdict,
@@ -157,12 +167,12 @@ export class GovernanceGateService implements GovernanceGate {
       auditHash = record.entryHash;
     } catch (err) {
       this.log?.error({ err, action, actor: principal.userId }, 'governance audit seal failed');
-      // Solo/desktop mode (RECODER_SOLO_MODE): a single local user with no
-      // durable audit store (no DB). Don't block their own local, user-initiated
-      // write on the missing Merkle seal — proceed with the audit gap logged
-      // above. A cloud deploy never sets RECODER_SOLO_MODE and keeps the
+      // Solo/desktop mode (bootstrap-injected `soloMode`): a single local user
+      // with no durable audit store (no DB). Don't block their own local,
+      // user-initiated write on the missing Merkle seal — proceed with the audit
+      // gap logged above. A cloud deploy never enables solo mode and keeps the
       // fail-closed refusal (an un-recorded write cannot be trusted there).
-      if (effective.effect === 'allow' && process.env.RECODER_SOLO_MODE !== '1') {
+      if (effective.effect === 'allow' && !this.soloMode) {
         return this.failClosed(req, principal, action, now, 'Audit chain unavailable — refusing to allow an un-recorded write.');
       }
     }

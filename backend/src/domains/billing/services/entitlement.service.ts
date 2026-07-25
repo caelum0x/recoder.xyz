@@ -58,6 +58,12 @@ export interface EntitlementServiceDeps {
   readonly resolveByok?: (subject: BillingSubject) => Promise<boolean> | boolean;
   /** Injectable clock for deterministic window math in tests. */
   readonly now?: () => Date;
+  /**
+   * Solo/desktop mode (bootstrap-injected from `RECODER_SOLO_MODE`, §10.8 — no
+   * env read here): quota fails OPEN when the metering repo is unreachable.
+   * Default `false` keeps every cloud deploy's fail-safe deny.
+   */
+  readonly soloMode?: boolean;
 }
 
 /** The calendar-month UTC window quota is metered against. */
@@ -70,6 +76,7 @@ function monthlyWindow(now: Date): { windowStart: string; resetAt: string } {
 export function createEntitlementService(deps: EntitlementServiceDeps): EntitlementGate {
   const { repo, catalog, distribution } = deps;
   const clock = deps.now ?? (() => new Date());
+  const soloMode = deps.soloMode === true;
 
   function subjectFromPrincipal(principal: Principal): BillingSubject {
     return principal.orgId
@@ -163,12 +170,12 @@ export function createEntitlementService(deps: EntitlementServiceDeps): Entitlem
       return { ...base, allowed: true, limit: 0, remaining: 0, byokBypass: false };
     }
 
-    // Solo/desktop mode (RECODER_SOLO_MODE): a single local user on their own
-    // machine with no billing plane. There is nothing to meter, so an
+    // Solo/desktop mode (bootstrap-injected `soloMode`): a single local user on
+    // their own machine with no billing plane. There is nothing to meter, so an
     // unreachable metering repo fails OPEN instead of denying — otherwise a
-    // DB-less desktop would 429 every AI request. A cloud deploy never sets
-    // RECODER_SOLO_MODE, so it keeps the fail-safe deny below.
-    if (!repo.isAvailable() && process.env.RECODER_SOLO_MODE === '1') {
+    // DB-less desktop would 429 every AI request. A cloud deploy never enables
+    // solo mode, so it keeps the fail-safe deny below.
+    if (!repo.isAvailable() && soloMode) {
       return { ...base, allowed: true, limit, remaining: limit, byokBypass: false };
     }
 

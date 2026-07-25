@@ -90,6 +90,7 @@ export class GovernanceComposer implements GovernanceModule {
       kernel,
       audit: this.auditChain,
       approvals: approvalRepo,
+      soloMode: cfg.soloMode,
       logger: this.log,
     });
 
@@ -115,6 +116,7 @@ export class GovernanceComposer implements GovernanceModule {
       repo: approvalRepo,
       logger: this.log,
       audit: this.gateService,
+      soloMode: cfg.soloMode,
     });
   }
 

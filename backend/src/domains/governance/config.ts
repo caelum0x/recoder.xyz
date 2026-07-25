@@ -33,6 +33,8 @@ export const governanceConfigSchema = z.object({
   vaultMasterKey: z.string().nullable(),
   /** Whether audit sealing into the durable Merkle chain is enabled. */
   auditEnabled: z.boolean(),
+  /** Solo/desktop mode — click-is-approval clearance + audit fail-open (see `RuntimeConfig.soloMode`). */
+  soloMode: z.boolean(),
   isProduction: z.boolean(),
 });
 
@@ -64,6 +66,7 @@ export function sliceGovernanceConfig(
     allowInsecureDaemon: overrides.allowInsecureDaemon ?? !app.runtime.isProduction,
     vaultMasterKey: overrides.vaultMasterKey ?? null,
     auditEnabled: overrides.auditEnabled ?? true,
+    soloMode: app.runtime.soloMode === true,
     isProduction: app.runtime.isProduction,
   });
 }
