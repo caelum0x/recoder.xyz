@@ -120,6 +120,111 @@ function computePairwise(
     return view;
 }
 
+// A truthful, NON-BINDING hint at the sibling the already-loaded data favors. It
+// never selects, picks, or merges — the dev still clicks Merge. `reason` is the
+// single criterion that decided it (the deciding datum is always REAL, never the
+// unknown sentinel). Absent ⇒ no sibling had any scoreable data, or the field is
+// a genuine tie, so we show nothing rather than guess.
+type SuggestedWinner = { workspaceId: string; reason: string };
+
+// Missing data ranks WORST so a sibling we cannot assess never outranks one we
+// measured as clean/passing/small. A criterion only ever "decides" in the
+// winner's favor when the winner's own value is real (see computeSuggestedWinner),
+// so the surfaced reason is always truthful about the winner.
+const CONFLICTS_UNKNOWN = Number.POSITIVE_INFINITY;
+const PASSING_UNKNOWN = -1;
+const SIZE_UNKNOWN = Number.POSITIVE_INFINITY;
+
+type WinnerMetrics = {
+    workspaceId: string;
+    conflicts: number;
+    passing: number;
+    size: number;
+    hasData: boolean;
+};
+
+function siblingMetrics(sibling: SiblingCompareEntry, readiness: Record<string, RecoderWorkspaceReadiness>): WinnerMetrics {
+    const wr = readiness?.[sibling.workspaceId];
+    let conflicts = CONFLICTS_UNKNOWN;
+    let hasConflicts = false;
+    const mergeability = wr?.mergeability;
+    if (mergeability != null && mergeability.available) {
+        conflicts = mergeability.conflicts?.length ?? 0;
+        hasConflicts = true;
+    }
+    let passing = PASSING_UNKNOWN;
+    let hasPassing = false;
+    const readinessView = wr?.readiness;
+    if (readinessView != null && Array.isArray(readinessView.signals)) {
+        passing = readinessView.signals.filter((s) => s.status == "pass").length;
+        hasPassing = true;
+    }
+    let size = SIZE_UNKNOWN;
+    let hasSize = false;
+    if (sibling.diffStat != null) {
+        size = sibling.diffStat.additions + sibling.diffStat.deletions;
+        hasSize = true;
+    }
+    return { workspaceId: sibling.workspaceId, conflicts, passing, size, hasData: hasConflicts || hasPassing || hasSize };
+}
+
+// Lexicographic: fewest conflicts, then most readiness checks passing, then
+// smallest diff (adds+dels). Returns <0 when `a` is the better sibling.
+function compareMetrics(a: WinnerMetrics, b: WinnerMetrics): number {
+    if (a.conflicts != b.conflicts) {
+        return a.conflicts - b.conflicts;
+    }
+    if (a.passing != b.passing) {
+        return b.passing - a.passing;
+    }
+    if (a.size != b.size) {
+        return a.size - b.size;
+    }
+    return 0;
+}
+
+function decideReason(winner: WinnerMetrics, runnerUp: WinnerMetrics): string {
+    if (winner.conflicts < runnerUp.conflicts) {
+        return "fewest conflicts";
+    }
+    if (winner.passing > runnerUp.passing) {
+        return "most checks passing";
+    }
+    if (winner.size < runnerUp.size) {
+        return "smallest diff";
+    }
+    return "";
+}
+
+// Pure + degrade-safe: score every sibling from data ALREADY loaded (mergeability
+// conflicts, readiness passes, diffStat size) and name the one the data favors. It
+// is a hint only — it selects nothing. Returns null when no sibling has scoreable
+// data, or when the top two tie on every criterion (the field genuinely favors no
+// one), so the UI shows no badge rather than fabricate a preference.
+function computeSuggestedWinner(
+    siblings: SiblingCompareEntry[],
+    readiness: Record<string, RecoderWorkspaceReadiness>
+): SuggestedWinner {
+    if (siblings == null || siblings.length == 0) {
+        return null;
+    }
+    const metrics = siblings.map((s) => siblingMetrics(s, readiness ?? {}));
+    if (!metrics.some((m) => m.hasData)) {
+        return null;
+    }
+    const sorted = [...metrics].sort(compareMetrics);
+    const winner = sorted[0];
+    const runnerUp = sorted[1];
+    if (winner == null || !winner.hasData || runnerUp == null) {
+        return null;
+    }
+    const reason = decideReason(winner, runnerUp);
+    if (reason == "") {
+        return null;
+    }
+    return { workspaceId: winner.workspaceId, reason };
+}
+
 // Read-only operator-attach hint for a group; absent for singleton/no-dmux groups.
 type GroupAttachHint = { attachCommand?: string; visibleSessions: string[] };
 
@@ -766,6 +871,7 @@ export {
     RecoderViewModel,
     groupByTaskGroup,
     computePairwise,
+    computeSuggestedWinner,
     TASK_GROUP_METADATA_KEY,
     type RecoderWorkspace,
     type RecoderSetup,
@@ -776,6 +882,7 @@ export {
     type ContestedFile,
     type PairwiseDiffDelta,
     type PairwiseCompareView,
+    type SuggestedWinner,
     type GroupAttachHint,
     type CompareView,
     type MergeabilityView,
