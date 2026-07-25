@@ -362,9 +362,9 @@ export class DodoPaymentsService {
       const response = await getDodoClient().subscriptions.updatePaymentMethod(
         subscription.providerId!,
         {
-          type: paymentMethodType,
-          payment_method_id: options?.paymentMethodId,
-          return_url: options?.returnUrl || `${process.env.NEXT_PUBLIC_APP_URL}/billing/success`,
+          payment_method: paymentMethodType === 'existing'
+            ? { type: 'existing' as const, payment_method_id: options?.paymentMethodId ?? '' }
+            : { type: 'new' as const, return_url: options?.returnUrl || `${process.env.NEXT_PUBLIC_APP_URL}/billing/success` },
         }
       );
 

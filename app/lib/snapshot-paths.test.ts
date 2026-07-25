@@ -7,7 +7,7 @@ import {
   isUnderPrefix,
   mergeSnapshotState,
   renamePath,
-} from './snapshot-paths.ts';
+} from './snapshot-paths';
 
 test('coerceFiles keeps only string values', () => {
   assert.deepEqual(
