@@ -78,17 +78,27 @@ class RecoderMemoryViewModel implements ViewModel {
         globalStore.set(this.loadingAtom, true);
         globalStore.set(this.errorAtom, "");
         try {
-            const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/memory/candidates`);
-            if (!res.ok) {
+            const base = getRecoderBackendUrl();
+            // Both edges answer with the sendSuccess envelope around a BARE array
+            // ({ success, data: MemoryItem[] } / { success, data: MemoryCandidate[] });
+            // there is no combined {items,candidates} route.
+            const [itemsRes, candidatesRes] = await Promise.all([
+                fetch(`${base}/api/agent-os/memory/items`),
+                fetch(`${base}/api/agent-os/memory/candidates`),
+            ]);
+            if (!itemsRes.ok || !candidatesRes.ok) {
                 globalStore.set(this.connectedAtom, false);
-                const detail = await readFetchError(res);
-                globalStore.set(this.errorAtom, detail || `Memory unavailable (${res.status})`);
+                const failed = !itemsRes.ok ? itemsRes : candidatesRes;
+                const detail = await readFetchError(failed);
+                globalStore.set(this.errorAtom, detail || `Memory unavailable (${failed.status})`);
                 return;
             }
-            const body = await res.json();
-            const data = body?.data ?? {};
-            const items = Array.isArray(data?.items) ? (data.items as RecoderMemoryItem[]) : [];
-            const candidates = Array.isArray(data?.candidates) ? (data.candidates as RecoderMemoryCandidate[]) : [];
+            const itemsBody = await itemsRes.json();
+            const candidatesBody = await candidatesRes.json();
+            const items = Array.isArray(itemsBody?.data) ? (itemsBody.data as RecoderMemoryItem[]) : [];
+            const candidates = Array.isArray(candidatesBody?.data)
+                ? (candidatesBody.data as RecoderMemoryCandidate[])
+                : [];
             const pending = candidates.filter((c) => c?.status === "candidate_created" || c?.status === "reviewed");
             globalStore.set(this.itemsAtom, items);
             globalStore.set(this.candidatesAtom, pending);

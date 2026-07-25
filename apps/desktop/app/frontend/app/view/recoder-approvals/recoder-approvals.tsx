@@ -8,35 +8,8 @@ import { RecoderApproval, RecoderApprovalsViewModel } from "./recoder-approvals-
 
 const REFRESH_MS = 6000;
 
-const REQUIRED_AT_LABELS: Record<string, string> = {
-    before_execution: "before execution",
-    before_write: "before write",
-    before_push: "before push",
-    before_pr: "before PR",
-    before_sensitive_action: "before sensitive action",
-    after_verification: "after verification",
-    custom: "custom gate",
-};
-
 function riskLabel(a: RecoderApproval): string {
-    return REQUIRED_AT_LABELS[a.requiredAt] ?? a.requiredAt ?? "gate";
-}
-
-function targetLabel(a: RecoderApproval): string {
-    const t = a.target;
-    if (!t) {
-        return "";
-    }
-    if (t.command) {
-        return t.command;
-    }
-    if (t.path) {
-        return t.path;
-    }
-    if (t.toolName) {
-        return t.toolName;
-    }
-    return "";
+    return a.riskTier ?? "gate";
 }
 
 function RecoderApprovalsView({ model }: ViewComponentProps<RecoderApprovalsViewModel>) {
@@ -75,40 +48,37 @@ function RecoderApprovalsView({ model }: ViewComponentProps<RecoderApprovalsView
             )}
             <div className="flex flex-col gap-2">
                 {approvals.map((a) => {
-                    const target = targetLabel(a);
-                    const busy = acting == a.approvalId;
+                    const action = a.action || "";
+                    const busy = acting == a.id;
                     return (
                         <div
-                            key={a.approvalId}
+                            key={a.id}
                             className="flex flex-col gap-2 rounded border border-border p-3"
-                            title={a.approvalId}
+                            title={a.id}
                         >
                             <div className="flex flex-col gap-0.5">
                                 <div className="text-sm font-medium">{a.reason || "Approval requested"}</div>
-                                {target != "" && (
-                                    <div className="text-xs text-secondary font-mono truncate">{target}</div>
+                                {action != "" && (
+                                    <div className="text-xs text-secondary font-mono truncate">{action}</div>
                                 )}
                             </div>
                             <div className="flex items-center gap-2 text-xs text-secondary flex-wrap">
                                 <span className="rounded bg-border/60 px-1.5 py-0.5">{riskLabel(a)}</span>
                                 <span>by {a.requestedBy || "unknown"}</span>
-                                {a.status == "escalated" && (
-                                    <span className="text-error">escalated</span>
-                                )}
                                 <span className="ml-auto font-mono truncate">{a.taskId}</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
                                     disabled={busy}
                                     className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
-                                    onClick={() => model.decide(a.approvalId, "approve")}
+                                    onClick={() => model.decide(a.id, "approve")}
                                 >
                                     {busy ? "…" : "Approve"}
                                 </button>
                                 <button
                                     disabled={busy}
                                     className="border border-border text-primary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer disabled:opacity-50"
-                                    onClick={() => model.decide(a.approvalId, "reject")}
+                                    onClick={() => model.decide(a.id, "reject")}
                                 >
                                     {busy ? "…" : "Reject"}
                                 </button>

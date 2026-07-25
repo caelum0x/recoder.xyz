@@ -25,13 +25,37 @@ type RecoderRunEvent = {
 };
 
 // The frames attachWorkspaceStream emits (backend conductor/live-events.ts).
+// LEGACY: the live backend does not wrap — its /stream WS fans out FULL
+// RunEvents as bare JSON (live-events.ts publishRaw), so bare frames are the
+// primary shape and this envelope is only tolerated for older backends.
 type StreamMessage =
     | { type: "event"; event: RecoderRunEvent }
     | { type: "error"; message?: string }
     | { type: "complete" };
 
+type ParsedStreamFrame =
+    | { kind: "event"; event: RecoderRunEvent }
+    | { kind: "error"; message: string }
+    | { kind: "complete" };
+
 const MaxScrollbackLines = 5000;
 const WorkspaceIdMetaKey = "recoder:workspaceid";
+// RunEventType values from packages/agent-os domain/event.ts, mirrored (like
+// RecoderRunEvent above) so bare frames can be recognized without coupling to
+// the backend package.
+const RunEventTypes = new Set<string>([
+    "started",
+    "state_transition",
+    "log",
+    "user_message",
+    "artifact",
+    "needs_input",
+    "verified",
+    "approval_requested",
+    "handoff",
+    "failed",
+    "completed",
+]);
 
 function toWebSocketUrl(httpUrl: string): string {
     if (httpUrl.startsWith("https://")) return "wss://" + httpUrl.slice("https://".length);
@@ -64,6 +88,34 @@ function formatEvent(event: RecoderRunEvent): string {
                 ? `artifact ${event.artifactId}`
                 : "";
     return detail != "" ? `[${ts}] ${kind}  ${detail}` : `[${ts}] ${kind}`;
+}
+
+function parseStreamFrame(raw: unknown): ParsedStreamFrame {
+    if (typeof raw != "string") return null;
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(raw);
+    } catch {
+        return null;
+    }
+    if (parsed == null || typeof parsed != "object") return null;
+    const type = (parsed as { type?: unknown }).type;
+    if (typeof type != "string") return null;
+    if (RunEventTypes.has(type)) {
+        return { kind: "event", event: parsed as RecoderRunEvent };
+    }
+    const legacy = parsed as StreamMessage;
+    if (legacy.type == "event" && legacy.event != null) {
+        return { kind: "event", event: legacy.event };
+    }
+    if (legacy.type == "error") {
+        const message = typeof legacy.message == "string" && legacy.message != "" ? legacy.message : "stream error";
+        return { kind: "error", message };
+    }
+    if (legacy.type == "complete") {
+        return { kind: "complete" };
+    }
+    return null;
 }
 
 class RecoderTerminalViewModel implements ViewModel {
@@ -159,28 +211,21 @@ class RecoderTerminalViewModel implements ViewModel {
     }
 
     handleMessage(raw: unknown): void {
-        if (typeof raw != "string") return;
-        let msg: StreamMessage;
-        try {
-            msg = JSON.parse(raw) as StreamMessage;
-        } catch {
+        const frame = parseStreamFrame(raw);
+        if (frame == null) return;
+        if (frame.kind == "event") {
+            // A bare completed/failed event renders as a line and nothing more:
+            // the socket is workspace-scoped and follow-up sendMessage runs
+            // stream through it, so a finished RUN must not close the stream.
+            this.appendLine(formatEvent(frame.event));
             return;
         }
-        if (msg == null || typeof msg != "object") return;
-
-        if (msg.type == "event" && msg.event != null) {
-            this.appendLine(formatEvent(msg.event));
+        if (frame.kind == "error") {
+            globalStore.set(this.errorAtom, frame.message);
+            this.appendLine(`[stream error] ${frame.message}`);
             return;
         }
-        if (msg.type == "error") {
-            const m = typeof msg.message == "string" && msg.message != "" ? msg.message : "stream error";
-            globalStore.set(this.errorAtom, m);
-            this.appendLine(`[stream error] ${m}`);
-            return;
-        }
-        if (msg.type == "complete") {
-            this.appendLine("[stream complete]");
-        }
+        this.appendLine("[stream complete]");
     }
 
     appendLine(text: string): void {
@@ -265,4 +310,11 @@ class RecoderTerminalViewModel implements ViewModel {
     }
 }
 
-export { RecoderTerminalViewModel, type RecoderTerminalStatus, toWebSocketUrl };
+export {
+    parseStreamFrame,
+    RecoderTerminalViewModel,
+    toWebSocketUrl,
+    type ParsedStreamFrame,
+    type RecoderRunEvent,
+    type RecoderTerminalStatus,
+};

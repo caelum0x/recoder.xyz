@@ -1313,11 +1313,27 @@ describe("BackendSupervisor packaged spawn target", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Fail-closed auth: the minted key must be REQUIRED, not decorative
+// Fail-closed auth: the minted key must be REQUIRED, not decorative — but ONLY
+// when it is enforceable. be048af57: the greenfield backend validates sk_ keys
+// via the DB-backed ApiKeyService, so without a DATABASE_URL a minted key can
+// never authenticate and STRICT_AUTH=true would 401 every route (bricked app).
+// The DB-less embedded desktop therefore stays on the documented permissive
+// loopback posture (127.0.0.1 bind, RECODER_SOLO_MODE, STRICT_AUTH=false).
 // ---------------------------------------------------------------------------
 
 describe("BackendSupervisor auth posture", () => {
-    it("runs the child STRICT (fail-closed) when the key mint succeeded", async () => {
+    const savedDatabaseUrl = process.env.DATABASE_URL;
+
+    afterEach(() => {
+        if (savedDatabaseUrl == null) {
+            delete process.env.DATABASE_URL;
+        } else {
+            process.env.DATABASE_URL = savedDatabaseUrl;
+        }
+    });
+
+    it("runs the child STRICT (fail-closed) when the mint succeeded AND a durable key store is configured", async () => {
+        process.env.DATABASE_URL = "postgres://test-host/recoder_backend";
         const child = makeFakeChild();
         const spawn = vi.fn(() => child);
         const fetchImpl = vi.fn(async () => ({ status: 200, json: async () => ({ success: true }) }));
@@ -1330,7 +1346,22 @@ describe("BackendSupervisor auth posture", () => {
         expect(spawnOpts.env.STRICT_AUTH).toBe("true");
     });
 
-    it("degrades to STRICT_AUTH=false ONLY when the mint failed (documented loopback fallback)", async () => {
+    it("stays permissive (STRICT_AUTH=false) when the mint succeeded but no DATABASE_URL exists to validate the key", async () => {
+        delete process.env.DATABASE_URL;
+        const child = makeFakeChild();
+        const spawn = vi.fn(() => child);
+        const fetchImpl = vi.fn(async () => ({ status: 200, json: async () => ({ success: true }) }));
+        const sup = new BackendSupervisor(baseOptions({ spawn, fetchImpl }) as any);
+
+        const result = await sup.start();
+
+        expect(result.ok).toBe(true);
+        const [, , spawnOpts] = spawn.mock.calls[0] as any;
+        expect(spawnOpts.env.STRICT_AUTH).toBe("false");
+    });
+
+    it("degrades to STRICT_AUTH=false when the mint failed, even with a durable store (documented loopback fallback)", async () => {
+        process.env.DATABASE_URL = "postgres://test-host/recoder_backend";
         const child = makeFakeChild();
         const spawn = vi.fn(() => child);
         const mintKey = vi.fn(() => Promise.reject(new Error("mint boom")));
