@@ -61,11 +61,23 @@ function folderName(repoPath: string): string {
 
 // Self-explains the greyed Launch button: empty string means nothing to say
 // (either ready to launch, or already posting).
-function launchDisabledReason(repoPath: string, runtimeId: string, needsPrompt: boolean): string {
+function launchDisabledReason(
+    repoPath: string,
+    runtimeId: string,
+    needsPrompt: boolean,
+    probed: boolean,
+    readyCount: number
+): string {
     if (repoPath.trim() == "") {
         return "Choose a folder to launch.";
     }
     if (runtimeId == "") {
+        if (!probed) {
+            return "Detecting installed agents…";
+        }
+        if (readyCount == 0) {
+            return "No coding agents found on PATH. Install Claude Code, Codex, or opencode, then reopen.";
+        }
         return "Choose an agent to launch.";
     }
     if (needsPrompt) {
@@ -307,6 +319,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const showGettingStarted = !loading && workspaces.length == 0 && error == "" && !launchOpen;
     const needsPrompt = !interactive && prompt.trim() == "";
     const canLaunch = !posting && repoPath.trim() != "" && runtimeId != "" && !needsPrompt;
+    const disabledReason = launchDisabledReason(repoPath, runtimeId, needsPrompt, setup.probed, readyAgents.length);
     const parallelAgents = readyAgents.filter((a) => a.runtimeId != runtimeId);
     const allParallelSelected =
         parallelAgents.length > 0 && parallelAgents.every((a) => alsoRun.includes(a.runtimeId));
@@ -407,7 +420,9 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             value={runtimeId}
                             onChange={(e) => setRuntimeId(e.target.value)}
                         >
-                            {readyAgents.length == 0 && <option value="">No agents available</option>}
+                            {readyAgents.length == 0 && (
+                                <option value="">{setup.probed ? "No agents found on PATH" : "Detecting agents…"}</option>
+                            )}
                             {setup.agents.map((a) => (
                                 <option key={a.runtimeId} value={a.runtimeId} disabled={!a.available}>
                                     {agentLabel(a.runtimeId)}
@@ -546,9 +561,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         </span>
                     </div>
 
-                    {!canLaunch && launchDisabledReason(repoPath, runtimeId, needsPrompt) != "" && (
-                        <div className={META}>{launchDisabledReason(repoPath, runtimeId, needsPrompt)}</div>
-                    )}
+                    {!canLaunch && disabledReason != "" && <div className={META}>{disabledReason}</div>}
 
                     {launchResult != null && !launchResult.ok && (
                         <div className={ERROR_ROW}>{launchResult.error || "Launch failed"}</div>
