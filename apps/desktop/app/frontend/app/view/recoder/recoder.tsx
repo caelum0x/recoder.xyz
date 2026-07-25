@@ -13,7 +13,9 @@ import {
     type RecoderWorkspace,
 } from "./recoder-model";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
+import { RecoderErrorRow, RecoderSkeleton } from "./recoder-states";
 import {
+    ERROR_ROW,
     FIELD_LABEL,
     INPUT,
     META,
@@ -174,8 +176,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                 </button>
             </div>
 
-            {error != "" && <div className="text-error text-sm">{error}</div>}
-            {loading && workspaces.length == 0 && <div className="text-secondary text-sm">Loading…</div>}
+            <RecoderErrorRow message={error} />
+            {loading && workspaces.length == 0 && error == "" && <RecoderSkeleton rows={3} />}
 
             {launchOpen && (
                 <div className="flex flex-col gap-3 rounded border border-border p-3 mt-1">
@@ -308,7 +310,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     </div>
 
                     {launchResult != null && !launchResult.ok && (
-                        <div className="text-error text-sm">{launchResult.error || "Launch failed"}</div>
+                        <div className={ERROR_ROW}>{launchResult.error || "Launch failed"}</div>
                     )}
                 </div>
             )}
@@ -398,9 +400,14 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     {isCompareOpen ? "Hide compare" : "Compare"}
                                 </button>
                             </div>
-                            {isCompareOpen && compareView != null && (
-                                <RecoderComparePanel model={model} compareView={compareView} />
-                            )}
+                            {isCompareOpen &&
+                                (compareView != null ? (
+                                    <RecoderComparePanel model={model} compareView={compareView} />
+                                ) : (
+                                    <div className="rounded border border-border p-2">
+                                        <RecoderSkeleton rows={2} />
+                                    </div>
+                                ))}
                             {group.workspaces.map((ws) => (
                                 <WorkspaceRow
                                     key={ws.workspaceId}
