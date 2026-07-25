@@ -136,6 +136,37 @@ function computePairwise(
     return view;
 }
 
+// One sibling's pre-merge overlap read: how many contested files it shares with
+// other agents, and, per file, WHICH other agents also touch it (for the caution).
+type SiblingOverlap = { count: number; files: string[]; agentsByFile: Record<string, string[]> };
+
+// Pure + degrade-safe: derive one sibling's overlap with its siblings from the
+// group contested set. The whole point is TRUTHFUL degrade: the backend's
+// computeContested SKIPS any sibling whose changedFiles is unreadable, so such a
+// sibling never appears in `contested`. A naive count would then read 0 and lie
+// that this agent collides with no one. So when this sibling's own changedFiles
+// is absent we return null — "we cannot know" — and the caller renders an explicit
+// 'overlap unknown', never a fabricated 0.
+function computeSiblingOverlap(
+    sibling: SiblingCompareEntry,
+    siblings: SiblingCompareEntry[],
+    contested: ContestedFile[]
+): SiblingOverlap {
+    if (sibling.changedFiles == null) {
+        return null;
+    }
+    const agentById = new Map(siblings.map((s) => [s.workspaceId, s.agent]));
+    const mine = (contested ?? []).filter((c) => c.workspaceIds.includes(sibling.workspaceId));
+    const files = mine.map((c) => c.path);
+    const agentsByFile: Record<string, string[]> = {};
+    for (const c of mine) {
+        agentsByFile[c.path] = c.workspaceIds
+            .filter((id) => id != sibling.workspaceId)
+            .map((id) => agentById.get(id) ?? id);
+    }
+    return { count: files.length, files, agentsByFile };
+}
+
 // A truthful, NON-BINDING hint at the sibling the already-loaded data favors. It
 // never selects, picks, or merges — the dev still clicks Merge. `reason` is the
 // single criterion that decided it (the deciding datum is always REAL, never the
@@ -1068,6 +1099,7 @@ export {
     RecoderViewModel,
     groupByTaskGroup,
     computePairwise,
+    computeSiblingOverlap,
     computeSuggestedWinner,
     TASK_GROUP_METADATA_KEY,
     type RecoderWorkspace,
@@ -1079,6 +1111,7 @@ export {
     type ContestedFile,
     type PairwiseDiffDelta,
     type PairwiseCompareView,
+    type SiblingOverlap,
     type SuggestedWinner,
     type GroupAttachHint,
     type CompareView,

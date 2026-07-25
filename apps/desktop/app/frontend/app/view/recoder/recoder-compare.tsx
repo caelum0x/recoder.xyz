@@ -6,9 +6,11 @@ import { agentLabel } from "./recoder-agent-labels";
 import { buildConvergenceEvidence, saveConvergenceEvidence } from "./recoder-evidence";
 import {
     computePairwise,
+    computeSiblingOverlap,
     computeSuggestedWinner,
     RecoderViewModel,
     type CompareView,
+    type ContestedFile,
     type MergeabilityView,
     type PairwiseCompareView,
     type RecoderDiffSummary,
@@ -160,6 +162,7 @@ type SiblingCompareRowProps = {
     model: RecoderViewModel;
     sibling: SiblingCompareEntry;
     siblings: SiblingCompareEntry[];
+    contested: ContestedFile[];
     taskGroup: string;
     readiness: ReadinessView;
     mergeability: MergeabilityView;
@@ -175,6 +178,7 @@ function SiblingCompareRow({
     model,
     sibling,
     siblings,
+    contested,
     taskGroup,
     readiness,
     mergeability,
@@ -187,6 +191,13 @@ function SiblingCompareRow({
 }: SiblingCompareRowProps) {
     const stat = sibling.diffStat;
     const merged = lastMerge != null && lastMerge.status == "merged";
+    const overlap = computeSiblingOverlap(sibling, siblings, contested);
+    const overlapAgents =
+        overlap != null && overlap.count > 0
+            ? Array.from(new Set(Object.values(overlap.agentsByFile).flat()))
+                  .map(agentLabel)
+                  .join(" · ")
+            : "";
     // Fetch the durable sealed audit trail first so the exported artifact prefers
     // the server record; an empty trail (solo) falls back to client assembly inside
     // the builder. Degrade-safe: fetchWorkspaceAudit never throws (returns []).
@@ -262,8 +273,48 @@ function SiblingCompareRow({
                 <ReadinessBadge readiness={readiness} />
                 <MergeabilityBadge mergeability={mergeability} />
             </div>
+            {mergeability != null &&
+                mergeability.available &&
+                mergeability.verdict == "conflicting" &&
+                (mergeability.conflicts?.length ?? 0) > 0 && (
+                    <div className="flex flex-col gap-0.5">
+                        <div className="text-xs text-error">merge conflicts ({mergeability.conflicts.length}):</div>
+                        {mergeability.conflicts.map((path) => (
+                            <span key={path} className="font-mono text-xs text-secondary truncate">
+                                {path}
+                            </span>
+                        ))}
+                    </div>
+                )}
+            {overlap == null ? (
+                <span className={META} title={sibling.changedFilesReason || undefined}>
+                    overlap unknown — changed-file list unavailable
+                </span>
+            ) : overlap.count == 0 ? (
+                <span className={META}>no file overlap with other agents</span>
+            ) : (
+                <span className={META} title={overlapAgents ? `Shared with ${overlapAgents}` : undefined}>
+                    overlaps {overlap.count} file{overlap.count == 1 ? "" : "s"} with other agents
+                </span>
+            )}
             {status && <div className={META}>{status}</div>}
             {lastMerge != null && <MergeVerdictLine record={lastMerge} />}
+            {overlap != null && overlap.count > 0 && !merged && (
+                <div className="flex flex-col gap-0.5 rounded border border-white/8 px-2 py-1">
+                    <div className="text-xs text-secondary">
+                        Shares {overlap.count} contested file{overlap.count == 1 ? "" : "s"} — read before merging:
+                    </div>
+                    {overlap.files.map((path) => (
+                        <span
+                            key={path}
+                            className="font-mono text-xs text-secondary truncate"
+                            title={(overlap.agentsByFile[path] ?? []).map(agentLabel).join(" · ")}
+                        >
+                            {path}
+                        </span>
+                    ))}
+                </div>
+            )}
             {merged && (
                 <div className="flex items-center gap-2">
                     <button
@@ -408,6 +459,7 @@ function RecoderComparePanel({ model, compareView }: { model: RecoderViewModel; 
                             model={model}
                             sibling={sibling}
                             siblings={compareView.siblings}
+                            contested={compareView.contested ?? []}
                             taskGroup={compareView.taskGroup ?? ""}
                             readiness={merge?.readiness}
                             mergeability={merge?.mergeability}
