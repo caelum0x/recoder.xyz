@@ -482,6 +482,9 @@ class RecoderViewModel implements ViewModel {
     // governance verdict (effect/tier/engine) + merge outcome, read by the compare
     // panel and the evidence step. Absent â no merge attempted yet.
     lastMergeAtom: PrimitiveAtom<Record<string, RecoderMergeRecord>>;
+    // The workspaceId of the keyboard-focused board row; "" means none selected.
+    // Drives j/k navigation and Enter-to-open; the view syncs it with the list.
+    selectedWorkspaceIdAtom: PrimitiveAtom<string>;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -511,6 +514,7 @@ class RecoderViewModel implements ViewModel {
         this.pairBAtom = atom("") as PrimitiveAtom<string>;
         this.readinessAtom = atom({}) as PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
         this.lastMergeAtom = atom({}) as PrimitiveAtom<Record<string, RecoderMergeRecord>>;
+        this.selectedWorkspaceIdAtom = atom("") as PrimitiveAtom<string>;
         this.groupsAtom = atom((get) => groupByTaskGroup(get(this.workspacesAtom)));
     }
 
