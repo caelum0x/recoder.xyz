@@ -3,7 +3,7 @@
 
 import { createBlock, getApi } from "@/app/store/global";
 import { useAtom, useAtomValue } from "jotai";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { agentLabel } from "./recoder-agent-labels";
 import { RecoderComparePanel } from "./recoder-compare";
 import { RecoderIdentityAffordance } from "./recoder-identity";
@@ -84,12 +84,26 @@ type WorkspaceRowProps = {
     status: string;
     busy: boolean;
     tmuxBin: string;
+    selected: boolean;
+    onSelect: () => void;
 };
 
-function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin }: WorkspaceRowProps) {
+function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onSelect }: WorkspaceRowProps) {
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!selected) {
+            return;
+        }
+        ref.current?.scrollIntoView({ block: "nearest" });
+    }, [selected]);
     return (
         <div
-            className="flex flex-col gap-1 rounded border border-border px-2.5 py-1.5 transition-colors duration-150 ease-out hover:bg-border/20"
+            ref={ref}
+            tabIndex={0}
+            data-selected={selected}
+            onClick={onSelect}
+            onFocus={onSelect}
+            className={`flex flex-col gap-1 rounded border border-border px-2.5 py-1.5 transition-colors duration-150 ease-out hover:bg-border/20 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/70 ${selected ? "ring-1 ring-accent/60 bg-border/20" : ""}`}
             title={`${ws.workspaceId} Â· ${ws.branch}`}
         >
             <div className="flex items-center gap-2">
@@ -138,6 +152,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const rowStatus = useAtomValue(model.rowStatusAtom);
     const busyRow = useAtomValue(model.busyRowAtom);
     const [launchOpen, setLaunchOpen] = useAtom(model.launchOpenAtom);
+    const [selectedId, setSelectedId] = useAtom(model.selectedWorkspaceIdAtom);
     const [repoPath, setRepoPath] = useAtom(model.launchRepoPathAtom);
     const recentRepos = useAtomValue(model.recentReposAtom);
     const [prompt, setPrompt] = useAtom(model.launchPromptAtom);
@@ -174,6 +189,58 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         }
     }, [readyAgents.length, runtimeId]);
 
+    // Flat, render-order list of the visible board rows (singleton + parallel-group
+    // rows, top-to-bottom) so keyboard nav walks the board exactly as it reads.
+    const orderedIds = groups.flatMap((g) => g.workspaces.map((w) => w.workspaceId));
+
+    // Keep the selection anchored to a live row: seed the first row when nothing is
+    // selected, and re-seed if a refresh dropped the previously-selected workspace.
+    useEffect(() => {
+        if (orderedIds.length == 0) {
+            return;
+        }
+        if (!orderedIds.includes(selectedId)) {
+            setSelectedId(orderedIds[0] ?? "");
+        }
+    }, [orderedIds.join(",")]);
+
+    const onBoardKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        const target = e.target as HTMLElement;
+        const tag = target?.tagName;
+        // Skip when focus is on a field OR an inner row control: a bubbled Enter on a
+        // row button (Merge, Archive, ...) must activate that button, not also openSession.
+        if (tag == "INPUT" || tag == "TEXTAREA" || tag == "SELECT" || tag == "BUTTON" || target?.isContentEditable) {
+            return;
+        }
+        if (e.key == "Escape") {
+            if (launchOpen) {
+                setLaunchOpen(false);
+                e.preventDefault();
+            }
+            return;
+        }
+        if (orderedIds.length == 0) {
+            return;
+        }
+        if (e.key == "j" || e.key == "ArrowDown") {
+            const idx = orderedIds.indexOf(selectedId);
+            setSelectedId(orderedIds[Math.min(idx + 1, orderedIds.length - 1)]);
+            e.preventDefault();
+            return;
+        }
+        if (e.key == "k" || e.key == "ArrowUp") {
+            const idx = orderedIds.indexOf(selectedId);
+            setSelectedId(orderedIds[Math.max(idx - 1, 0)]);
+            e.preventDefault();
+            return;
+        }
+        if (e.key == "Enter" && selectedId != "") {
+            openSession(selectedId);
+            e.preventDefault();
+            return;
+        }
+    };
+
     const showGettingStarted = !loading && workspaces.length == 0 && error == "" && !launchOpen;
     const canLaunch = !posting && repoPath.trim() != "" && runtimeId != "";
     const parallelAgents = readyAgents.filter((a) => a.runtimeId != runtimeId);
@@ -193,7 +260,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     };
 
     return (
-        <div className="flex flex-col h-full overflow-auto p-3 gap-2">
+        <div className="flex flex-col h-full overflow-auto p-3 gap-2" onKeyDown={onBoardKeyDown}>
             <div className="flex items-center gap-2">
                 <span className={PAGE_TITLE}>Recoder â Workspaces</span>
                 <div className="flex-1" />
@@ -422,6 +489,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                 status={rowStatus[ws.workspaceId]}
                                 busy={busyRow == ws.workspaceId}
                                 tmuxBin={setup.tmuxBin}
+                                selected={selectedId == ws.workspaceId}
+                                onSelect={() => setSelectedId(ws.workspaceId)}
                             />
                         );
                     }
@@ -463,6 +532,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     status={rowStatus[ws.workspaceId]}
                                     busy={busyRow == ws.workspaceId}
                                     tmuxBin={setup.tmuxBin}
+                                    selected={selectedId == ws.workspaceId}
+                                    onSelect={() => setSelectedId(ws.workspaceId)}
                                 />
                             ))}
                         </div>
