@@ -987,8 +987,16 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
     useLayoutEffect(() => {
         return () => {
             const webview = model.webviewRef.current;
-            if (webview?.isDevToolsOpened()) {
-                webview.closeDevTools();
+            if (webview == null || !webview.isConnected) {
+                return;
+            }
+            // webview methods throw if called before dom-ready or after detach from the DOM
+            try {
+                if (webview.isDevToolsOpened()) {
+                    webview.closeDevTools();
+                }
+            } catch (e) {
+                // detached during unmount; devtools are gone with the webContents anyway
             }
         };
     }, []);
