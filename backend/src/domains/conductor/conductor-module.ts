@@ -162,6 +162,7 @@ import {
   type EvidenceConvergence,
   type EvidenceGovernance,
 } from './evidence/convergence-evidence.js';
+import { renderEvidenceExport, type EvidenceExport } from './evidence/evidence-export.js';
 import {
   planConvergence as planConvergenceOp,
   type ConvergencePlan,
@@ -2074,6 +2075,20 @@ export class ConductorComposer implements ConductorModule {
     const raw = (workspace.metadata as Record<string, unknown> | undefined)?.convergenceEvidence;
     if (!raw || typeof raw !== 'object') return null;
     return raw as ConvergenceEvidenceRecord;
+  }
+
+  /**
+   * The framework-mapped, exportable evidence PACK for a workspace's merge
+   * (`GET …/evidence/export`) — renders the stored {@link ConvergenceEvidenceRecord}
+   * into a control-mapped artifact (SOC 2 / EU AI Act / DORA / Recoder) with a
+   * human-readable summary, content-hashed for integrity. PURE over the stored
+   * record: no gate, no mutation, no network. Every control status is DERIVED from
+   * the backing fields (never a fabricated `met`). `null` when the workspace does
+   * not exist OR was never merged with evidence (⇒ 404 at the edge).
+   */
+  async getConvergenceEvidenceExport(workspaceId: string): Promise<EvidenceExport | null> {
+    const record = await this.getConvergenceEvidence(workspaceId);
+    return record ? renderEvidenceExport(record) : null;
   }
 
   /** The raw compare read (no grid enrichment) — the pure sibling aggregate. */
