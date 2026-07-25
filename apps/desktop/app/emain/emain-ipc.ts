@@ -19,9 +19,6 @@ import {
     incrementTermCommandsWsl,
     setWasActive,
 } from "./emain-activity";
-import { projectBackendStatus } from "./backend-status-view";
-import { isBackendFrameOrigin, isLoopbackFrameUrl } from "./cockpit-origin";
-import { getBackendAuth, getBackendStatus } from "./emain-backend";
 import { getDeviceAuthManager } from "./emain-device-auth";
 import { createBuilderWindow, getAllBuilderWindows, getBuilderWindowByWebContentsId } from "./emain-builder";
 import { callWithOriginalXdgCurrentDesktopAsync, unamePlatform } from "./emain-platform";
@@ -197,78 +194,12 @@ function saveImageFileWithNativeDialog(
 }
 
 export function initIpcHandlers() {
-    // Cockpit runtime config: hands {backendUrl, token} to the cockpit page a
-    // webview loaded FROM the backend origin. The senderFrame check is the
-    // authoritative gate (the preload's loopback check is only an optimization)
-    // — any other origin gets null. null also means "backend not READY yet";
-    // the cockpit then truthfully shows its signed-out/unreachable state.
-    electron.ipcMain.handle("recoder:cockpit-config", (event) => {
-        const auth = getBackendAuth();
-        if (auth == null) {
-            return null;
-        }
-        const frameUrl = event.senderFrame?.url ?? "";
-        if (!isBackendFrameOrigin(frameUrl, auth.backendUrl)) {
-            return null;
-        }
-        // identity: the stored recoder.xyz device session's display identity, so
-        // a signed-in user lands straight on the board (no first-run gate).
-        const identity = getDeviceAuthManager().getIdentity();
-        return { backendUrl: auth.backendUrl, token: auth.apiKey, identity: identity ?? undefined };
-    });
-    // Redacted, secret-free supervisor-phase projection for the cockpit's
-    // "backend unreachable" banner. It names a local log path (no key/URL), so
-    // it is gated to the embedded cockpit (a loopback frame) rather than
-    // origin-matched against the READY backend — because auth (and thus the
-    // backend origin) is null exactly during starting/crashed/failed, the phases
-    // this must report. Absent supervisor ⇒ null (the cockpit keeps its generic
-    // banner). An arbitrary remote webview frame gets null.
-    electron.ipcMain.handle("recoder:backend-status", (event) => {
-        if (!isLoopbackFrameUrl(event.senderFrame?.url ?? "")) {
-            return null;
-        }
-        return projectBackendStatus(getBackendStatus());
-    });
-    // Device-flow auth bridge (cockpit SignIn). Origin-gated exactly like
-    // cockpit-config: only the page served FROM the embedded backend may drive
-    // sign-in. The prompt (user_code + verification URI) streams back to the
-    // SAME webContents that asked; results carry identity, never the token.
-    const cockpitFrameAllowed = (event: Electron.IpcMainInvokeEvent): boolean => {
-        const auth = getBackendAuth();
-        if (auth == null) {
-            return false;
-        }
-        return isBackendFrameOrigin(event.senderFrame?.url ?? "", auth.backendUrl);
-    };
-    electron.ipcMain.handle("recoder:device-login", async (event) => {
-        if (!cockpitFrameAllowed(event)) {
-            return { ok: false, reason: "unavailable" };
-        }
-        const sender = event.sender;
-        return getDeviceAuthManager().deviceLogin((prompt) => {
-            if (!sender.isDestroyed()) {
-                sender.send("recoder:device-login-prompt", prompt);
-            }
-        });
-    });
-    electron.ipcMain.handle("recoder:auth-refresh", async (event) => {
-        if (!cockpitFrameAllowed(event)) {
-            return { ok: false, reason: "unavailable" };
-        }
-        return getDeviceAuthManager().refresh();
-    });
-    electron.ipcMain.handle("recoder:auth-signout", async (event) => {
-        if (!cockpitFrameAllowed(event)) {
-            return { ok: false, reason: "unavailable" };
-        }
-        return getDeviceAuthManager().signOut();
-    });
-    // Wave-frontend sign-in bridge (optional, offline-safe). Unlike the cockpit
-    // handlers above, these serve the trusted app window (preload.ts `api`), whose
-    // frame is not the backend origin — so they are not origin-gated; the curated
-    // preload surface is the boundary. They reuse the SAME device-auth manager, so
-    // recoder.xyz stays the auth source of truth and the renderer only ever sees
-    // the display identity, never the token.
+    // Wave-frontend sign-in bridge (optional, offline-safe). These serve the
+    // trusted app window (preload.ts `api`), whose frame is not the backend
+    // origin — so they are not origin-gated; the curated preload surface is the
+    // boundary. They use the device-auth manager, so recoder.xyz stays the auth
+    // source of truth and the renderer only ever sees the display identity,
+    // never the token.
     electron.ipcMain.handle("recoder:get-identity", () => {
         return getDeviceAuthManager().getIdentity();
     });

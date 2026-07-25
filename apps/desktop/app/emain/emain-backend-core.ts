@@ -377,8 +377,6 @@ export function assembleBackendEnv(opts: {
     byokSecrets?: Record<string, string>;
     /** Connector addressing secrets (mem0/colbert/qdrant URLs) from the store (fill-only). */
     connectorSecrets?: Record<string, string>;
-    /** Packaged cockpit static build dir the backend serves at /cockpit (fill-only). */
-    cockpitDist?: string;
 }): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = {
         ...opts.baseEnv,
@@ -426,13 +424,6 @@ export function assembleBackendEnv(opts: {
     // of chasing a path the supervisor could not verify.
     if (opts.beadsBin && !env.BEADS_BIN) {
         env.BEADS_BIN = opts.beadsBin;
-    }
-    // Cockpit static dir the backend serves at /cockpit, fill-only. Packaged the
-    // spawn cwd is <resources>/backend so the backend's own default
-    // (../cockpit/dist) already resolves here; set it explicitly so the mount is
-    // independent of cwd. An operator override still wins.
-    if (opts.cockpitDist && !env.COCKPIT_DIST) {
-        env.COCKPIT_DIST = opts.cockpitDist;
     }
     // BYOK provider keys from the desktop secret store, fill-only: an explicit
     // env var (operator/dev-shell override) always wins over the stored key.
@@ -1265,10 +1256,6 @@ export class BackendSupervisor {
                 vector: vectorEnv,
                 byokSecrets,
                 connectorSecrets,
-                cockpitDist:
-                    this.isPackaged && this.resourcesPath
-                        ? nodePath.join(this.resourcesPath, "cockpit", "dist")
-                        : undefined,
             });
 
             this.port = port;

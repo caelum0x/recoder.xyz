@@ -14,7 +14,6 @@
  * (before the route table is built) without changing this file's shape.
  */
 import type http from 'node:http';
-import { existsSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import express, { type Router } from 'express';
 
@@ -175,34 +174,6 @@ function routerProvider(key: string, basePath: string, router: Router): RoutePro
 
 /** Every edge mount keeps its router's own guards — the edge adds no second layer. */
 const PUBLIC_MOUNT: GuardPolicy = { auth: 'public', interop: false };
-
-/**
- * PUBLIC cockpit SPA provider — the Wave `web` widget loads the bundled cockpit
- * build at `/cockpit/` BEFORE any credential check, so the product UI (HTML/JS)
- * always loads. It is a RouteProvider mounted through the SAME route table as
- * every domain router, so it lands on the one edge express app AHEAD of the 404
- * tail, and carries the default `PUBLIC_MOUNT` guard (no identity.middleware).
- * `express.static` serves real assets; a regex catch-all falls back to the SPA
- * shell so client-side routes resolve. Degrade-safe + truthful: a missing dist
- * (no `index.html`) logs a warn and returns `null` so the mount is skipped —
- * every other surface still boots (never a crash).
- */
-function buildCockpitProvider(cockpitDir: string, logger: Logger): RouteProvider | null {
-  const indexHtml = resolvePath(cockpitDir, 'index.html');
-  if (!existsSync(indexHtml)) {
-    logger.warn({ cockpitDir }, 'cockpit dist not found (no index.html) — UI mount skipped');
-    return null;
-  }
-  const router = express.Router();
-  router.use(express.static(cockpitDir));
-  // SPA fallback: any unmatched cockpit GET resolves to the app shell (real
-  // assets above win); the router is mounted at `/cockpit`, so it sees paths
-  // relative to that base.
-  router.get(/.*/, (_req, res) => {
-    res.sendFile(indexHtml);
-  });
-  return routerProvider('cockpit-ui', '/cockpit', router);
-}
 
 // The OPT-IN squad-seed env parser is re-homed in `agent-os-seams.ts` (bootstrap
 // is the sole sanctioned env read; agent-os owns the seed shape). Re-exported here
@@ -1277,18 +1248,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   //     layer — exactly one mount, one auth per surface (conflicts #1/#6/#10). The
   //     canonical chain (identity verifier + interop chain) is still bound here and
   //     drives the WS upgrade auth + any convention-guarded Phase-5+ providers. ---
-  // The PUBLIC cockpit UI static mount. `COCKPIT_DIST` (packaged:
-  // <resourcesPath>/cockpit/dist; dev: apps/desktop/cockpit/dist) is the
-  // sanctioned env read HERE; absent ⇒ a repo-relative `../cockpit/dist` default.
-  // Prepended so it resolves ahead of the domain routers (and the 404 tail);
-  // `null` when the dist is absent ⇒ the mount is simply skipped.
-  const cockpitDir = bootEnv.COCKPIT_DIST ?? resolvePath(process.cwd(), '../cockpit/dist');
-  const cockpitProvider = buildCockpitProvider(cockpitDir, childLogger('cockpit-ui'));
-
   const providers: readonly RouteProvider[] = [
-    // The cockpit SPA (PUBLIC, no auth) — served before any Bearer/api-key guard
-    // so the product UI loads; skipped truthfully when its dist is absent.
-    ...(cockpitProvider ? [cockpitProvider] : []),
     // Health — the Phase-11 observability aggregate (conflict #7), reachable through
     // the edge app. Owns GET /health (shallow liveness, down→503), /health/full
     // (per-domain verbatim + 4-engine + SLO rollup), and /api/agent-os/health.
