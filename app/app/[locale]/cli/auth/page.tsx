@@ -11,7 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 function Wordmark() {
   return (
     <div className="inline-flex items-center gap-2 mb-6">
-      <div className="h-7 w-7 rounded-md bg-white text-black flex items-center justify-center font-bold text-sm">R</div>
+      <img src="/logo.png" alt="Recoder" className="h-7 w-7 rounded-md" />
       <span className="text-white font-semibold text-lg tracking-tight">Recoder</span>
     </div>
   );
