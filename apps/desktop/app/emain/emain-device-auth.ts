@@ -5,8 +5,8 @@
  * emain-device-auth.ts — electron glue around the device-flow sign-in core
  * (emain-device-auth-core.ts): safeStorage encryption for the persisted
  * session, the userData session path, and the system-browser opener. The IPC
- * surface (recoder:device-login / auth-refresh / auth-signout) lives in
- * emain-ipc.ts; the renderer bridge in preload-webview.ts.
+ * surface (recoder:get-identity / sign-in / sign-out) lives in emain-ipc.ts;
+ * the renderer bridge in preload.ts.
  */
 
 import { app, safeStorage, shell } from "electron";

@@ -3,8 +3,8 @@
 
 /**
  * Desktop device-flow sign-in (RFC 8628) against recoder.xyz — the main-process
- * implementation behind the cockpit's `deviceLogin` / `refreshToken` / `signOut`
- * bridge (cockpit/src/lib/config.ts consumes it via preload-webview.ts).
+ * implementation behind the Wave-frontend `recoder:sign-in` / `get-identity` /
+ * `sign-out` bridge (emain-ipc.ts handlers, exposed through preload.ts).
  *
  * Flow: POST /api/auth/cli/device -> open the system browser on the
  * verification page -> poll POST /api/auth/cli/token (device_code grant) until
@@ -12,10 +12,9 @@
  * encrypted (Electron safeStorage) in userData -> report { ok, identity }.
  *
  * The recoder.xyz session is captured MAIN-PROCESS-SIDE only: the result hands
- * the cockpit the display identity, NOT the token — the cockpit keeps its
- * embedded-backend credential, and recoder.xyz remains the auth source of
- * truth for the user's account/plan. Nothing here fabricates a session: every
- * non-approved path resolves { ok: false, reason }.
+ * the renderer the display identity, NOT the token — recoder.xyz remains the
+ * auth source of truth for the user's account/plan. Nothing here fabricates a
+ * session: every non-approved path resolves { ok: false, reason }.
  *
  * This module has NO electron imports so it can be unit-tested with fakes
  * (see emain-device-auth-core.test.ts). The electron glue (safeStorage
