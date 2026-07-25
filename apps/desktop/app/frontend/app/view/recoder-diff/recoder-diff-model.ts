@@ -4,6 +4,7 @@
 import { globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
+import { readErrorReason, readFetchError } from "../recoder/recoder-errors";
 import { RecoderDiffView } from "./recoder-diff";
 
 type RecoderWorkspace = {
@@ -123,7 +124,12 @@ class RecoderDiffViewModel implements ViewModel {
             );
             if (!res.ok) {
                 globalStore.set(this.diffAtom, null);
-                globalStore.set(this.diffStatusAtom, res.status == 404 ? "no diff" : `diff unavailable (${res.status})`);
+                if (res.status == 404) {
+                    globalStore.set(this.diffStatusAtom, "no diff");
+                    return;
+                }
+                const detail = await readFetchError(res);
+                globalStore.set(this.diffStatusAtom, detail || `Diff unavailable (${res.status})`);
                 return;
             }
             const body = await res.json();
@@ -167,7 +173,7 @@ class RecoderDiffViewModel implements ViewModel {
                 await this.refresh();
                 return;
             }
-            const reason = (body && typeof body.error == "string" && body.error) || "";
+            const reason = readErrorReason(body);
             if (res.status == 409) {
                 globalStore.set(this.mergeStatusAtom, reason || "Merge needs approval.");
                 return;
@@ -207,7 +213,7 @@ class RecoderDiffViewModel implements ViewModel {
                 await this.refresh();
                 return;
             }
-            const reason = (body && typeof body.error == "string" && body.error) || "";
+            const reason = readErrorReason(body);
             if (res.status == 409) {
                 globalStore.set(this.prStatusAtom, reason || "PR needs approval.");
                 return;

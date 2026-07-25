@@ -5,6 +5,7 @@ import { globalStore } from "@/app/store/global";
 import type { Workspace } from "@recoder/conductor-ui";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
+import { readErrorReason } from "./recoder-errors";
 import { RecoderConductorView } from "./recoder";
 
 // SHELL FUSION: the workspace shape comes from @recoder/conductor-ui (the typed
@@ -320,26 +321,6 @@ type RecoderMergeRecord = {
     verdict?: RecoderMergeVerdict;
     at: string;
 };
-
-// Degrade-safe reason read tolerant of BOTH envelope shapes: the real error body
-// is { error: { message } }, but an older/leaner backend may send a bare string
-// error. Missing/odd shapes fall to "" so the caller shows a truthful fallback.
-function readErrorReason(body: unknown): string {
-    if (body == null || typeof body != "object") {
-        return "";
-    }
-    const err = (body as { error?: unknown }).error;
-    if (typeof err == "string") {
-        return err;
-    }
-    if (err != null && typeof err == "object") {
-        const msg = (err as { message?: unknown }).message;
-        if (typeof msg == "string") {
-            return msg;
-        }
-    }
-    return "";
-}
 
 // Workspace states that represent a genuinely-launched worktree. Anything else
 // (notably "failed", or an absent state) means the create call returned 2xx but
