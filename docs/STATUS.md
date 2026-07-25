@@ -50,9 +50,10 @@ capabilities → **[RECODER-MODULES.md](./RECODER-MODULES.md)** + **[RECODER-ARC
    3-way synthesis; conflicts truthfully surface as `unresolved`/400, never a
    marker-poisoned branch) → **governed merge + exportable evidence record** (with
    per-file `mode`/contributors provenance). Usable from the desktop via a
-   terminal-plain Converge panel in the compare view. Remaining refinements:
-   AST/semantic (not line-level) merge, an auto-"best" heuristic, and a plan-preview
-   dry-run of synthesizability.
+   terminal-plain Converge panel with per-file **pick or Synthesize** — a `?probe=1`
+   dry-run shows `✓ auto-mergeable` / `✗ <reason>` per contested file before
+   composing. Remaining refinements: AST/semantic (not line-level) merge and an
+   auto-"best" heuristic.
 3. **Desktop distribution** — no signed/notarized dmg, arm64-only; Lance vector
    store + Python sidecars ship dead-by-design (owner-gated packaging Bucket B).
 4. **Phase A auth consolidation** — `users → user` backfill written but unrun on
