@@ -86,7 +86,7 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
                         <span className="text-xs uppercase tracking-wide text-secondary">Folder</span>
                         {repoPath.trim() == "" ? (
                             <button className={`${PRIMARY_BTN} w-full`} onClick={browseFolder}>
-                                Choose folderâ¦
+                                Choose folder...
                             </button>
                         ) : (
                             <div className="flex items-center gap-2" title={repoPath}>
@@ -140,9 +140,9 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
 
                     <div className="flex items-center gap-2">
                         <button className={PRIMARY_BTN} disabled={!canLaunch} onClick={() => model.launch()}>
-                            {posting ? "Launchingâ¦" : "Launch"}
+                            {posting ? "Launching..." : "Launch"}
                         </button>
-                        {canLaunch && <span className="text-xs text-secondary">ââµ to launch</span>}
+                        {canLaunch && <span className="text-xs text-secondary">Cmd+Enter to launch</span>}
                     </div>
                 </div>
             )}
