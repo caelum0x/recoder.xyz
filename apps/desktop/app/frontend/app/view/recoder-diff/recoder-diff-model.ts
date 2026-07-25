@@ -221,6 +221,10 @@ class RecoderDiffViewModel implements ViewModel {
         if (!workspaceId) {
             return;
         }
+        // The PR route requires a non-empty title; derive it from the workspace's
+        // branch (falling back to its id) so the call never 400s on a missing title.
+        const ws = globalStore.get(this.workspacesAtom).find((w) => w.workspaceId == workspaceId);
+        const title = (ws?.branch || workspaceId).trim();
         globalStore.set(this.prCreatingAtom, true);
         globalStore.set(this.prStatusAtom, "");
         try {
@@ -229,7 +233,7 @@ class RecoderDiffViewModel implements ViewModel {
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({}),
+                    body: JSON.stringify({ title }),
                 }
             );
             const body = await res.json().catch(() => null);

@@ -435,7 +435,7 @@ function PairwisePanel({ pair }: { pair: PairwiseCompareView }) {
                 </div>
             )}
             <div className={META}>
-                Client-side delta + shared-file view — a true line-level pairwise diff needs a backend edge (backlog).
+                Client-side delta + shared-file view — a full line-level pairwise diff isn’t available yet.
             </div>
         </div>
     );
