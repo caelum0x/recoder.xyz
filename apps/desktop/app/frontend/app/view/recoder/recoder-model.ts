@@ -600,9 +600,10 @@ class RecoderViewModel implements ViewModel {
             // still renders. Never assume a shape we didn't see.
             const data = body?.data;
             const list = Array.isArray(data?.workspaces) ? data.workspaces : Array.isArray(data) ? data : [];
-            // Archived workspaces are terminal history, not live work — the board
-            // shows only active ones so it never clutters with dead/merged runs.
-            workspaces = (list as RecoderWorkspace[]).filter((w) => w.state != "archived");
+            // Archived + failed workspaces are terminal history, not live work — the
+            // board shows only active ones so it never clutters with dead runs. A
+            // failed launch is already surfaced truthfully in the launch panel itself.
+            workspaces = (list as RecoderWorkspace[]).filter((w) => w.state != "archived" && w.state != "failed");
             globalStore.set(this.workspacesAtom, workspaces);
         } catch (e) {
             globalStore.set(this.errorAtom, e instanceof Error ? e.message : String(e));
