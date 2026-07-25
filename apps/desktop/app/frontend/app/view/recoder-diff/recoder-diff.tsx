@@ -115,7 +115,7 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     return (
         <div className="flex flex-col h-full overflow-hidden p-3 gap-2">
             <div className="flex items-center gap-2">
-                <span className="font-semibold">Recoder â Review</span>
+                <span className="font-semibold">Recoder — Review</span>
                 {workspaces.length > 0 && (
                     <select
                         className="ml-auto bg-panel text-primary border border-border rounded px-2 py-0.5 text-sm cursor-pointer"
@@ -124,19 +124,19 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                     >
                         {workspaces.map((ws) => (
                             <option key={ws.workspaceId} value={ws.workspaceId}>
-                                {ws.branch} Â· {ws.state}
+                                {ws.branch} · {ws.state}
                             </option>
                         ))}
                     </select>
                 )}
                 {selectedId != "" && (
                     <button className={PRIMARY_BTN} disabled={merging} onClick={() => model.mergeSelected()}>
-                        {merging ? "Mergingâ¦" : "Merge"}
+                        {merging ? "Merging…" : "Merge"}
                     </button>
                 )}
                 {selectedId != "" && (
                     <button className={QUIET_BTN} disabled={prCreating} onClick={() => model.createPr()}>
-                        {prCreating ? "Creating PRâ¦" : "Create PR"}
+                        {prCreating ? "Creating PR…" : "Create PR"}
                     </button>
                 )}
             </div>
@@ -144,31 +144,31 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
             {prStatus != "" && <div className="text-xs text-secondary">{prStatus}</div>}
 
             {showNotConnected && (
-                <div className="text-secondary text-sm">Not connected â Recoder is starting…</div>
+                <div className="text-secondary text-sm">Not connected — Recoder is starting…</div>
             )}
             {showNoWorkspaces && (
-                <div className="text-secondary text-sm">No workspaces yet â nothing to review.</div>
+                <div className="text-secondary text-sm">No workspaces yet — nothing to review.</div>
             )}
-            {loading && workspaces.length == 0 && <div className="text-secondary text-sm">Loadingâ¦</div>}
+            {loading && workspaces.length == 0 && <div className="text-secondary text-sm">Loading…</div>}
 
             {selectedId != "" && (
                 <div className="flex flex-col gap-2 overflow-hidden">
                     {diff != null && (
                         <div className="flex items-center gap-2 text-xs text-secondary">
                             <span>base {diff.baseRef}</span>
-                            <span>Â·</span>
+                            <span>·</span>
                             <span>{diff.changedFiles} changed</span>
                             {diff.untracked.length > 0 && (
                                 <>
-                                    <span>Â·</span>
+                                    <span>·</span>
                                     <span>{diff.untracked.length} untracked</span>
                                 </>
                             )}
                         </div>
                     )}
-                    {diffLoading && <div className="text-secondary text-sm">Loading diffâ¦</div>}
+                    {diffLoading && <div className="text-secondary text-sm">Loading diff…</div>}
                     {!diffLoading && !hasPatch && (
-                        <div className="text-secondary text-sm">{diffStatus != "" ? diffStatus : "No diff â the worktree matches its base."}</div>
+                        <div className="text-secondary text-sm">{diffStatus != "" ? diffStatus : "No diff — the worktree matches its base."}</div>
                     )}
                     {!diffLoading && hasPatch && <DiffBody patch={diff.patch} />}
                     {!diffLoading && diff != null && diff.untracked.length > 0 && (

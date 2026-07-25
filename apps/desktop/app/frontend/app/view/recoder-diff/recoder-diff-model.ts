@@ -14,7 +14,18 @@ type RecoderWorkspace = {
     runtimeId: string;
 };
 
-// Shape of GET /api/conductor/workspaces/:id/diff â data (see conductor review.ts
+const WorkspaceIdMetaKey = "recoder:workspaceid";
+
+// The clicked workspace is threaded in via the block's meta so Review opens the
+// same workspace the hub launched from, not workspaces[0]. Absent → "" → the
+// refresh() auto-select path takes over, so the seed is always harmless.
+function readWorkspaceId(block: Block): string {
+    const meta = (block?.meta ?? {}) as Record<string, unknown>;
+    const raw = meta[WorkspaceIdMetaKey];
+    return typeof raw === "string" ? raw.trim() : "";
+}
+
+// Shape of GET /api/conductor/workspaces/:id/diff → data (see conductor review.ts
 // WorkspaceDiff). `patch` is a raw unified git diff; the view renders it line-by-line.
 type RecoderWorkspaceDiff = {
     workspaceId: string;
@@ -31,20 +42,21 @@ class RecoderDiffViewModel implements ViewModel {
     viewIcon: Atom<string>;
     viewName: Atom<string>;
     blockId: string;
+    blockAtom: Atom<Block>;
     workspacesAtom: PrimitiveAtom<RecoderWorkspace[]>;
     selectedIdAtom: PrimitiveAtom<string>;
     diffAtom: PrimitiveAtom<RecoderWorkspaceDiff>;
-    // False once a workspace-list fetch fails (backend down) â "not connected".
+    // False once a workspace-list fetch fails (backend down) → "not connected".
     connectedAtom: PrimitiveAtom<boolean>;
     loadingAtom: PrimitiveAtom<boolean>;
     diffLoadingAtom: PrimitiveAtom<boolean>;
-    // Neutral, human diff status ("no diff", "diff endpoint not available", â¦).
+    // Neutral, human diff status ("no diff", "diff endpoint not available", …).
     diffStatusAtom: PrimitiveAtom<string>;
     mergingAtom: PrimitiveAtom<boolean>;
-    // Human result of the last merge action ("Merged.", approval reason, â¦).
+    // Human result of the last merge action ("Merged.", approval reason, …).
     mergeStatusAtom: PrimitiveAtom<string>;
     prCreatingAtom: PrimitiveAtom<boolean>;
-    // Human result of the last PR action ("PR created: <url>", approval reason, â¦).
+    // Human result of the last PR action ("PR created: <url>", approval reason, …).
     prStatusAtom: PrimitiveAtom<string>;
 
     constructor(initOpts: ViewModelInitType) {
@@ -52,6 +64,7 @@ class RecoderDiffViewModel implements ViewModel {
         this.viewType = "recoder-diff";
         this.viewIcon = atom("code-compare");
         this.viewName = atom("Review");
+        this.blockAtom = initOpts.waveEnv.wos.getWaveObjectAtom<Block>(`block:${initOpts.blockId}`);
         this.workspacesAtom = atom([]) as PrimitiveAtom<RecoderWorkspace[]>;
         this.selectedIdAtom = atom("") as PrimitiveAtom<string>;
         this.diffAtom = atom(null) as PrimitiveAtom<RecoderWorkspaceDiff>;
@@ -77,14 +90,22 @@ class RecoderDiffViewModel implements ViewModel {
         try {
             const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/workspaces`);
             const body = await res.json();
-            const list = body?.data ?? [];
-            const workspaces = (Array.isArray(list) ? list : []) as RecoderWorkspace[];
+            // The conductor wraps the list as { data: { workspaces: [...] } };
+            // tolerate a bare { data: [...] } too so an older embedded backend
+            // still renders. Never assume a shape we didn't see.
+            const data = body?.data;
+            const list = Array.isArray(data?.workspaces) ? data.workspaces : Array.isArray(data) ? data : [];
+            const workspaces = (list as RecoderWorkspace[]).filter((w) => w.state != "archived");
             globalStore.set(this.workspacesAtom, workspaces);
             globalStore.set(this.connectedAtom, true);
             const current = globalStore.get(this.selectedIdAtom);
             const stillValid = workspaces.some((w) => w.workspaceId === current);
             if (!stillValid) {
-                globalStore.set(this.selectedIdAtom, workspaces[0]?.workspaceId ?? "");
+                // Prefer the workspace the hub clicked into (block meta) when it's
+                // present in the live list, else auto-select the first one.
+                const seed = readWorkspaceId(globalStore.get(this.blockAtom));
+                const seeded = seed != "" && workspaces.some((w) => w.workspaceId === seed) ? seed : "";
+                globalStore.set(this.selectedIdAtom, seeded || workspaces[0]?.workspaceId || "");
             }
         } catch {
             globalStore.set(this.connectedAtom, false);
@@ -112,8 +133,8 @@ class RecoderDiffViewModel implements ViewModel {
         await this.loadDiff(workspaceId);
     }
 
-    // Degrade-safe: 404 â "no diff", other non-2xx â "diff unavailable", thrown
-    // (backend unreachable) â "diff endpoint not available". Never a crash or a
+    // Degrade-safe: 404 → "no diff", other non-2xx → "diff unavailable", thrown
+    // (backend unreachable) → "diff endpoint not available". Never a crash or a
     // fabricated diff.
     async loadDiff(workspaceId: string) {
         globalStore.set(this.diffLoadingAtom, true);
@@ -147,10 +168,11 @@ class RecoderDiffViewModel implements ViewModel {
         }
     }
 
-    // Merge the selected workspace â the "review â merge" close. Degrade-safe:
-    // 409 (delivery gate / awaiting approval) â the backend's truthful reason;
-    // other non-2xx â truthful failure; success â "Merged." then refresh. In a
-    // solo desktop the merge click IS the approval (server-side). Never fabricates.
+    // Merge the selected workspace — the "review → merge" close. Degrade-safe:
+    // 403 (blocked / needs approval) and 503 (failed / illegal transition) each
+    // surface the backend's truthful reason; other non-2xx → truthful failure;
+    // success → "Merged." then refresh. In a solo desktop the merge click IS the
+    // approval (server-side). Never fabricates.
     async mergeSelected() {
         const workspaceId = globalStore.get(this.selectedIdAtom);
         if (!workspaceId) {
@@ -174,22 +196,26 @@ class RecoderDiffViewModel implements ViewModel {
                 return;
             }
             const reason = readErrorReason(body);
-            if (res.status == 409) {
-                globalStore.set(this.mergeStatusAtom, reason || "Merge needs approval.");
+            if (res.status == 403) {
+                globalStore.set(this.mergeStatusAtom, reason || "Merge blocked — needs approval.");
+                return;
+            }
+            if (res.status == 503) {
+                globalStore.set(this.mergeStatusAtom, `Merge could not complete — ${reason || "operation failed"}.`);
                 return;
             }
             globalStore.set(this.mergeStatusAtom, reason || `Merge failed (${res.status}).`);
         } catch {
-            globalStore.set(this.mergeStatusAtom, "Merge unavailable â Recoder isn’t reachable.");
+            globalStore.set(this.mergeStatusAtom, "Merge unavailable — Recoder isn’t reachable.");
         } finally {
             globalStore.set(this.mergingAtom, false);
         }
     }
 
-    // Open a PR for the selected workspace branch. Degrade-safe: 409 (delivery
-    // gate / awaiting approval) â the backend's truthful reason; other non-2xx â
-    // truthful failure; success â "PR created: <url>" (or "PR created." when the
-    // backend returns no url). Never fabricates a PR.
+    // Open a PR for the selected workspace branch. Degrade-safe: 403 (blocked /
+    // needs approval) and 503 (failed) each surface the backend's truthful reason;
+    // other non-2xx → truthful failure; success → "PR created: <url>" (or "PR
+    // created." when the backend returns no url). Never fabricates a PR.
     async createPr() {
         const workspaceId = globalStore.get(this.selectedIdAtom);
         if (!workspaceId) {
@@ -214,13 +240,17 @@ class RecoderDiffViewModel implements ViewModel {
                 return;
             }
             const reason = readErrorReason(body);
-            if (res.status == 409) {
-                globalStore.set(this.prStatusAtom, reason || "PR needs approval.");
+            if (res.status == 403) {
+                globalStore.set(this.prStatusAtom, reason || "PR blocked — needs approval.");
+                return;
+            }
+            if (res.status == 503) {
+                globalStore.set(this.prStatusAtom, `PR could not complete — ${reason || "operation failed"}.`);
                 return;
             }
             globalStore.set(this.prStatusAtom, reason || `PR failed (${res.status}).`);
         } catch {
-            globalStore.set(this.prStatusAtom, "PR unavailable â Recoder isn’t reachable.");
+            globalStore.set(this.prStatusAtom, "PR unavailable — Recoder isn’t reachable.");
         } finally {
             globalStore.set(this.prCreatingAtom, false);
         }
