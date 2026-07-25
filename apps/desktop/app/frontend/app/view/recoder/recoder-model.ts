@@ -448,6 +448,7 @@ class RecoderViewModel implements ViewModel {
     setupAtom: PrimitiveAtom<RecoderSetup>;
     diffSummariesAtom: PrimitiveAtom<Record<string, RecoderDiffSummary>>;
     launchOpenAtom: PrimitiveAtom<boolean>;
+    commandPaletteOpenAtom: PrimitiveAtom<boolean>;
     launchRepoPathAtom: PrimitiveAtom<string>;
     recentReposAtom: PrimitiveAtom<string[]>;
     launchPromptAtom: PrimitiveAtom<string>;
@@ -496,6 +497,7 @@ class RecoderViewModel implements ViewModel {
         this.setupAtom = atom({ agents: [], git: false, loaded: false, probed: false, tmuxBin: "" }) as PrimitiveAtom<RecoderSetup>;
         this.diffSummariesAtom = atom({}) as PrimitiveAtom<Record<string, RecoderDiffSummary>>;
         this.launchOpenAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.commandPaletteOpenAtom = atom(false) as PrimitiveAtom<boolean>;
         this.launchRepoPathAtom = atom(loadRecentRepos()[0] ?? "") as PrimitiveAtom<string>;
         this.recentReposAtom = atom(loadRecentRepos()) as PrimitiveAtom<string[]>;
         this.launchPromptAtom = atom("") as PrimitiveAtom<string>;
