@@ -18,7 +18,7 @@ exportable evidence file, not a dashboard.
 The finish line is a **3-step convergence loop**:
 
 1. Run N agents in parallel worktrees — **✅ works end-to-end.**
-2. Compare / converge N diffs, shared memory informing agents — **🟡 partial.**
+2. Compare / converge N diffs, shared memory informing agents — **🟢 converge engine shipped** (2026-07-25): `compare.service` surfaces contested files; the new `converge` engine resolves them (non-contested auto, contested by selection) and **composes** the winners into a fresh governed branch (`GET/POST /api/conductor/workspaces/compare/:taskGroup/converge[-plan]`) that flows through the step-3 merge + evidence. Remaining: line-level/AST synthesis when two agents edit the *same* file (currently whole-file pick).
 3. Governed, evidence-producing merge as the headline artifact — **🟡 evidence record shipped** (2026-07-25): the governed merge now emits a content-hashed, exportable `ConvergenceEvidence` record (task + N candidate diffs + governance verdict/approval + verification + provenance), sealed into the Merkle audit chain, retrievable at `GET /api/conductor/workspaces/:id/evidence`. Remaining: framework-mapped export renderer (SOC2/EU-AI-Act) + desktop surface.
 
 ## Where we are (2026-07-25)
@@ -45,11 +45,12 @@ capabilities → **[RECODER-MODULES.md](./RECODER-MODULES.md)** + **[RECODER-ARC
    `prisma generate` ✓, `tsc` resolves, `next build` ✓ (BUILD_ID + `.next/standalone`).
    Backend: `tsc` 0 · 2554 tests green. The APFS pressure that used to compound this
    is clear (~14 GB free). Build-time secrets still come from the deploy env.
-2. **Convergence step 2→3** — step 3's exportable governed-merge **evidence
-   record is now shipped** (see above). The remaining differentiator gap is
-   **step 2's per-file converge/synthesize engine**: `compare.service` surfaces
-   `contested` files (siblings touching the same path) but there's no pick-best-
-   per-file or synthesize-into-one-branch flow yet (~1–2 wks, the largest piece).
+2. **Convergence loop** — steps 1–3 now shipped end-to-end: parallel worktrees →
+   **per-file converge/compose** (step 2, `converge` engine) → **governed merge +
+   exportable evidence record** (step 3). The remaining differentiator refinement
+   is **line-level/AST synthesis within a single file** (two agents editing the
+   same file are resolved by whole-file pick today) + an auto-"best" heuristic and
+   a desktop converge surface.
 3. **Desktop distribution** — no signed/notarized dmg, arm64-only; Lance vector
    store + Python sidecars ship dead-by-design (owner-gated packaging Bucket B).
 4. **Phase A auth consolidation** — `users → user` backfill written but unrun on
