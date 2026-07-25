@@ -94,6 +94,13 @@ describe('planConvergence', () => {
     expect(plan.files.every((f) => f.mode === 'pick')).toBe(true);
   });
 
+  it('the PURE fold never sets `contested` — the synthesizability probe is an ops-layer add-on', () => {
+    expect(planConvergence(input()).contested).toBeUndefined();
+    expect(
+      planConvergence(input({ selection: { 'src/shared.ts': SYNTHESIZE_SELECTION } })).contested,
+    ).toBeUndefined();
+  });
+
   it('flags a contested path with NO selection as unresolved (no-selection)', () => {
     const plan = planConvergence(input({ selection: {} }));
     expect(plan.complete).toBe(false);

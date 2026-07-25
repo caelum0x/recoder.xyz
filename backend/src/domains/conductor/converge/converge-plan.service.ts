@@ -101,6 +101,23 @@ export interface ConvergencePlanSource {
   readonly fileCount: number;
 }
 
+/**
+ * A per-contested-file synthesizability probe result — an OPTIONAL, opt-in
+ * enrichment produced by the OPS layer (a read-only dry-run 3-way merge), NEVER by
+ * the pure fold. Present on {@link ConvergencePlan.contested} only when the plan was
+ * requested with `probe`. Lets the UI show which contested files auto-merge cleanly
+ * (can offer `@synthesize`) vs. which still need an explicit `pick`.
+ */
+export interface ContestedProbe {
+  readonly path: string;
+  /** Siblings that touched this path (sorted) — the pick options. */
+  readonly workspaceIds: readonly string[];
+  /** True when a clean line-level 3-way merge of the contesting versions is possible. */
+  readonly synthesizable: boolean;
+  /** When `synthesizable:false`: `'overlap'` | `'delete-modify'` | `'unreadable'`. */
+  readonly reason?: string;
+}
+
 /** The folded convergence plan (`GET …/converge-plan`) — the compose blueprint. */
 export interface ConvergencePlan {
   readonly taskGroup: string | null;
@@ -115,6 +132,13 @@ export interface ConvergencePlan {
   readonly changedFiles: readonly string[];
   /** True when there is ≥1 winning file AND nothing is unresolved — compose-ready. */
   readonly complete: boolean;
+  /**
+   * OPTIONAL synthesizability probe over the contested paths — present ONLY when the
+   * plan was requested with `probe` (the OPS layer attaches it; the pure fold never
+   * does). Sorted by path. Omitted entirely when unprobed (additive; existing
+   * callers/tests read only files/unresolved/sources/changedFiles/complete).
+   */
+  readonly contested?: readonly ContestedProbe[];
 }
 
 /** Build the per-path authorship map (path → set of authoring workspaceIds), degrade-truthful. */

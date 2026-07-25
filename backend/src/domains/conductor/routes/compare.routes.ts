@@ -4,7 +4,7 @@
  *
  *   GET /api/conductor/workspaces/compare?taskGroup=<id>   aggregate a group's siblings
  *   GET /api/conductor/workspaces/:id/siblings             the group a workspace belongs to
- *   GET /api/conductor/workspaces/compare/:taskGroup/converge-plan  step-2 per-file converge plan (read)
+ *   GET /api/conductor/workspaces/compare/:taskGroup/converge-plan  step-2 per-file converge plan (read; `?probe=1` adds synthesizability)
  *   POST /api/conductor/workspaces/compare/:taskGroup/converge      step-2 compose (GATED workspace.branch)
  *
  * Read-only by contract: neither edge mutates, so there is NO governance gate
@@ -102,7 +102,11 @@ export function buildCompareRoutes(deps: CompareRouterDeps): Router {
         sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`selection` must be a JSON object of path→workspaceId'));
         return;
       }
-      sendSuccess(res, { plan: await module.planConvergence(taskGroup, selection) });
+      // OPT-IN synthesizability probe (`?probe=1`): a read-only dry-run 3-way over the
+      // contested paths. Off by default so the desktop's debounced plan poll never
+      // pays for the probe unless it explicitly asks.
+      const probe = isTruthyFlag(req.query.probe);
+      sendSuccess(res, { plan: await module.planConvergence(taskGroup, selection, { probe }) });
     }),
   );
 
@@ -227,6 +231,12 @@ function parseSelectionValue(value: unknown): Readonly<Record<string, string>> |
 /** Coerce a request body into a plain object (never throws). */
 function asObject(body: unknown): Record<string, unknown> {
   return body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
+}
+
+/** A query flag is ON only for an explicit truthy token (`1|true|yes|on`); absent/`0`/`false` ⇒ off. */
+function isTruthyFlag(value: unknown): boolean {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === 'string' && ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase());
 }
 
 /** Map the governed grid-arrange result onto the response envelope (deny ⇒ 403). */

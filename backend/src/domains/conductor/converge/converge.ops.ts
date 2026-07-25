@@ -38,6 +38,7 @@ import { resolveRepoDefaultBranch } from '../git-default-branch.js';
 import {
   planConvergence,
   winnerSources,
+  type ContestedProbe,
   type ConvergenceMode,
   type ConvergencePlan,
   type ConvergencePlanSiblingInput,
@@ -409,21 +410,51 @@ async function synthesizeFile(
   },
 ): Promise<{ clean: true; content: string } | { clean: false }> {
   const { basePath, relPath, contributors, sourceWorktrees, tmpDir } = args;
-  if (contributors.length === 0) return { clean: false };
-
   // Base = the pristine worktree copy; absent (added-by-both) ⇒ an empty ancestor.
   const baseContent = (await readOptional(basePath)) ?? '';
+  const gathered = await gatherContributorVersions(sourceWorktrees, relPath, contributors);
+  if (!gathered.ok) return { clean: false }; // missing contributor ⇒ delete/modify
+  return threeWayFold(deps, baseContent, gathered.versions, tmpDir);
+}
 
-  // Each contributor's version; a MISSING one is a delete/modify — cannot synthesize.
+/**
+ * Read each contributor's version of `relPath` from its worktree, in the given
+ * (workspaceId-sorted) order. A contributor with NO resolved worktree, or one that
+ * DELETED the path (missing on disk), fails the gather (`{ok:false}`) — a
+ * delete/modify that cannot auto-merge. Shared by compose + the read-only probe.
+ */
+async function gatherContributorVersions(
+  sourceWorktrees: Map<string, string>,
+  relPath: string,
+  contributors: readonly string[],
+): Promise<{ ok: true; versions: string[] } | { ok: false }> {
+  if (contributors.length === 0) return { ok: false };
   const versions: string[] = [];
   for (const workspaceId of contributors) {
     const wt = sourceWorktrees.get(workspaceId);
-    if (!wt) return { clean: false };
+    if (!wt) return { ok: false };
     const content = await readOptional(path.join(wt, relPath));
-    if (content === null) return { clean: false }; // deletion vs edit ⇒ conflict
+    if (content === null) return { ok: false }; // deletion vs edit ⇒ conflict
     versions.push(content);
   }
+  return { ok: true, versions };
+}
 
+/**
+ * The PAIRWISE line-level 3-way fold shared by compose (writes the result) and the
+ * probe (dry-run). `running := versions[0]`, then for each next version `running :=
+ * merge-file(ours=running, base=ancestor, theirs=next)` with the ORIGINAL base as
+ * the common ancestor at every step (deterministic in the given order). A clean fold
+ * returns the merged content; ANY conflict returns `{clean:false}`. A real git fault
+ * PROPAGATES (never masqueraded as a conflict). Operands are temp files in `tmpDir`.
+ */
+async function threeWayFold(
+  deps: ConvergeOpsDeps,
+  baseContent: string,
+  versions: readonly string[],
+  tmpDir: string,
+): Promise<{ clean: true; content: string } | { clean: false }> {
+  if (versions.length === 0) return { clean: false };
   const baseFile = path.join(tmpDir, 'base');
   const oursFile = path.join(tmpDir, 'ours');
   const theirsFile = path.join(tmpDir, 'theirs');
@@ -470,6 +501,116 @@ async function mergeFile(
       return { clean: false, content: err.stdout };
     }
     throw err;
+  }
+}
+
+/** The contested-path input the probe scores (path + the siblings that touched it). */
+export interface ContestedProbeInput {
+  readonly path: string;
+  readonly workspaceIds: readonly string[];
+}
+
+/**
+ * DRY-RUN synthesizability probe (read-only) — for each contested path, run the SAME
+ * pairwise 3-way merge compose would, in a TEMP DIR (no `git worktree add`, no branch,
+ * no mutation), and report whether it comes out clean. The base version is read via
+ * `git show <base>:<path>` (empty when the path is added-by-both); contributor
+ * versions are read from the sibling worktrees. DEGRADE-TRUTHFUL + NEVER throws: a
+ * delete/modify ⇒ `synthesizable:false, reason:'delete-modify'`; a conflict ⇒
+ * `reason:'overlap'`; any git/read fault or unresolved worktree ⇒ `reason:'unreadable'`.
+ * Bounded to the contested paths passed in; the temp dir is always disposed.
+ */
+export async function probeSynthesizability(
+  deps: ConvergeOpsDeps,
+  contested: readonly ContestedProbeInput[],
+): Promise<ContestedProbe[]> {
+  const sorted = [...contested].sort((a, b) => a.path.localeCompare(b.path));
+  if (sorted.length === 0) return [];
+
+  // Resolve every candidate's worktree once (a fault ⇒ absent ⇒ that path degrades).
+  const ids = [...new Set(sorted.flatMap((c) => c.workspaceIds))];
+  const worktrees = new Map<string, string>();
+  let primary: Workspace | null = null;
+  for (const id of ids) {
+    const ws = await deps.getWorkspace(id).catch(() => null);
+    if (ws?.worktreePath) {
+      worktrees.set(id, ws.worktreePath);
+      primary ??= ws;
+    }
+  }
+  // No resolvable worktree in the whole group — every path is truthfully unreadable.
+  if (!primary?.worktreePath) {
+    return sorted.map((c) => ({
+      path: c.path,
+      workspaceIds: [...c.workspaceIds].sort(),
+      synthesizable: false,
+      reason: 'unreadable',
+    }));
+  }
+
+  const repoPath = await resolveMainRepo(deps, primary.worktreePath);
+  const base = await resolveBase(deps, primary, repoPath);
+  const tmpDir = await mkdtemp(path.join(tmpdir(), 'recoder-probe-'));
+  try {
+    const out: ContestedProbe[] = [];
+    for (const c of sorted) {
+      const contributors = [...c.workspaceIds].sort();
+      const result = await probeOne(deps, { repoPath, base, relPath: c.path, contributors, worktrees, tmpDir });
+      out.push({ path: c.path, workspaceIds: contributors, ...result });
+    }
+    return out;
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/** Probe ONE contested path — the same gather + 3-way fold as compose, but read-only. */
+async function probeOne(
+  deps: ConvergeOpsDeps,
+  args: {
+    readonly repoPath: string;
+    readonly base: string;
+    readonly relPath: string;
+    readonly contributors: readonly string[];
+    readonly worktrees: Map<string, string>;
+    readonly tmpDir: string;
+  },
+): Promise<{ synthesizable: boolean; reason?: string }> {
+  const { repoPath, base, relPath, contributors, worktrees, tmpDir } = args;
+  if (!isSafeRelPath(relPath)) return { synthesizable: false, reason: 'unreadable' };
+  // A contributor with no RESOLVED worktree is unreadable (distinct from a deletion).
+  if (contributors.some((id) => !worktrees.has(id))) return { synthesizable: false, reason: 'unreadable' };
+  const gathered = await gatherContributorVersions(worktrees, relPath, contributors);
+  if (!gathered.ok) return { synthesizable: false, reason: 'delete-modify' }; // a MISSING file
+  const baseContent = await showFileAtRef(deps, repoPath, base, relPath);
+  try {
+    const fold = await threeWayFold(deps, baseContent, gathered.versions, tmpDir);
+    return fold.clean ? { synthesizable: true } : { synthesizable: false, reason: 'overlap' };
+  } catch {
+    // A real git/read fault during the dry-run — truthfully "could not judge".
+    return { synthesizable: false, reason: 'unreadable' };
+  }
+}
+
+/**
+ * Read `git show <ref>:<relPath>` (the base version of a path) as a string. A failure
+ * (the path is NOT tracked at base — added-by-both — or the ref is unreadable) yields
+ * `''`, matching compose's empty-ancestor behavior for an added-by-both file.
+ */
+async function showFileAtRef(
+  deps: ConvergeOpsDeps,
+  repoPath: string,
+  ref: string,
+  relPath: string,
+): Promise<string> {
+  const exec = deps.exec ?? execFileSafe;
+  try {
+    const { stdout } = await exec('git', ['-C', repoPath, 'show', `${ref}:${relPath}`], {
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    return stdout;
+  } catch {
+    return ''; // not tracked at base (added-by-both) — an empty common ancestor
   }
 }
 
