@@ -15,6 +15,9 @@ import {
   LayoutDashboard,
   ArrowUpRight,
   ChevronRight,
+  GitBranch,
+  GitCompare,
+  GitMerge,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { getServiceUrlClient } from '@/lib/config/platforms';
@@ -102,6 +105,42 @@ const PRODUCTS = [
 ] as const;
 
 /* ------------------------------------------------------------------ */
+/*  The convergence loop — launch → compare → merge                    */
+/* ------------------------------------------------------------------ */
+const CONVERGENCE_STEPS = [
+  {
+    id: 'launch',
+    step: '01',
+    name: 'Launch',
+    tagline: 'N agents, isolated worktrees',
+    description:
+      'Point Claude Code, Codex, Cursor — any agent CLI — at one task. Each runs in its own isolated git worktree with your own API keys, so attempts never collide.',
+    icon: GitBranch,
+    features: ['Any agent CLI', 'One task, N attempts', 'Isolated git worktrees', 'BYOK — your keys, your infra'],
+  },
+  {
+    id: 'compare',
+    step: '02',
+    name: 'Compare',
+    tagline: 'Divergent diffs, side by side',
+    description:
+      'Fan-out is easy; convergence is the hard part. Review what each agent actually changed, side by side, instead of hand-refereeing a pile of conflicting branches.',
+    icon: GitCompare,
+    features: ['Side-by-side diff review', 'Pick the strongest attempt', 'Shared memory across runs', 'No hand-refereeing branches'],
+  },
+  {
+    id: 'merge',
+    step: '03',
+    name: 'Merge',
+    tagline: 'One trusted, evidence-backed change',
+    description:
+      'Approve the winner and merge it. The merge seals an exportable evidence record — what ran, what was reviewed, who approved — so the change is trusted, not just fast.',
+    icon: GitMerge,
+    features: ['Human-approvable merge', 'Exportable evidence record', 'What ran, who approved', 'One shippable change'],
+  },
+] as const;
+
+/* ------------------------------------------------------------------ */
 /*  Product surface — ONE neutral scheme + a single orange accent.     */
 /*  Products differ by icon + label + monospace tagline, not by hue,   */
 /*  matching the cube's restraint (dark faces, one warm accent).       */
@@ -122,7 +161,7 @@ const PRICING_TIERS = [
     name: 'Free',
     price: '$0',
     period: 'forever',
-    description: 'Bring your own API key',
+    description: 'Parallel agents, your own API key',
     features: ['6 sessions / day', 'CLI + Web access', 'Free models unlimited', 'Community support'],
     cta: 'Get Started',
     href: '/auth/signup',
@@ -186,7 +225,7 @@ export default function HomePage() {
     setTimeout(() => setter(false), 2000);
   };
 
-  const SPECS = ['5 products', '40+ AI models', 'A2A / MCP ready', 'Open-source core'];
+  const SPECS = ['Any agent CLI', 'Isolated git worktrees', 'BYOK — your keys', 'Self-hosted'];
 
   return (
     <div className="min-h-screen bg-black text-white antialiased">
@@ -219,19 +258,21 @@ export default function HomePage() {
             {/* Copy column */}
             <div className="rec-rise text-center lg:text-left">
               <div className="mb-6 flex justify-center lg:justify-start">
-                <Eyebrow>Terminal for coding agents</Eyebrow>
+                <Eyebrow>The convergence workspace for coding agents</Eyebrow>
               </div>
 
               <h1 className="text-balance text-4xl font-bold leading-[1.05] tracking-tight text-white sm:text-5xl md:text-6xl xl:text-7xl">
-                Run Claude Code, Codex,
+                N agents in parallel.
                 <br />
-                and any agent <span className="text-orange-400">in parallel.</span>
+                <span className="text-orange-400">One trusted merge.</span>
               </h1>
 
               <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-gray-400 lg:mx-0">
-                Recoder is a terminal for AI coding agents. Run each in its own
-                isolated git worktree, bring your own API key (BYOK), then review
-                the diff and merge — free to start, no lock-in.
+                Recoder is the self-hosted convergence workspace for AI coding
+                agents. Run Claude Code, Codex, and any agent in parallel
+                isolated git worktrees with your own API keys (BYOK), compare
+                their divergent diffs side by side, then merge the best one —
+                with an evidence record of what ran and who approved.
               </p>
 
               {/* Spec strip — monospace, engineered */}
@@ -286,69 +327,85 @@ export default function HomePage() {
       <section className="border-t border-white/5 px-6 py-24">
         <div className="container mx-auto max-w-6xl">
           <div className="mb-14 max-w-2xl space-y-4">
-            <Eyebrow>The platform</Eyebrow>
+            <Eyebrow>The convergence loop</Eyebrow>
             <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-              Five products, one control plane
+              Launch. Compare. Merge.
             </h2>
             <p className="text-lg text-gray-400">
-              Purpose-built surfaces that work together — or independently.
+              Parallel agents leave you with N conflicting branches. Recoder
+              turns them into one reviewed, evidence-backed change.
             </p>
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {PRODUCTS.map((product) => {
+            {CONVERGENCE_STEPS.map((step) => {
               const c = PRODUCT_SURFACE;
-              const Icon = product.icon;
-              const href = product.href();
-              const isExternal = product.external;
+              const Icon = step.icon;
 
-              const card = (
-                <div
-                  className={`group relative flex h-full flex-col rounded-2xl border ${c.border} ${c.bg} ${c.glow} p-6 transition-all duration-300 hover:shadow-lg`}
-                >
-                  <div className="mb-5 flex items-start justify-between">
-                    <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${c.bg} border ${c.border}`}>
-                      <Icon className={`h-5 w-5 ${c.text}`} />
+              return (
+                <TiltCard key={step.id}>
+                  <div
+                    className={`group relative flex h-full flex-col rounded-2xl border ${c.border} ${c.bg} ${c.glow} p-6 transition-all duration-300 hover:shadow-lg`}
+                  >
+                    <div className="mb-5 flex items-start justify-between">
+                      <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${c.bg} border ${c.border}`}>
+                        <Icon className={`h-5 w-5 ${c.text}`} />
+                      </div>
+                      <span className="font-mono text-xs text-gray-600">{step.step}</span>
                     </div>
-                    {isExternal && (
-                      <ArrowUpRight className="h-4 w-4 text-gray-600 transition-colors group-hover:text-gray-300" />
-                    )}
+
+                    <h3 className="text-xl font-bold tracking-tight">{step.name}</h3>
+                    <p className={`mt-1 font-mono text-xs uppercase tracking-wider ${c.text}`}>
+                      {step.tagline}
+                    </p>
+                    <p className="mt-3 text-sm leading-relaxed text-gray-400">
+                      {step.description}
+                    </p>
+
+                    <ul className="mt-5 space-y-2 border-t border-white/5 pt-5">
+                      {step.features.map((f) => (
+                        <li key={f} className="flex items-center gap-2.5 text-xs text-gray-400">
+                          <span className={`h-1 w-1 rounded-full ${c.dot}`} aria-hidden="true" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-
-                  <h3 className="text-xl font-bold tracking-tight">{product.name}</h3>
-                  <p className={`mt-1 font-mono text-xs uppercase tracking-wider ${c.text}`}>
-                    {product.tagline}
-                  </p>
-                  <p className="mt-3 text-sm leading-relaxed text-gray-400">
-                    {product.description}
-                  </p>
-
-                  <ul className="mt-5 space-y-2 border-t border-white/5 pt-5">
-                    {product.features.map((f) => (
-                      <li key={f} className="flex items-center gap-2.5 text-xs text-gray-400">
-                        <span className={`h-1 w-1 rounded-full ${c.dot}`} aria-hidden="true" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                </TiltCard>
               );
+            })}
+          </div>
 
-              const tilted = <TiltCard>{card}</TiltCard>;
-
-              return isExternal ? (
+          {/* Other platform surfaces — demoted to a compact mention */}
+          <div className="mt-12 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-white/5 pt-8">
+            <span className="font-mono text-xs uppercase tracking-wider text-gray-500">
+              Also on the platform
+            </span>
+            {PRODUCTS.map((product) => {
+              const href = product.href();
+              const label = (
+                <>
+                  {product.name}
+                  {product.external && <ArrowUpRight className="h-3 w-3" aria-hidden="true" />}
+                </>
+              );
+              return product.external ? (
                 <a
                   key={product.id}
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`rounded-2xl ${FOCUS_RING}`}
+                  className={`inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-sm text-gray-400 transition-colors hover:text-white ${FOCUS_RING}`}
                 >
-                  {tilted}
+                  {label}
                 </a>
               ) : (
-                <Link key={product.id} href={href} className={`rounded-2xl ${FOCUS_RING}`}>
-                  {tilted}
+                <Link
+                  key={product.id}
+                  href={href}
+                  className={`inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-sm text-gray-400 transition-colors hover:text-white ${FOCUS_RING}`}
+                >
+                  {label}
                 </Link>
               );
             })}
@@ -533,9 +590,9 @@ export default function HomePage() {
         <div className="container mx-auto max-w-5xl">
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
             {[
-              { value: '5', label: 'Products' },
+              { value: 'N', label: 'Agents in Parallel' },
+              { value: '1', label: 'Trusted Merge' },
               { value: '40+', label: 'AI Models' },
-              { value: '17', label: 'MCP Servers' },
               { value: '$0', label: 'To Start' },
             ].map(({ value, label }) => (
               <div key={label} className="space-y-1 text-center">
@@ -556,7 +613,9 @@ export default function HomePage() {
             <Eyebrow>Pricing</Eyebrow>
             <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Simple, honest pricing</h2>
             <p className="text-lg text-gray-400">
-              Start free with your own API key, or let us handle everything.
+              Parallel agents with your own API keys are free. Paid plans add
+              hosted models, more sessions, and team seats — predictable
+              pricing, no metered bill-shock.
             </p>
           </div>
 
@@ -631,10 +690,11 @@ export default function HomePage() {
             <Eyebrow>Start building</Eyebrow>
           </div>
           <h2 className="text-3xl font-bold tracking-tight md:text-5xl">
-            Ready to build with AI?
+            Stop hand-refereeing agent branches.
           </h2>
           <p className="text-lg text-gray-400">
-            Join thousands of developers building with Recoder.
+            Launch your agents in parallel and ship one trusted merge — on
+            infra you own, with your keys.
           </p>
 
           <div className="flex flex-col items-center justify-center gap-3 pt-2 sm:flex-row">

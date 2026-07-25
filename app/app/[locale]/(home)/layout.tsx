@@ -7,11 +7,13 @@ import {
 } from '@/app/components/StructuredData';
 
 // On-page hero (page.tsx H1/¶1) and this metadata must stay in agreement:
-// the real product is a terminal for running coding agents (Claude Code,
-// Codex, and more) in parallel isolated git worktrees, BYOK, review + merge.
-const HOME_TITLE = 'Recoder — Run Claude Code, Codex & AI Coding Agents in Parallel';
+// the product is the self-hosted convergence workspace for coding agents —
+// run Claude Code, Codex, and any agent in parallel isolated git worktrees
+// (BYOK), compare divergent diffs, and land ONE trusted, evidence-backed
+// merge (docs/PRODUCT-THESIS.md §0/§12).
+const HOME_TITLE = 'Recoder — Claude Code, Codex & Any Agent in Parallel. One Trusted Merge.';
 const HOME_DESCRIPTION =
-  'Recoder is a terminal for AI coding agents. Run Claude Code, Codex, and more in parallel isolated git worktrees, bring your own API key (BYOK), then review the diff and merge. Free to start.';
+  'Recoder is the self-hosted convergence workspace for AI coding agents. Run Claude Code, Codex, and any agent in parallel isolated git worktrees with your own API keys (BYOK), compare their divergent diffs side by side, and merge one trusted, evidence-backed change. Free to start.';
 
 export const metadata: Metadata = {
   title: HOME_TITLE,
@@ -21,11 +23,12 @@ export const metadata: Metadata = {
     'Claude Code',
     'Codex',
     'run coding agents in parallel',
+    'merge parallel agent diffs',
+    'AI agent convergence',
+    'self-hosted AI coding',
     'BYOK AI',
     'bring your own API key',
     'git worktree AI',
-    'terminal AI coding',
-    'free AI development',
     'review and merge AI diffs',
   ],
   openGraph: {
@@ -52,7 +55,7 @@ export default function HomeLayout({
   return (
     <>
       <OrganizationSchema />
-      {/* Terminal-first hero → surface the CLI SoftwareApplication schema too. */}
+      {/* Convergence-first hero → still surface the CLI SoftwareApplication schema. */}
       <SoftwareApplicationSchema />
       <WebApplicationSchema />
       <FAQPageSchema />
