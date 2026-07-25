@@ -22,6 +22,11 @@ const SAVE_BTN =
 const INPUT =
     "rounded border border-border bg-transparent px-2 py-1 text-sm focus:outline-none focus:border-accent/60 transition-colors duration-150";
 
+const ERROR_ROW =
+    "flex items-start gap-1.5 rounded border border-error/40 bg-error/10 text-error text-sm px-2 py-1";
+
+const SKELETON_ROW = "h-7 rounded border border-border bg-border/20 animate-pulse";
+
 const PAGE_TITLE = "text-sm font-semibold tracking-tight text-primary";
 const SECTION_TITLE = "text-sm font-semibold text-primary";
 const FIELD_LABEL = "text-xs uppercase tracking-wide text-secondary";
@@ -29,6 +34,7 @@ const ROW_TITLE = "text-sm text-primary";
 const META = "text-xs text-secondary";
 
 export {
+    ERROR_ROW,
     FIELD_LABEL,
     INPUT,
     META,
@@ -40,4 +46,5 @@ export {
     ROW_TITLE,
     SAVE_BTN,
     SECTION_TITLE,
+    SKELETON_ROW,
 };

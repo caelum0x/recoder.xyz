@@ -364,6 +364,13 @@ function RecoderComparePanel({ model, compareView }: { model: RecoderViewModel; 
     const bEntry = compareView.siblings.find((s) => s.workspaceId == pairB);
     const pair = aEntry != null && bEntry != null ? computePairwise(aEntry, bEntry, compareView.contested ?? []) : null;
     const suggested = computeSuggestedWinner(compareView.siblings, readinessMap);
+    if (compareView.siblings.length == 0) {
+        return (
+            <div className="rounded border border-border p-2">
+                <div className={META}>No sibling agents to compare yet.</div>
+            </div>
+        );
+    }
     return (
         <div className="flex flex-col gap-1.5 rounded border border-border p-2">
             <ContestedSet compareView={compareView} />
