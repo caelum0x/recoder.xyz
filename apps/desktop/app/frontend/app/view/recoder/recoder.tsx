@@ -104,14 +104,14 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
             onClick={onSelect}
             onFocus={onSelect}
             className={`flex flex-col gap-1 rounded border border-border px-2.5 py-1.5 transition-colors duration-150 ease-out hover:bg-border/20 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/70 ${selected ? "ring-1 ring-accent/60 bg-border/20" : ""}`}
-            title={`${ws.workspaceId} Â· ${ws.branch}`}
+            title={`${ws.workspaceId} - ${ws.branch}`}
         >
             <div className="flex items-center gap-2">
                 <span className={`${ROW_TITLE} truncate`}>{ws.branch}</span>
                 <span className={META}>{ws.state}</span>
                 {summary != null && summary.files > 0 && (
                     <span className={META}>
-                        +{summary.additions} â{summary.deletions}
+                        +{summary.additions} -{summary.deletions}
                     </span>
                 )}
                 <span className={`${META} ml-auto`}>{agentLabel(ws.runtimeId)}</span>
@@ -127,7 +127,7 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
                     Review
                 </button>
                 <button className={QUIET_BTN} disabled={busy} onClick={() => model.mergeWorkspace(ws.workspaceId)}>
-                    {busy ? "â¦" : "Merge"}
+                    {busy ? "..." : "Merge"}
                 </button>
                 <button className={QUIET_BTN} disabled={busy} onClick={() => model.archiveWorkspace(ws.workspaceId)}>
                     Archive
@@ -262,7 +262,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2" onKeyDown={onBoardKeyDown}>
             <div className="flex items-center gap-2">
-                <span className={PAGE_TITLE}>Recoder â Workspaces</span>
+                <span className={PAGE_TITLE}>Recoder - Workspaces</span>
                 <div className="flex-1" />
                 <RecoderIdentityAffordance />
                 <button className={PRIMARY_BTN} onClick={() => setLaunchOpen(!launchOpen)}>
@@ -298,7 +298,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         <span className={FIELD_LABEL}>Folder</span>
                         {repoPath.trim() == "" ? (
                             <button className={`${PRIMARY_BTN} w-full`} onClick={browseFolder}>
-                                Choose folderâ¦
+                                Choose folder...
                             </button>
                         ) : (
                             <div className="flex items-center gap-2" title={repoPath}>
@@ -333,7 +333,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         <span className={FIELD_LABEL}>First message (optional)</span>
                         <textarea
                             className={`${INPUT} min-h-16 resize-y`}
-                            placeholder="Optionally start the agent with a message â or leave empty and chat once it's runningâ¦"
+                            placeholder="Optionally start the agent with a message - or leave empty and chat once it's running..."
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
                             onKeyDown={(e) => {
@@ -400,19 +400,19 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             checked={interactive}
                             onChange={(e) => setInteractive(e.target.checked)}
                         />
-                        <span>Interactive session â run the real agent TUI</span>
+                        <span>Interactive session - run the real agent TUI</span>
                     </label>
 
                     <div className="flex items-center gap-2">
                         <button className={PRIMARY_BTN} disabled={!canLaunch} onClick={() => model.launch()}>
-                            {posting ? "Launchingâ¦" : "Launch"}
+                            {posting ? "Launching..." : "Launch"}
                         </button>
                         {parallelCount > 0 && (
                             <span className="text-xs text-secondary">
                                 Launches {1 + parallelCount} agents, each in its own worktree.
                             </span>
                         )}
-                        {canLaunch && <span className={`${META} ml-auto`}>ââµ to launch</span>}
+                        {canLaunch && <span className={`${META} ml-auto`}>Cmd+Enter to launch</span>}
                     </div>
 
                     {!canLaunch && launchDisabledReason(repoPath, runtimeId) != "" && (
@@ -441,32 +441,32 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         <div className="flex flex-col gap-1">
                             <div className={FIELD_LABEL}>Ready on this machine</div>
                             <div className="flex items-center gap-2 text-sm">
-                                <span>{setup.git ? "â" : "â"}</span>
+                                <span>{setup.git ? "✓" : "✗"}</span>
                                 <span className={setup.git ? "" : "text-secondary"}>git</span>
                             </div>
                             {setup.agents.length == 0 && (
                                 <div className={META}>
-                                    No coding agents detected on PATH â install Claude Code (or Codex / opencode) to
+                                    No coding agents detected on PATH - install Claude Code (or Codex / opencode) to
                                     launch a workspace.
                                 </div>
                             )}
                             {setup.agents.map((a) => (
                                 <div key={a.runtimeId} className="flex items-center gap-2 text-sm">
-                                    <span>{a.available ? "â" : "â"}</span>
+                                    <span>{a.available ? "✓" : "✗"}</span>
                                     <span className={a.available ? "" : "text-secondary"}>{agentLabel(a.runtimeId)}</span>
                                 </div>
                             ))}
                         </div>
                     ) : setup.probed ? (
                         <div className={META}>
-                            Couldn’t reach Recoder yet â it may still be starting.
+                            Couldn’t reach Recoder yet - it may still be starting.
                         </div>
                     ) : (
-                        <div className={META}>Checking local setupâ¦</div>
+                        <div className={META}>Checking local setup...</div>
                     )}
                     {setup.loaded && readyAgents.length > 0 && (
                         <div className={META}>
-                            You're set up â{" "}
+                            You're set up -{" "}
                             <button className={PRIMARY_BTN} onClick={() => setLaunchOpen(true)}>
                                 create a workspace
                             </button>{" "}
