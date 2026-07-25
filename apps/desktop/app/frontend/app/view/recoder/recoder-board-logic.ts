@@ -375,6 +375,60 @@ function isTerminalWorkspaceState(state: string): boolean {
     return state == "archived" || state == "failed";
 }
 
+// A needs-human moment observed between two polls: an agent finished and wants
+// review, or a workspace died. `key` (workspaceId:state) is the de-dupe unit —
+// notify at most once per workspace+state per session even if the state bounces.
+type RecoderAttentionKind = "review" | "failed";
+type RecoderAttentionEvent = {
+    workspaceId: string;
+    branch: string;
+    runtimeId: string;
+    kind: RecoderAttentionKind;
+    key: string;
+};
+
+function workspaceStateMap(workspaces: RecoderWorkspace[]): Map<string, string> {
+    return new Map(workspaces.map((ws) => [ws.workspaceId, ws.state]));
+}
+
+// Pure: fold the current poll against the previous poll's state map and return
+// only OBSERVED needs-human transitions — running → awaiting_review ("ready for
+// review") and any live state → failed. A workspace absent from `prevStates`
+// (first poll of the session, or launched between polls) is seeded silently:
+// we never notify about a state we didn't watch happen, so reopening the hub
+// against 10 already-waiting workspaces stays quiet. `alreadyNotified` keys
+// (workspaceId:state) suppress repeats when a state bounces back and forth.
+function detectAttentionTransitions(
+    prevStates: ReadonlyMap<string, string>,
+    workspaces: RecoderWorkspace[],
+    alreadyNotified: ReadonlySet<string>
+): RecoderAttentionEvent[] {
+    const events: RecoderAttentionEvent[] = [];
+    for (const ws of workspaces) {
+        const prev = prevStates.get(ws.workspaceId);
+        if (prev == null || prev == ws.state) {
+            continue;
+        }
+        const kind: RecoderAttentionKind =
+            prev == "running" && ws.state == "awaiting_review" ? "review" : ws.state == "failed" ? "failed" : null;
+        if (kind == null) {
+            continue;
+        }
+        const key = `${ws.workspaceId}:${ws.state}`;
+        if (alreadyNotified.has(key)) {
+            continue;
+        }
+        events.push({
+            workspaceId: ws.workspaceId,
+            branch: ws.branch ?? "",
+            runtimeId: ws.runtimeId ?? "",
+            kind,
+            key,
+        });
+    }
+    return events;
+}
+
 type RecoderBoardShow = "active" | "all" | "archived";
 
 function workspaceMatchesQuery(ws: RecoderWorkspace, q: string): boolean {
@@ -519,12 +573,16 @@ export {
     computePairwise,
     computeSiblingOverlap,
     computeSuggestedWinner,
+    detectAttentionTransitions,
     groupByTaskGroup,
     filterWorkspaces,
     bucketWorkspaceGroups,
     formatRelativeAge,
     isTerminalWorkspaceState,
+    workspaceStateMap,
     TASK_GROUP_METADATA_KEY,
+    type RecoderAttentionEvent,
+    type RecoderAttentionKind,
     type RecoderWorkspace,
     type RecoderDiffSummary,
     type SiblingCompareEntry,

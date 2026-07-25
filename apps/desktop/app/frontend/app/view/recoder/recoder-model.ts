@@ -6,12 +6,15 @@ import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { agentLabel } from "./recoder-agent-labels";
 import {
     bucketWorkspaceGroups,
+    detectAttentionTransitions,
     filterWorkspaces,
     groupByTaskGroup,
     isTerminalWorkspaceState,
+    workspaceStateMap,
     type CompareView,
     type MergeabilityView,
     type ReadinessView,
+    type RecoderAttentionEvent,
     type RecoderAuditEntry,
     type RecoderBoardBucket,
     type RecoderBoardShow,
@@ -96,6 +99,7 @@ const RECENT_REPOS_KEY = "recoder:recent-repos";
 const RECENT_REPOS_CAP = 8;
 const LAST_AGENT_KEY = "recoder:last-agent";
 const LAST_INTERACTIVE_KEY = "recoder:last-interactive";
+const NOTIFY_ATTENTION_KEY = "recoder:notify-attention";
 
 // Degrade-safe: a corrupt/absent store must never break launch, so every read
 // tolerates bad JSON and non-string entries and falls back to an empty list.
@@ -123,6 +127,16 @@ function loadLastAgent(): string {
 function loadLastInteractive(): boolean {
     try {
         return localStorage.getItem(LAST_INTERACTIVE_KEY) != "false";
+    } catch {
+        return true;
+    }
+}
+
+// Default ON: the whole point of parallel agents is walking away; only an
+// explicit "false" (or nothing to read) opts out. Degrade-safe like the others.
+function loadNotifyOnAttention(): boolean {
+    try {
+        return localStorage.getItem(NOTIFY_ATTENTION_KEY) != "false";
     } catch {
         return true;
     }
@@ -202,6 +216,14 @@ class RecoderViewModel implements ViewModel {
     cloneDestDirAtom: PrimitiveAtom<string>;
     cloningAtom: PrimitiveAtom<boolean>;
     cloneErrorAtom: PrimitiveAtom<string>;
+    // Whether needs-attention OS notifications fire (default ON, persisted).
+    notifyOnAttentionAtom: PrimitiveAtom<boolean>;
+    // Per-workspace state as of the LAST successful poll; null until the first
+    // poll lands, which seeds silently — a session never notifies about states
+    // it didn't watch change (no storm when reopening onto waiting workspaces).
+    prevWorkspaceStates: Map<string, string>;
+    // workspaceId:state keys already notified this session (de-dupe on bounce).
+    notifiedAttentionKeys: ReadonlySet<string>;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -241,6 +263,9 @@ class RecoderViewModel implements ViewModel {
         this.cloneDestDirAtom = atom("") as PrimitiveAtom<string>;
         this.cloningAtom = atom(false) as PrimitiveAtom<boolean>;
         this.cloneErrorAtom = atom("") as PrimitiveAtom<string>;
+        this.notifyOnAttentionAtom = atom(loadNotifyOnAttention()) as PrimitiveAtom<boolean>;
+        this.prevWorkspaceStates = null;
+        this.notifiedAttentionKeys = new Set();
         this.boardFilterAtom = atom("") as PrimitiveAtom<string>;
         this.boardShowAtom = atom("active") as PrimitiveAtom<RecoderBoardShow>;
         this.workspacesAtom = atom((get) =>
@@ -306,6 +331,7 @@ class RecoderViewModel implements ViewModel {
             // so the All / Archived views switch without a refetch.
             const all = list as RecoderWorkspace[];
             globalStore.set(this.allWorkspacesAtom, all);
+            this.noteAttentionTransitions(all);
             workspaces = all.filter((w) => !isTerminalWorkspaceState(w.state));
         } catch (e) {
             globalStore.set(this.errorAtom, e instanceof Error ? e.message : String(e));
@@ -316,6 +342,60 @@ class RecoderViewModel implements ViewModel {
         // independently degrade-safe.
         this.refreshSetup();
         this.loadDiffSummaries(workspaces);
+    }
+
+    // Compare this poll against the last SUCCESSFUL poll and fire an OS
+    // notification per observed needs-human transition (running → awaiting_review,
+    // anything → failed). Only called on a successful list read, so a backend
+    // outage never reseeds the map and can never manufacture "new" workspaces.
+    // The first poll of a session seeds silently.
+    noteAttentionTransitions(all: RecoderWorkspace[]) {
+        const prev = this.prevWorkspaceStates;
+        this.prevWorkspaceStates = workspaceStateMap(all);
+        if (prev == null || !globalStore.get(this.notifyOnAttentionAtom)) {
+            return;
+        }
+        const events = detectAttentionTransitions(prev, all, this.notifiedAttentionKeys);
+        if (events.length == 0) {
+            return;
+        }
+        this.notifiedAttentionKeys = new Set([...this.notifiedAttentionKeys, ...events.map((e) => e.key)]);
+        for (const event of events) {
+            this.showAttentionNotification(event);
+        }
+    }
+
+    // Renderer-side web Notification (granted by default in this shell; no RPC
+    // round trip) so onclick can select the workspace row in THIS view. Degrade-
+    // safe: an absent/denied Notification API or a throwing constructor is a
+    // silent no-op — the board itself still shows the state truthfully.
+    showAttentionNotification(event: RecoderAttentionEvent) {
+        if (typeof Notification == "undefined" || Notification.permission == "denied") {
+            return;
+        }
+        const name = event.branch != "" ? event.branch : event.workspaceId;
+        const title = event.kind == "review" ? `${name} is ready for review` : `${name} failed`;
+        try {
+            const notification = new Notification(title, {
+                body: event.runtimeId != "" ? agentLabel(event.runtimeId) : "",
+                tag: event.key,
+            });
+            notification.onclick = () => {
+                globalStore.set(this.selectedWorkspaceIdAtom, event.workspaceId);
+                window.focus();
+            };
+        } catch {
+            // degrade-safe: a notification that can't show must never break the poll
+        }
+    }
+
+    setNotifyOnAttention(on: boolean) {
+        globalStore.set(this.notifyOnAttentionAtom, on);
+        try {
+            localStorage.setItem(NOTIFY_ATTENTION_KEY, on ? "true" : "false");
+        } catch {
+            // degrade-safe: a corrupt store must never break the toggle
+        }
     }
 
     // Best-effort per-workspace changed-line summary. Each fetch degrades to "no

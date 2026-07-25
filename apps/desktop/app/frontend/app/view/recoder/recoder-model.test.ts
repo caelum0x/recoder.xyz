@@ -8,10 +8,12 @@ import {
     computePairwise,
     computeSiblingOverlap,
     computeSuggestedWinner,
+    detectAttentionTransitions,
     filterWorkspaces,
     formatRelativeAge,
     groupByTaskGroup,
     isTerminalWorkspaceState,
+    workspaceStateMap,
     TASK_GROUP_METADATA_KEY,
     type ContestedFile,
     type RecoderWorkspace,
@@ -466,5 +468,112 @@ describe("computeSuggestedWinner", () => {
         expect(
             computeSuggestedWinner([b, a], null as unknown as Record<string, RecoderWorkspaceReadiness>)
         ).toEqual({ workspaceId: a.workspaceId, reason: "smallest diff" });
+    });
+});
+
+describe("workspaceStateMap", () => {
+    it("maps workspaceId to state", () => {
+        const a = makeWs({ state: "running" });
+        const b = makeWs({ state: "awaiting_review" });
+        const map = workspaceStateMap([a, b]);
+        expect(map.get(a.workspaceId)).toBe("running");
+        expect(map.get(b.workspaceId)).toBe("awaiting_review");
+        expect(map.size).toBe(2);
+    });
+
+    it("an empty list yields an empty map", () => {
+        expect(workspaceStateMap([]).size).toBe(0);
+    });
+});
+
+describe("detectAttentionTransitions", () => {
+    const none = new Set<string>();
+
+    it("fires review on an observed running → awaiting_review", () => {
+        const ws = makeWs({ state: "awaiting_review", branch: "agent/fix" });
+        const prev = new Map([[ws.workspaceId, "running"]]);
+        expect(detectAttentionTransitions(prev, [ws], none)).toEqual([
+            {
+                workspaceId: ws.workspaceId,
+                branch: "agent/fix",
+                runtimeId: "claude_code",
+                kind: "review",
+                key: `${ws.workspaceId}:awaiting_review`,
+            },
+        ]);
+    });
+
+    it("fires failed from ANY prior live state", () => {
+        for (const from of ["created", "running", "setting_up", "ready", "awaiting_review"]) {
+            const ws = makeWs({ state: "failed" });
+            const prev = new Map([[ws.workspaceId, from]]);
+            const events = detectAttentionTransitions(prev, [ws], none);
+            expect(events).toHaveLength(1);
+            expect(events[0].kind).toBe("failed");
+        }
+    });
+
+    it("a workspace absent from prev (first poll / launched mid-poll) seeds silently", () => {
+        const waiting = makeWs({ state: "awaiting_review" });
+        const dead = makeWs({ state: "failed" });
+        expect(detectAttentionTransitions(new Map(), [waiting, dead], none)).toEqual([]);
+    });
+
+    it("an unchanged state fires nothing", () => {
+        const ws = makeWs({ state: "awaiting_review" });
+        const prev = new Map([[ws.workspaceId, "awaiting_review"]]);
+        expect(detectAttentionTransitions(prev, [ws], none)).toEqual([]);
+    });
+
+    it("only running → awaiting_review counts as review (not setting_up → awaiting_review)", () => {
+        const ws = makeWs({ state: "awaiting_review" });
+        const prev = new Map([[ws.workspaceId, "setting_up"]]);
+        expect(detectAttentionTransitions(prev, [ws], none)).toEqual([]);
+    });
+
+    it("non-attention transitions (running → ready, awaiting_review → archived) fire nothing", () => {
+        const ready = makeWs({ state: "ready" });
+        const archived = makeWs({ state: "archived" });
+        const prev = new Map([
+            [ready.workspaceId, "running"],
+            [archived.workspaceId, "awaiting_review"],
+        ]);
+        expect(detectAttentionTransitions(prev, [ready, archived], none)).toEqual([]);
+    });
+
+    it("an already-notified workspaceId:state key is suppressed (de-dupe on bounce)", () => {
+        const ws = makeWs({ state: "awaiting_review" });
+        const prev = new Map([[ws.workspaceId, "running"]]);
+        const notified = new Set([`${ws.workspaceId}:awaiting_review`]);
+        expect(detectAttentionTransitions(prev, [ws], notified)).toEqual([]);
+    });
+
+    it("failed staying failed across polls fires nothing (state map dedupe)", () => {
+        const ws = makeWs({ state: "failed" });
+        const prev = new Map([[ws.workspaceId, "failed"]]);
+        expect(detectAttentionTransitions(prev, [ws], none)).toEqual([]);
+    });
+
+    it("missing branch/runtimeId degrade to empty strings, never a crash", () => {
+        const ws = makeWs({ state: "failed" });
+        const bare = { ...ws, branch: undefined, runtimeId: undefined } as unknown as RecoderWorkspace;
+        const prev = new Map([[ws.workspaceId, "running"]]);
+        const events = detectAttentionTransitions(prev, [bare], none);
+        expect(events).toHaveLength(1);
+        expect(events[0].branch).toBe("");
+        expect(events[0].runtimeId).toBe("");
+    });
+
+    it("reports each transitioning workspace independently in one poll", () => {
+        const review = makeWs({ state: "awaiting_review" });
+        const dead = makeWs({ state: "failed" });
+        const quiet = makeWs({ state: "running" });
+        const prev = new Map([
+            [review.workspaceId, "running"],
+            [dead.workspaceId, "running"],
+            [quiet.workspaceId, "running"],
+        ]);
+        const events = detectAttentionTransitions(prev, [review, dead, quiet], none);
+        expect(events.map((e) => e.kind).sort()).toEqual(["failed", "review"]);
     });
 });
