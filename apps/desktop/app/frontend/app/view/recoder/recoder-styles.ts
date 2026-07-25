@@ -26,7 +26,7 @@ const INPUT =
     "rounded border border-white/8 bg-transparent px-2 py-1 text-sm focus:outline-none focus:border-accent/60 recoder-transition";
 
 const ERROR_ROW =
-    "flex items-start gap-1.5 rounded border border-error/40 bg-error/10 text-error text-sm px-2 py-1";
+    "flex items-start gap-1.5 rounded border-l-2 border-white/25 bg-white/[0.04] text-secondary text-sm px-2 py-1";
 
 const SKELETON_ROW = "h-7 rounded border border-white/8 bg-border/20 animate-pulse";
 

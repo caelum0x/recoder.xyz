@@ -1,7 +1,8 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ERROR_ROW, SKELETON_ROW } from "./recoder-styles";
+import type { ReactNode } from "react";
+import { ERROR_ROW, META, SKELETON_ROW } from "./recoder-styles";
 
 function RecoderSkeleton({ rows = 3 }: { rows?: number }) {
     return (
@@ -24,4 +25,15 @@ function RecoderErrorRow({ message }: { message: string }) {
 
 RecoderErrorRow.displayName = "RecoderErrorRow";
 
-export { RecoderErrorRow, RecoderSkeleton };
+function RecoderEmpty({ title, hint }: { title: string; hint?: ReactNode }) {
+    return (
+        <div className="flex flex-col gap-0.5 py-1">
+            <div className="text-secondary text-sm">{title}</div>
+            {hint != null && <div className={META}>{hint}</div>}
+        </div>
+    );
+}
+
+RecoderEmpty.displayName = "RecoderEmpty";
+
+export { RecoderEmpty, RecoderErrorRow, RecoderSkeleton };
