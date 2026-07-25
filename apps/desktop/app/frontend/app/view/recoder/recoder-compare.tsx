@@ -3,6 +3,7 @@
 
 import { useAtomValue } from "jotai";
 import { agentLabel } from "./recoder-agent-labels";
+import { ConvergePanel } from "./recoder-converge";
 import { buildConvergenceEvidence, saveConvergenceEvidence } from "./recoder-evidence";
 import {
     computePairwise,
@@ -444,7 +445,15 @@ function PairwisePanel({ pair }: { pair: PairwiseCompareView }) {
 
 PairwisePanel.displayName = "PairwisePanel";
 
-function RecoderComparePanel({ model, compareView }: { model: RecoderViewModel; compareView: CompareView }) {
+function RecoderComparePanel({
+    model,
+    compareView,
+    onReview,
+}: {
+    model: RecoderViewModel;
+    compareView: CompareView;
+    onReview: (workspaceId: string) => void;
+}) {
     const readinessMap = useAtomValue(model.readinessAtom);
     const rowStatus = useAtomValue(model.rowStatusAtom);
     const busyRow = useAtomValue(model.busyRowAtom);
@@ -468,6 +477,14 @@ function RecoderComparePanel({ model, compareView }: { model: RecoderViewModel; 
     return (
         <div className="flex flex-col gap-1.5 rounded border border-white/8 p-2">
             <ContestedSet compareView={compareView} />
+            {compareView.siblings.length >= 2 && (
+                <ConvergePanel
+                    taskGroup={compareView.taskGroup ?? ""}
+                    contested={compareView.contested ?? []}
+                    siblings={compareView.siblings}
+                    onReview={onReview}
+                />
+            )}
             {pair != null && <PairwisePanel pair={pair} />}
             <div className="flex flex-col gap-1">
                 {compareView.siblings.map((sibling) => {
