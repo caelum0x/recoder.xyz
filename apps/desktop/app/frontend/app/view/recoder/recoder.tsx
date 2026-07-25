@@ -277,6 +277,11 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             }
             return;
         }
+        if ((e.key == "n" || e.key == "N") && !launchOpen) {
+            setLaunchOpen(true);
+            e.preventDefault();
+            return;
+        }
         if (orderedIds.length == 0) {
             return;
         }
@@ -369,7 +374,14 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                 <div className="flex-1" />
                 <RecoderIdentityAffordance />
                 <button className={PRIMARY_BTN} onClick={() => setLaunchOpen(!launchOpen)}>
-                    {launchOpen ? "Close" : "New agent"}
+                    {launchOpen ? (
+                        "Close"
+                    ) : (
+                        <>
+                            New agent
+                            <span className="ml-1.5 text-xs text-meta font-mono">N</span>
+                        </>
+                    )}
                 </button>
             </div>
 
@@ -521,7 +533,9 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             </span>
                         )}
                         {posting && launchProgress != "" && <span className={META}>{launchProgress}</span>}
-                        {canLaunch && <span className={`${META} ml-auto`}>Cmd+Enter to launch</span>}
+                        <span className={`${META} ml-auto`}>
+                            <span className="font-mono">⌘/Ctrl+Enter</span> to launch
+                        </span>
                     </div>
 
                     {!canLaunch && launchDisabledReason(repoPath, runtimeId, needsPrompt) != "" && (
@@ -569,6 +583,10 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         <div className={SECTION_TITLE}>Welcome to Recoder</div>
                         <div className={META}>
                             Run your coding agents in parallel isolated worktrees, then review and merge.
+                        </div>
+                        <div className={META}>
+                            Press <span className="font-mono">⌘P</span> for commands ·{" "}
+                            <span className="font-mono">N</span> for a new agent
                         </div>
                     </div>
                     {setup.loaded ? (
