@@ -280,7 +280,34 @@ type RecoderMergeVerdict = { effect: string; tier?: string; degraded?: boolean; 
 
 // The merge op's own result (backend MergeResultView). `merged` is false when the
 // gate allowed and the merge ran but there was nothing to merge (already up to date).
-type RecoderMergeOutcome = { workspaceId: string; branch: string; merged: boolean };
+// `auditId`/`auditSeq`/`auditEntryHash` are the SEALED governance Merkle entry the
+// merge produced — captured verbatim from the 200 body so the evidence step can
+// cite it and query the durable trail. `null` when sealing degraded (never faked).
+type RecoderMergeOutcome = {
+    workspaceId: string;
+    branch: string;
+    merged: boolean;
+    auditId?: string | null;
+    auditSeq?: number | null;
+    auditEntryHash?: string | null;
+};
+
+// One entry of the durable governance Merkle chain returned by GET
+// /workspaces/:id/audit — a lenient mirror of the backend AuditRecord. We surface
+// only the structural chain fields (never the opaque payload, which may carry
+// engine internals). Every field optional so an older/leaner backend degrades and
+// nothing is fabricated. Solo desktop seals no local store ⇒ the trail is [].
+type RecoderAuditEntry = {
+    id?: string;
+    seq?: number;
+    prevHash?: string;
+    entryHash?: string;
+    action?: string;
+    effect?: string;
+    riskTier?: string;
+    degraded?: boolean;
+    createdAt?: string;
+};
 
 // The retained truthful record of the last merge attempt for one workspace, read
 // by the compare panel + the evidence step. `merge`/`verdict` are present only on
@@ -682,6 +709,29 @@ class RecoderViewModel implements ViewModel {
         }
     }
 
+    // GET /workspaces/:id/audit → { data: { audit: AuditRecord[] } } — the queryable
+    // durable governance Merkle trail sealed by the merge gate. Degrade-safe: any
+    // failure / non-2xx / missing shape yields [] (also the truthful solo-desktop
+    // result, which seals no local store). Read by the evidence step so an exported
+    // artifact prefers the sealed durable record over the client-assembled fallback.
+    async fetchWorkspaceAudit(workspaceId: string): Promise<RecoderAuditEntry[]> {
+        if (!workspaceId) {
+            return [];
+        }
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/audit`
+            );
+            if (!res.ok) {
+                return [];
+            }
+            const audit = (await res.json())?.data?.audit;
+            return Array.isArray(audit) ? (audit as RecoderAuditEntry[]) : [];
+        } catch {
+            return [];
+        }
+    }
+
     // Inline launch — the product loop's entry point. Launches the primary agent
     // plus any deliberately-ticked parallel agents, each in its OWN worktree, all
     // sharing ONE taskGroup so the compare board can aggregate siblings. Sends the
@@ -892,4 +942,5 @@ export {
     type RecoderMergeVerdict,
     type RecoderMergeOutcome,
     type RecoderMergeRecord,
+    type RecoderAuditEntry,
 };
