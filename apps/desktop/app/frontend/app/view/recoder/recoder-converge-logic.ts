@@ -198,6 +198,37 @@ function toggleSelection(selection: ConvergeSelection, path: string, workspaceId
     return { ...selection, [path]: workspaceId };
 }
 
+// One-click convenience: set every cleanly-mergeable contested path to @synthesize,
+// leaving the user's explicit picks/synths untouched (only fills UNRESOLVED paths
+// whose probe said `synthesizable`). Immutable. Genuinely-conflicting paths are
+// never auto-resolved — they still need a manual pick, so this never fabricates a
+// resolution. Returns a fresh map.
+function autoResolveSynthesizable(
+    selection: ConvergeSelection,
+    synthMap: Record<string, { synthesizable: boolean }>
+): ConvergeSelection {
+    const next = { ...selection };
+    for (const [path, info] of Object.entries(synthMap)) {
+        if (info.synthesizable && next[path] == null) {
+            next[path] = SYNTHESIZE_VALUE;
+        }
+    }
+    return next;
+}
+
+// How many contested paths a click of "auto-resolve" would newly resolve (the
+// synthesizable-and-still-unresolved count) — 0 hides/disables the action.
+function autoResolvableCount(
+    selection: ConvergeSelection,
+    synthMap: Record<string, { synthesizable: boolean }>
+): number {
+    let n = 0;
+    for (const [path, info] of Object.entries(synthMap)) {
+        if (info.synthesizable && selection[path] == null) n += 1;
+    }
+    return n;
+}
+
 // GET the read-only converge plan for the current selection. Degrade-safe: any
 // non-2xx surfaces the backend's verbatim reason (or a status-scoped fallback),
 // and an unreachable backend surfaces a truthful connectivity line. Never throws.
@@ -288,6 +319,8 @@ async function composeConvergence(
 }
 
 export {
+    autoResolvableCount,
+    autoResolveSynthesizable,
     composeConvergence,
     composeStatusFallback,
     fetchConvergePlan,

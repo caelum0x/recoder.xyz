@@ -4,6 +4,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+    autoResolvableCount,
+    autoResolveSynthesizable,
     composeConvergence,
     composeStatusFallback,
     fetchConvergePlan,
@@ -42,6 +44,35 @@ describe("toggleSelection — immutable per-path winner pick", () => {
         expect(picked).toEqual({ "a.ts": "@synthesize" });
         expect(toggleSelection(picked, "a.ts", SYNTHESIZE_VALUE)).toEqual({});
         expect(toggleSelection(picked, "a.ts", "ws2")).toEqual({ "a.ts": "ws2" });
+    });
+});
+
+describe("autoResolveSynthesizable — one-click, never fabricates a conflict resolution", () => {
+    const synthMap = {
+        "clean1.ts": { synthesizable: true },
+        "clean2.ts": { synthesizable: true },
+        "conflict.ts": { synthesizable: false },
+    };
+
+    it("sets @synthesize only for cleanly-mergeable, still-unresolved paths", () => {
+        const next = autoResolveSynthesizable({}, synthMap);
+        expect(next).toEqual({ "clean1.ts": "@synthesize", "clean2.ts": "@synthesize" });
+        // the genuinely-conflicting path is never auto-resolved
+        expect(next["conflict.ts"]).toBeUndefined();
+    });
+
+    it("leaves the user's explicit picks/synths untouched and never mutates input", () => {
+        const base = { "clean1.ts": "ws1" };
+        const next = autoResolveSynthesizable(base, synthMap);
+        expect(next["clean1.ts"]).toBe("ws1"); // kept the manual pick
+        expect(next["clean2.ts"]).toBe("@synthesize");
+        expect(base).toEqual({ "clean1.ts": "ws1" });
+    });
+
+    it("autoResolvableCount reports only the newly-resolvable clean paths", () => {
+        expect(autoResolvableCount({}, synthMap)).toBe(2);
+        expect(autoResolvableCount({ "clean1.ts": "ws1" }, synthMap)).toBe(1);
+        expect(autoResolvableCount({ "clean1.ts": "ws1", "clean2.ts": SYNTHESIZE_VALUE }, synthMap)).toBe(0);
     });
 });
 
