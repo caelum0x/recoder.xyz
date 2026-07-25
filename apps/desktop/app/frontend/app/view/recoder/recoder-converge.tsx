@@ -1,11 +1,13 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { cn } from "@/util/util";
 import { useEffect, useMemo, useState } from "react";
 import { agentLabel } from "./recoder-agent-labels";
 import {
     composeConvergence,
     fetchConvergePlan,
+    SYNTHESIZE_VALUE,
     toggleSelection,
     type ConvergePlan,
     type ConvergeSelection,
@@ -16,6 +18,10 @@ import { FIELD_LABEL, META, PICK_BTN_ON, PRIMARY_BTN, QUIET_BTN, QUIET_BTN_XS } 
 
 const PLAN_DEBOUNCE_MS = 250;
 
+// Per-path synthesizability from the one-shot probe: `null` for a path the probe
+// never covered (unprobed/old backend) so the row degrades to pick-only.
+type SynthInfo = { synthesizable: boolean; reason: string };
+
 type ConvergePanelProps = {
     taskGroup: string;
     contested: ContestedFile[];
@@ -25,12 +31,16 @@ type ConvergePanelProps = {
 
 // One contested path with its winner picker: a button per sibling that touched the
 // path (from the group's contested set), the picked one lit like the A/B picker.
+// When a probe covered the path, it also offers "Synthesize" (auto 3-way merge)
+// with a truthful ✓/✗ indicator; a non-synthesizable path dims that option and
+// keeps the reason visible so the user picks a winner instead.
 function ContestedPickRow({
     path,
     candidates,
     picked,
     agentByWs,
     disabled,
+    synth,
     onPick,
 }: {
     path: string;
@@ -38,8 +48,10 @@ function ContestedPickRow({
     picked: string;
     agentByWs: Map<string, string>;
     disabled: boolean;
-    onPick: (workspaceId: string) => void;
+    synth: SynthInfo;
+    onPick: (value: string) => void;
 }) {
+    const canSynth = synth != null && synth.synthesizable;
     return (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="min-w-[10rem] flex-1 truncate font-mono text-sm" title={path}>
@@ -60,8 +72,32 @@ function ContestedPickRow({
                         </button>
                     );
                 })}
+                {synth != null && (
+                    <button
+                        className={picked == SYNTHESIZE_VALUE ? PICK_BTN_ON : QUIET_BTN_XS}
+                        disabled={disabled || !canSynth}
+                        onClick={() => onPick(SYNTHESIZE_VALUE)}
+                        title={
+                            canSynth
+                                ? `Auto 3-way merge both agents' edits to ${path}`
+                                : `Can't auto-merge ${path}${synth.reason ? ` — ${synth.reason}` : ""}; pick a winner instead`
+                        }
+                    >
+                        Synthesize
+                    </button>
+                )}
             </div>
-            {picked == "" && <span className={META}>pick a winner</span>}
+            {synth != null && (
+                <span
+                    className={cn("text-xs", canSynth ? "text-accent" : "text-error")}
+                    title={synth.reason || undefined}
+                >
+                    {canSynth ? "✓ auto-mergeable" : `✗ ${synth.reason || "not auto-mergeable"}`}
+                </span>
+            )}
+            {picked == "" && (
+                <span className={META}>{canSynth ? "pick a winner or synthesize" : "pick a winner"}</span>
+            )}
         </div>
     );
 }
@@ -125,10 +161,37 @@ function ConvergePanel({ taskGroup, contested, siblings, onReview }: ConvergePan
     const [composing, setComposing] = useState(false);
     const [composeError, setComposeError] = useState("");
     const [composedId, setComposedId] = useState("");
+    const [synthMap, setSynthMap] = useState<Record<string, SynthInfo>>({});
 
     const agentByWs = useMemo(() => new Map(siblings.map((s) => [s.workspaceId, s.agent])), [siblings]);
     const selectionKey = JSON.stringify(selection);
     const hasContested = contested.length > 0;
+    const contestedKey = contested.map((c) => c.path).join("\n");
+
+    // One-shot synthesizability probe (O(contested paths), real-git) — fired once
+    // when the panel opens / the contested set first changes, NOT on the debounced
+    // selection poll. Degrade-safe: a failed/unprobed/old backend leaves synthMap
+    // empty so every row falls back to pick-only, never faking synthesizability.
+    useEffect(() => {
+        if (taskGroup == "" || !hasContested) {
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            const result = await fetchConvergePlan(taskGroup, {}, true);
+            if (cancelled || !result.ok || result.plan.contested == null) {
+                return;
+            }
+            const map: Record<string, SynthInfo> = {};
+            for (const c of result.plan.contested) {
+                map[c.path] = { synthesizable: c.synthesizable, reason: c.reason ?? "" };
+            }
+            setSynthMap(map);
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [taskGroup, contestedKey]);
 
     useEffect(() => {
         if (taskGroup == "" || !hasContested) {
@@ -169,10 +232,10 @@ function ConvergePanel({ taskGroup, contested, siblings, onReview }: ConvergePan
         );
     }
 
-    const onPick = (path: string, workspaceId: string) => {
+    const onPick = (path: string, value: string) => {
         setComposeError("");
         setComposedId("");
-        setSelection((cur) => toggleSelection(cur, path, workspaceId));
+        setSelection((cur) => toggleSelection(cur, path, value));
     };
 
     const onCompose = async () => {
@@ -189,11 +252,13 @@ function ConvergePanel({ taskGroup, contested, siblings, onReview }: ConvergePan
     };
 
     const composeReady = plan != null && plan.complete && !composing;
+    const anySynth = Object.values(synthMap).some((s) => s.synthesizable);
 
     return (
         <div className="flex flex-col gap-1.5 rounded border border-accent/30 px-2 py-2">
             <div className={FIELD_LABEL}>
-                Converge — pick a winner per contested file, then compose one reviewable workspace
+                Converge — pick a winner{anySynth ? " or Synthesize" : ""} per contested file, then compose one reviewable
+                workspace
             </div>
             <div className="flex flex-col gap-1">
                 {contested.map((c) => (
@@ -204,7 +269,8 @@ function ConvergePanel({ taskGroup, contested, siblings, onReview }: ConvergePan
                         picked={selection[c.path] ?? ""}
                         agentByWs={agentByWs}
                         disabled={composing}
-                        onPick={(workspaceId) => onPick(c.path, workspaceId)}
+                        synth={synthMap[c.path] ?? null}
+                        onPick={(value) => onPick(c.path, value)}
                     />
                 ))}
             </div>

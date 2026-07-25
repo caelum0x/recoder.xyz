@@ -13,6 +13,21 @@ type ConvergeSelection = Record<string, string>;
 // is "" when the backend named the path but gave no reason — never invented.
 type ConvergeUnresolved = { path: string; reason: string };
 
+// A probed contested path: whether a clean line-level 3-way synthesize is possible
+// (the "Synthesize" option) and, when not, the backend's verbatim reason
+// ('overlap' | 'delete-modify' | 'unreadable'). Present ONLY on a probed plan
+// (`?probe=1`); an unprobed/old backend omits `plan.contested` entirely.
+type ConvergeContestedProbe = {
+    path: string;
+    workspaceIds: string[];
+    synthesizable: boolean;
+    reason?: string;
+};
+
+// The selection value that requests an auto 3-way merge for a path instead of a
+// whole-file winner. The selection map stays Record<string,string>.
+const SYNTHESIZE_VALUE = "@synthesize";
+
 // The read-only converge preview. Every field is a truthful projection of the
 // backend plan: `winners` is the count of resolved winner files, `sources` the
 // per-sibling winner counts, `changedFiles` the files the composed workspace
@@ -24,6 +39,9 @@ type ConvergePlan = {
     sources: { workspaceId: string; count: number }[];
     changedFiles: string[];
     siblingCount: number;
+    // Populated only from a probed plan; `undefined` when unprobed so the panel can
+    // tell "no probe" apart from "probed, nothing synthesizable" ([]).
+    contested?: ConvergeContestedProbe[];
 };
 
 // Loose result shapes (not a discriminated union): this frontend runs with
@@ -106,10 +124,40 @@ function normalizeSources(value: unknown): { workspaceId: string; count: number 
     return out;
 }
 
+// The probed synthesizability list. A non-array (absent) yields `undefined` so the
+// panel keeps "unprobed" distinct from "probed, none synthesizable" ([]). Each
+// entry degrades to synthesizable=false and drops an empty reason.
+function normalizeContested(value: unknown): ConvergeContestedProbe[] {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+    const out: ConvergeContestedProbe[] = [];
+    for (const item of value) {
+        const obj = asObject(item);
+        if (obj == null) {
+            continue;
+        }
+        const path = typeof obj.path == "string" ? obj.path : "";
+        if (path == "") {
+            continue;
+        }
+        const entry: ConvergeContestedProbe = {
+            path,
+            workspaceIds: stringArray(obj.workspaceIds),
+            synthesizable: obj.synthesizable === true,
+        };
+        if (typeof obj.reason == "string" && obj.reason != "") {
+            entry.reason = obj.reason;
+        }
+        out.push(entry);
+    }
+    return out;
+}
+
 // Project the backend plan body into the truthful view the panel renders. Every
 // field degrades to a neutral empty/false rather than a fabricated value.
 function parseConvergePlan(data: Record<string, unknown>): ConvergePlan {
-    return {
+    const plan: ConvergePlan = {
         complete: data.complete === true,
         winners: countEntries(data.files),
         unresolved: normalizeUnresolved(data.unresolved),
@@ -117,6 +165,11 @@ function parseConvergePlan(data: Record<string, unknown>): ConvergePlan {
         changedFiles: stringArray(data.changedFiles),
         siblingCount: typeof data.siblingCount == "number" ? data.siblingCount : 0,
     };
+    const contested = normalizeContested(data.contested);
+    if (contested != null) {
+        plan.contested = contested;
+    }
+    return plan;
 }
 
 // Status-scoped truthful fallbacks for a compose failure whose body carried no
@@ -148,15 +201,22 @@ function toggleSelection(selection: ConvergeSelection, path: string, workspaceId
 // GET the read-only converge plan for the current selection. Degrade-safe: any
 // non-2xx surfaces the backend's verbatim reason (or a status-scoped fallback),
 // and an unreachable backend surfaces a truthful connectivity line. Never throws.
-async function fetchConvergePlan(taskGroup: string, selection: ConvergeSelection): Promise<ConvergePlanResult> {
+// `probe` opts into the O(contested paths) real-git synthesizability check that
+// populates `plan.contested`; leave it false for the debounced selection poll.
+async function fetchConvergePlan(
+    taskGroup: string,
+    selection: ConvergeSelection,
+    probe = false
+): Promise<ConvergePlanResult> {
     const tg = taskGroup.trim();
     if (tg == "") {
         return { ok: false, error: "No task group to converge." };
     }
     try {
         const sel = encodeURIComponent(JSON.stringify(selection));
+        const probeParam = probe ? "&probe=1" : "";
         const res = await fetch(
-            `${getRecoderBackendUrl()}/api/conductor/workspaces/compare/${encodeURIComponent(tg)}/converge-plan?selection=${sel}`
+            `${getRecoderBackendUrl()}/api/conductor/workspaces/compare/${encodeURIComponent(tg)}/converge-plan?selection=${sel}${probeParam}`
         );
         const body = await res.json().catch(() => null);
         if (!res.ok) {
@@ -232,8 +292,10 @@ export {
     composeStatusFallback,
     fetchConvergePlan,
     parseConvergePlan,
+    SYNTHESIZE_VALUE,
     toggleSelection,
     type ConvergeComposeResult,
+    type ConvergeContestedProbe,
     type ConvergePlan,
     type ConvergePlanResult,
     type ConvergeSelection,

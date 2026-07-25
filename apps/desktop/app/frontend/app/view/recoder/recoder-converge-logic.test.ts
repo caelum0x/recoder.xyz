@@ -8,6 +8,7 @@ import {
     composeStatusFallback,
     fetchConvergePlan,
     parseConvergePlan,
+    SYNTHESIZE_VALUE,
     toggleSelection,
 } from "./recoder-converge-logic";
 
@@ -34,6 +35,13 @@ describe("toggleSelection — immutable per-path winner pick", () => {
 
     it("picking a different sibling moves the win", () => {
         expect(toggleSelection({ "a.ts": "ws1" }, "a.ts", "ws2")).toEqual({ "a.ts": "ws2" });
+    });
+
+    it("handles the @synthesize sentinel like any other value", () => {
+        const picked = toggleSelection({ "a.ts": "ws1" }, "a.ts", SYNTHESIZE_VALUE);
+        expect(picked).toEqual({ "a.ts": "@synthesize" });
+        expect(toggleSelection(picked, "a.ts", SYNTHESIZE_VALUE)).toEqual({});
+        expect(toggleSelection(picked, "a.ts", "ws2")).toEqual({ "a.ts": "ws2" });
     });
 });
 
@@ -86,6 +94,28 @@ describe("parseConvergePlan — truthful projection, never fabricated", () => {
         // a stray truthy-but-non-bool complete is not coerced into a pass
         expect(parseConvergePlan({ complete: "yes" }).complete).toBe(false);
     });
+
+    it("omits `contested` when the plan was not probed (no synthesizability faked)", () => {
+        expect(parseConvergePlan({ complete: false, files: [] }).contested).toBeUndefined();
+        // probed-but-none stays an explicit empty array, distinct from unprobed.
+        expect(parseConvergePlan({ contested: [] }).contested).toEqual([]);
+    });
+
+    it("reads a probed plan's contested[]: path, sorted workspaceIds, synthesizable, reason", () => {
+        const plan = parseConvergePlan({
+            complete: false,
+            files: [],
+            contested: [
+                { path: "a.ts", workspaceIds: ["ws1", "ws2"], synthesizable: true },
+                { path: "b.ts", workspaceIds: ["ws1", "ws3"], synthesizable: false, reason: "overlap" },
+                { path: "", workspaceIds: ["ws9"], synthesizable: true },
+            ],
+        });
+        expect(plan.contested).toEqual([
+            { path: "a.ts", workspaceIds: ["ws1", "ws2"], synthesizable: true },
+            { path: "b.ts", workspaceIds: ["ws1", "ws3"], synthesizable: false, reason: "overlap" },
+        ]);
+    });
 });
 
 describe("envelope unwrapping — must read the backend's nested payload keys", () => {
@@ -127,6 +157,47 @@ describe("envelope unwrapping — must read the backend's nested payload keys", 
         mockFetchOnce({ success: true, data: { convergence: {} } });
         const result = await composeConvergence("grp1", { "a.ts": "ws1" });
         expect(result.ok).toBe(false);
+    });
+
+    it("a probed fetch requests ?probe=1 and surfaces plan.contested[]", async () => {
+        const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    success: true,
+                    data: {
+                        plan: {
+                            complete: false,
+                            files: [],
+                            unresolved: [{ path: "b.ts", reason: "pick a winner" }],
+                            contested: [
+                                { path: "a.ts", workspaceIds: ["ws1", "ws2"], synthesizable: true },
+                                { path: "b.ts", workspaceIds: ["ws1", "ws2"], synthesizable: false, reason: "overlap" },
+                            ],
+                        },
+                    },
+                }),
+                { status: 200, headers: { "Content-Type": "application/json" } }
+            )
+        );
+        const result = await fetchConvergePlan("grp1", {}, true);
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(String(spy.mock.calls[0][0])).toContain("probe=1");
+        expect(result.ok && result.plan.contested).toEqual([
+            { path: "a.ts", workspaceIds: ["ws1", "ws2"], synthesizable: true },
+            { path: "b.ts", workspaceIds: ["ws1", "ws2"], synthesizable: false, reason: "overlap" },
+        ]);
+    });
+
+    it("an unprobed fetch omits probe=1 and leaves plan.contested undefined", async () => {
+        const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+            new Response(JSON.stringify({ success: true, data: { plan: { complete: true, files: [] } } }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+            })
+        );
+        const result = await fetchConvergePlan("grp1", { "a.ts": "ws1" });
+        expect(String(spy.mock.calls[0][0])).not.toContain("probe=1");
+        expect(result.ok && result.plan.contested).toBeUndefined();
     });
 });
 
