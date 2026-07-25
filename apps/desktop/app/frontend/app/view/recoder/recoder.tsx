@@ -324,6 +324,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const allParallelSelected =
         parallelAgents.length > 0 && parallelAgents.every((a) => alsoRun.includes(a.runtimeId));
     const parallelCount = alsoRun.filter((id) => id != runtimeId && id != "").length;
+    const isGitError = /git|worktree|repositor/i.test(launchResult?.error ?? "");
 
     const toggleAlso = (id: string, on: boolean) =>
         setAlsoRun(on ? [...alsoRun, id] : alsoRun.filter((x) => x != id));
@@ -564,7 +565,18 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     {!canLaunch && disabledReason != "" && <div className={META}>{disabledReason}</div>}
 
                     {launchResult != null && !launchResult.ok && (
-                        <div className={ERROR_ROW}>{launchResult.error || "Launch failed"}</div>
+                        <div className="flex flex-col gap-1">
+                            <div className={ERROR_ROW}>{launchResult.error || "Launch failed"}</div>
+                            {isGitError && (
+                                <div className={META}>
+                                    Recoder needs a git repository here. Run `git init` in this folder, or choose a
+                                    repo folder.
+                                </div>
+                            )}
+                            <button className={QUIET_BTN} onClick={browseFolder}>
+                                Choose another folder
+                            </button>
+                        </div>
                     )}
                 </div>
             )}
