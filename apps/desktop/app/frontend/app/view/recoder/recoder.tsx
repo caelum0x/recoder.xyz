@@ -106,7 +106,7 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
             data-selected={selected}
             onClick={onSelect}
             onFocus={onSelect}
-            className={`flex flex-col gap-1 rounded border border-white/8 px-3 py-2 transition-colors duration-150 ease-out hover:bg-border/20 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/70 ${selected ? "ring-1 ring-accent/60 bg-border/20" : ""}`}
+            className={`flex flex-col gap-1 rounded border border-white/8 px-3 py-2 recoder-transition hover:bg-white/[0.04] hover:border-white/12 cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-white/50 ${selected ? "bg-accent" : ""}`}
             title={`${ws.workspaceId} - ${ws.branch}`}
         >
             <div className="flex items-center gap-2">

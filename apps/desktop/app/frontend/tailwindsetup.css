@@ -146,3 +146,16 @@ svg [aria-label="tip"] g path {
         animation: none;
     }
 }
+
+/* Standardized color-only transition for the whole recoder surface. Deliberately excludes
+   transform/box-shadow so hover/focus/selected changes never nudge layout or cast shadows. */
+.recoder-transition {
+    transition-property: background-color, border-color, color, outline-color;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+    .recoder-transition {
+        transition: none;
+    }
+}
