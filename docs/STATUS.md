@@ -27,7 +27,7 @@ The finish line is a **3-step convergence loop**:
 |---|---|---|
 | **Backend** (`backend/`) | ~90% | Greenfield 15-domain spine is real (old 12.8k-line monolith deleted). All 12 build phases wired; ~1,462 tests green **per docs** — not re-verified locally yet (see #22). `dist/` is stale. |
 | **Desktop** (`apps/desktop`) | ~70% | Core loop (launch N agents → diff → merge) works on arm64. Cockpit torn down. Gaps: arm64-only unsigned build, dead-by-design engines (Lance, Python sidecars), sign-in UI half-wired, Board/Session fragile. |
-| **Website** (`app/`) | ~85% | 110 pages + 169 API routes, live in prod. Gaps: no clean fresh install/build (#22), Phase A auth migration written-but-unrun, dual auth seams. |
+| **Website** (`app/`) | ~90% | 110 pages + 169 API routes, live in prod. Now installs + builds cleanly from the monorepo (#22 fixed 2026-07-25 — full `next build` produces BUILD_ID + standalone). Remaining gaps: Phase A auth migration written-but-unrun, dual auth seams. |
 | **Convergence thesis** | step 1 of 3 | Parallel worktrees done; compare/converge partial; governed evidence-merge not yet shipped. |
 
 Detail: backend → **[RECODER-BACKEND/BUILD-STATUS.md](./RECODER-BACKEND/BUILD-STATUS.md)**,
@@ -37,11 +37,14 @@ capabilities → **[RECODER-MODULES.md](./RECODER-MODULES.md)** + **[RECODER-ARC
 
 ## Blockers to "fully done"
 
-1. **Install blocker (#22)** — `app/` and `backend/` can't do a clean reproducible
-   install (`workspace:*` deps + `app/` not a pnpm member + npm lock missing those
-   deps). Prod works only via hand-carried prebuilt `.next`/`dist`. This blocks
-   independent verification of every "green" claim. *(APFS disk pressure that used
-   to compound this is currently clear — ~14 GB free.)*
+1. **~~Install blocker (#22)~~ — RESOLVED 2026-07-25.** Both `backend/` and the
+   website `app/` now install and build cleanly from the monorepo. `app/` was made
+   a pnpm member, its `@recoder/*` deps corrected (added `ecosystem-config`, dropped
+   orphan `database`/`ui`, recovered 2 UI components locally), the npm lock removed,
+   and Turbopack roots pinned to the monorepo. Verified: `pnpm install` ✓,
+   `prisma generate` ✓, `tsc` resolves, `next build` ✓ (BUILD_ID + `.next/standalone`).
+   Backend: `tsc` 0 · 2554 tests green. The APFS pressure that used to compound this
+   is clear (~14 GB free). Build-time secrets still come from the deploy env.
 2. **Convergence step 2→3** — compare/synthesize → governed evidence-producing
    merge is the differentiator and is still partial.
 3. **Desktop distribution** — no signed/notarized dmg, arm64-only; Lance vector
