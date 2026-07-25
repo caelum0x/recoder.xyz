@@ -145,11 +145,18 @@ class RecoderLaunchViewModel implements ViewModel {
             });
             const body = await res.json().catch(() => ({}));
             if (!res.ok || !body?.success) {
-                const reason = body?.error || `Launch failed (HTTP ${res.status})`;
+                // Backend errors come as { error: { code, message } } (e.g. a 503
+                // "prompt is required..."), so pull the message out — String() on the
+                // object would render "[object Object]".
+                const reason =
+                    (typeof body?.error === "string" ? body.error : body?.error?.message) ||
+                    `Launch failed (HTTP ${res.status})`;
                 globalStore.set(this.resultAtom, { ok: false, error: String(reason) });
                 return;
             }
-            const ws = body?.data ?? {};
+            // A 2xx nests the workspace at data.workspace ({ workspace, verdict }),
+            // so read workspaceId/branch off data.workspace, not data itself.
+            const ws = body?.data?.workspace ?? {};
             globalStore.set(this.resultAtom, {
                 ok: true,
                 workspaceId: ws?.workspaceId,
