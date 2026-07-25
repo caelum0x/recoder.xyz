@@ -92,14 +92,26 @@ Bing of changed URLs once `INDEXNOW_KEY` is set — even without this property
 claim. The property claim is for Bing's dashboard/analytics and manual submits,
 not a prerequisite for IndexNow crawl.
 
-**Decision — we do NOT use Bing's separate "URL Submission API".** Bing offers
-two automation paths: (a) IndexNow (what we use — §4) and (b) the older Bing
-Webmaster **Submission API** (`ssl.bing.com/webmaster/api.svc/.../SubmitUrlbatch`,
-needs a secret `apikey`, capped at **100 URLs/day**). IndexNow already delivers
-changed URLs to Bing with no daily quota and no secret, so the Submission API is
-intentionally not wired — it would be redundant and quota-limited. The "100 quota
-left today" shown in Bing Webmaster Tools applies only to that Submission API and
-is irrelevant to our IndexNow path. Revisit only if a Bing-specific need arises.
+**Two Bing paths, both wired:** (a) **IndexNow** (§4) — the primary path; public
+key, no daily quota, fires automatically on every CMS publish and fans out to Bing
++ Yandex + Seznam. (b) The direct **Bing Webmaster Submission API** — a secondary,
+quota-limited channel wired here for explicit/deploy-time Bing submits.
+
+Bing Submission API specifics:
+- **Endpoint:** `POST https://ssl.bing.com/webmaster/api.svc/json/SubmitUrlbatch?apikey=<key>`
+  body `{ siteUrl, urlList }`. Quota is read live via `GetUrlSubmissionQuota`.
+- **`BING_WEBMASTER_API_KEY` is a SECRET** — no committed default, set in the
+  deploy env only (and `app/.env` locally, which is gitignored). With no key the
+  channel is a truthful no-op. The "100 quota left today" in Bing Webmaster Tools
+  is this API's daily cap; each run is capped to `min(remaining, 100)`.
+- **Not fired on every CMS publish** (that would exhaust 100/day) — IndexNow
+  already covers per-content Bing crawl. Use the Bing API deliberately:
+  - CLI/deploy sweep: `pnpm --dir app seo:bing` (reads the live sitemap, ≤100 URLs).
+  - API: `POST /api/bing-submit` `{ "urls": [...] }` with the same auth as
+    `/api/indexnow` (internal-service signature OR `x-admin-secret`).
+- Code: `app/lib/seo/bing-submission.ts` (+ `scripts/bing-submit.mjs`, route
+  `app/app/api/bing-submit/route.ts`). To rotate the key, regenerate it in Bing
+  Webmaster Tools and update `BING_WEBMASTER_API_KEY` in the deploy env.
 
 ---
 
