@@ -108,6 +108,13 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
                             placeholder="What should the agent do? (leave empty to start and chat once running)"
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (!((e.metaKey || e.ctrlKey) && e.key == "Enter" && canLaunch)) {
+                                    return;
+                                }
+                                e.preventDefault();
+                                model.launch();
+                            }}
                         />
                     </label>
 
@@ -131,9 +138,12 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
                         <span>Interactive session</span>
                     </label>
 
-                    <button className={PRIMARY_BTN} disabled={!canLaunch} onClick={() => model.launch()}>
-                        {posting ? "Launching…" : "Launch"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button className={PRIMARY_BTN} disabled={!canLaunch} onClick={() => model.launch()}>
+                            {posting ? "Launching…" : "Launch"}
+                        </button>
+                        {canLaunch && <span className="text-xs text-secondary">⌘↵ to launch</span>}
+                    </div>
                 </div>
             )}
 
