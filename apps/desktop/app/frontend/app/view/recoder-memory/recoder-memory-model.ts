@@ -4,6 +4,7 @@
 import { globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
+import { readErrorReason, readFetchError } from "../recoder/recoder-errors";
 import { RecoderMemoryView } from "./recoder-memory";
 
 // Mirrors the Agent OS MemoryItem domain type (packages/agent-os/src/domain/memory-item.ts).
@@ -80,7 +81,8 @@ class RecoderMemoryViewModel implements ViewModel {
             const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/memory/candidates`);
             if (!res.ok) {
                 globalStore.set(this.connectedAtom, false);
-                globalStore.set(this.errorAtom, `backend returned ${res.status}`);
+                const detail = await readFetchError(res);
+                globalStore.set(this.errorAtom, detail || `Memory unavailable (${res.status})`);
                 return;
             }
             const body = await res.json();
@@ -122,12 +124,12 @@ class RecoderMemoryViewModel implements ViewModel {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ query }),
             });
+            const body = await res.json().catch(() => null);
             if (!res.ok) {
                 globalStore.set(this.resultsAtom, []);
-                globalStore.set(this.searchNoticeAtom, `search failed (${res.status})`);
+                globalStore.set(this.searchNoticeAtom, readErrorReason(body) || "Search unavailable.");
                 return;
             }
-            const body = await res.json();
             const data = body?.data ?? {};
             const memories = Array.isArray(data?.memories) ? data.memories : [];
             const results: RecoderMemoryResult[] = memories.map((m: { id?: string; body?: string }) => ({

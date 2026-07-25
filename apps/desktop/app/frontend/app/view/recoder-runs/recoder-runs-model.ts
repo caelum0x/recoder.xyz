@@ -4,6 +4,7 @@
 import { globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
+import { readErrorReason } from "../recoder/recoder-errors";
 import { RecoderRunsView } from "./recoder-runs";
 
 // Mirrors the Agent OS TaskRun domain type (packages/agent-os/src/domain/task-spec.ts).
@@ -85,20 +86,20 @@ class RecoderRunsViewModel implements ViewModel {
 
     async fetchRuns(): Promise<RecoderRun[]> {
         const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/runs`);
+        const body = await res.json().catch(() => null);
         if (!res.ok) {
-            throw new Error(`backend returned ${res.status}`);
+            throw new Error(readErrorReason(body) || `Request failed (${res.status})`);
         }
-        const body = await res.json();
         const list = Array.isArray(body?.data) ? (body.data as RecoderRun[]) : [];
         return [...list].sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
     }
 
     async fetchEvents(): Promise<RecoderRunEvent[]> {
         const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/events`);
+        const body = await res.json().catch(() => null);
         if (!res.ok) {
-            throw new Error(`backend returned ${res.status}`);
+            throw new Error(readErrorReason(body) || `Request failed (${res.status})`);
         }
-        const body = await res.json();
         const list = Array.isArray(body?.data) ? (body.data as RecoderRunEvent[]) : [];
         return [...list].sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "")).slice(0, MaxEvents);
     }

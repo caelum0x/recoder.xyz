@@ -4,6 +4,7 @@
 import { globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
+import { readFetchError } from "../recoder/recoder-errors";
 import { RecoderApprovalsView } from "./recoder-approvals";
 
 // Mirrors the Agent OS Approval domain type (packages/agent-os/src/domain/approval.ts).
@@ -66,7 +67,8 @@ class RecoderApprovalsViewModel implements ViewModel {
             const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/approvals`);
             if (!res.ok) {
                 globalStore.set(this.connectedAtom, false);
-                globalStore.set(this.errorAtom, `backend returned ${res.status}`);
+                const detail = await readFetchError(res);
+                globalStore.set(this.errorAtom, detail || `Approvals unavailable (${res.status})`);
                 return;
             }
             const body = await res.json();
@@ -92,8 +94,8 @@ class RecoderApprovalsViewModel implements ViewModel {
                 body: JSON.stringify({ decidedBy: TerminalDecider }),
             });
             if (!res.ok) {
-                const detail = await this.readError(res);
-                globalStore.set(this.actionErrorAtom, `${action} failed (${res.status})${detail}`);
+                const detail = await readFetchError(res);
+                globalStore.set(this.actionErrorAtom, detail || `Could not ${action} (${res.status})`);
                 return;
             }
         } catch (e) {
@@ -103,16 +105,6 @@ class RecoderApprovalsViewModel implements ViewModel {
             globalStore.set(this.actingAtom, "");
         }
         await this.refresh();
-    }
-
-    async readError(res: Response): Promise<string> {
-        try {
-            const body = await res.json();
-            const msg = body?.error;
-            return msg ? `: ${String(msg)}` : "";
-        } catch {
-            return "";
-        }
     }
 }
 
