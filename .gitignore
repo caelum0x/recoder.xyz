@@ -446,6 +446,11 @@ public
 # fontawesome). Same landmine — un-ignore so the fork builds from a fresh checkout.
 !apps/desktop/app/public/
 !apps/desktop/app/public/**
+# app/public = the recoder.xyz website's SOURCE static assets (fonts, og-image,
+# manifest, and the public IndexNow key file <key>.txt). Same landmine — un-ignore
+# so a fresh checkout builds and the IndexNow key validation file is served.
+!app/public/
+!app/public/**
 
 # apps/desktop/app/build = electron-builder packaging inputs (entitlements.mac.plist,
 # icon.icns). Same broad-`build/` landmine — un-ignore so mac packaging works

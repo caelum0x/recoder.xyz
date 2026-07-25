@@ -1,1 +1,11 @@
-INDEXNOW_KEY_PLACEHOLDER_DO_NOT_USE_GENERATE_A_REAL_KEY
+This file is NOT an IndexNow key file. It is a human-readable pointer.
+
+The live IndexNow key validation file is committed alongside this one as
+  public/fc855a24fb8ed402c70b39f17fe8b444.txt   (served at https://recoder.xyz/fc855a24fb8ed402c70b39f17fe8b444.txt)
+and its body is exactly the key. The same key is the committed default in
+app/lib/seo/indexnow.ts (DEFAULT_INDEXNOW_KEY). The IndexNow key is PUBLIC by
+design (it must be served publicly), so committing it is intentional and safe.
+
+To rotate: set INDEXNOW_KEY=<new 8-128 char [a-zA-Z0-9-] value> in the deploy
+env AND serve a matching public/<new-key>.txt whose body is exactly the new key.
+See docs/growth/SEARCH-SUBMISSION-RUNBOOK.md §4.
