@@ -260,6 +260,13 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             placeholder="Optionally start the agent with a message — or leave empty and chat once it's running…"
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (!((e.metaKey || e.ctrlKey) && e.key == "Enter" && canLaunch)) {
+                                    return;
+                                }
+                                e.preventDefault();
+                                model.launch();
+                            }}
                         />
                     </label>
 
@@ -329,6 +336,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                 Launches {1 + parallelCount} agents, each in its own worktree.
                             </span>
                         )}
+                        {canLaunch && <span className={`${META} ml-auto`}>⌘↵ to launch</span>}
                     </div>
 
                     {!canLaunch && launchDisabledReason(repoPath, runtimeId) != "" && (
