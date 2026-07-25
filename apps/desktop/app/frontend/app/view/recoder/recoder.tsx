@@ -617,12 +617,32 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         <div className={META}>Checking local setup...</div>
                     )}
                     {setup.loaded && readyAgents.length > 0 && (
-                        <div className={META}>
-                            You're set up -{" "}
+                        <div className="flex flex-col gap-2">
                             <button className={PRIMARY_BTN} onClick={() => setLaunchOpen(true)}>
-                                create a workspace
-                            </button>{" "}
-                            to run {agentLabel(readyAgents[0].runtimeId)} on a task.
+                                Launch your first agent
+                            </button>
+                            {recentRepos.filter((r) => r.trim() != "").length > 0 && (
+                                <div className="flex flex-col gap-1">
+                                    <div className={FIELD_LABEL}>Recent repos</div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {recentRepos
+                                            .filter((r) => r.trim() != "")
+                                            .map((r) => (
+                                                <button
+                                                    key={r}
+                                                    className={CHIP}
+                                                    title={r}
+                                                    onClick={() => {
+                                                        setRepoPath(r);
+                                                        setLaunchOpen(true);
+                                                    }}
+                                                >
+                                                    {folderName(r)}
+                                                </button>
+                                            ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
