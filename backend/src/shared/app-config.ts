@@ -32,6 +32,17 @@ export interface RuntimeConfig {
   readonly serviceName: string;
   /** Stable-per-process id for correlation and fleet accounting. */
   readonly instanceId: string;
+  /**
+   * Solo/desktop mode (`RECODER_SOLO_MODE=1`, set by the embedded desktop
+   * supervisor): a single local user on their own machine with no DB, no
+   * sign-in plane, and no separate human-approval plane. Domains use this to
+   * fail OPEN on their solo-only degrade seams (approval clearance, audit
+   * reads, auth promotion, metering) instead of fail-closed 401/403/503s. A
+   * cloud deploy never sets it, so every cloud gate keeps its fail-closed
+   * posture. Read ONCE at bootstrap (ARCHITECTURE §10.8) and injected —
+   * domain code must never read `process.env.RECODER_SOLO_MODE` directly.
+   */
+  readonly soloMode: boolean;
 }
 
 /** HTTP/WS server binding + graceful drain window. */

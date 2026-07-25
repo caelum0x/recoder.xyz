@@ -61,6 +61,8 @@ export const billingConfigSchema = z.object({
   ),
   /** Meter batch flush cadence (ms). `0` disables the flush loop (local only). */
   meterFlushIntervalMs: z.number().int().nonnegative(),
+  /** Solo/desktop mode — quota fails open when metering is unreachable (see `RuntimeConfig.soloMode`). */
+  soloMode: z.boolean(),
   isProduction: z.boolean(),
 });
 
@@ -112,6 +114,7 @@ export function sliceBillingConfig(app: AppConfig, overrides: BillingConfigOverr
     dodo: credential(overrides.dodo),
     planProducts: overrides.planProducts ?? {},
     meterFlushIntervalMs: overrides.meterFlushIntervalMs ?? (app.runtime.isProduction ? 30_000 : 0),
+    soloMode: app.runtime.soloMode === true,
     isProduction: app.runtime.isProduction,
   });
 }

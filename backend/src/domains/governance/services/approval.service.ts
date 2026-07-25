@@ -81,6 +81,12 @@ export interface ApprovalServiceDeps {
   readonly audit?: ApprovalAuditSink;
   /** Override the default request TTL (ms). */
   readonly defaultTtlMs?: number;
+  /**
+   * Solo/desktop mode (bootstrap-injected from `RECODER_SOLO_MODE`, §10.8 — no
+   * env read here): degrade `list()` to empty when the DB-less store faults.
+   * Default `false` keeps every cloud deploy's truthful failure.
+   */
+  readonly soloMode?: boolean;
 }
 
 export class ApprovalService {
@@ -88,12 +94,14 @@ export class ApprovalService {
   private readonly log: Logger;
   private readonly audit?: ApprovalAuditSink;
   private readonly defaultTtlMs: number;
+  private readonly soloMode: boolean;
 
   constructor(deps: ApprovalServiceDeps) {
     this.repo = deps.repo;
     this.log = deps.logger;
     if (deps.audit) this.audit = deps.audit;
     this.defaultTtlMs = clampTtl(deps.defaultTtlMs ?? DEFAULT_APPROVAL_TTL_MS);
+    this.soloMode = deps.soloMode === true;
   }
 
   /**
@@ -161,12 +169,12 @@ export class ApprovalService {
 
   /** List approvals matching the filter, newest first. */
   async list(query: ApprovalQuery = {}): Promise<readonly ApprovalRecord[]> {
-    // Solo/desktop mode (RECODER_SOLO_MODE): no durable approval store (no DB),
-    // and governance auto-clears `needs_approval` locally, so there is nothing to
-    // list. Degrade to empty instead of surfacing the store's "database is
-    // unavailable" 503 (which read as a broken Approvals panel). A cloud deploy
-    // never sets RECODER_SOLO_MODE and keeps the truthful failure.
-    if (process.env.RECODER_SOLO_MODE === '1') {
+    // Solo/desktop mode (bootstrap-injected `soloMode`): no durable approval
+    // store (no DB), and governance auto-clears `needs_approval` locally, so
+    // there is nothing to list. Degrade to empty instead of surfacing the
+    // store's "database is unavailable" 503 (which read as a broken Approvals
+    // panel). A cloud deploy never enables solo mode and keeps the truthful failure.
+    if (this.soloMode) {
       try {
         return await this.repo.list(query);
       } catch {

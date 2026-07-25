@@ -43,13 +43,17 @@ const SYNTHETIC: KernelVerdict = {
   engine: 'synthetic',
 };
 
-function buildGate(verdict: KernelVerdict, opts: { failAudit?: boolean; approvals?: InMemoryApprovalRepository } = {}) {
+function buildGate(
+  verdict: KernelVerdict,
+  opts: { failAudit?: boolean; approvals?: InMemoryApprovalRepository; soloMode?: boolean } = {},
+) {
   const auditRepo = opts.failAudit ? new FailingAuditRepository() : new InMemoryAuditRepository();
   const audit = new AuditChainService(auditRepo);
   const gate = new GovernanceGateService({
     kernel: fakeKernel({ verdict }),
     audit,
     approvals: opts.approvals,
+    soloMode: opts.soloMode,
     logger: silentLogger,
   });
   return { gate, auditRepo };
@@ -95,6 +99,31 @@ describe('GovernanceGateService — decide → risk → audit', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.effect).toBe('allow');
     expect(rows[0]?.payload.clearedByApprovalId).toBe(created.id);
+  });
+
+  it('SOLO MODE (bootstrap-injected, never env): clears a needs_approval to allow and seals it', async () => {
+    const { gate, auditRepo } = buildGate(NEEDS, { soloMode: true });
+    const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));
+
+    expect(v.effect).toBe('allow');
+    expect(v.reason).toContain('solo-mode clearance');
+    // The clearance is still sealed into the audit chain (no silent bypass).
+    const rows = (auditRepo as InMemoryAuditRepository).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.effect).toBe('allow');
+  });
+
+  it('SOLO MODE never clears a hard policy DENY', async () => {
+    const { gate } = buildGate(DENY, { soloMode: true });
+    const v = await gate.decide('branch.push', principal(), ctx({ taskId: 't1' }));
+    expect(v.effect).toBe('deny');
+  });
+
+  it('SOLO MODE: an allow whose audit seal fails proceeds with the gap logged (fail-open)', async () => {
+    const { gate } = buildGate(ALLOW, { failAudit: true, soloMode: true });
+    const v = await gate.decide('file.write', principal(), ctx());
+    expect(v.effect).toBe('allow');
+    expect(v.auditHash).toBeUndefined();
   });
 
   it('does NOT clear when no approval record exists (needs_approval unchanged)', async () => {

@@ -41,6 +41,8 @@ export interface IdentityConfig {
   readonly internalServiceKey: string | null;
   /** True when an internal service key is configured. */
   readonly internalServiceKeyPresent: boolean;
+  /** Solo/desktop mode — promote the local caller on mutating routes (see `RuntimeConfig.soloMode`). */
+  readonly soloMode: boolean;
   readonly isProduction: boolean;
   readonly deviceCodeTtlSeconds: number;
   readonly devicePollIntervalSeconds: number;
@@ -57,6 +59,7 @@ export function sliceIdentityConfig(app: AppConfig): IdentityConfig {
     strictAuth: app.auth.strict,
     internalServiceKey: app.internal.serviceKey,
     internalServiceKeyPresent: app.internal.serviceKeyPresent,
+    soloMode: app.runtime.soloMode === true,
     isProduction: app.runtime.isProduction,
     deviceCodeTtlSeconds: IDENTITY_DEFAULTS.deviceCodeTtlSeconds,
     devicePollIntervalSeconds: IDENTITY_DEFAULTS.devicePollIntervalSeconds,

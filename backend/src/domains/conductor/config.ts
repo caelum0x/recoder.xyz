@@ -63,6 +63,8 @@ export const conductorConfigSchema = z.object({
    * `false` -> the ssh substrate is never registered (selection degrades to tmux).
    */
   sshCredsPresent: z.boolean(),
+  /** Solo/desktop mode — degrade the audit-trail read to empty on a DB fault (see `RuntimeConfig.soloMode`). */
+  soloMode: z.boolean(),
   isProduction: z.boolean(),
 });
 
@@ -112,6 +114,7 @@ export function sliceConductorConfig(
     caps: { ...DEFAULT_CONDUCTOR_CAPS, ...(overrides.caps ?? {}) },
     daytonaCredsPresent: overrides.daytonaCredsPresent ?? false,
     sshCredsPresent: overrides.sshCredsPresent ?? false,
+    soloMode: app.runtime.soloMode === true,
     isProduction: app.runtime.isProduction,
   });
 }

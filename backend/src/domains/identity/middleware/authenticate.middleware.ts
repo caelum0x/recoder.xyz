@@ -118,13 +118,14 @@ export function createAuthMiddleware(deps: AuthMiddlewareDeps): AuthMiddleware {
         attach(req, p);
         return next();
       }
-      // Solo/desktop mode (RECODER_SOLO_MODE): a single local user on their own
-      // machine. There is no sign-in plane and the minted sk_ key can't validate
-      // without a DB, so the caller resolves anonymous — which would 401 every
-      // mutating route (create workspace, run agent, merge). Promote the local
-      // caller to a synthetic non-anonymous owner. A cloud deploy never sets
-      // RECODER_SOLO_MODE, so it keeps the fail-closed AUTH_REQUIRED below.
-      if (process.env.RECODER_SOLO_MODE === '1') {
+      // Solo/desktop mode (config.soloMode, bootstrap-injected from
+      // RECODER_SOLO_MODE): a single local user on their own machine. There is
+      // no sign-in plane and the minted sk_ key can't validate without a DB, so
+      // the caller resolves anonymous — which would 401 every mutating route
+      // (create workspace, run agent, merge). Promote the local caller to a
+      // synthetic non-anonymous owner. A cloud deploy never sets solo mode, so
+      // it keeps the fail-closed AUTH_REQUIRED below.
+      if (config.soloMode) {
         attach(req, principal.getSoloOwnerIdentity());
         return next();
       }

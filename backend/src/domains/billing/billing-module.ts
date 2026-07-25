@@ -95,6 +95,7 @@ export class BillingComposer implements BillingModule {
       catalog: this.catalog,
       distribution,
       logger: this.log,
+      soloMode: cfg.soloMode,
       ...(deps.resolveAuthPlan ? { resolveAuthPlan: deps.resolveAuthPlan } : {}),
       ...(deps.resolveByok ? { resolveByok: deps.resolveByok } : {}),
     });
