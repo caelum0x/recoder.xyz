@@ -16,8 +16,10 @@ function statusText(status: RecoderTerminalStatus): string {
 }
 
 function statusColor(status: RecoderTerminalStatus): string {
-    if (status == "connected") return "bg-success/20 text-success";
-    if (status == "connecting") return "bg-accent/20 text-accent";
+    // Graphite-only per the design system: connected is a real positive → accent;
+    // connecting is a neutral pending state; error keeps the one reserved crimson.
+    if (status == "connected") return "bg-accent/20 text-accent";
+    if (status == "connecting") return "border border-white/8 text-secondary";
     if (status == "error") return "bg-error/20 text-error";
     return "bg-secondary/20 text-secondary";
 }
