@@ -19,7 +19,7 @@ The finish line is a **3-step convergence loop**:
 
 1. Run N agents in parallel worktrees — **✅ works end-to-end.**
 2. Compare / converge N diffs, shared memory informing agents — **🟢 converge engine shipped** (2026-07-25): `compare.service` surfaces contested files; the new `converge` engine resolves them (non-contested auto, contested by selection) and **composes** the winners into a fresh governed branch (`GET/POST /api/conductor/workspaces/compare/:taskGroup/converge[-plan]`) that flows through the step-3 merge + evidence. Remaining: line-level/AST synthesis when two agents edit the *same* file (currently whole-file pick).
-3. Governed, evidence-producing merge as the headline artifact — **🟡 evidence record shipped** (2026-07-25): the governed merge now emits a content-hashed, exportable `ConvergenceEvidence` record (task + N candidate diffs + governance verdict/approval + verification + provenance), sealed into the Merkle audit chain, retrievable at `GET /api/conductor/workspaces/:id/evidence`. Remaining: framework-mapped export renderer (SOC2/EU-AI-Act) + desktop surface.
+3. Governed, evidence-producing merge as the headline artifact — **🟢 shipped**: the governed merge emits a content-hashed `ConvergenceEvidence` record (task + N candidate diffs + governance verdict/approval + verification + per-file `mode`/contributors provenance), sealed into the Merkle audit chain (`GET …/evidence`), **and a framework-mapped export pack** (`GET …/evidence/export?format=json|md`) that maps it to SOC2 CC8.1 / EU AI Act Art. 12 / DORA controls — each status **derived** from present evidence, never a fabricated "met". Remaining: signing/PKI + a broader control catalog (starter set today).
 
 ## Where we are (2026-07-25)
 
