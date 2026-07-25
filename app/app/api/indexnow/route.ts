@@ -1,8 +1,7 @@
-import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
+import { authorizeSubmitRequest } from '@/lib/seo/submit-auth';
 import { resolveIndexNowKey, submitUrls } from '@/lib/seo/indexnow';
 
 /**
@@ -36,33 +35,6 @@ const submitBodySchema = z
     message: 'Provide a non-empty `urls` (or `urlList`) array',
   });
 
-/** Constant-time compare of two secrets (hash to fixed length first). */
-function timingSafeCompare(a: string, b: string): boolean {
-  const ha = crypto.createHash('sha256').update(a, 'utf8').digest();
-  const hb = crypto.createHash('sha256').update(b, 'utf8').digest();
-  return crypto.timingSafeEqual(ha, hb);
-}
-
-/**
- * Authorize the request via internal-service signature or the admin secret.
- * DB-free (header-based) so the route stays cheap and independently testable.
- */
-function authorize(request: NextRequest, rawBody: string): { ok: true } | { ok: false; reason: string } {
-  const internal = verifyInternalServiceRequest(request, { rawBody });
-  if (internal.ok) return { ok: true };
-
-  const adminSecret = (process.env.ADMIN_SECRET || '').trim();
-  const header = (request.headers.get('x-admin-secret') || '').trim();
-  if (adminSecret && header && timingSafeCompare(header, adminSecret)) {
-    return { ok: true };
-  }
-
-  // `in`-narrowing (robust under the app's non-strict tsconfig, where boolean
-  // discriminant narrowing on `internal.ok` does not narrow the union).
-  const internalReason = 'reason' in internal ? internal.reason : 'unauthorized';
-  return { ok: false, reason: internalReason };
-}
-
 /**
  * POST /api/indexnow
  *
@@ -72,7 +44,7 @@ function authorize(request: NextRequest, rawBody: string): { ok: true } | { ok: 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const rawBody = await request.text();
 
-  const auth = authorize(request, rawBody);
+  const auth = authorizeSubmitRequest(request, rawBody);
   if (!auth.ok) {
     logger.warn('IndexNow ping rejected: unauthorized', {
       route: '/api/indexnow',
