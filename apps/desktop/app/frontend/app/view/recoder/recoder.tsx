@@ -889,7 +889,11 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     {isCompareOpen && (
                                         <div className="recoder-enter">
                                             {compareView != null ? (
-                                                <RecoderComparePanel model={model} compareView={compareView} />
+                                                <RecoderComparePanel
+                                                    model={model}
+                                                    compareView={compareView}
+                                                    onReview={openReview}
+                                                />
                                             ) : (
                                                 <div className="rounded border border-white/8 p-2">
                                                     <RecoderSkeleton rows={2} />
