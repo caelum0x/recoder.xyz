@@ -13,33 +13,78 @@ const PRIMARY_BTN =
 const QUIET_BTN =
     "border border-border text-secondary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer disabled:opacity-50";
 
-// Classify a single unified-diff line for coloring. File headers ("+++"/"---"
-// / "diff "/"index ") are checked before the generic +/- so they render neutral.
-function diffLineClass(line: string): string {
+type DiffLineKind = "add" | "del" | "hunk" | "meta" | "ctx";
+
+// Classify a unified-diff line by change type. File headers ("+++"/"---"/"diff "
+// /"index ") are matched before the generic +/- so they read as neutral metadata.
+function diffLineKind(line: string): DiffLineKind {
     if (line.startsWith("diff ") || line.startsWith("index ") || line.startsWith("+++") || line.startsWith("---")) {
-        return "text-secondary";
+        return "meta";
     }
     if (line.startsWith("@@")) {
-        return "text-accent";
+        return "hunk";
     }
     if (line.startsWith("+")) {
-        return "text-success";
+        return "add";
     }
     if (line.startsWith("-")) {
-        return "text-error";
+        return "del";
     }
-    return "text-primary/80";
+    return "ctx";
+}
+
+// Change type is encoded WITHOUT color: a luminance step (bg), an always-visible
+// gutter glyph, and a left-border bar. Crimson appears ONLY as the thin del
+// left-border marker, never on line text; green is never used.
+const AddGutter = "+";
+const DelGutter = "-";
+const NeutralGutter = " ";
+
+const AddRow = "bg-white/[0.05] text-primary/90 border-l-2 border-white/25";
+const DelRow = "bg-black/25 text-primary/50 border-l-2 border-error/50";
+const HunkRow = "text-accent";
+const MetaRow = "text-secondary";
+const CtxRow = "text-primary/70";
+
+function diffRowClass(kind: DiffLineKind): string {
+    if (kind == "add") {
+        return AddRow;
+    }
+    if (kind == "del") {
+        return DelRow;
+    }
+    if (kind == "hunk") {
+        return HunkRow;
+    }
+    if (kind == "meta") {
+        return MetaRow;
+    }
+    return CtxRow;
+}
+
+function diffGutter(kind: DiffLineKind): string {
+    if (kind == "add") {
+        return AddGutter;
+    }
+    if (kind == "del") {
+        return DelGutter;
+    }
+    return NeutralGutter;
 }
 
 function DiffBody({ patch }: { patch: string }) {
     const lines = patch.split("\n");
     return (
         <pre className="text-xs leading-5 font-mono whitespace-pre overflow-auto rounded border border-border p-2 bg-panel">
-            {lines.map((line, i) => (
-                <div key={i} className={cn(diffLineClass(line), "min-h-[1.25rem]")}>
-                    {line == "" ? " " : line}
-                </div>
-            ))}
+            {lines.map((line, i) => {
+                const kind = diffLineKind(line);
+                return (
+                    <div key={i} className={cn("flex min-h-[1.25rem]", diffRowClass(kind))}>
+                        <span className="select-none w-4 text-center opacity-70 font-mono">{diffGutter(kind)}</span>
+                        <span className="flex-1 whitespace-pre">{line == "" ? " " : line}</span>
+                    </div>
+                );
+            })}
         </pre>
     );
 }
@@ -130,8 +175,9 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                         <div className="flex flex-col gap-0.5">
                             <div className="text-xs uppercase tracking-wide text-secondary">Untracked</div>
                             {diff.untracked.map((f) => (
-                                <div key={f} className="text-xs font-mono text-success">
-                                    + {f}
+                                <div key={f} className="text-xs font-mono text-secondary">
+                                    <span className="select-none opacity-70">+ </span>
+                                    {f}
                                 </div>
                             ))}
                         </div>
