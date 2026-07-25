@@ -10,7 +10,10 @@ const nextConfig = {
   env: {
     SKIP_ENV_VALIDATION: process.env.SKIP_ENV_VALIDATION,
   },
-  outputFileTracingRoot: __dirname,
+  // Must match turbopack.root below. Rooted at the monorepo so the repo-root
+  // .pnpm store (where next/prisma/etc. physically live) is inside the traced
+  // root now that app/ is a pnpm member (see docs/STATUS.md #22).
+  outputFileTracingRoot: path.resolve(__dirname, '..'),
   typescript: {
     ignoreBuildErrors: true, // Pre-existing TS errors in doc pages (template literals in JSX)
   },
@@ -43,6 +46,12 @@ const nextConfig = {
   },
 
   turbopack: {
+    // Pin the Turbopack project root to the monorepo root. Now that app/ is a
+    // pnpm workspace member, `next` resolves via a symlink into the repo-root
+    // .pnpm store (outside app/), so a root of app/ makes Turbopack treat next
+    // as "outside the project" and refuse. Rooting at the repo covers both the
+    // app/ sources and the .pnpm store (see docs/STATUS.md #22).
+    root: path.resolve(__dirname, '..'),
     resolveAlias: {
       'react/compiler-runtime': './lib/payload/react-compiler-runtime-shim.ts',
     },
