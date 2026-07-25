@@ -868,17 +868,17 @@ export function writeWaveAIGatewayConfig(opts: {
  * Rail widgets retired from the default launcher (2026-07-25 Conductor-grade
  * trim; decisions recorded in docs/DESKTOP-UX-STATE-AND-PLAN.md §5):
  * cockpit (dropped UI), session/launch/review (hub owns those entry paths),
- * approvals/memory (broken wiring — resurface after fix), sysinfo/processes
- * (infra dashboards), plus the earlier-hidden infra views whose keys may still
- * be pinned in old user configs.
+ * sysinfo/processes (infra dashboards), plus the earlier-hidden infra views
+ * whose keys may still be pinned in old user configs. Approvals/Memory were
+ * retired here while their wiring was broken; §9 keeps them (governance
+ * differentiators) and the wiring is fixed (8597b41ee), so they are now in
+ * RestoredWidgetKeys instead.
  */
 export const RetiredWidgetKeys = [
     "defwidget@recoder-cockpit",
     "defwidget@recoder-terminal",
     "defwidget@recoder-launch",
     "defwidget@recoder-diff",
-    "defwidget@recoder-approvals",
-    "defwidget@recoder-memory",
     "defwidget@sysinfo",
     "defwidget@processviewer",
     "defwidget@recoder-board",
@@ -890,6 +890,15 @@ export const RetiredWidgetKeys = [
 ] as const;
 
 /**
+ * Formerly retired widgets brought back to the default rail. Earlier builds of
+ * removeRetiredWidgetConfig pinned these to `null` in the user's widgets.json
+ * (merge-delete), so simply un-retiring them is not enough — the persisted
+ * tombstone would keep hiding the restored default forever. Lift ONLY an exact
+ * `null` tombstone; a user-customized widget object is left untouched.
+ */
+export const RestoredWidgetKeys = ["defwidget@recoder-approvals", "defwidget@recoder-memory"] as const;
+
+/**
  * Self-heal the config-dir widgets.json so retired rail widgets stay gone.
  * The embedded default (server/pkg/wconfig/defaultconfig/widgets.json) in an
  * already-shipped Go binary may still declare these keys, and earlier builds
@@ -897,8 +906,9 @@ export const RetiredWidgetKeys = [
  * the config-dir file over the defaults, treating a `null` value as "delete
  * this key from the merged result". So force each retired key to `null` (not
  * just remove it) on every onReady — that neutralizes both a stale user entry
- * AND the default's entry, self-healing across installs. Idempotent; other
- * user widgets are untouched.
+ * AND the default's entry, self-healing across installs. Also lifts `null`
+ * tombstones for RestoredWidgetKeys so restored defaults reappear. Idempotent;
+ * other user widgets are untouched.
  */
 export function removeRetiredWidgetConfig(opts: { configDir: string; fs?: FsLike }): {
     widgetsPath: string;
@@ -918,10 +928,15 @@ export function removeRetiredWidgetConfig(opts: { configDir: string; fs?: FsLike
         return { widgetsPath, removed: false };
     }
     const stale = RetiredWidgetKeys.filter((key) => !(key in widgets) || widgets[key] !== null);
-    if (stale.length === 0) {
+    const tombstoned = RestoredWidgetKeys.filter((key) => key in widgets && widgets[key] === null);
+    if (stale.length === 0 && tombstoned.length === 0) {
         return { widgetsPath, removed: false };
     }
-    const healed = { ...widgets, ...Object.fromEntries(stale.map((key) => [key, null])) };
+    const healed = Object.fromEntries(
+        Object.entries({ ...widgets, ...Object.fromEntries(stale.map((key) => [key, null])) }).filter(
+            ([key]) => !tombstoned.includes(key as (typeof RestoredWidgetKeys)[number])
+        )
+    );
     fs.mkdirSync(opts.configDir, { recursive: true });
     fs.writeFileSync(widgetsPath, JSON.stringify(healed, null, 4) + "\n");
     return { widgetsPath, removed: true };
