@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - 'v*'
+      # changesets tags the desktop app as recoder-terminal@<version>
+      # (see release-changesets.yml); build release artifacts for those too.
+      - 'recoder-terminal@*'
   workflow_dispatch:
 
 env:

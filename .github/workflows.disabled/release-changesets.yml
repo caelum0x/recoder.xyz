@@ -1,0 +1,69 @@
+name: Release (changesets)
+
+# Changesets release pipeline (bd recoder-7byt; report #8 in
+# docs/research/OSS-ADOPTION-2026-07.md).
+#
+# On push to main:
+#   - if .changeset/*.md intent files exist -> opens/updates a "Version Packages"
+#     PR (consumes intents into per-package CHANGELOGs + version bumps);
+#   - when that PR merges -> `changeset tag` tags each released package as
+#     `<name>@<version>` and the action creates GitHub Releases from those tags.
+#
+# Those GitHub Releases are the single source read by the Hazel /download
+# endpoints, the electron-updater feed, the website changelog page, and the
+# in-app what's-new popover. `recoder-terminal@*` tags additionally trigger
+# desktop-release.yml artifact builds.
+#
+# All packages are private: privatePackages { version, tag } in
+# .changeset/config.json means nothing is ever published to npm.
+#
+# NOTE: this file lives in workflows.disabled/ like every workflow in this repo
+# (CI is deliberately off). Move it to .github/workflows/ to activate.
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  release:
+    name: Version Packages PR / Tag + GitHub Releases
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies (workspace resolution only; no build scripts)
+        run: pnpm install --ignore-scripts
+
+      - name: Create Version Packages PR or tag + GitHub Releases
+        uses: changesets/action@v1
+        with:
+          version: pnpm changeset version
+          # No npm publish (all packages private). `changeset tag` emits
+          # "New tag:" lines the action turns into GitHub Releases.
+          publish: pnpm changeset tag
+          commit: 'chore(release): version packages'
+          title: 'chore(release): version packages'
+          createGithubReleases: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
