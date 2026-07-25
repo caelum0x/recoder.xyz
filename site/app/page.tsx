@@ -29,12 +29,13 @@ function Hero() {
       <div className="relative mx-auto max-w-6xl px-6 pb-10 pt-16 md:pt-20">
         <div className="mx-auto max-w-3xl text-center">
           <h1 className="text-balance text-4xl font-semibold leading-[1.05] tracking-tight md:text-6xl">
-            Run your coding agents in parallel.
+            N agents in parallel. One trusted merge.
           </h1>
           <p className="text-balance mx-auto mt-5 max-w-2xl text-base text-muted md:text-lg">
             Recoder is a desktop app for running your own Claude Code, Codex,
             Cursor &amp; opencode agents in isolated git-worktree workspaces —
-            see what they&apos;re doing, review their diffs, and merge.
+            compare their divergent diffs side by side and merge the winner as
+            one trusted change.
           </p>
           <div className="mt-8 flex items-center justify-center gap-5">
             <DownloadButton className="px-6 py-3 text-[15px]" />
