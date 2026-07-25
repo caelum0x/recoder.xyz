@@ -190,7 +190,14 @@ function SiblingCompareRow({
     suggestedReason,
 }: SiblingCompareRowProps) {
     const stat = sibling.diffStat;
-    const merged = lastMerge != null && lastMerge.status == "merged";
+    // Merged is authoritative server truth, not just this session's merge action:
+    // after a restart or an out-of-band merge lastMerge is null, but the compare
+    // feed reports state 'merged' and readiness reports verdict 'delivered'. Deriving
+    // from all three hides the failing re-merge button and reveals Save evidence on reload.
+    const merged =
+        (lastMerge != null && lastMerge.status == "merged") ||
+        sibling.state == "merged" ||
+        readiness?.verdict == "delivered";
     const overlap = computeSiblingOverlap(sibling, siblings, contested);
     const overlapAgents =
         overlap != null && overlap.count > 0
@@ -208,7 +215,11 @@ function SiblingCompareRow({
             siblings,
             readiness,
             mergeability,
-            merge: lastMerge,
+            // A reloaded / out-of-band merge has no in-session lastMerge, so synthesize
+            // a truthful minimal record (status + timestamp only) from server state.
+            // No verdict/sealed block is fabricated — the artifact honestly shows
+            // client-assembled provenance for these fields.
+            merge: lastMerge ?? { status: "merged", at: sibling.updatedAt },
             taskGroup: taskGroup ?? "",
             audit,
         });
@@ -291,7 +302,11 @@ function SiblingCompareRow({
                     overlap unknown — changed-file list unavailable
                 </span>
             ) : overlap.count == 0 ? (
-                <span className={META}>no file overlap with other agents</span>
+                mergeability != null && mergeability.available && mergeability.verdict == "conflicting" ? (
+                    <span className={META}>conflicts with already-merged work — see merge conflicts above</span>
+                ) : (
+                    <span className={META}>no file overlap with other agents</span>
+                )
             ) : (
                 <span className={META} title={overlapAgents ? `Shared with ${overlapAgents}` : undefined}>
                     overlaps {overlap.count} file{overlap.count == 1 ? "" : "s"} with other agents
