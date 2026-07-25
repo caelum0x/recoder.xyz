@@ -17,9 +17,15 @@
 
 </div>
 
-Recoder Terminal is an open-source, AI-integrated terminal for macOS, Linux, and Windows. It works with any AI model. Bring your own API keys for OpenAI, Claude, or Gemini, or run local models via Ollama and LM Studio. No accounts required.
+**Recoder is the self-hosted convergence layer for parallel coding agents. N agents in parallel. One trusted merge.**
 
-Recoder Terminal also supports durable SSH sessions that survive network interruptions and restarts, with automatic reconnection. Edit remote files with a built-in graphical editor and preview files inline without leaving the terminal.
+The loop:
+
+1. **Launch** any coding agent (Claude Code, Codex, Cursor, opencode, …) — in parallel, each in its own isolated git worktree.
+2. **Review** the divergent diffs side by side.
+3. **Merge** the winner as one trusted, shippable change — on infra you own, with your own keys.
+
+Recoder Terminal is the desktop surface for that loop: an open-source, cross-platform terminal for macOS, Linux, and Windows. It works with any AI model — bring your own API keys for OpenAI, Claude, or Gemini, or run local models via Ollama and LM Studio. It also supports durable SSH sessions that survive network interruptions and restarts, a built-in graphical editor for remote files, and inline file previews without leaving the terminal.
 
 ![Recoder Terminal Screenshot](./assets/wave-screenshot.webp)
 

@@ -5,7 +5,7 @@
         "email": "info@recoder.xyz"
     },
     "productName": "Recoder",
-    "description": "Open-Source AI-Native Terminal Built for Seamless Workflows",
+    "description": "Self-hosted convergence layer for parallel coding agents — launch any agent in parallel isolated git worktrees, review the diffs, and merge one trusted change.",
     "license": "Apache-2.0",
     "version": "0.14.5",
     "homepage": "https://recoder.xyz",
