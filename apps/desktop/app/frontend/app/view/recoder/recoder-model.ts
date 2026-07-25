@@ -341,6 +341,26 @@ function readErrorReason(body: unknown): string {
     return "";
 }
 
+// Workspace states that represent a genuinely-launched worktree. Anything else
+// (notably "failed", or an absent state) means the create call returned 2xx but
+// the worktree never came up, so the launch must not be reported as a success.
+const LAUNCH_HEALTHY_STATES = new Set(["created", "running", "setting_up", "ready", "awaiting_review"]);
+
+// A launched workspace can 2xx with success:true yet carry state "failed" and a
+// metadata.error (e.g. worktree creation on a non-git folder). Pull that reason
+// out, collapsed to a single truthful line, so the user sees the real cause.
+function launchStateReason(workspace: unknown): string {
+    if (workspace == null || typeof workspace != "object") {
+        return "";
+    }
+    const meta = (workspace as { metadata?: unknown }).metadata;
+    const raw = readErrorReason(meta);
+    if (raw == "") {
+        return "";
+    }
+    return raw.replace(/\s+/g, " ").trim().slice(0, 160);
+}
+
 // A parallel-run group derived from workspaces sharing a metadata.taskGroup. A
 // solo (ungrouped) workspace is its own group of 1 with taskGroup null.
 type RecoderWorkspaceGroup = { taskGroup: string | null; workspaces: RecoderWorkspace[] };
@@ -779,6 +799,8 @@ class RecoderViewModel implements ViewModel {
         globalStore.set(this.launchResultAtom, null);
         const base = getRecoderBackendUrl();
         let started = 0;
+        let degraded = 0;
+        let lastDegradedReason = "";
         try {
             for (const agent of agents) {
                 const reqBody = {
@@ -799,16 +821,39 @@ class RecoderViewModel implements ViewModel {
                 });
                 const parsed = await res.json().catch(() => ({}));
                 if (!res.ok || !parsed?.success) {
-                    const reason = (parsed && typeof parsed.error == "string" && parsed.error) || `HTTP ${res.status}`;
+                    const reason =
+                        readErrorReason(parsed) ||
+                        (typeof parsed?.error == "string" && parsed.error) ||
+                        `HTTP ${res.status}`;
                     throw new Error(reason);
+                }
+                const workspace = parsed?.data?.workspace;
+                const state = workspace != null && typeof workspace.state == "string" ? workspace.state : "";
+                if (!LAUNCH_HEALTHY_STATES.has(state)) {
+                    degraded += 1;
+                    lastDegradedReason = launchStateReason(workspace) || (state != "" ? `state ${state}` : "no workspace state");
+                    continue;
                 }
                 started += 1;
             }
             this.rememberRepo(repoPath);
             this.rememberAgent(primary, interactive);
+            const total = agents.length;
+            if (degraded > 0) {
+                // A worktree that never came up is a real failure — keep the panel
+                // open with the true reason instead of flashing a success toast.
+                const summary =
+                    total > 1
+                        ? `Launched ${started} of ${total} — ${degraded} failed at worktree`
+                        : "Workspace failed at worktree";
+                const detail = lastDegradedReason != "" ? ` — ${lastDegradedReason}` : "";
+                globalStore.set(this.launchResultAtom, { ok: false, error: `${summary}${detail}` });
+                await this.refresh();
+                return;
+            }
             globalStore.set(this.launchResultAtom, {
                 ok: true,
-                message: agents.length > 1 ? `Launched ${started} agents.` : "Workspace created.",
+                message: total > 1 ? `Launched ${started} agents.` : "Workspace created.",
             });
             globalStore.set(this.launchOpenAtom, false);
             globalStore.set(this.launchPromptAtom, "");
@@ -943,7 +988,7 @@ class RecoderViewModel implements ViewModel {
                 return;
             }
             const body = await res.json().catch(() => null);
-            const reason = (body && typeof body.error == "string" && body.error) || "";
+            const reason = readErrorReason(body);
             this.setRowStatus(workspaceId, reason || `Archive failed (${res.status}).`);
         } catch {
             this.setRowStatus(workspaceId, "Archive unavailable â Recoder isn’t reachable.");
