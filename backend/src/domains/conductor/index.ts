@@ -87,6 +87,7 @@ export type {
   ConvergenceMode,
   ConvergenceUnresolved,
   ConvergencePlanSource,
+  ContestedProbe,
 } from './converge/converge-plan.service.js';
 import type {
   ComposeConvergenceInput,
@@ -588,10 +589,15 @@ export interface ConductorModule {
    * file→source map (step 2). Read-only. Non-contested paths auto-resolve to their
    * sole author; contested paths resolve to a valid selection or surface as
    * `unresolved` (never an invented winner). `complete` ⇒ compose-ready.
+   *
+   * `options.probe` opts into a read-only synthesizability dry-run over the contested
+   * paths, enriching the plan with `contested[]` (no worktree/mutation); unprobed the
+   * pure fold is returned verbatim (no `contested` field).
    */
   planConvergence(
     taskGroup: string,
     selection: Readonly<Record<string, string>>,
+    options?: { readonly probe?: boolean },
   ): Promise<ConvergencePlan>;
   /**
    * COMPOSE a convergence (`POST …/converge`) — GATED (`workspace.branch`).

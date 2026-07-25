@@ -168,6 +168,7 @@ import {
 } from './converge/converge-plan.service.js';
 import {
   composeConvergence as composeConvergenceOp,
+  probeSynthesizability as probeSynthesizabilityOp,
   EmptyConvergenceError,
   UnresolvedConvergenceError,
   type ComposeConvergenceInput,
@@ -2105,10 +2106,17 @@ export class ConductorComposer implements ConductorModule {
    * paths resolve to a VALID selection or surface as `unresolved` (a truthful
    * "you must decide", never an invented winner). An empty/absent group is a
    * truthful empty plan (`complete:false`).
+   *
+   * When `options.probe` is set, the plan is ENRICHED with a `contested[]`
+   * synthesizability probe (an OPT-IN, read-only dry-run 3-way merge over the
+   * contested paths — no worktree/mutation) so the UI can show which contested files
+   * auto-merge cleanly. Unprobed (the default), the pure fold is returned verbatim
+   * (no `contested` field) — existing callers are unaffected.
    */
   async planConvergence(
     taskGroup: string,
     selection: Readonly<Record<string, string>>,
+    options?: { readonly probe?: boolean },
   ): Promise<ConvergencePlan> {
     const view = await this.rawCompare(taskGroup);
     const siblings = view.siblings.map((s) => ({
@@ -2116,7 +2124,29 @@ export class ConductorComposer implements ConductorModule {
       agent: s.agent,
       ...(s.changedFiles ? { changedFiles: s.changedFiles } : {}),
     }));
-    return planConvergenceOp({ taskGroup: view.taskGroup, siblings, selection });
+    const plan = planConvergenceOp({ taskGroup: view.taskGroup, siblings, selection });
+    if (!options?.probe) return plan;
+
+    // OPT-IN enrichment: dry-run the 3-way over every contested path (resolved-by-
+    // synthesize/pick AND still-unresolved) so the UI can offer `@synthesize` only
+    // where it will actually come out clean. Read-only — never mutates, never throws.
+    const contestedInputs = [
+      ...plan.files.filter((f) => f.contested).map((f) => ({ path: f.path, workspaceIds: f.candidates })),
+      ...plan.unresolved.map((u) => ({ path: u.path, workspaceIds: u.candidates })),
+    ];
+    if (contestedInputs.length === 0) return { ...plan, contested: [] };
+    const contested = await probeSynthesizabilityOp(this.convergeDeps(), contestedInputs);
+    return { ...plan, contested };
+  }
+
+  /** The injected seams the convergence ops (compose + probe) run over. */
+  private convergeDeps(): ConvergeOpsDeps {
+    return {
+      compare: (taskGroup) => this.rawCompare(taskGroup),
+      getWorkspace: (id) => this.engine.getWorkspace(id),
+      registerWorkspace: (workspace) => this.repository.upsertWorkspace(workspace),
+      logger: this.log,
+    };
   }
 
   /**
@@ -2140,13 +2170,7 @@ export class ConductorComposer implements ConductorModule {
     });
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
     try {
-      const deps: ConvergeOpsDeps = {
-        compare: (taskGroup) => this.rawCompare(taskGroup),
-        getWorkspace: (id) => this.engine.getWorkspace(id),
-        registerWorkspace: (workspace) => this.repository.upsertWorkspace(workspace),
-        logger: this.log,
-      };
-      const result = await composeConvergenceOp(deps, {
+      const result = await composeConvergenceOp(this.convergeDeps(), {
         ...input,
         createdBy: input.createdBy || principal.userId,
       });

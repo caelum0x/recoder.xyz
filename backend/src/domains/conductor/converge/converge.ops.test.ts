@@ -14,13 +14,14 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Workspace } from '@recoder/agent-os';
 import type { Logger } from '../../../shared/logger.js';
 import {
   composeConvergence,
+  probeSynthesizability,
   EmptyConvergenceError,
   UnresolvedConvergenceError,
   type ConvergeOpsDeps,
@@ -442,5 +443,108 @@ describe('composeConvergence (intra-file 3-way synthesize, real git)', () => {
       }
     ).selections.find((s) => s.path === 'shared.ts')!;
     expect(sel.contributors).toEqual(['ws-a', 'ws-b', 'ws-c']); // deterministic sorted fold order
+  });
+});
+
+/**
+ * Dry-run synthesizability PROBE — the read-only preview the plan endpoint attaches
+ * on `?probe=1`, so the UI knows which contested files auto-merge before composing.
+ *
+ * Proves (real git): `synthesizable:true` for a non-overlapping contested file,
+ * `false`+`overlap` for an overlapping same-line one, `false`+`delete-modify` when a
+ * contributor deleted the path, `false`+`unreadable` for a candidate with no
+ * worktree, and — critically — the probe NEVER mutates (no new worktree/branch/dir).
+ */
+describe('probeSynthesizability (read-only dry-run, real git)', () => {
+  let root: string;
+  let repo: string;
+  const BASE_LINES = ['l1', 'l2', 'l3', 'l4', 'l5', ''];
+
+  beforeEach(() => {
+    root = mkdtempSync(path.join(tmpdir(), 'recoder-probe-'));
+    repo = path.join(root, 'repo');
+    mkdirSync(repo, { recursive: true });
+    git(repo, ['init', '-b', 'main']);
+    writeFileSync(path.join(repo, 'shared.ts'), BASE_LINES.join('\n'));
+    git(repo, ['add', '-A']);
+    git(repo, ['commit', '-m', 'base']);
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  function addSibling(id: string, mutate: (lines: string[]) => void, del = false): string {
+    const wt = path.join(root, id);
+    git(repo, ['worktree', 'add', '-b', `agent-${id}`, wt, 'main']);
+    if (del) {
+      rmSync(path.join(wt, 'shared.ts'));
+    } else {
+      const lines = [...BASE_LINES];
+      mutate(lines);
+      writeFileSync(path.join(wt, 'shared.ts'), lines.join('\n'));
+    }
+    return wt;
+  }
+
+  function deps(siblings: readonly { id: string; wt?: string }[]): ConvergeOpsDeps {
+    const workspaces: Record<string, Workspace> = Object.fromEntries(
+      siblings.map((s) => [s.id, makeWs({ workspaceId: s.id, worktreePath: s.wt, branch: `agent-${s.id}` })]),
+    );
+    return {
+      compare: async () => ({ count: siblings.length, siblings: [] }),
+      getWorkspace: async (id) => workspaces[id] ?? null,
+      registerWorkspace: async (ws) => ws,
+      logger: noopLogger,
+    };
+  }
+
+  const contestedShared = [{ path: 'shared.ts', workspaceIds: ['ws-a', 'ws-b'] }];
+
+  it('reports synthesizable:true for a non-overlapping contested file', async () => {
+    const wtA = addSibling('ws-a', (L) => (L[0] = 'l1-A'));
+    const wtB = addSibling('ws-b', (L) => (L[4] = 'l5-B'));
+    const out = await probeSynthesizability(deps([{ id: 'ws-a', wt: wtA }, { id: 'ws-b', wt: wtB }]), contestedShared);
+    expect(out).toEqual([{ path: 'shared.ts', workspaceIds: ['ws-a', 'ws-b'], synthesizable: true }]);
+  });
+
+  it('reports synthesizable:false + overlap for overlapping same-line edits', async () => {
+    const wtA = addSibling('ws-a', (L) => (L[2] = 'l3-A'));
+    const wtB = addSibling('ws-b', (L) => (L[2] = 'l3-B'));
+    const out = await probeSynthesizability(deps([{ id: 'ws-a', wt: wtA }, { id: 'ws-b', wt: wtB }]), contestedShared);
+    expect(out[0]).toEqual({ path: 'shared.ts', workspaceIds: ['ws-a', 'ws-b'], synthesizable: false, reason: 'overlap' });
+  });
+
+  it('reports synthesizable:false + delete-modify when a contributor deleted the path', async () => {
+    const wtA = addSibling('ws-a', (L) => (L[0] = 'l1-A'));
+    const wtB = addSibling('ws-b', () => {}, /* del */ true);
+    const out = await probeSynthesizability(deps([{ id: 'ws-a', wt: wtA }, { id: 'ws-b', wt: wtB }]), contestedShared);
+    expect(out[0]).toEqual({ path: 'shared.ts', workspaceIds: ['ws-a', 'ws-b'], synthesizable: false, reason: 'delete-modify' });
+  });
+
+  it('reports unreadable when a candidate has no worktree', async () => {
+    const wtA = addSibling('ws-a', (L) => (L[0] = 'l1-A'));
+    // ws-b resolves to a workspace record WITHOUT a worktreePath.
+    const out = await probeSynthesizability(deps([{ id: 'ws-a', wt: wtA }, { id: 'ws-b' }]), contestedShared);
+    expect(out[0]).toEqual({ path: 'shared.ts', workspaceIds: ['ws-a', 'ws-b'], synthesizable: false, reason: 'unreadable' });
+  });
+
+  it('returns [] for no contested paths', async () => {
+    expect(await probeSynthesizability(deps([]), [])).toEqual([]);
+  });
+
+  it('NEVER mutates — no new worktree, branch, or directory is created', async () => {
+    const wtA = addSibling('ws-a', (L) => (L[0] = 'l1-A'));
+    const wtB = addSibling('ws-b', (L) => (L[4] = 'l5-B'));
+
+    const worktreesBefore = execFileSync('git', ['-C', repo, 'worktree', 'list'], { encoding: 'utf8' });
+    const branchesBefore = execFileSync('git', ['-C', repo, 'branch', '--list'], { encoding: 'utf8' });
+    const dirsBefore = readdirSync(root).sort();
+
+    await probeSynthesizability(deps([{ id: 'ws-a', wt: wtA }, { id: 'ws-b', wt: wtB }]), contestedShared);
+
+    expect(execFileSync('git', ['-C', repo, 'worktree', 'list'], { encoding: 'utf8' })).toBe(worktreesBefore);
+    expect(execFileSync('git', ['-C', repo, 'branch', '--list'], { encoding: 'utf8' })).toBe(branchesBefore);
+    expect(readdirSync(root).sort()).toEqual(dirsBefore); // no `repo-converge-*`, no leftover
   });
 });
