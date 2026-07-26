@@ -14,8 +14,8 @@ type BoardIssue = {
     priority: string;
 };
 
-// A recorded work-signal: a stuck/blocked/needs-handoff workspace whose work was
-// handed back to the conductor and is now pickup-able (GET /api/conductor/work-signals).
+// A recorded work-signal: a stuck/blocked/needs-you run surfaced by the
+// observability domain and now pickup-able (GET /api/agent-os/observability/signals).
 type BoardSignal = {
     workspaceId: string;
     kind: string;
@@ -62,23 +62,26 @@ class RecoderBoardViewModel implements ViewModel {
         this.signalsAtom = atom([]) as PrimitiveAtom<BoardSignal[]>;
     }
 
-    // Pickup-able stuck work (independent + degrade-safe): a stuck/blocked agent's
-    // work handed back to the conductor. Any failure just leaves the section empty.
+    // Pickup-able stuck work (independent + degrade-safe): a stuck/blocked/needs-you
+    // run surfaced by the observability work-signals feed. Any failure just leaves
+    // the section empty. The signal shape is the domain WorkSignal
+    // {id, kind, title, reason, runId, detectedAt, ...}; the board only renders a
+    // correlated run id, a kind, a one-line detail, and a timestamp.
     async fetchSignals() {
         try {
-            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/work-signals?limit=20`);
+            const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/observability/signals`);
             if (!res.ok) {
                 globalStore.set(this.signalsAtom, []);
                 return;
             }
             const body = await res.json();
-            const list = Array.isArray(body?.data) ? body.data : [];
+            const list = Array.isArray(body?.data?.signals) ? body.data.signals : [];
             const signals: BoardSignal[] = list
                 .map((s: Record<string, unknown>) => ({
-                    workspaceId: firstString(s?.workspaceId),
+                    workspaceId: firstString(s?.runId),
                     kind: firstString(s?.kind),
-                    detail: firstString(s?.detail),
-                    when: firstString(s?.recordedAt),
+                    detail: firstString(s?.title, s?.reason),
+                    when: firstString(s?.detectedAt),
                 }))
                 .filter((s: BoardSignal) => s.kind != "");
             globalStore.set(this.signalsAtom, signals);
@@ -100,7 +103,7 @@ class RecoderBoardViewModel implements ViewModel {
         // Pickup-able stuck work loads independently of the beads ready-list.
         void this.fetchSignals();
         try {
-            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/issues/ready`);
+            const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/issues/ready`);
             if (res.status == 404) {
                 globalStore.set(this.issuesAtom, []);
                 globalStore.set(this.statusAtom, "not-available");

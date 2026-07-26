@@ -52,9 +52,10 @@ import { AgentOsWorkflowRunnerDriver } from './adapters/agent-os-workflow-runner
 import { createBrowserCheckWorkflowHandler } from './adapters/browser-check-workflow.handler.js';
 import { createNativeWorkflowHandler } from '@recoder/agent-workflows';
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
-import type { SquadIssuePort } from './ports/squad-issue.port.js';
+import type { SquadIssuePort, SquadReadyIssue } from './ports/squad-issue.port.js';
 import { buildSquadBoardRouter } from './routes/squad-board.routes.js';
 import { buildSquadReadRouter } from './routes/squad-read.routes.js';
+import { buildIssuesReadRouter } from './routes/issues-read.routes.js';
 import { buildWorkflowRouter } from './routes/workflow.routes.js';
 import { buildAgentOsRouter } from './routes/agent-os.routes.js';
 import { buildInternalAgentOsRouter } from './routes/internal-agent-os.routes.js';
@@ -79,6 +80,13 @@ export class AgentOsComposer implements AgentOsModule {
   private readonly drain: OutboxDrainService;
   private readonly squads: SquadService | null;
   private readonly autopilot: SquadAutopilotService | null;
+  /**
+   * The late-bound issue-graph read seam (`attachIssueGraph`). Stored on the
+   * module itself — INDEPENDENT of the autopilot — so the `/issues/ready` edge
+   * serves the Board even when squads/autopilot are off. Null until attached;
+   * a null seam reads `[]` (degrade-truthful), never throws.
+   */
+  private issueGraph: SquadIssuePort | null = null;
   private readonly workflows: WorkflowService;
   private readonly policyUpdates: PolicyUpdateEmitter;
   private readonly router: Router;
@@ -270,6 +278,12 @@ export class AgentOsComposer implements AgentOsModule {
     // Squads read-only introspection (list / detail / members / activity). Owner
     // decision: squads are never mutated over HTTP/MCP — reads only.
     this.router.use(buildSquadReadRouter({ squads: this.squads, middleware: deps.middleware }));
+    // Issue-graph ready-list edge (`/issues/ready`) — the Board's pickup queue.
+    // Independent of the squads flag; serves `{ ready: [] }` (200) until the
+    // issue-graph seam is attached, never a squads-off tombstone.
+    this.router.use(
+      buildIssuesReadRouter({ readyIssues: () => this.readyIssues(), middleware: deps.middleware }),
+    );
     // Workflow-definition CRUD + dispatch edge.
     this.router.use(buildWorkflowRouter({ workflows: this.workflows, middleware: deps.middleware }));
     this.router.use(inner);
@@ -333,11 +347,24 @@ export class AgentOsComposer implements AgentOsModule {
    * agent-os; mirrors `attachSquadAutopilotConductor`).
    */
   attachIssueGraph(port: SquadIssuePort): void {
+    // Store on the module regardless of the autopilot: the `/issues/ready` edge
+    // (the Board's pickup queue) reads the issue graph directly, independent of
+    // whether the squads autopilot is enabled.
+    this.issueGraph = port;
     if (!this.autopilot) {
-      this.log.debug('agent-os: squad autopilot disabled — issue-graph seam not attached');
+      this.log.debug('agent-os: squad autopilot disabled — issue-graph seam serves reads only');
       return;
     }
     this.autopilot.attachIssueGraph(port);
+  }
+
+  /**
+   * The unblocked open work (`bd ready --json`) the desktop Board picks up from.
+   * Degrade-truthful: no seam attached (or the graph down) resolves `[]` — the
+   * port's own degrade law already returns `[]` rather than throwing.
+   */
+  async readyIssues(): Promise<readonly SquadReadyIssue[]> {
+    return this.issueGraph?.ready() ?? [];
   }
 
   /**
