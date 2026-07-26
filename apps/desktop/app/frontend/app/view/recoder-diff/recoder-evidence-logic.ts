@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { base64ToArrayBuffer } from "@/util/util";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readErrorReason } from "../recoder/recoder-errors";
 
@@ -22,6 +23,25 @@ type EvidenceControlView = {
 
 type EvidenceCoverage = { met: number; partial: number; notEvidenced: number; total: number };
 
+// The Ed25519 detached signature over the pack. `signature` (base64) signs the
+// UTF-8 BYTES of `signedContentHash` (the hex string) — the backend signed
+// `Buffer.from(contentHash)`, so any client verify must encode the string too.
+type EvidenceSignatureView = {
+    algorithm: string;
+    publicKeyPem: string;
+    signedContentHash: string;
+    signature: string;
+    signedAt: string;
+};
+
+// The truthful trust state of the pack's signature. `signed` = present + covers
+// this pack's contentHash but NOT cryptographically checked; `verified` = a real
+// WebCrypto Ed25519 verify passed; `invalid` = hash mismatch or a failed crypto
+// verify (tampered); `unsigned` = no signature (no signing key configured).
+type SignatureStatus = "unsigned" | "signed" | "verified" | "invalid";
+
+type SignatureState = { status: SignatureStatus; reason: string };
+
 // The exportable compliance pack, projected to what the panel renders. Every field
 // is a truthful read of `data.export`; missing pieces degrade to neutral empties.
 type EvidenceExportView = {
@@ -34,6 +54,8 @@ type EvidenceExportView = {
     coverage: EvidenceCoverage;
     controls: EvidenceControlView[];
     contentHash: string;
+    // Absent when the pack is unsigned (null/absent) — never a fabricated block.
+    signature?: EvidenceSignatureView;
 };
 
 // Loose result shapes (repo convention: strictNullChecks off, so no discriminated
@@ -109,12 +131,34 @@ function normalizeCoverage(value: unknown): EvidenceCoverage {
     };
 }
 
+// A signature block is only meaningful with both a signature and the hash it
+// covers; a partial/absent block degrades to undefined ("unsigned"), never to a
+// fabricated invalid-tampered scream.
+function normalizeSignature(value: unknown): EvidenceSignatureView {
+    const obj = asObject(value);
+    if (obj == null) {
+        return undefined;
+    }
+    const signature = stringOr(obj.signature, "");
+    const signedContentHash = stringOr(obj.signedContentHash, "");
+    if (signature == "" || signedContentHash == "") {
+        return undefined;
+    }
+    return {
+        algorithm: stringOr(obj.algorithm, ""),
+        publicKeyPem: stringOr(obj.publicKeyPem, ""),
+        signedContentHash,
+        signature,
+        signedAt: stringOr(obj.signedAt, ""),
+    };
+}
+
 // Project `data.export` into the panel view. `subject` carries the merge facts;
 // `evidenceIntegrity.verified` is read strictly (only a real `true` is verified).
 function parseEvidenceExport(data: Record<string, unknown>): EvidenceExportView {
     const subject = asObject(data.subject) ?? {};
     const integrity = asObject(data.evidenceIntegrity) ?? {};
-    return {
+    const view: EvidenceExportView = {
         schema: stringOr(data.schema, ""),
         generatedAt: stringOr(data.generatedAt, ""),
         taskGroup: stringOr(subject.taskGroup, ""),
@@ -125,6 +169,118 @@ function parseEvidenceExport(data: Record<string, unknown>): EvidenceExportView 
         controls: normalizeControls(data.controls),
         contentHash: stringOr(data.contentHash, ""),
     };
+    const signature = normalizeSignature(data.signature);
+    if (signature != null) {
+        view.signature = signature;
+    }
+    return view;
+}
+
+// Pure, no-crypto trust derivation — ALWAYS run. A missing signature is unsigned;
+// a signature that covers a different hash than the pack carries is invalid
+// (tampered) with NO crypto needed; otherwise it is present-and-hash-matched
+// ("signed"), which is NOT a claim that the crypto was checked.
+function deriveSignatureStatus(view: EvidenceExportView): SignatureState {
+    const sig = view.signature;
+    if (sig == null) {
+        return { status: "unsigned", reason: "" };
+    }
+    if (sig.signedContentHash != view.contentHash) {
+        return { status: "invalid", reason: "signature covers a different contentHash than the pack — tampered" };
+    }
+    return { status: "signed", reason: "" };
+}
+
+// Returns a plain ArrayBuffer (not a Uint8Array<ArrayBufferLike>) so it satisfies
+// WebCrypto's BufferSource without a cast. Null on non-PEM/decoding failure.
+function pemToDer(pem: string): ArrayBuffer {
+    try {
+        const body = (pem ?? "").replace(/-----BEGIN [^-]+-----/g, "").replace(/-----END [^-]+-----/g, "");
+        if (body.trim() == "") {
+            return null;
+        }
+        return base64ToArrayBuffer(body);
+    } catch {
+        return null;
+    }
+}
+
+function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+    let hex = "";
+    for (const b of bytes) {
+        hex += b.toString(16).padStart(2, "0");
+    }
+    return hex;
+}
+
+// Real WebCrypto Ed25519 verify. Returns true (cryptographically verified), false
+// (verify failed → tampered), or null (this environment can't verify Ed25519 —
+// NOT the same as invalid). The message is the UTF-8 bytes of signedContentHash,
+// matching the backend's `Buffer.from(contentHash)`. Never throws.
+async function cryptoVerifyEd25519(sig: EvidenceSignatureView): Promise<boolean> {
+    const subtle = globalThis.crypto?.subtle;
+    if (subtle == null || sig.algorithm != "ed25519") {
+        return null;
+    }
+    try {
+        const der = pemToDer(sig.publicKeyPem);
+        if (der == null) {
+            return null;
+        }
+        const signatureBytes = base64ToArrayBuffer(sig.signature);
+        const message = bytesToArrayBuffer(new TextEncoder().encode(sig.signedContentHash));
+        const key = await subtle.importKey("spki", der, { name: "Ed25519" }, false, ["verify"]);
+        return await subtle.verify({ name: "Ed25519" }, key, signatureBytes, message);
+    } catch {
+        return null;
+    }
+}
+
+// Combine the pure baseline with an (injectable) crypto verify. A `signed`
+// baseline is upgraded to `verified` ONLY on a real true, downgraded to `invalid`
+// ONLY on a real false; an unavailable verifier (null / throw) STAYS `signed` —
+// an environment that can't verify is never conflated with a bad signature.
+async function deriveVerifiedSignature(
+    view: EvidenceExportView,
+    verify: (sig: EvidenceSignatureView) => Promise<boolean>
+): Promise<SignatureState> {
+    const baseline = deriveSignatureStatus(view);
+    if (baseline.status != "signed") {
+        return baseline;
+    }
+    try {
+        const result = await verify(view.signature);
+        if (result === true) {
+            return { status: "verified", reason: "" };
+        }
+        if (result === false) {
+            return { status: "invalid", reason: "Ed25519 signature did not verify against the embedded public key" };
+        }
+        return baseline;
+    } catch {
+        return baseline;
+    }
+}
+
+// SHA-256 fingerprint of the signer's SPKI public key, first 12 hex — an auditor
+// matches it against the published org key. Degrade-safe: "" when crypto/key is
+// unavailable (never a fabricated fingerprint).
+async function signaturePublicKeyFingerprint(pem: string): Promise<string> {
+    const subtle = globalThis.crypto?.subtle;
+    const der = pemToDer(pem);
+    if (subtle == null || der == null) {
+        return "";
+    }
+    try {
+        const digest = await subtle.digest("SHA-256", der);
+        return bytesToHex(new Uint8Array(digest)).slice(0, 12);
+    } catch {
+        return "";
+    }
 }
 
 // GET the JSON compliance export for a merged workspace. Degrade-safe: a 404 is the
@@ -213,16 +369,23 @@ function triggerTextDownload(filename: string, content: string, mime: string): v
 }
 
 export {
+    cryptoVerifyEd25519,
+    deriveSignatureStatus,
+    deriveVerifiedSignature,
     evidenceFilename,
     fetchEvidenceExport,
     fetchEvidenceMarkdown,
     normalizeStatus,
     parseEvidenceExport,
+    signaturePublicKeyFingerprint,
     triggerTextDownload,
     type EvidenceControlView,
     type EvidenceCoverage,
     type EvidenceExportResult,
     type EvidenceExportView,
     type EvidenceMarkdownResult,
+    type EvidenceSignatureView,
     type EvidenceStatus,
+    type SignatureState,
+    type SignatureStatus,
 };

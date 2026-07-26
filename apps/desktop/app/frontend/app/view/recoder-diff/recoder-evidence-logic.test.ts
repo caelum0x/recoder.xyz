@@ -4,10 +4,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+    deriveSignatureStatus,
+    deriveVerifiedSignature,
     fetchEvidenceExport,
     fetchEvidenceMarkdown,
     normalizeStatus,
     parseEvidenceExport,
+    signaturePublicKeyFingerprint,
+    type EvidenceExportView,
+    type EvidenceSignatureView,
 } from "./recoder-evidence-logic";
 
 function mockFetchOnce(body: unknown, status = 200, asText = false): void {
@@ -151,6 +156,102 @@ describe("fetchEvidenceExport — envelope unwrap + truthful 404", () => {
         expect(result.ok).toBe(false);
         expect(result.noEvidence).toBeUndefined();
         expect(result.error).toBe("backend degraded");
+    });
+});
+
+const SIGNATURE = {
+    algorithm: "ed25519",
+    publicKeyPem: "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAGb9ECWmEzf6FQbrBZ9w7lshQhqowtrbLDFw4rXAxZuE=\n-----END PUBLIC KEY-----\n",
+    signedContentHash: "sha256:pack",
+    signature: "c2lnbmF0dXJlLWJ5dGVz",
+    signedAt: "2026-07-26T00:00:00Z",
+};
+
+function signedView(overrides?: Partial<EvidenceSignatureView>): EvidenceExportView {
+    return parseEvidenceExport({ ...FULL_EXPORT, signature: { ...SIGNATURE, ...overrides } });
+}
+
+describe("parseEvidenceExport — signature block (additive, tolerant)", () => {
+    it("reads a present signature block", () => {
+        const view = parseEvidenceExport({ ...FULL_EXPORT, signature: SIGNATURE });
+        expect(view.signature).toEqual({
+            algorithm: "ed25519",
+            publicKeyPem: SIGNATURE.publicKeyPem,
+            signedContentHash: "sha256:pack",
+            signature: "c2lnbmF0dXJlLWJ5dGVz",
+            signedAt: "2026-07-26T00:00:00Z",
+        });
+    });
+
+    it("omits the block when absent, null, or missing the signature/hash (unsigned, not faked)", () => {
+        expect(parseEvidenceExport(FULL_EXPORT).signature).toBeUndefined();
+        expect(parseEvidenceExport({ ...FULL_EXPORT, signature: null }).signature).toBeUndefined();
+        expect(parseEvidenceExport({ ...FULL_EXPORT, signature: { algorithm: "ed25519" } }).signature).toBeUndefined();
+    });
+});
+
+describe("deriveSignatureStatus — pure hash-match trust (no crypto)", () => {
+    it("unsigned when there is no signature", () => {
+        expect(deriveSignatureStatus(parseEvidenceExport(FULL_EXPORT))).toEqual({ status: "unsigned", reason: "" });
+    });
+
+    it("signed when present and the signed hash matches the pack contentHash", () => {
+        expect(deriveSignatureStatus(signedView())).toEqual({ status: "signed", reason: "" });
+    });
+
+    it("invalid (tampered) when the signed hash differs from the pack contentHash — no crypto needed", () => {
+        const state = deriveSignatureStatus(signedView({ signedContentHash: "sha256:OTHER" }));
+        expect(state.status).toBe("invalid");
+        expect(state.reason).toContain("different contentHash");
+    });
+});
+
+describe("deriveVerifiedSignature — truthful crypto upgrade (injected verifier)", () => {
+    it("upgrades signed → verified only on a real true", async () => {
+        const state = await deriveVerifiedSignature(signedView(), async () => true);
+        expect(state).toEqual({ status: "verified", reason: "" });
+    });
+
+    it("downgrades signed → invalid on a real false (tampered)", async () => {
+        const state = await deriveVerifiedSignature(signedView(), async () => false);
+        expect(state.status).toBe("invalid");
+        expect(state.reason).toContain("did not verify");
+    });
+
+    it("STAYS signed when the verifier is unavailable (null) — never faked, never downgraded", async () => {
+        const state = await deriveVerifiedSignature(signedView(), async () => null);
+        expect(state).toEqual({ status: "signed", reason: "" });
+    });
+
+    it("STAYS signed when the verifier throws — never throws into render", async () => {
+        const state = await deriveVerifiedSignature(signedView(), async () => {
+            throw new Error("crypto exploded");
+        });
+        expect(state).toEqual({ status: "signed", reason: "" });
+    });
+
+    it("never runs crypto for a hash-mismatch: invalid stays invalid regardless of verifier", async () => {
+        let called = false;
+        const state = await deriveVerifiedSignature(signedView({ signedContentHash: "sha256:OTHER" }), async () => {
+            called = true;
+            return true;
+        });
+        expect(state.status).toBe("invalid");
+        expect(called).toBe(false);
+    });
+});
+
+describe("signaturePublicKeyFingerprint — stable, env-tolerant", () => {
+    it("is deterministic and either a 12-hex digest or empty when crypto is unavailable", async () => {
+        const fp1 = await signaturePublicKeyFingerprint(SIGNATURE.publicKeyPem);
+        const fp2 = await signaturePublicKeyFingerprint(SIGNATURE.publicKeyPem);
+        expect(fp1).toBe(fp2);
+        expect(fp1).toMatch(/^[0-9a-f]{0,12}$/);
+    });
+
+    it("returns empty for a non-PEM input (never a fabricated fingerprint)", async () => {
+        expect(await signaturePublicKeyFingerprint("")).toBe("");
+        expect(await signaturePublicKeyFingerprint("not a pem")).toBe("");
     });
 });
 
