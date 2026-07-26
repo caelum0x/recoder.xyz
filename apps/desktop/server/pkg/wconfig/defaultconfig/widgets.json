@@ -9,6 +9,16 @@
             }
         }
     },
+    "defwidget@recoder-board": {
+        "display:order": -5.5,
+        "icon": "clipboard-list",
+        "label": "board",
+        "blockdef": {
+            "meta": {
+                "view": "recoder-board"
+            }
+        }
+    },
     "defwidget@recoder-approvals": {
         "display:order": -5.2,
         "icon": "shield-halved",

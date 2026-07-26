@@ -23,7 +23,7 @@ import type { AgentOsRepositoryPort } from './ports/agent-os-repository.port.js'
 import type { RunEventBusPort } from './ports/run-event.port.js';
 import type { CoordinationAdmissionPort } from './ports/coordination-admission.port.js';
 import type { SquadConductorPort } from './ports/squad-autopilot.port.js';
-import type { SquadIssuePort } from './ports/squad-issue.port.js';
+import type { SquadIssuePort, SquadReadyIssue } from './ports/squad-issue.port.js';
 import type { SquadAutopilotService } from './services/squad-autopilot.service.js';
 import type { PolicyUpdatedListener } from './services/policy-update.emitter.js';
 import type { AgentOsDeps } from './types.js';
@@ -83,6 +83,12 @@ export interface AgentOsModule {
    * agent-os). No-op (logged) when the autopilot is off.
    */
   attachIssueGraph(port: SquadIssuePort): void;
+  /**
+   * The unblocked open work (`bd ready --json`) the desktop Board picks up from,
+   * read straight off the late-bound issue-graph seam (independent of squads).
+   * Degrade-truthful: `[]` when no seam is attached or the graph is down.
+   */
+  readyIssues(): Promise<readonly SquadReadyIssue[]>;
   /**
    * Register a `policy.updated` listener (§4c). Fired when a forbidden/secret-path
    * or approval policy artifact changes (a space upsert / policy PUT); bootstrap
