@@ -1,5 +1,14 @@
 # Recoder Desktop — Architecture, State, Flaws, Rules & Plan
 
+> **⚠️ STALE (as of 2026-07-26) — most gaps below are FIXED.** Verified against
+> current code: the sign-in wall is gone (cockpit torn down; sign-in is an optional
+> offline-safe Wave-native affordance), Session/Approvals/Memory are wired and tested,
+> and the Board is now wired (`GET /api/agent-os/issues/ready` + observability
+> `/signals`, back in the rail). Remaining real gaps: arm64-only unsigned packaging,
+> dead-by-design engines (Lance/Python sidecars), and a few retired infra views still
+> block-registered (OSS-name scrub). See `docs/STATUS.md` for the current summary. The
+> analysis below is kept for provenance.
+
 Status date: 2026-07-24. Owner-facing single source of truth for the desktop
 app's UI. It exists because tabs were hidden/patched reactively without a written
 decision — that was wrong. Every hide/fix decision is recorded here now.
