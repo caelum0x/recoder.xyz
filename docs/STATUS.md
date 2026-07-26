@@ -26,7 +26,7 @@ The finish line is a **3-step convergence loop**:
 | Area | State | Verdict |
 |---|---|---|
 | **Backend** (`backend/`) | ~90% | Greenfield 15-domain spine is real (old 12.8k-line monolith deleted). All 12 build phases wired; ~1,462 tests green **per docs** — not re-verified locally yet (see #22). `dist/` is stale. |
-| **Desktop** (`apps/desktop`) | ~70% | Core loop (launch N agents → diff → merge) works on arm64. Cockpit torn down. Gaps: arm64-only unsigned build, dead-by-design engines (Lance, Python sidecars), sign-in UI half-wired, Board/Session fragile. |
+| **Desktop** (`apps/desktop`) | ~80% | Core loop (launch N agents → diff → merge) + convergence/evidence all work on arm64. Cockpit torn down. Sign-in is now optional/offline-safe, Session/Approvals/Memory fixed, **Board wired** (task-driven pick-an-issue→launch). Remaining gaps: arm64-only unsigned build, dead-by-design engines (Lance, Python sidecars), a few retired infra views still registered (OSS-name scrub). `DESKTOP-UX-STATE-AND-PLAN.md` is stale — most gaps it lists shipped after its date. |
 | **Website** (`app/`) | ~90% | 110 pages + 169 API routes, live in prod. Now installs + builds cleanly from the monorepo (#22 fixed 2026-07-25 — full `next build` produces BUILD_ID + standalone). Remaining gaps: Phase A auth migration written-but-unrun, dual auth seams. |
 | **Convergence thesis** | step 1 of 3 | Parallel worktrees done; compare/converge partial; governed evidence-merge not yet shipped. |
 
