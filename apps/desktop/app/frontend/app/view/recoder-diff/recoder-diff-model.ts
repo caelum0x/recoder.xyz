@@ -54,6 +54,64 @@ type RecoderWorkspaceChecks = {
     checks?: RecoderCheckRow[];
 };
 
+// gh conclusions that mean the check actually failed. Single source of truth for
+// both the strip's red dot and the suggested-action logic.
+const FailedConclusions = new Set(["failure", "error", "timed_out", "startup_failure", "action_required", "cancelled"]);
+
+function isFailedConclusion(conclusion: string): boolean {
+    return FailedConclusions.has(conclusion.toLowerCase());
+}
+
+// The next step a reviewer should take, derived from the loaded PR/checks view.
+// Maps onto the Review surface's own controls (Create PR / Merge) or narrates a
+// blocking condition the reviewer must clear elsewhere (fix checks, address
+// feedback, resolve conflicts, wait). Distinct from the board's suggestNextAction:
+// this one HAS gh/PR data, so it can reason about mergeability and review state.
+type RecoderReviewActionId = "create-pr" | "merge" | "address-feedback" | "resolve-conflicts" | "wait";
+type RecoderReviewSuggestion = {
+    action: RecoderReviewActionId;
+    label: string;
+};
+
+// Pure. null ⇒ nothing actionable to suggest (checks not loaded, or gh/PR simply
+// unavailable for a benign reason like a local-only repo). Precedence is
+// deliberately blocking-first: conflicts and requested changes and failing checks
+// outrank "ready to merge" so a green subset never masks a real blocker.
+function suggestReviewAction(checks: RecoderWorkspaceChecks): RecoderReviewSuggestion | null {
+    if (checks == null) {
+        return null;
+    }
+    if (!checks.available) {
+        const reason = (checks.reason ?? "").toLowerCase();
+        if (reason.includes("no pull request") || reason.includes("no pr")) {
+            return { action: "create-pr", label: "No PR yet — create one to run checks and enable merge" };
+        }
+        return null;
+    }
+    const rows = checks.checks ?? [];
+    const mergeable = (checks.mergeable ?? "").toUpperCase();
+    const review = (checks.reviewDecision ?? "").toUpperCase();
+    if (mergeable == "CONFLICTING") {
+        return { action: "resolve-conflicts", label: "Merge conflicts — rebase or resolve before merging" };
+    }
+    if (review == "CHANGES_REQUESTED") {
+        return { action: "address-feedback", label: "Changes requested — address the review feedback" };
+    }
+    if (rows.some((row) => isFailedConclusion(row.conclusion))) {
+        return { action: "address-feedback", label: "Checks failing — fix them before merging" };
+    }
+    if (mergeable == "UNKNOWN" || rows.some((row) => row.status.toLowerCase() != "completed")) {
+        return { action: "wait", label: "Checks running — waiting for results" };
+    }
+    if (review == "REVIEW_REQUIRED") {
+        return { action: "wait", label: "Checks pass — waiting on required review" };
+    }
+    if (mergeable == "MERGEABLE") {
+        return { action: "merge", label: "Ready — checks pass, merge when you're set" };
+    }
+    return null;
+}
+
 // While any check is still running (or gh hasn't finished computing
 // mergeability) the strip would otherwise sit on a stale PENDING forever, since
 // the 6s refresh poll deliberately skips the gh-shelling checks edge. This lets
@@ -429,9 +487,13 @@ class RecoderDiffViewModel implements ViewModel {
 
 export {
     checksArePending,
+    isFailedConclusion,
     parseChecksData,
     RecoderDiffViewModel,
+    suggestReviewAction,
     type RecoderCheckRow,
+    type RecoderReviewActionId,
+    type RecoderReviewSuggestion,
     type RecoderWorkspace,
     type RecoderWorkspaceChecks,
     type RecoderWorkspaceDiff,

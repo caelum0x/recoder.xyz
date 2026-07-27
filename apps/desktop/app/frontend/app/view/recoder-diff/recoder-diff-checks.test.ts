@@ -14,7 +14,13 @@ vi.mock("./recoder-diff", () => ({
 
 import { globalStore } from "@/app/store/global";
 import { atom } from "jotai";
-import { checksArePending, parseChecksData, RecoderDiffViewModel } from "./recoder-diff-model";
+import {
+    checksArePending,
+    isFailedConclusion,
+    parseChecksData,
+    RecoderDiffViewModel,
+    suggestReviewAction,
+} from "./recoder-diff-model";
 
 const BaseUrl = "http://127.0.0.1:3100/api/conductor/workspaces";
 
@@ -87,6 +93,111 @@ describe("parseChecksData", () => {
     it("coerces non-string mergeable/reviewDecision and a missing checks array", () => {
         const parsed = parseChecksData({ available: true, mergeable: 7, reviewDecision: null });
         expect(parsed).toEqual({ available: true, mergeable: "", reviewDecision: "", checks: [] });
+    });
+});
+
+describe("isFailedConclusion", () => {
+    it("treats gh failure-family conclusions as failed, case-insensitively", () => {
+        for (const c of ["failure", "ERROR", "timed_out", "startup_failure", "action_required", "cancelled"]) {
+            expect(isFailedConclusion(c)).toBe(true);
+        }
+    });
+    it("treats success / neutral / empty as not failed", () => {
+        for (const c of ["success", "SUCCESS", "neutral", "skipped", ""]) {
+            expect(isFailedConclusion(c)).toBe(false);
+        }
+    });
+});
+
+describe("suggestReviewAction", () => {
+    it("suggests creating a PR when none exists yet", () => {
+        expect(
+            suggestReviewAction({ available: false, reason: "no pull request for the current branch" })
+        ).toEqual({ action: "create-pr", label: "No PR yet — create one to run checks and enable merge" });
+    });
+
+    it("suggests nothing for a benign unavailability (e.g. gh missing) or null", () => {
+        expect(suggestReviewAction(null)).toBe(null);
+        expect(suggestReviewAction({ available: false, reason: "gh CLI not found" })).toBe(null);
+    });
+
+    it("prioritizes merge conflicts over everything else", () => {
+        expect(
+            suggestReviewAction({
+                available: true,
+                mergeable: "CONFLICTING",
+                reviewDecision: "APPROVED",
+                checks: [{ name: "ci", status: "COMPLETED", conclusion: "SUCCESS" }],
+            })?.action
+        ).toBe("resolve-conflicts");
+    });
+
+    it("surfaces requested changes and failing checks as address-feedback", () => {
+        expect(
+            suggestReviewAction({
+                available: true,
+                mergeable: "MERGEABLE",
+                reviewDecision: "CHANGES_REQUESTED",
+                checks: [{ name: "ci", status: "COMPLETED", conclusion: "SUCCESS" }],
+            })?.action
+        ).toBe("address-feedback");
+        expect(
+            suggestReviewAction({
+                available: true,
+                mergeable: "MERGEABLE",
+                reviewDecision: "",
+                checks: [{ name: "ci", status: "COMPLETED", conclusion: "FAILURE" }],
+            })?.action
+        ).toBe("address-feedback");
+    });
+
+    it("waits while checks run or mergeability is still unknown", () => {
+        expect(
+            suggestReviewAction({
+                available: true,
+                mergeable: "MERGEABLE",
+                reviewDecision: "",
+                checks: [{ name: "ci", status: "IN_PROGRESS", conclusion: "" }],
+            })?.action
+        ).toBe("wait");
+        expect(
+            suggestReviewAction({
+                available: true,
+                mergeable: "UNKNOWN",
+                reviewDecision: "",
+                checks: [{ name: "ci", status: "COMPLETED", conclusion: "SUCCESS" }],
+            })?.action
+        ).toBe("wait");
+    });
+
+    it("waits on a required review even when checks are green", () => {
+        expect(
+            suggestReviewAction({
+                available: true,
+                mergeable: "MERGEABLE",
+                reviewDecision: "REVIEW_REQUIRED",
+                checks: [{ name: "ci", status: "COMPLETED", conclusion: "SUCCESS" }],
+            })?.action
+        ).toBe("wait");
+    });
+
+    it("suggests merge only when mergeable, reviewed/ungated, and checks pass", () => {
+        expect(
+            suggestReviewAction({
+                available: true,
+                mergeable: "MERGEABLE",
+                reviewDecision: "APPROVED",
+                checks: [{ name: "ci", status: "COMPLETED", conclusion: "SUCCESS" }],
+            })?.action
+        ).toBe("merge");
+        expect(
+            suggestReviewAction({
+                available: true,
+                mergeable: "MERGEABLE",
+                reviewDecision: "",
+                checks: [],
+            })?.action
+        ).toBe("merge");
     });
 });
 
