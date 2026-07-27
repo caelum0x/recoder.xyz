@@ -154,6 +154,7 @@ import {
 } from './services/repo-clone.service.js';
 import { PrChecksService, type WorkspaceChecksView } from './services/pr-checks.service.js';
 import { MergeabilityService, type MergeabilityView } from './services/mergeability.service.js';
+import { WorktreeStatusService } from './services/worktree-status.service.js';
 import { foldReadiness, type ReadinessView } from './services/readiness.service.js';
 import {
   assembleConvergenceEvidence,
@@ -312,6 +313,8 @@ export class ConductorComposer implements ConductorModule {
   private readonly repoClone: RepoCloneService;
   /** Read-only pre-merge conflict + base-divergence probe (git-native, degrade-truthful). */
   private readonly mergeability: MergeabilityService;
+  /** Read-only worktree open-work (uncommitted changes) probe (git-native, degrade-truthful). */
+  private readonly worktreeStatus: WorktreeStatusService;
   /**
    * OPTIONAL dmux LAYOUT-brain seam (F3 compare/parallel grid). Absent / dmux not
    * built ⇒ the compare read stays hint-less and `arrangeCompareGrid` returns a
@@ -375,6 +378,9 @@ export class ConductorComposer implements ConductorModule {
     // Read-only merge preflight over the SAME git seam (never throws; truthful
     // `available:false` when git/worktree/branch is absent — never a fake clean).
     this.mergeability = new MergeabilityService({ logger: this.log });
+    // Read-only worktree open-work probe over the SAME git seam (never throws;
+    // truthful `available:false` when git/worktree is absent — never a fake clean).
+    this.worktreeStatus = new WorktreeStatusService({ logger: this.log });
 
     const loggerPort = toLoggerPort(this.log);
 
@@ -1633,10 +1639,10 @@ export class ConductorComposer implements ConductorModule {
   }
 
   /**
-   * Fold the four merge-decision signals (lifecycle, mergeability, PR checks,
-   * preview verification) into ONE truthful read-model (`GET …/readiness`). PURE
-   * read: no gate, no audit, no mutation. Each of the four probes is settled
-   * INDEPENDENTLY via `Promise.allSettled`, so a rejected/hung probe degrades to
+   * Fold the five merge-decision signals (lifecycle, worktree open-work,
+   * mergeability, PR checks, preview verification) into ONE truthful read-model
+   * (`GET …/readiness`). PURE read: no gate, no audit, no mutation. Each probe is
+   * settled INDEPENDENTLY via `Promise.allSettled`, so a rejected/hung probe degrades to
    * an ABSENT input — the corresponding signal reports `'unknown'` and the edge
    * never 500s, never a fabricated pass. `state` is read from the already-fetched
    * workspace record (NOT the view probe), so lifecycle stays truthful even if the
@@ -1645,9 +1651,10 @@ export class ConductorComposer implements ConductorModule {
   async workspaceReadiness(workspaceId: string): Promise<ReadinessView> {
     const workspace = await this.engine.getWorkspace(workspaceId);
     if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
-    const [mergeR, prR, previewR, viewR] = await Promise.allSettled([
+    const [mergeR, prR, worktreeR, previewR, viewR] = await Promise.allSettled([
       this.mergeability.probe(workspace),
       this.prStatus.status(workspace),
+      this.worktreeStatus.probe(workspace),
       this.getPreviewVerification(workspaceId),
       this.buildWorkspaceView(workspace),
     ]);
@@ -1658,6 +1665,7 @@ export class ConductorComposer implements ConductorModule {
         : {}),
       ...(mergeR.status === 'fulfilled' ? { mergeability: mergeR.value } : {}),
       ...(prR.status === 'fulfilled' ? { prStatus: prR.value } : {}),
+      ...(worktreeR.status === 'fulfilled' ? { worktree: worktreeR.value } : {}),
       ...(previewR.status === 'fulfilled' ? { preview: previewR.value } : {}),
     });
   }

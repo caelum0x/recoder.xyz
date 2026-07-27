@@ -13,6 +13,7 @@ import type { WorkspaceState } from '@recoder/agent-os';
 import { foldReadiness, type ReadinessInput } from './readiness.service.js';
 import type { MergeabilityView } from './mergeability.service.js';
 import type { PrStatusView } from './pr-status.service.js';
+import type { WorktreeStatusView } from './worktree-status.service.js';
 import type { PreviewVerificationView } from '../ports/preview-verify.port.js';
 import {
   composeConductor,
@@ -96,6 +97,14 @@ function previewView(
     screenshotRef: null,
     ...overrides,
   };
+}
+
+function cleanWorktree(): WorktreeStatusView {
+  return { available: true, dirty: false, changedCount: 0 };
+}
+
+function dirtyWorktree(changedCount = 2): WorktreeStatusView {
+  return { available: true, dirty: true, changedCount };
 }
 
 const signalOf = (view: { signals: readonly { id: string; status: string }[] }, id: string) =>
@@ -236,13 +245,14 @@ describe('foldReadiness', () => {
     expect(signalOf(view, 'lifecycle')?.detail).toContain('still working');
   });
 
-  it('(i) all signals absent (running) → 4 unknown/pending signals, empty blockers, not_ready', () => {
+  it('(i) all signals absent (running) → 5 unknown/pending signals, empty blockers, not_ready', () => {
     const input: ReadinessInput = { state: 'running' as WorkspaceState };
     const view = foldReadiness(input);
     expect(view.verdict).toBe('not_ready');
     expect(view.blockers).toEqual([]);
-    expect(view.signals.map((s) => s.id)).toEqual(['lifecycle', 'merge', 'checks', 'preview']);
+    expect(view.signals.map((s) => s.id)).toEqual(['lifecycle', 'worktree', 'merge', 'checks', 'preview']);
     expect(signalOf(view, 'lifecycle')?.status).toBe('pending');
+    expect(signalOf(view, 'worktree')?.status).toBe('unknown');
     expect(signalOf(view, 'merge')?.status).toBe('unknown');
     expect(signalOf(view, 'checks')?.status).toBe('unknown');
     expect(signalOf(view, 'preview')?.status).toBe('unknown');
@@ -282,5 +292,48 @@ describe('workspaceReadiness edge (allSettled)', () => {
   it('missing workspace rejects with a not-found message (→ 404 at the edge)', async () => {
     const { module } = composeConductor({ substrates: [new FakeSubstrate()] });
     await expect(module.workspaceReadiness('ws_missing')).rejects.toThrow(/not found/);
+  });
+});
+
+describe('foldReadiness — worktree open-work signal', () => {
+  const base: ReadinessInput = {
+    state: 'awaiting_review' as WorkspaceState,
+    mergeability: cleanMerge(),
+    preview: previewView('passed'),
+  };
+
+  it('a clean worktree keeps a ready workspace ready and passes the signal', () => {
+    const view = foldReadiness({ ...base, worktree: cleanWorktree() });
+    expect(view.verdict).toBe('ready');
+    expect(signalOf(view, 'worktree')?.status).toBe('pass');
+  });
+
+  it('uncommitted work DISCOURAGES merge (not_ready, soft) without a hard blocker', () => {
+    const view = foldReadiness({ ...base, worktree: dirtyWorktree(3) });
+    expect(view.verdict).toBe('not_ready');
+    expect(view.blockers).toEqual([]);
+    expect(signalOf(view, 'worktree')?.status).toBe('pending');
+    expect(signalOf(view, 'worktree')?.detail).toContain('3 uncommitted');
+  });
+
+  it('an absent worktree probe is unknown and never downgrades a ready verdict', () => {
+    const view = foldReadiness(base);
+    expect(view.verdict).toBe('ready');
+    expect(signalOf(view, 'worktree')?.status).toBe('unknown');
+  });
+
+  it('a hard blocker still wins over a dirty worktree (blocked, not discouraged)', () => {
+    const view = foldReadiness({
+      state: 'awaiting_review' as WorkspaceState,
+      mergeability: conflictingMerge(['src/a.ts']),
+      worktree: dirtyWorktree(),
+    });
+    expect(view.verdict).toBe('blocked');
+    expect(view.blockers).toEqual(['src/a.ts']);
+  });
+
+  it('always emits exactly 5 signals in fixed order', () => {
+    const view = foldReadiness({ ...base, worktree: cleanWorktree() });
+    expect(view.signals.map((s) => s.id)).toEqual(['lifecycle', 'worktree', 'merge', 'checks', 'preview']);
   });
 });
