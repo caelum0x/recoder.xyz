@@ -109,12 +109,37 @@ function checkLabel(value: string): string {
     return value.toLowerCase().replace(/_/g, " ");
 }
 
-function ChecksStrip({ checks }: { checks: RecoderWorkspaceChecks }) {
+const REFRESH_LINK = "text-secondary/70 underline hover:text-secondary transition-colors cursor-pointer disabled:opacity-50 disabled:no-underline";
+
+function ChecksStrip({
+    checks,
+    loading,
+    onRefresh,
+}: {
+    checks: RecoderWorkspaceChecks;
+    loading: boolean;
+    onRefresh: () => void;
+}) {
+    // The manual affordance: the 6s poll skips gh, so while a user sits on one
+    // workspace watching CI this is how they pull a fresh result on demand.
+    const refreshBtn = (
+        <button className={REFRESH_LINK} disabled={loading} onClick={onRefresh} title="Re-check CI">
+            {loading ? "checking…" : "refresh"}
+        </button>
+    );
+    if (loading && checks == null) {
+        return <div className="flex items-center gap-2 text-xs text-secondary/70">{refreshBtn}</div>;
+    }
     if (checks == null) {
         return null;
     }
     if (!checks.available) {
-        return <div className="text-xs text-secondary/70">checks: {checks.reason || "unavailable"}</div>;
+        return (
+            <div className="flex items-center gap-2 text-xs text-secondary/70">
+                <span>checks: {checks.reason || "unavailable"}</span>
+                {refreshBtn}
+            </div>
+        );
     }
     const rows = checks.checks ?? [];
     return (
@@ -132,6 +157,7 @@ function ChecksStrip({ checks }: { checks: RecoderWorkspaceChecks }) {
                 </span>
             ))}
             {rows.length == 0 && <span>no checks reported</span>}
+            {refreshBtn}
         </div>
     );
 }
@@ -149,6 +175,7 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     const prCreating = useAtomValue(model.prCreatingAtom);
     const prStatus = useAtomValue(model.prStatusAtom);
     const checks = useAtomValue(model.checksAtom);
+    const checksLoading = useAtomValue(model.checksLoadingAtom);
 
     useEffect(() => {
         model.refresh();
@@ -188,7 +215,9 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                     </button>
                 )}
             </div>
-            {selectedId != "" && <ChecksStrip checks={checks} />}
+            {selectedId != "" && (
+                <ChecksStrip checks={checks} loading={checksLoading} onRefresh={() => model.refreshChecks()} />
+            )}
             {mergeStatus != "" && <div className="text-xs text-secondary">{mergeStatus}</div>}
             {prStatus != "" && <div className="text-xs text-secondary">{prStatus}</div>}
             {selectedId != "" && <EvidencePanel workspaceId={selectedId} />}

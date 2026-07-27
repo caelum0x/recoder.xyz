@@ -54,6 +54,26 @@ type RecoderWorkspaceChecks = {
     checks?: RecoderCheckRow[];
 };
 
+// While any check is still running (or gh hasn't finished computing
+// mergeability) the strip would otherwise sit on a stale PENDING forever, since
+// the 6s refresh poll deliberately skips the gh-shelling checks edge. This lets
+// refresh() re-probe on a slow cadence — but ONLY while genuinely pending.
+const CHECKS_REPOLL_MS = 45000;
+
+// True when the checks view has work still in flight: a not-yet-completed check
+// row, or a mergeability GitHub is still computing ("UNKNOWN"). A stable result
+// (all completed, mergeability known, or simply unavailable) is never pending,
+// so the slow re-poll stops the moment CI settles.
+function checksArePending(checks: RecoderWorkspaceChecks): boolean {
+    if (checks == null || !checks.available) {
+        return false;
+    }
+    if (typeof checks.mergeable == "string" && checks.mergeable.toUpperCase() == "UNKNOWN") {
+        return true;
+    }
+    return (checks.checks ?? []).some((row) => row.status.toLowerCase() != "completed");
+}
+
 // Coerce the checks payload into the view shape without ever trusting it.
 // Anything that isn't the documented shape degrades to a truthful
 // unavailable-with-reason, never a crash or a fabricated green.
@@ -117,6 +137,9 @@ class RecoderDiffViewModel implements ViewModel {
     // re-probing gh (the checks edge shells out per call) unless the selection
     // actually changed.
     checksWorkspaceId: string;
+    // Wall-clock of the last checks probe, so the pending re-poll fires at most
+    // once per CHECKS_REPOLL_MS instead of on every 6s tick.
+    checksProbedAtMs: number;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -138,6 +161,7 @@ class RecoderDiffViewModel implements ViewModel {
         this.checksAtom = atom(null) as PrimitiveAtom<RecoderWorkspaceChecks>;
         this.checksLoadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.checksWorkspaceId = "";
+        this.checksProbedAtMs = 0;
     }
 
     get viewComponent(): ViewComponent {
@@ -185,7 +209,28 @@ class RecoderDiffViewModel implements ViewModel {
             return;
         }
         const checksStale = this.checksWorkspaceId != selected;
-        await Promise.all([this.loadDiff(selected), checksStale ? this.fetchChecks(selected) : Promise.resolve()]);
+        // Re-probe gh on the slow cadence ONLY while checks are genuinely in
+        // flight, so a settled result never costs a gh call and a running one
+        // stops showing PENDING forever.
+        const repollDue =
+            !checksStale &&
+            checksArePending(globalStore.get(this.checksAtom)) &&
+            Date.now() - this.checksProbedAtMs >= CHECKS_REPOLL_MS;
+        await Promise.all([
+            this.loadDiff(selected),
+            checksStale || repollDue ? this.fetchChecks(selected) : Promise.resolve(),
+        ]);
+    }
+
+    // Explicit user-driven refresh of just the checks strip (the affordance in
+    // the Review view). Force-re-probes gh for the current selection; unlike the
+    // 6s poll this always fetches because the user asked for it.
+    async refreshChecks() {
+        const selected = globalStore.get(this.selectedIdAtom);
+        if (!selected) {
+            return;
+        }
+        await this.fetchChecks(selected);
     }
 
     async selectWorkspace(workspaceId: string) {
@@ -274,6 +319,7 @@ class RecoderDiffViewModel implements ViewModel {
             if (!current()) {
                 return;
             }
+            this.checksProbedAtMs = Date.now();
             globalStore.set(this.checksAtom, parseChecksData(body?.data));
         } catch {
             if (!current()) {
@@ -382,6 +428,7 @@ class RecoderDiffViewModel implements ViewModel {
 }
 
 export {
+    checksArePending,
     parseChecksData,
     RecoderDiffViewModel,
     type RecoderCheckRow,
