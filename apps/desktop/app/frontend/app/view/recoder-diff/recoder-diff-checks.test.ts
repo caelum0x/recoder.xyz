@@ -14,7 +14,7 @@ vi.mock("./recoder-diff", () => ({
 
 import { globalStore } from "@/app/store/global";
 import { atom } from "jotai";
-import { parseChecksData, RecoderDiffViewModel } from "./recoder-diff-model";
+import { checksArePending, parseChecksData, RecoderDiffViewModel } from "./recoder-diff-model";
 
 const BaseUrl = "http://127.0.0.1:3100/api/conductor/workspaces";
 
@@ -87,6 +87,152 @@ describe("parseChecksData", () => {
     it("coerces non-string mergeable/reviewDecision and a missing checks array", () => {
         const parsed = parseChecksData({ available: true, mergeable: 7, reviewDecision: null });
         expect(parsed).toEqual({ available: true, mergeable: "", reviewDecision: "", checks: [] });
+    });
+});
+
+describe("checksArePending", () => {
+    it("is false for null / unavailable / settled checks", () => {
+        expect(checksArePending(null)).toBe(false);
+        expect(checksArePending({ available: false, reason: "no pr" })).toBe(false);
+        expect(
+            checksArePending({
+                available: true,
+                mergeable: "MERGEABLE",
+                reviewDecision: "APPROVED",
+                checks: [{ name: "ci", status: "COMPLETED", conclusion: "SUCCESS" }],
+            })
+        ).toBe(false);
+    });
+
+    it("is false when available with no checks and a known mergeability", () => {
+        expect(checksArePending({ available: true, mergeable: "MERGEABLE", reviewDecision: "", checks: [] })).toBe(
+            false
+        );
+    });
+
+    it("is true while a check row is still running", () => {
+        expect(
+            checksArePending({
+                available: true,
+                mergeable: "MERGEABLE",
+                reviewDecision: "",
+                checks: [{ name: "ci", status: "IN_PROGRESS", conclusion: "" }],
+            })
+        ).toBe(true);
+    });
+
+    it("is true while GitHub is still computing mergeability", () => {
+        expect(
+            checksArePending({
+                available: true,
+                mergeable: "UNKNOWN",
+                reviewDecision: "",
+                checks: [{ name: "ci", status: "COMPLETED", conclusion: "SUCCESS" }],
+            })
+        ).toBe(true);
+    });
+});
+
+describe("RecoderDiffViewModel.refreshChecks", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("force-re-probes checks for the current selection", async () => {
+        const fetchMock = vi
+            .fn()
+            .mockImplementation(() => okJson({ available: true, mergeable: "MERGEABLE", reviewDecision: "", checks: [] }));
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        globalStore.set(model.selectedIdAtom, "ws-1");
+        await model.refreshChecks();
+
+        expect(fetchMock).toHaveBeenCalledWith(`${BaseUrl}/ws-1/checks`);
+        expect(model.checksWorkspaceId).toBe("ws-1");
+    });
+
+    it("is a no-op with no selection (never shells out to gh)", async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        globalStore.set(model.selectedIdAtom, "");
+        await model.refreshChecks();
+
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("RecoderDiffViewModel.refresh checks re-poll", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    function routeFetch(checksData: unknown) {
+        return vi.fn().mockImplementation((url: string) => {
+            if (url.endsWith("/checks")) {
+                return okJson(checksData);
+            }
+            if (url.endsWith("/diff")) {
+                return okJson({
+                    workspaceId: "ws-1",
+                    baseRef: "main",
+                    branch: "b",
+                    stat: "",
+                    patch: "",
+                    untracked: [],
+                    changedFiles: 0,
+                });
+            }
+            return okJson({ workspaces: [{ workspaceId: "ws-1", branch: "b", state: "running", runtimeId: "r" }] });
+        });
+    }
+
+    function countChecks(fetchMock: ReturnType<typeof vi.fn>): number {
+        return fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/checks")).length;
+    }
+
+    it("re-probes pending checks only after the interval, never on every tick", async () => {
+        const fetchMock = routeFetch({
+            available: true,
+            mergeable: "MERGEABLE",
+            reviewDecision: "",
+            checks: [{ name: "ci", status: "IN_PROGRESS", conclusion: "" }],
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        await model.refresh();
+        expect(countChecks(fetchMock)).toBe(1);
+
+        // Just probed → the next 6s tick must NOT shell out to gh again.
+        model.checksProbedAtMs = Date.now();
+        await model.refresh();
+        expect(countChecks(fetchMock)).toBe(1);
+
+        // Interval elapsed and still pending → one re-probe.
+        model.checksProbedAtMs = 0;
+        await model.refresh();
+        expect(countChecks(fetchMock)).toBe(2);
+    });
+
+    it("stops re-probing once checks have settled, even after the interval", async () => {
+        const fetchMock = routeFetch({
+            available: true,
+            mergeable: "MERGEABLE",
+            reviewDecision: "APPROVED",
+            checks: [{ name: "ci", status: "COMPLETED", conclusion: "SUCCESS" }],
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        await model.refresh();
+        expect(countChecks(fetchMock)).toBe(1);
+
+        model.checksProbedAtMs = 0;
+        await model.refresh();
+        expect(countChecks(fetchMock)).toBe(1);
     });
 });
 
