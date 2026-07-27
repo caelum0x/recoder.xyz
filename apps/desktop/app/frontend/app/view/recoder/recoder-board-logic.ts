@@ -263,16 +263,17 @@ type MergeabilityView = {
     reason?: string;
 };
 
-// One of the four merge-decision signals, in fixed order. `unknown` is a real
-// value (we could not judge) — never coerced to a pass.
+// One of the five merge-decision signals, in fixed order. `unknown` is a real
+// value (we could not judge) — never coerced to a pass. `worktree` reports
+// uncommitted open work: it is `pending` (discouraged) when the worktree is dirty.
 type ReadinessSignal = {
-    id: "lifecycle" | "merge" | "checks" | "preview";
+    id: "lifecycle" | "worktree" | "merge" | "checks" | "preview";
     status: "pass" | "fail" | "pending" | "unknown";
     detail: string;
 };
 
 // The folded merge-readiness read-model. `ready` is the hardest gate; `signals`
-// is ALWAYS 4, in order: lifecycle, merge, checks, preview.
+// is ALWAYS 5, in order: lifecycle, worktree, merge, checks, preview.
 type ReadinessView = {
     verdict: "ready" | "blocked" | "not_ready" | "unknown" | "delivered" | "terminal";
     signals: ReadinessSignal[];
