@@ -21,11 +21,12 @@ import type { WorkspaceState } from '@recoder/agent-os';
 import type { AttentionState } from '../types.js';
 import type { MergeabilityView } from './mergeability.service.js';
 import type { PrStatusView } from './pr-status.service.js';
+import type { WorktreeStatusView } from './worktree-status.service.js';
 import type { PreviewVerificationView } from '../ports/preview-verify.port.js';
 
-/** One of the four merge-decision signals, projected truthfully. */
+/** One of the five merge-decision signals, projected truthfully. */
 export interface ReadinessSignal {
-  readonly id: 'lifecycle' | 'merge' | 'checks' | 'preview';
+  readonly id: 'lifecycle' | 'worktree' | 'merge' | 'checks' | 'preview';
   /** `'unknown'` is a real value (we could not judge) — never coerced to a pass. */
   readonly status: 'pass' | 'fail' | 'pending' | 'unknown';
   readonly detail: string;
@@ -40,7 +41,7 @@ export interface ReadinessView {
    * to `'not_ready'` with an "agent still working" detail.
    */
   readonly verdict: 'ready' | 'blocked' | 'not_ready' | 'unknown' | 'delivered' | 'terminal';
-  /** ALWAYS 4 signals, fixed order: lifecycle, merge, checks, preview. */
+  /** ALWAYS 5 signals, fixed order: lifecycle, worktree, merge, checks, preview. */
   readonly signals: readonly ReadinessSignal[];
   /** Populated ONLY on hard blockers (a real merge conflict or a failing check). */
   readonly blockers: readonly string[];
@@ -53,6 +54,8 @@ export interface ReadinessInput {
   /** Absent ⇒ the merge probe rejected / was unavailable. */
   readonly mergeability?: MergeabilityView;
   readonly prStatus?: PrStatusView;
+  /** Absent ⇒ the worktree-status probe rejected / was unavailable. */
+  readonly worktree?: WorktreeStatusView;
   /** `null` ⇒ never verified; absent ⇒ the probe rejected. */
   readonly preview?: PreviewVerificationView | null;
 }
@@ -107,6 +110,26 @@ function deriveLifecycle(state: WorkspaceState, lifecycleClass: LifecycleClass):
     default:
       return { id: 'lifecycle', status: 'pending', detail: `agent still working (state '${state}')` };
   }
+}
+
+/**
+ * Worktree signal — a clean worktree passes; UNCOMMITTED work is `'pending'` (open
+ * work: it DISCOURAGES a merge without hard-blocking it, since the merge operates
+ * on committed state); an unavailable probe is `'unknown'`, never a fabricated
+ * clean pass.
+ */
+function deriveWorktree(worktree?: WorktreeStatusView): ReadinessSignal {
+  if (!worktree || worktree.available === false) {
+    return { id: 'worktree', status: 'unknown', detail: worktree?.reason ?? 'worktree status unavailable' };
+  }
+  if (worktree.dirty) {
+    return {
+      id: 'worktree',
+      status: 'pending',
+      detail: `${worktree.changedCount} uncommitted change(s) — commit before merging`,
+    };
+  }
+  return { id: 'worktree', status: 'pass', detail: 'worktree clean' };
 }
 
 /** Merge signal — NEVER a pass on an unavailable/unknown preflight (the truthful degrade). */
@@ -223,7 +246,10 @@ function deriveBlockers(
  *   3. failed ⇒ BLOCKED (a real delivery failure, not "still working");
  *   4. a hard merge conflict OR a failing check ⇒ BLOCKED (with the blockers);
  *   5. else still pre-review (working) ⇒ NOT_READY (the agent is still working);
- *   6. else merge is a real clean pass AND preview is not a hard fail ⇒ READY;
+ *   6. else merge is a real clean pass AND preview is not a hard fail:
+ *        a. the worktree has uncommitted OPEN WORK ⇒ NOT_READY (discouraged —
+ *           a soft downgrade so committed-state merge never silently drops it);
+ *        b. else ⇒ READY;
  *   7. else the merge signal is unknown ⇒ UNKNOWN (crux gate unjudgeable, no
  *      hard blocker — we could not judge, so we say so, never a blind green);
  *   8. else ⇒ NOT_READY (review-terminal + clean merge, but a hard preview fail —
@@ -232,10 +258,11 @@ function deriveBlockers(
 export function foldReadiness(input: ReadinessInput): ReadinessView {
   const lifecycleClass = classifyLifecycle(input.state, input.attention);
   const lifecycle = deriveLifecycle(input.state, lifecycleClass);
+  const worktree = deriveWorktree(input.worktree);
   const merge = deriveMerge(input.mergeability);
   const checks = deriveChecks(input.prStatus);
   const preview = derivePreview(input.preview);
-  const signals: readonly ReadinessSignal[] = [lifecycle, merge, checks, preview];
+  const signals: readonly ReadinessSignal[] = [lifecycle, worktree, merge, checks, preview];
 
   // Delivered/closed states are decided by lifecycle truth BEFORE the merge/checks
   // fold: an already-merged or closed workspace is never reported as blocked or
@@ -257,6 +284,13 @@ export function foldReadiness(input: ReadinessInput): ReadinessView {
     return { verdict: 'not_ready', signals, blockers: [] };
   }
   if (merge.status === 'pass' && preview.status !== 'fail') {
+    // Open (uncommitted) work DISCOURAGES a merge: the merge operates on committed
+    // state, so a dirty worktree would silently drop the agent's unstaged changes.
+    // This is a soft downgrade to not_ready, NOT a hard blocker — the reviewer can
+    // still merge, but the panel tells the truth that work is uncommitted.
+    if (worktree.status === 'pending') {
+      return { verdict: 'not_ready', signals, blockers: [] };
+    }
     return { verdict: 'ready', signals, blockers: [] };
   }
   if (merge.status === 'unknown') {
