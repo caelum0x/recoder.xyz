@@ -13,6 +13,7 @@ import {
     formatRelativeAge,
     groupByTaskGroup,
     isTerminalWorkspaceState,
+    suggestNextAction,
     workspaceStateMap,
     TASK_GROUP_METADATA_KEY,
     type ContestedFile,
@@ -575,5 +576,43 @@ describe("detectAttentionTransitions", () => {
         ]);
         const events = detectAttentionTransitions(prev, [review, dead, quiet], none);
         expect(events.map((e) => e.kind).sort()).toEqual(["failed", "review"]);
+    });
+});
+
+describe("suggestNextAction", () => {
+    const withChanges = { additions: 12, deletions: 3, files: 2 };
+    const noChanges = { additions: 0, deletions: 0, files: 0 };
+
+    it("suggests reviewing an awaiting_review workspace that has changes", () => {
+        expect(suggestNextAction("awaiting_review", withChanges, true)).toEqual({
+            action: "review",
+            label: "Ready — review the changes",
+        });
+    });
+
+    it("suggests archiving an awaiting_review workspace with nothing to merge", () => {
+        expect(suggestNextAction("awaiting_review", noChanges, true)?.action).toBe("archive");
+        expect(suggestNextAction("awaiting_review", undefined, true)?.action).toBe("archive");
+    });
+
+    it("suggests archiving a merged workspace to clear the board", () => {
+        expect(suggestNextAction("merged", withChanges, false)?.action).toBe("archive");
+    });
+
+    it("never points a failed row at its hidden Session button", () => {
+        // failed is terminal, so Session is not rendered — suggestion must be
+        // review (if it left changes) or archive, never session.
+        expect(suggestNextAction("failed", withChanges, true)?.action).toBe("review");
+        expect(suggestNextAction("failed", noChanges, true)?.action).toBe("archive");
+    });
+
+    it("suggests watching a running workspace only when it has a live session", () => {
+        expect(suggestNextAction("running", withChanges, true)?.action).toBe("session");
+        expect(suggestNextAction("running", withChanges, false)).toBe(null);
+    });
+
+    it("suggests nothing for archived or unknown states (degrade-safe)", () => {
+        expect(suggestNextAction("archived", withChanges, true)).toBe(null);
+        expect(suggestNextAction("some_future_state", withChanges, true)).toBe(null);
     });
 });

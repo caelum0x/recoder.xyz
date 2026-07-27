@@ -15,8 +15,11 @@ import {
     formatRelativeAge,
     isTerminalWorkspaceState,
     RecoderViewModel,
+    suggestNextAction,
     type RecoderBoardShow,
     type RecoderDiffSummary,
+    type RecoderRowActionId,
+    type RecoderRowSuggestion,
     type RecoderWorkspace,
 } from "./recoder-model";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
@@ -122,6 +125,11 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
     }, [selected]);
     const terminal = isTerminalWorkspaceState(ws.state);
     const age = formatRelativeAge(ws.createdAt);
+    const suggestion = suggestNextAction(ws.state, summary, ws.sessionName != null && ws.sessionName != "");
+    // Promote exactly one existing button to primary when it IS the suggested next
+    // step; every other button stays quiet. Never invents an action.
+    const btnClass = (action: RecoderRowActionId): string =>
+        suggestion != null && suggestion.action == action && !busy ? PRIMARY_BTN : QUIET_BTN;
     return (
         <div
             ref={ref}
@@ -143,7 +151,7 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
                 <span className={`${META} ml-auto`}>{agentLabel(ws.runtimeId)}</span>
                 {age != "" && <span className={META}>{age}</span>}
                 {!terminal && (
-                    <button className={QUIET_BTN} onClick={() => openSession(ws.workspaceId)}>
+                    <button className={btnClass("session")} onClick={() => openSession(ws.workspaceId)}>
                         Session
                     </button>
                 )}
@@ -152,12 +160,12 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
                         Terminal
                     </button>
                 )}
-                <button className={QUIET_BTN} onClick={() => openReview(ws.workspaceId)}>
+                <button className={btnClass("review")} onClick={() => openReview(ws.workspaceId)}>
                     Review
                 </button>
                 {!terminal && (
                     <button
-                        className={QUIET_BTN}
+                        className={btnClass("merge")}
                         disabled={busy || ws.state != "awaiting_review"}
                         title={ws.state != "awaiting_review" ? "Review first to enable merge" : undefined}
                         onClick={() => model.mergeWorkspace(ws.workspaceId)}
@@ -166,11 +174,17 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
                     </button>
                 )}
                 {ws.state != "archived" && (
-                    <button className={QUIET_BTN} disabled={busy} onClick={() => model.archiveWorkspace(ws.workspaceId)}>
+                    <button className={btnClass("archive")} disabled={busy} onClick={() => model.archiveWorkspace(ws.workspaceId)}>
                         Archive
                     </button>
                 )}
             </div>
+            {suggestion != null && (
+                <div className={`${META} flex items-center gap-1.5`}>
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent/70 shrink-0" />
+                    <span>{suggestion.label}</span>
+                </div>
+            )}
             {status && <div className={META}>{status}</div>}
         </div>
     );

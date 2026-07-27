@@ -5,7 +5,14 @@ import { RecoderEmpty, RecoderSkeleton } from "@/app/view/recoder/recoder-states
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
-import { RecoderDiffViewModel, type RecoderCheckRow, type RecoderWorkspaceChecks } from "./recoder-diff-model";
+import {
+    isFailedConclusion,
+    RecoderDiffViewModel,
+    suggestReviewAction,
+    type RecoderCheckRow,
+    type RecoderReviewActionId,
+    type RecoderWorkspaceChecks,
+} from "./recoder-diff-model";
 import { EvidencePanel } from "./recoder-evidence-panel";
 
 const REFRESH_MS = 6000;
@@ -91,12 +98,8 @@ function DiffBody({ patch }: { patch: string }) {
     );
 }
 
-// gh conclusions that mean the check actually failed — the ONLY places red
-// appears in the strip; everything else stays graphite.
-const FailedConclusions = new Set(["failure", "error", "timed_out", "startup_failure", "action_required", "cancelled"]);
-
 function checkDotClass(row: RecoderCheckRow): string {
-    if (FailedConclusions.has(row.conclusion.toLowerCase())) {
+    if (isFailedConclusion(row.conclusion)) {
         return "bg-error";
     }
     if (row.status.toLowerCase() != "completed") {
@@ -187,6 +190,13 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     const showNoWorkspaces = !loading && connected && workspaces.length == 0;
     const hasPatch = diff != null && diff.patch != null && diff.patch.trim() != "";
 
+    // Checks-driven next step. Promotes exactly one header button when it IS the
+    // suggested action; with no suggestion, Merge keeps its default primary (the
+    // review→merge close) so the header never looks unowned.
+    const reviewSuggestion = suggestReviewAction(checks);
+    const reviewBtnClass = (action: RecoderReviewActionId): string =>
+        reviewSuggestion != null && reviewSuggestion.action == action ? PRIMARY_BTN : QUIET_BTN;
+
     return (
         <div className="flex flex-col h-full overflow-hidden p-3 gap-2">
             <div className="flex items-center gap-2">
@@ -205,18 +215,28 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                     </select>
                 )}
                 {selectedId != "" && (
-                    <button className={PRIMARY_BTN} disabled={merging} onClick={() => model.mergeSelected()}>
+                    <button
+                        className={reviewSuggestion != null ? reviewBtnClass("merge") : PRIMARY_BTN}
+                        disabled={merging}
+                        onClick={() => model.mergeSelected()}
+                    >
                         {merging ? "Merging…" : "Merge"}
                     </button>
                 )}
                 {selectedId != "" && (
-                    <button className={QUIET_BTN} disabled={prCreating} onClick={() => model.createPr()}>
+                    <button className={reviewBtnClass("create-pr")} disabled={prCreating} onClick={() => model.createPr()}>
                         {prCreating ? "Creating PR…" : "Create PR"}
                     </button>
                 )}
             </div>
             {selectedId != "" && (
                 <ChecksStrip checks={checks} loading={checksLoading} onRefresh={() => model.refreshChecks()} />
+            )}
+            {selectedId != "" && reviewSuggestion != null && (
+                <div className="flex items-center gap-1.5 text-xs text-secondary">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent/70 shrink-0" />
+                    <span>{reviewSuggestion.label}</span>
+                </div>
             )}
             {mergeStatus != "" && <div className="text-xs text-secondary">{mergeStatus}</div>}
             {prStatus != "" && <div className="text-xs text-secondary">{prStatus}</div>}

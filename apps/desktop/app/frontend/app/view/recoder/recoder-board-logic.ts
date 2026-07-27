@@ -375,6 +375,50 @@ function isTerminalWorkspaceState(state: string): boolean {
     return state == "archived" || state == "failed";
 }
 
+// The one existing board action a row should PROMOTE as the workspace moves
+// toward a merge. Maps 1:1 onto a button already rendered by WorkspaceRow, so a
+// suggestion never invents a new capability — it only highlights the next step.
+type RecoderRowActionId = "review" | "merge" | "session" | "archive";
+type RecoderRowSuggestion = {
+    action: RecoderRowActionId;
+    label: string;
+};
+
+// Pure: the single most useful next step for a workspace, derived ONLY from data
+// the board already holds — the workspace state, its changed-line summary, and
+// whether it has a live session. Never triggers a gh/PR probe (that cost stays in
+// the Review surface). null ⇒ nothing to suggest; the row shows its neutral
+// buttons unpromoted. Unknown backend states fall through to null (degrade-safe).
+function suggestNextAction(
+    state: string,
+    summary: RecoderDiffSummary | undefined,
+    hasSession: boolean
+): RecoderRowSuggestion | null {
+    if (state == "merged") {
+        return { action: "archive", label: "Merged — archive to clear the board" };
+    }
+    if (state == "awaiting_review") {
+        const hasChanges = summary != null && summary.files > 0;
+        if (!hasChanges) {
+            return { action: "archive", label: "Nothing to merge — archive" };
+        }
+        return { action: "review", label: "Ready — review the changes" };
+    }
+    if (state == "failed") {
+        // A failed run is terminal, so its Session button is hidden — never point
+        // at a control the row won't render. Review its partial work if any, else
+        // archive.
+        const hasChanges = summary != null && summary.files > 0;
+        return hasChanges
+            ? { action: "review", label: "Failed with changes — review what it did" }
+            : { action: "archive", label: "Failed — archive" };
+    }
+    if (state == "running" && hasSession) {
+        return { action: "session", label: "Working — open the session to watch" };
+    }
+    return null;
+}
+
 // A needs-human moment observed between two polls: an agent finished and wants
 // review, or a workspace died. `key` (workspaceId:state) is the de-dupe unit —
 // notify at most once per workspace+state per session even if the state bounces.
@@ -579,8 +623,11 @@ export {
     bucketWorkspaceGroups,
     formatRelativeAge,
     isTerminalWorkspaceState,
+    suggestNextAction,
     workspaceStateMap,
     TASK_GROUP_METADATA_KEY,
+    type RecoderRowActionId,
+    type RecoderRowSuggestion,
     type RecoderAttentionEvent,
     type RecoderAttentionKind,
     type RecoderWorkspace,
