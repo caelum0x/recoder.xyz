@@ -210,6 +210,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const posting = useAtomValue(model.postingAtom);
     const launchProgress = useAtomValue(model.launchProgressAtom);
     const launchResult = useAtomValue(model.launchResultAtom);
+    const notifyOnAttention = useAtomValue(model.notifyOnAttentionAtom);
 
     useEffect(() => {
         model.refresh();
@@ -445,6 +446,13 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             { id: "clone-github", title: "Open GitHub project (clone)", run: () => setCloneOpen(true) },
             { id: "review", title: "Review workspace diff", run: openReview },
             { id: "shortcuts", title: "Show keyboard shortcuts", shortcut: "⌘/", run: () => setShortcutsOpen(true) },
+            {
+                id: "notify-toggle",
+                title: notifyOnAttention
+                    ? "Turn off attention notifications"
+                    : "Turn on attention notifications",
+                run: () => model.setNotifyOnAttention(!notifyOnAttention),
+            },
         ];
         for (const ws of workspaces) {
             const wsLabel = `${agentLabel(ws.runtimeId)} · ${ws.branch}`;
@@ -491,7 +499,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             });
         }
         return list;
-    }, [workspaces, groups, identity, model, setup.tmuxBin, setLaunchOpen, setShortcutsOpen, setCloneOpen]);
+    }, [workspaces, groups, identity, model, setup.tmuxBin, notifyOnAttention, setLaunchOpen, setShortcutsOpen, setCloneOpen]);
 
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2" onKeyDown={onBoardKeyDown}>
@@ -820,6 +828,18 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             <option value="all">All</option>
                             <option value="archived">Archived</option>
                         </select>
+                    </label>
+                    <label
+                        className="flex items-center gap-1.5 text-sm text-secondary cursor-pointer whitespace-nowrap"
+                        title="Show an OS notification when an agent needs your input"
+                    >
+                        <input
+                            type="checkbox"
+                            className="cursor-pointer"
+                            checked={notifyOnAttention}
+                            onChange={(e) => model.setNotifyOnAttention(e.target.checked)}
+                        />
+                        <span>Notify</span>
                     </label>
                     <button className={QUIET_BTN} onClick={() => setCloneOpen(true)}>
                         Clone repo
