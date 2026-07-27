@@ -251,11 +251,15 @@ only bug is that it's presented as a *forced wall* in the wrong frontend.
 ## 7. Target layout
 
 - **Default tab** = terminal + Workspaces hub. Nothing else auto-seeded.
-- **Launcher rail (REVISED 2026-07-25, Conductor-grade)** = **workspaces, runs,
-  terminal, files, web** — nothing else. The hub owns session/launch/review
-  entry; approvals/memory return only after their wiring is fixed; sysinfo/
-  processes are infra dashboards (north star: none). Nothing that renders
-  "not available"/"503"/empty-infra — and nothing that duplicates the hub.
+- **Launcher rail (REVISED 2026-07-27)** = **workspaces, board, approvals,
+  memory, runs, terminal, files, web** — 8 widgets (`defaultconfig/widgets.json`,
+  `display:order` -6…-3). The hub still owns session/launch/review entry (those
+  are NOT rail widgets). Approvals and Memory are back on the rail now that their
+  wiring is fixed (the earlier "return only after wiring is fixed" condition is
+  satisfied); Board was added when the task-driven pick-an-issue → launch loop was
+  wired (`55d1a9fc0`). sysinfo/processes stay OFF the rail (infra dashboards —
+  north star: none). Nothing that renders "not available"/"503"/empty-infra, and
+  nothing that duplicates the hub.
 
 ---
 
@@ -271,7 +275,7 @@ solo→empty), plus the earlier solo-mode gate cascade (memory
 retired outright: `recoder-launch-model.ts` is now a redirect into the
 Workspaces hub (`bc2b7d85e`) — it no longer posts anything.
 
-**2026-07-25 rail trim (this doc's §5 revision):** default widgets cut to 5
+**2026-07-25 rail trim (this doc's §5 revision):** default widgets first cut to 5
 (`defaultconfig/widgets.json`), `removeCockpitWidgetConfig` generalized to
 `removeRetiredWidgetConfig` (nulls all 14 retired keys in user config on every
 start), board "Pick up" retargeted to the hub, webview devtools unmount crash
@@ -279,9 +283,15 @@ fixed (`webview.tsx` cleanup guarded — the "WebView must be attached to the
 DOM" error on leaving the web tab). Audit found 3 NEW broken wirings (session
 stream frame shape; approvals list shape + decide endpoints; memory list
 shape) — FIXED in `8597b41ee` (unit tests added for terminal-model +
-memory-model; tsc clean, 97/97). NOTE: the Go server must
-be rebuilt for the defaults to ship (`task build:backend:quickdev --force` —
-the task cache does NOT invalidate on defaultconfig JSON edits).
+memory-model; tsc clean, 97/97).
+
+**Rail restored to 8 (as of 2026-07-27):** once the Approvals/Memory wirings were
+fixed they returned to `defaultconfig/widgets.json`, and the wired Board
+(`55d1a9fc0`) was added — the shipped rail is now **workspaces, board, approvals,
+memory, runs, terminal, files, web** (see §7). NOTE (still current): the Go server
+must be rebuilt for any `defaultconfig` change to ship —
+`task build:backend:quickdev --force`; the task cache does **NOT** invalidate on
+`defaultconfig` JSON edits, so a plain build silently keeps the old rail.
 
 **Pending (needs your decision, §9):** frontend consolidation; cockpit auth
 solo-bypass + PAL/openfang scrub + label map; Board (repoint work-signals /
@@ -364,8 +374,10 @@ hub (`bc2b7d85e`) — no POST body exists anymore; the hub's inline Launch is th
 only launch path.
 
 **Phase 4 — Loop-core launcher + default layout:**
-- Launcher rail = Workspaces, Session, Launch, Review, Runs, Approvals, Memory +
-  built-in terminal/files/web/sysinfo/processes. (Infra stays hidden.)
+- Launcher rail (ORIGINAL Phase-4 plan; SUPERSEDED by §7 — the shipped rail is
+  workspaces, board, approvals, memory, runs, terminal, files, web): Workspaces,
+  Session, Launch, Review, Runs, Approvals, Memory + built-in
+  terminal/files/web/sysinfo/processes. (Infra stays hidden.)
 - Default tab/layout = the Workspaces hub + a terminal. No wall of tiles.
 
 **Phase 5 — Verify (fresh launch):** no sign-in, no OSS names, no green, no
