@@ -278,10 +278,14 @@ type ReadinessSignal = {
 
 // The folded merge-readiness read-model. `ready` is the hardest gate; `signals`
 // is ALWAYS 5, in order: lifecycle, worktree, merge, checks, preview.
+type ReadinessPr = { number: number; state: "open" | "closed" | "merged"; draft: boolean; url: string };
+
 type ReadinessView = {
     verdict: "ready" | "blocked" | "not_ready" | "unknown" | "delivered" | "terminal";
     signals: ReadinessSignal[];
     blockers: string[];
+    // The open PR's identity (number/state/draft/url) when one exists; null otherwise.
+    pr?: ReadinessPr | null;
 };
 
 // The two independently-probed merge-decision views for one workspace. Each side

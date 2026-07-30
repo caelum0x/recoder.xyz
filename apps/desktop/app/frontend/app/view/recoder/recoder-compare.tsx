@@ -88,6 +88,14 @@ function ReadinessBadge({ readiness }: { readiness: ReadinessView }) {
                     </span>
                 ))}
             </div>
+            {readiness.pr != null && (
+                <span
+                    className="text-xs text-secondary border border-border rounded px-1"
+                    title={readiness.pr.url || `PR #${readiness.pr.number}`}
+                >
+                    PR #{readiness.pr.number} {readiness.pr.draft ? "(draft)" : readiness.pr.state}
+                </span>
+            )}
         </div>
     );
 }
