@@ -3,6 +3,7 @@
 
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
+import { identityInitials } from "./recoder-identity-avatar";
 import { RecoderIdentityModel } from "./recoder-identity-model";
 
 // Quiet, optional sign-in affordance for the Workspaces hub header. Never a wall:
@@ -22,8 +23,17 @@ function RecoderIdentityAffordance() {
         const label = identity.name || identity.email || "Signed in";
         return (
             <div className="flex items-center gap-2">
-                {identity.avatarUrl && (
-                    <img src={identity.avatarUrl} alt="" className="w-5 h-5 rounded-full" />
+                {identity.avatarUrl ? (
+                    <img src={identity.avatarUrl} alt="" className="w-5 h-5 rounded-full object-cover" />
+                ) : (
+                    // Monogram fallback so a signed-in user always has an avatar,
+                    // even before Better Auth populates an image. Graphite, no color.
+                    <span
+                        className="flex items-center justify-center w-5 h-5 rounded-full bg-white/10 text-primary/90 text-[10px] font-medium select-none"
+                        aria-hidden="true"
+                    >
+                        {identityInitials(identity.name, identity.email)}
+                    </span>
                 )}
                 <span className="text-sm text-secondary truncate max-w-[12rem]" title={identity.email || label}>
                     {label}
