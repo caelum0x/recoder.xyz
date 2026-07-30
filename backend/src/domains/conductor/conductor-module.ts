@@ -162,6 +162,7 @@ import { MergeabilityService, type MergeabilityView } from './services/mergeabil
 import { WorktreeStatusService } from './services/worktree-status.service.js';
 import { computeWorkspacePort } from './services/workspace-port.js';
 import { readRepoConfigFile } from './services/repo-config-file.js';
+import { EnvironmentImportService, type EnvironmentImportView } from './services/environment-import.js';
 import { foldReadiness, type ReadinessView } from './services/readiness.service.js';
 import {
   assembleConvergenceEvidence,
@@ -336,6 +337,8 @@ export class ConductorComposer implements ConductorModule {
   private readonly mergeability: MergeabilityService;
   /** Read-only worktree open-work (uncommitted changes) probe (git-native, degrade-truthful). */
   private readonly worktreeStatus: WorktreeStatusService;
+  /** Read-only first-run environment-import probe (git identity, agent configs, gh, shell). */
+  private readonly environmentImportService: EnvironmentImportService;
   /**
    * OPTIONAL dmux LAYOUT-brain seam (F3 compare/parallel grid). Absent / dmux not
    * built ⇒ the compare read stays hint-less and `arrangeCompareGrid` returns a
@@ -402,6 +405,9 @@ export class ConductorComposer implements ConductorModule {
     // Read-only worktree open-work probe over the SAME git seam (never throws;
     // truthful `available:false` when git/worktree is absent — never a fake clean).
     this.worktreeStatus = new WorktreeStatusService({ logger: this.log });
+    // Read-only first-run environment probe (git identity, agent configs, gh, shell)
+    // over the SAME exec seam; never throws, degrades each field independently.
+    this.environmentImportService = new EnvironmentImportService({ logger: this.log });
 
     const loggerPort = toLoggerPort(this.log);
 
@@ -1716,6 +1722,16 @@ export class ConductorComposer implements ConductorModule {
     const workspace = await this.engine.getWorkspace(workspaceId);
     if (!workspace?.worktreePath) return null;
     return detectDevCommand(workspace.worktreePath);
+  }
+
+  /**
+   * First-run environment import (`GET …/environment`): the host git identity,
+   * which agent CLIs are already configured, gh auth status, and the shell — so
+   * onboarding can say "we found your setup" instead of showing an empty start.
+   * PURE read, degrade-truthful (never throws, never fabricates a config).
+   */
+  async environmentImport(): Promise<EnvironmentImportView> {
+    return this.environmentImportService.probe();
   }
 
   /**

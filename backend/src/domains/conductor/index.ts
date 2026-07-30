@@ -57,6 +57,7 @@ import type {
 } from './types.js';
 import type { CreateConductorWorkspaceInput, ConductorWriteResult, WorkspaceRunConfigView } from './conductor-module.js';
 import type { ReviewComment } from './review/review-comments.js';
+import type { EnvironmentImportView } from './services/environment-import.js';
 import type {
   WorkspaceDiffView,
   WorkspaceDiffFilesView,
@@ -443,6 +444,8 @@ export interface ConductorModule {
   workspaceDevCommand(workspaceId: string): Promise<DevCommandView | null>;
   /** Effective run config: committed scripts + stable RECODER_PORT + detected command (or null). */
   workspaceRunConfig(workspaceId: string): Promise<WorkspaceRunConfigView | null>;
+  /** First-run environment import: git identity, agent configs, gh auth, shell (degrade-truthful). */
+  environmentImport(): Promise<EnvironmentImportView>;
   /** Persist a sniffed loopback preview URL — GATED (`workspace.preview_url`). */
   setPreviewUrl(
     workspaceId: string,
