@@ -25,6 +25,8 @@
  * Output (stdout): a single JSON line { apiKey, userId, keyId, scopes, reusedExistingCount }
  */
 
+import { resolve as pathResolve } from 'node:path';
+
 const DEV_KEY_NAME = 'dev-conductor-cockpit';
 
 // Scopes the conductor + cockpit need. `admin` alone is sufficient (it implies
@@ -61,12 +63,10 @@ async function main(): Promise<void> {
   if (!process.env.API_KEY_HASH_SALT) {
     fail('API_KEY_HASH_SALT must be set (the harness sets a fixed dev salt).');
   }
-  if (!process.env.DATABASE_URL) {
-    fail(
-      'DATABASE_URL must be set — sk_ keys are stored in Postgres (identity.platform_api_key), ' +
-        'not data/api-keys.json. Point it at the same database the dev server uses.',
-    );
-  }
+  // DATABASE_URL is no longer required: with a DB we mint into Postgres; WITHOUT
+  // one (the embedded/desktop backend) we mint into the SAME durable filesystem
+  // store the server validates against (API_KEY_STORE_PATH ?? data/api-keys.json),
+  // so a DB-less desktop can run fail-closed.
 
   // Dynamic imports keep the LOG_LEVEL default above effective (static imports
   // would hoist past it and lock the pino level to 'info').
@@ -75,6 +75,7 @@ async function main(): Promise<void> {
     { childLogger },
     { PersistenceComposer },
     { PgApiKeyStore },
+    { FilesystemApiKeyStore },
     { createApiKeyService },
     { sliceIdentityConfig },
   ] = await Promise.all([
@@ -82,6 +83,7 @@ async function main(): Promise<void> {
     import('../src/shared/logger.js'),
     import('../src/domains/persistence/persistence-module.js'),
     import('../src/domains/identity/repositories/api-key.repository.js'),
+    import('../src/domains/identity/repositories/filesystem-api-key.repository.js'),
     import('../src/domains/identity/api-key.service.js'),
     import('../src/domains/identity/config.js'),
   ]);
@@ -104,9 +106,17 @@ async function main(): Promise<void> {
     }
 
     const identityCfg = sliceIdentityConfig(config);
-    const store = new PgApiKeyStore(persistence.executor(), log);
+    // Same selection as the server bootstrap: Postgres when a pool is connectable,
+    // else the durable filesystem store at the shared path — so mint + validate
+    // agree on where DB-less desktop keys live.
+    const store = persistence.executor().isAvailable()
+      ? new PgApiKeyStore(persistence.executor(), log)
+      : new FilesystemApiKeyStore({
+          logger: log,
+          filePath: process.env.API_KEY_STORE_PATH ?? pathResolve(process.cwd(), 'data', 'api-keys.json'),
+        });
     if (!store.isAvailable()) {
-      fail('Postgres pool unavailable — check DATABASE_URL (no key was minted).');
+      fail('key store unavailable (no key was minted).');
     }
 
     const service = createApiKeyService({

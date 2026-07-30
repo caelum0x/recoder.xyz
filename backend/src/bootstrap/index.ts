@@ -35,6 +35,7 @@ import { createDeviceFlow } from '../domains/identity/device-flow.service.js';
 import { buildDeviceRouter } from '../domains/identity/routes/device.routes.js';
 import { sliceIdentityConfig } from '../domains/identity/config.js';
 import { PgApiKeyStore } from '../domains/identity/repositories/api-key.repository.js';
+import { FilesystemApiKeyStore } from '../domains/identity/repositories/filesystem-api-key.repository.js';
 import { createApiKeyService } from '../domains/identity/api-key.service.js';
 import { buildApiKeysRouter } from '../domains/identity/routes/api-keys.routes.js';
 import { createOrgsRbacFeature } from '../domains/identity/orgs-rbac.feature.js';
@@ -238,12 +239,22 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // the pool, mint/list/revoke return SERVICE_UNAVAILABLE (never a faked key).
   const identityCfg = sliceIdentityConfig(config);
   const apiKeyLog = childLogger('identity-apikeys');
-  const apiKeyStore = new PgApiKeyStore(persistence.executor(), apiKeyLog);
+  // Embedded/desktop backend has no DATABASE_URL, so PgApiKeyStore can't validate
+  // the minted conductor key. Fall back to a durable filesystem store (same port),
+  // shared by mint + validate, so the desktop can run fail-closed instead of
+  // relaxing STRICT_AUTH on loopback. The cloud/Pg path is unchanged.
+  const apiKeyEnv = options.env ?? process.env;
+  const apiKeyStore = persistence.executor().isAvailable()
+    ? new PgApiKeyStore(persistence.executor(), apiKeyLog)
+    : new FilesystemApiKeyStore({
+        logger: apiKeyLog,
+        filePath: apiKeyEnv.API_KEY_STORE_PATH ?? resolvePath(process.cwd(), 'data', 'api-keys.json'),
+      });
   const apiKeyService = createApiKeyService({
     store: apiKeyStore,
     logger: apiKeyLog,
-    hashSalt: (options.env ?? process.env).API_KEY_HASH_SALT ?? null,
-    isAvailable: () => persistence.executor().isAvailable(),
+    hashSalt: apiKeyEnv.API_KEY_HASH_SALT ?? null,
+    isAvailable: () => apiKeyStore.isAvailable(),
     prefixLength: identityCfg.apiKeyPrefixLength,
     defaultTtlDays: identityCfg.apiKeyDefaultTtlDays,
   });

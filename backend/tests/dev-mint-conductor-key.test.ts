@@ -13,7 +13,7 @@
  *    whose apiKey starts with `sk_`.
  */
 import { execFile } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -65,11 +65,17 @@ describe('scripts/dev-mint-conductor-key.ts', () => {
     expect(result.stdout).not.toContain('sk_');
   });
 
-  it('fails truthfully without DATABASE_URL (keys live in Postgres now)', async () => {
-    const result = await runScript({ API_KEY_HASH_SALT: 'test-salt' });
-    expect(result.code).not.toBe(0);
-    expect(result.stderr).toContain('DATABASE_URL must be set');
-    expect(result.stdout).not.toContain('sk_');
+  it('mints into the filesystem store when there is no DATABASE_URL (DB-less desktop)', async () => {
+    const keyPath = path.join(mkdtempSync(path.join(os.tmpdir(), 'mint-fs-')), 'api-keys.json');
+    const result = await runScript({ API_KEY_HASH_SALT: 'test-salt', API_KEY_STORE_PATH: keyPath });
+    expect(result.code).toBe(0);
+    const lastLine = result.stdout.trim().split('\n').at(-1) ?? '';
+    const parsed = JSON.parse(lastLine) as { apiKey?: string };
+    expect(parsed.apiKey).toMatch(/^sk_/);
+    // The store persists ONLY the hashed key — never the raw sk_ value.
+    const stored = readFileSync(keyPath, 'utf8');
+    expect(stored).toContain('keyHash');
+    expect(stored).not.toContain(parsed.apiKey as string);
   });
 
   it.skipIf(!process.env.MINT_TEST_DATABASE_URL)(
