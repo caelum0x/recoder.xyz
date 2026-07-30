@@ -53,6 +53,44 @@ type RecoderSetup = {
     tmuxBin: string;
 };
 
+// First-run environment import (GET /api/conductor/environment) — what the host
+// already has, so onboarding can say "we found your setup". null until probed.
+type RecoderEnvironment = {
+    gitIdentity: { name: string; email: string } | null;
+    agentConfigs: { id: string; present: boolean }[];
+    ghAuthenticated: boolean | null;
+    shell: string;
+};
+
+// Coerce the untrusted /environment payload into the view shape. Anything that
+// isn't the documented shape degrades to a safe default (null identity, no
+// configs, unknown gh, empty shell) — never a throw, never a fabricated config.
+function parseEnvironmentImport(data: unknown): RecoderEnvironment {
+    if (data == null || typeof data != "object") {
+        return { gitIdentity: null, agentConfigs: [], ghAuthenticated: null, shell: "" };
+    }
+    const d = data as Record<string, unknown>;
+    const gi = d.gitIdentity;
+    const gitIdentity =
+        gi != null && typeof gi == "object"
+            ? {
+                  name: typeof (gi as Record<string, unknown>).name == "string" ? ((gi as Record<string, unknown>).name as string) : "",
+                  email: typeof (gi as Record<string, unknown>).email == "string" ? ((gi as Record<string, unknown>).email as string) : "",
+              }
+            : null;
+    const agentConfigs = Array.isArray(d.agentConfigs)
+        ? d.agentConfigs
+              .filter((a): a is { id: string; present: boolean } => a != null && typeof a == "object" && typeof (a as Record<string, unknown>).id == "string")
+              .map((a) => ({ id: a.id, present: Boolean((a as Record<string, unknown>).present) }))
+        : [];
+    return {
+        gitIdentity: gitIdentity != null && (gitIdentity.name != "" || gitIdentity.email != "") ? gitIdentity : null,
+        agentConfigs,
+        ghAuthenticated: typeof d.ghAuthenticated == "boolean" ? d.ghAuthenticated : null,
+        shell: typeof d.shell == "string" ? d.shell : "",
+    };
+}
+
 // Outcome of an inline launch. `ok` distinguishes a truthful success from a
 // truthful failure whose reason is the backend's verbatim message — never faked.
 // On success it optionally carries the FIRST started workspace so the hub can
@@ -184,6 +222,8 @@ class RecoderViewModel implements ViewModel {
     loadingAtom: PrimitiveAtom<boolean>;
     errorAtom: PrimitiveAtom<string>;
     setupAtom: PrimitiveAtom<RecoderSetup>;
+    // First-run environment import (git identity, agent configs, gh, shell); null until probed.
+    environmentAtom: PrimitiveAtom<RecoderEnvironment>;
     diffSummariesAtom: PrimitiveAtom<Record<string, RecoderDiffSummary>>;
     launchOpenAtom: PrimitiveAtom<boolean>;
     commandPaletteOpenAtom: PrimitiveAtom<boolean>;
@@ -266,6 +306,7 @@ class RecoderViewModel implements ViewModel {
         this.loadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
         this.setupAtom = atom({ agents: [], git: false, loaded: false, probed: false, tmuxBin: "" }) as PrimitiveAtom<RecoderSetup>;
+        this.environmentAtom = atom(null) as PrimitiveAtom<RecoderEnvironment>;
         this.diffSummariesAtom = atom({}) as PrimitiveAtom<Record<string, RecoderDiffSummary>>;
         this.launchOpenAtom = atom(false) as PrimitiveAtom<boolean>;
         this.commandPaletteOpenAtom = atom(false) as PrimitiveAtom<boolean>;
@@ -355,6 +396,20 @@ class RecoderViewModel implements ViewModel {
             globalStore.set(this.setupAtom, { agents, git: Boolean(h?.available), loaded: true, probed: true, tmuxBin });
         } catch {
             globalStore.set(this.setupAtom, { agents: [], git: false, loaded: false, probed: true, tmuxBin: "" });
+        }
+        this.refreshEnvironment();
+    }
+
+    // GET /api/conductor/environment → the first-run import summary. Degrade-safe:
+    // any failure or a non-object payload leaves environmentAtom null (the "we
+    // found your setup" card simply doesn't render), never a throw.
+    async refreshEnvironment() {
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/environment`);
+            const body = await res.json();
+            globalStore.set(this.environmentAtom, res.ok ? parseEnvironmentImport(body?.data) : null);
+        } catch {
+            globalStore.set(this.environmentAtom, null);
         }
     }
 
@@ -987,5 +1042,5 @@ class RecoderViewModel implements ViewModel {
     }
 }
 
-export { RecoderViewModel, type RecoderSetup, type RecoderLaunchResult };
+export { RecoderViewModel, parseEnvironmentImport, type RecoderSetup, type RecoderEnvironment, type RecoderLaunchResult };
 export * from "./recoder-board-logic";

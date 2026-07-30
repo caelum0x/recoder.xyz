@@ -19,6 +19,7 @@ import {
     workspaceSearchKeywords,
     type RecoderBoardShow,
     type RecoderDiffSummary,
+    type RecoderEnvironment,
     type RecoderRowActionId,
     type RecoderRowSuggestion,
     type RecoderWorkspace,
@@ -193,6 +194,40 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
 
 WorkspaceRow.displayName = "WorkspaceRow";
 
+// First-run "we found your setup" line — meets the dev where they already live
+// (Cursor-style import). Renders nothing when the probe found nothing, so it is
+// never a hollow claim.
+function EnvironmentImportSummary({ env }: { env: RecoderEnvironment }) {
+    if (env == null) {
+        return null;
+    }
+    const found: string[] = [];
+    if (env.gitIdentity != null) {
+        found.push(`git as ${env.gitIdentity.name || env.gitIdentity.email}`);
+    }
+    const agents = env.agentConfigs.filter((a) => a.present).map((a) => agentLabel(a.id));
+    if (agents.length > 0) {
+        found.push(agents.join(", "));
+    }
+    if (env.ghAuthenticated === true) {
+        found.push("gh authenticated");
+    }
+    if (env.shell != "") {
+        found.push(env.shell);
+    }
+    if (found.length == 0) {
+        return null;
+    }
+    return (
+        <div className={`${META} flex items-center gap-1.5`}>
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent/70 shrink-0" />
+            <span>We found your setup — {found.join(" · ")}</span>
+        </div>
+    );
+}
+
+EnvironmentImportSummary.displayName = "EnvironmentImportSummary";
+
 function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const workspaces = useAtomValue(model.workspacesAtom);
     const allWorkspaces = useAtomValue(model.allWorkspacesAtom);
@@ -228,6 +263,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const launchProgress = useAtomValue(model.launchProgressAtom);
     const launchResult = useAtomValue(model.launchResultAtom);
     const notifyOnAttention = useAtomValue(model.notifyOnAttentionAtom);
+    const environment = useAtomValue(model.environmentAtom);
 
     useEffect(() => {
         model.refresh();
@@ -773,6 +809,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         <div className={META}>
                             Run your coding agents in parallel isolated worktrees, then review and merge.
                         </div>
+                        <EnvironmentImportSummary env={environment} />
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <button
