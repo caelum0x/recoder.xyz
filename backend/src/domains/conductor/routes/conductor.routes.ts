@@ -6,6 +6,7 @@
  *   GET    /api/conductor/workspaces/:id          fetch one workspace
  *   POST   /api/conductor/workspaces              create + launch (GATED)
  *   POST   /api/conductor/workspaces/:id/steer    send-keys to a live agent (GATED)
+ *   POST   /api/conductor/workspaces/:id/review-comments  line-anchored review notes → steer (GATED)
  *   GET    /api/conductor/workspaces/:id/events   RunEvents (conversation + lifecycle)
  *   GET    /api/conductor/workspaces/:id/diff     reviewable diff vs base
  *   GET    /api/conductor/workspaces/:id/diff/files  per-file changed list (numstat + name-status)
@@ -55,6 +56,7 @@ import type { CreateConductorWorkspaceInput, ConductorWriteResult } from '../con
 import type { PreviewVerifyOptions } from '../services/preview-verify.service.js';
 import type { CloneRepoErrorCode } from '../services/repo-clone.service.js';
 import type { PreviewVerifyAssertion } from '../ports/preview-verify.port.js';
+import { parseReviewComments } from '../review/review-comments.js';
 import { resolveConductorTmuxSocket } from '../tmux-socket.js';
 import { createRecoderSessionLister } from '../adapters/recoder-session-lister.adapter.js';
 
@@ -702,6 +704,29 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
           keys: requireString(body, 'keys'),
           ...(typeof body.submit === 'boolean' ? { submit: body.submit } : {}),
         },
+        req.principal!,
+      );
+      finishWrite(res, result, { key: 'steered' });
+    }),
+  );
+
+  router.post(
+    '/workspaces/:id/review-comments',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      // Pre-validate for a clean 400 BEFORE the gated steer: a payload with no
+      // usable comments would otherwise compose to an empty prompt and be refused
+      // post-gate with an opaque reason.
+      const comments = parseReviewComments(body.comments);
+      if (comments.length === 0) {
+        throw createError(
+          ErrorCode.VALIDATION_ERROR,
+          '`comments` must be a non-empty array of { file, body, line? }',
+        );
+      }
+      const result = await module.sendReviewComments(
+        { workspaceId: req.params.id, comments },
         req.principal!,
       );
       finishWrite(res, result, { key: 'steered' });
