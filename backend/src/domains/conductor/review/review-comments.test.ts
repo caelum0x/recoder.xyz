@@ -76,3 +76,20 @@ describe('composeReviewPrompt', () => {
     expect(prompt).not.toContain('src/b.ts: ');
   });
 });
+
+describe('review comments — difit diff-source side', () => {
+  it('carries side:old only with a line; side:new is the default (not stored)', () => {
+    expect(parseReviewComments([{ file: 'a.ts', line: 3, body: 'b', side: 'old' }])).toEqual([
+      { file: 'a.ts', body: 'b', line: 3, side: 'old' },
+    ]);
+    expect(parseReviewComments([{ file: 'a.ts', body: 'b', side: 'old' }])).toEqual([{ file: 'a.ts', body: 'b' }]);
+    expect(parseReviewComments([{ file: 'a.ts', line: 3, body: 'b', side: 'new' }])).toEqual([
+      { file: 'a.ts', body: 'b', line: 3 },
+    ]);
+  });
+
+  it('marks an old-side comment in the prompt so the agent edits the right side', () => {
+    const prompt = composeReviewPrompt([{ file: 'src/a.ts', line: 10, side: 'old', body: 'removed wrongly' }]);
+    expect(prompt).toContain('src/a.ts:10 (old) — removed wrongly');
+  });
+});
