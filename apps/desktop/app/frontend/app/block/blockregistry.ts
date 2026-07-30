@@ -24,7 +24,6 @@ import { RecoderDiffViewModel } from "@/app/view/recoder-diff/recoder-diff-model
 import { RecoderBoardViewModel } from "@/app/view/recoder-board/recoder-board-model";
 import { RecoderMemoryViewModel } from "@/app/view/recoder-memory/recoder-memory-model";
 import { RecoderRunsViewModel } from "@/app/view/recoder-runs/recoder-runs-model";
-import { RecoderConnectorsViewModel } from "@/app/view/recoder-connectors/recoder-connectors-model";
 import { RetiredViewModel } from "@/app/view/retired/retired";
 import { RecoderSettingsViewModel } from "@/app/view/recoder-settings/recoder-settings-model";
 import { TermViewModel } from "@/view/term/term-model";
@@ -52,15 +51,17 @@ BlockRegistry.set("recoder-launch", RecoderLaunchViewModel);
 BlockRegistry.set("recoder-approvals", RecoderApprovalsViewModel);
 BlockRegistry.set("recoder-diff", RecoderDiffViewModel);
 BlockRegistry.set("recoder-board", RecoderBoardViewModel);
-// recoder-tools / recoder-hands: retired infra views that leaked OSS engine names
-// (`recoder.browser-use`, `openfang`) — tombstoned like recoder-openfang per rule 4b
-// + the "no infra dashboards" north star. Files kept (owner precedent).
+// recoder-tools / recoder-hands / recoder-connectors: retired infra dashboards
+// (OpenHands-derived "hands", OSS engine names, green success pills) — tombstoned
+// like recoder-openfang per rule 4b + the "no infra dashboards" north star, so a
+// saved layout renders the tombstone instead of the dashboard. Files kept (owner
+// precedent); their bg-success greens are now unreachable.
 BlockRegistry.set("recoder-tools", RetiredViewModel);
 BlockRegistry.set("recoder-memory", RecoderMemoryViewModel);
 BlockRegistry.set("recoder-runs", RecoderRunsViewModel);
 BlockRegistry.set("recoder-hands", RetiredViewModel);
 BlockRegistry.set("recoder-openfang", RetiredViewModel);
-BlockRegistry.set("recoder-connectors", RecoderConnectorsViewModel);
+BlockRegistry.set("recoder-connectors", RetiredViewModel);
 BlockRegistry.set("recoder-settings", RecoderSettingsViewModel);
 
 function makeDefaultViewModel(viewType: string): ViewModel {
