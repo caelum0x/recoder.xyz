@@ -142,6 +142,32 @@ describe('classifyAttention — terminal-tail heuristics (running workspace)', (
     });
     expect(result.attention).toBe('unknown');
   });
+
+  it('Omnara: "waiting for your input" → agent_idle_prompt', () => {
+    expect(classifyAttention({ state: 'running', tail: 'Done.\nWaiting for your input to continue' }).attention).toBe(
+      'agent_idle_prompt',
+    );
+  });
+
+  it('Omnara: "Press Enter to continue" → agent_idle_prompt', () => {
+    expect(classifyAttention({ state: 'running', tail: 'Summary written.\nPress Enter to continue' }).attention).toBe(
+      'agent_idle_prompt',
+    );
+  });
+
+  it('Omnara: a numbered selection menu (2+ options) → agent_idle_prompt', () => {
+    const result = classifyAttention({
+      state: 'running',
+      tail: 'Which approach?\n❯ 1. Rebase\n2. Merge commit\n3. Squash',
+    });
+    expect(result.attention).toBe('agent_idle_prompt');
+  });
+
+  it('a single numbered line is NOT treated as a menu (no false needs-input)', () => {
+    expect(classifyAttention({ state: 'running', tail: 'Step 1. build the thing and keep going' }).attention).toBe(
+      'unknown',
+    );
+  });
 });
 
 describe('classifyAttention — the no-signal invariant', () => {

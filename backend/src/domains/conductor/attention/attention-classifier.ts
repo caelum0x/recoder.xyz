@@ -63,6 +63,21 @@ const PROMPT_LINE_PATTERNS: readonly RegExp[] = [
   /^\s*(?:│\s*)?[>$❯›]\s*$/,
 ];
 
+/**
+ * Omnara-derived NEEDS-INPUT phrasings (a wait for the user that is NOT a yes/no
+ * approval — those are caught by APPROVAL_PATTERNS first). Broadens recall over
+ * the settled-prompt-line check for agents that print an explicit ask.
+ */
+const NEEDS_INPUT_PATTERNS: readonly RegExp[] = [
+  /\bwaiting for (?:your )?(?:input|response|reply|answer)\b/i,
+  /\bpress\s+enter\b/i,
+  /\benter your\b/i,
+  /\btype your (?:message|response|answer|reply)\b/i,
+];
+
+/** A numbered selection-menu option line (`❯ 1. …`, `2) …`). */
+const MENU_OPTION_PATTERN = /^(?:❯\s*)?\d+[.)]\s+\S/;
+
 function recentLines(tail: string, maxLines: number): readonly string[] {
   return tail
     .split('\n')
@@ -86,6 +101,17 @@ function endsAtInputPrompt(lines: readonly string[]): boolean {
   const last = lines[lines.length - 1];
   if (!last) return false;
   return PROMPT_LINE_PATTERNS.some((pattern) => pattern.test(last));
+}
+
+/**
+ * Omnara-style needs-input detection: an explicit "waiting for input" phrasing,
+ * or a settled numbered SELECTION MENU (2+ option lines in the window — an agent
+ * asking the user to pick). Non-approval; complements {@link endsAtInputPrompt}.
+ */
+function hasNeedsInputPrompt(lines: readonly string[]): boolean {
+  const recent = lines.join('\n');
+  if (NEEDS_INPUT_PATTERNS.some((pattern) => pattern.test(recent))) return true;
+  return lines.filter((line) => MENU_OPTION_PATTERN.test(line)).length >= 2;
 }
 
 // --- RunEvent signal ---------------------------------------------------------
@@ -159,6 +185,9 @@ export function classifyAttention(signals: AttentionSignals): AttentionResult {
       }
       if (endsAtInputPrompt(lines)) {
         return { attention: 'agent_idle_prompt', reason: 'terminal tail: settled at an input prompt' };
+      }
+      if (hasNeedsInputPrompt(lines)) {
+        return { attention: 'agent_idle_prompt', reason: 'terminal tail: waiting for input (prompt/menu)' };
       }
       return { attention: 'unknown', reason: 'terminal tail carries no recognizable signal' };
     }
