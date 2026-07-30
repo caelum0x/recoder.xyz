@@ -5,6 +5,7 @@ import { globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readErrorReason, readFetchError } from "../recoder/recoder-errors";
+import type { ReviewCommentDraft } from "./recoder-diff-comments";
 import { RecoderDiffView } from "./recoder-diff";
 
 type RecoderWorkspace = {
@@ -191,6 +192,12 @@ class RecoderDiffViewModel implements ViewModel {
     prStatusAtom: PrimitiveAtom<string>;
     checksAtom: PrimitiveAtom<RecoderWorkspaceChecks>;
     checksLoadingAtom: PrimitiveAtom<boolean>;
+    // Draft line-anchored review comments, queued client-side until the reviewer
+    // sends them to the agent (POST …/review-comments). Cleared on a successful send.
+    pendingCommentsAtom: PrimitiveAtom<ReviewCommentDraft[]>;
+    commentSendingAtom: PrimitiveAtom<boolean>;
+    // Human result of the last send ("Sent 3 comments to the agent.", reason, …).
+    commentStatusAtom: PrimitiveAtom<string>;
     // Which workspace checksAtom describes — lets the 6s refresh poll skip
     // re-probing gh (the checks edge shells out per call) unless the selection
     // actually changed.
@@ -218,6 +225,9 @@ class RecoderDiffViewModel implements ViewModel {
         this.prStatusAtom = atom("") as PrimitiveAtom<string>;
         this.checksAtom = atom(null) as PrimitiveAtom<RecoderWorkspaceChecks>;
         this.checksLoadingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.pendingCommentsAtom = atom([]) as PrimitiveAtom<ReviewCommentDraft[]>;
+        this.commentSendingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.commentStatusAtom = atom("") as PrimitiveAtom<string>;
         this.checksWorkspaceId = "";
         this.checksProbedAtMs = 0;
     }
@@ -481,6 +491,71 @@ class RecoderDiffViewModel implements ViewModel {
             globalStore.set(this.prStatusAtom, "PR unavailable — Recoder isn’t reachable.");
         } finally {
             globalStore.set(this.prCreatingAtom, false);
+        }
+    }
+
+    // Queue a line-anchored (or file-level when line is null) review comment. An
+    // empty body is ignored so a stray submit never enqueues a blank note.
+    addComment(file: string, line: number | null, body: string) {
+        const trimmed = body.trim();
+        if (file.trim() == "" || trimmed == "") {
+            return;
+        }
+        const next = [...globalStore.get(this.pendingCommentsAtom), { file, line, body: trimmed }];
+        globalStore.set(this.pendingCommentsAtom, next);
+        globalStore.set(this.commentStatusAtom, "");
+    }
+
+    removeComment(index: number) {
+        const current = globalStore.get(this.pendingCommentsAtom);
+        if (index < 0 || index >= current.length) {
+            return;
+        }
+        globalStore.set(this.pendingCommentsAtom, current.filter((_, i) => i != index));
+    }
+
+    // Send the queued comments to the live agent (POST …/review-comments — the
+    // gated steer that folds them into one prompt). Degrade-safe like merge/PR:
+    // 403 (needs approval) and 503 (could not complete) surface truthful reasons;
+    // a clean success clears the queue. Never fabricates a delivery.
+    async sendComments() {
+        const workspaceId = globalStore.get(this.selectedIdAtom);
+        const comments = globalStore.get(this.pendingCommentsAtom);
+        if (!workspaceId || comments.length == 0) {
+            return;
+        }
+        globalStore.set(this.commentSendingAtom, true);
+        globalStore.set(this.commentStatusAtom, "");
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/review-comments`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ comments }),
+                }
+            );
+            const body = await res.json().catch(() => null);
+            if (res.ok) {
+                const n = comments.length;
+                globalStore.set(this.pendingCommentsAtom, []);
+                globalStore.set(this.commentStatusAtom, `Sent ${n} comment${n == 1 ? "" : "s"} to the agent.`);
+                return;
+            }
+            const reason = readErrorReason(body);
+            if (res.status == 403) {
+                globalStore.set(this.commentStatusAtom, reason || "Blocked — needs approval.");
+                return;
+            }
+            if (res.status == 503) {
+                globalStore.set(this.commentStatusAtom, `Could not send — ${reason || "operation failed"}.`);
+                return;
+            }
+            globalStore.set(this.commentStatusAtom, reason || `Send failed (${res.status}).`);
+        } catch {
+            globalStore.set(this.commentStatusAtom, "Send unavailable — Recoder isn’t reachable.");
+        } finally {
+            globalStore.set(this.commentSendingAtom, false);
         }
     }
 }

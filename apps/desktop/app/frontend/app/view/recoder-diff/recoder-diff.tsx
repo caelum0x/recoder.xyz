@@ -4,7 +4,8 @@
 import { RecoderEmpty, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { computeDiffLineAnchors } from "./recoder-diff-comments";
 import {
     isFailedConclusion,
     RecoderDiffViewModel,
@@ -81,20 +82,137 @@ function diffGutter(kind: DiffLineKind): string {
     return NeutralGutter;
 }
 
-function DiffBody({ patch }: { patch: string }) {
+// The inline composer that opens under a clicked diff line. Kept tiny and quiet;
+// Enter (without Shift) submits, Escape cancels — the terminal-native reflexes.
+function InlineCommentComposer({
+    anchorLabel,
+    onSubmit,
+    onCancel,
+}: {
+    anchorLabel: string;
+    onSubmit: (body: string) => void;
+    onCancel: () => void;
+}) {
+    const [body, setBody] = useState("");
+    const submit = () => {
+        if (body.trim() != "") {
+            onSubmit(body);
+        }
+    };
+    return (
+        <div className="flex flex-col gap-1 border-l-2 border-accent/50 bg-white/[0.03] px-2 py-1.5 my-0.5">
+            <span className="text-[10px] uppercase tracking-wide text-secondary/70">comment on {anchorLabel}</span>
+            <textarea
+                autoFocus
+                className="w-full resize-y rounded border border-border bg-transparent px-1.5 py-1 text-xs font-sans focus:outline-none focus:border-accent/60"
+                rows={2}
+                value={body}
+                placeholder="What should the agent change here?"
+                onChange={(e) => setBody(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key == "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        submit();
+                    } else if (e.key == "Escape") {
+                        e.preventDefault();
+                        onCancel();
+                    }
+                }}
+            />
+            <div className="flex items-center gap-2">
+                <button className={PRIMARY_BTN} disabled={body.trim() == ""} onClick={submit}>
+                    Add comment
+                </button>
+                <button className={QUIET_BTN} onClick={onCancel}>
+                    Cancel
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function DiffBody({ patch, model }: { patch: string; model: RecoderDiffViewModel }) {
     const lines = patch.split("\n");
+    const anchors = computeDiffLineAnchors(patch);
+    // Which rendered line has its comment composer open (-1 = none). Local UI
+    // state: the enqueued comments themselves live on the model.
+    const [activeLine, setActiveLine] = useState(-1);
     return (
         <pre className="text-xs leading-5 font-mono whitespace-pre overflow-auto rounded border border-border p-2 bg-panel">
             {lines.map((line, i) => {
                 const kind = diffLineKind(line);
+                const anchor = anchors[i];
+                const commentable = anchor != null && anchor.file != "" && anchor.newLine != null;
+                const anchorLabel = commentable ? `${anchor.file}:${anchor.newLine}` : "";
                 return (
-                    <div key={i} className={cn("flex min-h-[1.25rem]", diffRowClass(kind))}>
-                        <span className="select-none w-4 text-center opacity-70 font-mono">{diffGutter(kind)}</span>
-                        <span className="flex-1 whitespace-pre">{line == "" ? " " : line}</span>
+                    <div key={i} className="group">
+                        <div className={cn("flex min-h-[1.25rem]", diffRowClass(kind))}>
+                            <span className="select-none w-4 text-center opacity-70 font-mono">{diffGutter(kind)}</span>
+                            <span className="flex-1 whitespace-pre">{line == "" ? " " : line}</span>
+                            {commentable && (
+                                <button
+                                    className="select-none opacity-0 group-hover:opacity-100 text-secondary/70 hover:text-accent transition-opacity px-1 text-[11px] cursor-pointer"
+                                    title={`Comment on ${anchorLabel}`}
+                                    onClick={() => setActiveLine(activeLine == i ? -1 : i)}
+                                >
+                                    +💬
+                                </button>
+                            )}
+                        </div>
+                        {activeLine == i && commentable && (
+                            <InlineCommentComposer
+                                anchorLabel={anchorLabel}
+                                onSubmit={(bodyText) => {
+                                    model.addComment(anchor.file, anchor.newLine, bodyText);
+                                    setActiveLine(-1);
+                                }}
+                                onCancel={() => setActiveLine(-1)}
+                            />
+                        )}
                     </div>
                 );
             })}
         </pre>
+    );
+}
+
+// The queued review comments + the send-to-agent affordance. Reads the model's
+// pending-comment state; sending POSTs the gated /review-comments steer.
+function ReviewCommentQueue({ model }: { model: RecoderDiffViewModel }) {
+    const pending = useAtomValue(model.pendingCommentsAtom);
+    const sending = useAtomValue(model.commentSendingAtom);
+    const status = useAtomValue(model.commentStatusAtom);
+    if (pending.length == 0) {
+        return status != "" ? <div className="text-xs text-secondary">{status}</div> : null;
+    }
+    return (
+        <div className="flex flex-col gap-1 rounded border border-white/8 p-2">
+            <div className="flex items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-secondary">
+                    {pending.length} review comment{pending.length == 1 ? "" : "s"}
+                </span>
+                <div className="flex-1" />
+                <button className={PRIMARY_BTN} disabled={sending} onClick={() => model.sendComments()}>
+                    {sending ? "Sending…" : "Send to agent"}
+                </button>
+            </div>
+            {pending.map((c, i) => (
+                <div key={i} className="flex items-start gap-1.5 text-xs">
+                    <span className="font-mono text-secondary shrink-0">
+                        {c.line != null ? `${c.file}:${c.line}` : c.file}
+                    </span>
+                    <span className="flex-1 text-primary/90">{c.body}</span>
+                    <button
+                        className="text-secondary/70 hover:text-error transition-colors cursor-pointer shrink-0"
+                        title="Remove"
+                        onClick={() => model.removeComment(i)}
+                    >
+                        ✕
+                    </button>
+                </div>
+            ))}
+            {status != "" && <div className="text-xs text-secondary">{status}</div>}
+        </div>
     );
 }
 
@@ -272,7 +390,8 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                     {!diffLoading && !hasPatch && (
                         <div className="text-secondary text-sm">{diffStatus != "" ? diffStatus : "No diff — the worktree matches its base."}</div>
                     )}
-                    {!diffLoading && hasPatch && <DiffBody patch={diff.patch} />}
+                    {!diffLoading && hasPatch && <DiffBody patch={diff.patch} model={model} />}
+                    {!diffLoading && hasPatch && <ReviewCommentQueue model={model} />}
                     {!diffLoading && diff != null && diff.untracked.length > 0 && (
                         <div className="flex flex-col gap-0.5">
                             <div className="text-xs uppercase tracking-wide text-secondary">Untracked</div>

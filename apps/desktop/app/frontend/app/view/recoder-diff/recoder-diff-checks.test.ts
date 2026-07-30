@@ -542,3 +542,73 @@ describe("RecoderDiffViewModel workspace switching", () => {
         expect(model.checksWorkspaceId).toBe("ws-old");
     });
 });
+
+describe("RecoderDiffViewModel review comments", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("addComment enqueues a trimmed comment and ignores empty bodies", () => {
+        const model = makeModel();
+        model.addComment("src/a.ts", 12, "  fix this  ");
+        model.addComment("src/a.ts", 13, "   ");
+        model.addComment("", 1, "no file");
+        expect(globalStore.get(model.pendingCommentsAtom)).toEqual([{ file: "src/a.ts", line: 12, body: "fix this" }]);
+    });
+
+    it("removeComment drops the comment at an index (bounds-safe)", () => {
+        const model = makeModel();
+        model.addComment("a.ts", 1, "one");
+        model.addComment("b.ts", null, "two");
+        model.removeComment(5);
+        model.removeComment(0);
+        expect(globalStore.get(model.pendingCommentsAtom)).toEqual([{ file: "b.ts", line: null, body: "two" }]);
+    });
+
+    it("sendComments POSTs the queue, clears it, and reports success", async () => {
+        const fetchMock = vi.fn().mockImplementation(() => okJson({ steered: null }));
+        vi.stubGlobal("fetch", fetchMock);
+        const model = makeModel();
+        globalStore.set(model.selectedIdAtom, "ws-1");
+        model.addComment("src/a.ts", 12, "extract helper");
+        await model.sendComments();
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            `${BaseUrl}/ws-1/review-comments`,
+            expect.objectContaining({ method: "POST" })
+        );
+        const sentBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+        expect(sentBody).toEqual({ comments: [{ file: "src/a.ts", line: 12, body: "extract helper" }] });
+        expect(globalStore.get(model.pendingCommentsAtom)).toEqual([]);
+        expect(globalStore.get(model.commentStatusAtom)).toBe("Sent 1 comment to the agent.");
+    });
+
+    it("sendComments is a no-op with an empty queue or no selection", async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+        const model = makeModel();
+        globalStore.set(model.selectedIdAtom, "ws-1");
+        await model.sendComments();
+        model.addComment("a.ts", 1, "x");
+        globalStore.set(model.selectedIdAtom, "");
+        await model.sendComments();
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("sendComments keeps the queue and surfaces the reason on a governance deny", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue({
+                ok: false,
+                status: 403,
+                json: async () => ({ success: false, error: { message: "needs approval" } }),
+            })
+        );
+        const model = makeModel();
+        globalStore.set(model.selectedIdAtom, "ws-1");
+        model.addComment("a.ts", 1, "x");
+        await model.sendComments();
+        expect(globalStore.get(model.commentStatusAtom)).toBe("needs approval");
+        expect(globalStore.get(model.pendingCommentsAtom)).toHaveLength(1);
+    });
+});
