@@ -55,7 +55,7 @@ import type {
   SubstrateAvailabilityView,
   WorkspaceView,
 } from './types.js';
-import type { CreateConductorWorkspaceInput, ConductorWriteResult } from './conductor-module.js';
+import type { CreateConductorWorkspaceInput, ConductorWriteResult, WorkspaceRunConfigView } from './conductor-module.js';
 import type { ReviewComment } from './review/review-comments.js';
 import type {
   WorkspaceDiffView,
@@ -441,6 +441,8 @@ export interface ConductorModule {
   workspaceReadiness(workspaceId: string): Promise<ReadinessView>;
   /** Detected dev-server command for the worktree's project (or null). */
   workspaceDevCommand(workspaceId: string): Promise<DevCommandView | null>;
+  /** Effective run config: committed scripts + stable RECODER_PORT + detected command (or null). */
+  workspaceRunConfig(workspaceId: string): Promise<WorkspaceRunConfigView | null>;
   /** Persist a sniffed loopback preview URL — GATED (`workspace.preview_url`). */
   setPreviewUrl(
     workspaceId: string,

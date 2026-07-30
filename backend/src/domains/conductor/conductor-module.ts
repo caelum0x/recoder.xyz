@@ -160,6 +160,8 @@ import {
 import { PrChecksService, type WorkspaceChecksView } from './services/pr-checks.service.js';
 import { MergeabilityService, type MergeabilityView } from './services/mergeability.service.js';
 import { WorktreeStatusService } from './services/worktree-status.service.js';
+import { computeWorkspacePort } from './services/workspace-port.js';
+import { readRepoConfigFile } from './services/repo-config-file.js';
 import { foldReadiness, type ReadinessView } from './services/readiness.service.js';
 import {
   assembleConvergenceEvidence,
@@ -221,6 +223,20 @@ export interface ConductorWriteResult<T> {
    * to converge (`empty`). Absent ⇒ the caller maps deny→403 / allow-fail→503 as usual.
    */
   readonly code?: 'unresolved' | 'empty';
+}
+
+/** The `GET …/run-config` read-model: how to run a workspace + its dev port. */
+export interface WorkspaceRunConfigView {
+  /** Stable per-workspace dev-server port (`RECODER_PORT`). */
+  readonly port: number;
+  /** Committed setup script (`.recoder/settings.json` scripts.setup); '' = none. */
+  readonly setup: string;
+  /** Effective run command: committed run script, else the detected dev command, else ''. */
+  readonly run: string;
+  /** Where `run` came from, so the UI can be truthful about the source. */
+  readonly runSource: 'config' | 'detected' | 'none';
+  /** The auto-detected dev command (null when unrecognized), for display/override. */
+  readonly detectedCommand: string | null;
 }
 
 /** States a `stop` may act on — exactly those with a legal `→ cancelled` transition. */
@@ -666,8 +682,9 @@ export class ConductorComposer implements ConductorModule {
       return;
     }
     const repoKey = repoKeyFor(input.projectId, input.repoPath);
+    const recoderPort = computeWorkspacePort(workspace.workspaceId);
     void this.repoSetup
-      .runSetup({ repoKey, worktreePath: workspace.worktreePath, workspaceId: workspace.workspaceId })
+      .runSetup({ repoKey, worktreePath: workspace.worktreePath, workspaceId: workspace.workspaceId, recoderPort })
       .then((result) => {
         if (result.ran && result.ok === false) {
           this.log.warn(
@@ -1699,6 +1716,34 @@ export class ConductorComposer implements ConductorModule {
     const workspace = await this.engine.getWorkspace(workspaceId);
     if (!workspace?.worktreePath) return null;
     return detectDevCommand(workspace.worktreePath);
+  }
+
+  /**
+   * The effective run config for a workspace (`GET …/run-config`): the committed
+   * `.recoder/settings.json` scripts, the stable `RECODER_PORT` derived from the
+   * committed port window, and the auto-detected dev command. The `run` field is
+   * the committed run script when set, else the detected command, else '' — so
+   * the UI shows one truthful "how do I run this" answer. Degrade-safe: no
+   * worktree ⇒ null; a missing/broken config file degrades to defaults.
+   */
+  async workspaceRunConfig(workspaceId: string): Promise<WorkspaceRunConfigView | null> {
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    if (!workspace?.worktreePath) return null;
+    const [config, detected] = await Promise.all([
+      readRepoConfigFile(workspace.worktreePath),
+      detectDevCommand(workspace.worktreePath),
+    ]);
+    const port = computeWorkspacePort(workspaceId, config.port.base, config.port.span);
+    const run = config.scripts.run !== '' ? config.scripts.run : detected?.command ?? '';
+    const runSource: WorkspaceRunConfigView['runSource'] =
+      config.scripts.run !== '' ? 'config' : detected != null ? 'detected' : 'none';
+    return {
+      port,
+      setup: config.scripts.setup,
+      run,
+      runSource,
+      detectedCommand: detected?.command ?? null,
+    };
   }
 
   // --- workspace detail: governed writes ---------------------------------------

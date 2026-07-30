@@ -17,6 +17,7 @@
  *   GET    /api/conductor/workspaces/:id/evidence  exportable convergence evidence record (404 when unmerged)
  *   GET    /api/conductor/workspaces/:id/evidence/export  framework-mapped evidence pack (`?format=md` for text)
  *   GET    /api/conductor/workspaces/:id/dev-command  detected dev command (or null)
+ *   GET    /api/conductor/workspaces/:id/run-config  committed scripts + RECODER_PORT + detected cmd
  *   GET    /api/conductor/workspaces/:id/preview-verification  last preview verification summary (404 when unverified)
  *   GET    /api/conductor/workspaces/:id/view     attention-enriched view (truthful unknown)
  *   GET    /api/conductor/views                   attention-enriched views of every workspace
@@ -330,6 +331,14 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     middleware.authenticate,
     asyncHandler(async (req, res) => {
       sendSuccess(res, await module.workspaceDevCommand(req.params.id));
+    }),
+  );
+
+  router.get(
+    '/workspaces/:id/run-config',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      sendSuccess(res, await module.workspaceRunConfig(req.params.id));
     }),
   );
 

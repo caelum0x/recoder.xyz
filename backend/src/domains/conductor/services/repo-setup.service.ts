@@ -77,6 +77,12 @@ export interface RunSetupInput {
   readonly worktreePath: string;
   /** For log correlation only. */
   readonly workspaceId?: string;
+  /**
+   * The workspace's stable dev-server port, injected into the script env as
+   * `RECODER_PORT` so a setup step can pre-bind/echo it. Absent ⇒ not injected
+   * (the script just doesn't see the var).
+   */
+  readonly recoderPort?: number;
 }
 
 export interface RepoSetupServiceDeps {
@@ -204,6 +210,9 @@ export class RepoSetupService {
         cwd: input.worktreePath,
         timeoutMs: SETUP_TIMEOUT_MS,
         maxBuffer: SETUP_MAX_BUFFER,
+        // Give the setup script the workspace's stable dev port (merged onto
+        // process.env by the exec seam), matching what the run script will bind.
+        ...(input.recoderPort != null ? { env: { RECODER_PORT: String(input.recoderPort) } } : {}),
       });
       this.log.info(
         { workspaceId: input.workspaceId, repoKey: input.repoKey },
