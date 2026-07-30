@@ -56,6 +56,7 @@ import type {
   WorkspaceView,
 } from './types.js';
 import type { CreateConductorWorkspaceInput, ConductorWriteResult } from './conductor-module.js';
+import type { ReviewComment } from './review/review-comments.js';
 import type {
   WorkspaceDiffView,
   WorkspaceDiffFilesView,
@@ -341,6 +342,16 @@ export interface ConductorModule {
   ): Promise<ConductorWriteResult<Workspace>>;
   /** Steer a live agent (send-keys) — GATED (`workspace.steer`). */
   steerWorkspace(input: SteerInput, principal: Principal): Promise<ConductorWriteResult<void>>;
+  /**
+   * Send line-anchored diff-review comments to a live agent — GATED
+   * (`workspace.steer`): folds the comments into one structured prompt and steers
+   * it, so the reviewer's `file:line` notes become precise context the agent acts
+   * on. Delegates to {@link steerWorkspace} for all governance.
+   */
+  sendReviewComments(
+    input: { readonly workspaceId: string; readonly comments: readonly ReviewComment[] },
+    principal: Principal,
+  ): Promise<ConductorWriteResult<void>>;
   /**
    * Gracefully STOP a running workspace — GATED (`workspace.stop`): substrate
    * session kill (worktree preserved for review) + `cancelled` transition +

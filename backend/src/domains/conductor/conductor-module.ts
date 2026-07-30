@@ -112,6 +112,11 @@ import {
 } from './review/workspace-continue.ops.js';
 import { normalizeLocalPreviewUrl } from './review/preview-url-guard.js';
 import {
+  composeReviewPrompt,
+  parseReviewComments,
+  type ReviewComment,
+} from './review/review-comments.js';
+import {
   verifyWorkspacePreview,
   type PreviewVerifyDeps,
   type PreviewVerifyOptions,
@@ -971,6 +976,26 @@ export class ConductorComposer implements ConductorModule {
       this.log.warn({ err, workspaceId: input.workspaceId }, 'conductor steerWorkspace delivery failed');
       return { ok: false, verdict, reason };
     }
+  }
+
+  /**
+   * Send diff-review comments to the live agent: fold the line-anchored comments
+   * into ONE structured prompt (`composeReviewPrompt`) and STEER it into the
+   * session. This is the review→agent roundtrip — the reviewer's `file:line`
+   * notes become precise context so the agent addresses the right spots.
+   *
+   * Delegates to {@link steerWorkspace} for ALL governance: the gate, the audit
+   * seal, the running-state + live-session checks, and the send-keys transport.
+   * A payload with no valid comments composes to an empty prompt, which
+   * steerWorkspace refuses truthfully (`steer keys must be non-empty`) AFTER the
+   * gate — the HTTP route pre-validates for a clean 400 before we reach here.
+   */
+  async sendReviewComments(
+    input: { readonly workspaceId: string; readonly comments: readonly ReviewComment[] },
+    principal: Principal,
+  ): Promise<ConductorWriteResult<void>> {
+    const prompt = composeReviewPrompt(parseReviewComments(input.comments));
+    return this.steerWorkspace({ workspaceId: input.workspaceId, keys: prompt, submit: true }, principal);
   }
 
   /**
