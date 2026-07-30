@@ -337,3 +337,17 @@ describe('foldReadiness — worktree open-work signal', () => {
     expect(view.signals.map((s) => s.id)).toEqual(['lifecycle', 'worktree', 'merge', 'checks', 'preview']);
   });
 });
+
+describe('foldReadiness — PR metadata', () => {
+  it('surfaces the open PR identity (number/state/draft/url) when a PR exists', () => {
+    const view = foldReadiness({ state: 'awaiting_review' as WorkspaceState, prStatus: passingChecks() });
+    expect(view.pr).toEqual({ number: 7, state: 'open', draft: false, url: '' });
+  });
+
+  it('pr is null when there is no PR / no prStatus', () => {
+    expect(foldReadiness({ state: 'awaiting_review' as WorkspaceState }).pr).toBeNull();
+    expect(
+      foldReadiness({ state: 'awaiting_review' as WorkspaceState, prStatus: { available: true, hasPr: false } }).pr,
+    ).toBeNull();
+  });
+});
