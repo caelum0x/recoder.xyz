@@ -15,6 +15,10 @@ import {
     isTerminalWorkspaceState,
     suggestNextAction,
     workspaceStateMap,
+    deriveProjectIdentity,
+    deriveProjects,
+    filterByProject,
+    DEFAULT_PROJECT_ID,
     TASK_GROUP_METADATA_KEY,
     type ContestedFile,
     type RecoderWorkspace,
@@ -614,5 +618,55 @@ describe("suggestNextAction", () => {
     it("suggests nothing for archived or unknown states (degrade-safe)", () => {
         expect(suggestNextAction("archived", withChanges, true)).toBe(null);
         expect(suggestNextAction("some_future_state", withChanges, true)).toBe(null);
+    });
+});
+
+describe("deriveProjectIdentity", () => {
+    it("derives a name (basename) and a stable slug id from a repo path", () => {
+        expect(deriveProjectIdentity("/Users/x/recoder.xyz")).toEqual({
+            projectId: "recoder.xyz",
+            projectName: "recoder.xyz",
+        });
+        expect(deriveProjectIdentity("/home/dev/My App")).toEqual({
+            projectId: "my-app",
+            projectName: "My App",
+        });
+    });
+
+    it("ignores trailing slashes and handles Windows separators", () => {
+        expect(deriveProjectIdentity("/a/b/proj/").projectId).toBe("proj");
+        expect(deriveProjectIdentity("C:\\code\\Widget").projectName).toBe("Widget");
+        expect(deriveProjectIdentity("C:\\code\\Widget").projectId).toBe("widget");
+    });
+
+    it("degrades an empty or slug-less path to DEFAULT_PROJECT_ID (never blank)", () => {
+        expect(deriveProjectIdentity("")).toEqual({ projectId: DEFAULT_PROJECT_ID, projectName: DEFAULT_PROJECT_ID });
+        expect(deriveProjectIdentity("   ")).toEqual({ projectId: DEFAULT_PROJECT_ID, projectName: DEFAULT_PROJECT_ID });
+        expect(deriveProjectIdentity("/a/b/@@@").projectId).toBe(DEFAULT_PROJECT_ID);
+    });
+});
+
+describe("deriveProjects / filterByProject", () => {
+    it("rolls up distinct projects with counts, sorted by id", () => {
+        const ws = [
+            makeWs({ projectId: "beta" }),
+            makeWs({ projectId: "alpha" }),
+            makeWs({ projectId: "beta" }),
+            makeWs({ projectId: undefined }),
+        ];
+        expect(deriveProjects(ws)).toEqual([
+            { projectId: "alpha", count: 1 },
+            { projectId: "beta", count: 2 },
+            { projectId: DEFAULT_PROJECT_ID, count: 1 },
+        ]);
+    });
+
+    it("filters to one project; empty id means all projects", () => {
+        const a = makeWs({ projectId: "alpha" });
+        const b = makeWs({ projectId: "beta" });
+        const legacy = makeWs({ projectId: undefined });
+        expect(filterByProject([a, b, legacy], "alpha")).toEqual([a]);
+        expect(filterByProject([a, b, legacy], DEFAULT_PROJECT_ID)).toEqual([legacy]);
+        expect(filterByProject([a, b, legacy], "")).toHaveLength(3);
     });
 });

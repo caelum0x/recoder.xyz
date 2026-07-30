@@ -6,11 +6,15 @@ import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { agentLabel } from "./recoder-agent-labels";
 import {
     bucketWorkspaceGroups,
+    deriveProjectIdentity,
+    deriveProjects,
     detectAttentionTransitions,
+    filterByProject,
     filterWorkspaces,
     groupByTaskGroup,
     isTerminalWorkspaceState,
     workspaceStateMap,
+    type ProjectSummary,
     type CompareView,
     type MergeabilityView,
     type ReadinessView,
@@ -206,10 +210,14 @@ class RecoderViewModel implements ViewModel {
     busyRowAtom: PrimitiveAtom<string>;
     // Parallel-run groups derived from the current workspaces (metadata.taskGroup).
     groupsAtom!: Atom<RecoderWorkspaceGroup[]>;
-    // Board filter bar state: free-text query + the Show view.
+    // Board filter bar state: free-text query + the Show view + the Project filter.
     boardFilterAtom: PrimitiveAtom<string>;
     boardShowAtom: PrimitiveAtom<RecoderBoardShow>;
-    // The board's visible rows: Show view + text query applied to the unfiltered list.
+    // Selected project id ("" = all projects). Filters the board to one repo.
+    boardProjectAtom: PrimitiveAtom<string>;
+    // Distinct projects across ALL workspaces (with counts) for the filter dropdown.
+    projectsAtom!: Atom<ProjectSummary[]>;
+    // The board's visible rows: Show view + text query + project applied to the unfiltered list.
     boardWorkspacesAtom!: Atom<RecoderWorkspace[]>;
     // The visible rows grouped by taskGroup and folded into recency buckets —
     // exactly the order the board renders and keyboard nav walks.
@@ -292,12 +300,17 @@ class RecoderViewModel implements ViewModel {
         this.notifiedAttentionKeys = new Set();
         this.boardFilterAtom = atom("") as PrimitiveAtom<string>;
         this.boardShowAtom = atom("active") as PrimitiveAtom<RecoderBoardShow>;
+        this.boardProjectAtom = atom("") as PrimitiveAtom<string>;
+        this.projectsAtom = atom((get) => deriveProjects(get(this.allWorkspacesAtom)));
         this.workspacesAtom = atom((get) =>
             get(this.allWorkspacesAtom).filter((w) => !isTerminalWorkspaceState(w.state))
         );
         this.groupsAtom = atom((get) => groupByTaskGroup(get(this.workspacesAtom)));
         this.boardWorkspacesAtom = atom((get) =>
-            filterWorkspaces(get(this.allWorkspacesAtom), get(this.boardShowAtom), get(this.boardFilterAtom))
+            filterByProject(
+                filterWorkspaces(get(this.allWorkspacesAtom), get(this.boardShowAtom), get(this.boardFilterAtom)),
+                get(this.boardProjectAtom)
+            )
         );
         // `new Date()` at compute time is fresh enough: the 6s poll re-sets
         // allWorkspacesAtom, which recomputes the buckets.
@@ -680,7 +693,9 @@ class RecoderViewModel implements ViewModel {
                 }
                 const reqBody = {
                     spaceId: "default",
-                    projectId: "default",
+                    // Real project identity from the repo path so the board can group
+                    // and filter by project (was hardcoded "default").
+                    projectId: deriveProjectIdentity(repoPath).projectId,
                     taskId: genTaskId(),
                     repoPath,
                     runtimeId: agent,
