@@ -199,6 +199,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const buckets = useAtomValue(model.boardBucketsAtom);
     const [boardFilter, setBoardFilter] = useAtom(model.boardFilterAtom);
     const [boardShow, setBoardShow] = useAtom(model.boardShowAtom);
+    const [boardProject, setBoardProject] = useAtom(model.boardProjectAtom);
+    const projects = useAtomValue(model.projectsAtom);
     const compare = useAtomValue(model.compareAtom);
     const compareOpen = useAtomValue(model.compareOpenAtom);
     const loading = useAtomValue(model.loadingAtom);
@@ -831,6 +833,23 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         value={boardFilter}
                         onChange={(e) => setBoardFilter(e.target.value)}
                     />
+                    {projects.length > 1 && (
+                        <label className="flex items-center gap-1.5">
+                            <span className={FIELD_LABEL}>Project</span>
+                            <select
+                                className={`${INPUT} cursor-pointer max-w-[12rem]`}
+                                value={boardProject}
+                                onChange={(e) => setBoardProject(e.target.value)}
+                            >
+                                <option value="">All projects</option>
+                                {projects.map((p) => (
+                                    <option key={p.projectId} value={p.projectId}>
+                                        {p.projectId} ({p.count})
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    )}
                     <label className="flex items-center gap-1.5">
                         <span className={FIELD_LABEL}>Show</span>
                         <select

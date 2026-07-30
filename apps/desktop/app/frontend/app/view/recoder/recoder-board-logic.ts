@@ -19,6 +19,10 @@ type RecoderWorkspace = Pick<Workspace, "workspaceId" | "branch" | "runtimeId" |
         substrate?: string;
         sessionName?: string;
         metadata?: Record<string, unknown>;
+        // The repo this workspace belongs to (derived from repoPath at launch, see
+        // deriveProjectIdentity). Absent on legacy rows launched before project
+        // identity existed — those group under the DEFAULT_PROJECT_ID bucket.
+        projectId?: string;
     };
 
 // A per-workspace changed-line summary, folded from GET /workspaces/:id/diff/files.
@@ -376,6 +380,74 @@ function isTerminalWorkspaceState(state: string): boolean {
     return state == "archived" || state == "failed";
 }
 
+// The bucket for workspaces with no derivable project (empty repoPath, or legacy
+// rows launched before project identity). One shared literal so the launch POST,
+// the grouping, and the filter all agree.
+const DEFAULT_PROJECT_ID = "default";
+
+// A repo's identity for grouping/filtering the board. `projectId` is a stable,
+// path-safe slug shared by every workspace of the repo; `projectName` is the raw
+// basename for display.
+type ProjectIdentity = {
+    projectId: string;
+    projectName: string;
+};
+
+// Pure: derive a repo's identity from its filesystem path — the basename is the
+// human name, its lowercased slug (non `[a-z0-9._-]` runs → `-`) is the stable id
+// every workspace of that repo shares. Trailing slashes are ignored; an empty or
+// slug-less path degrades to DEFAULT_PROJECT_ID (never a throw, never a blank id).
+function deriveProjectIdentity(repoPath: string): ProjectIdentity {
+    const trimmed = (repoPath ?? "").trim().replace(/[/\\]+$/, "");
+    if (trimmed == "") {
+        return { projectId: DEFAULT_PROJECT_ID, projectName: DEFAULT_PROJECT_ID };
+    }
+    const base = trimmed.split(/[/\\]+/).pop() ?? "";
+    const projectName = base != "" ? base : DEFAULT_PROJECT_ID;
+    const slug = projectName
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    return { projectId: slug != "" ? slug : DEFAULT_PROJECT_ID, projectName };
+}
+
+// The projectId a workspace groups under — its own, or DEFAULT_PROJECT_ID when a
+// legacy row carries none. Kept in one place so grouping and filtering agree.
+function workspaceProjectId(ws: RecoderWorkspace): string {
+    const id = (ws.projectId ?? "").trim();
+    return id != "" ? id : DEFAULT_PROJECT_ID;
+}
+
+// One project's roll-up for the projects filter: its id and how many workspaces
+// (of the passed set) belong to it.
+type ProjectSummary = {
+    projectId: string;
+    count: number;
+};
+
+// Pure: the distinct projects across a workspace set, each with its count, sorted
+// by id so the filter dropdown is stable. Empty in → empty out.
+function deriveProjects(workspaces: readonly RecoderWorkspace[]): ProjectSummary[] {
+    const counts = new Map<string, number>();
+    for (const ws of workspaces) {
+        const id = workspaceProjectId(ws);
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+        .map(([projectId, count]) => ({ projectId, count }))
+        .sort((a, b) => a.projectId.localeCompare(b.projectId));
+}
+
+// Pure: keep only the workspaces of one project. An empty `projectId` means "all
+// projects" (no filtering) so the board's default shows everything.
+function filterByProject(workspaces: readonly RecoderWorkspace[], projectId: string): RecoderWorkspace[] {
+    const target = projectId.trim();
+    if (target == "") {
+        return [...workspaces];
+    }
+    return workspaces.filter((ws) => workspaceProjectId(ws) == target);
+}
+
 // The one existing board action a row should PROMOTE as the workspace moves
 // toward a merge. Maps 1:1 onto a button already rendered by WorkspaceRow, so a
 // suggestion never invents a new capability — it only highlights the next step.
@@ -626,7 +698,14 @@ export {
     isTerminalWorkspaceState,
     suggestNextAction,
     workspaceStateMap,
+    deriveProjectIdentity,
+    deriveProjects,
+    filterByProject,
+    workspaceProjectId,
+    DEFAULT_PROJECT_ID,
     TASK_GROUP_METADATA_KEY,
+    type ProjectIdentity,
+    type ProjectSummary,
     type RecoderRowActionId,
     type RecoderRowSuggestion,
     type RecoderAttentionEvent,
