@@ -18,6 +18,7 @@ import {
     deriveProjectIdentity,
     deriveProjects,
     filterByProject,
+    parseGhqLayout,
     workspaceSearchKeywords,
     DEFAULT_PROJECT_ID,
     TASK_GROUP_METADATA_KEY,
@@ -695,5 +696,49 @@ describe("workspaceSearchKeywords", () => {
         const kw = workspaceSearchKeywords(makeWs({ projectId: undefined, metadata: { title: 42 } }));
         expect(kw).not.toContain("undefined");
         expect(kw).toContain(DEFAULT_PROJECT_ID); // legacy project falls to default
+    });
+});
+
+describe("parseGhqLayout + deriveProjectIdentity (ghq host/owner/repo)", () => {
+    it("detects the ghq host/owner/repo triple in a path", () => {
+        expect(parseGhqLayout("/root/recoder/repos/github.com/caelum0x/recoder.xyz".split("/"))).toEqual({
+            host: "github.com",
+            owner: "caelum0x",
+            repo: "recoder.xyz",
+        });
+        expect(parseGhqLayout("home/dev/gitlab.com/acme/widget".split("/"))).toEqual({
+            host: "gitlab.com",
+            owner: "acme",
+            repo: "widget",
+        });
+    });
+
+    it("returns null when there is no host-shaped segment with an owner+repo after it", () => {
+        expect(parseGhqLayout("/Users/x/recoder.xyz".split("/"))).toBeNull(); // host-like, but it's the LAST segment
+        expect(parseGhqLayout("/home/dev/project".split("/"))).toBeNull();
+    });
+
+    it("derives owner/repo identity for a ghq-layout repo (disambiguated id)", () => {
+        expect(deriveProjectIdentity("~/recoder/repos/github.com/caelum0x/recoder.xyz")).toEqual({
+            projectId: "caelum0x-recoder.xyz",
+            projectName: "caelum0x/recoder.xyz",
+            host: "github.com",
+            owner: "caelum0x",
+            repo: "recoder.xyz",
+        });
+    });
+
+    it("keeps same-named repos under different owners distinct", () => {
+        const a = deriveProjectIdentity("/r/github.com/alice/app");
+        const b = deriveProjectIdentity("/r/github.com/bob/app");
+        expect(a.projectId).not.toBe(b.projectId);
+        expect(a.projectId).toBe("alice-app");
+        expect(b.projectId).toBe("bob-app");
+    });
+
+    it("still uses the basename for a plain (non-ghq) path — no host/owner/repo", () => {
+        const id = deriveProjectIdentity("/Users/x/recoder.xyz");
+        expect(id).toEqual({ projectId: "recoder.xyz", projectName: "recoder.xyz" });
+        expect(id.owner).toBeUndefined();
     });
 });
