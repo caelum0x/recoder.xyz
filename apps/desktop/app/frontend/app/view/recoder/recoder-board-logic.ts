@@ -386,28 +386,71 @@ function isTerminalWorkspaceState(state: string): boolean {
 const DEFAULT_PROJECT_ID = "default";
 
 // A repo's identity for grouping/filtering the board. `projectId` is a stable,
-// path-safe slug shared by every workspace of the repo; `projectName` is the raw
-// basename for display.
+// path-safe slug shared by every workspace of the repo; `projectName` is the
+// display name. When the path follows the ghq/Recoder-managed layout
+// (root/host/owner/repo), `host`/`owner`/`repo` are populated too, so cards can
+// group under the {host,owner,repo} key and same-named repos across owners stay
+// distinct. Absent for a plain (non-ghq) path.
 type ProjectIdentity = {
     projectId: string;
     projectName: string;
+    host?: string;
+    owner?: string;
+    repo?: string;
 };
 
-// Pure: derive a repo's identity from its filesystem path — the basename is the
-// human name, its lowercased slug (non `[a-z0-9._-]` runs → `-`) is the stable id
-// every workspace of that repo shares. Trailing slashes are ignored; an empty or
-// slug-less path degrades to DEFAULT_PROJECT_ID (never a throw, never a blank id).
+// A path segment that looks like a git HOST — a bare domain (label(.label)+ with
+// a letters-only TLD). Used to detect the ghq `host/owner/repo` triple on disk.
+function isHostSegment(segment: string): boolean {
+    return /^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/i.test(segment);
+}
+
+// Pure: detect the ghq layout convention (x-motemen/ghq) in a path — the FIRST
+// host-like segment followed by an owner and a repo segment. Returns the triple,
+// or null when the path isn't ghq-shaped (the caller then falls back to basename).
+// Deeper segments after repo (a worktree subdir) are ignored; standard ghq is the
+// 3-level host/owner/repo.
+function parseGhqLayout(segments: readonly string[]): { host: string; owner: string; repo: string } | null {
+    for (let i = 0; i + 2 < segments.length; i += 1) {
+        if (isHostSegment(segments[i]) && segments[i + 1] != "" && segments[i + 2] != "") {
+            return { host: segments[i], owner: segments[i + 1], repo: segments[i + 2] };
+        }
+    }
+    return null;
+}
+
+function slugify(value: string): string {
+    return value
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+}
+
+// Pure: derive a repo's identity from its filesystem path. A ghq-layout path
+// (root/host/owner/repo) yields projectName `owner/repo` and a
+// `owner-repo`-slugged id (so two repos with the same name under different owners
+// never collide); any other path uses the basename. Trailing slashes are ignored;
+// an empty or slug-less path degrades to DEFAULT_PROJECT_ID (never throws/blank).
 function deriveProjectIdentity(repoPath: string): ProjectIdentity {
     const trimmed = (repoPath ?? "").trim().replace(/[/\\]+$/, "");
     if (trimmed == "") {
         return { projectId: DEFAULT_PROJECT_ID, projectName: DEFAULT_PROJECT_ID };
     }
-    const base = trimmed.split(/[/\\]+/).pop() ?? "";
+    const segments = trimmed.split(/[/\\]+/).filter((s) => s != "");
+    const ghq = parseGhqLayout(segments);
+    if (ghq != null) {
+        const slug = slugify(`${ghq.owner}-${ghq.repo}`);
+        return {
+            projectId: slug != "" ? slug : DEFAULT_PROJECT_ID,
+            projectName: `${ghq.owner}/${ghq.repo}`,
+            host: ghq.host,
+            owner: ghq.owner,
+            repo: ghq.repo,
+        };
+    }
+    const base = segments[segments.length - 1] ?? "";
     const projectName = base != "" ? base : DEFAULT_PROJECT_ID;
-    const slug = projectName
-        .toLowerCase()
-        .replace(/[^a-z0-9._-]+/g, "-")
-        .replace(/^-+|-+$/g, "");
+    const slug = slugify(projectName);
     return { projectId: slug != "" ? slug : DEFAULT_PROJECT_ID, projectName };
 }
 
@@ -713,6 +756,7 @@ export {
     deriveProjectIdentity,
     deriveProjects,
     filterByProject,
+    parseGhqLayout,
     workspaceProjectId,
     workspaceSearchKeywords,
     DEFAULT_PROJECT_ID,
