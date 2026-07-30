@@ -18,8 +18,14 @@
 export interface ReviewComment {
   /** The changed file the comment is about (repo-relative). Required. */
   readonly file: string;
-  /** The 1-based line in the new file the comment anchors to; omitted ⇒ file-level. */
+  /** The 1-based line the comment anchors to; omitted ⇒ file-level. */
   readonly line?: number;
+  /**
+   * Which side of the diff `line` refers to (difit's diff-source distinction):
+   * `'new'` (post-change, the default) or `'old'` (a deleted/pre-change line).
+   * Absent ⇒ treated as `'new'`.
+   */
+  readonly side?: 'old' | 'new';
   /** The reviewer's note. Required (empty ⇒ the comment is dropped). */
   readonly body: string;
 }
@@ -47,14 +53,20 @@ export function parseReviewComments(data: unknown): ReviewComment[] {
     const lineRaw = e.line;
     const line =
       typeof lineRaw === 'number' && Number.isInteger(lineRaw) && lineRaw > 0 ? lineRaw : undefined;
-    out.push(line != null ? { file, line, body } : { file, body });
+    // `side` is only meaningful with a line; default 'new', only 'old' is carried.
+    const side = line != null && e.side === 'old' ? ('old' as const) : undefined;
+    out.push({ file, body, ...(line != null ? { line } : {}), ...(side != null ? { side } : {}) });
   }
   return out;
 }
 
-/** `src/foo.ts:42` when line-anchored, else the bare `src/foo.ts` (file-level). */
+/**
+ * `src/foo.ts:42` when line-anchored (with a ` (old)` marker for a pre-change
+ * line so the agent edits the right side), else the bare `src/foo.ts`.
+ */
 function anchor(comment: ReviewComment): string {
-  return comment.line != null ? `${comment.file}:${comment.line}` : comment.file;
+  if (comment.line == null) return comment.file;
+  return `${comment.file}:${comment.line}${comment.side === 'old' ? ' (old)' : ''}`;
 }
 
 /**
