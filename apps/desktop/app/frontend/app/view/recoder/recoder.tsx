@@ -26,6 +26,7 @@ import {
 } from "./recoder-model";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
 import { RecoderShortcutsOverlay } from "./recoder-shortcuts";
+import { RecoderWhatsNew } from "./recoder-whats-new";
 import { RecoderErrorRow, RecoderSkeleton } from "./recoder-states";
 import {
     CHIP,
@@ -584,6 +585,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     )}
                 </button>
             </div>
+
+            <RecoderWhatsNew />
 
             <RecoderErrorRow message={coldStart ? "" : error} />
             {loading && workspaces.length == 0 && error == "" && <RecoderSkeleton rows={3} />}
