@@ -70,7 +70,7 @@ const ClientId = "recoder-desktop";
 const DefaultPollIntervalMs = 5000;
 const MaxPollIntervalMs = 15000;
 
-function identityFromUser(user: unknown): DeviceIdentity | undefined {
+export function identityFromUser(user: unknown): DeviceIdentity | undefined {
     if (user == null || typeof user !== "object") {
         return undefined;
     }
@@ -85,8 +85,16 @@ function identityFromUser(user: unknown): DeviceIdentity | undefined {
     if (typeof u.plan === "string" && u.plan) {
         identity.plan = u.plan;
     }
-    if (typeof u.avatarUrl === "string" && u.avatarUrl) {
-        identity.avatarUrl = u.avatarUrl;
+    // Better Auth's standard profile field is `image`; some payloads carry
+    // `avatarUrl`. Accept either so an OAuth user's picture reaches the header.
+    const avatar =
+        typeof u.avatarUrl === "string" && u.avatarUrl
+            ? u.avatarUrl
+            : typeof u.image === "string" && u.image
+              ? u.image
+              : "";
+    if (avatar) {
+        identity.avatarUrl = avatar;
     }
     return Object.keys(identity).length > 0 ? identity : undefined;
 }

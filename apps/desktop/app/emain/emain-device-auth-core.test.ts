@@ -11,7 +11,7 @@
  * session; a corrupt session file reads as signed out (never a crash).
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { DeviceAuthManager, DeviceLoginPrompt } from "./emain-device-auth-core";
+import { DeviceAuthManager, DeviceLoginPrompt, identityFromUser } from "./emain-device-auth-core";
 
 interface FakeFile {
     content?: string;
@@ -37,6 +37,30 @@ function makeFakeFs(file: FakeFile) {
 }
 
 const identity = { email: "caelum@recoder.xyz", name: "caelum0x", plan: "pro" };
+
+describe("identityFromUser — avatar threading", () => {
+    it("maps Better Auth's `image` field to avatarUrl", () => {
+        expect(identityFromUser({ name: "Ada", image: "https://cdn/ada.png" })).toEqual({
+            name: "Ada",
+            avatarUrl: "https://cdn/ada.png",
+        });
+    });
+
+    it("prefers an explicit avatarUrl over image", () => {
+        expect(identityFromUser({ avatarUrl: "https://a/pref.png", image: "https://a/img.png" })?.avatarUrl).toBe(
+            "https://a/pref.png"
+        );
+    });
+
+    it("omits avatarUrl when neither field is a non-empty string", () => {
+        expect(identityFromUser({ name: "Ada", image: "", avatarUrl: 42 })).toEqual({ name: "Ada" });
+    });
+
+    it("returns undefined for a non-object / empty user (never throws)", () => {
+        expect(identityFromUser(null)).toBeUndefined();
+        expect(identityFromUser({})).toBeUndefined();
+    });
+});
 
 /** A scripted token endpoint: shift one response per poll. */
 function makeFetch(tokenResponses: Array<{ status: number; body: unknown }>) {
