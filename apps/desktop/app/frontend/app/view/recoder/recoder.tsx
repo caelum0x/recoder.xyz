@@ -16,6 +16,7 @@ import {
     isTerminalWorkspaceState,
     RecoderViewModel,
     suggestNextAction,
+    workspaceSearchKeywords,
     type RecoderBoardShow,
     type RecoderDiffSummary,
     type RecoderRowActionId,
@@ -472,15 +473,26 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         ];
         for (const ws of workspaces) {
             const wsLabel = `${agentLabel(ws.runtimeId)} · ${ws.branch}`;
+            // Every command for this workspace carries the same search keywords so
+            // ⌘K finds it by branch / project / agent / state / task title.
+            const keywords = workspaceSearchKeywords(ws);
             list.push({
                 id: `session-${ws.workspaceId}`,
                 title: `Open session — ${wsLabel}`,
+                keywords,
                 run: () => openSession(ws.workspaceId),
+            });
+            list.push({
+                id: `review-${ws.workspaceId}`,
+                title: `Review — ${wsLabel}`,
+                keywords,
+                run: () => openReview(ws.workspaceId),
             });
             if (ws.sessionName) {
                 list.push({
                     id: `terminal-${ws.workspaceId}`,
                     title: `Open terminal — ${wsLabel}`,
+                    keywords,
                     run: () => openTerminal(ws, setup.tmuxBin),
                 });
             }
@@ -488,12 +500,14 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                 list.push({
                     id: `merge-${ws.workspaceId}`,
                     title: `Merge — ${wsLabel}`,
+                    keywords,
                     run: () => model.mergeWorkspace(ws.workspaceId),
                 });
             }
             list.push({
                 id: `archive-${ws.workspaceId}`,
                 title: `Archive — ${wsLabel}`,
+                keywords,
                 run: () => model.archiveWorkspace(ws.workspaceId),
             });
         }

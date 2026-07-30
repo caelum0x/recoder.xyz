@@ -418,6 +418,18 @@ function workspaceProjectId(ws: RecoderWorkspace): string {
     return id != "" ? id : DEFAULT_PROJECT_ID;
 }
 
+// Pure: the searchable text for a workspace, folded for the command palette so
+// ⌘K finds a workspace by its branch, project, agent, state, or task title/prompt
+// — not just by a command's visible label. Non-string metadata degrades to ''.
+function workspaceSearchKeywords(ws: RecoderWorkspace): string {
+    const meta = ws.metadata ?? {};
+    const title = typeof meta.title == "string" ? meta.title : "";
+    const prompt = typeof meta.prompt == "string" ? meta.prompt : "";
+    return [ws.branch ?? "", workspaceProjectId(ws), agentLabel(ws.runtimeId ?? ""), ws.state ?? "", title, prompt]
+        .filter((s) => s != "")
+        .join(" ");
+}
+
 // One project's roll-up for the projects filter: its id and how many workspaces
 // (of the passed set) belong to it.
 type ProjectSummary = {
@@ -702,6 +714,7 @@ export {
     deriveProjects,
     filterByProject,
     workspaceProjectId,
+    workspaceSearchKeywords,
     DEFAULT_PROJECT_ID,
     TASK_GROUP_METADATA_KEY,
     type ProjectIdentity,

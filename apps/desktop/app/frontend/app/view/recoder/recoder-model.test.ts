@@ -18,6 +18,7 @@ import {
     deriveProjectIdentity,
     deriveProjects,
     filterByProject,
+    workspaceSearchKeywords,
     DEFAULT_PROJECT_ID,
     TASK_GROUP_METADATA_KEY,
     type ContestedFile,
@@ -668,5 +669,31 @@ describe("deriveProjects / filterByProject", () => {
         expect(filterByProject([a, b, legacy], "alpha")).toEqual([a]);
         expect(filterByProject([a, b, legacy], DEFAULT_PROJECT_ID)).toEqual([legacy]);
         expect(filterByProject([a, b, legacy], "")).toHaveLength(3);
+    });
+});
+
+describe("workspaceSearchKeywords", () => {
+    it("folds branch, project, agent label, state, and task title/prompt", () => {
+        const kw = workspaceSearchKeywords(
+            makeWs({
+                branch: "feat/login",
+                projectId: "recoder.xyz",
+                runtimeId: "claude_code",
+                state: "awaiting_review",
+                metadata: { title: "Fix the auth flow", prompt: "harden sessions" },
+            })
+        );
+        expect(kw).toContain("feat/login");
+        expect(kw).toContain("recoder.xyz");
+        expect(kw).toContain("Claude Code"); // agentLabel of claude_code
+        expect(kw).toContain("awaiting_review");
+        expect(kw).toContain("Fix the auth flow");
+        expect(kw).toContain("harden sessions");
+    });
+
+    it("degrades non-string metadata and missing fields to a clean string (no 'undefined')", () => {
+        const kw = workspaceSearchKeywords(makeWs({ projectId: undefined, metadata: { title: 42 } }));
+        expect(kw).not.toContain("undefined");
+        expect(kw).toContain(DEFAULT_PROJECT_ID); // legacy project falls to default
     });
 });

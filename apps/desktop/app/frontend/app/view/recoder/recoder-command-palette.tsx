@@ -3,7 +3,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type RecoderCommand = { id: string; title: string; shortcut?: string; run: () => void };
+// `keywords` is extra searchable text NOT shown in the row — a workspace command
+// carries its branch/project/agent/state/prompt here so the palette finds it by
+// any of those, turning ⌘K into workspace search, not just command-title search.
+type RecoderCommand = { id: string; title: string; shortcut?: string; keywords?: string; run: () => void };
 
 type RecoderCommandPaletteProps = { commands: RecoderCommand[]; onClose: () => void };
 
@@ -23,6 +26,13 @@ function fuzzyMatch(query: string, target: string): boolean {
         }
     }
     return qi == q.length;
+}
+
+// A command matches the query when the visible title OR its hidden keywords match.
+// The two are matched SEPARATELY (not concatenated) so a subsequence can't span
+// the title→keywords boundary and produce a surprising hit.
+function commandMatches(query: string, command: RecoderCommand): boolean {
+    return fuzzyMatch(query, command.title) || (command.keywords != null && fuzzyMatch(query, command.keywords));
 }
 
 type PaletteRowProps = { command: RecoderCommand; selected: boolean; onHover: () => void; onRun: () => void };
@@ -61,7 +71,7 @@ function RecoderCommandPalette({ commands, onClose }: RecoderCommandPaletteProps
         inputRef.current?.focus();
     }, []);
 
-    const filtered = useMemo(() => commands.filter((c) => fuzzyMatch(query, c.title)), [commands, query]);
+    const filtered = useMemo(() => commands.filter((c) => commandMatches(query, c)), [commands, query]);
 
     useEffect(() => {
         if (filtered.length == 0) {
@@ -146,4 +156,4 @@ function RecoderCommandPalette({ commands, onClose }: RecoderCommandPaletteProps
 
 RecoderCommandPalette.displayName = "RecoderCommandPalette";
 
-export { RecoderCommandPalette, type RecoderCommand };
+export { RecoderCommandPalette, commandMatches, fuzzyMatch, type RecoderCommand };
