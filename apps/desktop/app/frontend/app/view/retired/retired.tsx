@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { uxCloseBlock } from "@/app/store/keymodel";
 import { atom, type Atom } from "jotai";
 
 // Tombstone for view types that were removed from the product. Saved layouts may
@@ -25,10 +26,19 @@ class RetiredViewModel implements ViewModel {
     }
 }
 
-function RetiredView({}: ViewComponentProps<RetiredViewModel>) {
+function RetiredView({ model }: ViewComponentProps<RetiredViewModel>) {
+    // Opt-in cleanup: a saved layout can still carry a retired block (e.g. an old
+    // "openfang"/"pal" tab). Let the user remove it themselves via the same close
+    // path as the block header — never mutate their layout automatically.
     return (
-        <div className="flex h-full items-center justify-center p-3">
+        <div className="flex h-full flex-col items-center justify-center gap-2 p-3">
             <span className="text-secondary text-sm">This view is no longer available.</span>
+            <button
+                className="border border-white/8 text-secondary rounded px-2 py-0.5 text-xs hover:bg-border/40 hover:text-primary recoder-transition cursor-pointer"
+                onClick={() => uxCloseBlock(model.blockId)}
+            >
+                Close this view
+            </button>
         </div>
     );
 }
