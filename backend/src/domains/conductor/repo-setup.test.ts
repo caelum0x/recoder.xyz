@@ -156,6 +156,23 @@ describe('repo setup run hook (create)', () => {
     expect(calls[0].bin).toBe('bash');
     expect(calls[0].args).toEqual(['-lc', 'pnpm install']);
     expect(calls[0].options.cwd).toBe('/tmp/wt/ws_1');
+    // No port passed ⇒ no env overlay injected (script just doesn't see the var).
+    expect(calls[0].options.env).toBeUndefined();
+  });
+
+  it('injects RECODER_PORT into the setup script env when a port is given', async () => {
+    const { exec, calls } = makeExec(() => ({ stdout: '', stderr: '', code: 0 }));
+    const { service } = makeService({ exec });
+    await service.setScript('repo_1', 'echo $RECODER_PORT', makePrincipal());
+
+    await service.runSetup({
+      repoKey: 'repo_1',
+      worktreePath: '/tmp/wt/ws_1',
+      workspaceId: 'ws_1',
+      recoderPort: 4321,
+    });
+
+    expect(calls[0].options.env).toEqual({ RECODER_PORT: '4321' });
   });
 
   it('is a truthful skip when no script is configured (never runs anything)', async () => {
