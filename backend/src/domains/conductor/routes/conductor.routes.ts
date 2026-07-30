@@ -19,6 +19,7 @@
  *   GET    /api/conductor/workspaces/:id/dev-command  detected dev command (or null)
  *   GET    /api/conductor/workspaces/:id/run-config  committed scripts + RECODER_PORT + detected cmd
  *   GET    /api/conductor/environment  first-run import: git identity, agent configs, gh, shell
+ *   GET    /api/conductor/transcript/search?q=  search Claude session transcripts by content
  *   GET    /api/conductor/workspaces/:id/preview-verification  last preview verification summary (404 when unverified)
  *   GET    /api/conductor/workspaces/:id/view     attention-enriched view (truthful unknown)
  *   GET    /api/conductor/views                   attention-enriched views of every workspace
@@ -348,6 +349,15 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     middleware.authenticate,
     asyncHandler(async (_req, res) => {
       sendSuccess(res, await module.environmentImport());
+    }),
+  );
+
+  router.get(
+    '/transcript/search',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      const q = typeof req.query.q === 'string' ? req.query.q : '';
+      sendSuccess(res, await module.searchTranscripts(q));
     }),
   );
 

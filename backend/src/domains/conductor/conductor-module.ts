@@ -163,6 +163,7 @@ import { WorktreeStatusService } from './services/worktree-status.service.js';
 import { computeWorkspacePort } from './services/workspace-port.js';
 import { readRepoConfigFile } from './services/repo-config-file.js';
 import { EnvironmentImportService, type EnvironmentImportView } from './services/environment-import.js';
+import { SessionTranscriptService, type TranscriptSearchView } from './services/session-transcript.service.js';
 import { foldReadiness, type ReadinessView } from './services/readiness.service.js';
 import {
   assembleConvergenceEvidence,
@@ -339,6 +340,8 @@ export class ConductorComposer implements ConductorModule {
   private readonly worktreeStatus: WorktreeStatusService;
   /** Read-only first-run environment-import probe (git identity, agent configs, gh, shell). */
   private readonly environmentImportService: EnvironmentImportService;
+  /** Read-only bounded search over Claude session transcripts (~/.claude/projects). */
+  private readonly sessionTranscriptService: SessionTranscriptService;
   /**
    * OPTIONAL dmux LAYOUT-brain seam (F3 compare/parallel grid). Absent / dmux not
    * built ⇒ the compare read stays hint-less and `arrangeCompareGrid` returns a
@@ -408,6 +411,8 @@ export class ConductorComposer implements ConductorModule {
     // Read-only first-run environment probe (git identity, agent configs, gh, shell)
     // over the SAME exec seam; never throws, degrades each field independently.
     this.environmentImportService = new EnvironmentImportService({ logger: this.log });
+    // Read-only bounded transcript search over ~/.claude/projects; degrade-truthful.
+    this.sessionTranscriptService = new SessionTranscriptService({ logger: this.log });
 
     const loggerPort = toLoggerPort(this.log);
 
@@ -1732,6 +1737,16 @@ export class ConductorComposer implements ConductorModule {
    */
   async environmentImport(): Promise<EnvironmentImportView> {
     return this.environmentImportService.probe();
+  }
+
+  /**
+   * Search Claude session transcripts by message content (`GET …/transcript/search`)
+   * — the palette's "find that conversation" over ~/.claude/projects. PURE read,
+   * bounded + degrade-truthful (empty query → no hits; no sessions dir →
+   * available:false; never throws).
+   */
+  async searchTranscripts(query: string): Promise<TranscriptSearchView> {
+    return this.sessionTranscriptService.search(query);
   }
 
   /**
