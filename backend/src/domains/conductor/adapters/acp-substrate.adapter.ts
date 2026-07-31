@@ -19,8 +19,11 @@
  * Config-injected (NO `process.env` read here — ARCHITECTURE §10.8); the spawn +
  * exec + permission seams are injectable so it is unit-tested with a fake agent
  * and fake git. Degrade-truthful: an unavailable substrate refuses to launch, a
- * dead handle captures `null`, and permission requests default to DENY until the
- * composer wires the real approval gate.
+ * dead handle captures `null`. Agent-initiated requests (permission + delegated
+ * `fs/*`) are handled by {@link createAcpClientRequestHandler}, bound per-launch
+ * to the worktree: permissions use the worktree-isolation policy by default (or an
+ * injected `resolvePermission` gate bridge), and fs reads/writes are path-CONTAINED
+ * to that worktree — the isolation boundary is enforced, never trusted.
  */
 import path from 'node:path';
 import { existsSync, rmSync } from 'node:fs';
@@ -45,7 +48,12 @@ import type { ConductorConfig } from '../config.js';
 import { tmuxNameFor } from '../session-naming.js';
 import { AcpAgentDriver, type AcpProcess } from './acp/acp-driver.js';
 import { makeAcpProcess } from './acp/acp-process.js';
-import type { AcpNotification, AcpRequest } from './acp/acp-codec.js';
+import type { AcpNotification } from './acp/acp-codec.js';
+import {
+  createAcpClientRequestHandler,
+  type AcpPermissionContext,
+  type AcpPermissionDecision,
+} from './acp/acp-client-requests.js';
 
 export type ExecFn = (
   bin: string,
@@ -59,9 +67,6 @@ export const DEFAULT_ACP_COMMAND = 'claude-code-acp';
 const MAX_BUFFER_LINES = 4000;
 
 const NOOP_LOGGER: LoggerPort = { info() {}, warn() {}, error() {} };
-
-/** The default permission response until a real gate is wired: DENY (truthful, safe). */
-const DENY_PERMISSION = { outcome: { outcome: 'cancelled' } } as const;
 
 export interface CreateAcpSubstrateDeps {
   readonly config: Pick<ConductorConfig, 'worktreeRoot'>;
@@ -77,13 +82,14 @@ export interface CreateAcpSubstrateDeps {
     env?: NodeJS.ProcessEnv;
   }) => AcpProcess;
   /**
-   * Bridge an agent-initiated request (`session/request_permission`, `fs/*`) to
-   * the conductor — the composer wires this to the approval gate / RunEvent sink.
-   * Default: DENY every permission (safe until wired).
+   * Resolve an agent permission request (`session/request_permission`) to
+   * allow/deny — the composer injects a bridge to the approval gate here. Default:
+   * the worktree-isolation policy (allow in-worktree work, deny shell/network/
+   * unknown). The correct ACP outcome is formed by the client-request handler.
    */
-  readonly onPermissionRequest?: (
-    req: AcpRequest
-  ) => Promise<unknown> | unknown;
+  readonly resolvePermission?: (
+    ctx: AcpPermissionContext
+  ) => Promise<AcpPermissionDecision> | AcpPermissionDecision;
   /** PATH-presence probe (default: `which`); injected in tests to avoid a real binary. */
   readonly probe?: (bin: string) => Promise<boolean>;
 }
@@ -127,8 +133,6 @@ export function createAcpSubstrate(
   const worktreeRoot = deps.config.worktreeRoot;
   const command = deps.command ?? DEFAULT_ACP_COMMAND;
   const spawnProcess = deps.spawn ?? (opts => makeAcpProcess(opts));
-  const onPermissionRequest =
-    deps.onPermissionRequest ?? (() => DENY_PERMISSION);
 
   const byRef = new Map<string, AcpRunState>();
 
@@ -213,6 +217,18 @@ export function createAcpSubstrate(
         done: false,
         exit: null,
       };
+      // The agent→client request handler, bound to THIS workspace's worktree:
+      // permission decisions (policy or injected gate) + path-CONTAINED fs reads/
+      // writes (the agent may delegate them per the advertised fs capabilities).
+      const onRequest = createAcpClientRequestHandler({
+        workspaceId: input.workspaceId,
+        workspaceRoot: worktreePath,
+        ...(deps.resolvePermission
+          ? { resolvePermission: deps.resolvePermission }
+          : {}),
+        warn: (m, meta) =>
+          logger.warn(m, { workspaceId: input.workspaceId, meta }),
+      });
       const driver = new AcpAgentDriver({
         spawn: () =>
           spawnProcess({
@@ -222,7 +238,7 @@ export function createAcpSubstrate(
           }),
         onNotification: (n: AcpNotification) =>
           appendOutput(state, extractUpdateText(n.params)),
-        onRequest: (r: AcpRequest) => onPermissionRequest(r),
+        onRequest,
         warn: m => logger.warn(m, { workspaceId: input.workspaceId }),
       });
       (state as { driver: AcpAgentDriver }).driver = driver;

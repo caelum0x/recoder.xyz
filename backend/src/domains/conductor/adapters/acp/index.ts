@@ -11,8 +11,27 @@
  * `new AcpAgentDriver({ spawn, onRequest: <approval gate>, onNotification: <tail> })`.
  */
 export * from './acp-codec.js';
+export {
+  createAcpClientRequestHandler,
+  defaultAcpPermissionPolicy,
+  toPermissionOutcome,
+  parsePermissionRequest,
+  applyLineWindow,
+  type AcpClientRequestHandlerDeps,
+  type AcpPermissionContext,
+  type AcpPermissionDecision,
+  type AcpPermissionOption,
+  type AcpPermissionOutcome,
+  type AcpToolCall,
+  type AcpToolKind,
+} from './acp-client-requests.js';
 export { AcpClient, type AcpClientDeps } from './acp-client.js';
-export { AcpAgentDriver, ACP_PROTOCOL_VERSION, type AcpProcess, type AcpDriverDeps } from './acp-driver.js';
+export {
+  AcpAgentDriver,
+  ACP_PROTOCOL_VERSION,
+  type AcpProcess,
+  type AcpDriverDeps,
+} from './acp-driver.js';
 export {
   makeAcpProcess,
   makeAcpSpawner,
