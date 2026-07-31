@@ -744,6 +744,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   let acpPermissionGate:
     ((ctx: AcpPermissionContext) => Promise<AcpPermissionDecision>) | null =
     null;
+  let acpVerdictSeq = 0; // monotonic id suffix for surfaced ACP permission events
   const acpSub = createAcpSubstrate({
     config: conductorSubstrateConfig,
     logger: childLogger('conductor-acp'),
@@ -947,6 +948,36 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     getWorkspace: id => conductor.getWorkspace(id),
     principal: ACP_GATE_PRINCIPAL,
     logger: childLogger('conductor-acp-gate'),
+    // Surface a REFUSED permission truthfully into the workspace's run stream +
+    // durable audit (the "approval waits" frontend surface): a `needs_approval`
+    // verdict → `approval_requested`, a hard `deny` → `needs_input`. Allowed tool
+    // calls are already sealed to the audit chain inside the bridge, so they are
+    // not re-surfaced here (no per-tool-call log noise). Fire-and-forget +
+    // degrade-safe: a sink fault never affects the agent's turn. Requires a
+    // taskId to form a valid RunEvent; an uncorrelated verdict is skipped.
+    onVerdict: evt => {
+      if (evt.decision !== 'deny' || !evt.taskId) return;
+      void conductorRunSink
+        .append({
+          eventId: `acp-perm-${evt.workspaceId}-${(acpVerdictSeq += 1)}`,
+          type:
+            evt.effect === 'needs_approval'
+              ? 'approval_requested'
+              : 'needs_input',
+          taskId: evt.taskId,
+          ...(evt.runId ? { runId: evt.runId } : {}),
+          message: `ACP permission refused — ${evt.action} (${evt.effect}): ${evt.reason}`,
+          createdAt: new Date().toISOString(),
+          data: {
+            workspaceId: evt.workspaceId,
+            acp: true,
+            action: evt.action,
+            effect: evt.effect,
+            ...(evt.approvalId ? { approvalId: evt.approvalId } : {}),
+          },
+        })
+        .catch(() => {});
+    },
   });
 
   // Late-bind the squad-autopilot → conductor dispatch seam (agent-os is built
