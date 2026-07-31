@@ -9,12 +9,25 @@
  * shape but still validate fail-fast and map a not-found/illegal-transition onto a
  * spec `RpcError` (never a fabricated `result`).
  *
- * `userId` is carried in params because the A2A wire has no session cookie; the
- * ingress gate proves the envelope's signature and the host boundary enforces
- * ownership — this layer stays owner-scoped through the provided id.
+ * Ownership derives from the cryptographically-verified signer, NOT from a
+ * client-supplied `params.userId`: the A2A wire has no session cookie, so the
+ * ed25519 signed-ingress gate proves the sender's `key_id` (the registered agent
+ * id) and carries it into the handler via {@link A2ACallContext}. `key_id` is the
+ * only trustworthy owner id — the envelope `from` and `params.userId` are
+ * attacker-choosable by any enrolled peer, so trusting them lets one peer read or
+ * cancel every other tenant's tasks (confused-deputy IDOR). A caller-supplied
+ * `userId` that mismatches the verified signer is rejected. Only the insecure-dev
+ * / solo posture (no signer) falls back to `params.userId` (single-tenant
+ * fail-open).
  */
 import type { EnvelopeService } from '../wire/a2a-envelope.service.js';
-import { A2A_METHODS, RpcError, type A2AJsonRpcServer, type JsonRpcRequest } from '../wire/a2a-jsonrpc-server.js';
+import {
+  A2A_METHODS,
+  RpcError,
+  type A2ACallContext,
+  type A2AJsonRpcServer,
+  type JsonRpcRequest,
+} from '../wire/a2a-jsonrpc-server.js';
 import type { MultiDispatchService } from './multi-dispatch.js';
 import type { TaskLifecycleService } from './task-lifecycle.js';
 
@@ -41,6 +54,22 @@ function requireString(obj: Record<string, unknown>, key: string): string {
   return v;
 }
 
+/**
+ * The owner scope for a call. With a verified signer, ownership IS the proven
+ * `key_id`; a `params.userId` that disagrees is a spoof (rejected). Without a
+ * signer (insecure-dev / solo posture) the caller-supplied `userId` is required
+ * and trusted (single-tenant fail-open).
+ */
+function ownerOf(p: Record<string, unknown>, ctx: A2ACallContext): string {
+  const signer = ctx.signer;
+  if (!signer) return requireString(p, 'userId');
+  const claimed = p.userId;
+  if (typeof claimed === 'string' && claimed.length > 0 && claimed !== signer.keyId) {
+    throw new RpcError(A2A_RPC_CODES.INVALID_PARAMS, '`userId` does not match the signed sender identity.');
+  }
+  return signer.keyId;
+}
+
 export interface A2AMethodDeps {
   readonly jsonRpc: A2AJsonRpcServer;
   readonly tasks: TaskLifecycleService;
@@ -52,20 +81,20 @@ export interface A2AMethodDeps {
 export function registerA2AMethods(deps: A2AMethodDeps): void {
   const { jsonRpc, tasks, dispatch, envelope } = deps;
 
-  jsonRpc.register(A2A_METHODS.TASKS_GET, async (req) => {
+  jsonRpc.register(A2A_METHODS.TASKS_GET, async (req, ctx) => {
     const p = paramsOf(req);
     const id = requireString(p, 'id');
-    const userId = requireString(p, 'userId');
+    const userId = ownerOf(p, ctx);
     const task = await tasks.get(id, userId);
     if (!task) throw new RpcError(A2A_RPC_CODES.TASK_NOT_FOUND, `Task ${id} not found.`);
     const messages = await tasks.messages(id);
     return { task, messages };
   });
 
-  jsonRpc.register(A2A_METHODS.TASKS_CANCEL, async (req) => {
+  jsonRpc.register(A2A_METHODS.TASKS_CANCEL, async (req, ctx) => {
     const p = paramsOf(req);
     const id = requireString(p, 'id');
-    const userId = requireString(p, 'userId');
+    const userId = ownerOf(p, ctx);
     const result = await tasks.cancel(id, userId);
     if (!result.ok) {
       const code = result.code === 'not_found' ? A2A_RPC_CODES.TASK_NOT_FOUND : A2A_RPC_CODES.ILLEGAL_TRANSITION;
@@ -74,18 +103,18 @@ export function registerA2AMethods(deps: A2AMethodDeps): void {
     return { task: result.task };
   });
 
-  jsonRpc.register(A2A_METHODS.TASKS_RESUBSCRIBE, async (req) => {
+  jsonRpc.register(A2A_METHODS.TASKS_RESUBSCRIBE, async (req, ctx) => {
     const p = paramsOf(req);
     const id = requireString(p, 'id');
-    const userId = requireString(p, 'userId');
+    const userId = ownerOf(p, ctx);
     const task = await tasks.get(id, userId);
     if (!task) throw new RpcError(A2A_RPC_CODES.TASK_NOT_FOUND, `Task ${id} not found.`);
     return { task, messages: await tasks.messages(id) };
   });
 
-  jsonRpc.register(A2A_METHODS.MESSAGE_SEND, async (req) => {
+  jsonRpc.register(A2A_METHODS.MESSAGE_SEND, async (req, ctx) => {
     const p = paramsOf(req);
-    const userId = requireString(p, 'userId');
+    const userId = ownerOf(p, ctx);
     const message = p.message;
     if (typeof message !== 'object' || message === null) {
       throw new RpcError(A2A_RPC_CODES.INVALID_PARAMS, '`message` object is required');
@@ -96,7 +125,9 @@ export function registerA2AMethods(deps: A2AMethodDeps): void {
       throw new RpcError(A2A_RPC_CODES.INVALID_PARAMS, '`targets` must be a non-empty string array');
     }
     const env = envelope.buildEnvelope({
-      from: typeof msg.from === 'string' ? msg.from : userId,
+      // When signed, `from` IS the verified sender (userId === signer.keyId);
+      // never let a peer stamp someone else's id on the outbound envelope.
+      from: ctx.signer ? userId : typeof msg.from === 'string' ? msg.from : userId,
       to: typeof msg.to === 'string' ? msg.to : undefined,
       kind: typeof msg.kind === 'string' ? msg.kind : 'message',
       payload: { text: typeof msg.text === 'string' ? msg.text : '', ...(msg.data ? { data: msg.data } : {}) },

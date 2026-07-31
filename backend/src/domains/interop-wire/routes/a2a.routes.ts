@@ -59,7 +59,9 @@ export function buildA2ARoutes(deps: A2ARouterDeps): Router {
     '/rpc',
     ...(deps.rpcAdmission ? [deps.rpcAdmission] : []),
     asyncHandler(async (req, res) => {
-      const response = await jsonRpc.handleA2ARpc(req.body);
+      // Scope ownership by the verified signer from admission (undefined on the
+      // insecure-dev path ⇒ handlers fall back to the caller-supplied id).
+      const response = await jsonRpc.handleA2ARpc(req.body, { signer: req.a2aSigner });
       // JSON-RPC carries its own error object; the envelope stays 200 at the HTTP layer.
       sendSuccess(res, response);
     }),
