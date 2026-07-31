@@ -624,6 +624,85 @@ describe('createAcpSubstrate — restart reattach (explicit, via continueRun)', 
   });
 });
 
+describe('createAcpSubstrate — per-runtime agent binary (RECODER_ACP_AGENT)', () => {
+  it('launch resolves RECODER_ACP_AGENT, probes + spawns that binary, and records a marker', async () => {
+    const spawned: string[] = [];
+    const probed: string[] = [];
+    const marker: Record<string, string> = {};
+    const s = createAcpSubstrate(
+      baseDeps({
+        probe: async bin => {
+          probed.push(bin);
+          return true;
+        },
+        spawn: opts => {
+          spawned.push(opts.command);
+          return fakeAgent().proc;
+        },
+        writeAgentMarker: (wt, agent) => {
+          marker[wt] = agent;
+        },
+        readAgentMarker: wt => marker[wt] ?? null,
+      })
+    );
+    const handle = await s.launch({
+      ...launchInput,
+      env: { RECODER_ACP_AGENT: 'codex-acp' },
+    });
+    expect(spawned).toContain('codex-acp'); // spawned the resolved binary
+    expect(probed).toContain('codex-acp'); // probed the resolved binary (truthful)
+    expect(marker[handle.worktreePath!]).toBe('codex-acp'); // marker recorded
+  });
+
+  it('launch refuses truthfully when the resolved non-default binary is absent', async () => {
+    const s = createAcpSubstrate(
+      baseDeps({ probe: async bin => bin !== 'codex-acp' }) // codex-acp missing
+    );
+    await expect(
+      s.launch({ ...launchInput, env: { RECODER_ACP_AGENT: 'codex-acp' } })
+    ).rejects.toThrow(/unavailable.*codex-acp/);
+  });
+
+  it('launch with no RECODER_ACP_AGENT uses the default binary and writes no marker', async () => {
+    const spawned: string[] = [];
+    const marker: Record<string, string> = {};
+    const s = createAcpSubstrate(
+      baseDeps({
+        spawn: opts => {
+          spawned.push(opts.command);
+          return fakeAgent().proc;
+        },
+        writeAgentMarker: (wt, agent) => {
+          marker[wt] = agent;
+        },
+      })
+    );
+    await s.launch(launchInput);
+    expect(spawned).toContain('claude-code-acp'); // the DEFAULT_ACP_COMMAND
+    expect(Object.keys(marker)).toHaveLength(0); // default → no marker
+  });
+
+  it('reattach re-spawns the SAME binary recorded in the marker (restart-safe)', async () => {
+    const spawned: string[] = [];
+    const marker: Record<string, string> = { '/tmp/wt/ws-1': 'codex-acp' };
+    const s = createAcpSubstrate(
+      baseDeps({
+        exists: () => true,
+        spawn: opts => {
+          spawned.push(opts.command);
+          return fakeAgent({ loadSession: true }).proc;
+        },
+        readAgentMarker: wt => marker[wt] ?? null,
+      })
+    );
+    await s.continueRun?.(
+      { ref: 'ws-1', worktreePath: '/tmp/wt/ws-1', sessionName: 'sess-1' },
+      { workspaceId: 'ws-1', worktreePath: '/tmp/wt/ws-1', prompt: 'go' }
+    );
+    expect(spawned).toContain('codex-acp'); // reattached with the marked binary, not the default
+  });
+});
+
 describe('extractUpdateText', () => {
   it('pulls nested text from a session/update payload', () => {
     const params = {

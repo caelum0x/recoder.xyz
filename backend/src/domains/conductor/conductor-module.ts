@@ -26,13 +26,28 @@ import {
   type ReconcileReport,
   type WorkspaceEngineDeps,
 } from '@recoder/substrate';
-import type { RunEvent, Workspace, WorkspaceState, WorkspaceSubstrate } from '@recoder/agent-os';
+import type {
+  RunEvent,
+  Workspace,
+  WorkspaceState,
+  WorkspaceSubstrate,
+} from '@recoder/agent-os';
 import type { Logger } from '../../shared/logger.js';
 import type { ComponentHealth } from '../../shared/health-types.js';
 import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { Principal } from '../identity/types.js';
 import { sliceConductorConfig, type ConductorConfig } from './config.js';
-import type { GateVerdict, GovernanceAction, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView, SteerTransportPort, AuditReaderPort, AuditRecord } from './ports/index.js';
+import type {
+  GateVerdict,
+  GovernanceAction,
+  TerminalStreamPort,
+  GithubStatusPort,
+  GithubStatusView,
+  GithubRepoView,
+  SteerTransportPort,
+  AuditReaderPort,
+  AuditRecord,
+} from './ports/index.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { RunSignalPushPort } from './ports/run-signal-push.port.js';
@@ -45,7 +60,10 @@ import type {
   SubstrateKind,
   WorkspaceView,
 } from './types.js';
-import { classifyAttention, type AttentionResult } from './attention/attention-classifier.js';
+import {
+  classifyAttention,
+  type AttentionResult,
+} from './attention/attention-classifier.js';
 import type { ConductorModule, ConductorModuleDeps } from './index.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
 import type {
@@ -54,7 +72,10 @@ import type {
   PreviewVerificationView,
 } from './ports/preview-verify.port.js';
 import type { CoordinationAdmissionPort } from './ports/coordination-admission.port.js';
-import type { ConductorPlanPort, ConductorPlanDecision } from './ports/plan.port.js';
+import type {
+  ConductorPlanPort,
+  ConductorPlanDecision,
+} from './ports/plan.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
 import { deriveSeedTerms } from './adapters/code-intel.adapter.js';
 import {
@@ -66,11 +87,20 @@ import { readRepoPassages } from './adapters/repo-passages.adapter.js';
 import { resolveRepoDefaultBranch } from './git-default-branch.js';
 import { toLoggerPort } from './adapters/logger.adapter.js';
 import { createRecoderSessionLister } from './adapters/recoder-session-lister.adapter.js';
-import { createConductorRegistry, type ConductorRegistry } from './adapters/substrate-registry.adapter.js';
-import { listConductorRuntimes, type ConductorRuntimeView } from './adapters/runtime-listing.adapter.js';
+import {
+  createConductorRegistry,
+  type ConductorRegistry,
+} from './adapters/substrate-registry.adapter.js';
+import {
+  listConductorRuntimes,
+  type ConductorRuntimeView,
+} from './adapters/runtime-listing.adapter.js';
 import { createWorkspaceRepository } from './adapters/workspace-repository.adapter.js';
 import { createRunEventSink } from './adapters/run-event-sink.adapter.js';
-import { createRunTailer, type ConductorRunTailer } from './adapters/run-tailer.adapter.js';
+import {
+  createRunTailer,
+  type ConductorRunTailer,
+} from './adapters/run-tailer.adapter.js';
 import { createSubstrateScan } from './adapters/substrate-scan.adapter.js';
 import { TerminalStreamService } from './terminal/terminal-stream.js';
 import { buildConductorRoutes } from './routes/conductor.routes.js';
@@ -126,8 +156,14 @@ import {
   createBrowserPreviewVerifier,
   DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS,
 } from './adapters/browser-preview-verify.adapter.js';
-import { detectDevCommand, type DevCommandView } from './adapters/dev-command.adapter.js';
-import type { CheckpointRecord, CheckpointStorePort } from './ports/checkpoint-store.port.js';
+import {
+  detectDevCommand,
+  type DevCommandView,
+} from './adapters/dev-command.adapter.js';
+import type {
+  CheckpointRecord,
+  CheckpointStorePort,
+} from './ports/checkpoint-store.port.js';
 import { createInMemoryCheckpointStore } from './adapters/checkpoint-store.adapter.js';
 import {
   branchFromCheckpoint as branchFromCheckpointOp,
@@ -157,14 +193,29 @@ import {
   type CloneRepoInput,
   type CloneRepoOutcome,
 } from './services/repo-clone.service.js';
-import { PrChecksService, type WorkspaceChecksView } from './services/pr-checks.service.js';
-import { MergeabilityService, type MergeabilityView } from './services/mergeability.service.js';
+import {
+  PrChecksService,
+  type WorkspaceChecksView,
+} from './services/pr-checks.service.js';
+import {
+  MergeabilityService,
+  type MergeabilityView,
+} from './services/mergeability.service.js';
 import { WorktreeStatusService } from './services/worktree-status.service.js';
 import { computeWorkspacePort } from './services/workspace-port.js';
 import { readRepoConfigFile } from './services/repo-config-file.js';
-import { EnvironmentImportService, type EnvironmentImportView } from './services/environment-import.js';
-import { SessionTranscriptService, type TranscriptSearchView } from './services/session-transcript.service.js';
-import { foldReadiness, type ReadinessView } from './services/readiness.service.js';
+import {
+  EnvironmentImportService,
+  type EnvironmentImportView,
+} from './services/environment-import.js';
+import {
+  SessionTranscriptService,
+  type TranscriptSearchView,
+} from './services/session-transcript.service.js';
+import {
+  foldReadiness,
+  type ReadinessView,
+} from './services/readiness.service.js';
 import {
   assembleConvergenceEvidence,
   type ConvergenceEvidenceRecord,
@@ -172,8 +223,14 @@ import {
   type EvidenceConvergence,
   type EvidenceGovernance,
 } from './evidence/convergence-evidence.js';
-import { renderEvidenceExport, type EvidenceExport } from './evidence/evidence-export.js';
-import { loadEvidenceSigningKey, signEvidenceExport } from './evidence/evidence-signing.js';
+import {
+  renderEvidenceExport,
+  type EvidenceExport,
+} from './evidence/evidence-export.js';
+import {
+  loadEvidenceSigningKey,
+  signEvidenceExport,
+} from './evidence/evidence-signing.js';
 import type { KeyObject } from 'node:crypto';
 import {
   planConvergence as planConvergenceOp,
@@ -203,7 +260,10 @@ import type {
 } from './ports/workspace-grid.port.js';
 
 /** The create request the routes/callers build (createdBy is stamped from the principal). */
-export type CreateConductorWorkspaceInput = Omit<CreateWorkspaceInput, 'createdBy'>;
+export type CreateConductorWorkspaceInput = Omit<
+  CreateWorkspaceInput,
+  'createdBy'
+>;
 
 /** How many trailing terminal lines the attention probe captures. */
 const ATTENTION_TAIL_LINES = 60;
@@ -382,7 +442,8 @@ export class ConductorComposer implements ConductorModule {
     this.workspaceGrid = deps.workspaceGrid;
     this.tmuxIntrospect = deps.tmuxIntrospect;
     this.auditReader = deps.auditReader;
-    this.checkpointStore = deps.checkpointStore ?? createInMemoryCheckpointStore();
+    this.checkpointStore =
+      deps.checkpointStore ?? createInMemoryCheckpointStore();
 
     // Per-repo setup script: config seam (governed setScript/getScript) + the
     // fire-and-forget run hook shelled into every fresh worktree. Degrade-safe
@@ -410,9 +471,13 @@ export class ConductorComposer implements ConductorModule {
     this.worktreeStatus = new WorktreeStatusService({ logger: this.log });
     // Read-only first-run environment probe (git identity, agent configs, gh, shell)
     // over the SAME exec seam; never throws, degrades each field independently.
-    this.environmentImportService = new EnvironmentImportService({ logger: this.log });
+    this.environmentImportService = new EnvironmentImportService({
+      logger: this.log,
+    });
     // Read-only bounded transcript search over ~/.claude/projects; degrade-truthful.
-    this.sessionTranscriptService = new SessionTranscriptService({ logger: this.log });
+    this.sessionTranscriptService = new SessionTranscriptService({
+      logger: this.log,
+    });
 
     const loggerPort = toLoggerPort(this.log);
 
@@ -442,11 +507,16 @@ export class ConductorComposer implements ConductorModule {
     // isolated (logged, swallowed) so the live terminal stream never stalls.
     const localSink = createRunEventSink({
       repository: this.repository,
-      publish: (event) => this.terminalService.publishSync(event),
-      publishRun: (workspaceId, event) => this.terminalService.publishRunEvent(workspaceId, event),
+      publish: event => this.terminalService.publishSync(event),
+      publishRun: (workspaceId, event) =>
+        this.terminalService.publishRunEvent(workspaceId, event),
       logger: this.log,
     });
-    const fannedSink = composeRunEventSink(localSink, deps.runEventSink, this.log);
+    const fannedSink = composeRunEventSink(
+      localSink,
+      deps.runEventSink,
+      this.log
+    );
     // Terminal-event hook (h + i): on a `completed`/`failed` RunEvent the run flow
     // HARVESTS an evidence-backed memory candidate (brain) and CLOSES/NOTES the bd
     // issue (code-intel). Both are fire-and-forget + degrade-safe — a memory/beads
@@ -462,7 +532,7 @@ export class ConductorComposer implements ConductorModule {
       // bootstrap can inject the ops-recorder push port AFTER this module is
       // constructed (setRunSignalPush). Unwired ⇒ a truthful no-op (no push).
       getRunSignalPush: () => this.runSignalPush,
-      getWorkspace: (id) => this.repository.getWorkspace(id),
+      getWorkspace: id => this.repository.getWorkspace(id),
       logger: this.log,
     });
     // Path (b) token accounting: late-bind the completion-hook sink into the
@@ -471,7 +541,9 @@ export class ConductorComposer implements ConductorModule {
     // when the substrate is built in bootstrap). Degrade-safe: the substrate absent
     // / not shaped ⇒ a truthful no-op (tokens stay unmetered).
     try {
-      const inProc = this.registry.getFull('in_process' as SubstrateKind) as Partial<{
+      const inProc = this.registry.getFull(
+        'in_process' as SubstrateKind
+      ) as Partial<{
         setRunSink(s: typeof sink): void;
       }>;
       inProc.setRunSink?.(sink);
@@ -491,7 +563,7 @@ export class ConductorComposer implements ConductorModule {
       sink,
       logger: this.log,
       live: {
-        resolveSubstrate: (id) => {
+        resolveSubstrate: id => {
           try {
             return this.registry.getFull(id as SubstrateKind);
           } catch {
@@ -559,7 +631,7 @@ export class ConductorComposer implements ConductorModule {
    */
   private async enrichOpenfangCommand(
     input: CreateConductorWorkspaceInput,
-    principal: Principal,
+    principal: Principal
   ): Promise<string | undefined> {
     const raw = (input.prompt ?? '').trim();
     if (!raw) return undefined;
@@ -581,14 +653,16 @@ export class ConductorComposer implements ConductorModule {
           // builds a `repo_<id>` collection — so we never point search at an index
           // that was never built (absent ⇒ retrieval falls back to its default).
           ...(input.repoPath
-            ? { repoCollection: `repo_${repoIdFromRepoRef(input.projectId || input.repoPath)}` }
+            ? {
+                repoCollection: `repo_${repoIdFromRepoRef(input.projectId || input.repoPath)}`,
+              }
             : {}),
         });
         prompt = enriched.prompt;
       } catch (err) {
         this.log.warn(
           { err, runtimeId: input.runtimeId },
-          'conductor openfang prompt enrich faulted — running raw prompt',
+          'conductor openfang prompt enrich faulted — running raw prompt'
         );
       }
     }
@@ -610,7 +684,7 @@ export class ConductorComposer implements ConductorModule {
       } catch (err) {
         this.log.warn(
           { err, runtimeId: input.runtimeId },
-          'conductor openfang code-context enrich faulted — skipped',
+          'conductor openfang code-context enrich faulted — skipped'
         );
       }
     }
@@ -624,7 +698,10 @@ export class ConductorComposer implements ConductorModule {
    * engine must not block launch); every call is `void` + self-logging +
    * degrade-safe inside the adapter (or guarded by a truthful `configured()` probe).
    */
-  private startCodeIntel(input: CreateConductorWorkspaceInput, workspace: Workspace): void {
+  private startCodeIntel(
+    input: CreateConductorWorkspaceInput,
+    workspace: Workspace
+  ): void {
     const repoId = repoIdFromRepoRef(input.projectId || input.repoPath);
     // ColBERT per-repo late-interaction index: chunk the repo's text files and
     // build/refresh the PLAID collection so retrieval can surface passages the
@@ -633,23 +710,35 @@ export class ConductorComposer implements ConductorModule {
     if (this.colbertIndex?.configured() && input.repoPath) {
       const collection = `repo_${repoId}`;
       void readRepoPassages(input.repoPath)
-        .then((passages) =>
+        .then(passages =>
           passages.length > 0
-            ? this.colbertIndex!.ensureIndex(collection, passages, { overwrite: true })
-            : undefined,
+            ? this.colbertIndex!.ensureIndex(collection, passages, {
+                overwrite: true,
+              })
+            : undefined
         )
-        .catch((err) => this.log.warn({ err, repoId }, 'conductor colbert index hook faulted'));
+        .catch(err =>
+          this.log.warn({ err, repoId }, 'conductor colbert index hook faulted')
+        );
     }
     if (!this.codeIntel) return;
     const codeIntel = this.codeIntel;
     void codeIntel
       .indexRepo(input.repoPath, repoId)
-      .catch((err) => this.log.warn({ err, repoId }, 'conductor recodergit index hook faulted'));
+      .catch(err =>
+        this.log.warn(
+          { err, repoId },
+          'conductor recodergit index hook faulted'
+        )
+      );
     if (input.taskId) {
       void codeIntel
         .trackWork(input.taskId, workspace.workspaceId)
-        .catch((err) =>
-          this.log.warn({ err, taskId: input.taskId }, 'conductor beads track hook faulted'),
+        .catch(err =>
+          this.log.warn(
+            { err, taskId: input.taskId },
+            'conductor beads track hook faulted'
+          )
         );
     }
   }
@@ -665,14 +754,17 @@ export class ConductorComposer implements ConductorModule {
     if (!workspace.worktreePath) {
       this.log.debug(
         { workspaceId: workspace.workspaceId, substrate: workspace.substrate },
-        'conductor .mcp.json injection skipped (no worktree path)',
+        'conductor .mcp.json injection skipped (no worktree path)'
       );
       return;
     }
     void this.mcpInject
       .inject(workspace.worktreePath)
-      .catch((err) =>
-        this.log.warn({ err, workspaceId: workspace.workspaceId }, 'conductor .mcp.json injection faulted'),
+      .catch(err =>
+        this.log.warn(
+          { err, workspaceId: workspace.workspaceId },
+          'conductor .mcp.json injection faulted'
+        )
       );
   }
 
@@ -684,28 +776,43 @@ export class ConductorComposer implements ConductorModule {
    * never aborted by setup. The repo key is derived from the projectId (preferred)
    * falling back to the repoPath, matching the config write key.
    */
-  private runRepoSetup(input: CreateConductorWorkspaceInput, workspace: Workspace): void {
+  private runRepoSetup(
+    input: CreateConductorWorkspaceInput,
+    workspace: Workspace
+  ): void {
     if (!workspace.worktreePath) {
       this.log.debug(
         { workspaceId: workspace.workspaceId, substrate: workspace.substrate },
-        'conductor repo-setup skipped (no worktree path)',
+        'conductor repo-setup skipped (no worktree path)'
       );
       return;
     }
     const repoKey = repoKeyFor(input.projectId, input.repoPath);
     const recoderPort = computeWorkspacePort(workspace.workspaceId);
     void this.repoSetup
-      .runSetup({ repoKey, worktreePath: workspace.worktreePath, workspaceId: workspace.workspaceId, recoderPort })
-      .then((result) => {
+      .runSetup({
+        repoKey,
+        worktreePath: workspace.worktreePath,
+        workspaceId: workspace.workspaceId,
+        recoderPort,
+      })
+      .then(result => {
         if (result.ran && result.ok === false) {
           this.log.warn(
-            { workspaceId: workspace.workspaceId, repoKey, exitCode: result.exitCode },
-            'conductor repo-setup script failed (non-blocking)',
+            {
+              workspaceId: workspace.workspaceId,
+              repoKey,
+              exitCode: result.exitCode,
+            },
+            'conductor repo-setup script failed (non-blocking)'
           );
         }
       })
-      .catch((err) =>
-        this.log.warn({ err, workspaceId: workspace.workspaceId, repoKey }, 'conductor repo-setup hook faulted'),
+      .catch(err =>
+        this.log.warn(
+          { err, workspaceId: workspace.workspaceId, repoKey },
+          'conductor repo-setup hook faulted'
+        )
       );
   }
 
@@ -748,24 +855,36 @@ export class ConductorComposer implements ConductorModule {
    * read/merge edges resolve git-native as defense-in-depth).
    */
   private async resolveLaunchBaseRef(
-    input: CreateConductorWorkspaceInput,
+    input: CreateConductorWorkspaceInput
   ): Promise<string | undefined> {
     if (input.baseRef && input.baseRef !== 'HEAD') return input.baseRef;
     if (!input.repoPath) return input.baseRef;
-    const resolved = await resolveRepoDefaultBranch(execFileSafe, input.repoPath);
+    const resolved = await resolveRepoDefaultBranch(
+      execFileSafe,
+      input.repoPath
+    );
     return resolved ?? input.baseRef;
   }
 
   async createWorkspace(
     input: CreateConductorWorkspaceInput,
-    principal: Principal,
+    principal: Principal
   ): Promise<ConductorWriteResult<Workspace>> {
     const action = 'workspace.create';
-    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
-      target: { path: input.repoPath },
-      ...(input.taskId ? { taskId: input.taskId } : {}),
-      metadata: { projectId: input.projectId, runtimeId: input.runtimeId, substrate: input.substrate },
-    });
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { path: input.repoPath },
+        ...(input.taskId ? { taskId: input.taskId } : {}),
+        metadata: {
+          projectId: input.projectId,
+          runtimeId: input.runtimeId,
+          substrate: input.substrate,
+        },
+      }
+    );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
 
     // Pre-dispatch billing quota gate (OPTIONAL). When wired, a run counts against
@@ -775,16 +894,19 @@ export class ConductorComposer implements ConductorModule {
     // the policy gate already allowed. The gate itself is fail-safe on `allowed`.
     if (this.entitlementGate) {
       try {
-        const decision = await this.entitlementGate.check(principal, { quota: 'agent_run' });
+        const decision = await this.entitlementGate.check(principal, {
+          quota: 'agent_run',
+        });
         if (!decision.allowed) {
           const reason =
-            decision.message ?? `run quota denied (${decision.reason ?? 'quota_exceeded'})`;
+            decision.message ??
+            `run quota denied (${decision.reason ?? 'quota_exceeded'})`;
           return { ok: false, verdict, reason };
         }
       } catch (err) {
         this.log.warn(
           { err, projectId: input.projectId },
-          'conductor entitlement quota check errored — degrading open',
+          'conductor entitlement quota check errored — degrading open'
         );
       }
     }
@@ -805,7 +927,7 @@ export class ConductorComposer implements ConductorModule {
       } catch (err) {
         this.log.warn(
           { err, taskId: input.taskId },
-          'conductor pal planLaunch faulted — launching without advisory',
+          'conductor pal planLaunch faulted — launching without advisory'
         );
       }
     }
@@ -827,13 +949,18 @@ export class ConductorComposer implements ConductorModule {
           {
             authorizeReroute: async () =>
               (
-                await guardConductorWrite(this.gate, 'coordination.reroute', principal, {
-                  target: { path: input.repoPath },
-                  taskId: issueId,
-                  metadata: { issueId },
-                })
+                await guardConductorWrite(
+                  this.gate,
+                  'coordination.reroute',
+                  principal,
+                  {
+                    target: { path: input.repoPath },
+                    taskId: issueId,
+                    metadata: { issueId },
+                  }
+                )
               ).allowed,
-          },
+          }
         );
         if (!decision.admit) {
           // Truthful DEFER — not a governance deny: the write-gate already
@@ -844,7 +971,7 @@ export class ConductorComposer implements ConductorModule {
               coordinationDeferred: true,
               contenders: decision.conflict?.contenders.length ?? 0,
               rerouted: decision.reroute?.routed ?? false,
-            }),
+            })
           );
           return {
             ok: false,
@@ -857,7 +984,7 @@ export class ConductorComposer implements ConductorModule {
         // policy gate already allowed (fail-open, mirrors the entitlement gate).
         this.log.warn(
           { err, taskId: issueId },
-          'conductor coordination admission errored — degrading open',
+          'conductor coordination admission errored — degrading open'
         );
       }
     }
@@ -894,16 +1021,23 @@ export class ConductorComposer implements ConductorModule {
       // explicit caller baseRef always wins.
       const baseRef = await this.resolveLaunchBaseRef(input);
 
+      // Compose the launch env: the task-id anchor (RECODER_TASK_ID lets the
+      // in-process substrate + tailer attach RunEvents) plus — when the acp
+      // substrate is selected — the ACP agent binary for this runtime (codex →
+      // codex-acp, else claude-code-acp). The adapter resolves RECODER_ACP_AGENT
+      // per launch and re-spawns the same binary on reattach.
+      const launchEnv: Record<string, string> = { ...(input.env ?? {}) };
+      if (input.taskId) launchEnv.RECODER_TASK_ID = input.taskId;
+      if (substrate === 'acp')
+        launchEnv.RECODER_ACP_AGENT = acpBinaryForRuntime(runtimeId);
+      const hasEnv = Object.keys(launchEnv).length > 0;
+
       const workspace = await this.engine.createWorkspace({
         ...input,
         ...(baseRef !== undefined ? { baseRef } : {}),
         substrate,
         ...(command !== undefined ? { command } : {}),
-        // Tag the run with its task id so the in-process substrate + tailer can
-        // anchor RunEvents (path b reads RECODER_TASK_ID from env).
-        ...(input.taskId
-          ? { env: { ...(input.env ?? {}), RECODER_TASK_ID: input.taskId } }
-          : {}),
+        ...(hasEnv ? { env: launchEnv } : {}),
         createdBy: principal.userId,
       });
 
@@ -938,31 +1072,45 @@ export class ConductorComposer implements ConductorModule {
                 planSource: plan.source,
               }
             : {}),
-        }),
+        })
       );
       return { ok: true, verdict, value: workspace };
     } catch (err) {
-      const reason = err instanceof Error ? err.message : 'workspace launch failed';
-      this.log.error({ err, projectId: input.projectId }, 'conductor createWorkspace failed');
+      const reason =
+        err instanceof Error ? err.message : 'workspace launch failed';
+      this.log.error(
+        { err, projectId: input.projectId },
+        'conductor createWorkspace failed'
+      );
       return { ok: false, verdict, reason };
     }
   }
 
   async steerWorkspace(
     input: SteerInput,
-    principal: Principal,
+    principal: Principal
   ): Promise<ConductorWriteResult<void>> {
     const action = 'workspace.steer';
     const workspace = await this.engine.getWorkspace(input.workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
-      target: { path: input.workspaceId },
-      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-      metadata: { workspaceId: input.workspaceId },
-    });
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { path: input.workspaceId },
+        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+        metadata: { workspaceId: input.workspaceId },
+      }
+    );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    if (!workspace) return { ok: false, verdict, reason: 'workspace not found' };
+    if (!workspace)
+      return { ok: false, verdict, reason: 'workspace not found' };
     if (workspace.state !== 'running') {
-      return { ok: false, verdict, reason: `workspace is ${workspace.state}, not running` };
+      return {
+        ok: false,
+        verdict,
+        reason: `workspace is ${workspace.state}, not running`,
+      };
     }
     // The live send-keys transport is wired at the composition root (tmux-backed);
     // absent it, steering is refused truthfully (never faked).
@@ -970,7 +1118,8 @@ export class ConductorComposer implements ConductorModule {
       return {
         ok: false,
         verdict,
-        reason: 'steering requires a live send-keys transport (none wired in this composition)',
+        reason:
+          'steering requires a live send-keys transport (none wired in this composition)',
       };
     }
     // No live session address ⇒ nothing to steer into (never launched / torn down).
@@ -996,12 +1145,16 @@ export class ConductorComposer implements ConductorModule {
         conductorAuditEntry(action, principal, verdict, {
           workspaceId: input.workspaceId,
           bytes: keys.length,
-        }),
+        })
       );
       return { ok: true, verdict };
     } catch (err) {
-      const reason = err instanceof Error ? err.message : 'steer delivery failed';
-      this.log.warn({ err, workspaceId: input.workspaceId }, 'conductor steerWorkspace delivery failed');
+      const reason =
+        err instanceof Error ? err.message : 'steer delivery failed';
+      this.log.warn(
+        { err, workspaceId: input.workspaceId },
+        'conductor steerWorkspace delivery failed'
+      );
       return { ok: false, verdict, reason };
     }
   }
@@ -1019,11 +1172,17 @@ export class ConductorComposer implements ConductorModule {
    * gate — the HTTP route pre-validates for a clean 400 before we reach here.
    */
   async sendReviewComments(
-    input: { readonly workspaceId: string; readonly comments: readonly ReviewComment[] },
-    principal: Principal,
+    input: {
+      readonly workspaceId: string;
+      readonly comments: readonly ReviewComment[];
+    },
+    principal: Principal
   ): Promise<ConductorWriteResult<void>> {
     const prompt = composeReviewPrompt(parseReviewComments(input.comments));
-    return this.steerWorkspace({ workspaceId: input.workspaceId, keys: prompt, submit: true }, principal);
+    return this.steerWorkspace(
+      { workspaceId: input.workspaceId, keys: prompt, submit: true },
+      principal
+    );
   }
 
   /**
@@ -1035,19 +1194,33 @@ export class ConductorComposer implements ConductorModule {
    */
   async stopWorkspace(
     workspaceId: string,
-    principal: Principal,
+    principal: Principal
   ): Promise<ConductorWriteResult<Workspace>> {
     const action = 'workspace.stop';
     const workspace = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
-      target: { environment: 'conductor' },
-      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-      metadata: { workspaceId },
-    });
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+        metadata: { workspaceId },
+      }
+    );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    if (!workspace) return { ok: false, verdict, reason: `workspace not found: ${workspaceId}` };
+    if (!workspace)
+      return {
+        ok: false,
+        verdict,
+        reason: `workspace not found: ${workspaceId}`,
+      };
     if (!STOPPABLE_STATES.includes(workspace.state)) {
-      return { ok: false, verdict, reason: `workspace is ${workspace.state}, not stoppable` };
+      return {
+        ok: false,
+        verdict,
+        reason: `workspace is ${workspace.state}, not stoppable`,
+      };
     }
 
     // Kill the live session FIRST (keep the worktree — the work stays reviewable).
@@ -1055,14 +1228,28 @@ export class ConductorComposer implements ConductorModule {
     // `cancelled` while the agent may still be running.
     if (workspace.sessionName || workspace.worktreePath) {
       try {
-        await this.registry.getFull(workspace.substrate).teardown(
-          { ref: workspaceId, sessionName: workspace.sessionName, worktreePath: workspace.worktreePath },
-          { removeIsolation: false },
-        );
+        await this.registry
+          .getFull(workspace.substrate)
+          .teardown(
+            {
+              ref: workspaceId,
+              sessionName: workspace.sessionName,
+              worktreePath: workspace.worktreePath,
+            },
+            { removeIsolation: false }
+          );
       } catch (err) {
-        const reason = err instanceof Error ? err.message : 'substrate kill failed';
-        this.log.warn({ err, workspaceId }, 'conductor stopWorkspace substrate kill failed');
-        return { ok: false, verdict, reason: `stop failed (session may still be live): ${reason}` };
+        const reason =
+          err instanceof Error ? err.message : 'substrate kill failed';
+        this.log.warn(
+          { err, workspaceId },
+          'conductor stopWorkspace substrate kill failed'
+        );
+        return {
+          ok: false,
+          verdict,
+          reason: `stop failed (session may still be live): ${reason}`,
+        };
       }
     }
 
@@ -1081,10 +1268,15 @@ export class ConductorComposer implements ConductorModule {
     }
 
     try {
-      const stopped = await this.engine.advanceWorkspace(workspaceId, 'cancelled', undefined, {
-        stoppedBy: principal.userId,
-        stoppedAt: new Date().toISOString(),
-      });
+      const stopped = await this.engine.advanceWorkspace(
+        workspaceId,
+        'cancelled',
+        undefined,
+        {
+          stoppedBy: principal.userId,
+          stoppedAt: new Date().toISOString(),
+        }
+      );
       this.terminalService.publishSync({
         workspaceId,
         kind: 'state',
@@ -1093,11 +1285,18 @@ export class ConductorComposer implements ConductorModule {
       });
       await recordConductorAudit(
         this.gate,
-        conductorAuditEntry(action, principal, verdict, { workspaceId, from: workspace.state }),
+        conductorAuditEntry(action, principal, verdict, {
+          workspaceId,
+          from: workspace.state,
+        })
       );
       return { ok: true, verdict, value: stopped };
     } catch (err) {
-      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'stop failed' };
+      return {
+        ok: false,
+        verdict,
+        reason: err instanceof Error ? err.message : 'stop failed',
+      };
     }
   }
 
@@ -1111,17 +1310,27 @@ export class ConductorComposer implements ConductorModule {
   async advanceWorkspaceState(
     workspaceId: string,
     to: WorkspaceState,
-    principal: Principal,
+    principal: Principal
   ): Promise<ConductorWriteResult<Workspace>> {
     const action = 'workspace.advance';
     const workspace = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
-      target: { environment: 'conductor' },
-      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-      metadata: { workspaceId, to },
-    });
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+        metadata: { workspaceId, to },
+      }
+    );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    if (!workspace) return { ok: false, verdict, reason: `workspace not found: ${workspaceId}` };
+    if (!workspace)
+      return {
+        ok: false,
+        verdict,
+        reason: `workspace not found: ${workspaceId}`,
+      };
     if (!ADVANCE_TARGET_STATES.includes(to)) {
       return {
         ok: false,
@@ -1130,9 +1339,14 @@ export class ConductorComposer implements ConductorModule {
       };
     }
     try {
-      const advanced = await this.engine.advanceWorkspace(workspaceId, to, undefined, {
-        advancedBy: principal.userId,
-      });
+      const advanced = await this.engine.advanceWorkspace(
+        workspaceId,
+        to,
+        undefined,
+        {
+          advancedBy: principal.userId,
+        }
+      );
       this.terminalService.publishSync({
         workspaceId,
         kind: 'state',
@@ -1145,20 +1359,31 @@ export class ConductorComposer implements ConductorModule {
           workspaceId,
           from: workspace.state,
           to,
-        }),
+        })
       );
       return { ok: true, verdict, value: advanced };
     } catch (err) {
-      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'advance failed' };
+      return {
+        ok: false,
+        verdict,
+        reason: err instanceof Error ? err.message : 'advance failed',
+      };
     }
   }
 
-  async reconcile(principal: Principal): Promise<ConductorWriteResult<ReconcileReport>> {
+  async reconcile(
+    principal: Principal
+  ): Promise<ConductorWriteResult<ReconcileReport>> {
     const action = 'workspace.reconcile';
-    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
-      target: { environment: 'conductor' },
-      metadata: { op: 'reconcile' },
-    });
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        metadata: { op: 'reconcile' },
+      }
+    );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
     const report = await substrateReconcile(this.engineDeps);
     await recordConductorAudit(
@@ -1166,7 +1391,7 @@ export class ConductorComposer implements ConductorModule {
       conductorAuditEntry(action, principal, verdict, {
         live: report.live.length,
         orphanedWorkspaces: report.orphanedWorkspaces.length,
-      }),
+      })
     );
     return { ok: true, verdict, value: report };
   }
@@ -1176,7 +1401,7 @@ export class ConductorComposer implements ConductorModule {
   /** The narrow deps slice the checkpoint ops run over (git seams + store). */
   private checkpointDeps(): CheckpointOpsDeps {
     return {
-      getWorkspace: (id) => this.engine.getWorkspace(id),
+      getWorkspace: id => this.engine.getWorkspace(id),
       store: this.checkpointStore,
       logger: this.log,
       newId: () => uuidId.newId(),
@@ -1192,15 +1417,20 @@ export class ConductorComposer implements ConductorModule {
   async checkpointWorkspace(
     workspaceId: string,
     input: { label?: string; description?: string },
-    principal: Principal,
+    principal: Principal
   ): Promise<ConductorWriteResult<CheckpointRecord>> {
     const action = 'workspace.checkpoint';
     const workspace = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
-      target: { environment: 'conductor' },
-      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-      metadata: { workspaceId },
-    });
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+        metadata: { workspaceId },
+      }
+    );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
     try {
       const opInput: CreateCheckpointInput = {
@@ -1208,23 +1438,33 @@ export class ConductorComposer implements ConductorModule {
         ...(input.description ? { description: input.description } : {}),
         createdBy: principal.userId,
       };
-      const record = await createCheckpointOp(this.checkpointDeps(), workspaceId, opInput);
+      const record = await createCheckpointOp(
+        this.checkpointDeps(),
+        workspaceId,
+        opInput
+      );
       await recordConductorAudit(
         this.gate,
         conductorAuditEntry(action, principal, verdict, {
           workspaceId,
           checkpointId: record.checkpointId,
           ref: record.ref,
-        }),
+        })
       );
       return { ok: true, verdict, value: record };
     } catch (err) {
-      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'checkpoint failed' };
+      return {
+        ok: false,
+        verdict,
+        reason: err instanceof Error ? err.message : 'checkpoint failed',
+      };
     }
   }
 
   /** List a workspace's checkpoints (newest-first). Read-only. */
-  async listWorkspaceCheckpoints(workspaceId: string): Promise<readonly CheckpointRecord[]> {
+  async listWorkspaceCheckpoints(
+    workspaceId: string
+  ): Promise<readonly CheckpointRecord[]> {
     return listCheckpointsOp({ store: this.checkpointStore }, workspaceId);
   }
 
@@ -1236,29 +1476,42 @@ export class ConductorComposer implements ConductorModule {
   async restoreCheckpoint(
     workspaceId: string,
     checkpointId: string,
-    principal: Principal,
+    principal: Principal
   ): Promise<ConductorWriteResult<RestoreResultView>> {
     const action = 'workspace.restore';
     const workspace = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
-      target: { environment: 'conductor' },
-      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-      metadata: { workspaceId, checkpointId },
-    });
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+        metadata: { workspaceId, checkpointId },
+      }
+    );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
     try {
-      const result = await restoreCheckpointOp(this.checkpointDeps(), workspaceId, checkpointId);
+      const result = await restoreCheckpointOp(
+        this.checkpointDeps(),
+        workspaceId,
+        checkpointId
+      );
       await recordConductorAudit(
         this.gate,
         conductorAuditEntry(action, principal, verdict, {
           workspaceId,
           checkpointId,
           restoredTo: result.restoredTo,
-        }),
+        })
       );
       return { ok: true, verdict, value: result };
     } catch (err) {
-      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'restore failed' };
+      return {
+        ok: false,
+        verdict,
+        reason: err instanceof Error ? err.message : 'restore failed',
+      };
     }
   }
 
@@ -1270,16 +1523,26 @@ export class ConductorComposer implements ConductorModule {
   async branchFromCheckpoint(
     workspaceId: string,
     checkpointId: string,
-    input: { branch?: string; runtimeId?: string; taskId?: string; prompt?: string },
-    principal: Principal,
+    input: {
+      branch?: string;
+      runtimeId?: string;
+      taskId?: string;
+      prompt?: string;
+    },
+    principal: Principal
   ): Promise<ConductorWriteResult<BranchResultView>> {
     const action = 'workspace.branch';
     const source = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
-      target: { environment: 'conductor' },
-      ...(source?.taskId ? { taskId: source.taskId } : {}),
-      metadata: { workspaceId, checkpointId },
-    });
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        ...(source?.taskId ? { taskId: source.taskId } : {}),
+        metadata: { workspaceId, checkpointId },
+      }
+    );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
     try {
       const branchInput: BranchFromCheckpointInput = {
@@ -1291,9 +1554,15 @@ export class ConductorComposer implements ConductorModule {
       };
       const deps: BranchOpsDeps = {
         ...this.checkpointDeps(),
-        createWorkspace: (createInput) => this.engine.createWorkspace(createInput),
+        createWorkspace: createInput =>
+          this.engine.createWorkspace(createInput),
       };
-      const result = await branchFromCheckpointOp(deps, workspaceId, checkpointId, branchInput);
+      const result = await branchFromCheckpointOp(
+        deps,
+        workspaceId,
+        checkpointId,
+        branchInput
+      );
       // Same post-launch seam as createWorkspace: point the branched agent at the
       // governed backend MCP host (fire-and-forget + degrade-safe).
       this.injectWorktreeMcp(result.workspace);
@@ -1303,11 +1572,15 @@ export class ConductorComposer implements ConductorModule {
           workspaceId,
           checkpointId,
           newWorkspaceId: result.workspace.workspaceId,
-        }),
+        })
       );
       return { ok: true, verdict, value: result };
     } catch (err) {
-      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'branch failed' };
+      return {
+        ok: false,
+        verdict,
+        reason: err instanceof Error ? err.message : 'branch failed',
+      };
     }
   }
 
@@ -1351,7 +1624,9 @@ export class ConductorComposer implements ConductorModule {
    * edge); otherwise ALWAYS a truthful view (`available:false` + reason when
    * gh/auth/PR/GitHub-remote is absent — never fabricated).
    */
-  async workspaceChecks(workspaceId: string): Promise<WorkspaceChecksView | null> {
+  async workspaceChecks(
+    workspaceId: string
+  ): Promise<WorkspaceChecksView | null> {
     const workspace = await this.getWorkspace(workspaceId);
     if (!workspace) return null;
     return this.prChecks.checks(workspace);
@@ -1362,7 +1637,7 @@ export class ConductorComposer implements ConductorModule {
   /** The narrow deps slice the ported review/publish/continue ops run over. */
   private reviewDeps(): ReviewOpsDeps {
     return {
-      getWorkspace: (id) => this.engine.getWorkspace(id),
+      getWorkspace: id => this.engine.getWorkspace(id),
       advanceWorkspace: (id, to, patch, metadata) =>
         this.engine.advanceWorkspace(id, to, patch, metadata),
       getSubstrate: (id: WorkspaceSubstrate) => this.registry.getFull(id),
@@ -1375,13 +1650,20 @@ export class ConductorComposer implements ConductorModule {
     return this.engine.listWorkspaceEvents(workspaceId);
   }
 
-  async workspaceOutput(workspaceId: string, lines?: number): Promise<{ output: string }> {
+  async workspaceOutput(
+    workspaceId: string,
+    lines?: number
+  ): Promise<{ output: string }> {
     const workspace = await this.engine.getWorkspace(workspaceId);
     if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
     const substrate = this.registry.getFull(workspace.substrate);
     const captured = await substrate.capture(
-      { ref: workspaceId, sessionName: workspace.sessionName, worktreePath: workspace.worktreePath },
-      lines,
+      {
+        ref: workspaceId,
+        sessionName: workspace.sessionName,
+        worktreePath: workspace.worktreePath,
+      },
+      lines
     );
     // A gone handle captures null — an empty output is the truthful read.
     return { output: captured ?? '' };
@@ -1402,7 +1684,8 @@ export class ConductorComposer implements ConductorModule {
         exitCode: null,
         recentOutput: null,
         state: workspace.state,
-        reason: 'no live substrate handle (never launched or already torn down)',
+        reason:
+          'no live substrate handle (never launched or already torn down)',
       };
     }
     const substrate = this.registry.getFull(workspace.substrate);
@@ -1413,7 +1696,9 @@ export class ConductorComposer implements ConductorModule {
     };
     const [alive, exitCode, recentOutput] = await Promise.all([
       substrate.alive(handle),
-      substrate.exitCode ? substrate.exitCode(handle) : Promise.resolve(undefined),
+      substrate.exitCode
+        ? substrate.exitCode(handle)
+        : Promise.resolve(undefined),
       substrate.capture(handle, 50),
     ]);
     return {
@@ -1444,16 +1729,21 @@ export class ConductorComposer implements ConductorModule {
   /** Attention-enriched views of every workspace (the cockpit list's badges). */
   async listWorkspaceViews(): Promise<WorkspaceView[]> {
     const workspaces = await this.engine.listWorkspaces();
-    return Promise.all(workspaces.map((workspace) => this.buildWorkspaceView(workspace)));
+    return Promise.all(
+      workspaces.map(workspace => this.buildWorkspaceView(workspace))
+    );
   }
 
-  private async buildWorkspaceView(workspace: Workspace): Promise<WorkspaceView> {
+  private async buildWorkspaceView(
+    workspace: Workspace
+  ): Promise<WorkspaceView> {
     // Probe the substrate ONLY where the live tail can decide (running-ish states
     // with a handle) — listing must not shell out per archived record.
     let tail: string | null | undefined;
     let live: boolean | undefined;
     const probeLive =
-      (workspace.state === 'running' || workspace.state === 'changes_requested') &&
+      (workspace.state === 'running' ||
+        workspace.state === 'changes_requested') &&
       Boolean(workspace.sessionName || workspace.worktreePath);
     if (probeLive) {
       try {
@@ -1469,7 +1759,10 @@ export class ConductorComposer implements ConductorModule {
         ]);
       } catch (err) {
         // Missing signal, not a fabricated one — the classifier reports unknown.
-        this.log.warn({ err, workspaceId: workspace.workspaceId }, 'attention probe faulted');
+        this.log.warn(
+          { err, workspaceId: workspace.workspaceId },
+          'attention probe faulted'
+        );
       }
     }
 
@@ -1477,7 +1770,10 @@ export class ConductorComposer implements ConductorModule {
     try {
       events = await this.engine.listWorkspaceEvents(workspace.workspaceId);
     } catch (err) {
-      this.log.warn({ err, workspaceId: workspace.workspaceId }, 'attention event read faulted');
+      this.log.warn(
+        { err, workspaceId: workspace.workspaceId },
+        'attention event read faulted'
+      );
     }
 
     const attention: AttentionResult = classifyAttention({
@@ -1496,7 +1792,9 @@ export class ConductorComposer implements ConductorModule {
       substrate: workspace.substrate,
       branch: workspace.branch,
       baseRef: workspace.baseRef,
-      ...(workspace.worktreePath ? { worktreePath: workspace.worktreePath } : {}),
+      ...(workspace.worktreePath
+        ? { worktreePath: workspace.worktreePath }
+        : {}),
       ...(workspace.sessionName ? { sessionName: workspace.sessionName } : {}),
       state: workspace.state,
       createdBy: workspace.createdBy,
@@ -1514,10 +1812,10 @@ export class ConductorComposer implements ConductorModule {
   private compareDeps(): CompareDeps {
     return {
       listWorkspaces: () => this.engine.listWorkspaces(),
-      getWorkspace: (id) => this.engine.getWorkspace(id),
-      buildView: (workspace) => this.buildWorkspaceView(workspace),
-      diffStat: (workspace) => this.computeDiffStat(workspace),
-      changedFiles: (workspace) => this.computeChangedFiles(workspace),
+      getWorkspace: id => this.engine.getWorkspace(id),
+      buildView: workspace => this.buildWorkspaceView(workspace),
+      diffStat: workspace => this.computeDiffStat(workspace),
+      changedFiles: workspace => this.computeChangedFiles(workspace),
     };
   }
 
@@ -1530,19 +1828,26 @@ export class ConductorComposer implements ConductorModule {
    * vanish yields a truthful reason and NO list (never a fabricated set).
    */
   private async computeChangedFiles(
-    workspace: Workspace,
+    workspace: Workspace
   ): Promise<{ files?: readonly string[]; reason?: string }> {
     if (!workspace.worktreePath) {
       return { reason: 'no worktree (never launched or already torn down)' };
     }
     try {
-      const view = await workspaceDiffFilesOp(this.reviewDeps(), workspace.workspaceId);
+      const view = await workspaceDiffFilesOp(
+        this.reviewDeps(),
+        workspace.workspaceId
+      );
       if (!view.available) {
-        return { reason: 'changed-file list unavailable (non-repo / git absent)' };
+        return {
+          reason: 'changed-file list unavailable (non-repo / git absent)',
+        };
       }
-      return { files: view.files.map((f) => f.path) };
+      return { files: view.files.map(f => f.path) };
     } catch (err) {
-      return { reason: err instanceof Error ? err.message : 'changed-file list failed' };
+      return {
+        reason: err instanceof Error ? err.message : 'changed-file list failed',
+      };
     }
   }
 
@@ -1554,7 +1859,7 @@ export class ConductorComposer implements ConductorModule {
    * stat (never a fabricated `0/0/0`).
    */
   private async computeDiffStat(
-    workspace: Workspace,
+    workspace: Workspace
   ): Promise<{ stat?: ReturnType<typeof parseDiffStat>; reason?: string }> {
     if (!workspace.worktreePath) {
       return { reason: 'no worktree (never launched or already torn down)' };
@@ -1567,7 +1872,7 @@ export class ConductorComposer implements ConductorModule {
           sessionName: workspace.sessionName,
           worktreePath: workspace.worktreePath,
         },
-        workspace.baseRef || 'HEAD',
+        workspace.baseRef || 'HEAD'
       );
       return { stat: parseDiffStat(diff.stat, diff.changedFiles) };
     } catch (err) {
@@ -1596,8 +1901,11 @@ export class ConductorComposer implements ConductorModule {
   private async withGridHint(view: CompareView): Promise<CompareView> {
     if (!this.workspaceGrid || view.count < 2) return view; // singleton/ungrouped ⇒ no grid
     const sessions = view.siblings
-      .map((s) => s.sessionName)
-      .filter((name): name is string => typeof name === 'string' && name.trim().length > 0);
+      .map(s => s.sessionName)
+      .filter(
+        (name): name is string =>
+          typeof name === 'string' && name.trim().length > 0
+      );
     const repoPath = this.groupRepoPath(view);
     if (!repoPath || sessions.length === 0) return view; // truthful: no repo/sessions ⇒ no hint
     const hint = await this.workspaceGrid
@@ -1614,7 +1922,10 @@ export class ConductorComposer implements ConductorModule {
    */
   private groupRepoPath(view: CompareView): string | undefined {
     for (const sibling of view.siblings) {
-      if (typeof sibling.worktreePath === 'string' && sibling.worktreePath.trim().length > 0) {
+      if (
+        typeof sibling.worktreePath === 'string' &&
+        sibling.worktreePath.trim().length > 0
+      ) {
         return sibling.worktreePath;
       }
     }
@@ -1623,21 +1934,29 @@ export class ConductorComposer implements ConductorModule {
 
   async arrangeCompareGrid(
     taskGroup: string,
-    principal: Principal,
+    principal: Principal
   ): Promise<ConductorWriteResult<GroupGridArrangement | null>> {
     const action = 'workspace.grid';
-    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
-      target: { environment: 'conductor' },
-      metadata: { taskGroup },
-    });
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        metadata: { taskGroup },
+      }
+    );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
     // dmux absent ⇒ truthful null (no grid) — the write is a governed no-op.
     if (!this.workspaceGrid) return { ok: true, verdict, value: null };
 
     const view = await compareTaskGroupOp(this.compareDeps(), taskGroup);
     const worktrees = view.siblings
-      .filter((s): s is typeof s & { worktreePath: string } => typeof s.worktreePath === 'string')
-      .map((s) => ({ workspaceId: s.workspaceId, worktreePath: s.worktreePath }));
+      .filter(
+        (s): s is typeof s & { worktreePath: string } =>
+          typeof s.worktreePath === 'string'
+      )
+      .map(s => ({ workspaceId: s.workspaceId, worktreePath: s.worktreePath }));
     // No honest N-way grid to build — never a hollow one-dir grid.
     if (worktrees.length < 2) return { ok: true, verdict, value: null };
 
@@ -1651,7 +1970,7 @@ export class ConductorComposer implements ConductorModule {
           taskGroup,
           sessionName: arrangement.sessionName,
           paneCount: arrangement.paneCount,
-        }),
+        })
       );
     }
     return { ok: true, verdict, value: arrangement }; // null on any tmux fault
@@ -1671,7 +1990,9 @@ export class ConductorComposer implements ConductorModule {
    * legacy `/diff`); degrade-truthful (`available:false, files:[]` for a
    * non-repo/no-worktree tree, never a fabricated file).
    */
-  async workspaceDiffFiles(workspaceId: string): Promise<WorkspaceDiffFilesView> {
+  async workspaceDiffFiles(
+    workspaceId: string
+  ): Promise<WorkspaceDiffFilesView> {
     return workspaceDiffFilesOp(this.reviewDeps(), workspaceId);
   }
 
@@ -1681,7 +2002,10 @@ export class ConductorComposer implements ConductorModule {
    * rejected pre-spawn if it begins with `-`. PURE read; degrade-truthful
    * (`patch:null` when it cannot be computed, `patch:''` for no diff).
    */
-  async workspaceFilePatch(workspaceId: string, path: string): Promise<WorkspaceFilePatchView> {
+  async workspaceFilePatch(
+    workspaceId: string,
+    path: string
+  ): Promise<WorkspaceFilePatchView> {
     return workspaceFilePatchOp(this.reviewDeps(), workspaceId, path);
   }
 
@@ -1718,12 +2042,16 @@ export class ConductorComposer implements ConductorModule {
         : {}),
       ...(mergeR.status === 'fulfilled' ? { mergeability: mergeR.value } : {}),
       ...(prR.status === 'fulfilled' ? { prStatus: prR.value } : {}),
-      ...(worktreeR.status === 'fulfilled' ? { worktree: worktreeR.value } : {}),
+      ...(worktreeR.status === 'fulfilled'
+        ? { worktree: worktreeR.value }
+        : {}),
       ...(previewR.status === 'fulfilled' ? { preview: previewR.value } : {}),
     });
   }
 
-  async workspaceDevCommand(workspaceId: string): Promise<DevCommandView | null> {
+  async workspaceDevCommand(
+    workspaceId: string
+  ): Promise<DevCommandView | null> {
     const workspace = await this.engine.getWorkspace(workspaceId);
     if (!workspace?.worktreePath) return null;
     return detectDevCommand(workspace.worktreePath);
@@ -1757,17 +2085,30 @@ export class ConductorComposer implements ConductorModule {
    * the UI shows one truthful "how do I run this" answer. Degrade-safe: no
    * worktree ⇒ null; a missing/broken config file degrades to defaults.
    */
-  async workspaceRunConfig(workspaceId: string): Promise<WorkspaceRunConfigView | null> {
+  async workspaceRunConfig(
+    workspaceId: string
+  ): Promise<WorkspaceRunConfigView | null> {
     const workspace = await this.engine.getWorkspace(workspaceId);
     if (!workspace?.worktreePath) return null;
     const [config, detected] = await Promise.all([
       readRepoConfigFile(workspace.worktreePath),
       detectDevCommand(workspace.worktreePath),
     ]);
-    const port = computeWorkspacePort(workspaceId, config.port.base, config.port.span);
-    const run = config.scripts.run !== '' ? config.scripts.run : detected?.command ?? '';
+    const port = computeWorkspacePort(
+      workspaceId,
+      config.port.base,
+      config.port.span
+    );
+    const run =
+      config.scripts.run !== ''
+        ? config.scripts.run
+        : (detected?.command ?? '');
     const runSource: WorkspaceRunConfigView['runSource'] =
-      config.scripts.run !== '' ? 'config' : detected != null ? 'detected' : 'none';
+      config.scripts.run !== ''
+        ? 'config'
+        : detected != null
+          ? 'detected'
+          : 'none';
     return {
       port,
       setup: config.scripts.setup,
@@ -1790,7 +2131,7 @@ export class ConductorComposer implements ConductorModule {
     return {
       gate: this.gate,
       verifier: this.previewVerify ?? createBrowserPreviewVerifier(null),
-      getWorkspace: (id) => this.engine.getWorkspace(id),
+      getWorkspace: id => this.engine.getWorkspace(id),
       // Write-back seam: persist the COMPACT verification summary onto the
       // workspace record via the SAME same-state metadata-merge idiom
       // `setPreviewUrl` uses (`advanceWorkspace` MERGES the `{ previewVerification }`
@@ -1817,10 +2158,13 @@ export class ConductorComposer implements ConductorModule {
    * "screenshot not retained", never a broken image. A never-verified workspace is
    * a truthful `null` (⇒ a 404 at the edge), NEVER a fabricated pass.
    */
-  async getPreviewVerification(workspaceId: string): Promise<PreviewVerificationView | null> {
+  async getPreviewVerification(
+    workspaceId: string
+  ): Promise<PreviewVerificationView | null> {
     const workspace = await this.engine.getWorkspace(workspaceId);
     if (!workspace) return null;
-    const raw = (workspace.metadata as Record<string, unknown> | undefined)?.previewVerification;
+    const raw = (workspace.metadata as Record<string, unknown> | undefined)
+      ?.previewVerification;
     if (!raw || typeof raw !== 'object') return null;
     const record = raw as PreviewVerificationRecord;
     return {
@@ -1839,29 +2183,48 @@ export class ConductorComposer implements ConductorModule {
   async setPreviewUrl(
     workspaceId: string,
     url: unknown,
-    principal: Principal,
+    principal: Principal
   ): Promise<ConductorWriteResult<Workspace>> {
     const action = 'workspace.preview_url';
-    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
-      target: { environment: 'conductor' },
-      metadata: { workspaceId },
-    });
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        metadata: { workspaceId },
+      }
+    );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
     const normalized = normalizeLocalPreviewUrl(url);
     if (!normalized) {
-      return { ok: false, verdict, reason: 'a http(s) localhost/loopback url is required' };
+      return {
+        ok: false,
+        verdict,
+        reason: 'a http(s) localhost/loopback url is required',
+      };
     }
     try {
       const workspace = await this.engine.getWorkspace(workspaceId);
-      if (!workspace) return { ok: false, verdict, reason: `workspace not found: ${workspaceId}` };
+      if (!workspace)
+        return {
+          ok: false,
+          verdict,
+          reason: `workspace not found: ${workspaceId}`,
+        };
       // Same-state advance (no illegal transition) — safe to call repeatedly as
       // the run restarts on a new port.
-      const updated = await this.engine.advanceWorkspace(workspaceId, workspace.state, undefined, {
-        previewUrl: normalized,
-      });
+      const updated = await this.engine.advanceWorkspace(
+        workspaceId,
+        workspace.state,
+        undefined,
+        {
+          previewUrl: normalized,
+        }
+      );
       await recordConductorAudit(
         this.gate,
-        conductorAuditEntry(action, principal, verdict, { workspaceId }),
+        conductorAuditEntry(action, principal, verdict, { workspaceId })
       );
       // Fire-and-forget preview verification (browsing facet). The persist above is
       // AWAITED and truthful; this side effect is `void … .catch(…)` and NEVER
@@ -1874,24 +2237,37 @@ export class ConductorComposer implements ConductorModule {
       // caller (nor the completion hook downstream). Degrade-truthful end to end:
       // no driver ⇒ skipped(degraded); page break ⇒ failed; never a fabricated pass.
       if (this.previewVerify) {
-        void verifyWorkspacePreview(this.previewVerifyDeps(), workspaceId, principal, {
-          timeoutMs: DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS,
-        })
-          .then((r) => {
+        void verifyWorkspacePreview(
+          this.previewVerifyDeps(),
+          workspaceId,
+          principal,
+          {
+            timeoutMs: DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS,
+          }
+        )
+          .then(r => {
             if (!r.ok) {
               this.log.info(
                 { workspaceId, verdict: r.verdict.effect, reason: r.reason },
-                'conductor preview auto-verify not run',
+                'conductor preview auto-verify not run'
               );
             }
           })
-          .catch((err) =>
-            this.log.warn({ err, workspaceId }, 'conductor preview auto-verify faulted'),
+          .catch(err =>
+            this.log.warn(
+              { err, workspaceId },
+              'conductor preview auto-verify faulted'
+            )
           );
       }
       return { ok: true, verdict, value: updated };
     } catch (err) {
-      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'preview-url update failed' };
+      return {
+        ok: false,
+        verdict,
+        reason:
+          err instanceof Error ? err.message : 'preview-url update failed',
+      };
     }
   }
 
@@ -1908,40 +2284,54 @@ export class ConductorComposer implements ConductorModule {
   async verifyPreview(
     workspaceId: string,
     principal: Principal,
-    options?: PreviewVerifyOptions,
+    options?: PreviewVerifyOptions
   ): Promise<PreviewVerifyResult> {
-    return verifyWorkspacePreview(this.previewVerifyDeps(), workspaceId, principal, {
-      timeoutMs: DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS,
-      ...(options ?? {}),
-    });
+    return verifyWorkspacePreview(
+      this.previewVerifyDeps(),
+      workspaceId,
+      principal,
+      {
+        timeoutMs: DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS,
+        ...(options ?? {}),
+      }
+    );
   }
 
   async archiveWorkspace(
     workspaceId: string,
-    principal: Principal,
+    principal: Principal
   ): Promise<ConductorWriteResult<Workspace>> {
     const action = 'workspace.archive';
-    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
-      target: { environment: 'conductor' },
-      metadata: { workspaceId },
-    });
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        metadata: { workspaceId },
+      }
+    );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
     try {
       const archived = await archiveWorkspaceOp(this.reviewDeps(), workspaceId);
       await recordConductorAudit(
         this.gate,
-        conductorAuditEntry(action, principal, verdict, { workspaceId }),
+        conductorAuditEntry(action, principal, verdict, { workspaceId })
       );
       return { ok: true, verdict, value: archived };
     } catch (err) {
-      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'archive failed' };
+      return {
+        ok: false,
+        verdict,
+        reason: err instanceof Error ? err.message : 'archive failed',
+      };
     }
   }
 
   async createWorkspacePr(
     workspaceId: string,
     input: CreatePrInput,
-    principal: Principal,
+    principal: Principal
   ): Promise<ConductorWriteResult<CreatePrResultView>> {
     const action = 'workspace.pr';
     // Production rule: opening a PR pushes the branch (customer-visible delivery)
@@ -1949,47 +2339,67 @@ export class ConductorComposer implements ConductorModule {
     // The workspace's taskId anchors approval correlation: an `approved` record
     // for (taskId, action) clears a needs_approval verdict on retry.
     const workspace = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
-      target: { environment: 'conductor' },
-      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-      metadata: { workspaceId, base: input.base },
-    });
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+        metadata: { workspaceId, base: input.base },
+      }
+    );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
     try {
       const deps: PublishOpsDeps = this.reviewDeps();
       const result = await createWorkspacePrOp(deps, workspaceId, input);
       await recordConductorAudit(
         this.gate,
-        conductorAuditEntry(action, principal, verdict, { workspaceId, url: result.url }),
+        conductorAuditEntry(action, principal, verdict, {
+          workspaceId,
+          url: result.url,
+        })
       );
       return { ok: true, verdict, value: result };
     } catch (err) {
-      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'pr failed' };
+      return {
+        ok: false,
+        verdict,
+        reason: err instanceof Error ? err.message : 'pr failed',
+      };
     }
   }
 
   async mergeWorkspace(
     workspaceId: string,
     input: MergeInput,
-    principal: Principal,
+    principal: Principal
   ): Promise<ConductorWriteResult<MergeResultView>> {
     const action = 'workspace.merge';
     // A merge is THE customer-visible delivery — gate before any git/gh runs.
     // The workspace's taskId anchors approval correlation: an `approved` record
     // for (taskId, action) clears a needs_approval verdict on retry.
     const workspace = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
-      target: { environment: 'conductor' },
-      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-      metadata: { workspaceId, strategy: input.strategy },
-    });
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+        metadata: { workspaceId, strategy: input.strategy },
+      }
+    );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
     try {
       // Gather the convergence-evidence inputs at DECISION TIME (before the merge
       // mutates state): the candidate siblings + the folded pre-merge verification.
       // Degrade-truthful — never throws, so a compare/readiness fault never blocks
       // the merge (the evidence just records the parts it could truthfully gather).
-      const preMerge = await this.gatherConvergenceInputs(workspaceId, workspace);
+      const preMerge = await this.gatherConvergenceInputs(
+        workspaceId,
+        workspace
+      );
 
       const deps: PublishOpsDeps = this.reviewDeps();
       const result = await mergeWorkspaceOp(deps, workspaceId, input);
@@ -2000,7 +2410,10 @@ export class ConductorComposer implements ConductorModule {
       // the merge already happened above, so ANY throw here degrades to a null
       // record (truthful) rather than misreporting the succeeded merge as failed
       // via the outer catch.
-      let emitted: { record: ConvergenceEvidenceRecord | null; sealed: AuditRecord | null } = {
+      let emitted: {
+        record: ConvergenceEvidenceRecord | null;
+        sealed: AuditRecord | null;
+      } = {
         record: null,
         sealed: null,
       };
@@ -2016,7 +2429,7 @@ export class ConductorComposer implements ConductorModule {
       } catch (err) {
         this.log.warn(
           { err, workspaceId },
-          'convergence evidence emission failed (merge succeeded, unaffected)',
+          'convergence evidence emission failed (merge succeeded, unaffected)'
         );
       }
 
@@ -2040,7 +2453,11 @@ export class ConductorComposer implements ConductorModule {
       }
       return { ok: true, verdict, value };
     } catch (err) {
-      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'merge failed' };
+      return {
+        ok: false,
+        verdict,
+        reason: err instanceof Error ? err.message : 'merge failed',
+      };
     }
   }
 
@@ -2054,8 +2471,11 @@ export class ConductorComposer implements ConductorModule {
    */
   private async gatherConvergenceInputs(
     workspaceId: string,
-    workspace: Workspace | null,
-  ): Promise<{ candidates: readonly EvidenceCandidateInput[]; verification?: { view?: ReadinessView; reason?: string } }> {
+    workspace: Workspace | null
+  ): Promise<{
+    candidates: readonly EvidenceCandidateInput[];
+    verification?: { view?: ReadinessView; reason?: string };
+  }> {
     const [siblingsR, readinessR] = await Promise.allSettled([
       this.workspaceSiblings(workspaceId),
       this.workspaceReadiness(workspaceId),
@@ -2071,7 +2491,9 @@ export class ConductorComposer implements ConductorModule {
           ...(sibling.runId ? { runId: sibling.runId } : {}),
           state: sibling.state,
           ...(sibling.diffStat ? { diffStat: sibling.diffStat } : {}),
-          ...(sibling.changedFiles ? { changedFiles: sibling.changedFiles } : {}),
+          ...(sibling.changedFiles
+            ? { changedFiles: sibling.changedFiles }
+            : {}),
         });
       }
     }
@@ -2108,8 +2530,14 @@ export class ConductorComposer implements ConductorModule {
     verdict: GateVerdict;
     workspace: Workspace | null;
     result: MergeResultView;
-    preMerge: { candidates: readonly EvidenceCandidateInput[]; verification?: { view?: ReadinessView; reason?: string } };
-  }): Promise<{ record: ConvergenceEvidenceRecord | null; sealed: AuditRecord | null }> {
+    preMerge: {
+      candidates: readonly EvidenceCandidateInput[];
+      verification?: { view?: ReadinessView; reason?: string };
+    };
+  }): Promise<{
+    record: ConvergenceEvidenceRecord | null;
+    sealed: AuditRecord | null;
+  }> {
     const { action, principal, verdict, workspace, result, preMerge } = args;
     const governance: EvidenceGovernance = {
       action,
@@ -2128,14 +2556,19 @@ export class ConductorComposer implements ConductorModule {
     const evidence = assembleConvergenceEvidence({
       chosenWorkspaceId: result.workspaceId,
       ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-      taskGroup: workspace ? taskGroupOf(workspace) ?? null : null,
-      ...(typeof result.mergeMode === 'string' ? { mergeMode: result.mergeMode } : {}),
+      taskGroup: workspace ? (taskGroupOf(workspace) ?? null) : null,
+      ...(typeof result.mergeMode === 'string'
+        ? { mergeMode: result.mergeMode }
+        : {}),
       candidates: preMerge.candidates,
       governance,
       ...(preMerge.verification ? { verification: preMerge.verification } : {}),
       ...(convergence ? { convergence } : {}),
       actorId: principal.userId,
-      mergedAt: typeof mergedAtRaw === 'string' ? mergedAtRaw : new Date().toISOString(),
+      mergedAt:
+        typeof mergedAtRaw === 'string'
+          ? mergedAtRaw
+          : new Date().toISOString(),
     });
 
     // Seal the evidence hash into the Merkle chain (the audit leaf commits to it).
@@ -2148,7 +2581,7 @@ export class ConductorComposer implements ConductorModule {
         taskGroup: evidence.taskGroup,
         candidateCount: evidence.candidateCount,
         verificationVerdict: evidence.verification.verdict ?? 'unavailable',
-      }),
+      })
     );
 
     const record: ConvergenceEvidenceRecord = {
@@ -2165,12 +2598,20 @@ export class ConductorComposer implements ConductorModule {
     try {
       const current = await this.engine.getWorkspace(result.workspaceId);
       if (current) {
-        await this.engine.advanceWorkspace(result.workspaceId, current.state, undefined, {
-          convergenceEvidence: record,
-        });
+        await this.engine.advanceWorkspace(
+          result.workspaceId,
+          current.state,
+          undefined,
+          {
+            convergenceEvidence: record,
+          }
+        );
       }
     } catch (err) {
-      this.log.warn({ err, workspaceId: result.workspaceId }, 'convergence evidence persist failed (merge unaffected)');
+      this.log.warn(
+        { err, workspaceId: result.workspaceId },
+        'convergence evidence persist failed (merge unaffected)'
+      );
     }
     return { record, sealed };
   }
@@ -2182,10 +2623,13 @@ export class ConductorComposer implements ConductorModule {
    * Read-only: no gate, no audit, no mutation. A never-merged workspace is a
    * truthful `null` (⇒ 404 at the edge), never a fabricated record.
    */
-  async getConvergenceEvidence(workspaceId: string): Promise<ConvergenceEvidenceRecord | null> {
+  async getConvergenceEvidence(
+    workspaceId: string
+  ): Promise<ConvergenceEvidenceRecord | null> {
     const workspace = await this.engine.getWorkspace(workspaceId);
     if (!workspace) return null;
-    const raw = (workspace.metadata as Record<string, unknown> | undefined)?.convergenceEvidence;
+    const raw = (workspace.metadata as Record<string, unknown> | undefined)
+      ?.convergenceEvidence;
     if (!raw || typeof raw !== 'object') return null;
     return raw as ConvergenceEvidenceRecord;
   }
@@ -2199,19 +2643,27 @@ export class ConductorComposer implements ConductorModule {
    * the backing fields (never a fabricated `met`). `null` when the workspace does
    * not exist OR was never merged with evidence (⇒ 404 at the edge).
    */
-  async getConvergenceEvidenceExport(workspaceId: string): Promise<EvidenceExport | null> {
+  async getConvergenceEvidenceExport(
+    workspaceId: string
+  ): Promise<EvidenceExport | null> {
     const record = await this.getConvergenceEvidence(workspaceId);
     if (!record) return null;
     // PURE render first (deterministic hash/controls), THEN a thin detached-signature
     // step — signing the stable contentHash, never mutating it. Unsigned when no key.
     const pack = renderEvidenceExport(record);
-    return signEvidenceExport(pack, { privateKey: this.resolveEvidenceSigningKey(), logger: this.log });
+    return signEvidenceExport(pack, {
+      privateKey: this.resolveEvidenceSigningKey(),
+      logger: this.log,
+    });
   }
 
   /** Load + memoize the Ed25519 signing key from config (degrade-truthful: `null` = unsigned). */
   private resolveEvidenceSigningKey(): KeyObject | null {
     if (this.evidenceSigningKey === undefined) {
-      this.evidenceSigningKey = loadEvidenceSigningKey(this.cfg.evidenceSigningKey, this.log);
+      this.evidenceSigningKey = loadEvidenceSigningKey(
+        this.cfg.evidenceSigningKey,
+        this.log
+      );
     }
     return this.evidenceSigningKey;
   }
@@ -2226,14 +2678,20 @@ export class ConductorComposer implements ConductorModule {
    * `metadata.convergence`, narrowed to {@link EvidenceConvergence}. Absent /
    * malformed ⇒ `undefined` (a plain single-agent merge has none — never fabricated).
    */
-  private readConvergenceProvenance(workspace: Workspace | null): EvidenceConvergence | undefined {
-    const raw = (workspace?.metadata as Record<string, unknown> | undefined)?.convergence;
+  private readConvergenceProvenance(
+    workspace: Workspace | null
+  ): EvidenceConvergence | undefined {
+    const raw = (workspace?.metadata as Record<string, unknown> | undefined)
+      ?.convergence;
     if (!raw || typeof raw !== 'object') return undefined;
     const value = raw as Partial<EvidenceConvergence>;
-    if (!Array.isArray(value.selections) || typeof value.fileCount !== 'number') return undefined;
+    if (!Array.isArray(value.selections) || typeof value.fileCount !== 'number')
+      return undefined;
     return {
-      fromTaskGroup: typeof value.fromTaskGroup === 'string' ? value.fromTaskGroup : null,
-      sourceCount: typeof value.sourceCount === 'number' ? value.sourceCount : 0,
+      fromTaskGroup:
+        typeof value.fromTaskGroup === 'string' ? value.fromTaskGroup : null,
+      sourceCount:
+        typeof value.sourceCount === 'number' ? value.sourceCount : 0,
       fileCount: value.fileCount,
       selections: value.selections,
     };
@@ -2256,35 +2714,48 @@ export class ConductorComposer implements ConductorModule {
   async planConvergence(
     taskGroup: string,
     selection: Readonly<Record<string, string>>,
-    options?: { readonly probe?: boolean },
+    options?: { readonly probe?: boolean }
   ): Promise<ConvergencePlan> {
     const view = await this.rawCompare(taskGroup);
-    const siblings = view.siblings.map((s) => ({
+    const siblings = view.siblings.map(s => ({
       workspaceId: s.workspaceId,
       agent: s.agent,
       ...(s.changedFiles ? { changedFiles: s.changedFiles } : {}),
     }));
-    const plan = planConvergenceOp({ taskGroup: view.taskGroup, siblings, selection });
+    const plan = planConvergenceOp({
+      taskGroup: view.taskGroup,
+      siblings,
+      selection,
+    });
     if (!options?.probe) return plan;
 
     // OPT-IN enrichment: dry-run the 3-way over every contested path (resolved-by-
     // synthesize/pick AND still-unresolved) so the UI can offer `@synthesize` only
     // where it will actually come out clean. Read-only — never mutates, never throws.
     const contestedInputs = [
-      ...plan.files.filter((f) => f.contested).map((f) => ({ path: f.path, workspaceIds: f.candidates })),
-      ...plan.unresolved.map((u) => ({ path: u.path, workspaceIds: u.candidates })),
+      ...plan.files
+        .filter(f => f.contested)
+        .map(f => ({ path: f.path, workspaceIds: f.candidates })),
+      ...plan.unresolved.map(u => ({
+        path: u.path,
+        workspaceIds: u.candidates,
+      })),
     ];
     if (contestedInputs.length === 0) return { ...plan, contested: [] };
-    const contested = await probeSynthesizabilityOp(this.convergeDeps(), contestedInputs);
+    const contested = await probeSynthesizabilityOp(
+      this.convergeDeps(),
+      contestedInputs
+    );
     return { ...plan, contested };
   }
 
   /** The injected seams the convergence ops (compose + probe) run over. */
   private convergeDeps(): ConvergeOpsDeps {
     return {
-      compare: (taskGroup) => this.rawCompare(taskGroup),
-      getWorkspace: (id) => this.engine.getWorkspace(id),
-      registerWorkspace: (workspace) => this.repository.upsertWorkspace(workspace),
+      compare: taskGroup => this.rawCompare(taskGroup),
+      getWorkspace: id => this.engine.getWorkspace(id),
+      registerWorkspace: workspace =>
+        this.repository.upsertWorkspace(workspace),
       logger: this.log,
     };
   }
@@ -2301,13 +2772,18 @@ export class ConductorComposer implements ConductorModule {
    */
   async composeConvergence(
     input: ComposeConvergenceInput,
-    principal: Principal,
+    principal: Principal
   ): Promise<ConductorWriteResult<ComposeConvergenceResult>> {
     const action = 'workspace.branch';
-    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
-      target: { environment: 'conductor' },
-      metadata: { taskGroup: input.taskGroup },
-    });
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        metadata: { taskGroup: input.taskGroup },
+      }
+    );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
     try {
       const result = await composeConvergenceOp(this.convergeDeps(), {
@@ -2322,7 +2798,7 @@ export class ConductorComposer implements ConductorModule {
           branch: result.branch,
           fileCount: result.fileCount,
           sourceCount: result.plan.sources.length,
-        }),
+        })
       );
       return { ok: true, verdict, value: result };
     } catch (err) {
@@ -2338,7 +2814,8 @@ export class ConductorComposer implements ConductorModule {
       return {
         ok: false,
         verdict,
-        reason: err instanceof Error ? err.message : 'convergence compose failed',
+        reason:
+          err instanceof Error ? err.message : 'convergence compose failed',
       };
     }
   }
@@ -2360,7 +2837,10 @@ export class ConductorComposer implements ConductorModule {
    * fire-and-forget path (mirrors the internal principal path the autopilot uses),
    * not a customer-visible action. Degrade-truthful: a missing workspace ⇒ `false`.
    */
-  async recordRunInferenceId(workspaceId: string, inferenceId: string): Promise<boolean> {
+  async recordRunInferenceId(
+    workspaceId: string,
+    inferenceId: string
+  ): Promise<boolean> {
     if (!inferenceId) return false;
     const workspace = await this.engine.getWorkspace(workspaceId);
     if (!workspace) return false;
@@ -2368,24 +2848,34 @@ export class ConductorComposer implements ConductorModule {
     const existing = workspace.metadata?.inferenceId;
     if (typeof existing === 'string' && existing.length > 0) return true;
     // Same-state advance (no illegal transition) — the metadata patch merges.
-    await this.engine.advanceWorkspace(workspaceId, workspace.state, undefined, { inferenceId });
+    await this.engine.advanceWorkspace(
+      workspaceId,
+      workspace.state,
+      undefined,
+      { inferenceId }
+    );
     return true;
   }
 
   async sendWorkspaceMessage(
     workspaceId: string,
     input: ContinueWorkspaceInput,
-    principal: Principal,
+    principal: Principal
   ): Promise<ConductorWriteResult<ContinueWorkspaceResult>> {
     const action = 'workspace.message';
-    const { allowed, verdict } = await guardConductorWrite(this.gate, action, principal, {
-      target: { environment: 'conductor' },
-      metadata: { workspaceId },
-    });
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        metadata: { workspaceId },
+      }
+    );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
     try {
       const deps: ContinueOpsDeps = {
-        getWorkspace: (id) => this.engine.getWorkspace(id),
+        getWorkspace: id => this.engine.getWorkspace(id),
         advanceWorkspace: (id, to, patch, metadata) =>
           this.engine.advanceWorkspace(id, to, patch, metadata),
         getSubstrate: (id: WorkspaceSubstrate) => this.registry.getFull(id),
@@ -2400,15 +2890,24 @@ export class ConductorComposer implements ConductorModule {
       });
       await recordConductorAudit(
         this.gate,
-        conductorAuditEntry(action, principal, verdict, { workspaceId, runId: result.runId }),
+        conductorAuditEntry(action, principal, verdict, {
+          workspaceId,
+          runId: result.runId,
+        })
       );
       return { ok: true, verdict, value: result };
     } catch (err) {
-      return { ok: false, verdict, reason: err instanceof Error ? err.message : 'message failed' };
+      return {
+        ok: false,
+        verdict,
+        reason: err instanceof Error ? err.message : 'message failed',
+      };
     }
   }
 
-  async listReconcileFindings(workspaceId?: string): Promise<readonly ReconcileFindingView[]> {
+  async listReconcileFindings(
+    workspaceId?: string
+  ): Promise<readonly ReconcileFindingView[]> {
     return this.repository.listReconcileFindings(workspaceId);
   }
 
@@ -2420,7 +2919,10 @@ export class ConductorComposer implements ConductorModule {
    * this edge lets the cockpit pull the full queryable trail. Absent reader ⇒ a
    * truthful empty trail, never a fabricated record.
    */
-  async workspaceAudit(workspaceId: string, limit?: number): Promise<readonly AuditRecord[]> {
+  async workspaceAudit(
+    workspaceId: string,
+    limit?: number
+  ): Promise<readonly AuditRecord[]> {
     if (!this.auditReader) return [];
     // Solo/desktop (bootstrap-injected `cfg.soloMode`): no durable audit store, so
     // the read hits an unavailable DB and would 503. Nothing is sealed to read
@@ -2444,14 +2946,20 @@ export class ConductorComposer implements ConductorModule {
     const router = Router();
     // Compare routes FIRST: `/workspaces/compare` must resolve before the main
     // router's `/workspaces/:id` (else "compare" is read as a workspace id).
-    router.use(buildCompareRoutes({ module: this, middleware: this.middleware }));
+    router.use(
+      buildCompareRoutes({ module: this, middleware: this.middleware })
+    );
     // Checkpoint routes: static `/checkpoints` segment after `:id`, no collision
     // with the main `/workspaces/:id/*` edges; register before the main router.
-    router.use(buildCheckpointRoutes({ module: this, middleware: this.middleware }));
+    router.use(
+      buildCheckpointRoutes({ module: this, middleware: this.middleware })
+    );
     // Board query routes: the literal `/workspaces/archived` + the query-aware
     // `GET /workspaces` MUST precede the main router so the filtered list shadows
     // the plain list and `/workspaces/archived` resolves before `/workspaces/:id`.
-    router.use(buildWorkspaceQueryRoutes({ module: this, middleware: this.middleware }));
+    router.use(
+      buildWorkspaceQueryRoutes({ module: this, middleware: this.middleware })
+    );
     // Repo-config + PR-status: `/repo-setup-script` (GET/PUT) + the workspace's
     // `/workspaces/:id/pr-status` read. The setup-script PUT is governed inside
     // the injected RepoSetupService (deny ⇒ truthful 403, never a faked 200).
@@ -2461,7 +2969,7 @@ export class ConductorComposer implements ConductorModule {
         middleware: this.middleware,
         repoSetup: this.repoSetup,
         prStatus: this.prStatus,
-      }),
+      })
     );
     router.use(
       buildConductorRoutes({
@@ -2478,7 +2986,7 @@ export class ConductorComposer implements ConductorModule {
               }),
             }
           : {}),
-      }),
+      })
     );
     return router;
   }
@@ -2505,11 +3013,11 @@ export class ConductorComposer implements ConductorModule {
     this.log.info(
       {
         substrates: (await this.registry.availability())
-          .filter((s) => s.available)
-          .map((s) => s.id),
+          .filter(s => s.available)
+          .map(s => s.id),
         tmuxControlMode: this.cfg.tmuxControlMode,
       },
-      'conductor module started',
+      'conductor module started'
     );
   }
 
@@ -2524,7 +3032,19 @@ export class ConductorComposer implements ConductorModule {
  * local so the conductor never imports an engines-domain internal.
  */
 function repoIdFromRepoRef(ref: string): string {
-  return ref.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '__');
+  return ref
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '__');
+}
+
+/**
+ * Map a runtime to the ACP agent binary that drives it on the `acp` substrate:
+ * the `codex` runtime uses Zed's `codex-acp`, everything else the default
+ * `claude-code-acp`. Surfaced to the adapter via the `RECODER_ACP_AGENT` env var.
+ */
+function acpBinaryForRuntime(runtimeId: string | undefined): string {
+  return runtimeId === 'codex' ? 'codex-acp' : 'claude-code-acp';
 }
 
 /**
@@ -2537,7 +3057,7 @@ function repoIdFromRepoRef(ref: string): string {
 function composeRunEventSink(
   local: RunEventSinkPort,
   external: RunEventSinkPort | undefined,
-  logger: Logger,
+  logger: Logger
 ): RunEventSinkPort {
   if (!external) return local;
   return {
@@ -2545,7 +3065,10 @@ function composeRunEventSink(
       try {
         await external.append(event);
       } catch (err) {
-        logger.error({ err, eventId: event.eventId }, 'conductor run-event state-of-record ingest failed');
+        logger.error(
+          { err, eventId: event.eventId },
+          'conductor run-event state-of-record ingest failed'
+        );
       }
       await local.append(event);
     },
