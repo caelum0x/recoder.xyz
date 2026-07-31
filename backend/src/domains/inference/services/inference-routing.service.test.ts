@@ -262,7 +262,9 @@ describe('InferenceRoutingService pal routing brain', () => {
 
 describe('InferenceRoutingService.feedback', () => {
   function serviceWith(gateway: InferenceGatewayPort, outcomes: DeliveryOutcomeRepository) {
-    const ledger = { append: vi.fn(async () => null), recentForUser: vi.fn(), totalsForUser: vi.fn(), isDurable: () => true } as unknown as UsageLedgerRepository;
+    // The caller OWNS their inference here (ownsInference → true), so the
+    // cross-tenant ownership guard passes and these tests exercise the audit path.
+    const ledger = { append: vi.fn(async () => null), recentForUser: vi.fn(), totalsForUser: vi.fn(), ownsInference: vi.fn(async () => true), isDurable: () => true } as unknown as UsageLedgerRepository;
     return new InferenceRoutingService({ logger: log, gateway, catalog: catalog(null), ledger, outcomes });
   }
 

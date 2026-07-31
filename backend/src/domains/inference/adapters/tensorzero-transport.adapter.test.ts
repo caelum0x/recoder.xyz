@@ -33,6 +33,7 @@ function config(over: Partial<InferenceConfig> = {}): InferenceConfig {
     isProduction: false,
     internalServiceKeyPresent: false,
     internalServiceKey: null,
+    soloMode: false,
     gatewayEndpoint: 'http://127.0.0.1:3778',
     gatewayApiKeyPresent: false,
     gatewayApiKey: null,

@@ -17,6 +17,7 @@ import type { MemoryItem, MemoryCandidate } from '@recoder/agent-os';
 import type { QueryExecutor } from '../../persistence/ports/query-executor.port.js';
 import type {
   MemoryCandidateItemStore,
+  MemoryReadAuthz,
   MemoryRepository,
   RelationInput,
 } from '../ports/memory-repository.port.js';
@@ -43,6 +44,15 @@ function toRelation(row: RelationRow): MemoryRelation {
     kind,
     createdAt,
   };
+}
+
+/**
+ * Does this read see EVERY tenant's candidates? Only a privileged operator
+ * (`internal`/`admin`) or the desktop solo plane lifts the owner filter; absent
+ * an authz context the read is strictly owner-scoped (`proposedBy === userId`).
+ */
+function seesAllTenants(authz?: MemoryReadAuthz): boolean {
+  return authz?.privileged === true || authz?.soloMode === true;
 }
 
 /** Best-effort UUID (crypto.randomUUID with a timestamp fallback). */
@@ -86,14 +96,33 @@ export function createMemoryRepository(deps: MemoryRepositoryDeps): MemoryReposi
       return await store.upsertMemoryItem(item);
     },
 
-    async listCandidates(_userId: string, scope?: string): Promise<readonly MemoryCandidate[]> {
+    async listCandidates(
+      userId: string,
+      scope?: string,
+      authz?: MemoryReadAuthz,
+    ): Promise<readonly MemoryCandidate[]> {
       const all = await store.listMemoryCandidates();
-      return scope ? all.filter((c) => c.scope === scope) : all;
+      // The agent-os store is GLOBAL (all tenants). Constrain to the caller's own
+      // `proposedBy` rows unless a privileged/solo read lifts the filter — else a
+      // list is a cross-tenant enumeration (IDOR).
+      const owned = seesAllTenants(authz) ? all : all.filter((c) => c.proposedBy === userId);
+      return scope ? owned.filter((c) => c.scope === scope) : owned;
     },
 
-    async getCandidate(_userId: string, candidateId: string): Promise<MemoryCandidate | null> {
+    async getCandidate(
+      userId: string,
+      candidateId: string,
+      authz?: MemoryReadAuthz,
+    ): Promise<MemoryCandidate | null> {
       const all = await store.listMemoryCandidates();
-      return all.find((c) => c.candidateId === candidateId) ?? null;
+      const found = all.find((c) => c.candidateId === candidateId) ?? null;
+      if (!found) return null;
+      // Owner-bind the read: a candidate is only visible to its proposer unless a
+      // privileged/solo read lifts the filter. A non-owner gets `null` (indistinct
+      // from "does not exist" — no existence oracle), which is what makes the
+      // accept/reject lifecycle return NOT_FOUND before the governance gate.
+      if (seesAllTenants(authz)) return found;
+      return found.proposedBy === userId ? found : null;
     },
 
     async upsertCandidate(_userId: string, candidate: MemoryCandidate): Promise<MemoryCandidate> {

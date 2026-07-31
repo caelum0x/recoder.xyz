@@ -168,6 +168,8 @@ export class MemoryComposer implements MemoryModule {
       // Close the semantic-memory loop: an accepted durable fact is mirrored into
       // mem0's vector store so its consolidation/relations/decay run on real data.
       mem0: this.mem0,
+      // Solo/desktop fail-open for the candidate lookup (cloud stays owner-bound).
+      soloMode: cfg.soloMode,
       logger: this.log,
     });
     this.forgetService = createForgetService({
@@ -251,6 +253,8 @@ export class MemoryComposer implements MemoryModule {
         forget: this.forgetService,
         relations: this.relateService,
         middleware: this.middleware,
+        // Solo/desktop fail-open for candidate reads (cloud stays owner-bound).
+        soloMode: this.cfg.soloMode,
       })
     );
     router.use(

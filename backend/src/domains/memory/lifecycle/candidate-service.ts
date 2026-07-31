@@ -16,7 +16,7 @@
 import type { MemoryCandidate } from '@recoder/agent-os';
 import type { Logger } from '../../../shared/logger.js';
 import { ErrorCode, createError } from '../../../shared/errors.js';
-import type { MemoryRepository } from '../ports/memory-repository.port.js';
+import type { MemoryReadAuthz, MemoryRepository } from '../ports/memory-repository.port.js';
 import type { IssueGraphService } from '../ports/issue-graph.port.js';
 import type { MemoryWriteAllowlist } from './write-allowlist.js';
 
@@ -47,10 +47,10 @@ export interface ProposeCandidateInput {
 export interface CandidateService {
   /** Propose an evidence-backed candidate wisp (agent-os store + beads mirror). */
   propose(input: ProposeCandidateInput): Promise<MemoryCandidate>;
-  /** List a user's candidate wisps, optionally scoped. */
-  list(userId: string, scope?: string): Promise<readonly MemoryCandidate[]>;
-  /** Fetch one candidate by id (tenant-scoped). */
-  get(userId: string, candidateId: string): Promise<MemoryCandidate | null>;
+  /** List a user's candidate wisps, optionally scoped. Owner-bound unless `authz` lifts it. */
+  list(userId: string, scope?: string, authz?: MemoryReadAuthz): Promise<readonly MemoryCandidate[]>;
+  /** Fetch one candidate by id (tenant-scoped). Returns `null` for a non-owned id. */
+  get(userId: string, candidateId: string, authz?: MemoryReadAuthz): Promise<MemoryCandidate | null>;
 }
 
 export interface CandidateServiceDeps {
@@ -146,12 +146,12 @@ export function createCandidateService(deps: CandidateServiceDeps): CandidateSer
       return repository.upsertCandidate(input.userId, candidate);
     },
 
-    async list(userId: string, scope?: string): Promise<readonly MemoryCandidate[]> {
-      return repository.listCandidates(userId, scope);
+    async list(userId: string, scope?: string, authz?: MemoryReadAuthz): Promise<readonly MemoryCandidate[]> {
+      return repository.listCandidates(userId, scope, authz);
     },
 
-    async get(userId: string, candidateId: string): Promise<MemoryCandidate | null> {
-      return repository.getCandidate(userId, candidateId);
+    async get(userId: string, candidateId: string, authz?: MemoryReadAuthz): Promise<MemoryCandidate | null> {
+      return repository.getCandidate(userId, candidateId, authz);
     },
   };
 }

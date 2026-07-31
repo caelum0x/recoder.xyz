@@ -30,6 +30,13 @@ export const inferenceConfigSchema = z.object({
   internalServiceKeyPresent: z.boolean(),
   internalServiceKey: z.string().nullable(),
 
+  /**
+   * Solo/desktop mode (bootstrap-injected from `RECODER_SOLO_MODE`): the single
+   * local owner. Fails the cross-tenant feedback ownership guard OPEN so the
+   * embedded desktop user is never locked out.
+   */
+  soloMode: z.boolean(),
+
   /** Base URL of the loopback/external TensorZero gateway; `null` → unconfigured. */
   gatewayEndpoint: nullableUrl,
   /** Whether a bearer key is configured (surfaced); the value stays in-memory only. */
@@ -82,6 +89,7 @@ export function sliceInferenceConfig(
     isProduction: app.runtime.isProduction,
     internalServiceKeyPresent: app.internal.serviceKeyPresent,
     internalServiceKey: app.internal.serviceKey,
+    soloMode: app.runtime.soloMode === true,
     gatewayEndpoint: endpoint,
     gatewayApiKeyPresent: apiKey !== null,
     gatewayApiKey: apiKey,

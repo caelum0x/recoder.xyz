@@ -30,6 +30,7 @@ import type { AppError } from '../../../shared/errors.js';
 import type { Tenant } from '../types.js';
 import type { CloudModule } from '../index.js';
 import type { TenantRef } from '../services/tenancy.service.js';
+import { callerSeesFullFabric } from '../services/read-scope.js';
 
 function str(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
@@ -106,7 +107,18 @@ async function resolveSubjectTenant(
   return resolved;
 }
 
-export function buildCloudMcpTools(module: CloudModule): readonly McpToolRegistration[] {
+/**
+ * The caller's OWN tenant id, resolved best-effort (never throws). Used to scope
+ * the fleet manifest to the caller — a resolve miss / repo-down yields `null`
+ * (fail-safe: the caller then sees only shared-pool nodes, never a victim's).
+ */
+async function callerTenantId(module: CloudModule, caller: McpToolCaller | undefined): Promise<string | null> {
+  if (!caller || !str(caller.userId)) return null;
+  const resolved = await module.tenancy().resolve(callerRef(caller));
+  return resolved.ok ? resolved.value.id : null;
+}
+
+export function buildCloudMcpTools(module: CloudModule, soloMode = false): readonly McpToolRegistration[] {
   return [
     {
       name: 'cloud_tenant_read',
@@ -171,9 +183,16 @@ export function buildCloudMcpTools(module: CloudModule): readonly McpToolRegistr
     },
     {
       name: 'cloud_mesh_status',
-      description: 'Truthful mesh diagnostics: ziti/xds engine status + registrations (read-only, no data plane).',
-      handler: async () => {
+      description:
+        'Truthful mesh diagnostics: ziti/xds engine status (read-only, no data plane; cross-tenant registration counts are admin/internal-only).',
+      handler: async (_raw: unknown, caller?: McpToolCaller) => {
         const snapshot = await module.mesh().status();
+        // The registration counts aggregate every tenant's sandboxes/edges — a
+        // cross-tenant leak. Withhold them from a non-privileged caller; the
+        // engine health rollup stays truthful for the health surface.
+        if (!callerSeesFullFabric(caller, soloMode)) {
+          return { status: snapshot.status, engines: snapshot.engines, checkedAt: snapshot.checkedAt, restricted: true };
+        }
         return {
           status: snapshot.status,
           engines: snapshot.engines,
@@ -185,12 +204,20 @@ export function buildCloudMcpTools(module: CloudModule): readonly McpToolRegistr
     },
     {
       name: 'cloud_fleet_status',
-      description: 'The cloud capacity manifest: fleet nodes + up/down from heartbeat freshness (read-only).',
-      handler: async () => {
+      description:
+        'The cloud capacity manifest: fleet nodes + up/down from heartbeat freshness (read-only; scoped to the caller tenant + shared pool unless admin/internal).',
+      handler: async (_raw: unknown, caller?: McpToolCaller) => {
         const nodes = await module.fleet().list();
+        // Scope tenant-pinned nodes to the caller (shared-pool `tenantId:null`
+        // nodes are common capacity, safe to show). Admin/internal + solo see all.
+        let visible = nodes;
+        if (!callerSeesFullFabric(caller, soloMode)) {
+          const tenantId = await callerTenantId(module, caller);
+          visible = nodes.filter((n) => n.tenantId === null || (tenantId !== null && n.tenantId === tenantId));
+        }
         return {
-          count: nodes.length,
-          nodes: nodes.map((n) => ({
+          count: visible.length,
+          nodes: visible.map((n) => ({
             id: n.id,
             kind: n.kind,
             status: n.status,

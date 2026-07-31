@@ -26,6 +26,19 @@ export interface MemoryCandidateItemStore {
   upsertMemoryCandidate(candidate: MemoryCandidate): MemoryCandidate | Promise<MemoryCandidate>;
 }
 
+/**
+ * Read-time tenant-scope authorization for candidate reads. Candidates live in
+ * the GLOBAL agent-os store, so a read must be constrained to the caller's own
+ * `proposedBy` rows — omitting this context yields strict owner scoping. Either
+ * flag lifts the filter (mirrors `space-authz`):
+ *  - `privileged`: an `internal` service caller or an `admin`-scoped operator
+ *  - `soloMode`: the desktop single-user plane (fail-open, never lock the owner out)
+ */
+export interface MemoryReadAuthz {
+  readonly privileged?: boolean;
+  readonly soloMode?: boolean;
+}
+
 /** A relation edge to insert (id + timestamp are assigned by the repository). */
 export interface RelationInput {
   readonly userId: string;
@@ -44,8 +57,8 @@ export interface MemoryRepository {
   listItems(userId: string): Promise<readonly MemoryItem[]>;
   getItem(userId: string, memoryId: string): Promise<MemoryItem | null>;
   upsertItem(userId: string, item: MemoryItem): Promise<MemoryItem>;
-  listCandidates(userId: string, scope?: string): Promise<readonly MemoryCandidate[]>;
-  getCandidate(userId: string, candidateId: string): Promise<MemoryCandidate | null>;
+  listCandidates(userId: string, scope?: string, authz?: MemoryReadAuthz): Promise<readonly MemoryCandidate[]>;
+  getCandidate(userId: string, candidateId: string, authz?: MemoryReadAuthz): Promise<MemoryCandidate | null>;
   upsertCandidate(userId: string, candidate: MemoryCandidate): Promise<MemoryCandidate>;
 
   // — Relations (memory-owned `memory_relations` table) —

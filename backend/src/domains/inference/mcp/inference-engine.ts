@@ -68,6 +68,17 @@ function subjectUserId(caller?: McpToolCaller): string | undefined {
   return userId ? userId : undefined;
 }
 
+/**
+ * Operator bypass for the cross-tenant feedback ownership guard: an `admin`- or
+ * `internal`-scoped host-authorized caller (mirrors the route's
+ * `isPrivilegedPrincipal`). Derived ONLY from the edge-bound caller's scopes,
+ * NEVER from a tool arg. Absent scopes ⇒ not privileged (ownership is enforced).
+ */
+function isPrivilegedCaller(caller?: McpToolCaller): boolean {
+  const scopes = caller?.scopes;
+  return (scopes?.includes('admin') ?? false) || (scopes?.includes('internal') ?? false);
+}
+
 /** Parse + validate an MCP messages array (system boundary — never trust input). */
 function parseMessages(value: unknown): InferenceMessage[] | null {
   if (!Array.isArray(value) || value.length === 0) return null;
@@ -159,11 +170,17 @@ export function buildInferenceMcpTools(deps: InferenceMcpDeps): readonly McpTool
           return { error: 'value (boolean | number | string) is required' };
         }
         const userId = subjectUserId(caller);
+        // Cross-tenant ownership is enforced in the routing service; the bypass is
+        // derived from the edge-bound caller's scopes (admin/internal), NEVER a tool
+        // arg — an ordinary caller can only attach a signal to an inference IT
+        // produced (result is a truthful { routed:false, denied:'not_found' } otherwise).
+        const bypassOwnershipCheck = isPrivilegedCaller(caller);
         const result = await deps.routing.feedback({
           inferenceId,
           metricName,
           value,
           ...(userId ? { userId } : {}),
+          ...(bypassOwnershipCheck ? { bypassOwnershipCheck: true } : {}),
         });
         return { result };
       },

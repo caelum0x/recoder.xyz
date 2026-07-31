@@ -49,6 +49,7 @@ import type { FleetSupervisorService } from '../services/fleet-supervisor.servic
 import type { DomainsService } from '../services/domains.service.js';
 import type { CloudGovernanceGatePort } from '../ports/governance-gate.port.js';
 import { guardCloudWrite, recordCloudAudit } from '../services/cloud-write-gate.js';
+import { principalSeesFullFabric } from '../services/read-scope.js';
 import { DEPLOY_TARGET_KINDS, type DeployTargetKind } from '../types.js';
 
 export interface CloudRouterDeps {
@@ -73,6 +74,11 @@ export interface CloudRouterDeps {
    * MUST return `NaN` on an unreadable count so `checkQuota` denies (fail-safe).
    */
   readonly activePreviewCount: (tenantId: string) => Promise<number>;
+  /**
+   * Solo/desktop mode (RECODER_SOLO_MODE): fails OPEN on the cross-tenant
+   * mesh/fleet READS (single local tenant) so the desktop surfaces keep working.
+   */
+  readonly soloMode?: boolean;
 }
 
 const provisionBodySchema = z.object({
@@ -138,7 +144,23 @@ function tenantRefOf(principal: Principal): TenantRef & { ownerUserId: string } 
 
 export function buildCloudRouter(deps: CloudRouterDeps): Router {
   const { tenancy, provisioner, preview, mesh, fleet, domains, mw, logger, gate, activePreviewCount } = deps;
+  const soloMode = deps.soloMode === true;
   const router = Router();
+
+  /** True when the request's principal may see the whole cross-tenant fabric. */
+  function seesFullFabric(req: Request): boolean {
+    const principal = req.principal;
+    if (principal && !principal.isAnonymous) return principalSeesFullFabric(principal, soloMode);
+    return soloMode;
+  }
+
+  /** The request principal's OWN tenant id, resolved best-effort (`null` on miss). */
+  async function requestTenantId(req: Request): Promise<string | null> {
+    const principal = principalOf(req);
+    if (!principal) return null;
+    const resolved = await tenancy.resolve(tenantRefOf(principal));
+    return resolved.ok ? resolved.value.id : null;
+  }
 
   // --- Tenant ---
   router.get(
@@ -487,22 +509,44 @@ export function buildCloudRouter(deps: CloudRouterDeps): Router {
   );
 
   // --- Mesh (read-only) ---
+  // The full snapshot lists cross-tenant ziti identities (`sandbox-<id>`) + xds
+  // clusters — a cross-tenant leak. Gate the registration detail to an
+  // admin/internal caller (solo/desktop fails open); a non-privileged caller
+  // still gets the truthful engine health rollup for the health surface.
   router.get(
     '/mesh',
     mw.authenticate,
-    asyncHandler(async (_req, res) => {
+    asyncHandler(async (req, res) => {
       const snapshot = await mesh.status();
-      sendSuccess(res, snapshot);
+      if (seesFullFabric(req)) {
+        sendSuccess(res, snapshot);
+        return;
+      }
+      sendSuccess(res, {
+        status: snapshot.status,
+        engines: snapshot.engines,
+        checkedAt: snapshot.checkedAt,
+        restricted: true,
+      });
     }),
   );
 
   // --- Fleet (read-only) ---
+  // The manifest carries each node's owning `tenantId`. Scope tenant-pinned nodes
+  // to the caller (shared-pool `tenantId:null` nodes are common capacity, safe to
+  // show); admin/internal + solo see the whole fleet.
   router.get(
     '/fleet',
     mw.authenticate,
-    asyncHandler(async (_req, res) => {
+    asyncHandler(async (req, res) => {
       const nodes = await fleet.list();
-      sendSuccess(res, { nodes });
+      if (seesFullFabric(req)) {
+        sendSuccess(res, { nodes });
+        return;
+      }
+      const tenantId = await requestTenantId(req);
+      const visible = nodes.filter((n) => n.tenantId === null || (tenantId !== null && n.tenantId === tenantId));
+      sendSuccess(res, { nodes: visible });
     }),
   );
 
