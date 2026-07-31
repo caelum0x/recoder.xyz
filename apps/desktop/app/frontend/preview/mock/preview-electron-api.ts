@@ -65,6 +65,8 @@ const previewElectronApi: ElectronApi = {
     recoderSignOut: () => Promise.resolve({ ok: true }),
     selectDirectory: () => Promise.resolve(null),
     isGitRepo: (_dirPath: string) => Promise.resolve(true),
+    gitInit: (_dirPath: string) => Promise.resolve(false),
+    probeAgentAuth: (_runtimeId: string) => Promise.resolve("unknown"),
     onRecoderSignInPrompt: (_callback: (prompt: RecoderSignInPrompt) => void) => {},
     showAttentionNotification: (_workspaceId: string, _title: string, _body: string) => {},
     onAttentionNotificationClick: (_callback: (workspaceId: string) => void) => {},

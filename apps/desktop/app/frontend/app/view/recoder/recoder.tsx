@@ -3,9 +3,10 @@
 
 import { createBlock, getApi } from "@/app/store/global";
 import { useAtom, useAtomValue } from "jotai";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { agentAuthOptionSuffix, agentAuthPresentation } from "./recoder-agent-auth";
 import { agentLabel } from "./recoder-agent-labels";
-import { RecoderAgentSetup } from "./recoder-agent-setup";
+import { AgentAuthAffordance, RecoderAgentSetup } from "./recoder-agent-setup";
 import { RecoderCloneModal } from "./recoder-clone";
 import { RecoderCommandPalette, type RecoderCommand } from "./recoder-command-palette";
 import { RecoderComparePanel } from "./recoder-compare";
@@ -28,7 +29,7 @@ import {
 } from "./recoder-model";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
 import { RecoderShortcutsOverlay } from "./recoder-shortcuts";
-import { RecoderWhatsNew } from "./recoder-whats-new";
+import { RecoderWhatsNew } from "./recoder-whats-new-panel";
 import { RecoderErrorRow, RecoderSkeleton } from "./recoder-states";
 import {
     ATTN_BADGE,
@@ -277,6 +278,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const notifyOnAttention = useAtomValue(model.notifyOnAttentionAtom);
     const environment = useAtomValue(model.environmentAtom);
     const setupProbing = useAtomValue(model.setupProbingAtom);
+    const agentAuth = useAtomValue(model.agentAuthAtom);
+    const [gitIniting, setGitIniting] = useState(false);
 
     useEffect(() => {
         model.refresh();
@@ -469,6 +472,16 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const isGitError = /git|worktree|repositor/i.test(launchResult?.error ?? "");
     const quickStartRepo = recentRepos.find((r) => r.trim() != "") ?? "";
 
+    // Auth read for the currently-selected agent: `/runtimes` proves it's installed
+    // but never that it's logged in, so the picker offers an "authenticate" path
+    // whenever login is unverified. Never hard-blocks launch — an unverified login
+    // still launches (labelled honestly), so a keychain-authed agent isn't gated.
+    const selectedAgent = setup.agents.find((a) => a.runtimeId == runtimeId);
+    const selectedAuthPres =
+        selectedAgent != null && selectedAgent.available
+            ? agentAuthPresentation(true, agentAuth[selectedAgent.runtimeId] ?? "unknown")
+            : null;
+
     const toggleAlso = (id: string, on: boolean) =>
         setAlsoRun(on ? [...alsoRun, id] : alsoRun.filter((x) => x != id));
 
@@ -483,6 +496,24 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         } catch {
             setLaunchRepoIsGit(true);
         }
+    };
+
+    // `git init` the chosen folder via the main-process bridge, then RE-VERIFY with
+    // the same isGitRepo probe checkRepo uses — launch only re-enables if the folder
+    // is genuinely a repo afterwards, so a failed init never fakes readiness.
+    const initGit = async () => {
+        const path = repoPath.trim();
+        if (path == "") {
+            return;
+        }
+        setGitIniting(true);
+        try {
+            await getApi().gitInit(path);
+        } catch {
+            // swallow — the re-check below is the source of truth for readiness
+        }
+        await checkRepo(path);
+        setGitIniting(false);
     };
 
     const browseFolder = async () => {
@@ -635,10 +666,13 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             {setup.agents.map((a) => (
                                 <option key={a.runtimeId} value={a.runtimeId} disabled={!a.available}>
                                     {agentLabel(a.runtimeId)}
-                                    {a.available ? "" : " (not installed)"}
+                                    {agentAuthOptionSuffix(a.available, agentAuth[a.runtimeId] ?? "unknown")}
                                 </option>
                             ))}
                         </select>
+                        {selectedAuthPres?.needsAuth && (
+                            <AgentAuthAffordance runtimeId={runtimeId} badge={selectedAuthPres.badge} />
+                        )}
                         {setup.probed && readyAgents.length == 0 && (
                             <div className="flex items-center gap-2">
                                 <span className={META}>
@@ -692,7 +726,14 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             </div>
                         )}
                         {repoPath.trim() != "" && !repoIsGit && (
-                            <div className={META}>Not a git repository — run `git init` here, or choose a repo folder.</div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className={META}>
+                                    Not a git repository — Recoder needs one to create isolated worktrees.
+                                </span>
+                                <button className={QUIET_BTN} disabled={gitIniting} onClick={initGit}>
+                                    {gitIniting ? "Initializing…" : "Initialize git repository"}
+                                </button>
+                            </div>
                         )}
                     </label>
 
@@ -883,11 +924,18 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     {setup.loaded ? (
                         <div className={`${META} flex flex-wrap items-center gap-x-3 gap-y-1`}>
                             <span className={setup.git ? "" : "opacity-60"}>{setup.git ? "✓" : "✗"} git</span>
-                            {setup.agents.map((a) => (
-                                <span key={a.runtimeId} className={a.available ? "" : "opacity-60"}>
-                                    {a.available ? "✓" : "✗"} {agentLabel(a.runtimeId)}
-                                </span>
-                            ))}
+                            {setup.agents.map((a) => {
+                                const pres = agentAuthPresentation(a.available, agentAuth[a.runtimeId] ?? "unknown");
+                                const mark = !a.available ? "✗" : pres.badge == "ready" ? "✓" : "•";
+                                const note =
+                                    pres.badge == "ready" || pres.badge == "not installed" ? "" : ` (${pres.badge})`;
+                                return (
+                                    <span key={a.runtimeId} className={a.available ? "" : "opacity-60"}>
+                                        {mark} {agentLabel(a.runtimeId)}
+                                        {note}
+                                    </span>
+                                );
+                            })}
                         </div>
                     ) : setup.probed ? (
                         <div className={META}>
