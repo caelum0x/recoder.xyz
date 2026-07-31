@@ -3,16 +3,27 @@ import Link from 'next/link';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import {
-  Terminal, Globe, Cpu, Shield, Zap, Code2,
-  GitBranch, Database, Cloud, Lock, Sparkles, ArrowRight
+  Terminal,
+  GitBranch,
+  GitMerge,
+  ShieldCheck,
+  ClipboardCheck,
+  Brain,
+  KeyRound,
+  Plug,
+  Boxes,
+  ArrowRight,
+  Sparkles,
 } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Features - AI-Powered Development Tools | Recoder.xyz',
-  description: 'Explore Recoder features: CLI tool, Web IDE, 40+ AI models, BYOK support, real-time code generation, Git integration, multi-language support, database management, and cloud deployment to AWS, Vercel, Docker, and Kubernetes.',
+  title: 'Features — Run Every Agent in Parallel, Merge the Right One | Recoder.xyz',
+  description:
+    'Recoder is the self-hosted convergence layer for coding agents. Run Claude Code, Codex, Cursor, opencode, or pi in parallel isolated git worktrees, review where they diverge, and merge the one trusted result — with verification evidence, governance approvals, and shared memory. Your keys, your infra.',
   openGraph: {
-    title: 'Features - AI-Powered Development Tools | Recoder.xyz',
-    description: 'CLI tool, Web IDE, 40+ AI models, BYOK support, production-ready code generation, Git integration, and cloud deployment.',
+    title: 'Features — Run Every Agent in Parallel, Merge the Right One | Recoder.xyz',
+    description:
+      'Self-hosted convergence layer for coding agents: parallel isolated worktrees, review the divergence, merge one trusted result with verification evidence and governance. Bring your own agent and your own keys.',
     url: 'https://recoder.xyz/features',
     siteName: 'Recoder.xyz',
     images: [
@@ -20,15 +31,16 @@ export const metadata: Metadata = {
         url: 'https://recoder.xyz/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Recoder Features - AI-Powered Development Tools',
+        alt: 'Recoder Features — the convergence layer for coding agents',
       },
     ],
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Features - AI-Powered Development Tools',
-    description: 'CLI, Web IDE, 40+ AI models, BYOK, real-time code generation, Git integration, and cloud deployment.',
+    title: 'Features — Run Every Agent in Parallel, Merge the Right One',
+    description:
+      'Self-hosted convergence layer: parallel isolated worktrees, review the divergence, merge one trusted result with evidence and governance.',
     images: ['https://recoder.xyz/og-image.png'],
   },
   alternates: {
@@ -40,64 +52,88 @@ export default function FeaturesPage() {
   const features = [
     {
       icon: Terminal,
-      title: 'CLI Tool',
-      description: 'Powerful terminal-based development with AI assistance. Generate, refactor, and deploy code directly from your terminal.',
-      color: 'from-orange-500 to-red-600'
-    },
-    {
-      icon: Globe,
-      title: 'Web IDE',
-      description: 'Full-featured browser-based code editor with AI integration. Code anywhere, anytime, on any device.',
-      color: 'from-blue-500 to-cyan-600'
-    },
-    {
-      icon: Cpu,
-      title: '40+ AI Models',
-      description: 'Access GPT-4, Claude, Gemini, Llama, and more. Choose the best model for each task automatically.',
-      color: 'from-purple-500 to-pink-600'
-    },
-    {
-      icon: Shield,
-      title: 'Privacy First',
-      description: 'Your code stays yours. Use local models with Ollama or cloud providers - you control your data.',
-      color: 'from-green-500 to-emerald-600'
-    },
-    {
-      icon: Zap,
-      title: 'Real Code Generation',
-      description: 'Generate production-ready code, not mockups. Working APIs, databases, and deployments.',
-      color: 'from-yellow-500 to-orange-600'
-    },
-    {
-      icon: Code2,
-      title: 'Multi-Language Support',
-      description: 'TypeScript, Python, Rust, Go, Solidity, and more. Full-stack development in any language.',
-      color: 'from-indigo-500 to-purple-600'
+      title: 'Bring your own agent',
+      description:
+        'Run Claude Code, Codex, Cursor, opencode, or pi from one terminal — no lock-in. Each runtime is a swappable execution surface; the control plane stays the same.',
+      color: 'from-orange-500 to-red-600',
     },
     {
       icon: GitBranch,
-      title: 'Git Integration',
-      description: 'Seamless version control integration. Commit, push, and manage branches with AI assistance.',
-      color: 'from-gray-500 to-gray-700'
+      title: 'Parallel isolated worktrees',
+      description:
+        'Every agent run gets its own git worktree and branch, so they work in parallel without ever colliding. Launch several attempts at the same task at once.',
+      color: 'from-blue-500 to-cyan-600',
     },
     {
-      icon: Database,
-      title: 'Database Support',
-      description: 'PostgreSQL, MongoDB, Redis, and more. Generate schemas, migrations, and queries.',
-      color: 'from-teal-500 to-cyan-600'
+      icon: GitMerge,
+      title: 'Converge to one merge',
+      description:
+        'Review where the parallel runs diverge side by side, compare their diffs, and merge the single result you trust. Divergence in, one trusted change out.',
+      color: 'from-purple-500 to-pink-600',
     },
     {
-      icon: Cloud,
-      title: 'Cloud Deployment',
-      description: 'Deploy to AWS, Vercel, Docker, Kubernetes. Infrastructure as code generation.',
-      color: 'from-sky-500 to-blue-600'
+      icon: ClipboardCheck,
+      title: 'Verification before merge',
+      description:
+        'Each run ends with verification output and captured artifacts — not a claimed success. Health, approval, and check status stay truthful, backed by evidence.',
+      color: 'from-yellow-500 to-orange-600',
     },
     {
-      icon: Lock,
-      title: 'Bring Your Own Key',
-      description: '100% free platform. Use your own API keys and pay providers directly with no markup.',
-      color: 'from-rose-500 to-red-600'
-    }
+      icon: ShieldCheck,
+      title: 'Governance & approvals',
+      description:
+        'Policy gates, work locks, and approval waits guard risky actions — secret access, branch pushes, deploys. Deterministic decisions enforced below the model.',
+      color: 'from-green-500 to-emerald-600',
+    },
+    {
+      icon: Brain,
+      title: 'Shared agent memory',
+      description:
+        'A cross-agent issue graph recalls relevant context on launch and harvests evidence-backed candidates on completion, so the next run starts where the last left off.',
+      color: 'from-indigo-500 to-purple-600',
+    },
+    {
+      icon: Plug,
+      title: 'Governed MCP tool spine',
+      description:
+        'Agents reach memory, retrieval, browser, and code-intel through a governed MCP host — the same capabilities behind one auditable gate, not scattered side channels.',
+      color: 'from-teal-500 to-cyan-600',
+    },
+    {
+      icon: KeyRound,
+      title: 'Bring your own keys',
+      description:
+        'Use your own model provider keys and pay providers directly — no markup. Inference flows through a gateway you control, or falls back to your BYOK keys, honestly.',
+      color: 'from-rose-500 to-red-600',
+    },
+    {
+      icon: Boxes,
+      title: 'Self-hosted by design',
+      description:
+        'Run it on your own infrastructure with your own Postgres and vector store. Your code, your runs, and your audit trail stay on hardware you own.',
+      color: 'from-sky-500 to-blue-600',
+    },
+  ];
+
+  const steps = [
+    {
+      step: '01',
+      title: 'Fan out',
+      description:
+        'Hand the same task to one agent or several. Each launches in its own isolated worktree and runs in parallel.',
+    },
+    {
+      step: '02',
+      title: 'Review the divergence',
+      description:
+        'Watch the runs stream in, compare their diffs and verification output, and see exactly where they disagree.',
+    },
+    {
+      step: '03',
+      title: 'Merge with evidence',
+      description:
+        'Approve the run you trust — gated by policy, backed by artifacts — and converge it into one clean change.',
+    },
   ];
 
   return (
@@ -107,24 +143,46 @@ export default function FeaturesPage() {
         <div className="text-center mb-16">
           <div className="inline-flex items-center space-x-2 px-4 py-2 bg-neutral-800/50 border border-neutral-700 rounded-full mb-6">
             <Sparkles className="w-4 h-4 text-neutral-300" />
-            <span className="text-sm text-neutral-300">Powerful Features</span>
+            <span className="text-sm text-neutral-300">The convergence layer</span>
           </div>
-          <h1 className="text-5xl font-bold mb-6">Everything You Need to Build</h1>
+          <h1 className="text-5xl font-bold mb-6">Run every agent in parallel. Merge the one that&apos;s right.</h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            AI-powered development tools that generate real, production-ready code.
+            Recoder turns many divergent parallel-agent runs into one trusted merge — self-hosted,
+            evidence-backed, and governed. Bring your own agent and your own keys.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-20">
           {features.map((feature, i) => (
-            <div key={i} className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 transition-all group">
-              <div className={`w-12 h-12 bg-gradient-to-br ${feature.color} rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
+            <div
+              key={i}
+              className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 transition-all group"
+            >
+              <div
+                className={`w-12 h-12 bg-gradient-to-br ${feature.color} rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}
+              >
                 <feature.icon className="w-6 h-6 text-white" />
               </div>
               <h3 className="font-bold text-lg mb-2">{feature.title}</h3>
               <p className="text-sm text-gray-400">{feature.description}</p>
             </div>
           ))}
+        </div>
+
+        <div className="mb-20">
+          <h2 className="text-3xl font-bold text-center mb-3">How convergence works</h2>
+          <p className="text-center text-gray-400 mb-12 max-w-2xl mx-auto">
+            The same task, tried in parallel, reviewed where it diverges, merged once with evidence.
+          </p>
+          <div className="grid md:grid-cols-3 gap-6">
+            {steps.map((s) => (
+              <div key={s.step} className="p-6 rounded-2xl border border-white/10 bg-white/5">
+                <div className="text-sm font-mono text-neutral-500 mb-3">{s.step}</div>
+                <h3 className="font-bold text-lg mb-2">{s.title}</h3>
+                <p className="text-sm text-gray-400">{s.description}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="text-center">
