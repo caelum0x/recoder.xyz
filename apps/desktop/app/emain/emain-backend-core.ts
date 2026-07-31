@@ -391,6 +391,11 @@ export function assembleBackendEnv(opts: {
         STRICT_AUTH: "false",
         NODE_ENV: opts.baseEnv.NODE_ENV || "production",
         API_KEY_HASH_SALT: opts.apiKeyHashSalt,
+        // The DB-less durable sk_ key store shared by mint + validate (recoder-1r7i):
+        // an explicit absolute path so the mint subprocess (cwd=backendDir) and the
+        // backend child agree on ONE file regardless of cwd — this is what lets the
+        // desktop run STRICT_AUTH fail-closed without a DATABASE_URL.
+        API_KEY_STORE_PATH: opts.baseEnv.API_KEY_STORE_PATH || nodePath.join(opts.dataDir, "api-keys.json"),
         INTERNAL_SERVICE_KEY: opts.internalServiceKey,
         // The embedded backend is one user on their own machine, so delivery
         // (merge/PR) is one-click: a user-initiated merge records its own audited
@@ -1290,17 +1295,15 @@ export class BackendSupervisor {
             }
             this.apiKey = apiKey;
 
-            // Fail-closed ONLY when the minted key is actually enforceable. The
-            // greenfield backend validates sk_ keys through the DB-backed
-            // ApiKeyService; without a DATABASE_URL (the embedded desktop
-            // default) that store is empty, so a minted key can NEVER
-            // authenticate — forcing STRICT_AUTH would 401 every route and brick
-            // the app. In that case we stay on the documented permissive
-            // loopback posture (STRICT_AUTH=false; single local user, loopback
-            // bind, RECODER_SOLO_MODE). When a durable store IS configured the
-            // key is required, so it is never decorative. Follow-up: a DB-less
-            // durable key store so the desktop can be strict too.
-            const keyIsEnforceable = Boolean(apiKey && env.DATABASE_URL);
+            // Fail-closed ONLY when the minted key is actually enforceable — i.e.
+            // the backend can validate it. That is true when a durable store backs
+            // the ApiKeyService: EITHER Postgres (DATABASE_URL) OR the filesystem
+            // key store (API_KEY_STORE_PATH), which the mint above and the backend
+            // both use (recoder-1r7i). Without EITHER, a minted key can never
+            // authenticate and STRICT_AUTH would 401 every route, so we stay
+            // permissive. Safety: if the mint FAILED (apiKey null) this is false
+            // regardless, so a mint failure never bricks the app.
+            const keyIsEnforceable = Boolean(apiKey && (env.DATABASE_URL || env.API_KEY_STORE_PATH));
             const spawnEnv = keyIsEnforceable ? { ...env, STRICT_AUTH: "true" } : env;
             this._env = spawnEnv;
 
