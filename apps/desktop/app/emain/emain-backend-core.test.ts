@@ -1353,11 +1353,11 @@ describe("BackendSupervisor packaged spawn target", () => {
 
 // ---------------------------------------------------------------------------
 // Fail-closed auth: the minted key must be REQUIRED, not decorative — but ONLY
-// when it is enforceable. be048af57: the greenfield backend validates sk_ keys
-// via the DB-backed ApiKeyService, so without a DATABASE_URL a minted key can
-// never authenticate and STRICT_AUTH=true would 401 every route (bricked app).
-// The DB-less embedded desktop therefore stays on the documented permissive
-// loopback posture (127.0.0.1 bind, RECODER_SOLO_MODE, STRICT_AUTH=false).
+// when the backend can VALIDATE it, i.e. a durable store backs the ApiKeyService:
+// EITHER Postgres (DATABASE_URL) OR the filesystem key store (API_KEY_STORE_PATH,
+// recoder-1r7i) that the mint + backend share. The DB-less desktop now uses the
+// filesystem store, so it runs STRICT_AUTH=true. A mint FAILURE (apiKey null)
+// still degrades to STRICT_AUTH=false so it can never brick the app.
 // ---------------------------------------------------------------------------
 
 describe("BackendSupervisor auth posture", () => {
@@ -1385,7 +1385,10 @@ describe("BackendSupervisor auth posture", () => {
         expect(spawnOpts.env.STRICT_AUTH).toBe("true");
     });
 
-    it("stays permissive (STRICT_AUTH=false) when the mint succeeded but no DATABASE_URL exists to validate the key", async () => {
+    it("runs STRICT via the filesystem key store when the mint succeeded and there is no DATABASE_URL (recoder-1r7i)", async () => {
+        // The DB-less desktop default: no DATABASE_URL, but the mint + backend share
+        // the filesystem key store (API_KEY_STORE_PATH, always set by _buildEnv), so
+        // the minted key IS validatable and the child runs fail-closed.
         delete process.env.DATABASE_URL;
         const child = makeFakeChild();
         const spawn = vi.fn(() => child);
@@ -1396,7 +1399,8 @@ describe("BackendSupervisor auth posture", () => {
 
         expect(result.ok).toBe(true);
         const [, , spawnOpts] = spawn.mock.calls[0] as any;
-        expect(spawnOpts.env.STRICT_AUTH).toBe("false");
+        expect(spawnOpts.env.API_KEY_STORE_PATH).toBeTruthy();
+        expect(spawnOpts.env.STRICT_AUTH).toBe("true");
     });
 
     it("degrades to STRICT_AUTH=false when the mint failed, even with a durable store (documented loopback fallback)", async () => {
