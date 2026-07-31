@@ -41,8 +41,8 @@ The finish line is a **3-step convergence loop**:
 
 | Area | State | Verdict |
 |---|---|---|
-| **Backend** (`backend/`) | ~90% | Greenfield 15-domain spine is real (old 12.8k-line monolith deleted). All 12 build phases wired; `tsc` 0 · 2,554 tests green (re-verified with the #22 install fix, 2026-07-25). `dist/` may lag until rebuilt. |
-| **Desktop** (`apps/desktop`) | ~82% | Core loop (launch N agents → diff → merge) + convergence/evidence all work on arm64. Cockpit torn down. Sign-in is now optional/offline-safe, Session/Approvals/Memory fixed, **Board wired** (task-driven pick-an-issue→launch). This session: **mid-run "needs input" notification/badge** + **first-run agent-install** setup surface (`1e5ee10f6`), diff-comment→agent review loop, onboarding "We found your setup" probe. Remaining gaps: arm64-only unsigned build, dead-by-design engines (Lance, Python sidecars), embedded-path identity dropping name/plan (#42). See `DESKTOP-UX-STATE-AND-PLAN.md` §8 for the live tracked items (its §0–§7 flaw log is provenance, framed as historical). |
+| **Backend** (`backend/`) | ~90% | Greenfield 15-domain spine is real (old 12.8k-line monolith deleted). All 12 build phases wired; `tsc` 0 · **full suite green: 3,076 tests / 332 files** (2026-07-31 — the last 2 pre-existing failures, a social→identity domain-boundary value import and the DB-less conductor-key mint, fixed). `dist/` may lag until rebuilt. |
+| **Desktop** (`apps/desktop`) | ~82% | Core loop (launch N agents → diff → merge) + convergence/evidence all work on arm64. Cockpit torn down. Sign-in is now optional/offline-safe, Session/Approvals/Memory fixed, **Board wired** (task-driven pick-an-issue→launch). This session: **mid-run "needs input" notification/badge** + **first-run agent-install** setup surface (`1e5ee10f6`), diff-comment→agent review loop, onboarding "We found your setup" probe. Remaining gaps: arm64-only unsigned build, dead-by-design engines (Lance, Python sidecars), embedded-path identity dropping name/plan (#42). See `DESKTOP-UX-STATE-AND-PLAN.md` §8 for the live tracked items (its §0–§7 flaw log is provenance, framed as historical). Frontend `tsc` 0 · **471 tests green** (2026-07-31; fixed a `.ts`/`.tsx` shadow + a stale packaging-gate assertion). |
 | **Website** (`app/`) | ~90% | 110 pages + 169 API routes, live in prod. Now installs + builds cleanly from the monorepo (#22 fixed 2026-07-25 — full `next build` produces BUILD_ID + standalone). Remaining gaps: Phase A auth migration written-but-unrun, dual auth seams. |
 | **Convergence thesis** | 3 of 3 shipped | Parallel worktrees ✅; converge engine ✅ (`domains/conductor/converge/` — whole-file pick or `git merge-file` 3-way synthesis); governed evidence-merge ✅ (`domains/conductor/evidence/convergence-evidence.ts` + framework-mapped export + Ed25519 signing). Remaining refinement: AST/semantic (not line-level) same-file merge. |
 
@@ -128,8 +128,10 @@ unification**, not more app-security code.
    orphan `database`/`ui`, recovered 2 UI components locally), the npm lock removed,
    and Turbopack roots pinned to the monorepo. Verified: `pnpm install` ✓,
    `prisma generate` ✓, `tsc` resolves, `next build` ✓ (BUILD_ID + `.next/standalone`).
-   Backend: `tsc` 0 · 2554 tests green. The APFS pressure that used to compound this
-   is clear (~14 GB free). Build-time secrets still come from the deploy env.
+   Backend: `tsc` 0 · 3,076 tests green (full suite, 2026-07-31). All three surfaces
+   now fully green — website `tsc` 0 · 436 tests, desktop `tsc` 0 · 471 tests. The
+   APFS pressure that used to compound this is clear (~14 GB free). Build-time
+   secrets still come from the deploy env.
 2. **Convergence loop — shipped end-to-end** (backend + desktop): parallel
    worktrees → **converge** (whole-file pick **or** intra-file `git merge-file`
    3-way synthesis; conflicts truthfully surface as `unresolved`/400, never a
