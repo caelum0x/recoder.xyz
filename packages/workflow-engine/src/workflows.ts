@@ -30,16 +30,41 @@ const VALID_NODE_KINDS = new Set<WorkflowNodeKind>([
 	"memory",
 ]);
 
-/** Resolve the ordered checks for a workflow: explicit `checks` win over the registry. */
+/**
+ * Resolve the ordered checks for a workflow.
+ *
+ * SECURITY (command-injection RCE guard): a caller-supplied `explicit` check may
+ * SELECT structure (name / kind / config) but must NEVER inject a free-form shell
+ * `command`. Any command a check carries must originate from the TRUSTED
+ * host-owned registry, never from model / MCP output. Explicit checks therefore
+ * have their `command` stripped; a trusted registry command is re-attached only
+ * when it matches by name. This is defense-in-depth with the MCP boundary (which
+ * already refuses to read a `command` arg) and the exec runner (minimal env).
+ */
 export function resolveChecks(
 	workflow: string,
 	explicit: VerificationCheck[] | undefined,
 	registry: Record<string, VerificationCheck[]>,
 ): VerificationCheck[] {
+	const registryChecks = registry[workflow] ?? [];
 	if (explicit && explicit.length > 0) {
-		return explicit;
+		return explicit.map((check) => sanitizeExplicitCheck(check, registryChecks));
 	}
-	return registry[workflow] ?? [];
+	return registryChecks;
+}
+
+/**
+ * Strip a caller-supplied `command` from an explicit check. If a registry check
+ * (in the same workflow) shares the check's name, adopt its TRUSTED command;
+ * otherwise the check carries no command (the runner then `skip`s it truthfully).
+ */
+function sanitizeExplicitCheck(
+	check: VerificationCheck,
+	registryChecks: VerificationCheck[],
+): VerificationCheck {
+	const { command: _callerSupplied, ...rest } = check;
+	const trusted = registryChecks.find((entry) => entry.name === check.name)?.command;
+	return trusted ? { ...rest, command: trusted } : { ...rest };
 }
 
 /** Map a check kind onto a real workflow node kind (unknown kinds → 'verification'). */

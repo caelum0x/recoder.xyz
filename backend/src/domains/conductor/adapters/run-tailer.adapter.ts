@@ -98,10 +98,33 @@ export interface RunTailerDeps {
 export function createRunTailer(deps: RunTailerDeps): ConductorRunTailer {
   const { sink, logger, live } = deps;
   const attached = new Set<string>();
+  // Per-workspace start generation — a monotonically increasing token bumped on
+  // every attach AND every detach. The async control-mode `-V` probe captures the
+  // generation of the start that kicked it off; a stale probe whose generation was
+  // superseded by a later stop()/start() interleave is rejected (never registers a
+  // second control client — see the race guard in `startLive`).
+  const generation = new Map<string, number>();
   // Per-adapter tail registry (idempotency + stop handles) for the live path.
   const tailRegistry = new TailRegistry();
   // Control-mode clients keyed by workspace, so a stop cascades to the client.
   const controlTails = new Map<string, ControlModeTail>();
+
+  /**
+   * Detach a workspace (idempotent): invalidate any in-flight control-mode probe
+   * (generation bump), stop the control client (if any) and the poll tailer, and
+   * clear the attach marker so a later reconcile / `continueWorkspace` re-attaches.
+   * No-op for a workspace that was never attached.
+   */
+  const detach = (workspaceId: string): void => {
+    if (!attached.delete(workspaceId)) return;
+    generation.set(workspaceId, (generation.get(workspaceId) ?? 0) + 1);
+    const control = controlTails.get(workspaceId);
+    if (control) {
+      control.stop();
+      controlTails.delete(workspaceId);
+    }
+    stopRunTail(tailRegistry, workspaceId);
+  };
 
   /** Emit the single truthful lifecycle marker (NOT fabricated agent output). */
   const emitAttachMarker = (input: RunTailerAttachInput): void => {
@@ -118,7 +141,7 @@ export function createRunTailer(deps: RunTailerDeps): ConductorRunTailer {
   };
 
   /** Drive the real poll tailer (+ opt-in control mode) for a workspace. */
-  const startLive = (input: RunTailerAttachInput, driver: LiveTailDriver): void => {
+  const startLive = (input: RunTailerAttachInput, driver: LiveTailDriver, gen: number): void => {
     const inner = driver.resolveSubstrate(input.substrate);
     if (!inner) {
       // The engine attached a run on a substrate the registry does not know —
@@ -164,14 +187,37 @@ export function createRunTailer(deps: RunTailerDeps): ConductorRunTailer {
         control = undefined;
       }
 
-      // The workspace may have been detached (stop) while the probe ran.
-      if (!attached.has(input.workspaceId)) {
+      // The workspace may have been detached (stop) — OR a newer start()/stop()
+      // interleave may have superseded this probe (generation bump) — while the
+      // async `-V` probe ran. Either case: this stale probe must NOT register, or
+      // it would leak its just-spawned client and double-register the poll tail.
+      if (!attached.has(input.workspaceId) || generation.get(input.workspaceId) !== gen) {
         control?.stop();
         return;
       }
 
+      // Belt-and-suspenders: stop any control client already registered for this
+      // workspace before overwriting the map entry, so a client is never leaked
+      // (the generation guard above already rejects stale probes; this covers any
+      // residual double-register path without dropping a live child on the floor).
+      const prior = controlTails.get(input.workspaceId);
+      if (prior && prior !== control) prior.stop();
       if (control) controlTails.set(input.workspaceId, control);
       const substrate = control?.substrate ?? inner;
+      // Wrap the sink so a TERMINAL poll-tailer event (`completed`/`failed`) clears
+      // the workspace's attach. The poll tailer self-stops when the agent exits;
+      // without clearing `attached` a follow-up run (`continueWorkspace` → start
+      // same workspaceId) would hit the idempotency guard and stream NOTHING. The
+      // runId is deterministic (`run_${workspaceId}`) and reused across continues,
+      // so the guard cannot key on runId — the attach MUST clear on completion.
+      const tailSink: RunEventSinkPort = {
+        append: async (event) => {
+          await sink.append(event);
+          if (event.type === 'completed' || event.type === 'failed') {
+            detach(input.workspaceId);
+          }
+        },
+      };
       startRunTail(
         {
           workspaceId: input.workspaceId,
@@ -182,7 +228,7 @@ export function createRunTailer(deps: RunTailerDeps): ConductorRunTailer {
         },
         {
           substrate,
-          sink,
+          sink: tailSink,
           registry: tailRegistry,
           clock: driver.clock,
           id: driver.id,
@@ -196,6 +242,10 @@ export function createRunTailer(deps: RunTailerDeps): ConductorRunTailer {
     start(input: RunTailerAttachInput): void {
       if (attached.has(input.workspaceId)) return; // idempotent per workspace
       attached.add(input.workspaceId);
+      // Capture the generation THIS attach owns so its async control-mode probe
+      // can detect a later stop()/start() interleave and refuse to register stale.
+      const gen = (generation.get(input.workspaceId) ?? 0) + 1;
+      generation.set(input.workspaceId, gen);
       if (live) {
         logger.info(
           {
@@ -206,7 +256,7 @@ export function createRunTailer(deps: RunTailerDeps): ConductorRunTailer {
           },
           'conductor run-tailer attached (live substrate streaming)',
         );
-        startLive(input, live);
+        startLive(input, live, gen);
         return;
       }
       logger.info(
@@ -219,13 +269,7 @@ export function createRunTailer(deps: RunTailerDeps): ConductorRunTailer {
       return attached.has(workspaceId);
     },
     stop(workspaceId: string): void {
-      if (!attached.delete(workspaceId)) return;
-      const control = controlTails.get(workspaceId);
-      if (control) {
-        control.stop();
-        controlTails.delete(workspaceId);
-      }
-      stopRunTail(tailRegistry, workspaceId);
+      detach(workspaceId);
     },
   };
 }

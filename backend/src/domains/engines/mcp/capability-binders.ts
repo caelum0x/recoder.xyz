@@ -29,6 +29,7 @@ import {
 import {
   createWorkflowEngine,
   createCommandVerificationRunner,
+  type ExecFn,
   type WorkflowEngine,
 } from '@recoder/workflow-engine';
 import type { NotifyEngine } from '@recoder/agent-notify';
@@ -36,6 +37,51 @@ import type { NotifyEngine } from '@recoder/agent-notify';
 const execAsync = promisify(nodeExec);
 const VERIFY_MAX_BUFFER = 4 * 1024 * 1024;
 const VERIFY_DEFAULT_TIMEOUT_MS = 120_000;
+
+/**
+ * Build the MINIMAL env overlay for a verification subprocess: PATH so the OS can
+ * resolve a bare binary name, plus HOME for tools that need a home dir — and
+ * NOTHING else. NEVER `...process.env` (secret-leak guard, mirroring the
+ * PATH-only base `runCli`/cli-exec.ts enforces). Computed per-call so it tracks
+ * the live PATH.
+ */
+function minimalVerifyEnv(): NodeJS.ProcessEnv {
+  return {
+    PATH: process.env.PATH ?? '',
+    ...(process.env.HOME ? { HOME: process.env.HOME } : {}),
+  };
+}
+
+/**
+ * The verification `exec` seam for `recoder.workflow.verify`. Runs a command with
+ * a MINIMAL env (see {@link minimalVerifyEnv}) so an executed check can neither
+ * inherit nor exfiltrate backend secrets. Degrade-safe: a non-zero exit is
+ * surfaced as a truthful `{ exitCode }` (a `failed` check), never thrown. Exported
+ * for the security regression test.
+ */
+export function createEnginesVerifyExec(cwd: string): ExecFn {
+  return async (command, opts) => {
+    try {
+      const { stdout, stderr } = await execAsync(command, {
+        cwd: opts?.cwd ?? cwd,
+        timeout: opts?.timeoutMs ?? VERIFY_DEFAULT_TIMEOUT_MS,
+        maxBuffer: VERIFY_MAX_BUFFER,
+        // MINIMAL env — never the full process.env (secret-leak guard).
+        env: minimalVerifyEnv(),
+      });
+      return { exitCode: 0, stdout: String(stdout), stderr: String(stderr) };
+    } catch (err) {
+      // `exec` rejects on a non-zero exit; surface the real exit code + output
+      // (a truthful `failed` check) rather than throwing an `errored` one.
+      const e = err as { code?: number; stdout?: string; stderr?: string; message?: string };
+      return {
+        exitCode: typeof e.code === 'number' ? e.code : 1,
+        stdout: typeof e.stdout === 'string' ? e.stdout : '',
+        stderr: typeof e.stderr === 'string' ? e.stderr : e.message ?? '',
+      };
+    }
+  };
+}
 
 /**
  * Bind `recoder.git_nexus.*` over the recodergit on-disk indexer. The port resolves
@@ -75,25 +121,9 @@ export function createEnginesWorkflowEngine(deps: {
     runner: createCommandVerificationRunner({
       cwd,
       timeoutMs: VERIFY_DEFAULT_TIMEOUT_MS,
-      exec: async (command, opts) => {
-        try {
-          const { stdout, stderr } = await execAsync(command, {
-            cwd: opts?.cwd ?? cwd,
-            timeout: opts?.timeoutMs ?? VERIFY_DEFAULT_TIMEOUT_MS,
-            maxBuffer: VERIFY_MAX_BUFFER,
-          });
-          return { exitCode: 0, stdout: String(stdout), stderr: String(stderr) };
-        } catch (err) {
-          // `exec` rejects on a non-zero exit; surface the real exit code + output
-          // (a truthful `failed` check) rather than throwing an `errored` one.
-          const e = err as { code?: number; stdout?: string; stderr?: string; message?: string };
-          return {
-            exitCode: typeof e.code === 'number' ? e.code : 1,
-            stdout: typeof e.stdout === 'string' ? e.stdout : '',
-            stderr: typeof e.stderr === 'string' ? e.stderr : e.message ?? '',
-          };
-        }
-      },
+      // Minimal-env exec (PATH/HOME only) — commands that reach here come from the
+      // trusted named-workflow registry, never caller free-form input.
+      exec: createEnginesVerifyExec(cwd),
     }),
   });
 }

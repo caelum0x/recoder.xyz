@@ -47,8 +47,11 @@ export class KvStoreRepository implements KvStore {
       }
       return row.value ?? null;
     } catch (err) {
-      this.log.warn({ err: msg(err), namespace, key }, 'kv get failed; using fallback');
-      return this.fallbackGet(namespace, key);
+      // The pool is AVAILABLE but the read faulted (transient). Do NOT mask it
+      // with the in-memory fallback — that would make a present durable key look
+      // absent. Surface the fault so the caller learns the durable read failed.
+      this.log.warn({ err: msg(err), namespace, key }, 'kv get failed (durable read error surfaced)');
+      throw err;
     }
   }
 
@@ -79,8 +82,12 @@ export class KvStoreRepository implements KvStore {
         },
       );
     } catch (err) {
-      this.log.warn({ err: msg(err), namespace, key }, 'kv set failed; wrote to fallback');
-      this.fallbackSet(namespace, key, value, options);
+      // The pool is AVAILABLE but the write faulted (transient). Do NOT swallow
+      // it into the in-memory fallback: a durable write (sk_ keys, locks,
+      // idempotency markers) would silently become memory-only while isDurable()
+      // still reports true. Surface the fault so the caller learns it failed.
+      this.log.warn({ err: msg(err), namespace, key }, 'kv set failed (durable write error surfaced)');
+      throw err;
     }
   }
 

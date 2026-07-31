@@ -106,11 +106,15 @@ export function buildApiKeysRouter(deps: ApiKeysRouterDeps): Router {
         return;
       }
       const { userId, orgId } = owner(req);
+      // The caller can only grant scopes it itself holds — never let a minted
+      // key carry higher privilege than its minter (privilege-escalation guard).
+      const granterScopes = req.principal?.scopes ?? [];
       const minted = await service.mint({
         userId,
         ...(orgId ? { orgId } : {}),
         name: parsed.data.name,
         ...(parsed.data.scopes ? { scopes: parsed.data.scopes } : {}),
+        granterScopes,
         ...(parsed.data.expiresAt ? { expiresAt: new Date(parsed.data.expiresAt) } : {}),
       });
       // The raw key is returned ONCE here and is never recoverable afterwards.

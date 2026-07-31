@@ -221,7 +221,7 @@ describe('conductor completion hook', () => {
     expect(harvestOnCompletion).not.toHaveBeenCalled();
   });
 
-  it('meters one agent_run on a terminal event (idempotent by the workspace anchor)', async () => {
+  it('meters one agent_run on a terminal event (idempotent by the per-emission event anchor)', async () => {
     const inner = { append: vi.fn(async () => {}) };
     const record = vi.fn(async () => ({ inserted: true as const }));
     const sink = createCompletionHookSink({
@@ -242,9 +242,36 @@ describe('conductor completion hook', () => {
         kind: 'agent_run',
         quantity: 1,
         runId: 'run_ws_1',
-        idempotencyKey: 'agent_run:ws_1',
+        idempotencyKey: 'agent_run:evt_completed',
       })
     );
+  });
+
+  it('meters EACH distinct terminal turn of a continued workspace (per-emission key, not per-workspace)', async () => {
+    const record = vi.fn(async () => ({ inserted: true as const }));
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      getMeter: () => ({ record }),
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    // Two turns of the SAME workspace/run (runId is deterministic `run_ws_1`,
+    // reused across continues; workspaceId identical) but DISTINCT emitted
+    // terminal events. Anchoring on workspaceId/runId would collapse both onto one
+    // idempotency key and the meter's ON CONFLICT would drop turn 2.
+    await sink.append(event('completed', { eventId: 'evt_turn1' }));
+    await sink.append(event('completed', { eventId: 'evt_turn2' }));
+    await flush();
+
+    const agentRunKeys = record.mock.calls
+      .map((c) => c[0])
+      .filter((a) => a.kind === 'agent_run')
+      .map((a) => a.idempotencyKey);
+    // Two distinct turns ⇒ two distinct keys ⇒ both metered (a 10-message
+    // workspace bills 10 agent_runs, not 1).
+    expect(agentRunKeys).toEqual(['agent_run:evt_turn1', 'agent_run:evt_turn2']);
+    expect(new Set(agentRunKeys).size).toBe(2);
   });
 
   it('meters REAL token usage when the terminal event carries inputTokens/outputTokens (native openfang path)', async () => {
@@ -276,7 +303,7 @@ describe('conductor completion hook', () => {
       expect.objectContaining({
         kind: 'agent_run',
         quantity: 1,
-        idempotencyKey: 'agent_run:ws_1',
+        idempotencyKey: 'agent_run:evt_completed',
       })
     );
     // … and the REAL token usage is metered on top (1200 + 340 = 1540).
@@ -287,7 +314,7 @@ describe('conductor completion hook', () => {
         quantity: 1540,
         engine: 'openfang',
         runId: 'run_ws_1',
-        idempotencyKey: 'token:ws_1',
+        idempotencyKey: 'token:evt_completed',
       })
     );
     expect(record).toHaveBeenCalledTimes(2);

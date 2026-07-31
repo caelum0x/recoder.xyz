@@ -38,10 +38,12 @@ export type WorkflowPort = {
     taskId?: string;
     runId?: string;
     task?: { taskId?: string; intent?: string } & Record<string, unknown>;
+    // NOTE: a check carries NO free-form `command` across this boundary — a caller
+    // must not inject a shell command (command-injection RCE guard). Commands come
+    // from the trusted named-workflow registry only, matched by check name.
     checks?: Array<{
       name: string;
       kind?: string;
-      command?: string;
       config?: Record<string, unknown>;
     }>;
   }): Promise<unknown>;
@@ -101,10 +103,15 @@ function readStringArray(value: unknown): string[] | undefined {
 type WorkflowCheckArg = {
   name: string;
   kind?: string;
-  command?: string;
   config?: Record<string, unknown>;
 };
 
+/**
+ * Read caller-supplied checks as STRUCTURAL selectors only (name / kind / config).
+ * A free-form `command` is deliberately NOT read here: accepting a caller command
+ * and shelling it out is the command-injection RCE this guard closes. Any command
+ * a check runs must come from the trusted named-workflow registry downstream.
+ */
 function readChecks(value: unknown): WorkflowCheckArg[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const checks = value
@@ -116,7 +123,6 @@ function readChecks(value: unknown): WorkflowCheckArg[] | undefined {
       return {
         name,
         kind: readString(record.kind),
-        command: readString(record.command),
         config: readRecord(record.config),
       };
     })

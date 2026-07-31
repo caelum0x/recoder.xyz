@@ -151,10 +151,19 @@ export class OrgServiceImpl implements OrgService {
     return membership;
   }
 
-  async acceptInvite(membershipId: string): Promise<boolean> {
+  async acceptInvite(membershipId: string, callerUserId: string): Promise<boolean> {
     if (!membershipId) throw new AppError(ErrorCode.INVALID_INPUT, 'membershipId is required');
+    if (!callerUserId) throw new AppError(ErrorCode.INVALID_INPUT, 'callerUserId is required');
+
+    // IDOR guard: only the INVITED user may accept their own invite. A caller who
+    // merely learned the membershipId is indistinguishable from "no such invite"
+    // (return false → the route surfaces NOT_FOUND), so there is no oracle and no
+    // way to activate a victim's pending membership.
+    const membership = await this.stores.memberships.findById(membershipId);
+    if (!membership || membership.userId !== callerUserId) return false;
+
     const activated = await this.stores.memberships.activate(membershipId);
-    if (activated) this.log.info({ membershipId }, 'org invite accepted');
+    if (activated) this.log.info({ membershipId, callerUserId }, 'org invite accepted');
     return activated;
   }
 

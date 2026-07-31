@@ -75,6 +75,14 @@ export interface MintApiKeyParams {
   readonly orgId?: string;
   readonly name: string;
   readonly scopes?: readonly string[];
+  /**
+   * The scopes the MINTING principal itself holds. When present, the requested
+   * `scopes` must be a subset of these — a key can never carry higher privilege
+   * than its minter (a normal session holds only `['read','write']`, so it cannot
+   * mint an `admin`/`internal` key). Omit only on trusted server-side mints; even
+   * then the privileged scopes (`admin`/`internal`) are refused.
+   */
+  readonly granterScopes?: readonly string[];
   /** Optional expiry; omit for a non-expiring key. */
   readonly expiresAt?: Date | null;
 }

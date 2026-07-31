@@ -215,7 +215,15 @@ export function createCompletionHookSink(
         // flat run count. Both are idempotent by anchor, so a re-emit is a no-op.
         const meter = getMeter?.();
         if (meter && userId) {
-          const anchor = workspaceId ?? event.runId ?? taskId ?? event.eventId;
+          // Per-EMISSION anchor: `event.eventId` is unique per emitted terminal
+          // event, so a genuine RE-EMIT of the SAME event still dedupes (the meter
+          // is `ON CONFLICT DO NOTHING`), while each distinct turn of a continued
+          // workspace (turns 1..N, each its own terminal event) gets a distinct key
+          // and is metered. The runId is deterministic (`run_${workspaceId}`) and
+          // REUSED across continues, and workspaceId is identical for every turn —
+          // anchoring on either collapses turns 2..N onto turn 1 and drops their
+          // usage. eventId is the only per-turn discriminator, so it anchors here.
+          const anchor = event.eventId ?? workspaceId ?? event.runId ?? taskId;
           void meter
             .record({
               subjectId: userId,

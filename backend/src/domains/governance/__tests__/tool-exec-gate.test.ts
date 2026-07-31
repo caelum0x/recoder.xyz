@@ -35,6 +35,38 @@ describe('describeToolInput — secret-free projection', () => {
     expect(describeToolInput(null)).toBe('');
     expect(describeToolInput(42)).toBe('42');
   });
+
+  it('RECURSES into nested arrays/objects so a nested command reaches the classifier', () => {
+    // recoder.workflow.workflow.verify carries its dangerous payload one level
+    // deep in checks[].command. The kernel classifier must SEE it.
+    const s = describeToolInput({ checks: [{ command: 'rm -rf /' }] });
+    expect(s).toContain('command');
+    expect(s).toContain('rm -rf /');
+  });
+
+  it('still drops secret-named keys when they are nested inside arrays/objects', () => {
+    const s = describeToolInput({
+      steps: [{ command: 'deploy', apiKey: 'sk-nested-secret' }],
+      env: { token: 'nested-token-value', path: '/etc/passwd' },
+    });
+    expect(s).toContain('command');
+    expect(s).toContain('deploy');
+    expect(s).toContain('/etc/passwd'); // a nested path still reaches the classifier
+    expect(s).not.toContain('sk-nested-secret');
+    expect(s).not.toContain('nested-token-value');
+  });
+
+  it('stays BOUNDED for huge / deeply-nested payloads (no unbounded blowup)', () => {
+    const huge = { blob: 'x'.repeat(200_000), checks: Array.from({ length: 5000 }, (_, i) => ({ command: `c${i}` })) };
+    const s = describeToolInput(huge);
+    expect(s.length).toBeLessThanOrEqual(8192);
+
+    // Pathologically deep nesting must not recurse without limit.
+    let deep: unknown = 'rm -rf /';
+    for (let i = 0; i < 500; i += 1) deep = { nested: deep };
+    expect(() => describeToolInput(deep)).not.toThrow();
+    expect(describeToolInput(deep).length).toBeLessThanOrEqual(8192);
+  });
 });
 
 describe('createToolExecGate — the narrow per-tool teeth', () => {

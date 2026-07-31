@@ -1420,7 +1420,6 @@ function readChecks(value) {
     return {
       name,
       kind: readString10(record.kind),
-      command: readString10(record.command),
       config: readRecord3(record.config)
     };
   }).filter((entry) => entry !== void 0);

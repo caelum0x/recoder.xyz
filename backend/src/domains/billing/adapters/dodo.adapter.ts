@@ -192,7 +192,12 @@ export function createDodoAdapter(deps: ProviderAdapterDeps): BillingProviderPor
     },
 
     async emitUsage(events: readonly MeterEvent[]): Promise<void> {
+      // Pre-flight no-op guards: no credential or an empty batch never touches
+      // the network and never throws (nothing to flush).
       if (!credential.present || events.length === 0) return;
+      // A push failure MUST propagate: metering.flushOnce relies on this throw to
+      // leave the batch unflushed (never `markFlushed`) so usage is not silently
+      // dropped and the customer under-charged (billing-provider.port.ts §74-76).
       try {
         await call('POST', '/usage-events/ingest', {
           events: events.map((e) => ({
@@ -204,7 +209,8 @@ export function createDodoAdapter(deps: ProviderAdapterDeps): BillingProviderPor
           })),
         });
       } catch (error) {
-        logger?.warn?.({ error, count: events.length }, 'dodo.emitUsage failed → unflushed (fail safe)');
+        logger?.warn?.({ error, count: events.length }, 'dodo.emitUsage failed → retained for retry');
+        throw error;
       }
     },
 

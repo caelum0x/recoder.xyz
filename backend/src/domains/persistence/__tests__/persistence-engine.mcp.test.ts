@@ -79,6 +79,18 @@ describe('persistence MCP tools — caller binding + tenant-safe reads', () => {
     expect(executed).toHaveLength(0);
   });
 
+  it('db_query_readonly rejects a comma-joined multi-relation FROM (no allowlist bypass)', async () => {
+    const { module, executed } = fakeModule();
+    const q = tool(buildPersistenceMcpTools(module), 'db_query_readonly');
+    // ATTACK: `FROM allowed_view v, secrets s` — the keyword-anchored relation
+    // scan only sees `allowed_view`, so a comma-joined non-allowlisted table
+    // would sneak past the allowlist. A single-relation FROM is required.
+    await expect(
+      q.handler({ sql: 'select * from allowed_view v, secrets s' }, caller()),
+    ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    expect(executed).toHaveLength(0);
+  });
+
   it('db_query_readonly rejects comment/separator evasion before the DB seam', async () => {
     const { module, executed } = fakeModule();
     const q = tool(buildPersistenceMcpTools(module), 'db_query_readonly');
@@ -158,5 +170,29 @@ describe('persistence MCP tools — caller binding + tenant-safe reads', () => {
     const out = (await s.handler({}, caller())) as { tables: unknown[] };
     expect(out.tables).toHaveLength(1);
     expect(inspected).toEqual(['tables']);
+  });
+
+  it('db_schema_inspect denies a NON-privileged column/index drill-down (billing) before the DB seam', async () => {
+    const { module, inspected } = fakeModule();
+    const s = tool(buildPersistenceMcpTools(module), 'db_schema_inspect');
+    // A non-privileged agent must not enumerate columns/indexes of an arbitrary
+    // control-plane table (billing/identity/system) — mirror db_query_readonly's
+    // default-deny. The drill-down is restricted to privileged callers.
+    await expect(
+      s.handler({ schema: 'billing', table: 'invoices' }, caller()),
+    ).rejects.toMatchObject({ code: 'AUTHZ_PROJECT_ACCESS_DENIED' });
+    expect(inspected).toHaveLength(0);
+  });
+
+  it('db_schema_inspect lets a TRUSTED internal caller drill into columns/indexes', async () => {
+    const { module, inspected } = fakeModule();
+    const s = tool(buildPersistenceMcpTools(module), 'db_schema_inspect');
+    const out = (await s.handler(
+      { schema: 'billing', table: 'invoices' },
+      caller({ scopes: ['internal'] }),
+    )) as { columns: unknown[]; indexes: unknown[] };
+    expect(out.columns).toEqual([]);
+    expect(out.indexes).toEqual([]);
+    expect([...inspected].sort()).toEqual(['columns', 'indexes']);
   });
 });

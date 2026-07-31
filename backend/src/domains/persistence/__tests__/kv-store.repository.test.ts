@@ -67,3 +67,31 @@ describe('KvStoreRepository (degraded in-memory fallback)', () => {
     expect(await kv.list('ns')).toHaveLength(0);
   });
 });
+
+/**
+ * An executor that reports itself AVAILABLE but whose read/write throw
+ * (transient DB fault). A durable write (sk_ keys, locks, idempotency markers)
+ * must NOT silently degrade to memory-only — the caller has to learn the durable
+ * op failed, so the error is surfaced, not swallowed into the in-memory fallback.
+ */
+const failingAvailableExecutor = {
+  isAvailable: () => true,
+  mutate: async () => {
+    throw new Error('transient insert failure');
+  },
+  one: async () => {
+    throw new Error('transient read failure');
+  },
+} as unknown as QueryExecutor;
+
+describe('KvStoreRepository (available pool — surfaces DB faults, never silent write-drop)', () => {
+  it('set() rethrows when the pool is available but the write fails', async () => {
+    const kv = new KvStoreRepository(failingAvailableExecutor, silentLog);
+    await expect(kv.set('ns', 'k', 'v')).rejects.toThrow('transient insert failure');
+  });
+
+  it('get() rethrows when the pool is available but the read fails', async () => {
+    const kv = new KvStoreRepository(failingAvailableExecutor, silentLog);
+    await expect(kv.get('ns', 'k')).rejects.toThrow('transient read failure');
+  });
+});

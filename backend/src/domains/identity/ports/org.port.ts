@@ -61,6 +61,8 @@ export interface MembershipStore {
   insert(record: NewMembershipRecord): Promise<Membership>;
   /** The caller's membership in a given org (the authz-resolution path). */
   find(orgId: string, userId: string): Promise<Membership | null>;
+  /** A single membership by id (ownership check before accept/activate). */
+  findById(id: string): Promise<Membership | null>;
   listForOrg(orgId: string): Promise<readonly Membership[]>;
   listForUser(userId: string): Promise<readonly Membership[]>;
   /** Move an invited membership to `active`; returns `true` on transition. */
@@ -93,7 +95,13 @@ export interface OrgService {
   createOrg(params: CreateOrgParams): Promise<Org>;
   addTeam(orgId: string, slug: string, name: string): Promise<Team>;
   invite(params: InviteParams): Promise<Membership>;
-  acceptInvite(membershipId: string): Promise<boolean>;
+  /**
+   * Activate an invited membership. `callerUserId` MUST own the membership
+   * (`membership.userId === callerUserId`); a non-owner is treated as "no such
+   * invite" (returns `false`) so a leaked membershipId can't activate a victim's
+   * pending invite.
+   */
+  acceptInvite(membershipId: string, callerUserId: string): Promise<boolean>;
   listForUser(userId: string): Promise<readonly Org[]>;
   membersOf(orgId: string): Promise<readonly Membership[]>;
 }
