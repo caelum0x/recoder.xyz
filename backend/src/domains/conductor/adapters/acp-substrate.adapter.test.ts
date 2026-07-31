@@ -14,6 +14,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   createAcpSubstrate,
   extractUpdateText,
+  isSecretAgentEnvKey,
   type CreateAcpSubstrateDeps,
   type ExecFn,
 } from './acp-substrate.adapter.js';
@@ -700,6 +701,104 @@ describe('createAcpSubstrate — per-runtime agent binary (RECODER_ACP_AGENT)', 
       { workspaceId: 'ws-1', worktreePath: '/tmp/wt/ws-1', prompt: 'go' }
     );
     expect(spawned).toContain('codex-acp'); // reattached with the marked binary, not the default
+  });
+});
+
+describe('createAcpSubstrate — agent env secret-stripping (recoder-x4n1)', () => {
+  const dirtyEnv: NodeJS.ProcessEnv = {
+    PATH: '/usr/bin',
+    HOME: '/home/agent',
+    ANTHROPIC_API_KEY: 'sk-ant-keep',
+    GITHUB_TOKEN: 'ghp_keep',
+    INTERNAL_SERVICE_KEY: 'leak-internal',
+    AUTH_DATABASE_URL: 'postgres://leak',
+    BETTER_AUTH_SECRET: 'leak-secret',
+    POLAR_ACCESS_TOKEN: 'leak-polar',
+    CLOUDFLARE_API_TOKEN: 'leak-cf',
+    API_KEY_HASH_SALT: 'leak-salt',
+  };
+  const SECRETS = [
+    'INTERNAL_SERVICE_KEY',
+    'AUTH_DATABASE_URL',
+    'BETTER_AUTH_SECRET',
+    'POLAR_ACCESS_TOKEN',
+    'CLOUDFLARE_API_TOKEN',
+    'API_KEY_HASH_SALT',
+  ];
+
+  it('launch spawns the agent with backend secrets stripped, needed vars kept', async () => {
+    let spawnedEnv: NodeJS.ProcessEnv | undefined;
+    const s = createAcpSubstrate(
+      baseDeps({
+        processEnv: dirtyEnv,
+        spawn: opts => {
+          spawnedEnv = opts.env;
+          return fakeAgent().proc;
+        },
+      })
+    );
+    await s.launch({ ...launchInput, env: { RECODER_TASK_ID: 't1' } });
+    // KEPT — the agent needs these:
+    expect(spawnedEnv?.PATH).toBe('/usr/bin');
+    expect(spawnedEnv?.ANTHROPIC_API_KEY).toBe('sk-ant-keep');
+    expect(spawnedEnv?.GITHUB_TOKEN).toBe('ghp_keep');
+    expect(spawnedEnv?.RECODER_TASK_ID).toBe('t1'); // input.env passes through
+    // STRIPPED — backend secrets never reach the prompt-injectable agent:
+    for (const k of SECRETS) expect(spawnedEnv?.[k]).toBeUndefined();
+  });
+
+  it('reattach spawns with the same secret-stripped base env', async () => {
+    let spawnedEnv: NodeJS.ProcessEnv | undefined;
+    const s = createAcpSubstrate(
+      baseDeps({
+        exists: () => true,
+        processEnv: dirtyEnv,
+        spawn: opts => {
+          spawnedEnv = opts.env;
+          return fakeAgent({ loadSession: true }).proc;
+        },
+      })
+    );
+    await s.continueRun?.(
+      { ref: 'ws-1', worktreePath: '/tmp/wt/ws-1', sessionName: 'sess-1' },
+      { workspaceId: 'ws-1', worktreePath: '/tmp/wt/ws-1', prompt: 'go' }
+    );
+    expect(spawnedEnv?.PATH).toBe('/usr/bin');
+    expect(spawnedEnv?.ANTHROPIC_API_KEY).toBe('sk-ant-keep');
+    for (const k of SECRETS) expect(spawnedEnv?.[k]).toBeUndefined();
+  });
+});
+
+describe('isSecretAgentEnvKey', () => {
+  it('flags backend secrets and spares agent-needed vars', () => {
+    for (const k of [
+      'INTERNAL_SERVICE_KEY',
+      'API_KEY_HASH_SALT',
+      'DATABASE_URL',
+      'AUTH_DATABASE_URL',
+      'DIRECT_URL',
+      'BETTER_AUTH_SECRET',
+      'SESSION_SECRET',
+      'POLAR_ACCESS_TOKEN',
+      'CREEM_API_KEY_SECRET',
+      'CLOUDFLARE_API_TOKEN',
+      'HETZNER_TOKEN',
+      'REDIS_URL',
+      'SMTP_PASSWORD',
+    ])
+      expect(isSecretAgentEnvKey(k)).toBe(true);
+    for (const k of [
+      'PATH',
+      'HOME',
+      'ANTHROPIC_API_KEY',
+      'OPENAI_API_KEY',
+      'GITHUB_TOKEN',
+      'LANG',
+      'TERM',
+      'RECODER_TASK_ID',
+      'RECODER_ACP_AGENT',
+    ])
+      expect(isSecretAgentEnvKey(k)).toBe(false);
   });
 });
 
