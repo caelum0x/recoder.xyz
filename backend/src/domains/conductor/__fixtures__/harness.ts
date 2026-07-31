@@ -211,6 +211,12 @@ export class FakeSubstrate implements ConductorSubstrate {
   readonly #missingExit: number | null | undefined;
   readonly #runs = new Map<string, FakeRun>();
   #counter = 0;
+  #lastLaunchEnv: Record<string, string> | undefined;
+
+  /** Test-only: the env the most recent `launch` received (asserts env injection). */
+  lastLaunchEnv(): Record<string, string> | undefined {
+    return this.#lastLaunchEnv;
+  }
 
   constructor(options: FakeSubstrateOptions = {}) {
     this.id = options.id ?? 'tmux_worktree';
@@ -245,6 +251,7 @@ export class FakeSubstrate implements ConductorSubstrate {
   }
 
   async launch(input: SubstrateLaunchInput): Promise<SubstrateHandle> {
+    this.#lastLaunchEnv = input.env;
     const ref = `fake-${input.workspaceId}-${++this.#counter}`;
     this.#runs.set(ref, {
       command: input.command,

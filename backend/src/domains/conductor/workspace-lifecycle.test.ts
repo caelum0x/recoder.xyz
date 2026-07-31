@@ -16,7 +16,9 @@ import {
 
 describe('conductor workspace lifecycle', () => {
   it('creates + launches a workspace to running with a live substrate', async () => {
-    const { module } = composeConductor({ substrates: [new FakeSubstrate({ id: 'tmux_worktree' })] });
+    const { module } = composeConductor({
+      substrates: [new FakeSubstrate({ id: 'tmux_worktree' })],
+    });
     const principal = makePrincipal('user_alice');
 
     const result = await module.createWorkspace(makeCreateInput(), principal);
@@ -30,7 +32,10 @@ describe('conductor workspace lifecycle', () => {
 
   it('persists the created record so it is queryable by id and in the list', async () => {
     const { module } = composeConductor({ substrates: [new FakeSubstrate()] });
-    const created = await module.createWorkspace(makeCreateInput(), makePrincipal());
+    const created = await module.createWorkspace(
+      makeCreateInput(),
+      makePrincipal()
+    );
     expect(created.ok).toBe(true);
     const id = created.value!.workspaceId;
 
@@ -38,13 +43,16 @@ describe('conductor workspace lifecycle', () => {
     const list = await module.listWorkspaces();
 
     expect(fetched?.workspaceId).toBe(id);
-    expect(list.map((w) => w.workspaceId)).toContain(id);
+    expect(list.map(w => w.workspaceId)).toContain(id);
   });
 
   it('finalizes to a truthful failed record (never fabricates a launch) when no substrate is wired', async () => {
     const { module } = composeConductor({ substrates: [] });
 
-    const result = await module.createWorkspace(makeCreateInput(), makePrincipal());
+    const result = await module.createWorkspace(
+      makeCreateInput(),
+      makePrincipal()
+    );
 
     // The write was gated + performed, but with no substrate registered the launch
     // cannot succeed: the record is finalized to `failed` with a truthful error,
@@ -52,5 +60,42 @@ describe('conductor workspace lifecycle', () => {
     expect(result.value?.state).toBe('failed');
     expect(result.value?.state).not.toBe('running');
     expect(result.value?.metadata?.error).toBeTruthy();
+  });
+
+  it('injects RECODER_ACP_AGENT=codex-acp for a codex runtime on the acp substrate', async () => {
+    const acp = new FakeSubstrate({ id: 'acp' });
+    const { module } = composeConductor({ substrates: [acp] });
+
+    const res = await module.createWorkspace(
+      makeCreateInput({ substrate: 'acp', runtimeId: 'codex' }),
+      makePrincipal()
+    );
+
+    expect(res.ok).toBe(true);
+    expect(acp.lastLaunchEnv()?.RECODER_ACP_AGENT).toBe('codex-acp');
+  });
+
+  it('defaults RECODER_ACP_AGENT to claude-code-acp for a non-codex runtime on acp', async () => {
+    const acp = new FakeSubstrate({ id: 'acp' });
+    const { module } = composeConductor({ substrates: [acp] });
+
+    await module.createWorkspace(
+      makeCreateInput({ substrate: 'acp', runtimeId: 'claude_code' }),
+      makePrincipal()
+    );
+
+    expect(acp.lastLaunchEnv()?.RECODER_ACP_AGENT).toBe('claude-code-acp');
+  });
+
+  it('does not inject RECODER_ACP_AGENT for a non-acp substrate', async () => {
+    const tmux = new FakeSubstrate({ id: 'tmux_worktree' });
+    const { module } = composeConductor({ substrates: [tmux] });
+
+    await module.createWorkspace(
+      makeCreateInput({ substrate: 'tmux_worktree', runtimeId: 'codex' }),
+      makePrincipal()
+    );
+
+    expect(tmux.lastLaunchEnv()?.RECODER_ACP_AGENT).toBeUndefined();
   });
 });

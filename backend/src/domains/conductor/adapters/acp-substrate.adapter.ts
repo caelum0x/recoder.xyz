@@ -42,7 +42,7 @@
  * to that worktree — the isolation boundary is enforced, never trusted.
  */
 import path from 'node:path';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import {
   execFileSafe,
   which,
@@ -123,6 +123,14 @@ export interface CreateAcpSubstrateDeps {
    * before hard-killing the agent. Default 2000; tests inject a small value.
    */
   readonly cancelGraceMs?: number;
+  /**
+   * Recover the ACP agent binary a workspace was launched with, so `reattach` uses
+   * the SAME binary after a restart (the handle carries no env). Default: read the
+   * per-worktree marker file; injected in tests. Returns null when none was set.
+   */
+  readonly readAgentMarker?: (worktreePath: string) => string | null;
+  /** Persist the launched ACP agent binary for restart-safe reattach (default: marker file). */
+  readonly writeAgentMarker?: (worktreePath: string, agent: string) => void;
 }
 
 /** Per-handle live state — the ACP driver + its streamed output + turn status. */
@@ -178,6 +186,40 @@ export function createAcpSubstrate(
   const tornDown = new Set<string>();
   const exists: (path: string) => boolean = deps.exists ?? existsSync;
   const cancelGraceMs = deps.cancelGraceMs ?? 2000;
+
+  // Per-launch ACP agent binary: a sibling marker file next to the worktree (NOT
+  // inside it, so it never pollutes the reviewable diff) records the binary a
+  // non-default workspace was launched with, so `reattach` re-spawns the SAME
+  // agent after a restart (the handle carries no env). Default binary → no marker.
+  const markerPath = (worktreePath: string): string =>
+    `${worktreePath}.recoder-acp-agent`;
+  const readAgentMarker: (worktreePath: string) => string | null =
+    deps.readAgentMarker ??
+    (worktreePath => {
+      const p = markerPath(worktreePath);
+      try {
+        return exists(p) ? readFileSync(p, 'utf8').trim() || null : null;
+      } catch {
+        return null;
+      }
+    });
+  const writeAgentMarker: (worktreePath: string, agent: string) => void =
+    deps.writeAgentMarker ??
+    ((worktreePath, agent) => {
+      try {
+        writeFileSync(markerPath(worktreePath), agent, 'utf8');
+      } catch {
+        /* best effort — reattach falls back to the default binary */
+      }
+    });
+  const removeAgentMarker = (worktreePath: string): void => {
+    if (deps.writeAgentMarker) return; // injected store: nothing on disk to remove
+    try {
+      rmSync(markerPath(worktreePath), { force: true });
+    } catch {
+      /* best effort */
+    }
+  };
 
   const present: (bin: string) => Promise<boolean> =
     deps.probe ??
@@ -267,7 +309,10 @@ export function createAcpSubstrate(
     // worktree it ran in; without either there is nothing to reload.
     if (!sessionId || !worktreePath) return null;
     if (!exists(worktreePath)) return null;
-    const [git, agent] = await Promise.all([present('git'), present(command)]);
+    // Re-spawn the SAME agent binary the launch used (the handle carries no env),
+    // recovered from the per-worktree marker; default when none was recorded.
+    const agentBin = readAgentMarker(worktreePath) ?? command;
+    const [git, agent] = await Promise.all([present('git'), present(agentBin)]);
     if (!git || !agent) return null;
 
     const state: AcpRunState = {
@@ -280,7 +325,7 @@ export function createAcpSubstrate(
       exit: undefined, // its outcome is genuinely unknown — NEVER a fabricated 0
     };
     const driver = new AcpAgentDriver({
-      spawn: () => spawnProcess({ command, cwd: worktreePath }),
+      spawn: () => spawnProcess({ command: agentBin, cwd: worktreePath }),
       onNotification: (n: AcpNotification) => {
         // `session/load` replays the conversation history as session/update
         // notifications — the same buffering as a live turn restores the transcript.
@@ -398,9 +443,19 @@ export function createAcpSubstrate(
     },
 
     async launch(input: SubstrateLaunchInput): Promise<SubstrateHandle> {
-      const avail = await this.available();
-      if (!avail.available) {
-        throw new Error(`acp unavailable (${avail.reason})`);
+      // Per-launch agent binary: the conductor injects `RECODER_ACP_AGENT` (e.g.
+      // `codex-acp` for the codex runtime); default is `claude-code-acp`. Probe the
+      // RESOLVED binary so a missing non-default agent refuses truthfully.
+      const agentBin = input.env?.RECODER_ACP_AGENT?.trim() || command;
+      const [gitOk, agentOk] = await Promise.all([
+        present('git'),
+        present(agentBin),
+      ]);
+      if (!gitOk || !agentOk) {
+        const missing = [!gitOk && 'git', !agentOk && agentBin]
+          .filter(Boolean)
+          .join(', ');
+        throw new Error(`acp unavailable (missing: ${missing})`);
       }
       const branch = input.branch || `recoder/${input.workspaceId}`;
       const name = tmuxNameFor(input.workspaceId);
@@ -419,6 +474,10 @@ export function createAcpSubstrate(
         input.baseRef || 'HEAD',
       ]);
 
+      // Persist a NON-default binary so reattach re-spawns the same agent after a
+      // restart (the default needs no marker — reattach falls back to it).
+      if (agentBin !== command) writeAgentMarker(worktreePath, agentBin);
+
       const state: AcpRunState = {
         driver: null as unknown as AcpAgentDriver,
         output: [],
@@ -435,7 +494,7 @@ export function createAcpSubstrate(
       const driver = new AcpAgentDriver({
         spawn: () =>
           spawnProcess({
-            command,
+            command: agentBin,
             cwd: worktreePath,
             ...(input.env ? { env: { ...process.env, ...input.env } } : {}),
           }),
@@ -618,6 +677,7 @@ export function createAcpSubstrate(
           state?.worktreePath ??
           path.join(worktreeRoot, tmuxNameFor(handle.ref));
         await removeIsolation(state?.repoPath, wtPath);
+        removeAgentMarker(wtPath); // drop the sibling agent-binary marker
       }
       byRef.delete(handle.ref);
       logger.info('acp workspace torn down', { ref: handle.ref });
