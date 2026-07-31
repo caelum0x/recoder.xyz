@@ -20,6 +20,7 @@ power behind it.
 | [PRODUCT-THESIS.md](PRODUCT-THESIS.md) | The convergence thesis + locked product decisions. **Read first.** |
 | [RECODER-PRODUCT-DESIGN.md](RECODER-PRODUCT-DESIGN.md) | Design principles: clean-first, backend/frontend split, no engine names in the UI. |
 | [STATUS.md](STATUS.md) | Single source of truth for where the product is right now. |
+| [CONDUCTOR-PARITY-AND-SHIPPABILITY.md](CONDUCTOR-PARITY-AND-SHIPPABILITY.md) | Recoder vs Conductor.build parity + the "here → production multi-user" roadmap (P0/P1/P2 + critical path). |
 | [DESIGN-REFERENCE.md](DESIGN-REFERENCE.md) | Graphite / terminal-plain design system. |
 | [OWNER-RUNBOOK.md](OWNER-RUNBOOK.md) | Credential/release-gated owner actions. |
 
