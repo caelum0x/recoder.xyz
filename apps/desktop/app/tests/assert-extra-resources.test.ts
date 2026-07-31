@@ -40,7 +40,7 @@ describe("extraResources fail-loud gate", () => {
             { from: "missing/one.node", to: "native/one.node" },
             { from: "missing/two", to: "two" },
         ];
-        expect(() => assertExtraResourcesExist(entries, fixtureRoot)).toThrowError(/2 missing source path\(s\)/);
+        expect(() => assertExtraResourcesExist(entries, fixtureRoot)).toThrowError(/2 REQUIRED source\(s\) missing/);
         expect(() => assertExtraResourcesExist(entries, fixtureRoot)).toThrowError(/missing\/one\.node/);
         expect(() => assertExtraResourcesExist(entries, fixtureRoot)).toThrowError(/missing\/two/);
     });
