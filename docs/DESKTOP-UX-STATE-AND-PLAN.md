@@ -62,10 +62,11 @@ exist **twice**. The screenshots that look "broken/duplicated" (search shows the
 Recoder window *and* the recoder.xyz site; two web tiles) are this split leaking
 through. **This is the decision that gates everything else** (see §9).
 
-The cockpit also registers **only** the `board` view (`cockpit/src/panels/registry.ts:70`);
+The cockpit registered **only** the `board` view (`cockpit/src/panels/registry.ts:70`);
 its other panels (openfang, gateway/tensorzero, squads/multica, networking/ziti,
-memory, mcp) are **unregistered dead code still shipped in the bundle** — a
-standing OSS-name-leak risk.
+memory, mcp) were **unregistered dead code still shipped in the bundle** — a standing
+OSS-name-leak risk that the §9 deletion (recoder-flgn, 2026-07-31) eliminated. *(This
+row is historical — the whole `apps/desktop/cockpit/` tree is now deleted.)*
 
 ---
 

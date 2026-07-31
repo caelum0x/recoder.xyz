@@ -5,11 +5,18 @@
 > verdict; the linked docs hold the detail. Per repo policy: **truthful health,
 > never fake success.**
 
-> **Headline (2026-07-31):** Recoder is a **strong, freshly security-hardened
-> single-user product** (21 adversarially-verified vulns closed, 1,351 tests green
-> — see *Security* below) with a **code-grounded roadmap to multi-tenant launch**.
-> Multi-tenancy is **not done**: the P0 cross-tenant IDORs are being *closed, not
-> closed*. The full "here → production multi-user" path is
+> **Headline (2026-07-31, end of day):** Recoder is a **strong, security-hardened
+> product** whose **entire cross-tenant isolation surface is now owner-bound** — both P0
+> IDORs (conductor + agent-os), a **17-hole wave across 6 more domains** (memory /
+> governance / social / cloud / observability / inference), and the conductor **group
+> compare/converge** residual are all closed. **Web hardening** (security headers, CSRF,
+> credentialed-CORS guard) and **durability** (durable run/event store + event-log
+> idempotency) shipped. **Multi-tenant enablement landed backend-side** (org isolation
+> seam scopes by `orgId` when present; auto-reconcile; solo-mode boot guard). The
+> **remaining ship-blockers are OWNER decisions** — canonical trunk, prod deploy, the
+> web-side auth-model prod-validation (Next/Better-Auth cross-subdomain `orgId` + the
+> `user`/`users` reconciliation, owner-script-gated), and secret rotation — **plus one
+> XL** (billing-provider unification). The full "here → production multi-user" path is
 > **[CONDUCTOR-PARITY-AND-SHIPPABILITY.md](./CONDUCTOR-PARITY-AND-SHIPPABILITY.md)**;
 > the fixed-vs-residual security picture is
 > **[SECURITY-POSTURE.md](./SECURITY-POSTURE.md)**.
@@ -35,7 +42,7 @@ The finish line is a **3-step convergence loop**:
 | Area | State | Verdict |
 |---|---|---|
 | **Backend** (`backend/`) | ~90% | Greenfield 15-domain spine is real (old 12.8k-line monolith deleted). All 12 build phases wired; `tsc` 0 · 2,554 tests green (re-verified with the #22 install fix, 2026-07-25). `dist/` may lag until rebuilt. |
-| **Desktop** (`apps/desktop`) | ~80% | Core loop (launch N agents → diff → merge) + convergence/evidence all work on arm64. Cockpit torn down. Sign-in is now optional/offline-safe, Session/Approvals/Memory fixed, **Board wired** (task-driven pick-an-issue→launch). Remaining gaps: arm64-only unsigned build, dead-by-design engines (Lance, Python sidecars), a few retired infra views still registered (OSS-name scrub). `DESKTOP-UX-STATE-AND-PLAN.md` is stale — most gaps it lists shipped after its date. |
+| **Desktop** (`apps/desktop`) | ~82% | Core loop (launch N agents → diff → merge) + convergence/evidence all work on arm64. Cockpit torn down. Sign-in is now optional/offline-safe, Session/Approvals/Memory fixed, **Board wired** (task-driven pick-an-issue→launch). This session: **mid-run "needs input" notification/badge** + **first-run agent-install** setup surface (`1e5ee10f6`), diff-comment→agent review loop, onboarding "We found your setup" probe. Remaining gaps: arm64-only unsigned build, dead-by-design engines (Lance, Python sidecars), embedded-path identity dropping name/plan (#42). See `DESKTOP-UX-STATE-AND-PLAN.md` §8 for the live tracked items (its §0–§7 flaw log is provenance, framed as historical). |
 | **Website** (`app/`) | ~90% | 110 pages + 169 API routes, live in prod. Now installs + builds cleanly from the monorepo (#22 fixed 2026-07-25 — full `next build` produces BUILD_ID + standalone). Remaining gaps: Phase A auth migration written-but-unrun, dual auth seams. |
 | **Convergence thesis** | 3 of 3 shipped | Parallel worktrees ✅; converge engine ✅ (`domains/conductor/converge/` — whole-file pick or `git merge-file` 3-way synthesis); governed evidence-merge ✅ (`domains/conductor/evidence/convergence-evidence.ts` + framework-mapped export + Ed25519 signing). Remaining refinement: AST/semantic (not line-level) same-file merge. |
 
@@ -67,33 +74,51 @@ the backend/packages moat. **All fixed** (each TDD'd, failing test first), backe
   idempotency, `db_schema_inspect` privilege gate, FROM-allowlist comma-join bypass,
   KvStore silent write-drop, migration split-on-`;` in literals.
 
-**Scope caveat (truthful):** the sweep was scoped to the moat
-(identity/api/billing/agent-os/conductor/persistence/engines) — **not exhaustive**.
-A full pre-launch security pass is still warranted before multi-tenant cloud. See
-**[SECURITY-POSTURE.md](./SECURITY-POSTURE.md)** for the residual-risk list and the
-before-launch checklist.
+**Second wave — cross-tenant isolation + web hardening (same day):** beyond the 21-vuln
+sweep, the parity audit's isolation defects were then closed as their own TDD'd tranche:
+both P0 IDORs (conductor 28-route guard + agent-os `space-authz`; non-owners get a
+404-not-403 with no existence oracle — `51c7ee66d`); a **17-hole IDOR wave** across
+memory/governance/social/cloud/observability/inference (`00a12168d`); the conductor
+**group compare/converge** residual (`365fc1c92`); **web hardening** (CSP/HSTS/nosniff/
+frame-deny headers `51c7ee66d`; CSRF + credentialed-CORS guard `365fc1c92`); the **durable
+run/event store** (`fd6621902`) + **event-log idempotency** (`7cceb681e`); and the
+**solo-mode boot guard** (`51c7ee66d`). Remaining IDOR tail: `interop` + `edge` domains.
+Full fixed-vs-residual detail in **[SECURITY-POSTURE.md](./SECURITY-POSTURE.md)** §1.2.
 
-## Multi-tenant hardening (in progress)
+**Scope caveat (truthful):** the sweeps were scoped (moat +
+identity/api/billing/agent-os/conductor/persistence/engines + the 6 IDOR domains) — **not
+exhaustive**. A full **independent** pre-launch security pass is still warranted before
+multi-tenant cloud. See **[SECURITY-POSTURE.md](./SECURITY-POSTURE.md)** for the
+residual-risk list and the before-launch checklist.
 
-Recoder today is a **safe single-user build**, not yet a safe multi-tenant product.
+## Multi-tenant hardening (isolation now closed; enablement owner-gated)
+
 The parity+shippability audit (**[CONDUCTOR-PARITY-AND-SHIPPABILITY.md](./CONDUCTOR-PARITY-AND-SHIPPABILITY.md)**,
-47 features mapped / 46 gaps) is the roadmap. The **P0 blockers** being worked:
+47 features mapped / 46 gaps) is the roadmap. **What landed this session:**
 
-1. **Cross-tenant IDOR** — conductor workspaces + agent-os CRUD lack owner/tenant
-   scoping on read/write (any authed user could list/diff/steer/**merge** another
-   tenant's workspace by guessing an id). *In progress:* the conductor create path now
-   stamps `createdBy` from `req.principal`; full read/write tenant-scoping + an indexed
-   `tenant_id` column are the fix (P0 #1/#2, #41).
-2. **Entitlement / billing coherence** — paying customers read as *Free* (plan-ID
-   drift `pro-monthly`→?); two disconnected billing systems (the surface that *sells*
-   ≠ the one that *enforces*). (P0 #3/#4)
-3. **Org identity + RBAC + auto-provisioning** — isolation primitives exist but are
-   wired to nothing; web sessions carry no `orgId`. (P1 #9/#10/#11)
-4. **Release + CI** — no canonical trunk (origin/main frozen ~2 months); all 33
-   CI/CD workflows disabled → zero gate enforcement. *Owner-gated.* (P0 #5/#6)
+1. **✅ Cross-tenant isolation — closed.** Conductor workspaces (single `requireWorkspaceAccess`
+   guard over 28 routes + list filtering; non-owner 404-not-403), agent-os CRUD +
+   `PUT /spaces/:id/policy` (`space-authz`, owner from principal never body), a **17-hole wave**
+   across memory/governance/social/cloud/observability/inference, and the conductor **group
+   compare/converge** residual are all owner-bound (P0 #1/#2, #14; `51c7ee66d`, `00a12168d`,
+   `365fc1c92`). Tail: `interop` + `edge` still to IDOR-review; an indexed `tenant_id` column
+   (#41) is a scale refinement (scoping is enforced in the guard/query layer today).
+2. **✅ Entitlement coherence — the Free-misread is fixed.** Plan-alias (`pro-monthly/pro-yearly→pro`,
+   unknown→`free`), enforced-source quotas, and `subscription/manage` 402-refusing paid-with-no-payment
+   (P0 #3, #17/#18; `51c7ee66d`). The **durable billing fix — unifying the two providers (#4) — is
+   the one XL that remains.**
+3. **🟡 Org identity + RBAC — backend seam landed, web side owner-gated.** The isolation guards
+   scope by `orgId` when a principal carries one, and the org service (createOrg/membership/
+   principal orgId assembly) exists. **Remaining (owner-script-gated):** stamp `orgId` on the
+   primary **Next/Better-Auth cross-subdomain web session**, auto-provision a personal org on
+   first login, and reconcile the `user`/`users` split (P1 #9/#10/#11, #40). This is the
+   auth-model prod-validation blocker.
+4. **Release + CI — owner-gated.** No canonical trunk (origin/main frozen ~2 months); all 33
+   CI/CD workflows disabled → zero gate enforcement (P0 #5/#6).
 
-These are hardening steps **toward** multi-tenant; none is complete. Do not read this
-as "multi-tenant done."
+Net: the **isolation-correctness** work that separated "single-user build" from "multi-tenant-safe"
+is now **done**; what remains is **owner-gated release/auth-model/secret work + the XL billing
+unification**, not more app-security code.
 
 ## Blockers to "fully done"
 
@@ -147,3 +172,18 @@ parity-roadmap links above; fixed the dead `RECODER-NEXT-PHASE.md` link (now und
 `archive/`); scrubbed stale present-tense "cockpit" references from the live docs
 (the Preact cockpit SPA was deleted 2026-07-31, recoder-flgn); added
 **[SECURITY-POSTURE.md](./SECURITY-POSTURE.md)** to the index.
+
+**2026-07-31 end-of-day pass:** reflected the isolation/hardening tranche that landed
+after the earlier pass — both P0 IDORs, the 17-hole 6-domain IDOR wave + group residual,
+auto-reconcile, durable run/event store + event-log idempotency, solo-mode boot guard,
+security headers, CSRF/CORS guard, billing plan-alias/quota/no-free-paid, desktop
+needs-input + agent-install, diff-comment→agent, onboarding probe, plan-limits drift.
+Reframed the multi-tenant section from "in progress" to "isolation closed; enablement
+owner-gated," and marked the corresponding ✅ items in **CONDUCTOR-PARITY-AND-SHIPPABILITY.md**
+and **SECURITY-POSTURE.md** §1.2 with commit refs. Truthful residuals kept: the web-side
+auth-model prod-validation (Next/Better-Auth `orgId` + `user`/`users` reconciliation) and
+`interop`/`edge` IDOR review are owner-gated; billing-provider unification (#4) remains, but
+dunning-grace + overage upgrade-CTA (#29/#30) are now code-landed; A2A ed25519 (#27) is now
+enforced for **external ingress** (HMAC-only untrusted requests refused), internal per-actor
+enforcement pending; backend org auto-provisioning + `principal.orgId` landed (web session
+`orgId` still owner-gated).
