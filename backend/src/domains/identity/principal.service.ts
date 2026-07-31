@@ -24,14 +24,20 @@ import type { DeviceTokenValidator } from './ports/device-flow.port.js';
 import type { AuthSessionVerifier } from './adapters/better-auth.adapter.js';
 import type { Credential, Principal } from './types.js';
 import type { IdentityConfig } from './config.js';
+import { SOLO_OWNER_USER_ID } from '../../shared/solo-identity.js';
 
 /** The stable service id an internal-key caller is attributed to. */
 export const INTERNAL_SERVICE_USER_ID = 'internal-service';
 /** The sentinel id of the anonymous fallback identity. */
 export const ANONYMOUS_USER_ID = 'anonymous';
 
-/** Stable owner id for the single local user in RECODER_SOLO_MODE (desktop). */
-export const SOLO_OWNER_USER_ID = 'recoder-solo-owner';
+/**
+ * Stable owner id for the single local user in RECODER_SOLO_MODE (desktop).
+ * Defined in `shared/` so cross-domain consumers import the value from there (a
+ * domain must not import a runtime value from another domain internal);
+ * re-exported here for identity's own consumers.
+ */
+export { SOLO_OWNER_USER_ID };
 
 /** Scopes granted to a verified internal service caller. */
 const INTERNAL_SCOPES: readonly string[] = ['internal', 'read', 'write', 'admin'];
