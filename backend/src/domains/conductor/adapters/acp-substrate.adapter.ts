@@ -16,6 +16,16 @@
  *    same git-native diff the tmux substrate uses works verbatim);
  *  - `teardown`= stop the agent + `git worktree remove`.
  *
+ * RESTART-SURVIVABLE: the agent process + session live in an in-memory `byRef`
+ * map, so a backend restart drops them. Because launch returns the agent's ACP
+ * `sessionId` as the handle's `sessionName` (the engine persists it to the
+ * Workspace record), `capture`/`alive`/`exitCode`/`continueRun` can LAZILY
+ * reattach a persisted handle: spawn a fresh agent → `initialize` → `session/load`
+ * (v1 resume; the agent replays history into the buffer). Reattach is GATED on the
+ * agent advertising `loadSession`; when it can't (capability absent, worktree gone,
+ * agent/git missing), it degrades truthfully to "lost" (`null`) rather than
+ * fabricating a live handle, and the interrupted turn's outcome stays `undefined`.
+ *
  * Config-injected (NO `process.env` read here — ARCHITECTURE §10.8); the spawn +
  * exec + permission seams are injectable so it is unit-tested with a fake agent
  * and fake git. Degrade-truthful: an unavailable substrate refuses to launch, a
@@ -93,17 +103,21 @@ export interface CreateAcpSubstrateDeps {
   ) => Promise<AcpPermissionDecision> | AcpPermissionDecision;
   /** PATH-presence probe (default: `which`); injected in tests to avoid a real binary. */
   readonly probe?: (bin: string) => Promise<boolean>;
+  /** Filesystem-presence probe for the worktree (default: `existsSync`); injected in tests. */
+  readonly exists?: (path: string) => boolean;
 }
 
 /** Per-handle live state — the ACP driver + its streamed output + turn status. */
 interface AcpRunState {
   readonly driver: AcpAgentDriver;
   readonly output: string[];
-  readonly repoPath: string;
+  /** Repo the worktree belongs to; '' when unknown (reattach) → teardown degrades to rm. */
+  repoPath: string;
   readonly worktreePath: string;
   sessionId: string;
   done: boolean;
-  exit: number | null;
+  /** `number` = final code, `null` = clean-but-unset, `undefined` = unknown (interrupted). */
+  exit: number | null | undefined;
 }
 
 /** Best-effort text extraction from a `session/update` notification (any nested `text`). */
@@ -136,6 +150,10 @@ export function createAcpSubstrate(
   const spawnProcess = deps.spawn ?? (opts => makeAcpProcess(opts));
 
   const byRef = new Map<string, AcpRunState>();
+  // In-flight reattach promises, keyed by workspaceId, so concurrent poll callers
+  // (capture/alive/exitCode all fire on the same tick) trigger ONE re-spawn, not N.
+  const reattaching = new Map<string, Promise<AcpRunState | null>>();
+  const exists: (path: string) => boolean = deps.exists ?? existsSync;
 
   const present: (bin: string) => Promise<boolean> =
     deps.probe ??
@@ -153,6 +171,125 @@ export function createAcpSubstrate(
     if (state.output.length > MAX_BUFFER_LINES) {
       state.output.splice(0, state.output.length - MAX_BUFFER_LINES);
     }
+  }
+
+  /** Build the agent→client request handler bound to a worktree (permission + fs). */
+  function makeOnRequest(workspaceId: string, worktreePath: string) {
+    return createAcpClientRequestHandler({
+      workspaceId,
+      workspaceRoot: worktreePath,
+      ...(deps.resolvePermission
+        ? { resolvePermission: deps.resolvePermission }
+        : {}),
+      warn: (m, meta) => logger.warn(m, { workspaceId, meta }),
+    });
+  }
+
+  /**
+   * Re-establish a workspace's ACP session after a backend restart (the in-memory
+   * `byRef` map is gone). Spawns a FRESH agent, handshakes, and `session/load`s the
+   * persisted sessionId — GATED on the agent advertising `loadSession`. Returns the
+   * rehydrated state, or `null` when reattach is impossible (no sessionId, worktree
+   * removed, agent/git absent, or the agent can't reload) — truthfully "lost", never
+   * a fabricated live handle. The interrupted prior turn is NOT resumed: the session
+   * is idle (`done`, `exit=undefined`) and ready for the next `continueRun`.
+   */
+  async function reattach(
+    handle: SubstrateHandle
+  ): Promise<AcpRunState | null> {
+    const sessionId = handle.sessionName;
+    const worktreePath = handle.worktreePath;
+    // Reattach needs the persisted ACP sessionId (carried as sessionName) AND the
+    // worktree it ran in; without either there is nothing to reload.
+    if (!sessionId || !worktreePath) return null;
+    if (!exists(worktreePath)) return null;
+    const [git, agent] = await Promise.all([present('git'), present(command)]);
+    if (!git || !agent) return null;
+
+    const state: AcpRunState = {
+      driver: null as unknown as AcpAgentDriver,
+      output: [],
+      repoPath: '',
+      worktreePath,
+      sessionId,
+      done: true, // the prior turn died with the old process — nothing is running
+      exit: undefined, // its outcome is genuinely unknown — NEVER a fabricated 0
+    };
+    const driver = new AcpAgentDriver({
+      spawn: () => spawnProcess({ command, cwd: worktreePath }),
+      onNotification: (n: AcpNotification) => {
+        // `session/load` replays the conversation history as session/update
+        // notifications — the same buffering as a live turn restores the transcript.
+        appendOutput(state, extractUpdateText(n.params));
+        appendOutput(state, structuredUpdateLine(n.params));
+      },
+      onRequest: makeOnRequest(handle.ref, worktreePath),
+      warn: m => logger.warn(m, { workspaceId: handle.ref }),
+    });
+    (state as { driver: AcpAgentDriver }).driver = driver;
+
+    try {
+      const { loadSession } = await driver.start();
+      if (!loadSession) {
+        driver.stop();
+        logger.warn(
+          'acp reattach unsupported — agent has no loadSession capability',
+          {
+            workspaceId: handle.ref,
+          }
+        );
+        return null;
+      }
+      // Best-effort: recover the owning repo so teardown can `git worktree remove`
+      // (else it degrades to an rm of the worktree dir).
+      try {
+        const r = await exec('git', [
+          '-C',
+          worktreePath,
+          'rev-parse',
+          '--path-format=absolute',
+          '--git-common-dir',
+        ]);
+        const commonDir = r.stdout.trim();
+        if (commonDir) state.repoPath = path.dirname(commonDir);
+      } catch {
+        /* leave repoPath empty — teardown degrades to a directory remove */
+      }
+      await driver.loadSession(sessionId, worktreePath);
+      byRef.set(handle.ref, state);
+      logger.info('acp workspace reattached via session/load', {
+        workspaceId: handle.ref,
+        sessionId,
+        worktreePath,
+      });
+      return state;
+    } catch (err) {
+      try {
+        driver.stop();
+      } catch {
+        /* best effort */
+      }
+      logger.warn('acp reattach failed (best effort)', {
+        workspaceId: handle.ref,
+        err: message(err),
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Resolve the live state for a handle: the in-memory entry, or — after a restart
+   * emptied `byRef` — a lazily reattached session (deduped across concurrent callers).
+   */
+  async function resolve(handle: SubstrateHandle): Promise<AcpRunState | null> {
+    const live = byRef.get(handle.ref);
+    if (live) return live;
+    let inflight = reattaching.get(handle.ref);
+    if (!inflight) {
+      inflight = reattach(handle).finally(() => reattaching.delete(handle.ref));
+      reattaching.set(handle.ref, inflight);
+    }
+    return inflight;
   }
 
   return {
@@ -221,15 +358,7 @@ export function createAcpSubstrate(
       // The agent→client request handler, bound to THIS workspace's worktree:
       // permission decisions (policy or injected gate) + path-CONTAINED fs reads/
       // writes (the agent may delegate them per the advertised fs capabilities).
-      const onRequest = createAcpClientRequestHandler({
-        workspaceId: input.workspaceId,
-        workspaceRoot: worktreePath,
-        ...(deps.resolvePermission
-          ? { resolvePermission: deps.resolvePermission }
-          : {}),
-        warn: (m, meta) =>
-          logger.warn(m, { workspaceId: input.workspaceId, meta }),
-      });
+      const onRequest = makeOnRequest(input.workspaceId, worktreePath);
       const driver = new AcpAgentDriver({
         spawn: () =>
           spawnProcess({
@@ -276,17 +405,27 @@ export function createAcpSubstrate(
         workspaceId: input.workspaceId,
         worktreePath,
         branch,
+        sessionId: state.sessionId,
       });
-      return { ref: input.workspaceId, worktreePath, sessionName: name };
+      // Carry the agent's sessionId as `sessionName` — the engine persists it to the
+      // workspace record, so it survives a restart and drives `session/load` on reattach.
+      return {
+        ref: input.workspaceId,
+        worktreePath,
+        sessionName: state.sessionId,
+      };
     },
 
     async continueRun(
       handle: SubstrateHandle,
       input: ContinueRunInput
     ): Promise<SubstrateHandle> {
-      const state = byRef.get(handle.ref);
+      // Resolve reattaches after a restart, so a continued turn survives one.
+      const state = await resolve(handle);
       if (!state)
-        throw new Error('acp continueRun requires a live launched session');
+        throw new Error(
+          'acp continueRun requires a live or reattachable session'
+        );
       // ACP is in-process style — it accepts a rendered `prompt`; fall back to the
       // shell `command` field so either launch shape can drive the next turn.
       const instruction = input.prompt ?? input.command;
@@ -316,24 +455,24 @@ export function createAcpSubstrate(
       handle: SubstrateHandle,
       lines = 200
     ): Promise<string | null> {
-      const state = byRef.get(handle.ref);
+      const state = await resolve(handle);
       if (!state) return null;
       const tail = state.output.slice(-lines).join('\n').trimEnd();
       return tail ? tail + '\n' : '';
     },
 
     async alive(handle: SubstrateHandle): Promise<boolean> {
-      const state = byRef.get(handle.ref);
+      const state = await resolve(handle);
       return state ? !state.done : false;
     },
 
     async exitCode(
       handle: SubstrateHandle
     ): Promise<number | null | undefined> {
-      const state = byRef.get(handle.ref);
-      if (!state) return null; // gone
+      const state = await resolve(handle);
+      if (!state) return null; // gone / not reattachable
       if (!state.done) return undefined; // still running — unknown, NEVER 0
-      return state.exit;
+      return state.exit; // undefined here = interrupted (reattached), still unknown
     },
 
     async diff(
@@ -390,7 +529,7 @@ export function createAcpSubstrate(
               err: message(err),
             });
           }
-        } else if (existsSync(wtPath)) {
+        } else if (exists(wtPath)) {
           try {
             rmSync(wtPath, { recursive: true, force: true });
           } catch {

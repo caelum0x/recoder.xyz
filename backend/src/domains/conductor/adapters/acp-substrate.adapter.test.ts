@@ -35,10 +35,13 @@ function fakeAgent(opts?: {
   updateText?: string;
   stopReason?: string;
   sessionId?: string;
+  /** Advertise the `loadSession` capability at initialize (enables reattach). */
+  loadSession?: boolean;
 }) {
   const text = opts?.updateText ?? 'edited src/app.ts';
   const stopReason = opts?.stopReason ?? 'end_turn';
   const sessionId = opts?.sessionId ?? 'sess-1';
+  const loadSession = opts?.loadSession ?? false;
   let onData: ((chunk: string) => void) | null = null;
   let onExit: ((code: number | null) => void) | null = null;
   let killed = false;
@@ -46,21 +49,32 @@ function fakeAgent(opts?: {
   const deliver = (msg: Parameters<typeof encodeAcpMessage>[0]): void => {
     queueMicrotask(() => onData?.(encodeAcpMessage(msg)));
   };
+  const streamText = (): void =>
+    deliver(
+      makeNotification('session/update', {
+        sessionId,
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text },
+        },
+      })
+    );
   const handle = (req: AcpRequest): void => {
     if (req.method === 'initialize')
-      deliver(makeResponse(req.id, { protocolVersion: 1 }));
-    else if (req.method === 'session/new')
-      deliver(makeResponse(req.id, { sessionId }));
-    else if (req.method === 'session/prompt') {
       deliver(
-        makeNotification('session/update', {
-          sessionId,
-          update: {
-            sessionUpdate: 'agent_message_chunk',
-            content: { type: 'text', text },
-          },
+        makeResponse(req.id, {
+          protocolVersion: 1,
+          agentCapabilities: { loadSession },
         })
       );
+    else if (req.method === 'session/new')
+      deliver(makeResponse(req.id, { sessionId }));
+    else if (req.method === 'session/load') {
+      // v1 resume: replay the conversation as a session/update, then respond.
+      streamText();
+      deliver(makeResponse(req.id, {}));
+    } else if (req.method === 'session/prompt') {
+      streamText();
       deliver(makeResponse(req.id, { stopReason }));
     }
   };
@@ -301,6 +315,116 @@ describe('createAcpSubstrate', () => {
     expect(again?.ref).toBe('ws-1');
     await flush();
     expect(await s.exitCode?.(handle)).toBe(0);
+  });
+});
+
+describe('createAcpSubstrate — reattach after a backend restart', () => {
+  it('persists the ACP sessionId as the handle sessionName (state of record)', async () => {
+    const s = createAcpSubstrate(
+      baseDeps({ spawn: () => fakeAgent({ sessionId: 'sess-persist' }).proc })
+    );
+    const handle = await s.launch(launchInput);
+    // The engine persists handle.sessionName → workspace.sessionName, so the ACP
+    // sessionId survives a restart and can drive session/load on reattach.
+    expect(handle.sessionName).toBe('sess-persist');
+  });
+
+  it('reattaches via session/load using the persisted sessionId + worktree', async () => {
+    // A FRESH substrate = an empty in-memory byRef map = a backend restart. The
+    // worktree still exists on disk (exists: true) and the agent can reload.
+    const s = createAcpSubstrate(
+      baseDeps({
+        exists: () => true,
+        spawn: () =>
+          fakeAgent({
+            loadSession: true,
+            sessionId: 'sess-1',
+            updateText: 'replayed history',
+          }).proc,
+      })
+    );
+    const handle = {
+      ref: 'ws-1',
+      worktreePath: '/tmp/wt/ws-1',
+      sessionName: 'sess-1',
+    };
+    // capture lazily reattaches: spawn → initialize → session/load (replays text).
+    const out = await s.capture(handle);
+    expect(out).toContain('replayed history');
+    // No turn is running after a restart → alive is false, and the interrupted
+    // turn's outcome is UNKNOWN (undefined), NEVER a fabricated 0.
+    expect(await s.alive(handle)).toBe(false);
+    expect(await s.exitCode?.(handle)).toBeUndefined();
+  });
+
+  it('continueRun drives a fresh turn on the reattached session', async () => {
+    const s = createAcpSubstrate(
+      baseDeps({
+        exists: () => true,
+        spawn: () => fakeAgent({ loadSession: true, sessionId: 'sess-1' }).proc,
+      })
+    );
+    const handle = {
+      ref: 'ws-1',
+      worktreePath: '/tmp/wt/ws-1',
+      sessionName: 'sess-1',
+    };
+    const again = await s.continueRun?.(handle, {
+      workspaceId: 'ws-1',
+      worktreePath: handle.worktreePath,
+      prompt: 'keep going',
+    });
+    expect(again?.ref).toBe('ws-1');
+    await flush();
+    // The reattached session ran a clean turn → truthful success.
+    expect(await s.exitCode?.(handle)).toBe(0);
+  });
+
+  it('does NOT reattach (run stays lost) when the agent lacks loadSession', async () => {
+    const s = createAcpSubstrate(
+      baseDeps({
+        exists: () => true,
+        spawn: () =>
+          fakeAgent({ loadSession: false, sessionId: 'sess-1' }).proc,
+      })
+    );
+    const handle = {
+      ref: 'ws-1',
+      worktreePath: '/tmp/wt/ws-1',
+      sessionName: 'sess-1',
+    };
+    expect(await s.capture(handle)).toBeNull();
+    expect(await s.alive(handle)).toBe(false);
+    expect(await s.exitCode?.(handle)).toBeNull();
+  });
+
+  it('does NOT reattach when the worktree no longer exists', async () => {
+    const s = createAcpSubstrate(
+      baseDeps({
+        exists: () => false,
+        spawn: () => fakeAgent({ loadSession: true }).proc,
+      })
+    );
+    expect(
+      await s.capture({
+        ref: 'ws-1',
+        worktreePath: '/tmp/wt/ws-1',
+        sessionName: 'sess-1',
+      })
+    ).toBeNull();
+  });
+
+  it('does NOT reattach a handle with no persisted sessionId', async () => {
+    const s = createAcpSubstrate(
+      baseDeps({
+        exists: () => true,
+        spawn: () => fakeAgent({ loadSession: true }).proc,
+      })
+    );
+    // No sessionName on the handle → nothing to reload → truthful miss.
+    expect(
+      await s.capture({ ref: 'ws-1', worktreePath: '/tmp/wt/ws-1' })
+    ).toBeNull();
   });
 });
 

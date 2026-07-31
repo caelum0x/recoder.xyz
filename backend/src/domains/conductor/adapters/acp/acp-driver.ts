@@ -50,18 +50,20 @@ export class AcpAgentDriver {
   }
 
   /** Spawn the process, wire stdio, and complete the ACP `initialize` handshake. */
-  async start(): Promise<{ protocolVersion: number }> {
+  async start(): Promise<{ protocolVersion: number; loadSession: boolean }> {
     if (this.proc) {
       throw new Error('acp driver already started');
     }
     const proc = this.deps.spawn();
     const client = new AcpClient({
-      send: (line) => proc.write(line),
+      send: line => proc.write(line),
       ...(this.deps.onRequest ? { onRequest: this.deps.onRequest } : {}),
-      ...(this.deps.onNotification ? { onNotification: this.deps.onNotification } : {}),
+      ...(this.deps.onNotification
+        ? { onNotification: this.deps.onNotification }
+        : {}),
       ...(this.deps.warn ? { warn: this.deps.warn } : {}),
     });
-    proc.onData((chunk) => client.feed(chunk));
+    proc.onData(chunk => client.feed(chunk));
     proc.onExit(() => {
       this.exited = true;
       client.rejectAll('acp agent process exited');
@@ -71,13 +73,24 @@ export class AcpAgentDriver {
     const result = (await client.request('initialize', {
       protocolVersion: ACP_PROTOCOL_VERSION,
       clientCapabilities: { fs: { readTextFile: true, writeTextFile: true } },
-    })) as { protocolVersion?: number } | null;
-    return { protocolVersion: result?.protocolVersion ?? ACP_PROTOCOL_VERSION };
+    })) as {
+      protocolVersion?: number;
+      agentCapabilities?: { loadSession?: boolean };
+    } | null;
+    return {
+      protocolVersion: result?.protocolVersion ?? ACP_PROTOCOL_VERSION,
+      // Whether this agent can reload a persisted session in a FRESH process — the
+      // precondition for reattaching a workspace after a backend restart.
+      loadSession: result?.agentCapabilities?.loadSession === true,
+    };
   }
 
   /** Open a new session rooted at `cwd`; returns the agent's sessionId. */
   async newSession(cwd: string): Promise<string> {
-    const result = (await this.activeClient().request('session/new', { cwd, mcpServers: [] })) as {
+    const result = (await this.activeClient().request('session/new', {
+      cwd,
+      mcpServers: [],
+    })) as {
       sessionId?: string;
     } | null;
     const sessionId = result?.sessionId;
@@ -85,6 +98,20 @@ export class AcpAgentDriver {
       throw new Error('acp session/new returned no sessionId');
     }
     return sessionId;
+  }
+
+  /**
+   * Reload an existing session into THIS (freshly spawned) process — the ACP v1
+   * `session/load`. The agent replays the prior conversation as `session/update`
+   * notifications before this resolves, so the reattached session is ready for the
+   * next `prompt`. Only valid when the agent advertised `loadSession` at start().
+   */
+  async loadSession(sessionId: string, cwd: string): Promise<void> {
+    await this.activeClient().request('session/load', {
+      sessionId,
+      cwd,
+      mcpServers: [],
+    });
   }
 
   /** Send a user turn; resolves with the agent's stop reason when the turn ends. */
