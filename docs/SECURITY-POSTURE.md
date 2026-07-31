@@ -95,7 +95,8 @@ prod-validation, CI/secret work, billing unification, and infra hardening**.
 
 | Gap | Detail | ID | State |
 |---|---|---|---|
-| Cross-tenant IDOR (conductor / agent-os / 6 domains / groups) | The read/write cross-tenant surface. | P0 #1/#2 · P1 #14 | **✅ Fixed** (§1.2) — except `interop` + `edge` domains still to be IDOR-reviewed. |
+| Cross-tenant IDOR (conductor / agent-os / 6 domains / groups) | The read/write cross-tenant surface. | P0 #1/#2 · P1 #14 | **✅ Fixed** (§1.2). |
+| Cross-tenant IDOR (`interop` + `edge`) | The last two of the original 8 domains, audited via an adversarial find→verify sweep. **Two confirmed-reachable holes fixed:** A2A task ownership bound to the verified ed25519 signer instead of a spoofable `params.userId` (`interop-wire`), and `/internal/persistence/*` gated behind `requireInternal` (was unauthenticated — full schema disclosure + migration trigger). | audit `wrxr15ae9` | **✅ Fixed** (2 holes) — one **residual filed** (`recoder-xiqj`, governance approval-clearance principal-binding: real gap, doubtful reach, needs a policy decision). |
 | Indexed `tenant_id` | Scoping is enforced in the **guard/query layer** (principal/orgId-bound); a dedicated **indexed** `tenant_id` column for SQL-level filtering at scale is a refinement. | P2 #41 | **🟡 Partial** — enforced in-app; indexed column pending. |
 | Org identity — web side | Backend seam scopes by `orgId` when a principal carries one, and **backend auto-provisioning is committed** (`OrgProvisioningService` per-owner default org + `principal.orgId`). **Remaining (owner-gated):** stamp `orgId` on the primary **Next/Better-Auth** cross-subdomain session, provision on first web login, reconcile the `user`/`users` split (#40). | P1 #9/#10/#11 | **🟡 Backend auto-provisioning landed, web session owner-gated.** |
 
