@@ -15,7 +15,7 @@ Do these in order; each links to its detailed section. Steps marked **[you]** ne
 
 1. **[you] Pick the canonical trunk** (`recoder-mhyt`). `origin/main` is frozen ~2 months and has **diverged structurally** from `feat/enterprise-s0-p0` (a prior dry-run showed 547 add/add + modify/delete conflicts) — a normal merge is destructive. **Decide:** either (a) promote `feat/enterprise-s0-p0` to be the new `main` (`git branch -f main feat/enterprise-s0-p0` after review, force-publish), or (b) hand-drive the conflict resolution. This is a one-time repo-structure decision only you can make. Everything below assumes the shipped branch is the trunk.
 2. **✅ Website install/build — RESOLVED, no longer a blocker** (verified 2026-08-01). `app` is a pnpm-workspace member (`pnpm-workspace.yaml`), the npm `package-lock.json` is gone, `@recoder/*` `workspace:*` deps resolve, and `app/node_modules/.bin` is fully linked (`next`/`prisma`/`tsc`/`vitest` present ⇒ the historical `_linkBins` "Invalid Version" crash does **not** reproduce). `next@16.2.6` resolves, `tsc` 0, 436 tests pass. Nothing to decide here.
-3. **[you] Auth-model prod-validation** (§5) — the multi-tenant go-live gate: run the seam green in non-prod (`sso-logout-matrix`, `auth-email-reset-e2e`, `cli-device-flow-e2e`), stamp `orgId` on the Next/Better-Auth cross-subdomain session, run the `users→user` backfill on a **backup** of `recoder_main`, verify counts. Unblocks #42 (real name/plan on desktop) and org-tenant isolation end-to-end.
+3. **[you] Auth-model prod-validation** (§5) — the multi-tenant go-live gate: run the seam green in non-prod (`sso-logout-matrix`, `auth-email-reset-e2e`, `cli-device-flow-e2e`), stamp `orgId` on the Next/Better-Auth cross-subdomain session, run the `users→user` backfill on a **backup** of `recoder_main`, verify counts. Unblocks org-tenant isolation end-to-end. (#42 desktop identity is already resolved independently — the device flow carries real name/email/plan.)
 4. **[you] Billing — cut over to Creem** (§9) — set `BILLING_PROVIDER=creem` + the Creem keys; point the website checkout/webhook at the backend projection; verify a real test purchase unlocks capability. The backend is already Creem-ready (real adapter + registry); this is config + the website proxy + your Creem product IDs.
 5. **[you] Rotate secrets** (§10) — rotate anything that ever touched git history / the compromised box before opening to users.
 6. **[you] Sign + ship the desktop `.dmg`** (§1) — Apple cert; unsigned build already passes end-to-end.
@@ -58,10 +58,10 @@ CSC_LINK=<your-cert.p12> CSC_KEY_PASSWORD=<pw> pnpm exec electron-builder -c ele
   plist parsing (`plist@3.1.0` calls `parseFromString` with no mimeType; 0.9.x rejects
   it). Now constrained to `>=0.8.12 <0.9.0` (→ 0.8.13). If a future install re-floats
   it, packaging dies with a `DOMParser.parseFromString ... mimeType "undefined"` error.
-- A clean `pnpm install` currently crashes in pnpm's bin-linking dedup (`Invalid
-  Version` in `_linkBins`) — the pre-existing #22 workspace drift (a package with an
-  empty `version`). The lockfile here was regenerated with `pnpm install --lockfile-only`
-  (which skips bin-linking). Fixing the crash is part of task #22.
+- The historical `_linkBins` "Invalid Version" crash (#22) **no longer reproduces**
+  (verified 2026-08-01): `app` is a pnpm-workspace member, its `node_modules/.bin`
+  is fully linked (`next`/`prisma`/`tsc`/`vitest` present), and no member package
+  has an empty `version`. `pnpm install` completes and the bins link.
 - The `beforePack` gate aborts if a REQUIRED engine artifact is missing or wrong-arch — that is intended. lance is optional (ships degraded → Qdrant).
 - Then boot the `.app`, sign in, create a workspace on a real repo, confirm an agent runs in a tmux worktree, review the diff, merge. This completes task #17's "dmg boots and runs a real workspace".
 

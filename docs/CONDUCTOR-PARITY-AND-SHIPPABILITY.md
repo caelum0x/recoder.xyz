@@ -70,7 +70,7 @@ product** once the owner-gated release/auth-model/billing items below land.
 | Per-workspace terminal, diff UI, merge, archive, run history, ⌘K palette, clone modal, keyboard shortcuts, quick start, per-message model | Parity | All present. |
 | **Notifications when agent needs input** | **✅ Parity** (#15 done) | The `needs_input` classifier verdict now reaches the board badge + notification, not just awaiting_review/failed — the "walk away, get pinged" promise is wired (`desktop/.../recoder-board-logic.ts` + `recoder-model.ts`, `1e5ee10f6`). |
 | In-app agent install / setup | **✅ Parity** (#16 done) | First-run agent-setup surface installs/points at a coding agent so a non-terminal user no longer dead-ends at "No agents found" (`desktop/.../recoder-agent-setup.tsx`, `1e5ee10f6`). |
-| Identity / profile (name + avatar) | **Partial** | Avatar landed; embedded/cookie desktop path still drops real name/email/plan → generic "Signed in FREE" (#42, `recoder-4st1`). |
+| Identity / profile (name + avatar + plan) | **✅ Done** (#42 / `recoder-4st1`) | The device flow carries real name/email/plan/avatar end-to-end (website `/api/auth/cli/token` → `identityFromUser`); the affordance shows name/email + plan on hover. The old "Signed in FREE" was deleted-cockpit UI. |
 
 ---
 
@@ -110,7 +110,7 @@ product** once the owner-gated release/auth-model/billing items below land.
 - **🟡 #41 indexed `tenant_id`** — cross-tenant scoping is now **enforced in the guard/query layer** (principal/orgId-bound) by #1/#2/#14; a dedicated **indexed** `tenant_id` column for SQL-level filtering at scale is the remaining refinement.
 - **🟢 #27 A2A ed25519 — external ingress enforced.** The signed-envelope schema carries `ed25519` alongside `hmac-sha256`, and the ingress gate now **refuses untrusted external HMAC-only requests** (`401 external_ingress_requires_ed25519`; `domains/interop-wire/wire/ed25519-ingress.gate.ts` + `signed-ingress` carries a `trusted` flag so internal/loopback callers keep HMAC). **Remaining:** per-actor ed25519 enforcement for internal actors.
 - **🟢 #29/#30 dunning grace + overage CTA — code-landed.** `past_due` subscriptions retain entitlements for a **7-day dunning-grace** window (`DUNNING_GRACE_DAYS`, `withinDunningGrace`) instead of hard-failing on the first missed webhook, and quota exhaustion surfaces an `UpgradeHint` naming the next tier that clears the limit (`upgradeTierForQuota`) for a real CTA (`domains/billing/services/{entitlement,plan-catalog}.service.ts`). Sits **on top of** billing-provider unification (#4, still open). Overage **proration** is the remaining slice.
-- **Open:** distributed rate-limit / Redis (#26), non-root images / Docker (#28), overage proration on the #4 unification, durable run-history fallout (#31/#32), collapse the two Better-Auth configs (#36), deploy entrypoint cleanup (#37/#38), in-app agent re-scan (#39), `users→user` backfill (#40, owner-gated), embedded-path identity (#42).
+- **Open:** distributed rate-limit / Redis (#26), non-root images / Docker (#28), overage proration on the #4 unification, durable run-history fallout (#31/#32), collapse the two Better-Auth configs (#36), deploy entrypoint cleanup (#37/#38), in-app agent re-scan (#39), `users→user` backfill (#40, owner-gated).
 
 ---
 
