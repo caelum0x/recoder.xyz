@@ -221,7 +221,9 @@ describe('CRUD edges — spaces', () => {
     const h = await buildHarness();
     expect((await send(h, 'POST', '/spaces', spaceBody)).status).toBe(200);
 
-    const got = await get(h, '/spaces/space-1');
+    // Reads are now tenant-scoped (recoder-eqsz): a created space is visible to
+    // its OWNER, not to the anonymous fallback — authenticate the read.
+    const got = await request(h.base, '/spaces/space-1', { headers: asUser });
     expect(got.status).toBe(200);
     expect(dataOf<{ spaceId: string; createdAt: string }>(got).spaceId).toBe('space-1');
     expect(dataOf<{ createdAt: string }>(got).createdAt).toBeTruthy();

@@ -23,16 +23,21 @@ import { ErrorCode, createError, sendError, sendSuccess, asyncHandler } from '..
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { ConductorModule } from '../index.js';
 import type { ConductorWriteResult } from '../conductor-module.js';
+import { requireWorkspaceAccess } from './workspace-access.js';
 
 export interface CompareRouterDeps {
   readonly module: ConductorModule;
   readonly middleware: AuthMiddleware;
+  /** Solo/desktop single-user mode (from `cfg.soloMode`); fails the ownership guard OPEN. */
+  readonly soloMode?: boolean;
 }
 
 /** Build the read-only `/api/conductor` compare sub-router (mount BEFORE the main router). */
 export function buildCompareRoutes(deps: CompareRouterDeps): Router {
   const router = Router();
   const { module, middleware } = deps;
+  // Ownership guard for the `:id`-scoped sibling read (recoder-tf68).
+  const access = requireWorkspaceAccess(module, { soloMode: deps.soloMode === true });
 
   // Aggregate every sibling of a parallel-run group for side-by-side review.
   // A blank/absent `taskGroup` is a truthful empty view (never an error).
@@ -54,6 +59,7 @@ export function buildCompareRoutes(deps: CompareRouterDeps): Router {
   router.get(
     '/workspaces/:id/siblings',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       const compare = await module.workspaceSiblings(req.params.id);
       if (!compare) {

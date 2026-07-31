@@ -25,10 +25,15 @@ import type { PreviewVerificationView } from './ports/preview-verify.port.js';
 import type { ConductorModule } from './index.js';
 import { buildConductorRoutes } from './routes/conductor.routes.js';
 
+// A privileged (admin) principal: this suite exercises the preview-verification
+// READ, not the workspace-ownership guard (recoder-tf68), so it uses the operator
+// path to reach any workspace. Ownership itself is covered by
+// workspace-ownership-idor.test.ts.
 const PRINCIPAL: Principal = {
+  userId: 'user_test',
   actorId: 'user_test',
   actorType: 'user',
-  scopes: [],
+  scopes: ['admin'],
 } as unknown as Principal;
 
 /** An `authenticate` that stamps a principal ONLY when an auth header is present (else 401). */
@@ -62,7 +67,12 @@ function stubModule(state: StubState): ConductorModule {
       return state.view ?? null;
     },
     async getWorkspace() {
-      return state.workspace ?? null;
+      // The ownership guard resolves the workspace before the handler. When a test
+      // does not pin `workspace`, default to a present record so the guard admits
+      // (the privileged PRINCIPAL then passes) and the handler's own logic runs;
+      // a test that pins `workspace: null` still models a missing workspace.
+      if ('workspace' in state) return state.workspace ?? null;
+      return { workspaceId: 'ws-1', createdBy: 'user_test' } as Workspace;
     },
   } as unknown as ConductorModule;
 }

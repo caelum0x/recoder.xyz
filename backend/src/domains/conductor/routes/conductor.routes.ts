@@ -62,6 +62,11 @@ import type { PreviewVerifyAssertion } from '../ports/preview-verify.port.js';
 import { parseReviewComments } from '../review/review-comments.js';
 import { resolveConductorTmuxSocket } from '../tmux-socket.js';
 import { createRecoderSessionLister } from '../adapters/recoder-session-lister.adapter.js';
+import {
+  requireWorkspaceAccess,
+  filterAccessibleWorkspaces,
+  type WorkspaceAccessOptions,
+} from './workspace-access.js';
 
 export interface ConductorRouterDeps {
   readonly module: ConductorModule;
@@ -80,6 +85,13 @@ export interface ConductorRouterDeps {
    * conductor drives. Read-only + degrade-truthful (tmux absent ⇒ `[]`).
    */
   readonly listRecoderSessions?: () => Promise<readonly string[]>;
+  /**
+   * Solo/desktop single-user mode (bootstrap-injected from `RECODER_SOLO_MODE` via
+   * `cfg.soloMode`). When true the workspace-ownership guard FAILS OPEN — there is
+   * one local owner and the desktop user must never be locked out of their own
+   * workspaces. A cloud deploy leaves this false, so ownership is enforced.
+   */
+  readonly soloMode?: boolean;
 }
 
 // Must match the full WorkspaceSubstrate union. `'acp'` is opt-in and degrades
@@ -114,19 +126,29 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   const resolveTmuxSocket = deps.resolveTmuxSocket ?? resolveConductorTmuxSocket;
   const listRecoderSessions = deps.listRecoderSessions ?? createRecoderSessionLister();
 
+  // The single ownership seam applied to EVERY `:id`-scoped edge below (recoder-tf68):
+  // a caller may only reach a workspace it owns (or, when privileged/solo, any). An
+  // inaccessible workspace is a 404 identical to a missing one (no existence oracle).
+  const accessOpts: WorkspaceAccessOptions = { soloMode: deps.soloMode === true };
+  const access = requireWorkspaceAccess(module, accessOpts);
+
   // --- reads -----------------------------------------------------------------
 
   router.get(
     '/workspaces',
     middleware.authenticate,
-    asyncHandler(async (_req, res) => {
-      sendSuccess(res, { workspaces: await module.listWorkspaces() });
+    asyncHandler(async (req, res) => {
+      const workspaces = await module.listWorkspaces();
+      sendSuccess(res, {
+        workspaces: filterAccessibleWorkspaces(workspaces, req.principal!, accessOpts),
+      });
     }),
   );
 
   router.get(
     '/workspaces/:id',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       const workspace = await module.getWorkspace(req.params.id);
       if (!workspace) {
@@ -151,6 +173,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/events',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       sendSuccess(res, { events: await module.listWorkspaceEvents(req.params.id) });
     }),
@@ -159,6 +182,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/diff',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       try {
         sendSuccess(res, await module.workspaceDiff(req.params.id));
@@ -171,6 +195,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/tree',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       try {
         sendSuccess(res, await module.workspaceTree(req.params.id));
@@ -186,6 +211,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/diff/files',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       try {
         sendSuccess(res, await module.workspaceDiffFiles(req.params.id));
@@ -202,6 +228,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/diff/file',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       const p = optionalString(req.query.path);
       if (!p) throw createError(ErrorCode.VALIDATION_ERROR, '`path` query param is required');
@@ -222,6 +249,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/mergeability',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       try {
         sendSuccess(res, await module.workspaceMergeability(req.params.id));
@@ -238,6 +266,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/readiness',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       try {
         sendSuccess(res, await module.workspaceReadiness(req.params.id));
@@ -257,6 +286,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/audit',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       try {
         const limit = readPositiveIntQuery(req.query.limit);
@@ -276,6 +306,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/evidence',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       try {
         const evidence = await module.getConvergenceEvidence(req.params.id);
@@ -306,6 +337,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/evidence/export',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       try {
         const pack = await module.getConvergenceEvidenceExport(req.params.id);
@@ -334,6 +366,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/dev-command',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       sendSuccess(res, await module.workspaceDevCommand(req.params.id));
     }),
@@ -342,6 +375,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/run-config',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       sendSuccess(res, await module.workspaceRunConfig(req.params.id));
     }),
@@ -374,6 +408,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/preview-verification',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       const view = await module.getPreviewVerification(req.params.id);
       if (view) {
@@ -396,6 +431,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/output',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       try {
         const lines = Number.parseInt(String(req.query.lines ?? ''), 10);
@@ -413,6 +449,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/status',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       try {
         sendSuccess(res, await module.workspaceStatus(req.params.id));
@@ -427,6 +464,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/view',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       const view = await module.workspaceView(req.params.id);
       if (!view) {
@@ -440,8 +478,11 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/views',
     middleware.authenticate,
-    asyncHandler(async (_req, res) => {
-      sendSuccess(res, { workspaces: await module.listWorkspaceViews() });
+    asyncHandler(async (req, res) => {
+      const workspaces = await module.listWorkspaceViews();
+      sendSuccess(res, {
+        workspaces: filterAccessibleWorkspaces(workspaces, req.principal!, accessOpts),
+      });
     }),
   );
 
@@ -453,6 +494,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.post(
     '/workspaces/:id/stop',
     middleware.authenticateMutating,
+    access,
     asyncHandler(async (req, res) => {
       const result = await module.stopWorkspace(req.params.id, req.principal!);
       finishWrite(res, result, { key: 'workspace' });
@@ -465,6 +507,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.post(
     '/workspaces/:id/advance',
     middleware.authenticateMutating,
+    access,
     asyncHandler(async (req, res) => {
       const body = asObject(req.body);
       const to = requireString(body, 'to');
@@ -479,6 +522,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.post(
     '/workspaces/:id/message',
     middleware.authenticateMutating,
+    access,
     asyncHandler(async (req, res) => {
       const body = asObject(req.body);
       const result = await module.sendWorkspaceMessage(
@@ -496,6 +540,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.post(
     '/workspaces/:id/pr',
     middleware.authenticateMutating,
+    access,
     asyncHandler(async (req, res) => {
       const body = asObject(req.body);
       const result = await module.createWorkspacePr(
@@ -516,6 +561,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.post(
     '/workspaces/:id/merge',
     middleware.authenticateMutating,
+    access,
     asyncHandler(async (req, res) => {
       const body = asObject(req.body);
       const result = await module.mergeWorkspace(
@@ -533,6 +579,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.post(
     '/workspaces/:id/archive',
     middleware.authenticateMutating,
+    access,
     asyncHandler(async (req, res) => {
       const result = await module.archiveWorkspace(req.params.id, req.principal!);
       finishWrite(res, result, { key: 'workspace' });
@@ -542,6 +589,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.post(
     '/workspaces/:id/preview-url',
     middleware.authenticateMutating,
+    access,
     asyncHandler(async (req, res) => {
       const body = asObject(req.body);
       const result = await module.setPreviewUrl(req.params.id, body.url, req.principal!);
@@ -559,6 +607,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.post(
     '/workspaces/:id/preview-verify',
     middleware.authenticateMutating,
+    access,
     asyncHandler(async (req, res) => {
       const options = readPreviewVerifyOptions(asObject(req.body ?? {}));
       const result = await module.verifyPreview(req.params.id, req.principal!, options);
@@ -629,6 +678,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.get(
     '/workspaces/:id/checks',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       const view = await module.workspaceChecks(req.params.id);
       if (!view) {
@@ -727,6 +777,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.post(
     '/workspaces/:id/steer',
     middleware.authenticateMutating,
+    access,
     asyncHandler(async (req, res) => {
       const body = asObject(req.body);
       const result = await module.steerWorkspace(
@@ -744,6 +795,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.post(
     '/workspaces/:id/review-comments',
     middleware.authenticateMutating,
+    access,
     asyncHandler(async (req, res) => {
       const body = asObject(req.body);
       // Pre-validate for a clean 400 BEFORE the gated steer: a payload with no

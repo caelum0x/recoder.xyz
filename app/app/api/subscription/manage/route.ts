@@ -6,6 +6,7 @@ import crypto from 'crypto';
 
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { isPaidPlanId } from '@/lib/config/enforced-quotas';
 
 const BACKEND_URL = process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:3100');
 
@@ -125,6 +126,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Invalid plan', message: 'Plan not found or inactive' },
         { status: 400 }
+      );
+    }
+
+    // SECURITY (P1): a client must never be able to grant itself a PAID plan by
+    // POSTing a planId. A paid `subscriptionPlan` is only ever written by a
+    // verified provider payment webhook (see app/api/webhooks/*). This route is
+    // restricted to downgrades/cancellations to the free plan; any paid target
+    // is refused with no durable write, and the caller is sent to checkout.
+    if (isPaidPlanId(planId)) {
+      return NextResponse.json(
+        {
+          error: 'payment_required',
+          message:
+            'Paid plans are activated only after a verified payment. Start a checkout instead; the plan is granted by the payment webhook.',
+        },
+        { status: 402 }
       );
     }
 

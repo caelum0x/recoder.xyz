@@ -3,7 +3,24 @@
  *
  * Both /api/billing/plans and /api/subscriptions/plans serve data from here
  * so pricing, features, and limits stay consistent across the platform.
+ *
+ * The advertised `limits.requests` / `limits.tokens` are DERIVED from
+ * {@link ENFORCED_QUOTAS} (the mirror of the backend billing gate's canonical
+ * `PLAN_QUOTAS`) so the pricing page never advertises more quota than the gate
+ * actually enforces. See app/lib/config/enforced-quotas.ts.
  */
+
+import { ENFORCED_QUOTAS, enforcedTierForPlanId } from './enforced-quotas';
+
+/** Advertised request quota for a checkout plan-id (== enforced). */
+function advertisedRequests(planId: string): number {
+  return ENFORCED_QUOTAS[enforcedTierForPlanId(planId)].requests;
+}
+
+/** Advertised token quota for a checkout plan-id (== enforced). */
+function advertisedTokens(planId: string): number {
+  return ENFORCED_QUOTAS[enforcedTierForPlanId(planId)].tokens;
+}
 
 export interface PlanDefinition {
   id: string;
@@ -36,8 +53,8 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanDefinition> = {
     limits: {
       sessionsPerDay: 6,
       tokensPerSession: 10000,
-      requests: 1000,
-      tokens: 1000000
+      requests: advertisedRequests('free'),
+      tokens: advertisedTokens('free')
     }
   },
   'pro-monthly': {
@@ -56,8 +73,8 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanDefinition> = {
     limits: {
       sessionsPerDay: 50,
       tokensPerSession: 100000,
-      requests: 50000,
-      tokens: 50000000
+      requests: advertisedRequests('pro-monthly'),
+      tokens: advertisedTokens('pro-monthly')
     }
   },
   'pro-yearly': {
@@ -74,8 +91,8 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanDefinition> = {
     limits: {
       sessionsPerDay: 50,
       tokensPerSession: 100000,
-      requests: 50000,
-      tokens: 50000000
+      requests: advertisedRequests('pro-yearly'),
+      tokens: advertisedTokens('pro-yearly')
     }
   },
   'enterprise': {
@@ -96,8 +113,8 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanDefinition> = {
     limits: {
       sessionsPerDay: 1000,
       tokensPerSession: 500000,
-      requests: 1000000,
-      tokens: 1000000000
+      requests: advertisedRequests('enterprise'),
+      tokens: advertisedTokens('enterprise')
     }
   }
 };

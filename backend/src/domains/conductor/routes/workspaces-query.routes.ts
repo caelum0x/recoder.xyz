@@ -25,10 +25,20 @@ import {
   parseArchivedParam,
   type WorkspaceQueryFilters,
 } from '../services/workspace-query.service.js';
+import {
+  filterAccessibleWorkspaces,
+  type WorkspaceAccessOptions,
+} from './workspace-access.js';
 
 export interface WorkspaceQueryRouterDeps {
   readonly module: ConductorModule;
   readonly middleware: AuthMiddleware;
+  /**
+   * Solo/desktop single-user mode (from `cfg.soloMode`). When true the list is NOT
+   * narrowed by ownership (one local owner). Cloud leaves it false, so the board
+   * returns ONLY the caller's own workspaces (recoder-tf68).
+   */
+  readonly soloMode?: boolean;
 }
 
 /** Every canonical workspace state — the validation surface for the `state=` filter. */
@@ -77,26 +87,34 @@ function filtersFromQuery(query: Record<string, unknown>): WorkspaceQueryFilters
 export function buildWorkspaceQueryRoutes(deps: WorkspaceQueryRouterDeps): Router {
   const router = Router();
   const { module, middleware } = deps;
+  // Ownership scoping for the board list edges (recoder-tf68): a caller sees ONLY
+  // their own workspaces (privileged/solo callers see all).
+  const accessOpts: WorkspaceAccessOptions = { soloMode: deps.soloMode === true };
 
   // Archived history — literal path, registered before the query-aware list so a
   // request for `/workspaces/archived` never falls through to `/workspaces/:id`.
   router.get(
     '/workspaces/archived',
     middleware.authenticate,
-    asyncHandler(async (_req, res) => {
-      sendSuccess(res, { workspaces: await module.listArchivedWorkspaces() });
+    asyncHandler(async (req, res) => {
+      const workspaces = await module.listArchivedWorkspaces();
+      sendSuccess(res, {
+        workspaces: filterAccessibleWorkspaces(workspaces, req.principal!, accessOpts),
+      });
     }),
   );
 
-  // Query-aware list. With no filters this returns every record (behavior-identical
-  // to the base `GET /workspaces`); with filters it narrows truthfully.
+  // Query-aware list. With no filters this returns every record the caller owns
+  // (behavior-identical to the base `GET /workspaces`); with filters it narrows
+  // truthfully. Ownership scoping is applied AFTER the board filters.
   router.get(
     '/workspaces',
     middleware.authenticate,
     asyncHandler(async (req, res) => {
       const filters = filtersFromQuery(req.query as Record<string, unknown>);
+      const workspaces = await module.queryWorkspaces(filters);
       sendSuccess(res, {
-        workspaces: await module.queryWorkspaces(filters),
+        workspaces: filterAccessibleWorkspaces(workspaces, req.principal!, accessOpts),
         filters,
       });
     }),

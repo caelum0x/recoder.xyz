@@ -40,6 +40,11 @@ import {
   type PolicyUpdatedEvent,
 } from '../services/policy-update.emitter.js';
 import {
+  canAccessSpace,
+  ownerIdForCreate,
+  visibleSpaces,
+} from '../services/space-authz.js';
+import {
   agentUpsertSchema,
   artifactCreateSchema,
   eventsQuerySchema,
@@ -62,6 +67,12 @@ export interface AgentOsCrudRoutesDeps {
    * emission (unchanged behavior); a fire never blocks the write path.
    */
   readonly onPolicyChange?: (event: PolicyUpdatedEvent) => void;
+  /**
+   * Solo/desktop mode (bootstrap-injected from `RECODER_SOLO_MODE`). When true
+   * the space tenant-scoping guards fail OPEN (single local owner is never
+   * locked out). Defaults to false — cloud deploys keep owner-scoped isolation.
+   */
+  readonly soloMode?: boolean;
 }
 
 /** The actor recorded on writes when the body names none (never anonymous — gate is upstream). */
@@ -92,15 +103,18 @@ function handle(fn: (req: Request, res: Response) => Promise<void>): RequestHand
 /** Build the CRUD edge table (mounted inside the `/api/agent-os` router). */
 export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
   const { repository, middleware, onPolicyChange } = deps;
+  const soloMode = deps.soloMode ?? false;
   const taskService = new TaskService();
   const router = Router();
 
   const read = middleware.authenticate;
   const write = middleware.authenticateMutating;
 
-  // — Spaces —
-  router.get('/spaces', read, handle(async (_req, res) => {
-    sendSuccess(res, await repository.listSpaces());
+  // — Spaces (tenant-isolated: owner-scoped, with operator + solo bypass) —
+  router.get('/spaces', read, handle(async (req, res) => {
+    // Tenant-scope the list: a caller sees only their own spaces (operator/solo
+    // see all). Never leak another tenant's spaces.
+    sendSuccess(res, visibleSpaces(await repository.listSpaces(), req.principal, soloMode));
   }));
 
   router.get(
@@ -110,7 +124,10 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     handle(async (req, res) => {
       const spaces = await repository.listSpaces();
       const space = spaces.find((s) => s.spaceId === req.params.spaceId);
-      if (!space) return notFound(res, 'space', req.params.spaceId);
+      // A non-owned space is indistinguishable from a missing one — 404, no oracle.
+      if (!space || !canAccessSpace(space, req.principal, soloMode)) {
+        return notFound(res, 'space', req.params.spaceId);
+      }
       sendSuccess(res, space);
     }),
   );
@@ -121,11 +138,22 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     validateBody(spaceUpsertSchema),
     handle(async (req, res) => {
       const body = req.body as z.infer<typeof spaceUpsertSchema>;
+      const existing = (await repository.listSpaces()).find((s) => s.spaceId === body.spaceId);
+      // An upsert that targets an EXISTING space the caller doesn't own is
+      // refused as a 404 (no existence oracle); operator/solo callers bypass.
+      if (existing && !canAccessSpace(existing, req.principal, soloMode)) {
+        return notFound(res, 'space', body.spaceId);
+      }
       const now = new Date().toISOString();
+      // Ownership is derived from the authenticated principal — NEVER the body.
+      // Create ⇒ stamp the caller; operator/solo overwrite of an existing space
+      // ⇒ PRESERVE the tenant owner (no hijack).
+      const ownerId = existing ? existing.ownerId : ownerIdForCreate(req.principal);
       const space: Space = {
         ...body,
-        createdAt: body.createdAt ?? now,
-        updatedAt: body.updatedAt ?? now,
+        ownerId,
+        createdAt: existing?.createdAt ?? body.createdAt ?? now,
+        updatedAt: now,
       };
       const saved = await repository.upsertSpace(space);
       // A space upsert carries its forbidden/secret-path + approval policy — signal
@@ -146,7 +174,13 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     handle(async (req, res) => {
       const spaceId = req.params.spaceId;
       const spaces = await repository.listSpaces();
-      if (!spaces.some((s) => s.spaceId === spaceId)) return notFound(res, 'space', spaceId);
+      const space = spaces.find((s) => s.spaceId === spaceId);
+      // GOVERNANCE-BYPASS FIX: only the space owner (or an operator/solo caller)
+      // may rewrite `forbiddenPaths` / approval gates. Unknown OR non-owned ⇒
+      // 404 (no oracle) — never let one tenant edit another's policy.
+      if (!space || !canAccessSpace(space, req.principal, soloMode)) {
+        return notFound(res, 'space', spaceId);
+      }
       const policy = req.body as z.infer<typeof spacePolicyPutSchema>;
       const saved = await repository.upsertSpacePolicy(spaceId, policy);
       // The forbidden/secret-path + approval policy changed — hot-swap the kernel
