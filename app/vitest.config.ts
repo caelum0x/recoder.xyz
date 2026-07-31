@@ -2,6 +2,12 @@ import { defineConfig } from 'vitest/config';
 import path from 'path';
 
 export default defineConfig({
+  // Match Next's production JSX transform (automatic runtime). tsconfig's
+  // `jsx: preserve` leaves esbuild on the classic `React.createElement` factory,
+  // which throws `React is not defined` for any page that renders JSX without a
+  // `React` import (as Next never requires one). Automatic runtime aligns the
+  // test transform with production and is strictly more compatible.
+  esbuild: { jsx: 'automatic' },
   test: {
     globals: true,
     environment: 'jsdom',
