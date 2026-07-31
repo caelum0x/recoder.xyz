@@ -7,6 +7,19 @@ Everything in this repo that can be built and verified **without owner credentia
 - **Desktop:** agent-install + needs-input notification wired; git-init affordance live; Preact cockpit SPA deleted (Wave-only); arm64 dmg builds unsigned, packaging gate passes.
 - **Website:** OAuth-only signin; tsc 0, 436 tests green. Next/Payload version triangle corrected to 16.2.6/react 19; install remains blocked by workspace protocol drift + bin-linking crash (needs owner decision between pnpm-member or concrete-version conversion).
 - **All three suites green** (backend, website, desktop).
+- **Governance approval-clearance residual (`recoder-xiqj`) now FIXED** (2026-08-01) — clearance binds to `requestedBy === principal.userId`; no owner action needed.
+
+## 0. Go-live sequence — the critical path, in order
+
+Do these in order; each links to its detailed section. Steps marked **[you]** need your credentials/authority; nothing else is left in code.
+
+1. **[you] Pick the canonical trunk** (`recoder-mhyt`). `origin/main` is frozen ~2 months and has **diverged structurally** from `feat/enterprise-s0-p0` (a prior dry-run showed 547 add/add + modify/delete conflicts) — a normal merge is destructive. **Decide:** either (a) promote `feat/enterprise-s0-p0` to be the new `main` (`git branch -f main feat/enterprise-s0-p0` after review, force-publish), or (b) hand-drive the conflict resolution. This is a one-time repo-structure decision only you can make. Everything below assumes the shipped branch is the trunk.
+2. **[you] Website install/build unblock** (§5, last bullet) — the `app/` `workspace:*` vs `npm`-lock drift. Pick (a) pnpm-member + fix the `_linkBins` crash, or (b) concrete-version conversion. Required before any website deploy.
+3. **[you] Auth-model prod-validation** (§5) — the multi-tenant go-live gate: run the seam green in non-prod (`sso-logout-matrix`, `auth-email-reset-e2e`, `cli-device-flow-e2e`), stamp `orgId` on the Next/Better-Auth cross-subdomain session, run the `users→user` backfill on a **backup** of `recoder_main`, verify counts. Unblocks #42 (real name/plan on desktop) and org-tenant isolation end-to-end.
+4. **[you] Billing — cut over to Creem** (§9) — set `BILLING_PROVIDER=creem` + the Creem keys; point the website checkout/webhook at the backend projection; verify a real test purchase unlocks capability. The backend is already Creem-ready (real adapter + registry); this is config + the website proxy + your Creem product IDs.
+5. **[you] Rotate secrets** (§10) — rotate anything that ever touched git history / the compromised box before opening to users.
+6. **[you] Sign + ship the desktop `.dmg`** (§1) — Apple cert; unsigned build already passes end-to-end.
+7. **[you] Deploy** — build + PM2 restart per your manual deploy recipe (backend + website), then the growth/search submissions (§6). Verify health is truthful, not inferred.
 
 ## What is already DONE + verified (context)
 - Backend: all 12 OSS engines fully productized (deep-module fusion), backend-src consolidation with a **permanent cross-domain-import guard** (`backend/src/shared/__tests__/domain-boundaries.test.ts`), 2,300+ tests, tsc 0, boots 15 truthful health sources.
@@ -78,3 +91,21 @@ The preview-verify loop is closed (verify → persist summary → GET → deskto
 
 ## 8. OpenShip email  (deferred — do NOT fork)
 Evaluated 2026-07-21: don't fork/vendor. Re-eval in 2+ quarters only for INBOUND mail on a clean non-Hetzner VPS. See the memory note.
+
+## 9. Billing — unify on Creem  (the one XL, `recoder-nn4o`; needs your Creem account)
+**Root problem:** two disconnected systems. The website has its own Paddle/Dodo checkout + webhook routes that set `subscriptionPlan` on the `recoder_main` user, *separate* from the backend's MoR projection. Revenue collected on the site does not reliably unlock backend capability. **Fix: one MoR provider (Creem), one webhook projection, website routes become thin proxies, `subscriptionPlan` driven strictly from the backend projection.**
+
+**The backend is already Creem-ready — this is mostly config + your Creem IDs + the website proxy, not new backend code:**
+- The Creem adapter is real (`billing/adapters/creem.adapter.ts`, 199 lines: hosted checkout `POST /v1/checkouts`, `getSubscription`, `cancel`, HMAC-SHA256 webhook verify on `creem-signature`), and `provider-registry.ts` selects the ONE active provider from `BILLING_PROVIDER`.
+
+**Steps:**
+1. **Env (backend):** `BILLING_PROVIDER=creem`, `CREEM_API_KEY=<your key>`, `CREEM_WEBHOOK_SECRET=<your signing secret>`. That flips the enforcing provider to Creem with zero code change.
+2. **Creem dashboard:** create the products/prices for the plans (Free/$10wk/$20mo/$100mo — match `plan-catalog.service.ts` / `app/lib/config/enforced-quotas.ts`); set the webhook destination to **`POST https://<api-host>/api/billing/webhooks/creem`** (the backend verifies the signature and projects the subscription event to entitlements — no website involvement).
+3. **Website checkout → thin proxy:** replace the Paddle/Dodo checkout routes (`app/app/api/{paddle,dodo,billing/checkout,billing/create-checkout}/…`) with a single call to the backend to mint a Creem hosted-checkout URL, then redirect. Retire the website's own `api/paddle/webhooks` + `api/webhooks/payment` (Creem posts to the backend, not the site).
+4. **Plan source of truth:** stop writing `subscriptionPlan` from website checkout success; read it from the backend projection. **This crosses the auth-model boundary** — do it *after* §0 step 3 (the `orgId`/profile bridge), so the website reflects the backend's Creem-driven plan instead of maintaining its own. Until then the backend enforces correctly but the website display may lag.
+5. **Verify:** a real test purchase in Creem → webhook lands at `/api/billing/webhooks/creem` → `entitlement.service` unlocks the tier → a gated backend capability that was 402 now succeeds. Confirm dunning (`past_due` keeps access for `DUNNING_GRACE_DAYS`) and the overage `UpgradeHint` surface.
+
+Do NOT add Stripe. MoR providers only (Polar/Creem/Paddle/Dodo); Creem is the pick.
+
+## 10. Rotate secrets  (before opening to users)
+The box ran a compromised `recoder-site` (React2Shell RCE / XMRig) and this repo's history predates the secret-scanning gate. Before go-live rotate anything that could have leaked: `BETTER_AUTH_SECRET`, `INTERNAL_SERVICE_KEY`, `API_KEY_HASH_SALT` (⚠ rotating this invalidates every existing `sk_` platform key — re-mint the desktop conductor key after), DB passwords, `CREEM_API_KEY`/`CREEM_WEBHOOK_SECRET`, `EVIDENCE_SIGNING_KEY`, Cloudflare tokens, and any provider keys. Then re-scan git history (`gitleaks`) and, ideally, run the app as non-root (open item from the monorepo security audit).
