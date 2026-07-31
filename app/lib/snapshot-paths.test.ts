@@ -1,5 +1,4 @@
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
+import { test, expect } from 'vitest';
 import {
   ancestorDirectories,
   coerceDirectories,
@@ -10,60 +9,54 @@ import {
 } from './snapshot-paths';
 
 test('coerceFiles keeps only string values', () => {
-  assert.deepEqual(
-    coerceFiles({ 'a.ts': 'x', 'b.ts': 1, 'c.ts': null, 'd.ts': 'y' }),
-    { 'a.ts': 'x', 'd.ts': 'y' },
-  );
+  expect(coerceFiles({ 'a.ts': 'x', 'b.ts': 1, 'c.ts': null, 'd.ts': 'y' })).toEqual({
+    'a.ts': 'x',
+    'd.ts': 'y',
+  });
 });
 
 test('coerceFiles collapses non-objects and arrays to {}', () => {
-  assert.deepEqual(coerceFiles(null), {});
-  assert.deepEqual(coerceFiles(undefined), {});
-  assert.deepEqual(coerceFiles('nope'), {});
-  assert.deepEqual(coerceFiles(['a', 'b']), {});
+  expect(coerceFiles(null)).toEqual({});
+  expect(coerceFiles(undefined)).toEqual({});
+  expect(coerceFiles('nope')).toEqual({});
+  expect(coerceFiles(['a', 'b'])).toEqual({});
 });
 
 test('coerceDirectories de-dupes, drops blanks, and sorts', () => {
-  assert.deepEqual(
-    coerceDirectories(['src', 'src', '  ', '', 'lib', 3, null]),
-    ['lib', 'src'],
-  );
-  assert.deepEqual(coerceDirectories('not-an-array'), []);
+  expect(coerceDirectories(['src', 'src', '  ', '', 'lib', 3, null])).toEqual(['lib', 'src']);
+  expect(coerceDirectories('not-an-array')).toEqual([]);
 });
 
 test('ancestorDirectories returns shallow→deep prefixes, no blanks', () => {
-  assert.deepEqual(ancestorDirectories('src/components/Button.tsx'), [
-    'src',
-    'src/components',
-  ]);
-  assert.deepEqual(ancestorDirectories('index.ts'), []);
+  expect(ancestorDirectories('src/components/Button.tsx')).toEqual(['src', 'src/components']);
+  expect(ancestorDirectories('index.ts')).toEqual([]);
   // Leading/trailing slashes must never yield an empty ('') directory.
-  assert.deepEqual(ancestorDirectories('/src/a.ts'), ['src']);
-  assert.deepEqual(ancestorDirectories('a//b/c.ts'), ['a', 'a/b']);
+  expect(ancestorDirectories('/src/a.ts')).toEqual(['src']);
+  expect(ancestorDirectories('a//b/c.ts')).toEqual(['a', 'a/b']);
 });
 
 test('isUnderPrefix matches the prefix itself and its subtree only', () => {
-  assert.equal(isUnderPrefix('src', 'src'), true);
-  assert.equal(isUnderPrefix('src/a.ts', 'src'), true);
+  expect(isUnderPrefix('src', 'src')).toBe(true);
+  expect(isUnderPrefix('src/a.ts', 'src')).toBe(true);
   // Must not match a sibling that merely shares the prefix string.
-  assert.equal(isUnderPrefix('srcother/a.ts', 'src'), false);
+  expect(isUnderPrefix('srcother/a.ts', 'src')).toBe(false);
 });
 
 test('renamePath rewrites subtree and leaves others untouched', () => {
-  assert.equal(renamePath('src/a.ts', 'src', 'lib'), 'lib/a.ts');
-  assert.equal(renamePath('src', 'src', 'lib'), 'lib');
-  assert.equal(renamePath('other/a.ts', 'src', 'lib'), 'other/a.ts');
-  assert.equal(renamePath('srcother/a.ts', 'src', 'lib'), 'srcother/a.ts');
+  expect(renamePath('src/a.ts', 'src', 'lib')).toBe('lib/a.ts');
+  expect(renamePath('src', 'src', 'lib')).toBe('lib');
+  expect(renamePath('other/a.ts', 'src', 'lib')).toBe('other/a.ts');
+  expect(renamePath('srcother/a.ts', 'src', 'lib')).toBe('srcother/a.ts');
 });
 
 test('mergeSnapshotState registers ALL ancestor directories of nested files (regression)', () => {
   const result = mergeSnapshotState(null, {
     files: { 'src/components/ui/Button.tsx': 'export {}' },
   });
-  assert.deepEqual(result.files, { 'src/components/ui/Button.tsx': 'export {}' });
+  expect(result.files).toEqual({ 'src/components/ui/Button.tsx': 'export {}' });
   // Previously only the immediate parent (src/components/ui) was registered,
   // leaving src and src/components missing from the tree.
-  assert.deepEqual(result.directories, ['src', 'src/components', 'src/components/ui']);
+  expect(result.directories).toEqual(['src', 'src/components', 'src/components/ui']);
 });
 
 test('mergeSnapshotState upserts over existing files and merges directories', () => {
@@ -71,9 +64,9 @@ test('mergeSnapshotState upserts over existing files and merges directories', ()
     { files: { 'a.ts': 'old' }, directories: ['existing'] },
     { files: { 'a.ts': 'new', 'pkg/b.ts': 'b' } },
   );
-  assert.equal(result.files['a.ts'], 'new');
-  assert.equal(result.files['pkg/b.ts'], 'b');
-  assert.deepEqual(result.directories, ['existing', 'pkg']);
+  expect(result.files['a.ts']).toBe('new');
+  expect(result.files['pkg/b.ts']).toBe('b');
+  expect(result.directories).toEqual(['existing', 'pkg']);
 });
 
 test('mergeSnapshotState removePaths drops a single file but keeps directories', () => {
@@ -81,8 +74,8 @@ test('mergeSnapshotState removePaths drops a single file but keeps directories',
     { files: { 'src/a.ts': 'a', 'src/b.ts': 'b' }, directories: ['src'] },
     { removePaths: ['src/a.ts'] },
   );
-  assert.deepEqual(Object.keys(result.files), ['src/b.ts']);
-  assert.deepEqual(result.directories, ['src']);
+  expect(Object.keys(result.files)).toEqual(['src/b.ts']);
+  expect(result.directories).toEqual(['src']);
 });
 
 test('mergeSnapshotState removePathPrefixes drops files and directories in subtree', () => {
@@ -93,8 +86,8 @@ test('mergeSnapshotState removePathPrefixes drops files and directories in subtr
     },
     { removePathPrefixes: ['src'] },
   );
-  assert.deepEqual(Object.keys(result.files).sort(), ['keep.ts']);
-  assert.deepEqual(result.directories, ['other']);
+  expect(Object.keys(result.files).sort()).toEqual(['keep.ts']);
+  expect(result.directories).toEqual(['other']);
 });
 
 test('mergeSnapshotState renamePaths rewrites files and directories', () => {
@@ -105,8 +98,8 @@ test('mergeSnapshotState renamePaths rewrites files and directories', () => {
     },
     { renamePaths: [{ from: 'src', to: 'app' }] },
   );
-  assert.deepEqual(Object.keys(result.files).sort(), ['app/a.ts', 'app/nested/b.ts']);
-  assert.deepEqual(result.directories, ['app', 'app/nested']);
+  expect(Object.keys(result.files).sort()).toEqual(['app/a.ts', 'app/nested/b.ts']);
+  expect(result.directories).toEqual(['app', 'app/nested']);
 });
 
 test('mergeSnapshotState applies addDirectories and removeDirectories last', () => {
@@ -115,13 +108,13 @@ test('mergeSnapshotState applies addDirectories and removeDirectories last', () 
     { addDirectories: ['added', ''], removeDirectories: ['keep'] },
   );
   // Empty-string directory entries are ignored; explicit removal wins.
-  assert.deepEqual(result.directories, ['added']);
+  expect(result.directories).toEqual(['added']);
 });
 
 test('mergeSnapshotState is immutable: does not mutate the existing state', () => {
   const existing = { files: { 'a.ts': 'a' }, directories: ['src'] };
   const result = mergeSnapshotState(existing, { files: { 'b.ts': 'b' } });
-  assert.deepEqual(existing.files, { 'a.ts': 'a' }, 'existing.files must be untouched');
-  assert.deepEqual(existing.directories, ['src'], 'existing.directories must be untouched');
-  assert.notEqual(result.files, existing.files);
+  expect(existing.files, 'existing.files must be untouched').toEqual({ 'a.ts': 'a' });
+  expect(existing.directories, 'existing.directories must be untouched').toEqual(['src']);
+  expect(result.files).not.toBe(existing.files);
 });
