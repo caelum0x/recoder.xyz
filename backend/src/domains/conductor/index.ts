@@ -48,7 +48,10 @@ import type { ColbertSearchPort } from '../memory/ports/colbert-search.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
 import type { SubstrateScanDeps } from './adapters/substrate-scan.adapter.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
-import type { WorkspaceRepositoryPort } from './ports/workspace-repository.port.js';
+import type {
+  CanonicalRunStore,
+  WorkspaceRepositoryPort,
+} from './ports/workspace-repository.port.js';
 import type {
   ReconcileFindingView,
   SteerInput,
@@ -160,6 +163,14 @@ export interface ConductorModuleDeps {
   readonly runEventSink?: RunEventSinkPort;
   /** Optional durable workspace repository (agent-os-backed) overriding the default. */
   readonly repository?: WorkspaceRepositoryPort;
+  /**
+   * The DURABLE agent-os state-of-record store (the backend `AgentOsRepositoryPort`)
+   * the conductor delegates its canonical TaskRun/RunEvent/TaskSpec reads+writes to,
+   * so run history + RunEvents survive a backend restart (P1 #8). Absent (tests /
+   * no state-of-record) ⇒ the repository degrades to a bounded in-process store and
+   * reports `isDurable() === false` truthfully. Ignored when `repository` is set.
+   */
+  readonly canonicalRunStore?: CanonicalRunStore;
   /** Optional collision-prevention write-lock (conductor-locks over coordination). */
   readonly lock?: WorkLockPort;
   /** Optional resource-governor admission (refuse over-budget launches). */

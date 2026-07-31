@@ -1,8 +1,11 @@
 /**
  * `createRunEventSink` — the fan-out {@link RunEventSinkPort} the run-tailer emits
  * through. ONE emission, two consumers (domain doc §6):
- *  - DURABLE: the injected repository's `appendEvent` (the audit trail / live
- *    terminal source of record).
+ *  - DURABLE: the injected repository's `appendEvent` (the audit trail / source of
+ *    record), gated by `persistDurably`. It is skipped when an EXTERNAL durable
+ *    sink (the agent-os RunEvent bus) already writes the same event to the SAME
+ *    state-of-record store — otherwise every tailed event would be duplicated
+ *    (P1 #8). Direct control-plane writers still persist via `repository.appendEvent`.
  *  - LIVE: the `/sync` publisher, which streams state changes + log deltas to the
  *    clients attached to that workspace's terminal.
  *
@@ -19,6 +22,13 @@ import type { RunEventSinkPort, WorkspaceSyncEvent } from '../ports/index.js';
 
 export interface RunEventSinkDeps {
   readonly repository: WorkspaceRepositoryPort;
+  /**
+   * Whether THIS sink durably appends the event to the repository. `false` when an
+   * external durable sink (the agent-os bus) already persists it to the same
+   * state-of-record store, so the local sink stays live-only and never duplicates.
+   * Defaults to `true` (the sink is the sole durable writer).
+   */
+  readonly persistDurably?: boolean;
   /** The live `/sync` publisher (from the terminal surface). */
   readonly publish: (event: WorkspaceSyncEvent) => void;
   /**
@@ -33,12 +43,15 @@ export interface RunEventSinkDeps {
 /** Build the durable+live RunEvent sink. */
 export function createRunEventSink(deps: RunEventSinkDeps): RunEventSinkPort {
   const { repository, publish, publishRun, logger } = deps;
+  const persistDurably = deps.persistDurably ?? true;
   return {
     async append(event: RunEvent): Promise<void> {
-      try {
-        await repository.appendEvent(event);
-      } catch (err) {
-        logger.error({ err, eventId: event.eventId }, 'conductor run-event durable append failed');
+      if (persistDurably) {
+        try {
+          await repository.appendEvent(event);
+        } catch (err) {
+          logger.error({ err, eventId: event.eventId }, 'conductor run-event durable append failed');
+        }
       }
       const workspaceId = resolveWorkspaceId(event);
       if (!workspaceId) return;

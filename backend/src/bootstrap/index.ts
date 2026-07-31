@@ -849,6 +849,11 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     middleware: identity.middleware(),
     gate: governance.gate(),
     runEventSink: conductorRunSink,
+    // DURABLE canonical run/event store (P1 #8): the conductor delegates its
+    // TaskRun/RunEvent/TaskSpec reads+writes to the agent-os state-of-record so run
+    // history + RunEvents survive a backend restart. Same executor ⇒ degrades in
+    // lockstep (isDurable ⇒ false, in-process fallback) when the DB is unavailable.
+    canonicalRunStore: agentOs.repository(),
     substrates: [cliSub, openfangSub, cloudDaytonaSub, acpSub],
     brain: conductorBrain,
     codeIntel: conductorCodeIntel,

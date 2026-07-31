@@ -6,11 +6,15 @@
  * is the SOLE owner of `conductor_workspaces`, `conductor_run_tails`, and
  * `conductor_reconcile_findings` (migrations 0001–0003), so those are persisted
  * durably here through the injected executor. The canonical `TaskRun` / `RunEvent`
- * / `TaskSpec` tables are owned by the agent-os domain (task #16); until its
- * repository port is published, the conductor keeps those three in a bounded
- * in-process store so the engine's `upsertRun`/`appendEvent`/`listTasks` calls
- * never no-op silently. Bootstrap may inject a durable agent-os-backed repository
- * that overrides this fallback for the canonical tables.
+ * / `TaskSpec` tables are owned by the agent-os domain (task #16) and reached ONLY
+ * through the injected {@link CanonicalRunStore} (the backend `AgentOsRepositoryPort`,
+ * bound at the composition root over the SAME persistence executor). When that
+ * store is bound and the executor is available it is the DURABLE SOURCE OF TRUTH
+ * for `upsertRun`/`listRuns`/`appendEvent`/`listEvents`/`listTasks`, so run history
+ * + the RunEvent log survive a backend restart (P1 #8). Absent it (tests) or with
+ * the executor down (DB-less desktop) those five degrade to a bounded in-process
+ * store so the engine's calls never no-op silently — but `isDurable()` then
+ * reports `false` truthfully (the read-model does NOT survive a restart).
  *
  * DEGRADE-SAFE: when `executor.isAvailable()` is false EVERY table degrades to the
  * in-process store — the module still serves (reconcile/list work in-memory)
@@ -22,6 +26,7 @@ import type { RunEvent, TaskRun, TaskSpec, Workspace } from '@recoder/agent-os';
 import type { QueryExecutor } from '../../persistence/ports/query-executor.port.js';
 import type { QueryRow } from '../../persistence/types.js';
 import type {
+  CanonicalRunStore,
   PersistReconcileFindingInput,
   PersistRunTailInput,
   RunTailCursor,
@@ -33,11 +38,18 @@ const DOMAIN_KEY = '__recoderDomain';
 
 export interface WorkspaceRepositoryDeps {
   readonly executor: QueryExecutor;
+  /**
+   * The DURABLE agent-os-owned canonical store for TaskRun / RunEvent / TaskSpec.
+   * When bound (composition root) AND the executor is available, run/event
+   * reads+writes delegate to it so they survive a restart. Absent ⇒ the bounded
+   * in-process fallback (tests / no state-of-record).
+   */
+  readonly canonicalStore?: CanonicalRunStore;
 }
 
 /** Build the conductor workspace repository over the persistence executor. */
 export function createWorkspaceRepository(deps: WorkspaceRepositoryDeps): WorkspaceRepositoryPort {
-  const { executor } = deps;
+  const { executor, canonicalStore } = deps;
 
   // Bounded in-process fallback for the agent-os-owned canonical tables and for
   // the whole port when the executor is unavailable.
@@ -49,6 +61,11 @@ export function createWorkspaceRepository(deps: WorkspaceRepositoryDeps): Worksp
   const memFindings: ReconcileFindingView[] = [];
 
   const durable = (): boolean => executor.isAvailable();
+
+  // The canonical run/event tables are durable ONLY when the agent-os store is
+  // bound AND the executor is up. When the executor is down we do NOT delegate to
+  // a postgres-backed store whose queries would reject — we fall back truthfully.
+  const canonicalDurable = (): boolean => Boolean(canonicalStore) && executor.isAvailable();
 
   async function upsertWorkspace(workspace: Workspace): Promise<Workspace> {
     memWorkspaces.set(workspace.workspaceId, workspace);
@@ -117,22 +134,28 @@ export function createWorkspaceRepository(deps: WorkspaceRepositoryDeps): Worksp
     return decoded.length > 0 ? decoded : [...memWorkspaces.values()];
   }
 
-  // --- canonical agent-os tables: bounded in-process fallback ---
+  // --- canonical agent-os tables: durable via the injected store (P1 #8), with a
+  //     bounded in-process fallback when it is absent or the executor is down. ---
   async function upsertRun(run: TaskRun): Promise<TaskRun> {
+    if (canonicalStore && canonicalDurable()) return canonicalStore.upsertRun(run);
     memRuns.set(run.runId, run);
     return run;
   }
   async function listRuns(): Promise<TaskRun[]> {
+    if (canonicalStore && canonicalDurable()) return canonicalStore.listRuns();
     return [...memRuns.values()];
   }
   async function appendEvent(event: RunEvent): Promise<RunEvent> {
+    if (canonicalStore && canonicalDurable()) return canonicalStore.appendEvent(event);
     memEvents.push(event);
     return event;
   }
   async function listEvents(): Promise<RunEvent[]> {
+    if (canonicalStore && canonicalDurable()) return canonicalStore.listEvents();
     return [...memEvents];
   }
   async function listTasks(): Promise<TaskSpec[]> {
+    if (canonicalStore && canonicalDurable()) return canonicalStore.listTasks();
     return [...memTasks.values()];
   }
 
@@ -254,6 +277,7 @@ export function createWorkspaceRepository(deps: WorkspaceRepositoryDeps): Worksp
     getTailCursor,
     recordReconcileFinding,
     listReconcileFindings,
+    isDurable: canonicalDurable,
   };
 }
 
