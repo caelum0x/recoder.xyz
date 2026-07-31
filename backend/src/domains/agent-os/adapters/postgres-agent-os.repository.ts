@@ -215,8 +215,14 @@ export class PostgresAgentOsRepository implements AgentOsRepositoryPort {
 
   // — Immutable event log (append-only) —
   async appendEvent(event: RunEvent): Promise<RunEvent> {
+    // Idempotent by `event_id` (defense-in-depth durability, recoder-4euj):
+    // conductor RunEvents persist through this path (P1 #8) with deterministic
+    // eventIds, so a re-emit of the same terminal event is a truthful no-op —
+    // `on conflict (event_id) do nothing` (backed by the unique index from
+    // agentos_0006) never writes a duplicate durable row.
     await this.executor.mutate(
-      `insert into agentos_event_log (event_id, payload) values (:event_id, :payload::jsonb)`,
+      `insert into agentos_event_log (event_id, payload) values (:event_id, :payload::jsonb)
+       on conflict (event_id) do nothing`,
       { event_id: event.eventId, payload: JSON.stringify(event) },
     );
     return event;
