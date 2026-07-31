@@ -7,7 +7,7 @@
 > **entirely in the backend, invisible to the user.** The frontend is as plain as a terminal.
 >
 > System layers: [RECODER-ARCHITECTURE.md](./RECODER-ARCHITECTURE.md). Backend build:
-> [RECODER-BACKEND/BUILD-STATUS.md](./RECODER-BACKEND/BUILD-STATUS.md).
+> [RECODER-BACKEND/ARCHITECTURE.md](./RECODER-BACKEND/ARCHITECTURE.md).
 
 ---
 
@@ -68,34 +68,33 @@ Install Recoder  →  Open app  →  Sign in / Sign up (recoder.xyz web auth)
 Small on purpose. Roughly three screens.
 
 ### A. Board (home) — parallel workspaces
-- The conductor.build columned board (`Board.tsx` already implements this): workspace cards grouped
-  by lifecycle (queued → running → needs-review → done). Live from `GET /workspaces`.
+- The conductor.build columned board (the Wave-native `recoder`/`recoder-board` view): workspace cards
+  grouped by lifecycle (queued → running → needs-review → done). Live from `GET /workspaces`.
 - Each card: codename, repo/branch, the agent, a glanceable state — no engine chatter.
 - **New workspace** = one action: pick repo (auto-listed from your GitHub) + agent (preselected) +
   a task prompt. That's it — the backend does recall/index/gate/track invisibly.
-- **Board search / history** ✅ — a terse filter bar (`BoardSearch`) over the board: free-text `q`
-  plus repo / agent / state filters and an archived toggle, so a busy board stays findable and old
-  runs stay reachable. Live from `GET /workspaces?q=&repo=&agent=&state=&archived=` +
-  `GET /workspaces/archived`.
-- **Multi-agent compare** ✅ — when you fan a task out across agents (F3), the board shows them
-  side-by-side (`ComparePanel` + `CompareGroupsBar`): pick a run's parallel siblings and diff their
-  results at a glance before you review each one. Live from `GET /workspaces/compare?taskGroup=` +
-  `GET /workspaces/:id/siblings`.
+- **Board search / history** ✅ — a terse filter bar over the board: free-text `q` plus repo / agent /
+  state filters and an archived toggle, so a busy board stays findable and old runs stay reachable.
+  Live from `GET /workspaces?q=&repo=&agent=&state=&archived=` + `GET /workspaces/archived`.
+- **Multi-agent compare** ✅ — when you fan a task out across agents, the board shows them
+  side-by-side: pick a run's parallel siblings and diff their results at a glance before you review
+  each one. Live from `GET /workspaces/compare?taskGroup=` + `GET /workspaces/:id/siblings`.
+- **Converge** ✅ — turn the N parallel diffs into one governed branch: non-contested files auto-merge,
+  contested files resolve by pick or 3-way `git merge-file` synthesis, and the result flows through
+  the governed merge + evidence pack. Live from `GET/POST /workspaces/compare/:taskGroup/converge[-plan]`.
 
 ### B. Workspace detail — the agent run
-- **Terminal** — the live agent working in its tmux worktree (the real session).
-- **Diff / files** — what the agent changed (`DiffView` + `FileTree`).
-- **Conversation** — the agent's turns (`ConversationView`), clean.
+- **Terminal** — the live agent working in its tmux worktree (the real session, `recoder-terminal`).
+- **Diff / files** — what the agent changed (`recoder-diff`).
+- **Conversation** — the agent's turns, clean.
 - **Inline approval** — when the governance gate blocks a risky write, a single inline approve/reject
   appears in-context (not a separate "Approvals" tab). Approve → the run continues.
 - **Checkpoints** ✅ — snapshot the workspace (git state + agent context) at any point, then restore
-  it or branch a fresh workspace off it — safe experimentation without losing a good run
-  (`CheckpointsPanel`). Live from `POST/GET /workspaces/:id/checkpoints` +
-  `POST /workspaces/:id/checkpoints/:cid/{restore,branch}`.
+  it or branch a fresh workspace off it — safe experimentation without losing a good run.
+  Live from `POST/GET /workspaces/:id/checkpoints` + `POST /workspaces/:id/checkpoints/:cid/{restore,branch}`.
 - **Repo setup + PR status** ✅ — a per-repo setup script runs automatically on worktree create so
-  each agent starts from a ready environment (`RepoSettings`), and a live PR chip surfaces the
-  workspace's pull-request state (`gh`). Live from the worktree-create setup hook +
-  `GET /workspaces/:id/pr-status`.
+  each agent starts from a ready environment, and a live PR chip surfaces the workspace's
+  pull-request state (`gh`). Live from the worktree-create setup hook + `GET /workspaces/:id/pr-status`.
 - **Review + merge** — review the diff, merge/PR. Done.
 
 ### C. Minimal chrome
@@ -114,66 +113,28 @@ stay on disk (dev/debug), but they are OUT of the product nav. The engines run i
 | Concern | Where | Visible to user? |
 |---|---|---|
 | Memory (mem0/beads/colbert), inference (tensorzero), governance, code-intel (recodergit), issue-graph (beads), browsing, squads (multica), networking (ziti/xds) | **BACKEND** engines, consumed by the conductor run flow | **NO** — invisible; the user feels the benefit |
-| Workspaces, agent runs, terminal, diff, review, merge, approvals, sign-in | **FRONTEND** (cockpit + wave shell) | **YES** — the whole product |
+| Workspaces, agent runs, terminal, diff, review, merge, approvals, sign-in | **FRONTEND** (the Wave-native `recoder-*` views) | **YES** — the whole product |
 
 The frontend consumes ONLY the workspace/run/auth edges. It never renders an engine.
 
 ---
 
-## 5. Build plan (frontend, phased)
+## 5. Current surface (what actually ships)
 
-**Phase F0 — Slim to the workspace UX.** ✅ **DONE** (`ff9c16785`). Strip the panel registry/nav
-to `board` + the workspace detail drill-in; remove the 13 engine/infra tabs from the nav (keep
-component files on disk). Logo-only navbar, single health dot. Approvals shown inline in the
-workspace detail. *Subtraction, not addition.* Verify cockpit build + tests.
+The frontend is the **Wave-native `recoder-*` views** embedded in the desktop shell (the second
+Preact "cockpit" SPA that once mirrored these surfaces was **deleted** — 2026-07-31, recoder-flgn).
+It consumes ONLY the backend workspace/run/auth edges; it never renders an engine. The surfaces the
+principles above describe are all live: the board (`recoder`/`recoder-board`), workspace detail
+(`recoder-terminal`, `recoder-diff`), runs (`recoder-runs`), inline approvals (`recoder-approvals`),
+and memory (`recoder-memory`), plus checkpoints, multi-agent compare, converge, board search, and
+repo/PR status on the proven conductor seams — all governed and truthful-degrading, all inside the
+workspace/board mental model. The marketing home carries a dependency-free CSS-3D `HeroCube` +
+`TiltCard` depth (Core-Web-Vitals-safe, reduced-motion aware, `aria-hidden`).
 
-**Phase F1 — Zero-config onboarding.** ✅ **DONE** (`492c07c27`). Desktop first-run: open
-recoder.xyz sign-in (device flow) → capture session; auto-detect installed agent CLIs (probe PATH +
-their auth) and GitHub identity (`gh`/git) → preselect; land on the board. No wizard.
-*Shipped as:* backend `GET /api/conductor/{runtimes,github/status,health}` (PATH-probed CLIs +
-token-free gh/git identity); cockpit first-run SignIn gate + agent preselect + "GitHub · <login>"
-chip + keyed-envelope client; electron main `emain-device-auth` (RFC 8628 vs `/api/auth/cli/*`,
-safeStorage session, identity-only bridge over origin-gated IPC). **← next: F2.**
-
-**Phase F2 — Workspace detail polish.** ✅ **DONE** (`6bcca0579` + `689239ee8` + `cf4c26b42`).
-The run screen's full API — `GET workspaces/:id/{events,diff,tree,dev-command,output,status}` +
-governed `POST {message,pr,merge,archive,preview-url}` (chat = continueRun in the same worktree;
-merge = gh or REAL local-git fallback; every write behind the governance gate) — ported from the
-proven v1 conductor onto the domain seams. Live streaming: WS `/workspaces/:id/stream` (full
-RunEvents, `?access_token=` upgrade auth for browser WS) + output/status poll fallback. Repo list
-auto-populated from the detected GitHub account (`gh repo list` → New Workspace folder hint).
-**← next: F3.**
-
-**Phase F3 — Multi-agent parallelism UX.** ✅ **DONE** (`0cfefd056`). "Also run in parallel" in the
-New Workspace form: one workspace per ticked agent — same folder + task, own worktree/taskId each,
-truthful partial results — compare on the board, review each on its own schedule.
-
-**Phase F4 — Invisible-engine feedback (subtle).** ✅ **DONE** (`0cfefd056`). One quiet count-only
-run-header note ("recalled N things from past runs") from the backend's truthful
-`metadata.knowledgeSources` provenance — never an engine name; nothing shown when nothing recalled.
-
-**Phase F5 — Run-management surfaces (checkpoints, compare, search, repo/PR).** ✅ **DONE**. Four
-product features on the proven conductor seams, all governed and truthful-degrading: (1)
-**Checkpoints** — snapshot git + agent context, restore, or branch a new workspace off a snapshot
-(`POST/GET /workspaces/:id/checkpoints` + `/:cid/{restore,branch}`; cockpit `CheckpointsPanel`). (2)
-**Multi-agent compare** — side-by-side parallel siblings for a fanned-out task
-(`GET /workspaces/compare?taskGroup=` + `/workspaces/:id/siblings`; cockpit `ComparePanel` +
-`CompareGroupsBar`). (3) **Board search / history** — free-text + repo/agent/state filters and an
-archived view (`GET /workspaces?q=&repo=&agent=&state=&archived=` + `/workspaces/archived`; cockpit
-`BoardSearch`). (4) **Repo setup + PR status** — per-repo setup script on worktree create + live PR
-chip (`GET /workspaces/:id/pr-status` via `gh`; cockpit `RepoSettings` + PR chip). All four stay
-inside the workspace/board mental model — no engine surfaces.
-
-**Website 3D touch.** ✅ **DONE**. The marketing home gets a dependency-free CSS-3D `HeroCube` (the
-Recoder cube, live) and `TiltCard` depth on the feature cards — Core-Web-Vitals-safe, reduced-motion
-aware, and `aria-hidden` for assistive tech. Zero JS libraries, no layout shift; the cube reinforces
-the logo, not a wordmark.
-
-**All six frontend phases (F0–F5) are done.** Remaining product polish rides on real usage
-feedback; the backend follow-ups live in [RECODER-BACKEND/BUILD-STATUS.md](./RECODER-BACKEND/BUILD-STATUS.md).
-
-Verification each phase: `cd apps/desktop/cockpit && pnpm build && pnpm exec vitest run`; the wave
-shell hosts it; consumes the backend workspace/auth edges only.
+Remaining product polish rides on real usage feedback; the desktop remainder is tracked in
+[DESKTOP-UX-STATE-AND-PLAN.md](./DESKTOP-UX-STATE-AND-PLAN.md) and backend follow-ups in
+[RECODER-BACKEND/ARCHITECTURE.md](./RECODER-BACKEND/ARCHITECTURE.md). The Wave shell hosts these
+views and consumes the backend workspace/auth edges only.
 
 ---
 

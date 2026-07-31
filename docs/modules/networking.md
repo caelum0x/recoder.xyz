@@ -71,6 +71,11 @@ as agent-callable MCP tools behind the governance gate:
 All read tools mirror the `MeshDiagnostics` truthfulness contract: engine down or
 endpoint absent ⇒ the tool reports the missing source, never fakes data.
 
+**Agent-facing MCP tools (governed): none.** The mesh has no public `recoder_*`
+capability-bridge tool in `mcp/recoder-capability-tools.cjs` — agents reach it only
+through the engine-namespace `cloud_mesh_*` / `cloud_xds_*` ids above (behind the same
+governance gate). No `recoder_mesh_*` wrapper exists today; adding one would be new work.
+
 **Rule:** this module drives the real engine(s) directly and exposes ONE cohesive,
 governed, health-truthful interface to the backend. Depth lives in the engine dirs;
 this folder owns the composition + interface. Degrade-safe: any engine down → that

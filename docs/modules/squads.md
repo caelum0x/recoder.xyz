@@ -59,6 +59,14 @@ Two dark wiring hops were closed (items 19–20), both **opt-in / fail-open**:
   `admit:true, gated:false` ⇒ the launch proceeds untouched. A coordination engine being
   down NEVER blocks a launch; only a confirmed contention defers.
 
+**Agent-facing MCP tools (governed): none.** The multica coordination surface is
+engine-namespace only — `coordination_squad_routing` / `coordination_status` /
+`coordination_conflicts` / `coordination_request_reroute` above. There is no public
+`recoder_*` capability-bridge wrapper for them in `mcp/recoder-capability-tools.cjs`
+(the `recoder_coordination_acquire_lock` / `_detect_conflict` bridge tools are the
+governance *workLocks* facet — see governance.md — not these squad verbs). Adding a
+`recoder_squad_*` tool would be new work.
+
 **Rule:** this module drives the real engine(s) directly and exposes ONE cohesive,
 governed, health-truthful interface to the backend. Depth lives in the engine dirs;
 this folder owns the composition + interface. Degrade-safe: any engine down → that

@@ -113,3 +113,13 @@ These surface the `routeModel · consensus · escalate` facets above as callable
 
 Degrade-safe: if the pal engine or an underlying model provider is down, the affected
 tool reports down and never fakes a result.
+
+### Agent-facing MCP tool (governed)
+
+The one public `recoder_*` id agents call for the pal layer is **`recoder_pal_plan`**,
+bridged by `mcp/recoder-capability-tools.cjs` to the `recoder.pal-plan` server's
+`pal.plan` verb (the owned in-proc `computePalPlanDecision` seam, deny-biased) through
+the gated MCP host (`authorize → risk → execute → audit`). It surfaces the
+`plan` / `planLaunch` facet — runtime / substrate / tool-grants / risk / approval — to
+agents. The sidecar `pal.route · pal.consensus · pal.debate · pal.models` verbs above
+stay engine-namespace only (no `recoder_*` wrapper, no backend decision seam).

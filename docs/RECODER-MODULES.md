@@ -4,7 +4,7 @@
 > own dirs and USED by the built 15-domain backend (`backend/src/domains/*`): boots with 15 truthful
 > health sources, tsc 0, ~1462 backend tests. The supervisor spawns the OSS engines on boot and the
 > conductor run flow consumes them (memory recall/harvest, tensorzero inference, governance, recodergit
-> + beads). See [RECODER-BACKEND/BUILD-STATUS.md](./RECODER-BACKEND/BUILD-STATUS.md) for live status.
+> + beads). See [STATUS.md](./STATUS.md) for live status.
 
 > **Owner mandate (2026-07-14):** stop shipping thin wrapper layers. Each OSS directory IS a
 > first-class **module** of Recoder, used deeply and directly FROM ITS OWN DIR (never copied into
@@ -17,7 +17,7 @@
 ## The three layers (do not confuse them)
 
 ```
-  apps/          SURFACES / products. desktop (the Wave-fork shell + cockpit) · social.
+  apps/          SURFACES / products. desktop (the Wave-fork shell — the recoder-* views) · social.
     │            They consume the backend over its edges. No capability logic lives here.
     ▼ consume
   MODULES        The capabilities. Each is a DIRECTORY, used in place:
@@ -136,10 +136,10 @@ live and dispatch-tested (telegram/slack/signal/imessage/whatsapp/line/feishu); 
 was **dropped from the exported channel set** (never truly extracted, OpenClaw-coupled — owner decision 5).
 **Deep target:** a backend `SocialModule` that supervises the channel drivers in-process (or owns the
 apps/social sidecar), exposes `onInbound → dispatchToConductor` so a Telegram message becomes a
-conductor workspace end-to-end, and surfaces channel health in the cockpit. openclaw's agents +
+conductor workspace end-to-end, and surfaces channel health in the desktop UI. openclaw's agents +
 skills-reference fold into the reply loop.
 **Build:** (a) module wraps connectors + supervises the drivers; (b) wire inbound→conductor; (c)
-one channel (telegram) live end-to-end; (d) cockpit social panel.
+one channel (telegram) live end-to-end; (d) desktop social panel.
 
 ---
 
@@ -238,7 +238,7 @@ becoming the conductor's actual launch-path planner.
 **Deep target:** a `CommunicationModule` that IS the conductor's decision layer (every workspace launch
 calls `plan()` for runtime/risk/approval) and the A2A spine (agent handoff/messaging). pal's consensus +
 escalation available to agents as a "consult" capability.
-**Build:** (a) module unifies pal + a2a; (b) launch path calls plan(); (c) consult capability + cockpit.
+**Build:** (a) module unifies pal + a2a; (b) launch path calls plan(); (c) consult capability + desktop UI.
 
 ---
 
@@ -369,14 +369,14 @@ so it FUSES into them rather than running beside them.
 the existing task lifecycle + beads assignment — multica's autopilot/squad ideas ported into the Recoder
 conductor rather than supervising the Go binary. `engines/multica-client.ts` remains a degrade-safe
 loopback client (binary unbuilt). Recoder already owns the conductor (enqueue/claim/start/complete), the
-board (`packages/herd` + cockpit), and beads (issue graph). **Deep target (partly shipped):** the
+board (`packages/herd` + the desktop board view), and beads (issue graph). **Deep target (partly shipped):** the
 `SquadsModule` folds multica's distinctive primitives into
 the Recoder conductor: **squads** (assign work to `@FrontendTeam`; a leader agent routes to a member) and
 **autopilots** (scheduled recurring agent runs that self-create the issue + route it), on top of the
 existing task lifecycle + beads assignment. Not a separate managed-agents server — its IDEAS become
 Recoder conductor features. **Build:** (a) squad = a named group of runtimes + a leader-routing policy
 over the existing launch path; (b) autopilot = a cron trigger that creates a beads issue + dispatches a
-conductor run; (c) surface squads/autopilots in the cockpit board. Port the logic (Go → TS conductor)
+conductor run; (c) surface squads/autopilots in the desktop board. Port the logic (Go → TS conductor)
 rather than supervise the Go binary, since it overlaps our own control plane.
 
 ## Module build order

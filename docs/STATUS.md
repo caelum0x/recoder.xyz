@@ -25,12 +25,12 @@ The finish line is a **3-step convergence loop**:
 
 | Area | State | Verdict |
 |---|---|---|
-| **Backend** (`backend/`) | ~90% | Greenfield 15-domain spine is real (old 12.8k-line monolith deleted). All 12 build phases wired; ~1,462 tests green **per docs** — not re-verified locally yet (see #22). `dist/` is stale. |
+| **Backend** (`backend/`) | ~90% | Greenfield 15-domain spine is real (old 12.8k-line monolith deleted). All 12 build phases wired; `tsc` 0 · 2,554 tests green (re-verified with the #22 install fix, 2026-07-25). `dist/` may lag until rebuilt. |
 | **Desktop** (`apps/desktop`) | ~80% | Core loop (launch N agents → diff → merge) + convergence/evidence all work on arm64. Cockpit torn down. Sign-in is now optional/offline-safe, Session/Approvals/Memory fixed, **Board wired** (task-driven pick-an-issue→launch). Remaining gaps: arm64-only unsigned build, dead-by-design engines (Lance, Python sidecars), a few retired infra views still registered (OSS-name scrub). `DESKTOP-UX-STATE-AND-PLAN.md` is stale — most gaps it lists shipped after its date. |
 | **Website** (`app/`) | ~90% | 110 pages + 169 API routes, live in prod. Now installs + builds cleanly from the monorepo (#22 fixed 2026-07-25 — full `next build` produces BUILD_ID + standalone). Remaining gaps: Phase A auth migration written-but-unrun, dual auth seams. |
-| **Convergence thesis** | step 1 of 3 | Parallel worktrees done; compare/converge partial; governed evidence-merge not yet shipped. |
+| **Convergence thesis** | 3 of 3 shipped | Parallel worktrees ✅; converge engine ✅ (`domains/conductor/converge/` — whole-file pick or `git merge-file` 3-way synthesis); governed evidence-merge ✅ (`domains/conductor/evidence/convergence-evidence.ts` + framework-mapped export + Ed25519 signing). Remaining refinement: AST/semantic (not line-level) same-file merge. |
 
-Detail: backend → **[RECODER-BACKEND/BUILD-STATUS.md](./RECODER-BACKEND/BUILD-STATUS.md)**,
+Detail: backend → **[RECODER-BACKEND/ARCHITECTURE.md](./RECODER-BACKEND/ARCHITECTURE.md)**,
 engines → **[RECODER-BACKEND/FUSION-STATUS.md](./RECODER-BACKEND/FUSION-STATUS.md)**,
 desktop/product → **[DESKTOP-UX-STATE-AND-PLAN.md](./DESKTOP-UX-STATE-AND-PLAN.md)**,
 capabilities → **[RECODER-MODULES.md](./RECODER-MODULES.md)** + **[RECODER-ARCHITECTURE.md](./RECODER-ARCHITECTURE.md)**.
