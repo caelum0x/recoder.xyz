@@ -302,6 +302,20 @@ export interface WorkspaceRunConfigView {
   readonly detectedCommand: string | null;
 }
 
+/**
+ * How a batch of review comments reached the agent — so the reviewer's client can
+ * be truthful about whether the note steered a LIVE turn or kicked a NEW follow-up
+ * run. Returned as the value of {@link ConductorModule.sendReviewComments}.
+ */
+export interface ReviewCommentDelivery {
+  /** `'steer'` = folded into a live running agent's turn; `'run'` = a new gated worktree run. */
+  readonly delivery: 'steer' | 'run';
+  /** The follow-up run id (only when `delivery === 'run'`). */
+  readonly runId?: string;
+  /** The workspace state after the follow-up run started (only when `delivery === 'run'`). */
+  readonly state?: WorkspaceState;
+}
+
 /** States a `stop` may act on — exactly those with a legal `→ cancelled` transition. */
 const STOPPABLE_STATES: readonly WorkspaceState[] = [
   'created',
@@ -1174,16 +1188,29 @@ export class ConductorComposer implements ConductorModule {
   }
 
   /**
-   * Send diff-review comments to the live agent: fold the line-anchored comments
-   * into ONE structured prompt (`composeReviewPrompt`) and STEER it into the
-   * session. This is the review→agent roundtrip — the reviewer's `file:line`
-   * notes become precise context so the agent addresses the right spots.
+   * The review→agent roundtrip: fold the reviewer's line-anchored diff comments
+   * into ONE structured prompt (`composeReviewPrompt`) and DRIVE the agent with it,
+   * so `file:line — comment` notes become precise context the agent acts on.
    *
-   * Delegates to {@link steerWorkspace} for ALL governance: the gate, the audit
-   * seal, the running-state + live-session checks, and the send-keys transport.
-   * A payload with no valid comments composes to an empty prompt, which
-   * steerWorkspace refuses truthfully (`steer keys must be non-empty`) AFTER the
-   * gate — the HTTP route pre-validates for a clean 400 before we reach here.
+   * Routes by workspace state so the loop is wired for the REAL review flow (not
+   * just a mid-flight running agent):
+   *   - `running` (a live turn exists) ⇒ STEER the composed prompt into the session
+   *     (fastest roundtrip, no new run) — {@link steerWorkspace}, gated
+   *     `workspace.steer`.
+   *   - any other (`awaiting_review` / `changes_requested` / `awaiting_approval`,
+   *     the states a reviewer actually posts from) ⇒ drive a NEW gated run in the
+   *     worktree via the continue/message path — {@link sendWorkspaceMessage}, gated
+   *     `workspace.message`. This is the wiring the parity audit found missing: a
+   *     comment on a reviewed (non-running) workspace otherwise died with
+   *     "workspace is <state>, not running".
+   *
+   * Both branches inherit ALL governance from the method they delegate to (gate +
+   * ownership context + audit seal). Degrade-truthful: a workspace that cannot
+   * continue (no worktree / substrate has no in-place relaunch / not found) surfaces
+   * the real reason from the continue op — it never fakes a delivery. A payload with
+   * no valid comments composes to an empty prompt refused truthfully downstream
+   * (`steer keys must be non-empty` / `message text is required`); the HTTP route
+   * pre-validates for a clean 400 before we reach here.
    */
   async sendReviewComments(
     input: {
@@ -1191,12 +1218,42 @@ export class ConductorComposer implements ConductorModule {
       readonly comments: readonly ReviewComment[];
     },
     principal: Principal
-  ): Promise<ConductorWriteResult<void>> {
+  ): Promise<ConductorWriteResult<ReviewCommentDelivery>> {
     const prompt = composeReviewPrompt(parseReviewComments(input.comments));
-    return this.steerWorkspace(
-      { workspaceId: input.workspaceId, keys: prompt, submit: true },
+    // Read the state ONLY to pick the delivery path; the actual write is gated
+    // (and ownership-guarded at the route) by whichever branch we delegate to.
+    const workspace = await this.engine.getWorkspace(input.workspaceId);
+
+    // Re-type a failure passthrough onto the delivery result (no value present).
+    const asFailure = (
+      r: ConductorWriteResult<unknown>
+    ): ConductorWriteResult<ReviewCommentDelivery> => ({
+      ok: false,
+      verdict: r.verdict,
+      ...(r.reason != null ? { reason: r.reason } : {}),
+      ...(r.code != null ? { code: r.code } : {}),
+    });
+
+    if (workspace?.state === 'running') {
+      const steered = await this.steerWorkspace(
+        { workspaceId: input.workspaceId, keys: prompt, submit: true },
+        principal
+      );
+      if (!steered.ok) return asFailure(steered);
+      return { ok: true, verdict: steered.verdict, value: { delivery: 'steer' } };
+    }
+
+    const run = await this.sendWorkspaceMessage(
+      input.workspaceId,
+      { text: prompt, createdBy: principal.userId },
       principal
     );
+    if (!run.ok) return asFailure(run);
+    return {
+      ok: true,
+      verdict: run.verdict,
+      value: { delivery: 'run', runId: run.value?.runId, state: run.value?.state },
+    };
   }
 
   /**

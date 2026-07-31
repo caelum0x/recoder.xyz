@@ -6,7 +6,7 @@
  *   GET    /api/conductor/workspaces/:id          fetch one workspace
  *   POST   /api/conductor/workspaces              create + launch (GATED)
  *   POST   /api/conductor/workspaces/:id/steer    send-keys to a live agent (GATED)
- *   POST   /api/conductor/workspaces/:id/review-comments  line-anchored review notes → steer (GATED)
+ *   POST   /api/conductor/workspaces/:id/review-comments  line-anchored review notes → agent (steer live / new run) (GATED)
  *   GET    /api/conductor/workspaces/:id/events   RunEvents (conversation + lifecycle)
  *   GET    /api/conductor/workspaces/:id/diff     reviewable diff vs base
  *   GET    /api/conductor/workspaces/:id/diff/files  per-file changed list (numstat + name-status)
@@ -812,7 +812,9 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
         { workspaceId: req.params.id, comments },
         req.principal!,
       );
-      finishWrite(res, result, { key: 'steered' });
+      // `review.delivery` tells the client whether the comments steered a live turn
+      // or kicked a new follow-up run — truthful either way, never a fake steer.
+      finishWrite(res, result, { key: 'review' });
     }),
   );
 
