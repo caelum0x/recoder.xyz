@@ -21,6 +21,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import express from 'express';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { createPrivateKey, sign } from 'node:crypto';
+import { canonicalJson } from '@recoder/a2a-sdk';
 import type { RequestHandler } from 'express';
 import type { AppConfig } from '../../../shared/app-config.js';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
@@ -30,6 +32,41 @@ import type { InteropWireConfigOverrides } from '../config.js';
 
 const SECRET = 'mount-order-secret-xyz';
 const USER = 'user-1';
+
+// --- Deterministic ed25519 peer key (RFC 8032 §7.1 test vector 1) -------------
+const ED25519_SEED_HEX = '9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60';
+const ED25519_PUBLIC_HEX = 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a';
+const ED25519_PKCS8_PREFIX = '302e020100300506032b657004220420';
+const PEER_KEY_ID = 'peer:mount-order';
+
+/** Build an ed25519-signed A2A envelope whose domain payload wraps `rpc`. */
+function ed25519EnvelopeWrapping(rpc: unknown): Record<string, unknown> {
+  const domain = {
+    id: 'a2a_mount_order_ed25519',
+    from: PEER_KEY_ID,
+    kind: 'jsonrpc',
+    payload: rpc,
+    createdAt: new Date().toISOString(),
+  };
+  const key = createPrivateKey({
+    key: Buffer.from(ED25519_PKCS8_PREFIX + ED25519_SEED_HEX, 'hex'),
+    format: 'der',
+    type: 'pkcs8',
+  });
+  const signature = sign(null, Buffer.from(canonicalJson(domain), 'utf8'), key).toString('hex');
+  return {
+    envelope_version: '1.0.0',
+    id: domain.id,
+    payload_type: 'recoder.a2a.message',
+    payload: domain,
+    signature: {
+      algorithm: 'ed25519',
+      key_id: PEER_KEY_ID,
+      signature,
+      signed_at: new Date().toISOString(),
+    },
+  };
+}
 
 const silentLogger = {
   info: () => {},
@@ -247,6 +284,9 @@ describe('/api/a2a mount order — the exposed wire stays governed (production p
       requireSignedIngress: true,
       allowInsecureIngress: false,
       hmacSecret: SECRET,
+      // Register the external peer's ed25519 key so its per-sender signature verifies.
+      ed25519Mode: 'enforce',
+      ed25519PeerKeys: { [PEER_KEY_ID]: ED25519_PUBLIC_HEX },
       localCard: WIRE_CARD,
     });
   });
@@ -269,18 +309,33 @@ describe('/api/a2a mount order — the exposed wire stays governed (production p
     expect(json.success).toBe(false);
   });
 
-  it('a correctly-signed envelope wrapping the call is admitted and dispatched', async () => {
+  it('an EXTERNAL shared-HMAC envelope is REFUSED (audit #27: no shared-secret forgery on the wire)', async () => {
+    // The wire edge is external/hostile-by-default: a valid shared-HMAC signature
+    // must NOT admit a cross-tenant sender. Only per-sender ed25519 is accepted.
     const rpc = {
       jsonrpc: '2.0',
       id: 4,
       method: 'message/send',
-      params: { userId: USER, message: { text: 'signed hello' }, targets: ['ghost-target'] },
+      params: { userId: USER, message: { text: 'hmac hello' }, targets: ['ghost-target'] },
     };
     const envelopeService = srv.wire.core().envelope();
     const sealed = envelopeService.sealEnvelope(
       envelopeService.buildEnvelope({ from: 'peer', kind: 'jsonrpc', payload: rpc }),
     );
     const res = await postRpc(sealed);
+    expect(res.status).not.toBe(200);
+    const json = res.json() as { success: boolean };
+    expect(json.success).toBe(false);
+  });
+
+  it('a per-sender ed25519 envelope wrapping the call is admitted and dispatched', async () => {
+    const rpc = {
+      jsonrpc: '2.0',
+      id: 5,
+      method: 'message/send',
+      params: { userId: USER, message: { text: 'ed25519 hello' }, targets: ['ghost-target'] },
+    };
+    const res = await postRpc(ed25519EnvelopeWrapping(rpc));
     expect(res.status).toBe(200);
     const json = res.json() as { data: { error?: unknown; result?: { taskId: string } } };
     expect(json.data.error).toBeUndefined();

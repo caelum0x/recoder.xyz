@@ -28,9 +28,24 @@ export interface SignedIngressConfig {
   readonly maxFutureSkewMs?: number;
 }
 
+/**
+ * Trust classification the caller asserts about an inbound envelope's origin.
+ * Absent/`false` ⇒ the caller is EXTERNAL / cross-tenant (hostile-by-default);
+ * `trusted: true` ⇒ the caller has proven an intra-cluster/trusted origin (e.g.
+ * a valid `INTERNAL_SERVICE_KEY` or an in-process transport binding). The
+ * ed25519 gate reserves the shared-symmetric-HMAC path for `trusted` callers.
+ */
+export interface IngressAdmissionContext {
+  readonly trusted?: boolean;
+}
+
 /** A signed-ingress gate: `admit(value)` → fail-closed `IngressResult`. */
 export interface SignedIngressGate {
-  admit<TPayload = unknown>(value: unknown, now?: Date): Promise<IngressResult<TPayload>>;
+  admit<TPayload = unknown>(
+    value: unknown,
+    now?: Date,
+    context?: IngressAdmissionContext,
+  ): Promise<IngressResult<TPayload>>;
 }
 
 function denied(status: number, code: string, reason: string): IngressResult<never> {
@@ -47,7 +62,15 @@ export function createSignedIngressGate(
   config: SignedIngressConfig,
 ): SignedIngressGate {
   return {
-    async admit<TPayload = unknown>(value: unknown, now?: Date): Promise<IngressResult<TPayload>> {
+    // `_context` is accepted for interface parity with the ed25519 gate that
+    // decorates this one. Reaching THIS gate already means the caller is on the
+    // sanctioned shared-HMAC path (intra-cluster/trusted, or a non-signature
+    // posture), so the trust classification does not further gate here.
+    async admit<TPayload = unknown>(
+      value: unknown,
+      now?: Date,
+      _context?: IngressAdmissionContext,
+    ): Promise<IngressResult<TPayload>> {
       // Fail-closed: cannot verify a required signature without a secret.
       if (config.requireSigned && !config.hmacSecret) {
         return denied(503, 'signed_ingress_secret_missing', 'Signing required but no HMAC secret configured — rejected (fail-closed).');
