@@ -101,6 +101,22 @@ describe('GovernanceGateService — decide → risk → audit', () => {
     expect(rows[0]?.payload.clearedByApprovalId).toBe(created.id);
   });
 
+  it('does NOT clear with an approval requested by a DIFFERENT actor (no cross-actor reuse)', async () => {
+    // recoder-xiqj: clearance must bind to the acting principal, not just
+    // task+action. Actor u2's approved record must never clear u1's action —
+    // otherwise any actor sharing a taskId inherits another's approval.
+    const approvals = new InMemoryApprovalRepository();
+    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u2', taskId: 't1' });
+    await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
+
+    const { gate } = buildGate(NEEDS, { approvals });
+    const v = await gate.decide('pr.merge', principal({ userId: 'u1' }), ctx({ taskId: 't1' }));
+
+    // u1 has no approval of its own → stays blocked, never borrows u2's.
+    expect(v.effect).toBe('needs_approval');
+    expect(v.approvalId).toBeUndefined();
+  });
+
   it('SOLO MODE (bootstrap-injected, never env): clears a needs_approval to allow and seals it', async () => {
     const { gate, auditRepo } = buildGate(NEEDS, { soloMode: true });
     const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));

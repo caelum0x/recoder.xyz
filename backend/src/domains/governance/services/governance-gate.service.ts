@@ -120,7 +120,7 @@ export class GovernanceGateService implements GovernanceGate {
     //    recorded human decision IS the authorization. The clearance is sealed
     //    into the audit chain below (step 4). Fail-closed everywhere else: the
     //    kernel's bare `approvalGateId` never clears, a lookup fault never clears.
-    const clearedByApprovalId = await this.resolveApprovalClearance(action, kernelVerdict, ctx);
+    const clearedByApprovalId = await this.resolveApprovalClearance(action, kernelVerdict, ctx, principal);
     // Solo/desktop mode (bootstrap-injected `soloMode`): a single local user on
     // their own machine with NO human-approval plane to route a `needs_approval`
     // verdict to — the user's own action IS the approval. Clear it to `allow`
@@ -348,20 +348,29 @@ export class GovernanceGateService implements GovernanceGate {
     action: GovernanceAction,
     verdict: KernelVerdict,
     ctx: GateDecisionContext,
+    principal: Principal,
   ): Promise<string | undefined> {
     if (verdict.effect !== 'needs_approval') return undefined;
     if (!ctx.taskId) return undefined;
     if (!this.approvals) return undefined;
     try {
-      const approved = await this.approvals.hasApproval(ctx.taskId, action);
-      if (!approved) return undefined;
-      const records = await this.approvals.list({ taskId: ctx.taskId, status: 'approved' });
-      // Only a record for the SAME action clears; without its id there is no
-      // auditable evidence, so the verdict stays blocking.
+      // Bind the clearance to the ACTING principal (recoder-xiqj): an approval
+      // clears only for the actor who requested it (`requestedBy`). Otherwise any
+      // actor sharing a taskId inherits another tenant's approval for the same
+      // action (confused-deputy / approval reuse). `requestedBy` is always the
+      // requesting principal's userId, and the same actor retries to clear, so
+      // this never breaks a legitimate flow.
+      const records = await this.approvals.list({
+        taskId: ctx.taskId,
+        status: 'approved',
+        requestedBy: principal.userId,
+      });
+      // Only a record for the SAME action + this requester clears; without its id
+      // there is no auditable evidence, so the verdict stays blocking.
       return records.find((r) => r.action === action)?.id;
     } catch (err) {
       this.log?.warn(
-        { err, action, taskId: ctx.taskId },
+        { err, action, taskId: ctx.taskId, actor: principal.userId },
         'governance approval lookup failed — leaving needs_approval in place',
       );
       return undefined;
