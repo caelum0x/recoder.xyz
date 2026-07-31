@@ -86,9 +86,9 @@ run/event store** (`fd6621902`) + **event-log idempotency** (`7cceb681e`); and t
 `interop` + `edge` completed the IDOR surface (adversarial find→verify sweep `wrxr15ae9`):
 A2A task ownership now binds to the cryptographically-verified ed25519 signer (not a spoofable
 `params.userId`), and `/internal/persistence/*` is gated behind `requireInternal` (was
-unauthenticated — full schema disclosure + migration trigger). **One residual filed** (governance
-approval-clearance principal-binding, `recoder-xiqj` — real gap, doubtful reach, needs a policy
-decision).
+unauthenticated — full schema disclosure + migration trigger). The follow-on residual
+(governance approval-clearance principal-binding, `recoder-xiqj`) is now **fixed** too —
+clearance binds to `requestedBy === principal.userId`, closing cross-actor approval reuse.
 Full fixed-vs-residual detail in **[SECURITY-POSTURE.md](./SECURITY-POSTURE.md)** §1.2.
 
 **Scope caveat (truthful):** the sweeps were scoped (moat +

@@ -12,9 +12,10 @@ happened.
 
 **SHIPPED (2026-07-31):** Multi-tenant IDOR sweep COMPLETE. All 8 original domains
 audited; the last two (interop + edge, 2026-07-31) now enforce ed25519 signer-bound
-ownership + /internal/* self-gating. **RESIDUAL (filed, not fixed, bd recoder-xiqj):**
-approval-clearance principal-binding — a real gap in the approval-gate service that
-requires a policy decision; only affects high-stakes approval workflows, doubtful reach.
+ownership + /internal/* self-gating. **FIXED (bd recoder-xiqj):**
+approval-clearance is now principal-bound — `resolveApprovalClearance` requires
+`requestedBy === principal.userId`, so an approval clears only for the actor that
+requested it (no cross-actor approval reuse). Legit same-actor flow preserved.
 
 It owns four load-bearing seams the other 14 domains wire to:
 
