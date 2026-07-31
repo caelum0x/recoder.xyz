@@ -10,7 +10,7 @@
  *
  * No `process.env` reads (config is injected); no top-level singletons.
  */
-import type { Router } from 'express';
+import type { Router, RequestHandler } from 'express';
 import type { Pool } from 'pg';
 import type { AppConfig } from '../../shared/app-config.js';
 import type { Logger } from '../../shared/logger.js';
@@ -104,8 +104,8 @@ export class PersistenceComposer implements PersistenceModule {
     return buildPersistenceHealth(this.pool, this.runner, this.cfg.maxPoolSize);
   }
 
-  routes(): Router {
-    return registerPersistenceRoutes(this);
+  routes(requireInternal?: RequestHandler): Router {
+    return registerPersistenceRoutes(this, requireInternal);
   }
 
   mcp(): readonly McpToolRegistration[] {

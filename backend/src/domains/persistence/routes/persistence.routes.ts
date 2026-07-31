@@ -1,15 +1,28 @@
 /**
- * `/internal/persistence/*` edges. All are internal-only; the edge domain
- * (Phase 4) applies the `INTERNAL_SERVICE_KEY` gate + interop chain when it
- * mounts this router, and write edges additionally pass the governance gate
- * (Phase 3). This file owns only the handlers over the module surface.
+ * `/internal/persistence/*` edges. All are internal-only: they disclose the full
+ * DB schema and can trigger control-plane migrations, so every route sits behind
+ * `requireInternal` (constant-time `INTERNAL_SERVICE_KEY` gate; fail-closed —
+ * unset key ⇒ 503, missing/bad key ⇒ 401). The edge domain's guard convention is
+ * globally overridden to public (bootstrap), so — like every sibling internal
+ * router — this router self-gates up front rather than relying on the mount.
+ * This file owns the handlers over the module surface.
  */
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import { asyncHandler, sendSuccess, sendError, createError, ErrorCode } from '../../../shared/errors.js';
 import type { PersistenceModule } from './../index.js';
 
-export function registerPersistenceRoutes(module: PersistenceModule): Router {
+export function registerPersistenceRoutes(module: PersistenceModule, requireInternal?: RequestHandler): Router {
   const router = Router();
+
+  // These edges are worker-to-backend only — gate once, up front, fail-closed.
+  // The gate is optional in the type only to keep the uniform `DomainModule`
+  // contract; if it is ever wired without one, deny everything rather than
+  // serve schema/migrations ungated (fail-closed, never fake-open).
+  const gate: RequestHandler =
+    requireInternal ??
+    ((_req, res) =>
+      sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'internal persistence gate not wired')));
+  router.use(gate);
 
   // GET /internal/persistence/health — pool ping + migration ledger + saturation.
   router.get(
