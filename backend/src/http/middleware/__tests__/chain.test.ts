@@ -39,9 +39,9 @@ function makeChain(verifier: SessionVerifier = nullVerifier) {
 }
 
 describe('chain — the ONE canonical ordered pipeline', () => {
-  it('global chain is context → cors → body → api-rate-limit (4 links)', () => {
+  it('global chain is context → cors → csrf → body → api-rate-limit (5 links)', () => {
     const links = makeChain().buildGlobalChain();
-    expect(links).toHaveLength(4);
+    expect(links).toHaveLength(5);
   });
 
   it('a public, non-interop mount compiles to an empty guard', () => {

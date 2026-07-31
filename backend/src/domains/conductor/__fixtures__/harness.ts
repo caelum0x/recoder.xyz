@@ -101,9 +101,13 @@ export function makePrincipal(userId = 'user_test'): Principal {
   };
 }
 
-/** The minimal `AppConfig` slice the conductor config reads (`runtime.isProduction`). */
-export function makeConfig(isProduction = false): AppConfig {
-  return { runtime: { isProduction } } as unknown as AppConfig;
+/**
+ * The minimal `AppConfig` slice the conductor config reads (`runtime.isProduction`
+ * + `runtime.soloMode`). `soloMode` drives the desktop single-owner fail-open path
+ * (`sliceConductorConfig` reads `app.runtime.soloMode === true`).
+ */
+export function makeConfig(isProduction = false, soloMode = false): AppConfig {
+  return { runtime: { isProduction, soloMode } } as unknown as AppConfig;
 }
 
 /** A recording governance gate whose `decide` effect is configurable per call. */
@@ -374,6 +378,8 @@ export interface ComposeOptions {
   substrateScan?: ConductorModuleDeps['substrateScan'];
   /** OPTIONAL dmux LAYOUT-brain grid seam (absent ⇒ no grid hint, arrange ⇒ null). */
   workspaceGrid?: ConductorModuleDeps['workspaceGrid'];
+  /** OPTIONAL AppConfig override (e.g. `makeConfig(false, true)` for solo/desktop mode). */
+  config?: AppConfig;
 }
 
 /** Compose a conductor module over the in-memory harness. Returns the module + its gate. */
@@ -383,7 +389,7 @@ export function composeConductor(options: ComposeOptions = {}): {
 } {
   const gate = options.gate ?? makeGate('allow');
   const module = createConductorModule({
-    config: makeConfig(),
+    config: options.config ?? makeConfig(),
     logger: makeLogger(),
     executor:
       options.executor ?? makeExecutor(options.executorAvailable ?? false),

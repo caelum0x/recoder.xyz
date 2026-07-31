@@ -2,7 +2,7 @@
  * The ONE canonical request pipeline — so all 14 domains share a single request
  * lifecycle instead of each hand-ordering middleware. Fixed order:
  *
- *   request-context → cors → body(limits) → rate-limit(api)          [GLOBAL]
+ *   request-context → cors → csrf → body(limits) → rate-limit(api)    [GLOBAL]
  *     → rate-limit(tier?) → auth | internal-key → interop-gate       [PER-MOUNT GUARD]
  *       → route → notFound → error                                   [tail, added by composer]
  *
@@ -21,6 +21,7 @@ import type { EdgeConfig } from '../../domains/edge/config.js';
 import type { GuardPolicy } from '../../domains/edge/types.js';
 import { requestContext } from './request-context.js';
 import { corsMiddleware } from './cors.js';
+import { csrfOriginGuard } from './csrf.js';
 import { httpRateLimiters, type HttpRateLimiters } from './rate-limit.js';
 import { authenticateRequest, optionalAuth } from './auth.js';
 import { internalKeyGate } from './internal-key.js';
@@ -49,6 +50,9 @@ export interface EdgeChain {
 export function createChain(deps: ChainDeps): EdgeChain {
   const context = requestContext({ logger: deps.logger });
   const cors = corsMiddleware(deps.config.cors);
+  // CSRF admission (item #25): reject cookie-authenticated mutations that lack a
+  // same-origin proof. Reuses the CORS allowlist as the single origin source.
+  const csrf = csrfOriginGuard(deps.config.cors);
   // The global JSON parser also STASHES the exact received bytes on `req.rawBody`.
   // The billing webhook ingress (`/api/billing/webhooks/:provider`) verifies a
   // provider signature over the raw bytes; since this global parser runs before
@@ -69,7 +73,7 @@ export function createChain(deps: ChainDeps): EdgeChain {
   const internalKey = internalKeyGate({ internalServiceKey: deps.config.internalServiceKey });
   const gateFor = interopGate({ chain: deps.interopChain, logger: deps.logger });
 
-  const buildGlobalChain = (): RequestHandler[] => [context, cors, body, rateLimiters.api];
+  const buildGlobalChain = (): RequestHandler[] => [context, cors, csrf, body, rateLimiters.api];
 
   const buildGuard = (policy: GuardPolicy): RequestHandler[] => {
     const links: RequestHandler[] = [];

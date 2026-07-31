@@ -392,15 +392,25 @@ export interface ConductorModule {
    * siblings both touched, always emitted as `[]` when none). Read-only +
    * degrade-safe: an unreadable sibling reports a reason and contributes NOTHING
    * to the overlap; a missing/blank group is a truthful empty view.
+   *
+   * When a `principal` is supplied (every HTTP route), the aggregate is narrowed to
+   * the caller's OWN siblings (recoder-kybr) — a group is keyed on a shared
+   * `taskGroup`, so the single-id `:id` guard cannot cover it. A principal-less
+   * (internal) read (the merge-time evidence gather) sees the full group.
    */
-  compareTaskGroup(taskGroup: string): Promise<CompareView>;
+  compareTaskGroup(taskGroup: string, principal?: Principal): Promise<CompareView>;
   /**
    * The compare view for the group a single workspace belongs to (its own
    * singleton set when ungrouped — `contested` is then always `[]`). Each row
    * carries its changed-file list; the view carries the contested-overlap set.
-   * Null when the workspace does not exist.
+   * Null when the workspace does not exist OR the caller may not access it (a
+   * no-oracle null when a `principal` is supplied). A supplied `principal` also
+   * narrows the group to the caller's OWN siblings (recoder-kybr).
    */
-  workspaceSiblings(workspaceId: string): Promise<CompareView | null>;
+  workspaceSiblings(
+    workspaceId: string,
+    principal?: Principal,
+  ): Promise<CompareView | null>;
   /**
    * Arrange the parallel-run group's operator grid — GATED (`workspace.grid`):
    * ensure the dedicated `recoder-group-<taskGroup>` session then build one pane
@@ -648,6 +658,7 @@ export interface ConductorModule {
     taskGroup: string,
     selection: Readonly<Record<string, string>>,
     options?: { readonly probe?: boolean },
+    principal?: Principal,
   ): Promise<ConvergencePlan>;
   /**
    * COMPOSE a convergence (`POST …/converge`) — GATED (`workspace.branch`).

@@ -183,6 +183,7 @@ import {
   type WorkspaceQueryFilters,
 } from './services/workspace-query.service.js';
 import { buildCompareRoutes } from './routes/compare.routes.js';
+import { canAccessWorkspace } from './routes/workspace-access.js';
 import { buildCheckpointRoutes } from './routes/checkpoint.routes.js';
 import { buildWorkspaceQueryRoutes } from './routes/workspaces-query.routes.js';
 import { buildRepoConfigRoutes } from './routes/repo-config.routes.js';
@@ -1821,14 +1822,38 @@ export class ConductorComposer implements ConductorModule {
 
   // --- multi-agent compare (F3 parallel-run groups): read-only ------------------
 
-  /** The narrow read seams the compare service groups + projects over. */
-  private compareDeps(): CompareDeps {
+  /**
+   * The per-caller access predicate the compare/converge aggregation folds through
+   * (recoder-kybr). A group-scoped read/compose is keyed on a shared `taskGroup`,
+   * so the single-id `:id` guard cannot cover it — this restricts the group to the
+   * siblings the caller may access, reusing the SAME `canAccessWorkspace` semantics
+   * (createdBy/tenant + admin + solo fail-open) the `:id` routes enforce. A
+   * principal-less (INTERNAL) call ⇒ `undefined` (no filter — the FULL group, as the
+   * merge-time evidence read needs). Pure + side-effect free.
+   */
+  private compareAccessFilter(
+    principal?: Principal
+  ): ((workspace: Workspace) => boolean) | undefined {
+    if (!principal) return undefined;
+    const opts = { soloMode: this.cfg.soloMode };
+    return workspace => canAccessWorkspace(principal, workspace, opts);
+  }
+
+  /**
+   * The narrow read seams the compare service groups + projects over. When a
+   * `principal` is supplied (every HTTP route), the aggregate is narrowed to the
+   * caller's OWN siblings via {@link compareAccessFilter}; a principal-less internal
+   * call sees the full group.
+   */
+  private compareDeps(principal?: Principal): CompareDeps {
+    const canAccess = this.compareAccessFilter(principal);
     return {
       listWorkspaces: () => this.engine.listWorkspaces(),
       getWorkspace: id => this.engine.getWorkspace(id),
       buildView: workspace => this.buildWorkspaceView(workspace),
       diffStat: workspace => this.computeDiffStat(workspace),
       changedFiles: workspace => this.computeChangedFiles(workspace),
+      ...(canAccess ? { canAccess } : {}),
     };
   }
 
@@ -1893,13 +1918,25 @@ export class ConductorComposer implements ConductorModule {
     }
   }
 
-  async compareTaskGroup(taskGroup: string): Promise<CompareView> {
-    const view = await compareTaskGroupOp(this.compareDeps(), taskGroup);
+  async compareTaskGroup(
+    taskGroup: string,
+    principal?: Principal
+  ): Promise<CompareView> {
+    const view = await compareTaskGroupOp(
+      this.compareDeps(principal),
+      taskGroup
+    );
     return this.withGridHint(view);
   }
 
-  async workspaceSiblings(workspaceId: string): Promise<CompareView | null> {
-    const view = await workspaceSiblingsOp(this.compareDeps(), workspaceId);
+  async workspaceSiblings(
+    workspaceId: string,
+    principal?: Principal
+  ): Promise<CompareView | null> {
+    const view = await workspaceSiblingsOp(
+      this.compareDeps(principal),
+      workspaceId
+    );
     return view ? this.withGridHint(view) : view;
   }
 
@@ -1963,7 +2000,12 @@ export class ConductorComposer implements ConductorModule {
     // dmux absent ⇒ truthful null (no grid) — the write is a governed no-op.
     if (!this.workspaceGrid) return { ok: true, verdict, value: null };
 
-    const view = await compareTaskGroupOp(this.compareDeps(), taskGroup);
+    // recoder-kybr: arrange ONLY the caller's own worktrees — never span a grid
+    // over another tenant's sibling of the same taskGroup.
+    const view = await compareTaskGroupOp(
+      this.compareDeps(principal),
+      taskGroup
+    );
     const worktrees = view.siblings
       .filter(
         (s): s is typeof s & { worktreePath: string } =>
@@ -2681,9 +2723,16 @@ export class ConductorComposer implements ConductorModule {
     return this.evidenceSigningKey;
   }
 
-  /** The raw compare read (no grid enrichment) — the pure sibling aggregate. */
-  private async rawCompare(taskGroup: string): Promise<CompareView> {
-    return compareTaskGroupOp(this.compareDeps(), taskGroup);
+  /**
+   * The raw compare read (no grid enrichment) — the pure sibling aggregate. When a
+   * `principal` is supplied the aggregate is narrowed to the caller's OWN siblings
+   * (recoder-kybr); a principal-less internal read (merge-time evidence) sees all.
+   */
+  private async rawCompare(
+    taskGroup: string,
+    principal?: Principal
+  ): Promise<CompareView> {
+    return compareTaskGroupOp(this.compareDeps(principal), taskGroup);
   }
 
   /**
@@ -2727,9 +2776,12 @@ export class ConductorComposer implements ConductorModule {
   async planConvergence(
     taskGroup: string,
     selection: Readonly<Record<string, string>>,
-    options?: { readonly probe?: boolean }
+    options?: { readonly probe?: boolean },
+    principal?: Principal
   ): Promise<ConvergencePlan> {
-    const view = await this.rawCompare(taskGroup);
+    // recoder-kybr: plan over ONLY the caller's own siblings (a group is keyed on a
+    // shared taskGroup, so the `:id` guard cannot cover it). Principal-less ⇒ full group.
+    const view = await this.rawCompare(taskGroup, principal);
     const siblings = view.siblings.map(s => ({
       workspaceId: s.workspaceId,
       agent: s.agent,
@@ -2756,16 +2808,21 @@ export class ConductorComposer implements ConductorModule {
     ];
     if (contestedInputs.length === 0) return { ...plan, contested: [] };
     const contested = await probeSynthesizabilityOp(
-      this.convergeDeps(),
+      this.convergeDeps(principal),
       contestedInputs
     );
     return { ...plan, contested };
   }
 
-  /** The injected seams the convergence ops (compose + probe) run over. */
-  private convergeDeps(): ConvergeOpsDeps {
+  /**
+   * The injected seams the convergence ops (compose + probe) run over. When a
+   * `principal` is supplied the `compare` seam is narrowed to the caller's OWN
+   * siblings (recoder-kybr), so a converge folds only worktrees the caller owns;
+   * a principal-less internal call sees the full group.
+   */
+  private convergeDeps(principal?: Principal): ConvergeOpsDeps {
     return {
-      compare: taskGroup => this.rawCompare(taskGroup),
+      compare: taskGroup => this.rawCompare(taskGroup, principal),
       getWorkspace: id => this.engine.getWorkspace(id),
       registerWorkspace: workspace =>
         this.repository.upsertWorkspace(workspace),
@@ -2799,7 +2856,8 @@ export class ConductorComposer implements ConductorModule {
     );
     if (!allowed) return { ok: false, verdict, reason: verdict.reason };
     try {
-      const result = await composeConvergenceOp(this.convergeDeps(), {
+      // recoder-kybr: fold ONLY the caller's own worktrees into the convergence.
+      const result = await composeConvergenceOp(this.convergeDeps(principal), {
         ...input,
         createdBy: input.createdBy || principal.userId,
       });
