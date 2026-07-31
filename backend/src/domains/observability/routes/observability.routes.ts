@@ -40,6 +40,43 @@ function actor(req: Request): Principal | null {
   return req.principal && !req.principal.isAnonymous ? req.principal : null;
 }
 
+/**
+ * Does the caller carry an elevated scope that may read an ARBITRARY tenant's
+ * governance audit chain? Mirrors `resolveActorId` in `mcp/observability-engine.ts`
+ * (the `obs_audit_search` twin) and the middleware's `requireAdmin` notion of an
+ * operator: an `internal` service caller, or a principal holding the `admin`/
+ * `internal` scope. A NON-privileged principal may only read its OWN rows.
+ */
+function isAuditOperator(principal: Principal): boolean {
+  return (
+    principal.kind === 'internal' ||
+    principal.scopes.includes('admin') ||
+    principal.scopes.includes('internal')
+  );
+}
+
+/**
+ * Resolve the `actorId` audit filter, bound to the authenticated {@link Principal}
+ * (mirrors `resolveActorId` in the `obs_audit_search` MCP twin). A NON-privileged
+ * principal is pinned to its OWN `userId`; a caller-supplied foreign `actorId` is
+ * REJECTED (never served) — cross-tenant audit-trail disclosure is the IDOR. An
+ * operator (`admin`/`internal`) may name any `actorId`, or omit it for the global
+ * ops view. On a foreign-actor attempt, returns `{ denied: true }` so the handler
+ * responds 403 rather than leaking another tenant's ledger.
+ */
+function resolveAuditActorId(
+  principal: Principal,
+  requested: string | undefined,
+): { actorId: string | undefined } | { denied: true } {
+  if (isAuditOperator(principal)) {
+    return { actorId: requested };
+  }
+  if (requested && requested !== principal.userId) {
+    return { denied: true };
+  }
+  return { actorId: principal.userId };
+}
+
 // --- health (root) ----------------------------------------------------------
 
 export interface HealthRoutesDeps {
@@ -222,14 +259,42 @@ export function buildControlRoutes(deps: ControlRoutesDeps): Router {
   );
 
   // XDR audit query (Merkle re-verified before display).
+  //
+  // SECURITY (cross-tenant IDOR): the governance audit chain is tenant-owned
+  // data. `authenticateMutating` (not `authenticate`) requires a NON-anonymous
+  // principal — closing the omit-all read where an anonymous caller pulled EVERY
+  // tenant's ledger — while honoring RECODER_SOLO_MODE fail-open (the middleware
+  // promotes the single local caller to the synthetic solo owner). A non-operator
+  // principal is then pinned to its OWN `actorId`; a caller-named foreign
+  // `actorId` is refused 403. Mirrors the `obs_audit_search` MCP twin.
   router.get(
     '/audit',
-    deps.mw.authenticate,
+    deps.mw.authenticateMutating,
     asyncHandler(async (req, res) => {
+      const principal = actor(req);
+      if (!principal) {
+        sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'authentication required'));
+        return;
+      }
+      const requestedActorId =
+        typeof req.query.actorId === 'string' && req.query.actorId.trim()
+          ? req.query.actorId.trim()
+          : undefined;
+      const resolved = resolveAuditActorId(principal, requestedActorId);
+      if ('denied' in resolved) {
+        sendError(
+          res,
+          createError(
+            ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+            'may only read your own audit rows',
+          ),
+        );
+        return;
+      }
       const effect =
         req.query.effect === 'allow' || req.query.effect === 'deny' ? req.query.effect : undefined;
       const query: XdrQuery = {
-        ...(typeof req.query.actorId === 'string' ? { actorId: req.query.actorId } : {}),
+        ...(resolved.actorId ? { actorId: resolved.actorId } : {}),
         ...(typeof req.query.action === 'string' ? { action: req.query.action } : {}),
         ...(effect ? { effect } : {}),
         limit: Math.min(Number(req.query.limit) || 100, 500),
@@ -250,9 +315,15 @@ export function buildControlRoutes(deps: ControlRoutesDeps): Router {
   );
 
   // Recent structured logs from the ops ring buffer.
+  //
+  // SECURITY (cross-tenant disclosure): the ring is process-GLOBAL — it holds
+  // every tenant's log lines with no per-tenant scoping. Gate it to internal
+  // operators via `requireInternal` (the same INTERNAL_SERVICE_KEY boundary the
+  // sibling `/metrics` scrape uses), not plain `authenticate`, so a single
+  // authenticated tenant can't read across the tenancy.
   router.get(
     '/logs',
-    deps.mw.authenticate,
+    deps.mw.requireInternal,
     asyncHandler(async (req, res) => {
       const limit = Math.min(Number(req.query.limit) || 100, 500);
       sendSuccess(res, { records: deps.logRing.recent(limit) });

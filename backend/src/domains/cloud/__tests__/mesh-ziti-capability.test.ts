@@ -192,6 +192,8 @@ function toolMap(fetchLike: FetchLike, gate?: CloudGovernanceGatePort): Map<stri
 }
 
 const caller: McpToolCaller = { userId: 'u-1' };
+/** Admin/internal caller — the cross-tenant mesh registration detail is gated to this scope. */
+const adminCaller: McpToolCaller = { userId: 'ops-1', scopes: ['internal'] };
 
 const allowGate = {
   decide: async () => ({ effect: 'allow', tier: 'low', degraded: false, reason: 'ok' }),
@@ -211,7 +213,7 @@ describe('cloud mesh MCP read tools', () => {
   });
 
   it('cloud_mesh_services_list returns engine status + services', async () => {
-    const res = (await toolMap(fetchLike).get('cloud_mesh_services_list')!.handler({}, caller)) as {
+    const res = (await toolMap(fetchLike).get('cloud_mesh_services_list')!.handler({}, adminCaller)) as {
       count: number;
       services: unknown[];
     };
@@ -220,7 +222,7 @@ describe('cloud mesh MCP read tools', () => {
   });
 
   it('cloud_mesh_enrollment_status counts enrolled vs pending', async () => {
-    const res = (await toolMap(fetchLike).get('cloud_mesh_enrollment_status')!.handler({}, caller)) as {
+    const res = (await toolMap(fetchLike).get('cloud_mesh_enrollment_status')!.handler({}, adminCaller)) as {
       pending: number;
       enrolled: number;
     };
@@ -229,7 +231,7 @@ describe('cloud mesh MCP read tools', () => {
   });
 
   it('cloud_mesh_topology returns counts + a timestamp', async () => {
-    const res = (await toolMap(fetchLike).get('cloud_mesh_topology')!.handler({}, caller)) as {
+    const res = (await toolMap(fetchLike).get('cloud_mesh_topology')!.handler({}, adminCaller)) as {
       identities: number;
       services: number;
       pendingEnrollments: number;

@@ -180,4 +180,29 @@ describe('inference.complete / inference.feedback tenant attribution', () => {
     );
     expect(feedback.mock.calls[0]?.[0]).not.toMatchObject({ userId: 'victim-user-id' });
   });
+
+  it('SECURITY: inference.feedback does NOT bypass ownership for an ordinary caller (cross-tenant poisoning enforced downstream)', async () => {
+    const { deps, feedback } = feedbackDeps();
+    await toolNamed(deps, 'inference.feedback').handler(
+      { inferenceId: 'inf1', metricName: 'thumbs', value: true },
+      { userId: 'tenant-B', scopes: ['read', 'write'] },
+    );
+    expect(feedback.mock.calls[0]?.[0]).not.toMatchObject({ bypassOwnershipCheck: true });
+  });
+
+  it('SECURITY: inference.feedback bypasses ownership ONLY for an admin/internal-scoped caller (operator path)', async () => {
+    const admin = feedbackDeps();
+    await toolNamed(admin.deps, 'inference.feedback').handler(
+      { inferenceId: 'inf1', metricName: 'thumbs', value: true },
+      { userId: 'op', scopes: ['admin'] },
+    );
+    expect(admin.feedback).toHaveBeenCalledWith(expect.objectContaining({ bypassOwnershipCheck: true, userId: 'op' }));
+
+    const internal = feedbackDeps();
+    await toolNamed(internal.deps, 'inference.feedback').handler(
+      { inferenceId: 'inf1', metricName: 'thumbs', value: true },
+      { userId: 'svc', scopes: ['internal'] },
+    );
+    expect(internal.feedback).toHaveBeenCalledWith(expect.objectContaining({ bypassOwnershipCheck: true }));
+  });
 });

@@ -80,6 +80,23 @@ export class PgUsageLedgerRepository implements UsageLedgerRepository {
     }
   }
 
+  async ownsInference(userId: string, inferenceId: string): Promise<boolean> {
+    // Fail CLOSED: no durable backing / no ids ⇒ ownership cannot be proven, so
+    // the caller does NOT own the inference (a fault is never a poisoning oracle).
+    if (!this.qe.isAvailable() || !userId || !inferenceId) return false;
+    try {
+      const row = await this.qe.one<QueryRow>(
+        `select 1 as owned from inference_usage_ledger
+          where inference_id = :inference_id and user_id = :user_id limit 1`,
+        { inference_id: inferenceId, user_id: userId },
+      );
+      return row !== null && row !== undefined;
+    } catch (err) {
+      this.log.warn({ err: message(err), userId }, 'usage ledger ownership check failed (denying)');
+      return false;
+    }
+  }
+
   async totalsForUser(
     userId: string,
     sinceIso?: string,

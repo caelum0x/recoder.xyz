@@ -11,18 +11,20 @@
  *   GET    /api/agent-os/locks                list active locks (filterable)
  *   DELETE /api/agent-os/locks/:id            release a held lock
  *
- * Security posture:
+ * Security posture (cross-tenant IDOR — see `governance-access.ts`):
  *  - Mutating routes use `authenticateMutating` (a real, non-anonymous principal).
- *  - The ACTOR identity (`requestedBy`, `decidedBy`, lock `holderAgentId`) is
- *    taken from the resolved {@link Principal}, NEVER from the request body — a
- *    caller cannot forge who requested/decided/holds.
+ *  - The ACTOR/OWNER (`requestedBy`, `decidedBy`, lock `holderAgentId`) is bound to
+ *    the resolved {@link Principal}, NEVER trusted from the request body/query — a
+ *    non-privileged caller can only act as / see ITS OWN subject. `decide` is
+ *    authorized to the approval's owner (or admin/internal); a foreign approval is
+ *    a no-oracle 404. The list edges are forced to the caller's own id; the locks
+ *    holder is the caller. An `admin`/`internal` operator may target any subject,
+ *    and `RECODER_SOLO_MODE` (one local user) fails OPEN. This mirrors the MCP
+ *    twins (`governance_approval_decide` / `governance_release_lock` /
+ *    `resolveActor` / `resolveLockHolderScope`).
  *  - A lock conflict is a truthful `{ acquired: false, lock, conflictReason }`
  *    200 (the acquire ran; the outcome is "not acquired"), never a faked success.
  *  - All bodies validated fail-fast with the uniform `sendError` envelope.
- *
- * NOTE (approver authority): who may DECIDE an approval is a policy concern.
- * This edge requires a real principal and records `decidedBy`; enforcing that the
- * decider is an authorized approver (RBAC / gate) is layered in integration.
  */
 import { Router } from 'express';
 import { ErrorCode, createError, sendError, sendSuccess, asyncHandler } from '../../../shared/errors.js';
@@ -30,11 +32,19 @@ import type { AuthMiddleware } from '../../identity/middleware/authenticate.midd
 import type { ApprovalService } from '../services/approval.service.js';
 import type { WorkLockService } from '../services/work-lock.service.js';
 import type { ApprovalStatus, RiskTier } from '../types.js';
+import { canDecideApproval, resolveOwnerScope } from './governance-access.js';
 
 export interface GovernanceApprovalsRouterDeps {
   readonly approvals: ApprovalService;
   readonly workLocks: WorkLockService;
   readonly middleware: AuthMiddleware;
+  /**
+   * Solo/desktop single-user mode (bootstrap-injected from `RECODER_SOLO_MODE`
+   * via `cfg.soloMode`). When true the actor/owner scoping fails OPEN — the one
+   * local user is never locked out. A cloud deploy never sets it and keeps the
+   * per-tenant enforcement below.
+   */
+  readonly soloMode?: boolean;
 }
 
 const APPROVAL_STATUSES: readonly ApprovalStatus[] = ['pending', 'approved', 'denied', 'expired'];
@@ -43,6 +53,7 @@ const APPROVAL_STATUSES: readonly ApprovalStatus[] = ['pending', 'approved', 'de
 export function buildGovernanceApprovalsRouter(deps: GovernanceApprovalsRouterDeps): Router {
   const router = Router();
   const { approvals, workLocks, middleware } = deps;
+  const access = { soloMode: deps.soloMode === true };
 
   // --- approvals -------------------------------------------------------------
 
@@ -68,15 +79,24 @@ export function buildGovernanceApprovalsRouter(deps: GovernanceApprovalsRouterDe
     }),
   );
 
-  // List approvals, optionally filtered by task / requester / status.
+  // List approvals, optionally filtered by task / requester / status. The
+  // `requestedBy` scope is FORCED to the caller's own id for a non-privileged
+  // principal (an unscoped list would leak every tenant's approvals); an
+  // admin/internal operator (or solo mode) may pass an arbitrary requester or
+  // list all.
   router.get(
     '/approvals',
     middleware.authenticate,
     asyncHandler(async (req, res) => {
       const status = queryStatus(req.query.status);
+      const requestedBy = resolveOwnerScope(
+        req.principal!,
+        typeof req.query.requestedBy === 'string' ? req.query.requestedBy : undefined,
+        access,
+      );
       const records = await approvals.list({
         ...(typeof req.query.taskId === 'string' ? { taskId: req.query.taskId } : {}),
-        ...(typeof req.query.requestedBy === 'string' ? { requestedBy: req.query.requestedBy } : {}),
+        ...(requestedBy != null ? { requestedBy } : {}),
         ...(status ? { status } : {}),
         ...(queryLimit(req.query.limit) != null ? { limit: queryLimit(req.query.limit)! } : {}),
       });
@@ -98,11 +118,21 @@ export function buildGovernanceApprovalsRouter(deps: GovernanceApprovalsRouterDe
     }),
   );
 
-  // Approve / deny a pending approval. Decider = the authenticated principal.
+  // Approve / deny a pending approval. The decider must be AUTHORIZED for this
+  // specific approval — an admin/internal operator, solo mode, or the approval's
+  // own requester. A foreign (or genuinely-absent) approval is a byte-identical
+  // 404 with no existence oracle, so a caller cannot probe other tenants' gates
+  // nor self-clear/DoS one they do not own. Decider identity is bound to the
+  // principal (never the body). Mirrors the MCP `governance_approval_decide` twin.
   router.post(
     '/approvals/:id/decide',
     middleware.authenticateMutating,
     asyncHandler(async (req, res) => {
+      const existing = await approvals.get(req.params.id);
+      if (!existing || !canDecideApproval(req.principal!, existing, access)) {
+        sendError(res, createError(ErrorCode.NOT_FOUND, 'approval not found'));
+        return;
+      }
       const body = asObject(req.body);
       const decision = requireDecision(body);
       const record = await approvals.decide(req.params.id, {
@@ -116,17 +146,22 @@ export function buildGovernanceApprovalsRouter(deps: GovernanceApprovalsRouterDe
 
   // --- work locks ------------------------------------------------------------
 
-  // Acquire a work lock on a resource path. Holder = the authenticated principal
-  // unless an explicit agent id is supplied (e.g. a runtime acting for itself).
+  // Acquire a work lock on a resource path. Holder is BOUND to the authenticated
+  // principal — a non-privileged caller cannot forge a lock under a foreign
+  // holder (a body `holderAgentId` is ignored for it). Only an admin/internal
+  // operator (or solo mode) may name an explicit holder. Mirrors `resolveActor`.
   router.post(
     '/locks',
     middleware.authenticateMutating,
     asyncHandler(async (req, res) => {
       const body = asObject(req.body);
       const resourcePath = requireString(body, 'resourcePath');
+      const holderAgentId =
+        resolveOwnerScope(req.principal!, optionalString(body, 'holderAgentId'), access) ??
+        req.principal!.userId;
       const result = await workLocks.acquire({
         resourcePath,
-        holderAgentId: optionalString(body, 'holderAgentId') ?? req.principal!.userId,
+        holderAgentId,
         taskId: optionalString(body, 'taskId') ?? null,
         mode: requireMode(body),
         ttlMs: optionalNumber(body, 'ttlMs'),
@@ -137,27 +172,40 @@ export function buildGovernanceApprovalsRouter(deps: GovernanceApprovalsRouterDe
     }),
   );
 
-  // List active locks, optionally scoped to a holder or task.
+  // List active locks. The `holderAgentId` scope is FORCED to the caller's own id
+  // for a non-privileged principal (an unscoped list would enumerate every
+  // tenant's active work); an admin/internal operator (or solo mode) may target
+  // an arbitrary holder or list all. Mirrors `resolveLockHolderScope`.
   router.get(
     '/locks',
     middleware.authenticate,
     asyncHandler(async (req, res) => {
+      const holderAgentId = resolveOwnerScope(
+        req.principal!,
+        typeof req.query.holderAgentId === 'string' ? req.query.holderAgentId : undefined,
+        access,
+      );
       const locks = await workLocks.listActive({
-        ...(typeof req.query.holderAgentId === 'string' ? { holderAgentId: req.query.holderAgentId } : {}),
+        ...(holderAgentId != null ? { holderAgentId } : {}),
         ...(typeof req.query.taskId === 'string' ? { taskId: req.query.taskId } : {}),
       });
       sendSuccess(res, { locks });
     }),
   );
 
-  // Release a held lock. Holder-scoped to the authenticated principal (or an
-  // explicit holder id the caller owns); a foreign/absent lock returns 404.
+  // Release a held lock. Holder is BOUND to the authenticated principal — a
+  // non-privileged caller cannot release a victim's lock by naming them in the
+  // body (a body `holderAgentId` is ignored for it). Only an admin/internal
+  // operator (or solo mode) may release on behalf of an explicit holder. A
+  // foreign/absent lock returns a no-oracle 404. Mirrors `governance_release_lock`.
   router.delete(
     '/locks/:id',
     middleware.authenticateMutating,
     asyncHandler(async (req, res) => {
       const body = asObject(req.body);
-      const holderAgentId = optionalString(body, 'holderAgentId') ?? req.principal!.userId;
+      const holderAgentId =
+        resolveOwnerScope(req.principal!, optionalString(body, 'holderAgentId'), access) ??
+        req.principal!.userId;
       const released = await workLocks.release(req.params.id, holderAgentId);
       if (!released) {
         sendError(res, createError(ErrorCode.NOT_FOUND, 'no active lock with that id held by you'));

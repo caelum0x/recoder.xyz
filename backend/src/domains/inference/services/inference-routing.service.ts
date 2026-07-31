@@ -230,6 +230,21 @@ export class InferenceRoutingService {
    * (`{ routed:false, reason }` when no feedback-capable tier is bound).
    */
   async feedback(req: FeedbackRequest): Promise<FeedbackResult> {
+    // CROSS-TENANT OWNERSHIP GUARD (shared by BOTH feedback surfaces — the HTTP
+    // route and the MCP tool route through here). An attributed, non-privileged
+    // caller may only attach a signal to an inference IT produced. When ownership
+    // cannot be proven we refuse with a no-oracle NOT_FOUND and NEVER dispatch to
+    // the gateway (poisoning a victim's RLHF/quality signal is stopped here).
+    if (await this.feedbackOwnershipDenied(req)) {
+      return {
+        routed: false,
+        tier: 'none',
+        inferenceId: req.inferenceId,
+        metricName: req.metricName,
+        reason: 'inference not found',
+        denied: 'not_found',
+      };
+    }
     const startedAt = this.now();
     const result = await this.gateway.feedback(req);
     try {
@@ -253,6 +268,30 @@ export class InferenceRoutingService {
       );
     }
     return result;
+  }
+
+  /**
+   * Decide whether a feedback submission must be refused for cross-tenant
+   * ownership. BYPASS (returns false ⇒ proceed) when the caller is admin/internal/
+   * solo (`bypassOwnershipCheck`) or the call is unattributed (`!userId` ⇒ an
+   * internal/direct path with no tenant to scope to). Otherwise the caller must
+   * OWN the inference: `ledger.ownsInference` fails CLOSED (returns false when the
+   * durable backing is down or the read errors), so an unprovable ownership is a
+   * refusal — a fault is never a feedback-poisoning oracle.
+   */
+  private async feedbackOwnershipDenied(req: FeedbackRequest): Promise<boolean> {
+    if (req.bypassOwnershipCheck || !req.userId) return false;
+    try {
+      const owns = await this.ledger.ownsInference(req.userId, req.inferenceId);
+      return !owns;
+    } catch (err) {
+      // Fail CLOSED: an ownership read fault must refuse (never a poisoning oracle).
+      this.log.warn(
+        { err: message(err), inferenceId: req.inferenceId },
+        'feedback ownership check errored — refusing (fail closed)',
+      );
+      return true;
+    }
   }
 
   /** Record usage + delivery outcome. Never throws (accounting must not fail delivery). */

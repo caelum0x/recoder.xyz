@@ -174,6 +174,7 @@ export class GovernanceComposer implements GovernanceModule {
         approvals: this.approvalService,
         workLocks: this.workLockService,
         middleware: this.middleware,
+        soloMode: this.cfg.soloMode,
       }),
     );
     router.use(

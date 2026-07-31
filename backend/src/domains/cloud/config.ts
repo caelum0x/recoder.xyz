@@ -62,6 +62,12 @@ export const cloudConfigSchema = z.object({
   /** recoder-xds Go engine loopback endpoint (`null` ⇒ mesh adapter `down`). */
   xdsEndpoint: z.string().nullable(),
   isProduction: z.boolean(),
+  /**
+   * Solo/desktop mode (RECODER_SOLO_MODE): the single embedded local user. Fails
+   * OPEN on cross-tenant mesh/fleet READS (there is one local tenant) so the
+   * desktop surfaces keep working for their legitimate owner.
+   */
+  soloMode: z.boolean(),
 });
 
 export type CloudConfig = z.infer<typeof cloudConfigSchema>;
@@ -141,6 +147,7 @@ export function sliceCloudConfig(app: AppConfig, overrides: CloudConfigOverrides
     zitiEndpoint: overrides.zitiEndpoint ?? null,
     xdsEndpoint: overrides.xdsEndpoint ?? null,
     isProduction: app.runtime.isProduction,
+    soloMode: app.runtime.soloMode === true,
   });
 }
 

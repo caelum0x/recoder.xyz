@@ -22,6 +22,7 @@ import type { GateVerdict } from '../../governance/types.js';
 import type { MemoryRepository } from '../ports/memory-repository.port.js';
 import type { IssueGraphService } from '../ports/issue-graph.port.js';
 import type { Mem0Message, Mem0Port } from '../ports/mem0.port.js';
+import { resolveMemoryReadAuthz } from '../memory-authz.js';
 
 /** The governed action key the gate classifies (durable memory promotion). */
 export const MEMORY_PROMOTE_ACTION = 'memory.promote';
@@ -86,6 +87,13 @@ export interface MemoryLifecycleDeps {
    * down → truthful skip; NEVER blocks the promotion.
    */
   readonly mem0?: Mem0Port;
+  /**
+   * Desktop single-user plane (bootstrap-injected from `RECODER_SOLO_MODE`). When
+   * set, the candidate lookup fails OPEN so the embedded local owner is never
+   * locked out of their own accept/reject; a cloud deploy leaves it false so the
+   * owner-bound tenant scoping holds.
+   */
+  readonly soloMode?: boolean;
   readonly logger: Logger;
   readonly now?: () => string;
   readonly newId?: () => string;
@@ -129,14 +137,20 @@ export function createMemoryLifecycle(
   deps: MemoryLifecycleDeps
 ): MemoryLifecycle {
   const { repository, gate, beads, mem0, logger } = deps;
+  const soloMode = deps.soloMode === true;
   const now = deps.now ?? (() => new Date().toISOString());
   const newId = deps.newId ?? defaultId;
 
   return {
     async accept(input: AcceptCandidateInput): Promise<AcceptResult> {
+      // Owner-bind the candidate lookup (proposedBy === userId) unless the
+      // reviewer is a privileged operator or we are in solo mode. A non-owner
+      // resolves to `null` → NOT_FOUND below, BEFORE the governance gate and any
+      // materialize/mem0 write (no cross-tenant promotion; no existence oracle).
       const candidate = await repository.getCandidate(
         input.userId,
-        input.candidateId
+        input.candidateId,
+        resolveMemoryReadAuthz(input.principal, soloMode)
       );
       if (!candidate) {
         throw createError(
@@ -298,9 +312,12 @@ export function createMemoryLifecycle(
     },
 
     async reject(input: RejectCandidateInput): Promise<RejectResult> {
+      // Owner-bind the lookup (see `accept`): a non-owner resolves to `null` →
+      // NOT_FOUND, BEFORE any audit seal or candidate state change.
       const candidate = await repository.getCandidate(
         input.userId,
-        input.candidateId
+        input.candidateId,
+        resolveMemoryReadAuthz(input.principal, soloMode)
       );
       if (!candidate) {
         throw createError(

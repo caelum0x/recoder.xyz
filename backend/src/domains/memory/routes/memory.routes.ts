@@ -28,6 +28,7 @@ import type { CandidateService, MemoryScope } from '../lifecycle/candidate-servi
 import type { MemoryLifecycle } from '../lifecycle/memory-lifecycle.js';
 import type { ForgetService } from '../lifecycle/forget.js';
 import type { RelateService } from '../lifecycle/relate.js';
+import { resolveMemoryReadAuthz } from '../memory-authz.js';
 
 export interface MemoryRouterDeps {
   readonly recall: RecallService;
@@ -36,6 +37,12 @@ export interface MemoryRouterDeps {
   readonly forget: ForgetService;
   readonly relations: RelateService;
   readonly middleware: AuthMiddleware;
+  /**
+   * Desktop single-user plane (bootstrap-injected from `RECODER_SOLO_MODE`).
+   * When set, candidate reads fail OPEN so the embedded local owner is never
+   * locked out; a cloud deploy leaves it false so owner-bound scoping holds.
+   */
+  readonly soloMode: boolean;
 }
 
 const MEMORY_SCOPES: readonly MemoryScope[] = ['user', 'org', 'space', 'repo', 'path', 'agent', 'task-type'];
@@ -43,7 +50,7 @@ const MEMORY_SCOPES: readonly MemoryScope[] = ['user', 'org', 'space', 'repo', '
 /** Build the memory router (mount under `/api/agent-os`). */
 export function buildMemoryRouter(deps: MemoryRouterDeps): Router {
   const router = Router();
-  const { recall, candidates, lifecycle, forget, relations, middleware } = deps;
+  const { recall, candidates, lifecycle, forget, relations, middleware, soloMode } = deps;
 
   // --- recall ----------------------------------------------------------------
 
@@ -71,7 +78,11 @@ export function buildMemoryRouter(deps: MemoryRouterDeps): Router {
     middleware.authenticate,
     asyncHandler(async (req, res) => {
       const scope = typeof req.query.scope === 'string' ? req.query.scope : undefined;
-      const records = await candidates.list(req.principal!.userId, scope);
+      const records = await candidates.list(
+        req.principal!.userId,
+        scope,
+        resolveMemoryReadAuthz(req.principal, soloMode),
+      );
       sendSuccess(res, { candidates: records });
     }),
   );
@@ -103,7 +114,11 @@ export function buildMemoryRouter(deps: MemoryRouterDeps): Router {
     '/memory/candidates/:id',
     middleware.authenticate,
     asyncHandler(async (req, res) => {
-      const candidate = await candidates.get(req.principal!.userId, req.params.id);
+      const candidate = await candidates.get(
+        req.principal!.userId,
+        req.params.id,
+        resolveMemoryReadAuthz(req.principal, soloMode),
+      );
       if (!candidate) {
         sendError(res, createError(ErrorCode.NOT_FOUND, 'memory candidate not found'));
         return;

@@ -37,6 +37,14 @@ const nullableUrl = z.string().url().nullable();
 export const memoryConfigSchema = z.object({
   isProduction: z.boolean(),
 
+  /**
+   * Solo/desktop mode (bootstrap-injected from `RECODER_SOLO_MODE`): a single
+   * local owner with no sign-in plane. Candidate reads/lifecycle fail OPEN so the
+   * embedded desktop owner is never locked out of their own memory; a cloud
+   * deploy never sets it, so owner-bound tenant scoping stays enforced.
+   */
+  soloMode: z.boolean().default(false),
+
   /** `INTERNAL_SERVICE_KEY` presence (gates `/internal/agent-os/memory/harvest`). */
   internalServiceKeyPresent: z.boolean(),
   internalServiceKey: z.string().nullable(),
@@ -199,6 +207,7 @@ export function sliceMemoryConfig(
   const openaiApiKey = normSecret(overrides.embedOpenaiApiKey);
   return memoryConfigSchema.parse({
     isProduction: app.runtime.isProduction,
+    soloMode: app.runtime.soloMode === true,
     internalServiceKeyPresent: app.internal.serviceKeyPresent,
     internalServiceKey: app.internal.serviceKey,
 

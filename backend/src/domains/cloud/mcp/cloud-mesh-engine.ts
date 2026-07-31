@@ -36,6 +36,7 @@ import type { MeshDiagnosticsService } from '../services/mesh-diagnostics.servic
 import type { ZitiMeshEnroller } from '../adapters/ziti-mesh.adapter.js';
 import type { CloudGovernanceGatePort, GateDecisionContext } from '../ports/governance-gate.port.js';
 import { guardCloudWrite, recordCloudAudit } from '../services/cloud-write-gate.js';
+import { callerSeesFullFabric } from '../services/read-scope.js';
 
 export interface CloudMeshMcpDeps {
   /** The read-only mesh diagnostics (ziti services / enrollment / topology). */
@@ -47,6 +48,12 @@ export interface CloudMeshMcpDeps {
   readonly logger: Logger;
   /** The injected governance gate; absent ⇒ degrade-open (warn-logged, auth-elsewhere). */
   readonly gate?: CloudGovernanceGatePort;
+  /**
+   * Solo/desktop mode (RECODER_SOLO_MODE): the single local user fails OPEN on the
+   * cross-tenant control-plane READS (there is one local tenant), so the desktop
+   * mesh surfaces keep working for their legitimate owner.
+   */
+  readonly soloMode?: boolean;
 }
 
 function str(v: unknown): string | undefined {
@@ -59,6 +66,20 @@ function callerRef(caller: McpToolCaller): TenantRef & { ownerUserId: string } {
     ownerUserId: caller.userId,
     ...(caller.orgId ? { orgId: caller.orgId } : {}),
   };
+}
+
+/**
+ * Derive the ziti enrollment role attributes for a resolved tenant. The tenant
+ * segmentation role (`tenant-<id>`) is ALWAYS forced (mirrors the hardened
+ * `mesh-fabric.service` path). Any caller-supplied `tenant-*` role the caller
+ * does not own is STRIPPED — a caller can never mint an identity carrying another
+ * tenant's segmentation — while non-tenant custom roles are preserved.
+ */
+function safeRoleAttributes(tenantId: string, raw: unknown): readonly string[] {
+  const tenantRole = `tenant-${tenantId}`;
+  const supplied = Array.isArray(raw) ? raw.filter((v): v is string => typeof v === 'string') : [];
+  const kept = supplied.filter((role) => !role.startsWith('tenant-') || role === tenantRole);
+  return [tenantRole, ...kept.filter((role) => role !== tenantRole)];
 }
 
 /** The governed actor for an MCP mesh write: the resolved tenant's owner. */
@@ -75,14 +96,22 @@ function principalOfTenant(tenant: Tenant): Principal {
 
 export function buildCloudMeshMcpTools(deps: CloudMeshMcpDeps): readonly McpToolRegistration[] {
   const { mesh, tenancy, enroller, logger, gate } = deps;
+  const soloMode = deps.soloMode === true;
 
   return [
     {
       name: 'cloud_mesh_services_list',
       description:
-        'List registered ziti mesh services with status + encryption/role attributes (read-only, no data plane).',
-      handler: async () => {
-        const [engine, services] = await Promise.all([mesh.status(), mesh.zitiServices()]);
+        'List registered ziti mesh services with status + encryption/role attributes (read-only, no data plane; cross-tenant detail is admin/internal-only).',
+      handler: async (_raw: unknown, caller?: McpToolCaller) => {
+        // The service list carries `tenant-<id>` role attributes — a cross-tenant
+        // leak. Withhold the registrations from a non-privileged caller; the
+        // engine status stays truthful for the health surface.
+        const engine = await mesh.status();
+        if (!callerSeesFullFabric(caller, soloMode)) {
+          return { engine, count: 0, services: [], restricted: true };
+        }
+        const services = await mesh.zitiServices();
         return {
           engine,
           count: services.length,
@@ -99,9 +128,13 @@ export function buildCloudMeshMcpTools(deps: CloudMeshMcpDeps): readonly McpTool
     {
       name: 'cloud_mesh_enrollment_status',
       description:
-        'Report ziti identity/endpoint enrollment posture: enrolled vs outstanding token + expiry (read-only).',
-      handler: async () => {
-        const [engine, enrollments] = await Promise.all([mesh.status(), mesh.zitiEnrollments()]);
+        'Report ziti identity/endpoint enrollment posture: enrolled vs outstanding token + expiry (read-only; cross-tenant detail is admin/internal-only).',
+      handler: async (_raw: unknown, caller?: McpToolCaller) => {
+        const engine = await mesh.status();
+        if (!callerSeesFullFabric(caller, soloMode)) {
+          return { engine, count: 0, enrolled: 0, pending: 0, enrollments: [], restricted: true };
+        }
+        const enrollments = await mesh.zitiEnrollments();
         return {
           engine,
           count: enrollments.length,
@@ -120,9 +153,21 @@ export function buildCloudMeshMcpTools(deps: CloudMeshMcpDeps): readonly McpTool
     {
       name: 'cloud_mesh_topology',
       description:
-        'Query the ziti mesh topology/health: engine status + identity/service/enrollment counts (read-only).',
-      handler: async () => {
+        'Query the ziti mesh topology/health: engine status + identity/service/enrollment counts (read-only; cross-tenant counts are admin/internal-only).',
+      handler: async (_raw: unknown, caller?: McpToolCaller) => {
         const topo = await mesh.meshTopology();
+        if (!callerSeesFullFabric(caller, soloMode)) {
+          // The cross-tenant registration counts are withheld; engine health stays.
+          return {
+            engine: topo.engine,
+            identities: 0,
+            services: 0,
+            enrollments: 0,
+            pendingEnrollments: 0,
+            checkedAt: topo.checkedAt,
+            restricted: true,
+          };
+        }
         return {
           engine: topo.engine,
           identities: topo.identities.length,
@@ -170,12 +215,16 @@ export function buildCloudMeshMcpTools(deps: CloudMeshMcpDeps): readonly McpTool
         }
 
         // 4. Transport the enrollment (degrade-safe: absent controller ⇒ ok:false).
+        //    SECURITY: the identity `name` + `roleAttributes` are DERIVED from the
+        //    resolved tenant, NEVER forwarded from free-form args — the tenant
+        //    segmentation role is forced and any foreign `tenant-*` role the caller
+        //    supplied is stripped, so a caller cannot mint an identity carrying
+        //    another tenant's mesh segmentation (mirrors mesh-fabric.service).
+        const identityName = `tenant-${tenant.id}-${name}`;
         const outcome = await enroller.enroll({
-          name,
+          name: identityName,
           ...(str(args.method) ? { method: str(args.method) } : {}),
-          ...(Array.isArray(args.roleAttributes)
-            ? { roleAttributes: args.roleAttributes.filter((v): v is string => typeof v === 'string') }
-            : {}),
+          roleAttributes: safeRoleAttributes(tenant.id, args.roleAttributes),
           isRouter,
         });
         if (!outcome.ok) return { ok: false, error: outcome.reason, tenantId: tenant.id };

@@ -42,14 +42,33 @@ const health = vi.fn(async () =>
   ok({ status: 'live', httpStatus: 200, checkedAt: '2026-01-01T00:00:00.000Z', reason: null }),
 );
 
+const meshSnapshot = {
+  status: 'up', engines: [{ engine: 'ziti', status: 'up' }],
+  zitiIdentities: [{ id: 'id_a', name: 'sandbox-a', status: 'registered' }],
+  xdsClusters: [{ name: 'preview-x', type: 'EDS', status: 'registered', endpoints: 1 }],
+  checkedAt: '2026-01-01T00:00:00.000Z',
+};
+const meshStatus = vi.fn(async () => meshSnapshot);
+
+const fleetNodes = [
+  { id: 'node_own', tenantId: 'ten_1', kind: 'sandbox', status: 'up', capacity: {}, lastSeen: 'x' },
+  { id: 'node_victim', tenantId: 'ten_victim', kind: 'sandbox', status: 'up', capacity: {}, lastSeen: 'x' },
+  { id: 'node_shared', tenantId: null, kind: 'mesh', status: 'up', capacity: {}, lastSeen: 'x' },
+];
+const fleetList = vi.fn(async () => fleetNodes);
+
 const tenancySvc = { resolve, effectiveQuota, placement };
 const provisionerSvc = { list };
 const previewSvc = { health };
+const meshSvc = { status: meshStatus };
+const fleetSvc = { list: fleetList };
 
 const module = {
   tenancy: () => tenancySvc,
   provisioner: () => provisionerSvc,
   preview: () => previewSvc,
+  mesh: () => meshSvc,
+  fleet: () => fleetSvc,
 } as unknown as CloudModule;
 
 function toolMap(tools: readonly McpToolRegistration[]): Map<string, McpToolRegistration> {
@@ -143,5 +162,43 @@ describe('cloud read MCP — privileged callers may target an args-named subject
     // Privileged caller resolved the args-named subject and read under it.
     expect(resolve).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'ten_1' }));
     expect(list).toHaveBeenCalledWith('ten_1');
+  });
+});
+
+describe('cloud read MCP — cross-tenant mesh/fleet scoping (IDOR defence)', () => {
+  const ops: McpToolCaller = { userId: 'ops_1', scopes: ['internal'] };
+
+  it('cloud_mesh_status WITHHOLDS the cross-tenant registration counts from a non-priv caller', async () => {
+    const res = (await tools().get('cloud_mesh_status')!.handler({}, owner)) as Record<string, unknown>;
+    expect(res.restricted).toBe(true);
+    expect(res.status).toBe('up');
+    expect(res.zitiIdentities).toBeUndefined();
+  });
+
+  it('cloud_mesh_status returns the full snapshot to an admin/internal caller', async () => {
+    const res = (await tools().get('cloud_mesh_status')!.handler({}, ops)) as Record<string, unknown>;
+    expect(res.restricted).toBeFalsy();
+    expect(res.zitiIdentities).toBe(1);
+    expect(res.xdsClusters).toBe(1);
+  });
+
+  it('cloud_fleet_status SCOPES nodes to the caller tenant + shared pool (victim node dropped)', async () => {
+    const res = (await tools().get('cloud_fleet_status')!.handler({}, owner)) as Record<string, unknown>;
+    const nodes = res.nodes as { id: string }[];
+    const ids = nodes.map((n) => n.id);
+    expect(ids).toContain('node_own');
+    expect(ids).toContain('node_shared');
+    expect(ids).not.toContain('node_victim');
+  });
+
+  it('cloud_fleet_status returns EVERY node to an admin/internal caller', async () => {
+    const res = (await tools().get('cloud_fleet_status')!.handler({}, ops)) as Record<string, unknown>;
+    expect((res.nodes as unknown[]).length).toBe(3);
+  });
+
+  it('cloud_fleet_status FAILS OPEN in solo/desktop mode (all nodes visible)', async () => {
+    const soloTools = toolMap(buildCloudMcpTools(module, true));
+    const res = (await soloTools.get('cloud_fleet_status')!.handler({}, owner)) as Record<string, unknown>;
+    expect((res.nodes as unknown[]).length).toBe(3);
   });
 });

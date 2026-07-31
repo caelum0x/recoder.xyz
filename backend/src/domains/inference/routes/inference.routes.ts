@@ -50,6 +50,12 @@ export interface InferenceRoutesDeps {
    */
   readonly getGate: () => InferenceKeyWriteGate | undefined;
   readonly mw: AuthMiddleware;
+  /**
+   * Solo/desktop mode (bootstrap-injected from `RECODER_SOLO_MODE`): the single
+   * local owner has no sign-in plane, so the cross-tenant feedback ownership guard
+   * fails OPEN for them (never locks the embedded desktop user out of feedback).
+   */
+  readonly soloMode?: boolean;
 }
 
 const roleSchema = z.enum(['system', 'user', 'assistant', 'tool']);
@@ -99,9 +105,21 @@ const keyWriteBodySchema = z.object({
     .max(4096, { message: 'key must be at most 4096 characters' }),
 });
 
+/**
+ * Operator bypass for the cross-tenant feedback ownership guard: an `internal`
+ * service-to-service caller or an `admin`/`internal`-scoped principal (mirrors
+ * `isPrivilegedPrincipal` in agent-os space-authz). Absent principal ⇒ not
+ * privileged. NEVER derived from the request body.
+ */
+function isPrivilegedPrincipal(principal: { kind?: string; scopes?: readonly string[] } | undefined): boolean {
+  if (!principal) return false;
+  return principal.kind === 'internal' || (principal.scopes?.includes('admin') ?? false) || (principal.scopes?.includes('internal') ?? false);
+}
+
 /** Build the inference control router. */
 export function buildInferenceRouter(deps: InferenceRoutesDeps): Router {
   const { gateway, routing, catalog, ledger, providerKeys, keyCache, resolver, getGate, mw } = deps;
+  const soloMode = deps.soloMode ?? false;
   const router = Router();
 
   router.get(
@@ -166,13 +184,26 @@ export function buildInferenceRouter(deps: InferenceRoutesDeps): Router {
         sendError(res, createError(ErrorCode.VALIDATION_ERROR, parsed.error.issues[0]?.message ?? 'invalid body'));
         return;
       }
+      // Cross-tenant ownership is enforced in the routing service; the bypass flag
+      // is derived from the RESOLVED principal (admin/internal) or solo mode — NEVER
+      // from the request body — so an ordinary caller can only attach a signal to an
+      // inference IT produced.
+      const bypassOwnershipCheck = soloMode || isPrivilegedPrincipal(req.principal);
       const result = await routing.feedback({
         inferenceId: parsed.data.inferenceId,
         metricName: parsed.data.metricName,
         value: parsed.data.value,
         ...(req.principal?.userId ? { userId: req.principal.userId } : {}),
+        ...(bypassOwnershipCheck ? { bypassOwnershipCheck: true } : {}),
       });
       if (!result.routed) {
+        // No-oracle refusal: an inference the caller does not own is a 404,
+        // indistinguishable from a genuinely-missing id (never confirms it exists
+        // for another tenant).
+        if (result.denied === 'not_found') {
+          sendError(res, createError(ErrorCode.NOT_FOUND, 'inference not found'));
+          return;
+        }
         // Truthful degrade: no feedback-capable tier is bound — never a faked accept.
         sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'no feedback-capable inference tier available'));
         return;

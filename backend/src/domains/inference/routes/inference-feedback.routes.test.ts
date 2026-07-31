@@ -138,6 +138,131 @@ describe('POST /inference/feedback', () => {
     });
   });
 
+  describe('cross-tenant ownership (feedback poisoning)', () => {
+    /** Build a server whose principal + soloMode are configurable per test. */
+    function buildOwnershipServer(opts: {
+      principal: Partial<Principal>;
+      soloMode?: boolean;
+      feedback: (req: FeedbackRequest) => Promise<FeedbackResult>;
+    }): Promise<{ base: string; server: http.Server; feedbackSpy: ReturnType<typeof vi.fn> }> {
+      const feedbackSpy = vi.fn(opts.feedback);
+      const auth: RequestHandler = (req, _res, next) => {
+        req.principal = opts.principal as unknown as Principal;
+        next();
+      };
+      const mw = { authenticate: auth, authenticateMutating: auth } as unknown as AuthMiddleware;
+      const deps = {
+        gateway: {},
+        routing: { complete: vi.fn(), feedback: feedbackSpy },
+        catalog: {},
+        ledger: {},
+        providerKeys: {},
+        keyCache: {},
+        mw,
+        soloMode: opts.soloMode ?? false,
+      } as unknown as InferenceRoutesDeps;
+      return startServer(deps).then(({ base, server }) => ({ base, server, feedbackSpy }));
+    }
+
+    const notFoundFeedback = async (req: FeedbackRequest): Promise<FeedbackResult> => ({
+      routed: false,
+      tier: 'none',
+      inferenceId: req.inferenceId,
+      metricName: req.metricName,
+      reason: 'inference not found',
+      denied: 'not_found',
+    });
+
+    it("maps an ownership refusal (denied:'not_found') to a no-oracle 404 NOT_FOUND", async () => {
+      const { base, server } = await buildOwnershipServer({
+        principal: { userId: 'tenant-B', isAnonymous: false, scopes: [], kind: 'session' },
+        feedback: notFoundFeedback,
+      });
+      try {
+        const res = await request(base, '/inference/feedback', { method: 'POST', body: VALID_BODY });
+        expect(res.status).toBe(404);
+        expect(res.json()).toMatchObject({ success: false, error: { code: 'NOT_FOUND' } });
+      } finally {
+        await new Promise<void>((r) => server.close(() => r()));
+      }
+    });
+
+    it('does NOT set bypass for an ordinary session principal (ownership is enforced downstream)', async () => {
+      const { base, server, feedbackSpy } = await buildOwnershipServer({
+        principal: { userId: 'tenant-B', isAnonymous: false, scopes: [], kind: 'session' },
+        feedback: notFoundFeedback,
+      });
+      try {
+        await request(base, '/inference/feedback', { method: 'POST', body: VALID_BODY });
+        expect(feedbackSpy.mock.calls[0]?.[0]).not.toMatchObject({ bypassOwnershipCheck: true });
+      } finally {
+        await new Promise<void>((r) => server.close(() => r()));
+      }
+    });
+
+    it('sets bypass=true for an admin-scoped principal (operator path)', async () => {
+      const routed = async (req: FeedbackRequest): Promise<FeedbackResult> => ({
+        routed: true,
+        tier: 'napi',
+        inferenceId: req.inferenceId,
+        metricName: req.metricName,
+        feedbackId: 'fb-admin',
+      });
+      const { base, server, feedbackSpy } = await buildOwnershipServer({
+        principal: { userId: 'op', isAnonymous: false, scopes: ['admin'], kind: 'session' },
+        feedback: routed,
+      });
+      try {
+        const res = await request(base, '/inference/feedback', { method: 'POST', body: VALID_BODY });
+        expect(res.status).toBe(200);
+        expect(feedbackSpy).toHaveBeenCalledWith(expect.objectContaining({ bypassOwnershipCheck: true, userId: 'op' }));
+      } finally {
+        await new Promise<void>((r) => server.close(() => r()));
+      }
+    });
+
+    it('sets bypass=true for an internal-kind principal (service-to-service)', async () => {
+      const routed = async (req: FeedbackRequest): Promise<FeedbackResult> => ({
+        routed: true,
+        tier: 'napi',
+        inferenceId: req.inferenceId,
+        metricName: req.metricName,
+        feedbackId: 'fb-int',
+      });
+      const { base, server, feedbackSpy } = await buildOwnershipServer({
+        principal: { userId: 'svc', isAnonymous: false, scopes: [], kind: 'internal' },
+        feedback: routed,
+      });
+      try {
+        await request(base, '/inference/feedback', { method: 'POST', body: VALID_BODY });
+        expect(feedbackSpy).toHaveBeenCalledWith(expect.objectContaining({ bypassOwnershipCheck: true }));
+      } finally {
+        await new Promise<void>((r) => server.close(() => r()));
+      }
+    });
+
+    it('sets bypass=true in RECODER_SOLO_MODE (single local desktop owner fails open)', async () => {
+      const routed = async (req: FeedbackRequest): Promise<FeedbackResult> => ({
+        routed: true,
+        tier: 'napi',
+        inferenceId: req.inferenceId,
+        metricName: req.metricName,
+        feedbackId: 'fb-solo',
+      });
+      const { base, server, feedbackSpy } = await buildOwnershipServer({
+        principal: { userId: 'local', isAnonymous: false, scopes: [], kind: 'session' },
+        soloMode: true,
+        feedback: routed,
+      });
+      try {
+        await request(base, '/inference/feedback', { method: 'POST', body: VALID_BODY });
+        expect(feedbackSpy).toHaveBeenCalledWith(expect.objectContaining({ bypassOwnershipCheck: true }));
+      } finally {
+        await new Promise<void>((r) => server.close(() => r()));
+      }
+    });
+  });
+
   describe('declined (no feedback-capable tier)', () => {
     let base: string;
     let server: http.Server;

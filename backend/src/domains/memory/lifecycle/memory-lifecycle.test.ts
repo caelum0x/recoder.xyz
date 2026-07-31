@@ -7,11 +7,13 @@ import type { MemoryCandidate, MemoryItem } from '@recoder/agent-os';
 import type { Principal } from '../../identity/types.js';
 import type { GovernanceGate } from '../../governance/ports/gate.port.js';
 import type { GateVerdict, GovernanceEffect } from '../../governance/types.js';
-import type { MemoryRepository } from '../ports/memory-repository.port.js';
+import type { MemoryRepository, MemoryCandidateItemStore } from '../ports/memory-repository.port.js';
+import type { QueryExecutor } from '../../persistence/ports/query-executor.port.js';
 import type { IssueGraphService } from '../ports/issue-graph.port.js';
 import { fakeIssueGraph } from '../__fixtures__/issue-graph.fixture.js';
 import type { Mem0Message, Mem0Port, Mem0Scope } from '../ports/mem0.port.js';
 import { createMemoryLifecycle } from './memory-lifecycle.js';
+import { createMemoryRepository } from '../adapters/candidate-repository.adapter.js';
 
 const silentLogger = {
   info() {},
@@ -424,5 +426,230 @@ describe('createMemoryLifecycle.reject', () => {
         reason: '  ',
       })
     ).rejects.toThrow();
+  });
+});
+
+// --- Cross-tenant accept/reject over the REAL owner-bound adapter (IDOR #3) ----
+
+/** Relations are untouched here — an unavailable pool is fine. */
+const idleQuery: QueryExecutor = {
+  async execute() {
+    return [];
+  },
+  async one() {
+    return null;
+  },
+  async read() {
+    return [];
+  },
+  async mutate() {
+    return 0;
+  },
+  async withTransaction(fn) {
+    return fn(idleQuery);
+  },
+  isAvailable() {
+    return false;
+  },
+} as unknown as QueryExecutor;
+
+/** The GLOBAL agent-os store (unscoped) — the adapter is what constrains by owner. */
+function fakeStore(seed: MemoryCandidate[]): {
+  store: MemoryCandidateItemStore;
+  items: MemoryItem[];
+  candidates: MemoryCandidate[];
+} {
+  const items: MemoryItem[] = [];
+  const candidates: MemoryCandidate[] = [...seed];
+  const store: MemoryCandidateItemStore = {
+    listMemoryItems() {
+      return items;
+    },
+    upsertMemoryItem(m) {
+      items.push(m);
+      return m;
+    },
+    listMemoryCandidates() {
+      return candidates;
+    },
+    upsertMemoryCandidate(c) {
+      const idx = candidates.findIndex((x) => x.candidateId === c.candidateId);
+      if (idx >= 0) candidates[idx] = c;
+      else candidates.push(c);
+      return c;
+    },
+  };
+  return { store, items, candidates };
+}
+
+/** A gate that counts `decide` calls so we can prove it is never consulted for an IDOR. */
+function countingGate(effect: GovernanceEffect): { gate: GovernanceGate; decideCalls: number; auditCalls: number } {
+  const state = { decideCalls: 0, auditCalls: 0 };
+  const gate: GovernanceGate = {
+    async decide() {
+      state.decideCalls += 1;
+      return verdict(effect);
+    },
+    async enforceTool() {
+      return { outcome: 'allowed', reason: 'ok', degraded: false, engine: 'ts' } as never;
+    },
+    async route() {
+      return { routable: true, tier: 'low', reason: 'ok' } as never;
+    },
+    async recordAudit() {
+      state.auditCalls += 1;
+      return {} as never;
+    },
+    async verifyAudit() {
+      return {} as never;
+    },
+  };
+  return {
+    gate,
+    get decideCalls() {
+      return state.decideCalls;
+    },
+    get auditCalls() {
+      return state.auditCalls;
+    },
+  };
+}
+
+function principalFor(userId: string, scopes: readonly string[] = [], kind = 'session'): Principal {
+  return { userId, scopes, kind, isAnonymous: false, raw: {} } as unknown as Principal;
+}
+
+/** A candidate owned by user A (proposedBy is the proposer's userId). */
+const ownedByA = candidate({ candidateId: 'cA', proposedBy: 'userA', title: 'A secret', body: 'A body' });
+
+describe('createMemoryLifecycle.accept — cross-tenant is NOT_FOUND (IDOR #3)', () => {
+  it('the owner can promote their own candidate', async () => {
+    const { store, items } = fakeStore([ownedByA]);
+    const repo = createMemoryRepository({ query: idleQuery, store });
+    const mem0 = mem0Up();
+    const g = countingGate('allow');
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: g.gate,
+      beads: beadsDown,
+      mem0: mem0.port,
+      logger: silentLogger,
+    });
+
+    const result = await lifecycle.accept({
+      userId: 'userA',
+      candidateId: 'cA',
+      principal: principalFor('userA'),
+    });
+    expect(result.promoted).toBe(true);
+    expect(items).toHaveLength(1);
+    expect(mem0.added).toHaveLength(1);
+    expect(g.decideCalls).toBe(1);
+  });
+
+  it('another tenant gets NOT_FOUND before the gate + performs no materialize/mem0 write', async () => {
+    const { store, items } = fakeStore([ownedByA]);
+    const repo = createMemoryRepository({ query: idleQuery, store });
+    const mem0 = mem0Up();
+    const g = countingGate('allow');
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: g.gate,
+      beads: beadsDown,
+      mem0: mem0.port,
+      logger: silentLogger,
+    });
+
+    await expect(
+      lifecycle.accept({ userId: 'userB', candidateId: 'cA', principal: principalFor('userB') })
+    ).rejects.toThrow(/not found/i);
+    // The gate was never consulted, and nothing was materialized or mirrored.
+    expect(g.decideCalls).toBe(0);
+    expect(items).toHaveLength(0);
+    expect(mem0.added).toHaveLength(0);
+  });
+
+  it('an admin operator may promote another tenant candidate (privileged bypass)', async () => {
+    const { store, items } = fakeStore([ownedByA]);
+    const repo = createMemoryRepository({ query: idleQuery, store });
+    const g = countingGate('allow');
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: g.gate,
+      beads: beadsDown,
+      logger: silentLogger,
+    });
+    const result = await lifecycle.accept({
+      userId: 'operator',
+      candidateId: 'cA',
+      principal: principalFor('operator', ['admin']),
+    });
+    expect(result.promoted).toBe(true);
+    expect(items).toHaveLength(1);
+  });
+
+  it('fails open under solo mode (single local owner)', async () => {
+    const { store, items } = fakeStore([ownedByA]);
+    const repo = createMemoryRepository({ query: idleQuery, store });
+    const g = countingGate('allow');
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: g.gate,
+      beads: beadsDown,
+      logger: silentLogger,
+      soloMode: true,
+    });
+    const result = await lifecycle.accept({
+      userId: 'solo-user',
+      candidateId: 'cA',
+      principal: principalFor('solo-user'),
+    });
+    expect(result.promoted).toBe(true);
+    expect(items).toHaveLength(1);
+  });
+});
+
+describe('createMemoryLifecycle.reject — cross-tenant is NOT_FOUND (IDOR #3)', () => {
+  it('another tenant gets NOT_FOUND and does not mutate the candidate', async () => {
+    const { store, candidates } = fakeStore([ownedByA]);
+    const repo = createMemoryRepository({ query: idleQuery, store });
+    const g = countingGate('allow');
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: g.gate,
+      beads: beadsDown,
+      logger: silentLogger,
+    });
+    await expect(
+      lifecycle.reject({
+        userId: 'userB',
+        candidateId: 'cA',
+        principal: principalFor('userB'),
+        reason: 'not mine to reject',
+      })
+    ).rejects.toThrow(/not found/i);
+    // No audit seal was written and the candidate is untouched.
+    expect(g.auditCalls).toBe(0);
+    expect(candidates[0]?.status).toBe('candidate_created');
+  });
+
+  it('the owner can reject their own candidate', async () => {
+    const { store, candidates } = fakeStore([ownedByA]);
+    const repo = createMemoryRepository({ query: idleQuery, store });
+    const g = countingGate('allow');
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: g.gate,
+      beads: beadsDown,
+      logger: silentLogger,
+    });
+    const result = await lifecycle.reject({
+      userId: 'userA',
+      candidateId: 'cA',
+      principal: principalFor('userA'),
+      reason: 'stale',
+    });
+    expect(result.candidate.status).toBe('rejected');
+    expect(candidates[0]?.status).toBe('rejected');
   });
 });

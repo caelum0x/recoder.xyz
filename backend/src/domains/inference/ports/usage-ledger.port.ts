@@ -19,6 +19,14 @@ export interface UsageLedgerRepository {
   /** Recent usage rows for a user (most-recent-first, bounded). */
   recentForUser(userId: string, limit?: number): Promise<readonly UsageLedgerRecord[]>;
   /**
+   * True IFF a ledger row exists for `inferenceId` attributed to `userId` — i.e.
+   * this caller produced this inference. The cross-tenant feedback ownership guard
+   * consults this before dispatching a signal to the gateway. Degrade-safe: when
+   * the durable backing is unavailable (or the read errors) it returns FALSE, so
+   * ownership fails CLOSED (a fault is never a feedback-poisoning oracle).
+   */
+  ownsInference(userId: string, inferenceId: string): Promise<boolean>;
+  /**
    * Aggregate token + cost totals for a user over an optional lookback window.
    * Returns zeros when no rows / no pool.
    */

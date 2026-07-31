@@ -123,8 +123,16 @@ export interface FeedbackRequest {
   readonly metricName: string;
   /** The signal value (boolean/float metric, or a comment string). */
   readonly value: boolean | number | string;
-  /** The authenticated caller (audit attribution). */
+  /** The authenticated caller (audit attribution + cross-tenant ownership scope). */
   readonly userId?: string;
+  /**
+   * Skip the cross-tenant ownership guard for a privileged caller. Set TRUE by a
+   * call site ONLY for an admin/internal principal or in RECODER_SOLO_MODE (the
+   * single local desktop owner). Absent/false ⇒ the routing service verifies the
+   * `inferenceId` was produced by `userId` before dispatching (an unowned id is
+   * refused with a no-oracle NOT_FOUND). NEVER derived from a caller-supplied arg.
+   */
+  readonly bypassOwnershipCheck?: boolean;
 }
 
 /**
@@ -141,6 +149,14 @@ export interface FeedbackResult {
   readonly feedbackId?: string;
   /** Truthful reason when `routed` is false. */
   readonly reason?: string;
+  /**
+   * Refusal discriminator when `routed` is false because a PRE-DISPATCH guard
+   * refused the call (not a delivery fault): `'not_found'` = the cross-tenant
+   * ownership guard could not attribute `inferenceId` to the caller. Routes map it
+   * to a no-oracle 404 (indistinguishable from a genuinely-missing id) — never a
+   * 5xx that would confirm the id exists for another tenant.
+   */
+  readonly denied?: 'not_found';
 }
 
 /** One streamed delta emitted through the `onDelta` sink. */

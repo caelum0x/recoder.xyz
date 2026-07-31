@@ -262,6 +262,8 @@ export class CloudComposer implements CloudModule {
         logger: this.log,
         // Phase-3 governance decide→audit seam guarding EVERY write edge.
         ...(this.gate ? { gate: this.gate } : {}),
+        // Solo/desktop fail-open on the cross-tenant mesh/fleet reads.
+        soloMode: this.cfg.soloMode,
         // Deny-safe active-preview count over the deployment repo (`NaN` on error).
         activePreviewCount: async (tenantId: string) => {
           if (!this.repos.deployments.isAvailable()) return Number.NaN;
@@ -289,7 +291,7 @@ export class CloudComposer implements CloudModule {
 
   mcp(): readonly McpToolRegistration[] {
     return [
-      ...buildCloudMcpTools(this),
+      ...buildCloudMcpTools(this, this.cfg.soloMode),
       // Governance-gated WRITE tools (provision/destroy sandbox, domain CRUD) —
       // the same `decide → audit` gate the HTTP edges use (defence in depth).
       ...buildCloudWriteMcpTools({
@@ -306,6 +308,7 @@ export class CloudComposer implements CloudModule {
         enroller: this.zitiAdapter,
         logger: this.log,
         ...(this.gate ? { gate: this.gate } : {}),
+        soloMode: this.cfg.soloMode,
       }),
       // xDS control-plane introspection reads (snapshot/clusters/routes/listeners/
       // endpoints) over the recoder-xds engine — read-only, degrade-safe.

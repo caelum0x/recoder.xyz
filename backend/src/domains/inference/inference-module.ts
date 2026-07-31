@@ -263,6 +263,7 @@ export class InferenceComposer implements InferenceModule {
         resolver: this.byokResolverImpl,
         getGate: () => this.keyWriteGate,
         mw: this.middleware,
+        soloMode: this.cfg.soloMode,
       }),
     );
     // OpenAI base-url compatibility: `/inference/v1/...` and `/gateway/v1/...`.

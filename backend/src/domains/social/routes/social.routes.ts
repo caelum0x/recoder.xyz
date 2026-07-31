@@ -25,6 +25,8 @@
 import { Router } from 'express';
 import { ErrorCode, createError, sendError, sendSuccess, asyncHandler } from '../../../shared/errors.js';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
+import type { Principal } from '../../identity/types.js';
+import { SOLO_OWNER_USER_ID } from '../../identity/principal.service.js';
 import type { SocialRepository } from '../ports/social-repository.port.js';
 import type { ConnectorSecretsPort } from '../ports/connector-secrets.port.js';
 import type { ChannelAdapterRegistry } from '../adapters/channel-adapter-registry.js';
@@ -48,6 +50,27 @@ export interface SocialRouterDeps {
   readonly health: () => Promise<unknown>;
   /** Handles a verified webhook payload (normalize + run the inbound pipeline). */
   readonly onVerifiedWebhook: VerifiedWebhookHandler;
+}
+
+/**
+ * Whether a principal MAY act across tenant ownership on the mutating edges.
+ * Preserves the two intended bypasses (mirrors `verifyOrgAccess`/`requireAdmin`):
+ *  - admin / internal-service callers (operational overrides), and
+ *  - the synthetic RECODER_SOLO_MODE owner (single local desktop user — no DB,
+ *    no other tenants — so ownership checks must fail OPEN, never lock them out).
+ * Every other caller is held to strict per-owner scoping.
+ */
+function bypassesOwnership(p: Principal): boolean {
+  return p.kind === 'internal' || p.scopes.includes('admin') || p.userId === SOLO_OWNER_USER_ID;
+}
+
+/**
+ * Map an outbound `channel` to its binding `connector_id`. Follows the inbound
+ * pipeline's default convention (`connectorIdFor = (channel) => channel`) so a
+ * chat bound (or seen inbound) under the channel name resolves consistently.
+ */
+function connectorIdForChannel(channel: ChannelId): string {
+  return channel;
 }
 
 /** Read the exact raw bytes of the request body (for HMAC verification). */
@@ -112,13 +135,27 @@ export function buildSocialRoutes(deps: SocialRouterDeps): Router {
     '/bindings',
     middleware.authenticateMutating,
     asyncHandler(async (req, res) => {
+      const principal = req.principal!;
       const body = asObject(req.body);
       const connectorId = requireString(body, 'connectorId');
       const parsed = bindChannelSchema.parse(body);
+      // Cross-tenant HIJACK guard: the durable upsert conflict key is GLOBAL
+      // `(connector_id, chat_ref)` — it excludes `user_id` — so without this
+      // pre-check tenant B could overwrite tenant A's existing binding for the
+      // same connector+chat (redirect A's inbound, or `allow:false` to revoke A).
+      // A caller may only create/replace a binding they own; a non-owner is 404
+      // (never reveal another tenant's binding). Admin/internal + solo bypass.
+      if (!bypassesOwnership(principal)) {
+        const existing = await repository.getBinding(connectorId, parsed.chatRef);
+        if (existing && existing.userId !== principal.userId) {
+          sendError(res, createError(ErrorCode.NOT_FOUND, 'binding not found'));
+          return;
+        }
+      }
       const binding = await repository.upsertBinding({
         id: `bind_${connectorId}_${parsed.chatRef}`,
         connectorId,
-        userId: req.principal!.userId,
+        userId: principal.userId,
         chatRef: parsed.chatRef,
         allow: parsed.allow,
         ...(parsed.spaceId ? { spaceId: parsed.spaceId } : {}),
@@ -145,6 +182,7 @@ export function buildSocialRoutes(deps: SocialRouterDeps): Router {
     '/send',
     middleware.authenticateMutating,
     asyncHandler(async (req, res) => {
+      const principal = req.principal!;
       const body = asObject(req.body);
       const channel = requireString(body, 'channel');
       if (!isChannelId(channel)) {
@@ -152,6 +190,18 @@ export function buildSocialRoutes(deps: SocialRouterDeps): Router {
         return;
       }
       const parsed = sendMessageSchema.parse(body);
+      // Cross-tenant SEND guard: the connector is SHARED, so without an ownership
+      // check any authed caller could push text into any chat over it. Require a
+      // binding the caller OWNS for this (connector, chat); an unowned/unbound
+      // chat is 403 and the connector is never touched. Admin/internal bypass;
+      // the RECODER_SOLO_MODE owner fails open (single local user, no bindings).
+      if (!bypassesOwnership(principal)) {
+        const binding = await repository.getBinding(connectorIdForChannel(channel), parsed.chatRef);
+        if (!binding || binding.userId !== principal.userId) {
+          sendError(res, createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'not authorized to send to this chat'));
+          return;
+        }
+      }
       const result = await channels.send(channel, {
         target: { channel: channel as never, accountId: 'default', conversationId: parsed.chatRef },
         text: parsed.text,
