@@ -36,6 +36,13 @@ export interface IngressResult<TPayload = unknown> {
   readonly reason: string;
   /** The verified payload — present only when `admitted === true`. */
   readonly payload?: TPayload;
+  /**
+   * The cryptographically-verified sender — present only when admission proved a
+   * per-sender ed25519 signature. `keyId` is the registered agent id (the only
+   * trustworthy owner identity); downstream handlers scope ownership by it rather
+   * than any caller-supplied field. Absent for the permissive/insecure path.
+   */
+  readonly signer?: { readonly keyId: string; readonly from?: string };
 }
 
 /** An outbound sealed + signed envelope this instance publishes. */

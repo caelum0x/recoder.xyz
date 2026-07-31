@@ -333,7 +333,9 @@ describe('/api/a2a mount order — the exposed wire stays governed (production p
       jsonrpc: '2.0',
       id: 5,
       method: 'message/send',
-      params: { userId: USER, message: { text: 'ed25519 hello' }, targets: ['ghost-target'] },
+      // A signed call's ownership derives from the verified signer (key_id); a
+      // caller-supplied userId must equal it (here: the signing peer identity).
+      params: { userId: PEER_KEY_ID, message: { text: 'ed25519 hello' }, targets: ['ghost-target'] },
     };
     const res = await postRpc(ed25519EnvelopeWrapping(rpc));
     expect(res.status).toBe(200);

@@ -21,6 +21,17 @@ import type { Logger } from '../../../shared/logger.js';
 import type { IngressResult } from '../types.js';
 import type { SignedIngressGate } from '../wire/signed-ingress.gate.js';
 
+// --- Express request augmentation: the verified A2A sender from admission. ---
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Request {
+      /** The cryptographically-verified A2A sender (present only on the signed path). */
+      a2aSigner?: { readonly keyId: string; readonly from?: string };
+    }
+  }
+}
+
 /** The signing posture the guard enforces (mirrors `InteropWireConfig`). */
 export interface RpcAdmissionPosture {
   /** Reject unsigned calls (forced on in production). */
@@ -94,8 +105,11 @@ export function createRpcAdmissionGuard(deps: RpcAdmissionGuardDeps): RequestHan
           );
           return;
         }
-        // Dispatch ONLY the verified payload — never the raw wire body.
+        // Dispatch ONLY the verified payload — never the raw wire body — and
+        // carry the verified sender identity so the handler scopes ownership by
+        // the proven signer, not a caller-supplied `params.userId`.
         req.body = result.payload;
+        req.a2aSigner = result.signer;
         next();
       })
       .catch((err: unknown) => {

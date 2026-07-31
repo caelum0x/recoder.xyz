@@ -155,13 +155,24 @@ export function createEd25519IngressGate(deps: Ed25519IngressGateDeps): SignedIn
     return null;
   }
 
-  /** Admit the (verified or permissively-allowed) envelope's domain payload. */
-  function admitDomain<TPayload>(raw: unknown, code: string, reason: string): IngressResult<TPayload> {
+  /**
+   * Admit the (verified or permissively-allowed) envelope's domain payload. A
+   * `verifiedKeyId` is threaded through ONLY on the cryptographically-verified
+   * path so the admitted result carries the trustworthy sender identity; the
+   * permissive-unverified path passes none (never labels an unverified sender).
+   */
+  function admitDomain<TPayload>(
+    raw: unknown,
+    code: string,
+    reason: string,
+    verifiedKeyId?: string,
+  ): IngressResult<TPayload> {
     const domain = envelope.parseEnvelope<TPayload>(raw);
     if (!domain) {
       return denied(400, 'envelope_payload_malformed', 'Signed envelope payload is not a well-formed A2A domain envelope.');
     }
-    return { admitted: true, status: 200, code, reason, payload: domain.payload };
+    const signer = verifiedKeyId ? { keyId: verifiedKeyId, from: domain.from } : undefined;
+    return { admitted: true, status: 200, code, reason, payload: domain.payload, ...(signer ? { signer } : {}) };
   }
 
   return {
@@ -203,7 +214,7 @@ export function createEd25519IngressGate(deps: Ed25519IngressGateDeps): SignedIn
         return denied(503, 'ed25519_verifier_fault', 'ed25519 ingress verifier faulted — rejected (fail-closed).');
       }
       if (rejection === null) {
-        return admitDomain<TPayload>(value, 'ingress_admitted', 'Verified ed25519 A2A envelope.');
+        return admitDomain<TPayload>(value, 'ingress_admitted', 'Verified ed25519 A2A envelope.', value.signature.key_id);
       }
       if (mode === 'enforce') {
         return denied(rejection.status, rejection.code, rejection.reason);
