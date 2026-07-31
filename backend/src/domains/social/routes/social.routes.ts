@@ -26,7 +26,7 @@ import { Router } from 'express';
 import { ErrorCode, createError, sendError, sendSuccess, asyncHandler } from '../../../shared/errors.js';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { Principal } from '../../identity/types.js';
-import { SOLO_OWNER_USER_ID } from '../../identity/principal.service.js';
+import { SOLO_OWNER_USER_ID } from '../../../shared/solo-identity.js';
 import type { SocialRepository } from '../ports/social-repository.port.js';
 import type { ConnectorSecretsPort } from '../ports/connector-secrets.port.js';
 import type { ChannelAdapterRegistry } from '../adapters/channel-adapter-registry.js';
