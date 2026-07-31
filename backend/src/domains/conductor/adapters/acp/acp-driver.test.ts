@@ -123,6 +123,25 @@ describe('AcpAgentDriver lifecycle', () => {
     });
   });
 
+  it('start() rejects an unsupported negotiated protocol version (truthful, not silent)', async () => {
+    const agent = fakeAgent(m =>
+      m === 'initialize' ? { protocolVersion: 2 } : defaultResponder(m)
+    );
+    const driver = new AcpAgentDriver({ spawn: agent.spawn });
+    await expect(driver.start()).rejects.toThrow(
+      /unsupported protocol version/
+    );
+  });
+
+  it('prompt() maps a missing stopReason to "unknown" — never a fabricated end_turn', async () => {
+    const agent = fakeAgent(m =>
+      m === 'session/prompt' ? {} : defaultResponder(m)
+    ); // session/prompt result omits stopReason
+    const driver = new AcpAgentDriver({ spawn: agent.spawn });
+    await driver.start();
+    await expect(driver.prompt('s1', 'go')).resolves.toBe('unknown');
+  });
+
   it('cancel sends a session/cancel notification', async () => {
     const agent = fakeAgent(defaultResponder);
     const driver = new AcpAgentDriver({ spawn: agent.spawn });

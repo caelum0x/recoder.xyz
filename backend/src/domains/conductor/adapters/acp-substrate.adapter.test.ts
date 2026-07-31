@@ -23,9 +23,11 @@ import {
   encodeAcpMessage,
   isAcpRequest,
   isAcpResponse,
+  makeError,
   makeNotification,
   makeRequest,
   makeResponse,
+  AcpErrorCode,
   type AcpRequest,
   type AcpResponse,
 } from './acp/acp-codec.js';
@@ -37,11 +39,18 @@ function fakeAgent(opts?: {
   sessionId?: string;
   /** Advertise the `loadSession` capability at initialize (enables reattach). */
   loadSession?: boolean;
+  /** Reply to session/load with a JSON-RPC error (reattach must kill + degrade). */
+  failLoad?: boolean;
+  /** Never answer session/prompt so the turn stays in flight (guards + cancel tests). */
+  hangPrompt?: boolean;
 }) {
   const text = opts?.updateText ?? 'edited src/app.ts';
   const stopReason = opts?.stopReason ?? 'end_turn';
   const sessionId = opts?.sessionId ?? 'sess-1';
   const loadSession = opts?.loadSession ?? false;
+  const failLoad = opts?.failLoad ?? false;
+  const hangPrompt = opts?.hangPrompt ?? false;
+  const seen: string[] = [];
   let onData: ((chunk: string) => void) | null = null;
   let onExit: ((code: number | null) => void) | null = null;
   let killed = false;
@@ -70,10 +79,15 @@ function fakeAgent(opts?: {
     else if (req.method === 'session/new')
       deliver(makeResponse(req.id, { sessionId }));
     else if (req.method === 'session/load') {
+      if (failLoad) {
+        deliver(makeError(req.id, AcpErrorCode.InternalError, 'load failed'));
+        return;
+      }
       // v1 resume: replay the conversation as a session/update, then respond.
       streamText();
       deliver(makeResponse(req.id, {}));
     } else if (req.method === 'session/prompt') {
+      if (hangPrompt) return; // turn never ends — done stays false
       streamText();
       deliver(makeResponse(req.id, { stopReason }));
     }
@@ -81,8 +95,11 @@ function fakeAgent(opts?: {
 
   const proc: AcpProcess = {
     write: line => {
-      for (const m of decodeAcpStream(line).messages)
+      for (const m of decodeAcpStream(line).messages) {
+        const method = (m as { method?: string }).method;
+        if (typeof method === 'string') seen.push(method);
         if (isAcpRequest(m)) handle(m);
+      }
     },
     onData: cb => {
       onData = cb;
@@ -95,7 +112,7 @@ function fakeAgent(opts?: {
       onExit?.(0);
     },
   };
-  return { proc, wasKilled: () => killed };
+  return { proc, wasKilled: () => killed, seenMethods: () => seen };
 }
 
 /** A git exec that records calls and returns canned diff output. */
@@ -104,6 +121,8 @@ function fakeGit() {
   const exec: ExecFn = async (bin, args) => {
     calls.push([bin, ...args]);
     const line = args.join(' ');
+    if (line.includes('rev-parse') && line.includes('--git-common-dir'))
+      return { stdout: '/repo/.git\n', stderr: '', code: 0 };
     if (line.includes('diff --stat'))
       return { stdout: ' src/app.ts | 2 +-\n', stderr: '', code: 0 };
     if (line.includes('status --porcelain'))
@@ -318,7 +337,22 @@ describe('createAcpSubstrate', () => {
   });
 });
 
-describe('createAcpSubstrate — reattach after a backend restart', () => {
+describe('createAcpSubstrate — restart reattach (explicit, via continueRun)', () => {
+  const persistedHandle = {
+    ref: 'ws-1',
+    worktreePath: '/tmp/wt/ws-1',
+    sessionName: 'sess-1',
+  };
+  const resume = (
+    s: ReturnType<typeof createAcpSubstrate>,
+    handle = persistedHandle
+  ) =>
+    s.continueRun?.(handle, {
+      workspaceId: 'ws-1',
+      worktreePath: handle.worktreePath,
+      prompt: 'keep going',
+    });
+
   it('persists the ACP sessionId as the handle sessionName (state of record)', async () => {
     const s = createAcpSubstrate(
       baseDeps({ spawn: () => fakeAgent({ sessionId: 'sess-persist' }).proc })
@@ -329,102 +363,260 @@ describe('createAcpSubstrate — reattach after a backend restart', () => {
     expect(handle.sessionName).toBe('sess-persist');
   });
 
-  it('reattaches via session/load using the persisted sessionId + worktree', async () => {
-    // A FRESH substrate = an empty in-memory byRef map = a backend restart. The
-    // worktree still exists on disk (exists: true) and the agent can reload.
+  it('probes are READ-ONLY after a restart — no auto-reattach, no agent spawned', async () => {
+    // Fresh substrate = empty byRef = a backend restart. A passive poll must NEVER
+    // boot an agent (else reconcile / UI polling leaks a process per workspace).
+    const spawn = vi.fn(() => fakeAgent({ loadSession: true }).proc);
+    const s = createAcpSubstrate(baseDeps({ exists: () => true, spawn }));
+    expect(await s.capture(persistedHandle)).toBeNull();
+    expect(await s.alive(persistedHandle)).toBe(false);
+    expect(await s.exitCode?.(persistedHandle)).toBeNull();
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it('continueRun reattaches via session/load (replays history) and drives a fresh turn', async () => {
     const s = createAcpSubstrate(
       baseDeps({
         exists: () => true,
         spawn: () =>
-          fakeAgent({
-            loadSession: true,
-            sessionId: 'sess-1',
-            updateText: 'replayed history',
-          }).proc,
+          fakeAgent({ loadSession: true, updateText: 'replayed history' }).proc,
       })
     );
-    const handle = {
-      ref: 'ws-1',
-      worktreePath: '/tmp/wt/ws-1',
-      sessionName: 'sess-1',
-    };
-    // capture lazily reattaches: spawn → initialize → session/load (replays text).
-    const out = await s.capture(handle);
-    expect(out).toContain('replayed history');
-    // No turn is running after a restart → alive is false, and the interrupted
-    // turn's outcome is UNKNOWN (undefined), NEVER a fabricated 0.
-    expect(await s.alive(handle)).toBe(false);
-    expect(await s.exitCode?.(handle)).toBeUndefined();
-  });
-
-  it('continueRun drives a fresh turn on the reattached session', async () => {
-    const s = createAcpSubstrate(
-      baseDeps({
-        exists: () => true,
-        spawn: () => fakeAgent({ loadSession: true, sessionId: 'sess-1' }).proc,
-      })
-    );
-    const handle = {
-      ref: 'ws-1',
-      worktreePath: '/tmp/wt/ws-1',
-      sessionName: 'sess-1',
-    };
-    const again = await s.continueRun?.(handle, {
-      workspaceId: 'ws-1',
-      worktreePath: handle.worktreePath,
-      prompt: 'keep going',
-    });
+    const again = await resume(s);
     expect(again?.ref).toBe('ws-1');
+    // session/load replayed the prior history into the capture buffer.
+    expect(await s.capture(persistedHandle)).toContain('replayed history');
     await flush();
-    // The reattached session ran a clean turn → truthful success.
-    expect(await s.exitCode?.(handle)).toBe(0);
+    // and the fresh turn ran to a clean end_turn → truthful success.
+    expect(await s.exitCode?.(persistedHandle)).toBe(0);
   });
 
-  it('does NOT reattach (run stays lost) when the agent lacks loadSession', async () => {
+  it('continueRun refuses + kills the spawned agent when loadSession is unsupported (no leak)', async () => {
+    const agent = fakeAgent({ loadSession: false });
     const s = createAcpSubstrate(
-      baseDeps({
-        exists: () => true,
-        spawn: () =>
-          fakeAgent({ loadSession: false, sessionId: 'sess-1' }).proc,
-      })
+      baseDeps({ exists: () => true, spawn: () => agent.proc })
     );
-    const handle = {
-      ref: 'ws-1',
-      worktreePath: '/tmp/wt/ws-1',
-      sessionName: 'sess-1',
-    };
-    expect(await s.capture(handle)).toBeNull();
-    expect(await s.alive(handle)).toBe(false);
-    expect(await s.exitCode?.(handle)).toBeNull();
+    await expect(resume(s)).rejects.toThrow(/live or reattachable/);
+    expect(agent.wasKilled()).toBe(true); // spawned probe agent was stopped
+    expect(await s.capture(persistedHandle)).toBeNull(); // still lost
   });
 
-  it('does NOT reattach when the worktree no longer exists', async () => {
+  it('continueRun kills the spawned agent when session/load rejects (no leak)', async () => {
+    const agent = fakeAgent({ loadSession: true, failLoad: true });
     const s = createAcpSubstrate(
-      baseDeps({
-        exists: () => false,
-        spawn: () => fakeAgent({ loadSession: true }).proc,
-      })
+      baseDeps({ exists: () => true, spawn: () => agent.proc })
     );
-    expect(
-      await s.capture({
-        ref: 'ws-1',
-        worktreePath: '/tmp/wt/ws-1',
-        sessionName: 'sess-1',
-      })
-    ).toBeNull();
+    await expect(resume(s)).rejects.toThrow(/live or reattachable/);
+    expect(agent.wasKilled()).toBe(true);
   });
 
-  it('does NOT reattach a handle with no persisted sessionId', async () => {
+  it('continueRun refuses to reattach when the worktree no longer exists (no spawn)', async () => {
+    const spawn = vi.fn(() => fakeAgent({ loadSession: true }).proc);
+    const s = createAcpSubstrate(baseDeps({ exists: () => false, spawn }));
+    await expect(resume(s)).rejects.toThrow(/live or reattachable/);
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it('continueRun refuses to reattach a handle with no persisted sessionId', async () => {
     const s = createAcpSubstrate(
       baseDeps({
         exists: () => true,
         spawn: () => fakeAgent({ loadSession: true }).proc,
       })
     );
-    // No sessionName on the handle → nothing to reload → truthful miss.
-    expect(
-      await s.capture({ ref: 'ws-1', worktreePath: '/tmp/wt/ws-1' })
-    ).toBeNull();
+    await expect(
+      resume(s, { ref: 'ws-1', worktreePath: '/tmp/wt/ws-1' } as never)
+    ).rejects.toThrow(/live or reattachable/);
+  });
+
+  it('concurrent continueRun calls trigger ONE re-spawn (dedup) and one wins the turn', async () => {
+    const spawn = vi.fn(
+      () => fakeAgent({ loadSession: true, hangPrompt: true }).proc
+    );
+    const s = createAcpSubstrate(baseDeps({ exists: () => true, spawn }));
+    const results = await Promise.allSettled([resume(s), resume(s)]);
+    // exactly one agent spawned (reattach deduped across the two callers)...
+    expect(spawn).toHaveBeenCalledTimes(1);
+    // ...one continueRun drove the turn, the other hit the in-flight guard.
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter(r => r.status === 'rejected')).toHaveLength(1);
+  });
+
+  it('continueRun refuses a second turn while one is in flight (no overlap / fabricated exit)', async () => {
+    // hangPrompt keeps the launch turn running so the guard is deterministic.
+    const s = createAcpSubstrate(
+      baseDeps({ spawn: () => fakeAgent({ hangPrompt: true }).proc })
+    );
+    const handle = await s.launch(launchInput);
+    await expect(
+      s.continueRun?.(handle, {
+        workspaceId: 'ws-1',
+        worktreePath: handle.worktreePath!,
+        prompt: 'again',
+      })
+    ).rejects.toThrow(/already in flight/);
+  });
+
+  it('teardown after a reattach removes the worktree via the recovered repo', async () => {
+    const git = fakeGit();
+    const s = createAcpSubstrate(
+      baseDeps({
+        exists: () => true,
+        exec: git.exec,
+        spawn: () => fakeAgent({ loadSession: true }).proc,
+      })
+    );
+    await resume(s);
+    await flush();
+    await s.teardown?.(persistedHandle);
+    // rev-parse --git-common-dir recovered /repo/.git → repo /repo → worktree remove.
+    const remove = git.calls.find(
+      c => c.includes('worktree') && c.includes('remove')
+    );
+    expect(remove).toContain('/repo');
+    expect(await s.capture(persistedHandle)).toBeNull(); // forgotten
+  });
+
+  it('teardown gracefully session/cancels a live turn before the hard kill', async () => {
+    const agent = fakeAgent({ hangPrompt: true }); // turn stays in flight
+    const s = createAcpSubstrate(
+      baseDeps({ cancelGraceMs: 10, spawn: () => agent.proc })
+    );
+    const handle = await s.launch(launchInput);
+    await s.teardown?.(handle);
+    // the agent saw a graceful session/cancel AND was ultimately killed.
+    expect(agent.seenMethods()).toContain('session/cancel');
+    expect(agent.wasKilled()).toBe(true);
+  });
+
+  it('a structured tool_call replayed during session/load appears in the reattached capture', async () => {
+    function loadToolCallAgent(): AcpProcess {
+      let onData: ((c: string) => void) | null = null;
+      const deliver = (m: Parameters<typeof encodeAcpMessage>[0]) =>
+        queueMicrotask(() => onData?.(encodeAcpMessage(m)));
+      return {
+        write: line => {
+          for (const m of decodeAcpStream(line).messages) {
+            if (!isAcpRequest(m)) continue;
+            if (m.method === 'initialize')
+              deliver(
+                makeResponse(m.id, {
+                  protocolVersion: 1,
+                  agentCapabilities: { loadSession: true },
+                })
+              );
+            else if (m.method === 'session/load') {
+              deliver(
+                makeNotification('session/update', {
+                  sessionId: 'sess-1',
+                  update: {
+                    sessionUpdate: 'tool_call',
+                    toolCallId: 't1',
+                    title: 'run tests',
+                    kind: 'execute',
+                    status: 'in_progress',
+                  },
+                })
+              );
+              deliver(makeResponse(m.id, {}));
+            } else if (m.method === 'session/prompt')
+              deliver(makeResponse(m.id, { stopReason: 'end_turn' }));
+          }
+        },
+        onData: cb => {
+          onData = cb;
+        },
+        onExit: () => {},
+        kill: () => {},
+      };
+    }
+    const s = createAcpSubstrate(
+      baseDeps({ exists: () => true, spawn: () => loadToolCallAgent() })
+    );
+    await resume(s);
+    expect(await s.capture(persistedHandle)).toContain(
+      '[acp tool: run tests [execute] — in_progress]'
+    );
+  });
+
+  it('the reattach-rebuilt handler still enforces default-deny on a resumed session', async () => {
+    const sentBack: AcpResponse[] = [];
+    function loadPermissionAgent(): AcpProcess {
+      let onData: ((c: string) => void) | null = null;
+      const deliver = (m: Parameters<typeof encodeAcpMessage>[0]) =>
+        queueMicrotask(() => onData?.(encodeAcpMessage(m)));
+      return {
+        write: line => {
+          for (const m of decodeAcpStream(line).messages) {
+            if (isAcpRequest(m)) {
+              if (m.method === 'initialize')
+                deliver(
+                  makeResponse(m.id, {
+                    protocolVersion: 1,
+                    agentCapabilities: { loadSession: true },
+                  })
+                );
+              else if (m.method === 'session/load') {
+                // A resumed agent asks to run a shell command mid-replay.
+                deliver(
+                  makeRequest(777, 'session/request_permission', {
+                    sessionId: 'sess-1',
+                    toolCall: { kind: 'execute' },
+                    options: [
+                      { kind: 'allow_once', name: 'Allow', optionId: 'a1' },
+                      { kind: 'reject_once', name: 'Reject', optionId: 'r1' },
+                    ],
+                  })
+                );
+                deliver(makeResponse(m.id, {}));
+              } else if (m.method === 'session/prompt')
+                deliver(makeResponse(m.id, { stopReason: 'end_turn' }));
+            } else if (isAcpResponse(m)) sentBack.push(m);
+          }
+        },
+        onData: cb => {
+          onData = cb;
+        },
+        onExit: () => {},
+        kill: () => {},
+      };
+    }
+    const s = createAcpSubstrate(
+      baseDeps({ exists: () => true, spawn: () => loadPermissionAgent() })
+    );
+    await resume(s);
+    for (let i = 0; i < 6; i++) await flush();
+    // The worktree-isolation policy denies shell execute by default (reject option),
+    // proving the handler rebuilt for the resumed session is still worktree-bound.
+    const reply = sentBack.find(m => m.id === 777);
+    expect(reply?.result).toEqual({
+      outcome: { outcome: 'selected', optionId: 'r1' },
+    });
+  });
+
+  it('bounds the capture buffer, keeping the newest lines', async () => {
+    const big = Array.from({ length: 5000 }, (_, i) => `L${i}`).join('\n');
+    const s = createAcpSubstrate(
+      baseDeps({ spawn: () => fakeAgent({ updateText: big }).proc })
+    );
+    const handle = await s.launch(launchInput);
+    await flush();
+    const out = (await s.capture(handle, 100000)) ?? '';
+    expect(out).not.toContain('L0\n'); // oldest lines trimmed
+    expect(out).toContain('L4999'); // newest line retained
+    expect(out.split('\n').length).toBeLessThanOrEqual(4100);
+  });
+
+  it('truncates a single pathological newline-free line (byte bound)', async () => {
+    const huge = 'x'.repeat(200_000); // one line, no newlines, > MAX_LINE_BYTES
+    const s = createAcpSubstrate(
+      baseDeps({ spawn: () => fakeAgent({ updateText: huge }).proc })
+    );
+    const handle = await s.launch(launchInput);
+    await flush();
+    const out = (await s.capture(handle, 100000)) ?? '';
+    expect(out).toContain('…[truncated]');
+    expect(out.length).toBeLessThan(100_000); // not the full 200k
   });
 });
 

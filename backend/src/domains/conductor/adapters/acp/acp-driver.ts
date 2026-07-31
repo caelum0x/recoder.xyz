@@ -77,8 +77,18 @@ export class AcpAgentDriver {
       protocolVersion?: number;
       agentCapabilities?: { loadSession?: boolean };
     } | null;
+    // ACP requires the client to validate the negotiated version and refuse a
+    // version it can't speak, rather than blindly sending v1-shaped requests an
+    // older/newer agent won't understand. Fail truthfully (stop + throw) instead.
+    const negotiated = result?.protocolVersion ?? ACP_PROTOCOL_VERSION;
+    if (negotiated !== ACP_PROTOCOL_VERSION) {
+      this.stop();
+      throw new Error(
+        `acp: unsupported protocol version ${negotiated} (client speaks ${ACP_PROTOCOL_VERSION})`
+      );
+    }
     return {
-      protocolVersion: result?.protocolVersion ?? ACP_PROTOCOL_VERSION,
+      protocolVersion: negotiated,
       // Whether this agent can reload a persisted session in a FRESH process — the
       // precondition for reattaching a workspace after a backend restart.
       loadSession: result?.agentCapabilities?.loadSession === true,
@@ -114,13 +124,18 @@ export class AcpAgentDriver {
     });
   }
 
-  /** Send a user turn; resolves with the agent's stop reason when the turn ends. */
+  /**
+   * Send a user turn; resolves with the agent's stop reason when the turn ends.
+   * A response that OMITS `stopReason` resolves to `'unknown'` — NOT `'end_turn'`
+   * — so the substrate never fabricates a clean exit 0 for an off-spec agent reply
+   * (the caller maps only an explicit `'end_turn'` to success).
+   */
   async prompt(sessionId: string, text: string): Promise<string> {
     const result = (await this.activeClient().request('session/prompt', {
       sessionId,
       prompt: [{ type: 'text', text }],
     })) as { stopReason?: string } | null;
-    return result?.stopReason ?? 'end_turn';
+    return result?.stopReason ?? 'unknown';
   }
 
   /** Cancel the in-flight turn (a notification — the agent ends the turn itself). */
