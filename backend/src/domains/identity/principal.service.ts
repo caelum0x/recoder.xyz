@@ -36,6 +36,18 @@ export const SOLO_OWNER_USER_ID = 'recoder-solo-owner';
 /** Scopes granted to a verified internal service caller. */
 const INTERNAL_SCOPES: readonly string[] = ['internal', 'read', 'write', 'admin'];
 
+/**
+ * Resolves (and lazily provisions) a web user's tenant org → orgId. Implemented
+ * by {@link OrgProvisioningService}. Injected optionally so the seam degrades:
+ * absent → session principals resolve with `orgId` undefined (userId-ownership
+ * fallback, no regression). Must be idempotent, cheap, and degrade-safe — it is
+ * called during every session resolution.
+ */
+export interface OrgResolver {
+  /** Return the user's active org id, provisioning a personal org if none. */
+  ensurePersonalOrg(userId: string): Promise<string | undefined>;
+}
+
 export interface PrincipalServiceDeps {
   readonly config: IdentityConfig;
   readonly logger: Logger;
@@ -45,6 +57,13 @@ export interface PrincipalServiceDeps {
   readonly apiKeyValidator?: ApiKeyValidator;
   /** Optional device-token validator; absent → device resolution degrades to `null`. */
   readonly deviceTokenValidator?: DeviceTokenValidator;
+  /**
+   * Optional org resolver — sets `orgId` on resolved SESSION principals (audit
+   * #9) and lazily provisions a personal org for a user with none (audit #11).
+   * Absent → session principals carry `orgId` undefined. Only session principals
+   * use it; api-key/device carry their own org, internal/anonymous never need one.
+   */
+  readonly orgResolver?: OrgResolver;
 }
 
 export class PrincipalService implements SessionVerifier {
@@ -53,6 +72,7 @@ export class PrincipalService implements SessionVerifier {
   private readonly authSession: AuthSessionVerifier;
   private readonly apiKeyValidator?: ApiKeyValidator;
   private readonly deviceTokenValidator?: DeviceTokenValidator;
+  private readonly orgResolver?: OrgResolver;
 
   constructor(deps: PrincipalServiceDeps) {
     this.cfg = deps.config;
@@ -60,6 +80,7 @@ export class PrincipalService implements SessionVerifier {
     this.authSession = deps.authSession;
     this.apiKeyValidator = deps.apiKeyValidator;
     this.deviceTokenValidator = deps.deviceTokenValidator;
+    this.orgResolver = deps.orgResolver;
   }
 
   async verify(cred: Credential): Promise<Principal | null> {
@@ -110,10 +131,15 @@ export class PrincipalService implements SessionVerifier {
     if (sessionToken) {
       const session = await this.safe(() => this.authSession.verifyToken(sessionToken), 'session verify');
       if (session) {
+        // #9/#11: resolve (and lazily provision) the user's tenant org so the
+        // IDOR fixes' `tenant.orgId === principal.orgId` scoping functions for
+        // web users. Degrade-safe: undefined → userId-ownership fallback.
+        const orgId = await this.resolveSessionOrg(session.userId);
         return {
           userId: session.userId,
           sessionId: session.sessionId,
           email: session.email,
+          ...(orgId ? { orgId } : {}),
           scopes: ['read', 'write'],
           kind: 'session',
           isAnonymous: false,
@@ -124,6 +150,18 @@ export class PrincipalService implements SessionVerifier {
 
     // 5. Nothing resolved.
     return null;
+  }
+
+  /**
+   * Resolve the session user's org id via the optional {@link OrgResolver}
+   * (lazily provisioning a personal org when absent). Never throws: a missing
+   * resolver or any fault yields `undefined` so an auth resolution is never a 500
+   * and the caller degrades to userId-scoped ownership.
+   */
+  private async resolveSessionOrg(userId: string): Promise<string | undefined> {
+    if (!this.orgResolver) return undefined;
+    const resolved = await this.safe(() => this.orgResolver!.ensurePersonalOrg(userId), 'org resolve');
+    return resolved ?? undefined;
   }
 
   /**

@@ -25,7 +25,10 @@ import {
   type AuthSenders,
   type BetterAuthAdapter,
 } from './adapters/better-auth.adapter.js';
-import { PrincipalService } from './principal.service.js';
+import { PrincipalService, type OrgResolver } from './principal.service.js';
+import { createOrgService } from './org.service.js';
+import { createOrgStores } from './repositories/org.repository.js';
+import { createOrgProvisioningService } from './org-provisioning.service.js';
 import { createAuthMiddleware, type AuthMiddleware } from './middleware/authenticate.middleware.js';
 import { buildAuthRouter } from './routes/auth.routes.js';
 import { buildInternalIdentityRouter } from './routes/internal-identity.routes.js';
@@ -63,12 +66,26 @@ export class IdentityModuleImpl implements IdentityModule {
       ...(senders ? { senders } : {}),
     });
 
+    // #9/#11 — lazy personal-org provisioning + orgId resolution onto session
+    // principals. Built only when persistence is present; a dedicated,
+    // governance-free OrgService is used because personal-org creation is a
+    // system action for an already-authenticated user (never user-gated). DB-less
+    // / solo boots skip it entirely → session principals resolve orgId undefined.
+    const orgResolver: OrgResolver | undefined = this.executor
+      ? createOrgProvisioningService({
+          orgService: createOrgService({ executor: this.executor, logger: this.log }),
+          memberships: createOrgStores(this.executor).memberships,
+          logger: this.log,
+        })
+      : undefined;
+
     this.principalSvc = new PrincipalService({
       config: this.cfg,
       logger: this.log,
       authSession: this.adapter,
       ...(deps.apiKeyValidator ? { apiKeyValidator: deps.apiKeyValidator } : {}),
       ...(deps.deviceTokenValidator ? { deviceTokenValidator: deps.deviceTokenValidator } : {}),
+      ...(orgResolver ? { orgResolver } : {}),
     });
 
     this.authMiddleware = createAuthMiddleware({
