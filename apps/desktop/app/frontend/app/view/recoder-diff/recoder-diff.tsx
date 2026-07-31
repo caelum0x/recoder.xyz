@@ -142,8 +142,10 @@ function DiffBody({ patch, model }: { patch: string; model: RecoderDiffViewModel
             {lines.map((line, i) => {
                 const kind = diffLineKind(line);
                 const anchor = anchors[i];
-                const commentable = anchor != null && anchor.file != "" && anchor.newLine != null;
-                const anchorLabel = commentable ? `${anchor.file}:${anchor.newLine}` : "";
+                const commentable = anchor != null && anchor.file != "" && anchor.line != null;
+                const anchorLabel = commentable
+                    ? `${anchor.file}:${anchor.line}${anchor.side == "old" ? " (old)" : ""}`
+                    : "";
                 return (
                     <div key={i} className="group">
                         <div className={cn("flex min-h-[1.25rem]", diffRowClass(kind))}>
@@ -163,7 +165,7 @@ function DiffBody({ patch, model }: { patch: string; model: RecoderDiffViewModel
                             <InlineCommentComposer
                                 anchorLabel={anchorLabel}
                                 onSubmit={(bodyText) => {
-                                    model.addComment(anchor.file, anchor.newLine, bodyText);
+                                    model.addComment(anchor.file, anchor.line, bodyText, anchor.side ?? undefined);
                                     setActiveLine(-1);
                                 }}
                                 onCancel={() => setActiveLine(-1)}
@@ -199,7 +201,7 @@ function ReviewCommentQueue({ model }: { model: RecoderDiffViewModel }) {
             {pending.map((c, i) => (
                 <div key={i} className="flex items-start gap-1.5 text-xs">
                     <span className="font-mono text-secondary shrink-0">
-                        {c.line != null ? `${c.file}:${c.line}` : c.file}
+                        {c.line != null ? `${c.file}:${c.line}${c.side == "old" ? " (old)" : ""}` : c.file}
                     </span>
                     <span className="flex-1 text-primary/90">{c.body}</span>
                     <button

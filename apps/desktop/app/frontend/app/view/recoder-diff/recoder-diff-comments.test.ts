@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from "vitest";
-import { computeDiffLineAnchors, parseHunkNewStart, stripDiffPathPrefix } from "./recoder-diff-comments";
+import { computeDiffLineAnchors, parseHunkStarts, stripDiffPathPrefix } from "./recoder-diff-comments";
 
 describe("stripDiffPathPrefix", () => {
     it("strips a/ and b/ prefixes and maps /dev/null to empty", () => {
@@ -14,15 +14,15 @@ describe("stripDiffPathPrefix", () => {
     });
 });
 
-describe("parseHunkNewStart", () => {
-    it("reads the new-file start from a hunk header", () => {
-        expect(parseHunkNewStart("@@ -1,4 +1,6 @@")).toBe(1);
-        expect(parseHunkNewStart("@@ -10,0 +11,3 @@ func foo()")).toBe(11);
-        expect(parseHunkNewStart("@@ -0,0 +1 @@")).toBe(1);
+describe("parseHunkStarts", () => {
+    it("reads the old + new start lines from a hunk header", () => {
+        expect(parseHunkStarts("@@ -1,4 +1,6 @@")).toEqual({ oldStart: 1, newStart: 1 });
+        expect(parseHunkStarts("@@ -10,3 +11,3 @@ func foo()")).toEqual({ oldStart: 10, newStart: 11 });
+        expect(parseHunkStarts("@@ -0,0 +1 @@")).toEqual({ oldStart: 0, newStart: 1 });
     });
     it("returns null for a malformed header (no wrong guess)", () => {
-        expect(parseHunkNewStart("@@ garbage @@")).toBe(null);
-        expect(parseHunkNewStart("not a hunk")).toBe(null);
+        expect(parseHunkStarts("@@ garbage @@")).toBe(null);
+        expect(parseHunkStarts("not a hunk")).toBe(null);
     });
 });
 
@@ -39,52 +39,62 @@ describe("computeDiffLineAnchors", () => {
         " context two",
     ].join("\n");
 
+    const lines = patch.split("\n");
+    const anchors = computeDiffLineAnchors(patch);
+    const at = (text: string) => anchors[lines.indexOf(text)];
+
     it("returns one anchor per rendered line, indexed identically to patch.split", () => {
-        const anchors = computeDiffLineAnchors(patch);
-        expect(anchors).toHaveLength(patch.split("\n").length);
+        expect(anchors).toHaveLength(lines.length);
     });
 
-    it("anchors added and context lines to their real new-file line number", () => {
-        const lines = patch.split("\n");
-        const anchors = computeDiffLineAnchors(patch);
-        const at = (text: string) => anchors[lines.indexOf(text)];
-        expect(at(" context one")).toEqual({ file: "src/a.ts", newLine: 1 });
-        expect(at("+added line")).toEqual({ file: "src/a.ts", newLine: 2 });
-        expect(at(" context two")).toEqual({ file: "src/a.ts", newLine: 3 });
+    it("anchors added and context lines to the NEW file line (side new)", () => {
+        expect(at(" context one")).toEqual({ file: "src/a.ts", line: 1, side: "new" });
+        expect(at("+added line")).toEqual({ file: "src/a.ts", line: 2, side: "new" });
+        expect(at(" context two")).toEqual({ file: "src/a.ts", line: 3, side: "new" });
     });
 
-    it("never anchors deletions, hunk headers, or file/meta headers", () => {
-        const lines = patch.split("\n");
-        const anchors = computeDiffLineAnchors(patch);
-        const at = (text: string) => anchors[lines.indexOf(text)];
-        expect(at("-removed line").newLine).toBe(null);
-        expect(at("@@ -1,3 +1,4 @@").newLine).toBe(null);
-        expect(at("+++ b/src/a.ts").newLine).toBe(null);
-        expect(at("diff --git a/src/a.ts b/src/a.ts").newLine).toBe(null);
+    it("anchors a DELETION to the OLD file line (side old)", () => {
+        // old-file lines: 1='context one', 2='removed line', 3='context two'
+        expect(at("-removed line")).toEqual({ file: "src/a.ts", line: 2, side: "old" });
+    });
+
+    it("never anchors hunk headers or file/meta headers", () => {
+        expect(at("@@ -1,3 +1,4 @@")).toEqual({ file: "src/a.ts", line: null, side: null });
+        expect(at("+++ b/src/a.ts")).toEqual({ file: "src/a.ts", line: null, side: null });
+        expect(at("diff --git a/src/a.ts b/src/a.ts")).toEqual({ file: "", line: null, side: null });
+    });
+
+    it("keeps old/new counters independent across adds, dels, and context", () => {
+        const multi = [
+            "+++ b/x.ts",
+            "@@ -5,4 +5,3 @@",
+            " keep",   // old 5, new 5
+            "-gone1",  // old 6
+            "-gone2",  // old 7
+            "+new1",   // new 6
+            " tail",   // old 8, new 7
+        ].join("\n");
+        const ls = multi.split("\n");
+        const a = computeDiffLineAnchors(multi);
+        expect(a[ls.indexOf(" keep")]).toEqual({ file: "x.ts", line: 5, side: "new" });
+        expect(a[ls.indexOf("-gone1")]).toEqual({ file: "x.ts", line: 6, side: "old" });
+        expect(a[ls.indexOf("-gone2")]).toEqual({ file: "x.ts", line: 7, side: "old" });
+        expect(a[ls.indexOf("+new1")]).toEqual({ file: "x.ts", line: 6, side: "new" });
+        expect(a[ls.indexOf(" tail")]).toEqual({ file: "x.ts", line: 7, side: "new" });
     });
 
     it("tracks the current file across multiple file sections", () => {
-        const multi = [
-            "diff --git a/one.ts b/one.ts",
+        const two = [
             "+++ b/one.ts",
             "@@ -1 +1,2 @@",
             "+first",
-            "diff --git a/two.ts b/two.ts",
             "+++ b/two.ts",
             "@@ -5,0 +6,1 @@",
             "+second",
         ].join("\n");
-        const lines = multi.split("\n");
-        const anchors = computeDiffLineAnchors(multi);
-        expect(anchors[lines.indexOf("+first")]).toEqual({ file: "one.ts", newLine: 1 });
-        expect(anchors[lines.indexOf("+second")]).toEqual({ file: "two.ts", newLine: 6 });
-    });
-
-    it("leaves lines before any file header unanchored (file empty)", () => {
-        const anchors = computeDiffLineAnchors("random preamble\nmore preamble");
-        expect(anchors).toEqual([
-            { file: "", newLine: null },
-            { file: "", newLine: null },
-        ]);
+        const ls = two.split("\n");
+        const a = computeDiffLineAnchors(two);
+        expect(a[ls.indexOf("+first")]).toEqual({ file: "one.ts", line: 1, side: "new" });
+        expect(a[ls.indexOf("+second")]).toEqual({ file: "two.ts", line: 6, side: "new" });
     });
 });

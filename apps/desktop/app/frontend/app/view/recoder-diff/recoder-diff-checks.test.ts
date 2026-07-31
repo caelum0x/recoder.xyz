@@ -556,6 +556,16 @@ describe("RecoderDiffViewModel review comments", () => {
         expect(globalStore.get(model.pendingCommentsAtom)).toEqual([{ file: "src/a.ts", line: 12, body: "fix this" }]);
     });
 
+    it("addComment carries side:old only for a deletion (new is default, omitted)", () => {
+        const model = makeModel();
+        model.addComment("src/a.ts", 2, "restore this", "old");
+        model.addComment("src/a.ts", 5, "rename", "new");
+        expect(globalStore.get(model.pendingCommentsAtom)).toEqual([
+            { file: "src/a.ts", line: 2, body: "restore this", side: "old" },
+            { file: "src/a.ts", line: 5, body: "rename" },
+        ]);
+    });
+
     it("removeComment drops the comment at an index (bounds-safe)", () => {
         const model = makeModel();
         model.addComment("a.ts", 1, "one");
