@@ -74,6 +74,8 @@ backend/engines/py/ops-recorder/            # EXISTING sidecar — USED IN PLACE
 
 ## 3. Per-file responsibility table
 
+> **Health status (2026-07-31):** Suite-wide tsc 0 / 3,076 tests (backend: `tsc 0 / 3076 tests`; website: `tsc 0 / 436 tests`; desktop: `tsc 0 / 471 tests`). All 15 backend domains health-register and report `up|down|degraded` truthfully.
+
 | # | Path | Lang | Kind | Responsibility | Key exports |
 |---|------|------|------|----------------|-------------|
 | 1 | `index.ts` | ts | service | Pure factory: `createObservabilityModule(deps)`; re-exports the one public interface. | `createObservabilityModule`, `ObservabilityModule` |

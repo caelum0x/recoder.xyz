@@ -31,7 +31,9 @@ Three responsibilities, one composer:
 2. **Metering & quotas** — durable per-run / per-token / per-engine usage events
    in Postgres, idempotent, batched and flushed to the provider meter feed;
    quota counters with reset windows enforced fail-safe (deny/zero-headroom on
-   miss, never inflated).
+   miss, never inflated). **Shipped (Phase 9):** 7-day dunning grace
+   (`withinDunningGrace`, `DUNNING_GRACE_DAYS`) for `past_due` subscriptions,
+   plus overage UpgradeHint CTA (encourage plan upgrade when quota exceeded).
 3. **Money edges** — checkout, customer portal, invoices, and **signed
    webhooks** (`/webhooks/:provider`, provider ∈ polar|creem|paddle|dodo) that reconcile subscription/grant state.
 
@@ -249,7 +251,7 @@ Mounted by the `edge` domain route table. All pass the interop chain.
 | POST | `/api/billing/checkout` | session | Create hosted checkout (active MoR provider) for a plan | **yes** |
 | POST | `/api/billing/cancel` | session | Cancel the caller's active subscription (now or at period end) | **yes** |
 | POST | `/api/billing/webhooks/:provider` | **signature** | MoR webhook (provider ∈ polar\|creem\|paddle\|dodo) → idempotent reconcile | no¹ |
-| POST | `/internal/billing/meter` | `INTERNAL_SERVICE_KEY` | Worker/conductor emits a `UsageRecord` (idempotent ledger append) | no¹ |
+| POST | `/internal/billing/meter` | `INTERNAL_SERVICE_KEY` (requireInternal self-gates) | Worker/conductor emits a `UsageRecord` (idempotent ledger append) | no¹ |
 
 ¹ Webhook reconcile and metering ingest are NOT gate-decided: the webhook is
 trusted by raw-body signature verification, the meter append is an idempotent

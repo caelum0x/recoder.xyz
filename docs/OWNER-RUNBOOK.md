@@ -2,6 +2,12 @@
 
 Everything in this repo that can be built and verified **without owner credentials or a signed release** is done and pushed on `feat/enterprise-s0-p0`. This file is the single list of what genuinely needs your hands, each with exact steps. Nothing here was faked or half-claimed in code.
 
+## Summary of what shipped (2026-07-31)
+- **Backend:** isolation-correct + all 8 IDOR domains audited/fixed; org auto-provisioning + principal.orgId landed; A2A ed25519 external ingress enforced; dunning-grace + overage CTA code-landed; tsc 0, 3,076 tests green.
+- **Desktop:** agent-install + needs-input notification wired; git-init affordance live; Preact cockpit SPA deleted (Wave-only); arm64 dmg builds unsigned, packaging gate passes.
+- **Website:** OAuth-only signin; tsc 0, 436 tests green. Next/Payload version triangle corrected to 16.2.6/react 19; install remains blocked by workspace protocol drift + bin-linking crash (needs owner decision between pnpm-member or concrete-version conversion).
+- **All three suites green** (backend, website, desktop).
+
 ## What is already DONE + verified (context)
 - Backend: all 12 OSS engines fully productized (deep-module fusion), backend-src consolidation with a **permanent cross-domain-import guard** (`backend/src/shared/__tests__/domain-boundaries.test.ts`), 2,300+ tests, tsc 0, boots 15 truthful health sources.
 - Desktop: packaging fail-loud gate (arch-aware, lance-optional), env injection, truthful engine roster; desktop terminal-plain compare-group attach + preview-checked line; the durable-shell **safe subset** (shared tmux-server invariant, `recoder-<id>` naming contract, health emits `tmuxBin`+socket, read bridge, flagged attach).

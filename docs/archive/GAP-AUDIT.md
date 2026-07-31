@@ -1,5 +1,11 @@
 # Recoder Master Gap Audit
 
+> **📦 ARCHIVED / historical (2026-07-17).** A point-in-time gap snapshot; the gaps
+> it enumerates were subsequently closed across the doc-gap-closure and engine
+> deep-module waves. Kept as provenance — for current state see
+> **[STATUS.md](../STATUS.md)** and **[SECURITY-POSTURE.md](../SECURITY-POSTURE.md)**.
+> Some referenced working docs (`RECODER-BACKEND/BUILD-STATUS.md`) no longer exist.
+
 Date: 2026-07-17 · Branch: `feat/enterprise-s0-p0` · Sources: 23 parallel doc-vs-code audits + build/boot check
 Build health: `tsc --noEmit` = 0 errors · server boots clean on :3719 · `/health` = 200 `degraded` (truthful, no DB) · clean shutdown.
 
@@ -53,6 +59,14 @@ cross-tenant authorization review — closed a systemic security class. Net:
      disk is near-critical.
 
 The §4 stale-doc corrections have been applied across the reconciled doc set.
+
+> **2026-07-31 status update:** The backend continued to mature post-closure. Current suite health:
+> backend tsc 0 / 3,076 tests, website tsc 0 / 436 tests, desktop tsc 0 / 471 tests. Additional
+> completions since 2026-07-18: multi-tenant IDOR sweep across all 8 domains (verified), conductor
+> diff review comments routing into agent loop, desktop agent-auth probe + git-init affordance,
+> website OAuth-only signin on main site, A2A ed25519 ingress verification, 7-day billing dunning
+> grace with overage UpgradeHint. Owner-gated work remains on the backlog (prod `users→user`
+> backfill, CI enablement, secret rotation).
 
 ---
 

@@ -8,26 +8,27 @@
 > unified identity, full-website scope), which carried into the new plan. Read
 > BUILD-STATUS first.
 >
-> **Phase-A progress (2026-07-18, branch `feat/enterprise-s0-p0`):** Phase 0 (server boots) long
+> **Phase-A progress (2026-07-18/2026-07-31, branch `feat/enterprise-s0-p0`):** Phase 0 (server boots) long
 > done — the backend is now a **15-domain** control plane under `backend/src/domains/*` with a thin
-> 28-line `server.ts` → `bootstrap.start()` and **15 truthful health sources** (tsc 0, ~1462 tests).
-> The BACKEND half of Phase A is **shipped**: in-process Better Auth owned by the backend, one config
-> in `packages/auth` consumed only by the backend, unified `user`/`session`, **DB-backed `sk_` keys**
-> (out of the filesystem JSON store), zero `APP_API_URL` delegation. WEBSITE half in progress: the
-> full site is RECONCILED back into main `app/`, `/api/auth/[...all]` now PROXIES the backend, and the
-> **backend auth seam** (`RECODER_AUTH_BACKEND_SEAM`, `app/lib/auth-backend-seam.ts`, OFF by default)
-> plus an **idempotent `users→user` backfill migration**
-> (`app/prisma/migrations/20260718000000_backfill_singular_identity.sql`) are written. **The migration
-> is written but NOT yet run on prod** (owner-gated runbook: backup → migrate `recoder_main` → verify
-> counts → sso/device e2e → then delete the compat bridge); the raw-SQL compat bridge is KEPT until
-> then. Remaining Phase-A slices: flip the server-side session READS onto the backend seam; run the
-> backfill; Next 15.4.11→15.5.x security bump (needs install+build); Dockerfile.production restore
-> decision; stale root ecosystem.config.js still lists removed pm/agency/agents surfaces.
+> 28-line `server.ts` → `bootstrap.start()` and **15 truthful health sources** (tsc 0, ~3,076 backend
+> tests; ~436 website tests; ~471 desktop tests). The BACKEND half of Phase A is **shipped**: in-process
+> Better Auth owned by the backend, one config in `packages/auth` consumed only by the backend, unified
+> `user`/`session`, **DB-backed `sk_` keys** (out of the filesystem JSON store), zero `APP_API_URL`
+> delegation, organization auto-provisioning + principal.orgId binding. WEBSITE half in progress: the
+> full site is RECONCILED back into main `app/`, `/api/auth/[...all]` now PROXIES the backend, main-site
+> signin is now **OAuth-only** (email/password disabled), and the **backend auth seam**
+> (`RECODER_AUTH_BACKEND_SEAM`, `app/lib/auth-backend-seam.ts`, OFF by default) plus an **idempotent
+> `users→user` backfill migration** (`app/prisma/migrations/20260718000000_backfill_singular_identity.sql`)
+> are written. **The migration is written but NOT yet run on prod** (owner-gated runbook: backup → migrate
+> `recoder_main` → verify counts → sso/device e2e → then delete the compat bridge); the raw-SQL compat
+> bridge is KEPT until then. Remaining Phase-A slices: flip the server-side session READS onto the backend
+> seam; run the backfill; Next 15.4.11→15.5.x security bump (needs install+build); Dockerfile.production
+> restore decision; stale root ecosystem.config.js still lists removed pm/agency/agents surfaces.
 
 > **Where we are.** The shell fusion is done: Wave is now `apps/desktop` (Electron+React `app/`,
-> Go `server/`, Preact `cockpit/`), engines live under `backend/engines/{py,rust}` +
-> `apps/desktop/{server/engines,engines}`, and the desktop embeds and supervises the ONE
-> Node/Express control plane (`backend/`, `recoder-backend`) as a child process. See
+> Go `server/`; the Preact `cockpit/` SPA was deleted 2026-07-31), engines live under
+> `backend/engines/{py,rust}` + `apps/desktop/server/engines`, and the desktop embeds and supervises
+> the ONE Node/Express control plane (`backend/`, `recoder-backend`) as a child process. See
 > [RECODER-ARCHITECTURE.md](./RECODER-ARCHITECTURE.md) for the layer stack.
 >
 > **This doc** plans the next epoch: making that backend the real **spine** — the single owner of
@@ -64,7 +65,7 @@ from "scattered but present" into "the single thing desktop and website both sta
 
 | Area | Truth today | Status now |
 |---|---|---|
-| **Backend** | ONE Node/Express app `backend/` (`recoder-backend`). No Python backend (the `db.py`/SQLAlchemy memory is stale; only `backend/engines/py/mem0` has a `db.py`). | ✅ **Boots.** The unbootable v1 `server.ts` was replaced by a thin 28-line `server.ts` → `bootstrap.start()`; the app is now **15 domains under `backend/src/domains/*`** (`src/` = `bootstrap/ domains/ http/ shared/ + logger.ts + server.ts`), tsc 0, boots with **15 truthful health sources**, ~1462 tests. |
+| **Backend** | ONE Node/Express app `backend/` (`recoder-backend`). No Python backend (the `db.py`/SQLAlchemy memory is stale; only `backend/engines/py/mem0` has a `db.py`). | ✅ **Boots.** The unbootable v1 `server.ts` was replaced by a thin 28-line `server.ts` → `bootstrap.start()`; the app is now **15 domains under `backend/src/domains/*`** (`src/` = `bootstrap/ domains/ http/ shared/ + logger.ts + server.ts`), tsc 0, boots with **15 truthful health sources**, ~3,076 backend tests (2026-07-31). |
 | **Auth** | Backend-owned. | ✅ **Unified.** The backend OWNS Better Auth (one config in `packages/auth` consumed only by the backend), reads the DB directly (no `APP_API_URL/verify-token` hop), unified `user`/`session` (+ `user_cli_link`, never dropping `users`), and **DB-backed `sk_` keys** (out of the filesystem JSON store). Website website consumes it over the shared `.recoder.xyz` cookie via the `/api/auth/[...all]` proxy. Compat bridge (`packages/auth/src/session.ts`) KEPT until the prod backfill runs. |
 | **Desktop auth** | Same `backend` binary, embedded. Local access via a DB-minted `sk_` key + Wave `X-AuthKey`; cloud identity via device-flow to `recoder.xyz`. | ✅ On the unified identity domain (`backend/src/domains/identity`); `sk_` mint rewritten over the DB-backed store. |
 | **Social** | The embedded backend hosts the connectors, now the `social` domain. | ✅ **Folded.** `apps/social` collapsed into the one embedded backend; the social domain serves **`/api/social`** (channels + webhooks; NOT `/api/connectors`). `apps/` = desktop only. Remaining: Discord inbound wiring; public-URL ingress for LINE/Slack webhooks behind NAT. |

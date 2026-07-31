@@ -82,7 +82,13 @@ memory/governance/social/cloud/observability/inference (`00a12168d`); the conduc
 **group compare/converge** residual (`365fc1c92`); **web hardening** (CSP/HSTS/nosniff/
 frame-deny headers `51c7ee66d`; CSRF + credentialed-CORS guard `365fc1c92`); the **durable
 run/event store** (`fd6621902`) + **event-log idempotency** (`7cceb681e`); and the
-**solo-mode boot guard** (`51c7ee66d`). Remaining IDOR tail: `interop` + `edge` domains.
+**solo-mode boot guard** (`51c7ee66d`). **Final wave — the last two domains audited (2026-07-31):**
+`interop` + `edge` completed the IDOR surface (adversarial find→verify sweep `wrxr15ae9`):
+A2A task ownership now binds to the cryptographically-verified ed25519 signer (not a spoofable
+`params.userId`), and `/internal/persistence/*` is gated behind `requireInternal` (was
+unauthenticated — full schema disclosure + migration trigger). **One residual filed** (governance
+approval-clearance principal-binding, `recoder-xiqj` — real gap, doubtful reach, needs a policy
+decision).
 Full fixed-vs-residual detail in **[SECURITY-POSTURE.md](./SECURITY-POSTURE.md)** §1.2.
 
 **Scope caveat (truthful):** the sweeps were scoped (moat +
@@ -99,20 +105,21 @@ The parity+shippability audit (**[CONDUCTOR-PARITY-AND-SHIPPABILITY.md](./CONDUC
 1. **✅ Cross-tenant isolation — closed.** Conductor workspaces (single `requireWorkspaceAccess`
    guard over 28 routes + list filtering; non-owner 404-not-403), agent-os CRUD +
    `PUT /spaces/:id/policy` (`space-authz`, owner from principal never body), a **17-hole wave**
-   across memory/governance/social/cloud/observability/inference, and the conductor **group
+   across all 6 domains (memory/governance/social/cloud/observability/inference), **the final 2 IDOR
+   domains** (`interop`/`edge`; 2 holes fixed, 1 residual filed), and the conductor **group
    compare/converge** residual are all owner-bound (P0 #1/#2, #14; `51c7ee66d`, `00a12168d`,
-   `365fc1c92`). Tail: `interop` + `edge` still to IDOR-review; an indexed `tenant_id` column
-   (#41) is a scale refinement (scoping is enforced in the guard/query layer today).
+   `365fc1c92`, `wrxr15ae9`). An indexed `tenant_id` column (#41) is a scale refinement
+   (scoping is enforced in the guard/query layer today).
 2. **✅ Entitlement coherence — the Free-misread is fixed.** Plan-alias (`pro-monthly/pro-yearly→pro`,
    unknown→`free`), enforced-source quotas, and `subscription/manage` 402-refusing paid-with-no-payment
    (P0 #3, #17/#18; `51c7ee66d`). The **durable billing fix — unifying the two providers (#4) — is
    the one XL that remains.**
-3. **🟡 Org identity + RBAC — backend seam landed, web side owner-gated.** The isolation guards
-   scope by `orgId` when a principal carries one, and the org service (createOrg/membership/
-   principal orgId assembly) exists. **Remaining (owner-script-gated):** stamp `orgId` on the
-   primary **Next/Better-Auth cross-subdomain web session**, auto-provision a personal org on
-   first login, and reconcile the `user`/`users` split (P1 #9/#10/#11, #40). This is the
-   auth-model prod-validation blocker.
+3. **🟡 Org identity + RBAC — backend auto-provisioning landed, web side owner-gated.** The isolation guards
+   scope by `orgId` when a principal carries one. **Backend committed:** `OrgProvisioningService` auto-provisions
+   a default org per owner (idempotent), and `principal.service` resolves + attaches `principal.orgId`.
+   **Remaining (owner-script-gated):** stamp `orgId` on the primary **Next/Better-Auth cross-subdomain
+   web session**, auto-provision on first web login, and reconcile the `user`/`users` split (P1 #9/#10/#11, #40).
+   This is the auth-model prod-validation blocker.
 4. **Release + CI — owner-gated.** No canonical trunk (origin/main frozen ~2 months); all 33
    CI/CD workflows disabled → zero gate enforcement (P0 #5/#6).
 
@@ -179,13 +186,13 @@ parity-roadmap links above; fixed the dead `RECODER-NEXT-PHASE.md` link (now und
 after the earlier pass — both P0 IDORs, the 17-hole 6-domain IDOR wave + group residual,
 auto-reconcile, durable run/event store + event-log idempotency, solo-mode boot guard,
 security headers, CSRF/CORS guard, billing plan-alias/quota/no-free-paid, desktop
-needs-input + agent-install, diff-comment→agent, onboarding probe, plan-limits drift.
-Reframed the multi-tenant section from "in progress" to "isolation closed; enablement
+needs-input + agent-install, diff-comment→agent, onboarding probe, plan-limits drift,
+and the completion of the last two IDOR domains (`interop`/`edge`; 2 holes fixed, 1 residual
+filed). Reframed the multi-tenant section from "in progress" to "isolation closed; enablement
 owner-gated," and marked the corresponding ✅ items in **CONDUCTOR-PARITY-AND-SHIPPABILITY.md**
 and **SECURITY-POSTURE.md** §1.2 with commit refs. Truthful residuals kept: the web-side
-auth-model prod-validation (Next/Better-Auth `orgId` + `user`/`users` reconciliation) and
-`interop`/`edge` IDOR review are owner-gated; billing-provider unification (#4) remains, but
-dunning-grace + overage upgrade-CTA (#29/#30) are now code-landed; A2A ed25519 (#27) is now
-enforced for **external ingress** (HMAC-only untrusted requests refused), internal per-actor
-enforcement pending; backend org auto-provisioning + `principal.orgId` landed (web session
-`orgId` still owner-gated).
+auth-model prod-validation (Next/Better-Auth `orgId` + `user`/`users` reconciliation);
+billing-provider unification (#4) remains, but dunning-grace + overage upgrade-CTA (#29/#30)
+are now code-landed; A2A ed25519 (#27) is now enforced for **external ingress** (HMAC-only
+untrusted requests refused), internal per-actor enforcement pending; backend org auto-provisioning
++ `principal.orgId` landed (web session `orgId` still owner-gated).

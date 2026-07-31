@@ -77,8 +77,10 @@ closed as their own TDD'd tranche. **All fixed:**
 | Durability / integrity | Run/event reads were in-memory-only (history `[]` after restart); event-log lacked idempotency (double-apply risk). | Run/event reads bound to the **durable store** (`fd6621902`); agent-os **event-log idempotency** keyed per event across postgres + in-memory repos (`7cceb681e`). | `fd6621902` · `7cceb681e` |
 | Reliability guard | `RECODER_SOLO_MODE` fail-open reachable on a shared host. | Boot guard refuses solo-mode on a non-loopback / shared-DB host (`bootstrap/solo-mode-guard.ts`). | `51c7ee66d` |
 
-**Remaining of the original 8 IDOR domains:** `interop` and `edge` are still to be
-IDOR-reviewed (tracked as the tail of #14).
+**Final wave (2026-07-31) — the last 2 of the original 8 IDOR domains:**
+`interop` and `edge` completed the audit (adversarial find→verify sweep `wrxr15ae9`):
+2 confirmed-reachable holes fixed (A2A task ownership + `/internal/persistence/*` gating);
+1 residual filed (`recoder-xiqj`, governance approval-clearance principal-binding).
 
 ---
 
@@ -98,7 +100,7 @@ prod-validation, CI/secret work, billing unification, and infra hardening**.
 | Cross-tenant IDOR (conductor / agent-os / 6 domains / groups) | The read/write cross-tenant surface. | P0 #1/#2 · P1 #14 | **✅ Fixed** (§1.2). |
 | Cross-tenant IDOR (`interop` + `edge`) | The last two of the original 8 domains, audited via an adversarial find→verify sweep. **Two confirmed-reachable holes fixed:** A2A task ownership bound to the verified ed25519 signer instead of a spoofable `params.userId` (`interop-wire`), and `/internal/persistence/*` gated behind `requireInternal` (was unauthenticated — full schema disclosure + migration trigger). | audit `wrxr15ae9` | **✅ Fixed** (2 holes) — one **residual filed** (`recoder-xiqj`, governance approval-clearance principal-binding: real gap, doubtful reach, needs a policy decision). |
 | Indexed `tenant_id` | Scoping is enforced in the **guard/query layer** (principal/orgId-bound); a dedicated **indexed** `tenant_id` column for SQL-level filtering at scale is a refinement. | P2 #41 | **🟡 Partial** — enforced in-app; indexed column pending. |
-| Org identity — web side | Backend seam scopes by `orgId` when a principal carries one, and **backend auto-provisioning is committed** (`OrgProvisioningService` per-owner default org + `principal.orgId`). **Remaining (owner-gated):** stamp `orgId` on the primary **Next/Better-Auth** cross-subdomain session, provision on first web login, reconcile the `user`/`users` split (#40). | P1 #9/#10/#11 | **🟡 Backend auto-provisioning landed, web session owner-gated.** |
+| Org identity | Backend seam scopes by `orgId` when a principal carries one. **✅ Backend auto-provisioning committed** (`OrgProvisioningService` per-owner default org + `principal.orgId`). **Remaining (owner-script-gated):** stamp `orgId` on the primary **Next/Better-Auth** cross-subdomain session, provision on first web login, reconcile the `user`/`users` split (#40). | P1 #9/#10/#11 | **🟡 Backend landed; web session owner-gated.** |
 
 ### Supply chain / CI / secrets
 
@@ -142,9 +144,9 @@ Ordered by the parity audit's **critical path**. Much is now done (✅); the res
 
 - [x] **Close the two blocker IDORs** (#1, #2) — done; principal-derived, tenant-scoped,
       404-not-403 for non-owners (§1.2).
-- [x] **IDOR-review the post-audit domains** (#14) — 6 of 8 done (memory, governance,
-      social, cloud, observability, inference) + the conductor group residual.
-- [ ] **IDOR-review the last 2 domains** (#14 tail): `interop`, `edge`.
+- [x] **IDOR-review the post-audit domains** (#14) — all 8 done (memory, governance,
+      social, cloud, observability, inference, interop, edge) + the conductor group residual
+      (2 holes in interop/edge fixed, 1 residual filed).
 - [x] **Apply the core web hardening** (#24/#25) — security headers, CSRF, credentialed-CORS
       guard (§1.2).
 - [x] **Fix entitlement + quota coherence** (#3/#17/#18) — plan-alias + enforced-source quotas

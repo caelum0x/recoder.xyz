@@ -294,7 +294,7 @@ CREATE INDEX IF NOT EXISTS idx_engine_restart_log_engine_time
 
 ---
 
-## 5. HTTP / MCP edges
+## 5. HTTP / MCP edges (auth architecture & subject-binding)
 
 The domain router mounts at the `/api/mcp` base (bootstrap `DOMAIN_REGISTRY.engines.mountBase`),
 plus an `INTERNAL_SERVICE_KEY`-gated worker router at `/internal/engines`. Every tool call carries
@@ -302,6 +302,14 @@ the authenticated `Principal` and passes the interop `authorize→risk→execute
 `host.call()` — the edge NEVER executes a handler itself. Responses use
 `sendSuccess`/`sendError(createError(code,msg))`; gate outcomes ride a 200 envelope whose
 `data.status` carries the truthful decision (`completed`/`denied`/`needs_approval`/`failed`).
+
+**SECURITY NOTE (2026-07-31 multi-tenant IDOR audit, completed):** The edge guard architecture
+binds tenant identity to the authenticated principal (via `resolveUserId()` → host-authorized
+`McpToolCaller`). A caller cannot spoof identity in `args` — cross-tenant requests are rejected
+`403 AUTHZ_PROJECT_ACCESS_DENIED` unless the caller is `admin`/`internal`. All subject-bearing MCP
+tools (memory/cloud/billing/identity) override `args.userId` with the authenticated principal's
+`userId` before `host.call()`. Missing caller ⇒ `AUTH_REQUIRED`. This closed the systemic IDOR
+class across the MCP tool surface.
 
 > The per-engine **list + health** surface ships as **MCP tools** (`engine.list` / `engine.health`
 > in `mcp/engines-engine.ts`), not standalone REST routes — the shipped router has no

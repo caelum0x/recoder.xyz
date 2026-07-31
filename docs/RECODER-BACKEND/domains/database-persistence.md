@@ -213,15 +213,19 @@ Notes:
 
 ## 5. Edges (HTTP / MCP)
 
-All internal, `INTERNAL_SERVICE_KEY`-gated, mounted by the `edge` domain's route table; every write passes the interop chain `authorize→risk→policy→audit` and the governance gate.
+All internal, `INTERNAL_SERVICE_KEY`-gated. **SHIPPED (2026-07-31, architecture change):** The
+bootstrap globally overrides the edge default guard to PUBLIC_MOUNT, so `/internal/persistence/*`
+**self-gates** via `requireInternal` middleware injected into the router (see
+`routes/persistence.routes.ts:14-25`). This is fail-closed: missing/invalid key → 401/503, never
+a bypass. Every write passes the interop chain `authorize→risk→policy→audit` and the governance gate.
 
 | Method | Path | Purpose | Gate |
 |---|---|---|---|
-| GET | `/internal/persistence/health` | pool ping + migration ledger + saturation | internal key |
-| POST | `/internal/persistence/migrate` | apply pending migrations (idempotent) | internal key + governance write |
-| GET | `/internal/persistence/migrate/status` | applied vs pending ledger (read-only) | internal key |
-| GET | `/internal/persistence/introspect` | list application tables (read-only) | internal key |
-| GET | `/internal/persistence/introspect/:schema/:table` | columns + indexes for one table | internal key |
+| GET | `/internal/persistence/health` | pool ping + migration ledger + saturation | self-gated via requireInternal |
+| POST | `/internal/persistence/migrate` | apply pending migrations (idempotent) | self-gated via requireInternal + governance write |
+| GET | `/internal/persistence/migrate/status` | applied vs pending ledger (read-only) | self-gated via requireInternal |
+| GET | `/internal/persistence/introspect` | list application tables (read-only) | self-gated via requireInternal |
+| GET | `/internal/persistence/introspect/:schema/:table` | columns + indexes for one table | self-gated via requireInternal |
 
 *(Planned, NOT yet shipped: `POST /internal/persistence/backup` — the `schema/backup.ts` `pg_dump` helper exists but is not yet wired into the module interface or a route; when added it is internal-key + **approval-gated**.)*
 

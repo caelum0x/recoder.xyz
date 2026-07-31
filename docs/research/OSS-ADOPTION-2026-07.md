@@ -78,11 +78,11 @@ independently (mandatory for copyleft/no-license).
   diff layer for code-review products: split/unified, word-level highlights, virtualization for large diffs,
   and **merge-conflict rendering with pick-current/incoming/both UI**.
 - **Why it wins over hand-rolling:** the conflict-resolution component maps directly onto the convergence
-  thesis (N branches → one trusted merge), and the **vanilla-JS component path sidesteps the known
-  cockpit Preact/react-hooks dup landmine** (`project_cockpit_preact_dup_landmine`).
-- **Integration sketch:** npm dep in `apps/desktop/cockpit`; use vanilla-JS components (not the React ones);
+  thesis (N branches → one trusted merge), and the vanilla-JS component path avoids React/Preact versioning conflicts.
+- **Integration sketch:** npm dep in `apps/desktop/app/frontend` (the Wave frontend); use vanilla-JS components (not the React ones);
   mount as the diff surface for workspace review and for the merge/converge step. Inline comment gutter
-  hooks feed the difit-style schema (#4).
+  hooks feed the difit-style schema (#4). **Note (2026-07-31):** the Preact cockpit SPA was deleted; all desktop UI
+  is now Wave recoder-* views.
 
 ### 6. Electron Notification API (builtin) — WIRE — G5 delivery (implements recoder-wupr)
 - **URL:** https://www.electronjs.org/docs/latest/api/notification (Electron, MIT); optional https://github.com/mikaelbr/node-notifier (MIT, 5.8k)
@@ -91,7 +91,8 @@ independently (mandatory for copyleft/no-license).
 - **Integration sketch:** Trivial closer. Supervisor emits `agent-needs-input` (from Omnara-style heuristics
   #3, ACP permission-requests #9, or agent-os approval gates) → Electron main fires a Notification →
   click focuses the exact workspace. Zero deps for v1 (builtin only). Directly closes open issue
-  **recoder-wupr**; badge the dock icon as a bonus.
+  **recoder-wupr**; badge the dock icon as a bonus. **Status (2026-07-31):** first-run agent-auth probe,
+  git-init affordance, and mid-run needs-input notifications shipped.
 
 ### 7. electron-updater + Hazel — ADOPT + PORT — G8 (update + /download)
 - **URLs:** https://github.com/electron-userland/electron-builder (MIT, 14.6k) · https://github.com/vercel/hazel (MIT, 3.0k)
@@ -158,7 +159,7 @@ independently (mandatory for copyleft/no-license).
 | **Worktrunk** | MIT/Apache-2.0 dual, 6.0k | study/port | Worktree lifecycle state machine + hooks (create → run → merge-back → prune, stale/orphan handling) to harden the conductor's worktree layer. |
 | **git-worktree-runner** | Apache-2.0, 1.7k | port checklist | The unglamorous bootstrap: copy .env/untracked config + install deps into fresh worktrees (known failure mode: agents launched into bare worktrees). Fold into workspace-create. |
 | **avt** | Apache-2.0, 229 | port/wire | Rust ANSI/VT parser → clean plain-text screen state from tmux bytes. The quality upgrade for transcript search (#3) and readable run evidence; NAPI sidecar like the openfang fusion. Use avt/asciicast-rs, NOT the GPL-3 asciinema CLI/server. |
-| **cmdk** | MIT, 12.8k | wire | Palette primitive for G7 (Linear/Raycast feel). MUST ride the anchored preact/compat aliases (cockpit dup landmine) and verify its Radix Dialog dep is alias-covered — that risk is why it's Tier 2, not Tier 1. kbar (MIT) is the fallback if aliasing fights. |
+| **cmdk** | MIT, 12.8k | wire | Palette primitive for G7 (Linear/Raycast feel). Verify Radix Dialog and other dep compatibility in Wave frontend. kbar (MIT) is the fallback if integration fights. |
 | **parallel-code** | MIT, 891 | study | Minimal end-to-end implementation of Recoder's exact loop; lift its agent-CLI invocation matrix / worktree naming where better than current conductor code. |
 | **AG-UI** | MIT, 14.9k | study | Event vocabulary reference for conductor→cockpit streaming; map RunEvents onto it only if third-party client rendering becomes a goal. |
 | **react-hotkeys-hook / react-joyride** | MIT | wire later | Shortcut registry + first-run tour; both hooks-based → same preact alias care. Polish phase, after G-gaps close. |

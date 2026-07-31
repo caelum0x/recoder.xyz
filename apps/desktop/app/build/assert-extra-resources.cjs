@@ -143,7 +143,7 @@ function assertExtraResourcesExist(extraResources, appRoot, opts = {}) {
                 fatal.join("\n") +
                 "\nBuild the missing artifacts first — native .node addons come from " +
                 "scripts/build-native-addons.sh (release builds only; there is no debug fallback), " +
-                "backend/dist from the backend build, cockpit/dist from the cockpit build, " +
+                "backend/dist from the backend build, " +
                 "the beads bd binary (never committed — >100MB, stripped from git history) from " +
                 "`cd apps/desktop/server/engines/beads && go build -o bin/bd ./cmd/bd`. " +
                 "Refusing to package a desktop app with silently-missing or wrong-arch engine artifacts."
