@@ -141,6 +141,13 @@ async function main(): Promise<void> {
       userId,
       name: DEV_KEY_NAME,
       scopes: CONDUCTOR_SCOPES,
+      // Trusted operator bootstrap: a human running this dev/desktop mint
+      // explicitly authorizes these scopes (incl. the privileged `admin` the
+      // conductor surface needs). This is NOT the untrusted request path — the
+      // granter must carry every requested scope, so pass the same set. Without
+      // it, `resolveGrantableScopes` refuses `admin` (fail-closed) and the mint
+      // throws, so a DB-less desktop could never mint its conductor key.
+      granterScopes: CONDUCTOR_SCOPES,
     });
 
     process.stdout.write(
