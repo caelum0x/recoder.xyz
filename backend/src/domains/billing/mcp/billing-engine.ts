@@ -130,6 +130,8 @@ export function buildBillingMcpTools(module: BillingModule): readonly McpToolReg
           byokBypass: d.byokBypass,
           resetAt: d.resetAt,
           reason: d.reason ?? null,
+          // #30: an actionable upgrade CTA when the quota is exhausted (else null).
+          upgrade: d.upgrade ?? null,
         };
       },
     },

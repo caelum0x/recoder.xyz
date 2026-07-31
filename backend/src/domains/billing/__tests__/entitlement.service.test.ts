@@ -77,6 +77,21 @@ function activeSub(plan: PlanTier): BillingSubscription {
   };
 }
 
+/** A `past_due` subscription whose paid period ended at `currentPeriodEnd`. */
+function pastDueSub(plan: PlanTier, currentPeriodEnd: string | null): BillingSubscription {
+  return {
+    id: 'sub_pd',
+    subjectId: 'u1',
+    subjectKind: 'user',
+    plan,
+    provider: 'polar',
+    status: 'past_due',
+    currentPeriodEnd,
+    cancelAtPeriodEnd: false,
+    updatedAt: '2026-07-01T00:00:00.000Z',
+  };
+}
+
 describe('EntitlementGate (working before any provider)', () => {
   it('resolves free as the deny-safe floor when no subscription exists', async () => {
     const gate = makeGate(fakeRepo({}));
@@ -86,6 +101,25 @@ describe('EntitlementGate (working before any provider)', () => {
   it('resolves the webhook-confirmed plan when active', async () => {
     const gate = makeGate(fakeRepo({ subscription: activeSub('team') }));
     expect(await gate.resolvePlan(subject('u1'))).toBe('team');
+  });
+
+  // --- #29 Dunning grace window ---
+
+  it('RETAINS the paid tier for a past_due subscription still within the dunning grace window', async () => {
+    // now = 2026-07-15; period ended 5 days ago → inside the 7-day grace window.
+    const gate = makeGate(fakeRepo({ subscription: pastDueSub('team', '2026-07-10T12:00:00.000Z') }));
+    expect(await gate.resolvePlan(subject('u1'))).toBe('team');
+  });
+
+  it('DOWNGRADES a past_due subscription to free once the dunning grace window has elapsed', async () => {
+    // now = 2026-07-15; period ended 14 days ago → past the 7-day grace window.
+    const gate = makeGate(fakeRepo({ subscription: pastDueSub('team', '2026-07-01T12:00:00.000Z') }));
+    expect(await gate.resolvePlan(subject('u1'))).toBe('free');
+  });
+
+  it('DOWNGRADES a past_due subscription with no known period end (deny-safe: cannot prove grace)', async () => {
+    const gate = makeGate(fakeRepo({ subscription: pastDueSub('team', null) }));
+    expect(await gate.resolvePlan(subject('u1'))).toBe('free');
   });
 
   it('allows a free-tier feature offline (no provider needed)', async () => {
@@ -115,6 +149,16 @@ describe('EntitlementGate (working before any provider)', () => {
     const d = await over.checkQuota(subject('u1'), 'agent_run');
     expect(d.allowed).toBe(false);
     expect(d.reason).toBe('quota_exceeded');
+  });
+
+  // --- #30 quota_exceeded carries an actionable upgrade CTA ---
+
+  it('a quota_exceeded decision carries an upgrade CTA (current tier + the tier that lifts the limit)', async () => {
+    const over = makeGate(fakeRepo({ used: { agent_run: 50 } })); // free agent_run limit = 50
+    const d = await over.checkQuota(subject('u1'), 'agent_run');
+    expect(d.allowed).toBe(false);
+    expect(d.reason).toBe('quota_exceeded');
+    expect(d.upgrade).toEqual({ currentTier: 'free', suggestedTier: 'pro' });
   });
 
   it('BYOK bypasses token-metered quota but NOT feature gates', async () => {

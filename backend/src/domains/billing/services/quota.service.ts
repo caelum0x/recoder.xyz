@@ -175,18 +175,21 @@ export function createQuotaService(deps: QuotaServiceDeps): QuotaService {
     // (5)/(6) Compute headroom and decide.
     const remaining = Math.max(0, limit - used);
     const allowed = remaining >= units;
+    if (allowed) {
+      return { ...base, allowed, limit, remaining, byokBypass: false };
+    }
+    // #30: carry a structured upgrade CTA (current + lifting tier) on the deny so
+    // callers can surface "upgrade to continue" rather than an opaque hard-deny.
+    const suggestedTier = catalog.upgradeTierForQuota(plan, kind);
     return {
       ...base,
-      allowed,
+      allowed: false,
       limit,
       remaining,
       byokBypass: false,
-      ...(allowed
-        ? {}
-        : {
-            reason: 'quota_exceeded' as const,
-            message: `quota exceeded for ${kind}: ${remaining}/${limit} remaining`,
-          }),
+      reason: 'quota_exceeded',
+      message: `quota exceeded for ${kind}: ${remaining}/${limit} remaining`,
+      ...(suggestedTier ? { upgrade: { currentTier: plan, suggestedTier } } : {}),
     };
   }
 
