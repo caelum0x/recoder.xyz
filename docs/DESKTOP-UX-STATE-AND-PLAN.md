@@ -51,7 +51,7 @@ The desktop app ships **two independent UIs** that both talk to the same backend
 | | **Wave frontend** | **Cockpit SPA** |
 |---|---|---|
 | Path | `apps/desktop/app/frontend` (the `recoder-*` views) | `apps/desktop/cockpit` (Preact SPA) |
-| How it's shown | native Wave blocks/tabs | historically a **web-iframe widget** loading `http://127.0.0.1:3100/cockpit/` — now fully unsurfaced AND unserved (launcher widget suppressed; not packaged by electron-builder; the backend `/cockpit` static mount + `COCKPIT_DIST` were removed per the §9 LOCKED drop, 2026-07-25) |
+| How it's shown | native Wave blocks/tabs | **REMOVED** — historically a web-iframe widget loading `http://127.0.0.1:3100/cockpit/`, unsurfaced+unserved per the §9 LOCKED drop (2026-07-25), then the whole `apps/desktop/cockpit/` source tree **DELETED** (recoder-flgn, 2026-07-31) |
 | Workspace board/list | `recoder.tsx`, `recoder-board` | `App.tsx` + `Board.tsx` |
 | **Create workspace** | `recoder-launch/*` → `POST /api/conductor/workspaces` | `NewWorkspaceForm.tsx` → **same** `POST /api/conductor/workspaces` |
 | Agent list | `GET /api/conductor/runtimes` | **same** `GET /api/conductor/runtimes` |
@@ -339,8 +339,9 @@ dashboards + sign-in wall + OSS names are removed.
   `cockpitDist` plumbing were removed; the cockpit-only IPC bridge
   (`recoder:cockpit-config`/`backend-status`/`device-login`/`auth-refresh`/
   `auth-signout`, `cockpit-origin.ts` gate, `preload-webview` bridge) was
-  ripped out. The `apps/desktop/cockpit/` source tree still exists on disk but
-  nothing serves or loads it.
+  ripped out. The `apps/desktop/cockpit/` source tree has been **DELETED**
+  (`git rm`, 2026-07-31, recoder-flgn — 155 tracked files + ~93 MB on disk); the
+  historical references below describe the now-removed second frontend.
 - Port "Sign in with Recoder" into the Wave hub/onboarding — drive the existing
   `emain-device-auth-core` (Google/GitHub device flow) via an IPC bridge; retire
   `cockpit/SignIn.tsx`. Make it **optional** (button + "continue offline"), never

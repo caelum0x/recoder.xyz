@@ -32,7 +32,7 @@ describe("packaging config", () => {
         expect(serialized).not.toMatch(/\bWave\b/);
     });
 
-    it("bundles the embedded backend + tmux + native addons + cockpit as extraResources", () => {
+    it("bundles the embedded backend + tmux + native addons as extraResources", () => {
         const entries: Array<{ from: string; to: string }> = config.extraResources;
         const byTo = new Map(entries.map((e) => [e.to, e.from]));
         const expected: Array<[string, string]> = [
@@ -54,7 +54,6 @@ describe("packaging config", () => {
                 "native/tensorzero_gateway_napi.node",
                 "../../../backend/engines/rust/tensorzero/crates/target/release/tensorzero_gateway_napi.node",
             ],
-            ["cockpit/dist", "../cockpit/dist"],
         ];
         for (const [to, from] of expected) {
             expect(byTo.get(to), `extraResources entry missing for ${to}`).toBe(from);
