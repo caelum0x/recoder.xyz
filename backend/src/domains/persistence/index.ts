@@ -8,7 +8,7 @@
  * persistence exposes `QueryExecutor` + `Repository`/`RepositoryFactory` +
  * `KvStore` + `StateOfRecordRepository` + `MigrationRunner`).
  */
-import type { Router } from 'express';
+import type { Router, RequestHandler } from 'express';
 import type { AppConfig } from '../../shared/app-config.js';
 import type { Logger } from '../../shared/logger.js';
 import type { ComponentHealth } from '../../shared/health-types.js';
@@ -46,8 +46,14 @@ export interface PersistenceModule {
   migrate(): Promise<MigrationReport>;
   /** Truthful health. */
   health(): Promise<ComponentHealth>;
-  /** Express router for `/internal/persistence/*`. */
-  routes(): Router;
+  /**
+   * Express router for `/internal/persistence/*`. Takes the `requireInternal`
+   * gate (from `identity.middleware()`) and self-applies it fail-closed, since
+   * the edge guard convention is globally overridden to public. The param is
+   * optional only to preserve the uniform `DomainModule.routes()` shape — a
+   * missing gate denies all edges rather than serving them ungated.
+   */
+  routes(requireInternal?: RequestHandler): Router;
   /** MCP tool registrations. */
   mcp(): readonly McpToolRegistration[];
   /** Boot hook: migrate + hydrate KV cache + seed (all degrade-safe). */

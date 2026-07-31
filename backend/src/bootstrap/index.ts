@@ -1463,11 +1463,14 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       DOMAIN_REGISTRY.observability.mountBase,
       observability.routes()
     ),
-    // Persistence internal edges.
+    // Persistence internal edges. The edge guard convention is globally
+    // overridden to public, so persistence self-gates with the internal-key
+    // middleware (like every sibling internal router) rather than relying on
+    // the mount — these edges disclose schema + trigger migrations.
     routerProvider(
       'persistence',
       DOMAIN_REGISTRY.persistence.mountBase,
-      persistence.routes()
+      persistence.routes(identity.middleware().requireInternal)
     ),
     // Better Auth host at /api/auth/* (public: login/signup can't require a session).
     routerProvider('identity-auth', '/api/auth', identity.authRoutes()),
