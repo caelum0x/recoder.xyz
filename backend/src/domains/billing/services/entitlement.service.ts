@@ -29,6 +29,7 @@ import {
   BYOK_BYPASS_KINDS,
   USAGE_KINDS,
   type BillingSubject,
+  type BillingSubscription,
   type EntitlementDecision,
   type EntitlementRequest,
   type EntitlementView,
@@ -40,6 +41,28 @@ import {
 } from '../types.js';
 
 const GATE_NAME = 'billing.entitlement';
+
+/**
+ * Dunning grace window (#29). A `past_due` subscription — a renewal payment that
+ * failed but has NOT been canceled — RETAINS its prior paid tier until
+ * `currentPeriodEnd + DUNNING_GRACE_DAYS` before it hard-downgrades to `free`.
+ * This avoids yanking a paying customer to Free the instant a card fails, while
+ * still bounding the free ride so a permanently-failing account eventually drops.
+ */
+export const DUNNING_GRACE_DAYS = 7;
+const DUNNING_GRACE_MS = DUNNING_GRACE_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * Is a `past_due` subscription still inside its dunning grace window?
+ * Deny-safe: an absent/unparseable `currentPeriodEnd` cannot prove grace, so it
+ * returns `false` (the subject falls back to the deny-safe plan resolution).
+ */
+function withinDunningGrace(sub: BillingSubscription, now: Date): boolean {
+  if (!sub.currentPeriodEnd) return false;
+  const periodEnd = Date.parse(sub.currentPeriodEnd);
+  if (Number.isNaN(periodEnd)) return false;
+  return now.getTime() <= periodEnd + DUNNING_GRACE_MS;
+}
 
 export interface EntitlementServiceDeps {
   readonly repo: MeteringRepository;
@@ -89,6 +112,10 @@ export function createEntitlementService(deps: EntitlementServiceDeps): Entitlem
     try {
       const sub = await repo.getActiveSubscription(subject.subjectId);
       if (sub && (sub.status === 'active' || sub.status === 'trialing')) {
+        webhookPlan = catalog.normalize(sub.plan);
+      } else if (sub && sub.status === 'past_due' && withinDunningGrace(sub, clock())) {
+        // #29 dunning grace: a failed renewal keeps the paid tier through a
+        // bounded retry window instead of an instant hard-downgrade to free.
         webhookPlan = catalog.normalize(sub.plan);
       }
     } catch (error) {
@@ -211,18 +238,21 @@ export function createEntitlementService(deps: EntitlementServiceDeps): Entitlem
 
     const remaining = Math.max(0, limit - used);
     const allowed = remaining >= cost;
+    if (allowed) {
+      return { ...base, allowed, limit, remaining, byokBypass: false };
+    }
+    // #30: a hard-deny carries a structured upgrade CTA (current + lifting tier)
+    // so the UI can offer "upgrade to continue" instead of an opaque dead end.
+    const suggestedTier = catalog.upgradeTierForQuota(plan, kind);
     return {
       ...base,
-      allowed,
+      allowed: false,
       limit,
       remaining,
       byokBypass: false,
-      ...(allowed
-        ? {}
-        : {
-            reason: 'quota_exceeded' as const,
-            message: `quota exceeded for ${kind}: ${remaining}/${limit} remaining`,
-          }),
+      reason: 'quota_exceeded',
+      message: `quota exceeded for ${kind}: ${remaining}/${limit} remaining`,
+      ...(suggestedTier ? { upgrade: { currentTier: plan, suggestedTier } } : {}),
     };
   }
 
@@ -279,6 +309,7 @@ export function createEntitlementService(deps: EntitlementServiceDeps): Entitlem
         plan: d.plan,
         ...(d.reason ? { reason: d.reason } : {}),
         ...(d.message ? { message: d.message } : {}),
+        ...(d.upgrade ? { upgrade: d.upgrade } : {}),
         quota: d,
       };
     },

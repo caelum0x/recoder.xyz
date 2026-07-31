@@ -267,6 +267,20 @@ describe('QuotaService — fail-safe deny path first', () => {
     expect(d.reason).toBe('quota_exceeded');
   });
 
+  it('a quota_exceeded decision carries an upgrade CTA signal (current + suggested tier)', async () => {
+    const repo = memRepo();
+    const meter = createMeteringService({ repo, now: FIXED_NOW });
+    const svc = createQuotaService({ repo, catalog, resolvePlan: resolvePlan('free'), metering: meter, now: FIXED_NOW });
+    // Exhaust the free agent_run window (limit = 50).
+    for (let i = 0; i < 50; i += 1) {
+      await meter.record({ subjectId: 'u1', kind: 'agent_run', quantity: 1, idempotencyKey: `run${i}` });
+    }
+    const d = await svc.check(subject('u1'), 'agent_run');
+    expect(d.allowed).toBe(false);
+    expect(d.reason).toBe('quota_exceeded');
+    expect(d.upgrade).toEqual({ currentTier: 'free', suggestedTier: 'pro' });
+  });
+
   it('consume does not record on a deny', async () => {
     const repo = memRepo();
     const meter = createMeteringService({ repo, now: FIXED_NOW });

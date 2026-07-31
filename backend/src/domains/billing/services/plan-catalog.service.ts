@@ -12,6 +12,7 @@
  */
 import { FEATURE_MATRIX, type Plan as DistributionPlan } from '@recoder/distribution';
 import type { BillingConfig } from '../config.js';
+import { PLAN_TIERS } from '../types.js';
 import type { BillingProviderName, Feature, PlanTier, UsageKind } from '../types.js';
 
 /** Tier ordering: a higher rank satisfies any lower-rank requirement. */
@@ -63,6 +64,12 @@ export interface PlanCatalog {
   hasFeature(plan: PlanTier, feature: Feature): boolean;
   /** The quota limit for a kind on a tier; `0` = unlimited. */
   quotaLimit(plan: PlanTier, kind: UsageKind): number;
+  /**
+   * The lowest tier ABOVE `plan` that lifts the quota for `kind` — a strictly
+   * higher finite limit, or unlimited (`0`). Powers the #30 upgrade CTA. Returns
+   * `undefined` when no higher tier raises the limit (e.g. already at the top).
+   */
+  upgradeTierForQuota(plan: PlanTier, kind: UsageKind): PlanTier | undefined;
   /** Map a domain tier onto distribution's 4-tier `Plan` (grant-resolution reuse). */
   toDistributionPlan(plan: PlanTier): DistributionPlan;
   /** Resolve the active-provider product id for a tier (checkout), or undefined. */
@@ -137,6 +144,19 @@ export function createPlanCatalog(config: BillingConfig): PlanCatalog {
     hasFeature: (plan, feature) => (PLAN_CAPABILITIES[plan] ?? PLAN_CAPABILITIES.free).includes(feature),
 
     quotaLimit: (plan, kind) => PLAN_QUOTAS[plan]?.[kind] ?? 0,
+
+    upgradeTierForQuota(plan, kind) {
+      const currentLimit = PLAN_QUOTAS[plan]?.[kind] ?? 0;
+      const currentRank = PLAN_RANK[plan];
+      // PLAN_TIERS is ordered lowest→highest, so the first match is the cheapest lift.
+      for (const tier of PLAN_TIERS) {
+        if (PLAN_RANK[tier] <= currentRank) continue;
+        const tierLimit = PLAN_QUOTAS[tier]?.[kind] ?? 0;
+        // `0` = unlimited (always a lift); otherwise a strictly higher finite cap.
+        if (tierLimit === 0 || tierLimit > currentLimit) return tier;
+      }
+      return undefined;
+    },
 
     toDistributionPlan: (plan) => TO_DISTRIBUTION[plan] ?? 'free',
 

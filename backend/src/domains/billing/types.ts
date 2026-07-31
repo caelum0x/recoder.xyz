@@ -256,6 +256,20 @@ export interface EntitlementDecision {
   readonly message?: string;
 }
 
+/**
+ * An actionable "upgrade to continue" affordance carried on a `quota_exceeded`
+ * decision (#30). Instead of an opaque hard-deny, the gate names the subject's
+ * current tier and the lowest tier that lifts the exhausted limit — so the UI can
+ * render an upgrade CTA rather than a dead end. Absent when no higher tier lifts
+ * the limit (e.g. already at the top tier).
+ */
+export interface UpgradeHint {
+  /** The subject's current effective tier (the one that ran out of headroom). */
+  readonly currentTier: PlanTier;
+  /** The lowest tier above `currentTier` that raises (or removes) this quota. */
+  readonly suggestedTier: PlanTier;
+}
+
 /** A quota decision — carries the resolved headroom view. */
 export interface QuotaDecision {
   readonly allowed: boolean;
@@ -268,6 +282,11 @@ export interface QuotaDecision {
   readonly byokBypass: boolean;
   readonly reason?: EntitlementDenyReason;
   readonly message?: string;
+  /**
+   * Present only on a `quota_exceeded` deny: the structured upgrade CTA (#30).
+   * Lets the caller surface "upgrade to continue" instead of an opaque deny.
+   */
+  readonly upgrade?: UpgradeHint;
 }
 
 /** The full entitlement view surfaced to the UI (plan + features + quotas). */
@@ -291,6 +310,11 @@ export interface GateDecision {
   readonly plan: PlanTier;
   readonly reason?: EntitlementDenyReason;
   readonly message?: string;
+  /**
+   * The upgrade CTA hoisted from a `quota_exceeded` quota decision (#30), so a
+   * caller branching on the envelope alone can render "upgrade to continue".
+   */
+  readonly upgrade?: UpgradeHint;
   /** The detailed feature decision when the request was a feature check. */
   readonly feature?: EntitlementDecision;
   /** The detailed quota decision when the request was a quota check. */
