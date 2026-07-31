@@ -21,6 +21,11 @@ function RecoderIdentityAffordance() {
 
     if (identity != null) {
         const label = identity.name || identity.email || "Signed in";
+        // The device flow already carries name/email/plan (recoder-4st1); surface
+        // all of it on hover without cluttering the quiet affordance.
+        const detail = [identity.name, identity.email, identity.plan ? `plan: ${identity.plan}` : null]
+            .filter(Boolean)
+            .join(" · ");
         return (
             <div className="flex items-center gap-2">
                 {identity.avatarUrl ? (
@@ -35,7 +40,7 @@ function RecoderIdentityAffordance() {
                         {identityInitials(identity.name, identity.email)}
                     </span>
                 )}
-                <span className="text-sm text-secondary truncate max-w-[12rem]" title={identity.email || label}>
+                <span className="text-sm text-secondary truncate max-w-[12rem]" title={detail || label}>
                     {label}
                 </span>
                 <button
