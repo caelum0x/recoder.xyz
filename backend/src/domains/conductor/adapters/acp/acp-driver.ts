@@ -6,7 +6,7 @@
  *
  * The PROCESS is injected as an {@link AcpProcess} seam, so the orchestration is
  * unit-testable with a fake in-memory process — the real adapter's only job is to
- * spawn the agent binary (claude-agent-acp / codex-acp) and adapt its child_process
+ * spawn the agent binary (claude-code-acp / codex-acp) and adapt its child_process
  * streams to this seam. Degrade-truthful: `start` is idempotent-guarded, a prompt
  * after the process died rejects truthfully (via rejectAll), and `stop` always
  * kills + fails in-flight requests.
