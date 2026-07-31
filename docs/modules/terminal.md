@@ -32,16 +32,26 @@
 
 The terminal substrate lives inside the CONDUCTOR domain, and the conductor
 run-plane now ships the following workspace features on top of it (conductor
-domain API + cockpit UI):
+domain API + the Wave `recoder-*` desktop views under
+`apps/desktop/app/frontend/app/view/recoder/`; the old Preact "cockpit" SPA was
+deleted):
 
 > **SHIPPED — Checkpoints.** Snapshot a workspace's git + context, restore it, or
 > branch a fresh workspace from it:
 > `POST/GET /api/conductor/workspaces/:id/checkpoints · POST /:cid/restore · POST /:cid/branch`.
-> Cockpit surface: `CheckpointsPanel`.
 
-> **SHIPPED — Multi-agent compare.** View parallel-agent runs side-by-side:
+> **SHIPPED — Multi-agent compare + convergence.** View parallel-agent runs
+> side-by-side and converge them into one trusted merge:
 > `GET /api/conductor/workspaces/compare?taskGroup= · GET /api/conductor/workspaces/:id/siblings`.
-> Cockpit surface: `ComparePanel` + `CompareGroupsBar`.
+> Desktop surface (Wave `recoder-*` shell): the board (`recoder.tsx`) opens the
+> compare panel `RecoderComparePanel`
+> (`apps/desktop/app/frontend/app/view/recoder/recoder-compare.tsx:526`), which
+> renders each sibling's readiness/PR chip and embeds the convergence picker
+> `ConvergePanel` (`recoder-converge.tsx:338` — per-contested-path winner picker
+> + truthful "Synthesize" auto 3-way merge). The workspace terminal itself is the
+> Wave block view `RecoderTerminalView` (`recoder-terminal.tsx:141`, registered via
+> `recoder-terminal-model.ts`), opened over the shared tmux server by
+> `openWorkspaceTerminal` (`recoder-open-terminal.ts:188`).
 
 > **SHIPPED — dmux worktree-bound compare grid + attach hint (item 26).** The dmux
 > LAYOUT brain arranges the F3 parallel-run group into an operator grid:
@@ -80,12 +90,25 @@ domain API + cockpit UI):
 > **SHIPPED — Board search / history.** Search and filter the workspace board and
 > read archived runs:
 > `GET /api/conductor/workspaces?q=&repo=&agent=&state=&archived= · GET /api/conductor/workspaces/archived`.
-> Cockpit surface: `BoardSearch`.
+> Desktop surface: the board filter/command-palette in the Wave shell
+> (`recoder.tsx`, `recoder-command-palette.tsx`, `recoder-board-logic.ts`).
 
 > **SHIPPED — Repo setup + PR status.** Run a per-repo setup script on worktree
 > create, and read live PR status via `gh`:
 > `GET /api/conductor/workspaces/:id/pr-status`.
-> Cockpit surface: `RepoSettings` + PR chip.
+> Desktop surface: PR chip in the compare panel `RecoderComparePanel`
+> (`recoder-compare.tsx:91-98`). The per-repo setup script is a backend/conductor
+> worktree-create hook; the current Wave shell exposes no dedicated repo-settings panel.
+
+## Shipped public workspace MCP tools
+
+> **SHIPPED — agent-facing workspace tools.** The governed A2A/MCP surface exposes
+> the public workspace verbs agents call to drive the conductor run-plane (registered
+> in `mcp/recoder-a2a-server.js`): `recoder_workspace_create` (provision a coding
+> workspace), `recoder_workspace_status`, `recoder_workspace_diff`,
+> `recoder_workspace_merge`, and `recoder_workspace_events`. These are the stable
+> public ids; the conductor domain API endpoints above are the internal governed
+> bindings behind them.
 
 **Rule:** this module drives the real engine(s) directly and exposes ONE cohesive,
 governed, health-truthful interface to the backend. Depth lives in the engine dirs;

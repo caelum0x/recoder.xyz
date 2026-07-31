@@ -57,25 +57,28 @@ by **(binary, socket)**:
   guarantee therefore rests on both the Node backend and the Go wavesrv resolving the same
   `$TMUX_TMPDIR` and the same effective uid.
 
-**What is convergent, and what only *looks* convergent (honest current state):**
+**What is convergent (shipped — Bucket A1a/A1b):**
 
 - Binary pinning **exists** on the conductor side (`tmux-path.ts`), and an attach-block
   builder **ships** (`apps/desktop/app/frontend/app/view/recoder/recoder-open-terminal.ts`):
   it builds a `cmd` block running `tmux attach-session -t recoder-*`, prefix/allowlist
   validated, with `cmd:runonce=false` so it re-attaches after relaunch.
-- **BUT the pin is not wired through the attach path today.** The builder reads the pinned
-  binary from `GET /api/conductor/health/full` → `body.data.substrate.tmuxBin`
-  (`recoder-open-terminal.ts:74-76`). That route/field **does not exist**: the conductor
-  defines only `GET /api/conductor/health` returning `{available, tmux, reason?}`
-  (`conductor.routes.ts:361-374`) and `/substrates`; the only `/health/full` is the
-  observability aggregator mounted at root, which carries no substrate binary/socket. So the
-  builder always falls through to `FallbackTmuxBin = "tmux"` (`recoder-open-terminal.ts:8`).
-  Through this path the binary pin is a **silent no-op today** — PATH `tmux` may resolve to a
-  different binary/server than the vendored one the conductor drives.
+- **The pin is now wired through the attach path.** `GET /api/conductor/health` emits a
+  `substrate` block carrying `tmuxBin` (the resolved pin from `tmux-path.ts`, §A1a) and
+  `tmuxSocket` (this backend's default-socket mirror `${TMUX_TMPDIR:-/tmp}/tmux-<uid>/default`,
+  §A1b) — `conductor.routes.ts:651-670` (doc-comment cites §A1a/§A1b), both `null` when
+  unknown so the caller never asserts a shared server that is not configured here. The
+  builder sources them from that route via `resolveConductorTmuxServer()`
+  (`recoder-open-terminal.ts:108-120`, reading `body.data.substrate.tmuxBin`/`.tmuxSocket`)
+  and passes `-S <socket>` on attach, so the attach action now resolves the **vendored**
+  binary against the **same** server the conductor drives. It falls through to
+  `FallbackTmuxBin = "tmux"` (`recoder-open-terminal.ts:8`) **only** when the backend is
+  unreachable or the field is absent — a truthful degrade, no longer a silent no-op.
 
-The invariant above is the *target* Bucket A makes real and asserted; it is not yet true
-end-to-end. Bucket A's first, load-bearing step is to **create** the health field, not to
-extend one that already exists.
+The invariant above is now **real and asserted end-to-end** through the attach path: Bucket
+A1a created the health field and Bucket A1b mirrored the default socket, closing the former
+silent no-op. Bucket B (making the *default* durable-shell block itself be the conductor
+session) remains owner-deferred.
 
 ---
 
@@ -120,9 +123,9 @@ Every Bucket A step must satisfy all three gates:
 
 | Step | What it adds | Behavior-preserving? | Touches Go? |
 |---|---|---|---|
-| **A1a** | Create `substrate.tmuxBin` (the resolved pin from `tmux-path.ts`) on a conductor health route, and point `recoder-open-terminal.ts` at the shipped shape. Closes the silent no-op: the attach action starts sourcing the *vendored* binary instead of PATH `tmux`. | Yes — only the explicit, opt-in attach action changes which binary it resolves; default controller selection is untouched. | No |
-| **A1b** | Add `substrate.tmuxSocket` as the **default-socket mirror** — tmux's own algorithm `${TMUX_TMPDIR:-/tmp}/tmux-<effective-uid>/default`, emitting `null` when it cannot be replicated with confidence rather than a guess; propagate the **same `TMUX_TMPDIR`** to the wavesrv child in `emain-wavesrv.ts`. | Yes — codifies and asserts today's coincidence; selects no new socket, moves no session's home. | No |
-| **A2** | Read-only list bridge: LIST `recoder-*` sessions via the pinned binary+socket (reuse the Node scan adapter over a read-only edge, **or** an Electron-main `execFile(tmuxBin, ['list-sessions', ...])`). Pure read, prefix-filtered, degrade-truthful (tmux absent → empty list + warn). | Yes — additive, unused by the default lifecycle. | No |
+| **A1a** ✅ | **Shipped.** `substrate.tmuxBin` (the resolved pin from `tmux-path.ts`) now rides `GET /api/conductor/health` (`conductor.routes.ts:651-670`), and `recoder-open-terminal.ts:108-120` sources it. Closed the silent no-op: the attach action sources the *vendored* binary instead of PATH `tmux`. | Yes — only the explicit, opt-in attach action changes which binary it resolves; default controller selection is untouched. | No |
+| **A1b** ✅ | **Shipped.** `substrate.tmuxSocket` is the **default-socket mirror** — tmux's own algorithm `${TMUX_TMPDIR:-/tmp}/tmux-<effective-uid>/default`, emitting `null` when it cannot be replicated with confidence rather than a guess (`conductor.routes.ts:665`, `resolveTmuxSocket`); the wave-side attach passes `-S <socket>` sourced from the same payload. | Yes — codifies and asserts today's coincidence; selects no new socket, moves no session's home. | No |
+| **A2** ✅ | **Shipped.** Read-only list bridge: `GET /api/conductor/health` → `/sessions` LISTs `recoder-*` sessions via the pinned binary+socket over the reconcile scan seam (prefix-filtered, degrade-truthful — tmux absent → empty list + warn). | Yes — additive, unused by the default lifecycle. | No |
 | **A3** | Generalize the shipped attach bridge behind an opt-in/flag: source `tmuxBin` + socket from A1's health payload, keep the prefix/allowlist validation, keep `cmd:shell=false`, `runonce=false`. Does **not** replace the default `ShellController`/`DurableShellController` selection. | Yes — default selection unchanged; attach stays opt-in. | No |
 | **A4** | Session-naming contract as a shared, tested spec: golden input→output vectors where conductor `tmuxNameFor` and the wave TS validator agree (same accepts, rejects, sanitization). | Yes — test + doc only. | No |
 | **A5** | This document. | Yes — doc only. | No |
@@ -185,8 +188,9 @@ changes which server/socket/PTY a durable session uses.
 - Focused package tests: existing conductor substrate + `reconcile-scan-wiring` tests stay
   green untouched, plus the new A1a health-field, naming-golden, socket-identity, and
   list-bridge unit tests.
-- **Silent-no-op proof:** a test showing the attach path resolves the **pinned** binary once
-  A1a ships, instead of falling back to PATH `tmux`.
+- **Silent-no-op proof (shipped):** the attach path resolves the **pinned** binary from
+  `substrate.tmuxBin` (A1a), falling back to PATH `tmux` only when the backend is unreachable
+  or the field is absent.
 - **Degrade-truthful proof:** tmux-absent path returns a typed empty list + warn on both the
   conductor scan source and the new wave list bridge; unknown socket → `null`, never a
   guessed default.
@@ -201,15 +205,14 @@ parity, and explicit-socket migration/orphaning.
 
 ## 7. Bottom line (honesty)
 
-The unification is **partially scaffolded but not working end-to-end**: binary pinning exists
-on the conductor side and an attach-block builder ships, but the health field that would feed
-it the pinned binary **does not exist**, so today the attach path silently uses PATH `tmux`.
-The safe, do-it-now work (Bucket A) is small: create `substrate.tmuxBin` on a conductor route
-and wire the attach client to it, mirror-and-assert tmux's *default* socket only, add a
-TS-only read-only list bridge, lock the naming contract with golden tests, generalize the
-existing attach path behind a flag, and document it — all behavior-preserving, TS-only (no
-Go), and unit-verifiable. The part that actually *unifies* — making the **default**
-durable-shell block *be* the conductor session, retiring the JobManager restart path,
-collapsing reconcilers, and pinning an explicit socket — is load-bearing, edits the Go shell,
-and is only provable on the packaged app. That is Bucket B and must not be executed
-autonomously.
+The safe, do-it-now work (Bucket A) has **shipped**: `GET /api/conductor/health` now emits
+`substrate.tmuxBin` + `substrate.tmuxSocket` (`conductor.routes.ts:651-670`, §A1a/§A1b) and
+the wave-side attach client sources both (`recoder-open-terminal.ts:108-120`), so the attach
+path resolves the **pinned vendored** binary against the **same** default-socket tmux server
+the conductor drives instead of silently falling back to PATH `tmux`. The former "silent
+no-op" is closed; the shared-tmux-server invariant is asserted end-to-end through the attach
+path (with a truthful degrade to PATH `tmux` only when the backend is unreachable). The part
+that actually *unifies* — making the **default** durable-shell block *be* the conductor
+session, retiring the JobManager restart path, collapsing reconcilers, and pinning an
+explicit socket — is load-bearing, edits the Go shell, and is only provable on the packaged
+app. That is Bucket B and **remains owner-deferred**; it must not be executed autonomously.

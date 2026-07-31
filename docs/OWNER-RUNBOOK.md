@@ -15,9 +15,10 @@ Everything in this repo that can be built and verified **without owner credentia
 `electron-builder --mac --arm64` produces `Recoder-darwin-arm64-<ver>.dmg` (+ `.zip`
 + `.app`, ~306 MB dmg) with every native engine shipped in `Contents/Resources/`
 (`native/{openfang,recoder-governance,tensorzero}_napi.node`, `backend/engines/beads/bin/bd`,
-`backend/engines/tmux/tmux`), the embedded `backend/dist`, and `cockpit/dist`. The
-packaging-truth gate passes (lance degrades truthfully). Only SIGNING + the human
-e2e run remain.
+`backend/engines/tmux/tmux`) and the embedded `backend/dist`. The frontend is the Wave-native
+`recoder-*` views built into the shell — the old separate `cockpit/dist` is gone (the cockpit SPA
+was deleted, recoder-flgn). The packaging-truth gate passes (lance degrades truthfully). Only
+SIGNING + the human e2e run remain.
 
 Exact minimal build (avoids the full `task package`, which `clean`s dist and
 cross-compiles Windows via `zig`, which isn't installed here):
@@ -30,8 +31,8 @@ CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder -c electron-builder
 # SIGNED (your cert):
 CSC_LINK=<your-cert.p12> CSC_KEY_PASSWORD=<pw> pnpm exec electron-builder -c electron-builder.config.cjs -p never --mac --arm64
 ```
-- Native `.node` addons + `bd` + `tmux` + `backend/dist` + `cockpit/dist` were already
-  built and present; only `dist/tsunamiscaffold` needed building. Rebuild the `.node`
+- Native `.node` addons + `bd` + `tmux` + `backend/dist` were already built and present;
+  only `dist/tsunamiscaffold` needed building. Rebuild the `.node`
   via `scripts/build-native-addons.sh` only if stale.
 - **Landmine (fixed 2026-07-22, commit `38acbade4`):** the root pnpm override
   `@xmldom/xmldom: ">=0.8.12"` floated to 0.9.9, which broke electron-builder's mac

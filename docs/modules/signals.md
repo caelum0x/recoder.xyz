@@ -41,6 +41,12 @@
 > degrade truthfully: engine down → the tool surfaces the failure, never fakes a
 > signal.
 
+> **Agent-facing MCP tools (governed): none.** There is no public `recoder_*`
+> capability-bridge tool for work-signals in `mcp/recoder-capability-tools.cjs` — agents
+> reach the read-side only through the engine-namespace `ops-recorder.query` /
+> `ops-recorder.stats` ids above. (The `recoder_logs_*` capability tools bridge the
+> observability *run-event* log, a different engine, not this ops-recorder signal store.)
+
 **Rule:** this module drives the real engine(s) directly and exposes ONE cohesive,
 governed, health-truthful interface to the backend. Depth lives in the engine dirs;
 this folder owns the composition + interface. Degrade-safe: any engine down → that

@@ -4,10 +4,10 @@
 > is the spine; Rust and Python are capability engines beside it; Go engines are
 > used in place. The desktop embeds this backend; the website consumes its edges.
 > This document is the canonical map. Each of the 14 domains has its own detailed
-> design under [`domains/`](./domains/); the buildable file plan is
-> [`FILE-TREE.md`](./FILE-TREE.md); the phased plan is [`BUILD-ORDER.md`](./BUILD-ORDER.md).
+> design under [`domains/`](./domains/); the cross-language engine seam is detailed
+> in [`ENGINE-INTEGRATION.md`](./ENGINE-INTEGRATION.md).
 >
-> **Shipped as of 2026-07-18** (see [`BUILD-STATUS.md`](./BUILD-STATUS.md)): the 14
+> **Shipped as of 2026-07-18:** the 14
 > domains live under `backend/src/domains/*` and ship as **15 directories** — the
 > A2A/interop domain is split into a hostile-wire core (`interop/`) and its
 > dispatch/runtime composer (`interop-wire/`) — so the backend boots with **15

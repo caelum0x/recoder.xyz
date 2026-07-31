@@ -27,6 +27,16 @@ desktop still boots). The Python `backend/engines/py/browser-use` agent is a
 `backend/src/domains/engines/adapters/sidecar/browser-use.adapter.ts`, health `up`
 only when the uv venv answers over the sidecar seam).
 
+**Agent-facing MCP tools (governed).** The public `recoder_*` ids agents actually call
+— bridged through the gated MCP host (`POST /api/mcp/tools/:server/:tool/call`,
+`authorize → risk → execute → audit`) by `mcp/recoder-capability-tools.cjs` — map onto
+the engine verbs above: `recoder_browser_open` → `browser.open`,
+`recoder_browser_snapshot` → `browser.snapshot`, and `recoder_browser_verify` →
+`browser.verify` (all on the `recoder.browser` server); `recoder_browser_navigate` →
+`browser.navigate` and `recoder_browser_extract` → `browser.extract` (on the
+`recoder.browser-use` server). Each degrades to a truthful "not available" / "not
+configured" string when the driver or interop key is absent — never a faked page.
+
 **Planned (not yet shipped).** A single unified `BrowsingModule` at
 `backend/src/domains/browsing/` exposing the full `open · snapshot · extract · verify ·
 navigate` surface with the browser-use owned-venv sidecar running by default,

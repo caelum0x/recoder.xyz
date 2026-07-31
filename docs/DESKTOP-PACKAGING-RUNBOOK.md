@@ -1,17 +1,26 @@
-# Desktop Packaging Truth — Design
+# Desktop Packaging Truth
+
+> **Status: Bucket A SHIPPED.** The arch-aware fail-loud gate this doc designed is now in code —
+> `app/build/assert-extra-resources.cjs` exports `readBinaryArch` + the three-outcome
+> `assertExtraResourcesExist(…, {targetArch, optional, archSensitive})`, and
+> `app/electron-builder.config.cjs` declares `OPTIONAL_EXTRA_RESOURCES` + `ARCH_SENSITIVE_EXTRA_RESOURCES`
+> and wires them through an arch-aware `beforePack(context)`. Lance is classified optional (loud
+> degrade, not abort) and the mac target is arm64-only until x64 native exists. The sections below are
+> kept as the design record; **Bucket B** (cargo release builds, cross-arch, signing, the actual
+> `electron-builder` run) remains the **Owner Runbook** in §8.
 
 **Scope:** `apps/desktop`. Goal: a packaged `.dmg` ships the native engines **alive**, and any missing/wrong artifact **fails the build loud at package time** (or is an *explicitly logged* degrade), never a silently-dead engine.
 
-**Mandate:** truthful health. The desktop embeds the ONE Node backend (`process.execPath` + `ELECTRON_RUN_AS_NODE=1` running `backend/dist/server.js`) and spawns the OSS engines. Absence is reported, never faked; an intentional degrade (Lance/Qdrant, un-packaged Python sidecars) is *visible*, not hidden.
+**Mandate:** truthful health. The desktop embeds the ONE Node backend (`process.execPath` + `ELECTRON_RUN_AS_NODE=1` running `backend/dist/server.js`) and spawns the OSS engines. Absence is reported, never faked; an intentional degrade (Lance/Qdrant, un-packaged Python sidecars) is *visible*, not hidden. The frontend is the Wave-native `recoder-*` views built into the shell (the separate Preact "cockpit" SPA was deleted, recoder-flgn — there is no `cockpit/dist` artifact).
 
-This design covers **Bucket A (TRACTABLE NOW — config/TS, no heavy native build)**. Bucket B (cargo release builds, cross-arch, signing, the actual `electron-builder` run) is the **Owner Runbook** in §8 and is *not* auto-committed. Autonomous commits in Bucket A are fully verifiable on this machine with `node --test` / `tsc` — none of them build a `.node`, invoke `cargo`, or run `electron-builder`.
+Autonomous Bucket A commits are fully verifiable on this machine with `node --test` / `tsc` — none of them build a `.node`, invoke `cargo`, or run `electron-builder`.
 
 ---
 
 ## 0. Current state (verified against the tree)
 
-- **Gate exists but is existence-only.** `app/build/assert-extra-resources.cjs` throws with the full missing list; wired at `app/electron-builder.config.cjs:220` (`beforePack`). It does **not** know the target arch and does **not** distinguish *required* from *deliberately-degraded*, and does **not** validate Mach-O arch or dist freshness.
-- **`lance_npm_bindings.node` blocks everything.** `electron-builder.config.cjs:111-114` lists `../../../crates/lance/npm-bindings/target/release/lance_npm_bindings.node`. That file is absent — and, verified, **`crates/` does not exist at the repo root at all** (only inside stale `.claude/worktrees/...` copies). It is not in `scripts/build-native-addons.sh`, and no runtime resolver injects a `LANCE_*` path. Because the gate treats every `from` as required, this single absent file **aborts the whole dmg build** — for an engine the app never even wires.
+- **Gate is arch-aware + degrade-aware (SHIPPED).** `app/build/assert-extra-resources.cjs` exports the three-outcome `assertExtraResourcesExist(extraResources, appRoot, {targetArch, optional, archSensitive})` + `readBinaryArch` (Mach-O header parse); `app/electron-builder.config.cjs` declares `OPTIONAL_EXTRA_RESOURCES` + `ARCH_SENSITIVE_EXTRA_RESOURCES` and passes `context.arch` through `beforePack`. It distinguishes *required* (throw) from *deliberately-degraded* (loud non-fatal) and validates Mach-O CPU arch against the dmg target. *(The pre-ship state was existence-only; the design below is what shipped.)*
+- **`lance_npm_bindings.node` no longer blocks the build.** It is classified in `OPTIONAL_EXTRA_RESOURCES` → its absence prints a loud degrade line, not an abort. (Verified: **`crates/` does not exist at the repo root** — only inside stale `.claude/worktrees/...` copies — and no runtime resolver injects a `LANCE_*` path yet; Lance stays a truthful no-op → Qdrant. Vendoring the crate is §8-A.)
 - **beads / recodergit / dmux / tmux are already correct** in `extraResources` (lines 62-105) and present on disk. No path correction needed there.
 - **Arch-sensitive `.node` + `bd` are real on disk (verified):** `backend/engines/rust/recoder-governance/target/release/recoder-governance-napi.node`, `backend/engines/rust/openfang/target/release/openfang_napi.node`, `backend/engines/rust/tensorzero/crates/target/release/tensorzero_gateway_napi.node`, and `apps/desktop/server/engines/beads/bin/bd` all **PRESENT** (host arm64). `crates/lance/npm-bindings/target/release/lance_npm_bindings.node` is **ABSENT** (the deliberate degrade).
 - **Python sidecars** (`backend/engines/py/{mem0,colbert,browser-use,ops-recorder}`) are **not** in `extraResources` at all → shipped dead with zero build-time signal. Bundling them (per-arch venvs / interpreter) is a heavy owner project, not a config tweak → treat as **explicit degrade**, surfaced in health.
@@ -74,7 +83,7 @@ function assertExtraResourcesExist(extraResources, appRoot, opts = {}) {
       "electron-builder extraResources gate:\n" + fatal.join("\n") +
       "\nNative .node come from scripts/build-native-addons.sh (release only); " +
       "beads bd from `cd apps/desktop/server/engines/beads && go build -o bin/bd ./cmd/bd`; " +
-      "backend/dist + cockpit/dist from their own builds. " +
+      "backend/dist from its own build (the Wave recoder-* frontend builds into the shell). " +
       "Refusing to package a desktop app with silently-missing or wrong-arch engine artifacts."
     );
   }
@@ -125,7 +134,7 @@ beforePack: async (context) => {
 
 ## 2. extraResources corrections (exact diffs)
 
-The paths for beads/recodergit/dmux/tmux/backend/cockpit are **already correct** — no change. Two corrections:
+The paths for beads/recodergit/dmux/tmux/backend are **already correct** — no change. Two corrections:
 
 ### 2a. Classify Lance as optional; declare the arch-sensitive set
 
@@ -295,7 +304,7 @@ Design (all TS, no heavy build):
    [vector]  lance: no native addon (crates/lance not built) → Qdrant/no-op   # NOT an /internal/engines engine
    ```
    **Mapping note (per critic):** Lance is **not** a declared engine on `/internal/engines/health`, so its `[vector]` line is derived from the packaging classification (`OPTIONAL_EXTRA_RESOURCES`, §2a) + `LANCE_DATA_DIR` presence (§3a) — not the engine endpoint. Conductor `substrate:*` ids (from `/api/conductor/health`) are a **separate axis** (execution substrate, i.e. can work launch at all); if the supervisor also surfaces substrate readiness it must label those lines `substrate:*`, never conflate them with engine ids.
-2. **Expose the roster on `getStatus()`** (the supervisor's never-lies status object) so the cockpit renders it. Per `.claude/rules/frontend.md` the surface shows *engine state with evidence links*, not "AI is working". A dead-because-unpackaged engine shows its endpoint-reported `reason` (`not packaged` / `venv absent`), not a blank.
+2. **Expose the roster on `getStatus()`** (the supervisor's never-lies status object) so the Wave `recoder-*` frontend can render it. Per `.claude/rules/frontend.md` the surface shows *engine state with evidence links*, not "AI is working". A dead-because-unpackaged engine shows its endpoint-reported `reason` (`not packaged` / `venv absent`), not a blank.
 3. **Reconcile packaging truth with runtime truth:** the same classification the gate uses (`OPTIONAL_EXTRA_RESOURCES`, un-packaged Python sidecars) is the expected-degrade list; if an engine the gate *verified present* (e.g. `openfang:napi`, `beads:cli`) reports `down` on `/internal/engines/health`, that is a **real** fault worth a louder log line (built-but-broken ≠ deliberately-absent).
 
 This closes the loop: the gate guarantees no *silent* dead engine at package time; the roster (sourced from the endpoint that actually lists engines) guarantees no *hidden* dead engine at runtime.
@@ -365,7 +374,7 @@ Each commit is Bucket A only — green under §6 gates, no `cargo`/`electron-bui
 1. **`feat(desktop): arch-aware fail-loud extraResources gate`** — extend `assert-extra-resources.cjs` (optional/arch-sensitive/`readBinaryArch`), keep back-compat signature, make `beforePack` pass `context.arch`. Add gate unit tests. *(Unblocks nothing yet by itself; safe.)*
 2. **`fix(desktop): classify lance optional + declare arch-sensitive set; restrict mac target to arm64`** — the two `Set`s + `mac.target` diff (§2a/2b). *After this, a dmg is buildable again (Lance degrades loud instead of aborting) and won't ship arm64-in-x64.* Add the config-correctness test.
 3. **`feat(desktop): inject embedded-vector + connector env into backend spawn`** — `resolveEmbeddedVectorEnv`, `CONNECTOR_SECRET_ENV_NAMES`, `assembleBackendEnv` fills, caller wiring. Add resolver + env tests (§5).
-4. **`feat(desktop): truthful engine roster on boot`** — supervisor fetches `GET /internal/engines/health` (with the `INTERNAL_SERVICE_KEY` it already holds) on READY, logs alive/degraded roster driven by the endpoint's own status/reason, renders Lance from packaging classification, exposes on `getStatus()` for the cockpit (§4).
+4. **`feat(desktop): truthful engine roster on boot`** — supervisor fetches `GET /internal/engines/health` (with the `INTERNAL_SERVICE_KEY` it already holds) on READY, logs alive/degraded roster driven by the endpoint's own status/reason, renders Lance from packaging classification, exposes on `getStatus()` for the Wave `recoder-*` frontend (§4).
 
 Land order 1→2 first (2 depends on 1's option-aware signature); 3 and 4 are independent of each other.
 
@@ -413,13 +422,13 @@ cd apps/desktop
 #   (a) scripts/build-native-addons.sh all   # + lance (8-A, needs the crate vendored first), + x64 (8-B)
 #   (b) cd apps/desktop/server/engines/beads && go build -o bin/bd ./cmd/bd
 #   (c) cd backend && pnpm build              # backend/dist (tsc)
-#   (d) node apps/desktop/cockpit/build.mjs   # cockpit/dist
+#   (d) the Wave recoder-* frontend builds into the shell (pnpm run build:prod) — no separate cockpit/dist
 #   (e) vendored recodergit + dmux dists present
 task package   # pnpm run build:prod && electron-builder -c app/electron-builder.config.cjs -p never
 # signing/notarization env (CSC_LINK / CSC_KEY_PASSWORD / notarytool creds) per release policy;
 # production/dmg distribution is approval-gated (.claude/rules/production.md).
 ```
-The `beforePack` gate now guarantees this run **aborts loud** if any required native/backend/cockpit/bd artifact is missing or wrong-arch, and **prints a degraded roster** for the deliberately-absent ones — so a signed dmg can never silently ship a dead engine.
+The `beforePack` gate now guarantees this run **aborts loud** if any required native/backend/bd artifact is missing or wrong-arch, and **prints a degraded roster** for the deliberately-absent ones — so a signed dmg can never silently ship a dead engine.
 
 ---
 

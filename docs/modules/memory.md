@@ -68,3 +68,22 @@ the in-place mem0 + colbert engines, all degrade-truthful and subject-scoped:
   `create` / `drop` are attributable to an authorized principal, keeping the
   cross-tenant class closed. With the engine absent, tools return a truthful
   `not_configured` rather than fake a result.
+
+**Agent-facing MCP tools (governed).** The public `recoder_*` ids agents actually call
+into this domain — bridged by `mcp/recoder-capability-tools.cjs` through the gated MCP
+host (`authorize → risk → execute → audit`) — span all three engines:
+
+- **mem0 recall/candidate:** `recoder_memory_search` → `recoder.memory`/`memory.search`;
+  `recoder_remember` → `recoder.memory`/`memory.candidate.create` (an evidence-bound
+  candidate, reviewed before it becomes durable — never a blind write).
+- **colbert RAG:** `recoder_retrieval_search` → `recoder.retrieval`/`retrieval.search`
+  (embed + ColBERT-rerank) and `recoder_retrieval_ingest` →
+  `recoder.retrieval`/`retrieval.ingest`.
+- **beads issue graph:** `recoder_issues_ready` → `beads.ready`, `recoder_issue_create`
+  → `beads.create`, `recoder_issue_claim` → `beads.claim`, `recoder_issue_note` →
+  `beads.note`, `recoder_issue_close` → `beads.close` (all on `recoder.beads`).
+
+Each degrades to a truthful "not available" / "not configured" string when the engine or
+interop key is absent. There is deliberately **no** public `recoder_*` promote tool —
+promotion stays on the governed memory-lifecycle path (mirrors the removed
+`beads.memory_promote`).

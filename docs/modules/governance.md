@@ -54,6 +54,17 @@ facet reports down, never fakes success. See ../RECODER-MODULES.md §GOVERNANCE.
 Degrade-safe throughout: without a DB the durable audit/approval/lock/secret repos
 no-op truthfully and the ladder deny-biases on the pure-TS floor.
 
+**Agent-facing MCP tools (governed).** The public `recoder_*` ids agents call into this
+domain — bridged by `mcp/recoder-capability-tools.cjs` through the gated MCP host
+(`authorize → risk → execute → audit`) — are **`recoder_request_approval`** (the
+*approvals* facet → `approvals.request`, records a pending control-plane approval) and
+the *workLocks* facet pair **`recoder_coordination_acquire_lock`** /
+**`recoder_coordination_detect_conflict`** (advisory acquire / conflict-check on a shared
+resource; these resolve server-side to the governance domain's lock tools —
+`governance_acquire_lock` / `locks_list`, per `engines/mcp/engine-registry.ts`). Each
+degrades truthfully ("not configured" / "not available") rather than fake a clearance or
+lock. The `governance_*` ids above remain the direct engine-namespace surface.
+
 **Per-tool teeth (2026-07-21, C1–C4):** the three previously-dark residuals are now
 live. Governance exposes a narrow least-authority facet `toolExecGate()` returning a
 `ToolExecEnforcementPort` (`ports/tool-exec-gate.port.ts`) bound by `createToolExecGate`
