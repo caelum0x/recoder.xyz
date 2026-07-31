@@ -495,14 +495,16 @@ class RecoderDiffViewModel implements ViewModel {
     }
 
     // Queue a line-anchored (or file-level when line is null) review comment. An
-    // empty body is ignored so a stray submit never enqueues a blank note.
-    addComment(file: string, line: number | null, body: string) {
+    // empty body is ignored so a stray submit never enqueues a blank note. `side`
+    // carries difit's diff-source ("old" for a deletion); "new" is the default and
+    // left off the wire (the backend defaults it).
+    addComment(file: string, line: number | null, body: string, side?: "old" | "new") {
         const trimmed = body.trim();
         if (file.trim() == "" || trimmed == "") {
             return;
         }
-        const next = [...globalStore.get(this.pendingCommentsAtom), { file, line, body: trimmed }];
-        globalStore.set(this.pendingCommentsAtom, next);
+        const draft: ReviewCommentDraft = { file, line, body: trimmed, ...(side == "old" ? { side } : {}) };
+        globalStore.set(this.pendingCommentsAtom, [...globalStore.get(this.pendingCommentsAtom), draft]);
         globalStore.set(this.commentStatusAtom, "");
     }
 
