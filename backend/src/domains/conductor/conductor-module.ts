@@ -488,8 +488,15 @@ export class ConductorComposer implements ConductorModule {
     });
 
     // Workspace repository over the persistence executor (degrade-safe in-process).
+    // The canonical run/event tables (TaskRun/RunEvent/TaskSpec) delegate to the
+    // injected agent-os state-of-record store so run history survives a restart
+    // (P1 #8); absent it / DB-less they fall back truthfully (isDurable ⇒ false).
     this.repository =
-      deps.repository ?? createWorkspaceRepository({ executor: deps.executor });
+      deps.repository ??
+      createWorkspaceRepository({
+        executor: deps.executor,
+        ...(deps.canonicalRunStore ? { canonicalStore: deps.canonicalRunStore } : {}),
+      });
 
     // Terminal surface owns the sync hub; steering is gated through this composer.
     this.terminalService = new TerminalStreamService({
@@ -503,10 +510,16 @@ export class ConductorComposer implements ConductorModule {
     // Durable + live run-event sink; the tailer emits through it. When an external
     // state-of-record sink is injected (the agent-os RunEvent bus, adapted at the
     // composition root), fan out to it FIRST so the control plane sees every event,
-    // then to the conductor-local durable+live sink. A failing external ingest is
+    // then to the conductor-local live sink. A failing external ingest is
     // isolated (logged, swallowed) so the live terminal stream never stalls.
+    //
+    // DURABILITY OWNERSHIP (P1 #8): the local sink durably appends ONLY when there
+    // is NO external durable sink. With the bus wired, the bus IS the durable
+    // state-of-record writer (`repository.appendEvent` now delegates to the SAME
+    // agent-os store); a second local durable append would duplicate every event.
     const localSink = createRunEventSink({
       repository: this.repository,
+      persistDurably: !deps.runEventSink,
       publish: event => this.terminalService.publishSync(event),
       publishRun: (workspaceId, event) =>
         this.terminalService.publishRunEvent(workspaceId, event),
@@ -3016,7 +3029,7 @@ export class ConductorComposer implements ConductorModule {
     return buildConductorHealth({
       config: this.cfg,
       substrates: await this.registry.availability(),
-      repositoryAvailable: true,
+      repositoryAvailable: this.repository.isDurable(),
       liveConnections: this.terminalService.liveConnections(),
     });
   }

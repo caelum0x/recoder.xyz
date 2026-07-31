@@ -15,7 +15,25 @@
  * tests inject an in-memory fake. Interface only.
  */
 import type { WorkspaceRepositoryPort as SubstrateWorkspaceRepositoryPort } from '@recoder/substrate';
+import type { RunEvent, TaskRun, TaskSpec } from '@recoder/agent-os';
 import type { ReconcileFindingKind, ReconcileFindingView } from '../types.js';
+
+/**
+ * The DURABLE canonical store for the agent-os-owned TaskRun / RunEvent / TaskSpec
+ * tables (task #16). The conductor does NOT own these tables — it delegates its
+ * canonical run/event reads+writes to this injected store so run history and the
+ * RunEvent log survive a backend restart (P1 #8). Structurally satisfied by the
+ * backend `AgentOsRepositoryPort` (bound at the composition root over the SAME
+ * persistence executor); methods may run sync (memory driver) or async (postgres)
+ * — both are legal, so callers `await` the result.
+ */
+export interface CanonicalRunStore {
+  upsertRun(run: TaskRun): Promise<TaskRun> | TaskRun;
+  listRuns(): Promise<TaskRun[]> | TaskRun[];
+  appendEvent(event: RunEvent): Promise<RunEvent> | RunEvent;
+  listEvents(): Promise<RunEvent[]> | RunEvent[];
+  listTasks(): Promise<TaskSpec[]> | TaskSpec[];
+}
 
 /** A persisted tail cursor row (mirror of `conductor_run_tails`). */
 export interface RunTailCursor {
@@ -68,4 +86,12 @@ export interface WorkspaceRepositoryPort extends SubstrateWorkspaceRepositoryPor
   recordReconcileFinding(input: PersistReconcileFindingInput): Promise<void>;
   /** List findings, optionally scoped to one workspace, for operator/policy review. */
   listReconcileFindings(workspaceId?: string): Promise<readonly ReconcileFindingView[]>;
+
+  /**
+   * TRUTHFUL durability signal for the canonical run/event read-model: `true` only
+   * when the injected {@link CanonicalRunStore} is bound AND the executor is
+   * available, i.e. runs/events survive a restart. `false` in the DB-less desktop
+   * / no-executor path where the read-model is a bounded in-process fallback.
+   */
+  isDurable(): boolean;
 }
