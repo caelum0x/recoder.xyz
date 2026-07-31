@@ -5,6 +5,12 @@
 > governance / cloud / observability), reached on a real lifecycle seam. MCP-tool
 > definitions, engine adapters, and tests are **not** fusion — they are surface, not wiring.
 >
+> **Status (2026-07-31):** The prioritized fusion backlog (P0–P6 + Waves 1–4 / C-series)
+> is **COMPLETE**. All enumerated items shipped; every engine's write→read loop on a real
+> product-flow lifecycle seam is closed (see §1 per-engine gap column). Three residual
+> classes remain (kernel-export-blocked, owner-deferred, keep-dark-by-design); none are
+> open fusion work — see §2.
+>
 > Thesis order (why each engine exists in the "total product"):
 > beads = memory-for-all-agents · openfang = agentic-backend · pal = agent-comms-brain ·
 > tensorzero = all-inference · governance = all-writes · mem0/colbert = full-recall ·
@@ -12,6 +18,7 @@
 > browser-use = verify/research · ziti/xds = networking · dmux = multi-agent-layout.
 >
 > Fusion levels: **deeply-fused** (write+read on real lifecycle seams) ·
+> **fully-fused** (entire loop closed, regression-locked) ·
 > **partially-fused** (one half of the loop, or read-only) ·
 > **adapter-only** (registered + MCP-exposed, zero product-flow consumer).
 

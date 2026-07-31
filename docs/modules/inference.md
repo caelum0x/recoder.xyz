@@ -7,7 +7,7 @@
 **Rule:** this module drives the real engine(s) directly and exposes ONE cohesive,
 governed, health-truthful interface to the backend. Depth lives in the engine dirs;
 this folder owns the composition + interface. Degrade-safe: any engine down → that
-facet reports down, never fakes success. See ../docs/RECODER-MODULES.md §INFERENCE.
+facet reports down, never fakes success. See ../RECODER-MODULES.md §INFERENCE.
 
 **Shipped:** a REAL standalone domain at `backend/src/domains/inference/`
 (`createInferenceModule` in `index.ts` → `InferenceComposer` in
@@ -30,7 +30,7 @@ miss returns a truthful `notRouted(model, reason)`, never a fabricated completio
   second `.node`. Tried first when `cfg.napiFirst` (default `true`,
   `config.ts:90`) and `napi.available()`.
 - **Rung 2 — loopback** (`LlmGatewayPort`): the supervised HTTP gateway
-  (`backend/src/gateway/tensorzero-client.ts` skin). Buffered `complete`/`embed`/
+  (`backend/src/domains/inference/llm-gateway-client.ts` skin). Buffered `complete`/`embed`/
   `health` reuse it; streaming uses the `gateway-stream.ts` SSE seam for REAL
   per-token deltas.
 - **Rung 3 — direct BYOK multi-provider router** (`RouterTierPort` over

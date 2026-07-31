@@ -81,4 +81,4 @@ governed, health-truthful interface to the backend. Depth lives in the engine di
 this folder owns the composition + interface. Degrade-safe: any engine down → that
 facet reports down (absent ziti/xds endpoint ⇒ `status:'down'` with the missing
 source named, empty identities/clusters), never fakes success. A network fault
-resolves to `unknown`/`down`, never a throw. See ../docs/RECODER-MODULES.md §NETWORKING.
+resolves to `unknown`/`down`, never a throw. See ../RECODER-MODULES.md §NETWORKING.

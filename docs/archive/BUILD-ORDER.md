@@ -1,5 +1,11 @@
 # Recoder Backend — Phased Build Order
 
+> **📦 ARCHIVED / historical.** This was the planning sequence for the greenfield
+> backend build. The build is done (all 12 phases wired; `tsc` 0 · full suite green
+> — see **[STATUS.md](../STATUS.md)** and **[RECODER-BACKEND/ARCHITECTURE.md](../RECODER-BACKEND/ARCHITECTURE.md)**).
+> Kept as provenance; some sibling working docs it links (`FILE-TREE.md`,
+> `BUILD-STATUS.md`) were consumed during the build and no longer exist.
+
 > The implementation sequence for the backend described in
 > [`ARCHITECTURE.md`](./ARCHITECTURE.md) and enumerated in
 > [`FILE-TREE.md`](./FILE-TREE.md). Ordered by dependency: nothing is built before
@@ -518,6 +524,18 @@ Closed by binding every subject-bearing tool to the host-authorized **`McpToolCa
 at the MCP edge trust boundary (non-privileged caller → own subject, foreign → 403,
 admin/internal → arbitrary, absent → `AUTH_REQUIRED`); converged + verified by exhaustive
 enumeration (only pure-infra MCP files remain caller-free).
+
+**2026-07-31 hardening round:** The suite matured further post-2026-07-18:
+- **Security:** multi-tenant IDOR sweep completed across all 8 domains (verified cross-tenant
+  authorization binding on MCP write tools, A2A ed25519 ingress verification mandatory, edge guard
+  architecture with self-gating routers).
+- **Conductor:** diff review comments now route back into agent loop (#35), enabling the
+  review-feedback cycle.
+- **Desktop:** agent-auth probe + git-init affordance shipped; Preact cockpit SPA fully deleted
+  (Wave frontend is the only desktop UI).
+- **Website:** main-site signin switched to OAuth-only (email/password disabled).
+- **Billing:** 7-day dunning grace for past_due subscriptions with overage UpgradeHint CTA.
+- **Suite health:** backend tsc 0 / 3,076 tests, website tsc 0 / 436 tests, desktop tsc 0 / 471 tests.
 
 **Owner-gated follow-ups (need prod access / a decision):** run the auth backfill
 migration runbook (then delete the compat bridge); rotate `COMPOSIO_API_KEY`; the

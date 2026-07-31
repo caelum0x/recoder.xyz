@@ -56,6 +56,11 @@ table level**:
 - Migration `0006_legacy_users_link` **backfills links, never drops** the plural
   table. The physical models stay separate; callers see one identity.
 
+**SHIPPED (2026-07-31):** org auto-provisioning + `principal.orgId` now land for all
+principals (CLI users get a lazy personal org via `OrgProvisioningService`).
+**OWNER-GATED (not done):** web-session orgId (Next/Better-Auth) + full user/users
+reconciliation remain pending — these require app layer changes outside the backend domain.
+
 ## File tree (40 files under `backend/src/domains/identity/`)
 
 > Shipped tree. Port files landed with shorter names than the brief
@@ -68,9 +73,10 @@ table level**:
 identity/
   index.ts                              # createIdentityModule() factory + IdentityModule interface; re-exports the auth-plan reader
   identity-module.ts                    # IdentityModuleImpl composer: better-auth + verifier + middleware; feature deps injected (optional, degrade-safe)
-  types.ts                              # Identity, Principal, PlatformApiKey, DeviceGrant, Org, Team, Role, Permission
+  types.ts                              # Identity, Principal (now with orgId binding), PlatformApiKey, DeviceGrant, Org, Team, Role, Permission
   config.ts                             # IdentityConfig slice of AppConfig (secrets refs, TTLs, cookie domain)
   health.ts                             # health(): better-auth | auth-db | key-store | device-store | org-store
+  org-provisioning.service.ts           # lazy personal-org provisioning: ensurePersonalOrg(userId) → cached orgId (idempotent, degrade-safe)
   orgs-rbac.feature.ts                  # composes org.service + rbac.service (+ their repos) into one orgs/RBAC feature + router
   ports/
     session-verifier.port.ts            # SessionVerifier — identity→ALL domains (the load-bearing seam)
@@ -127,10 +133,11 @@ identity/
 |------|------|------|----------------|-------------|
 | `index.ts` | ts | service | Pure factory + the ONE public interface for the domain. | `createIdentityModule(deps)`, `interface IdentityModule` |
 | `identity-module.ts` | ts | service | Composer that fuses every engine/service behind `IdentityModule`; wires the governance gate around all writes; owns `health()`. | `class IdentityModuleImpl` |
-| `types.ts` | ts | type | Canonical domain types. `Principal` is the cross-domain shape. | `Identity`, `Principal`, `PrincipalKind`, `PlatformApiKey`, `DeviceGrant`, `Org`, `Team`, `Membership`, `Role`, `Permission` |
+| `types.ts` | ts | type | Canonical domain types. `Principal` is the cross-domain shape (userId + orgId + sessionId for org-scoped authz). | `Identity`, `Principal` (with orgId binding), `PrincipalKind`, `PlatformApiKey`, `DeviceGrant`, `Org`, `Team`, `Membership`, `Role`, `Permission` |
 | `config.ts` | ts | config | Typed `IdentityConfig` slice taken from `AppConfig` (never reads `process.env`). Fails SAFE: missing secret → engine reports `down`. | `IdentityConfig`, `sliceIdentityConfig(appConfig)` |
 | `health.ts` | ts | service | Aggregates per-engine `up\|down` (better-auth secret present? auth-db reachable? stores reachable?). Truthful, `degraded` flagged. | `buildIdentityHealth(deps): HealthReport` |
-| `ports/session-verifier.port.ts` | ts | port | **The identity→ALL seam.** Resolve any credential to a `Principal`. | `interface SessionVerifier { verify(cred): Promise<Principal \| null> }` |
+| `org-provisioning.service.ts` | ts | service | Lazy personal-org provisioning (audit #11): `ensurePersonalOrg(userId)` returns cached orgId or creates one idempotently; degrades safely to undefined. | `class OrgProvisioningService implements OrgResolver`, `ensurePersonalOrg(userId): Promise<string \| undefined>` |
+| `ports/session-verifier.port.ts` | ts | port | **The identity→ALL seam.** Resolve any credential to a `Principal` (now includes orgId binding for org isolation). | `interface SessionVerifier { verify(cred): Promise<Principal \| null> }` |
 | `ports/identity-repo.port.ts` | ts | port | Unified read model over `user`/`users`; link + resolve. | `interface IdentityReadModel { resolveIdentity, findUserById, resolveCliUser, linkLegacyUser }` |
 | `ports/api-key.port.ts` | ts | port | `sk_` key persistence + validation contract (business logic depends on this, not on pg). | `interface ApiKeyStore { insert, findByPrefix, listForUser, revoke, touchLastUsed }`, `interface ApiKeyValidator` |
 | `ports/device-flow.port.ts` | ts | port | Device/user-code persistence + token-validation contract. | `interface DeviceGrantStore { create, findByDeviceCodeHash, findByUserCode, approve, consume, expireStale }`, `interface DeviceTokenValidator` |
@@ -283,9 +290,9 @@ call passes the `@recoder/interop` `authorize→risk→policy→audit` chain.
 
 - `SessionVerifier.verify(cred): Promise<Principal | null>` — the load-bearing seam;
   consumed by the `edge`/`http` layer and any domain guarding a request.
-- `Principal` type — `{ userId, orgId?, sessionId, kind: 'user'|'apikey'|'internal'|'anonymous', scopes, isAnonymous }`.
+- `Principal` type — `{ userId, orgId?, sessionId, kind: 'user'|'apikey'|'internal'|'anonymous', scopes, isAnonymous }`. orgId is auto-provisioned via `OrgProvisioningService.ensurePersonalOrg()` for new CLI users.
 - `PermissionEvaluator.can(principal, action, resource)` — consumed by any domain
-  doing authorization (agent-os approvals, billing, governance).
+  doing authorization (agent-os approvals, billing, governance). Org isolation enforced via `principal.orgId` scoping.
 - `ApiKeyStore` / `IdentityReadModel` — for domains that must resolve a user (billing, conductor).
 - `AuthPlanReader` — the website plan-read seam billing consumes as `resolveAuthPlan`.
 - MCP tools via `identity-engine.ts` (`identity_whoami` / `identity_resolve` / `identity_link`).

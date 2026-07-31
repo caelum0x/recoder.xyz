@@ -31,6 +31,8 @@ Core responsibilities:
 
 This domain COMPOSES the frozen `@recoder/agent-os` package fresh behind a single `AgentOsModule` interface rather than moving/copying the legacy `backend/src/agent-os/` dir (that flat dir was later absorbed + removed). The heavy domain logic already lives in the `@recoder/agent-os` package (`TaskService`, `transitionTaskRun`, `isAllowedTaskRunTransition`, run/approval/artifact contracts, …) — this domain WIRES those contracts to persistence, governance, and edges.
 
+**Status notes (2026-07-31):** Identity auto-provisioning + `principal.orgId` now land (via `OrgProvisioningService` in the identity domain). **One RESIDUAL (filed, not fixed):** governance approval-clearance principal-binding is incomplete (bd recoder-xiqj — real gap, doubtful reach, needs a policy decision — owner discretion).
+
 ### Design principles honored
 
 - **Config only from bootstrap.** No `process.env` in domain code (the legacy `service-container.ts` reads env directly — this is REPLACED by a typed `AgentOsConfig` slice injected at construction).

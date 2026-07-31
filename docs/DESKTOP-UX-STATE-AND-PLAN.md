@@ -7,7 +7,7 @@
 > is kept for provenance — the "done/fixed" annotations are accurate against current
 > code. See `docs/STATUS.md` for the headline summary.
 
-Status date (analysis): 2026-07-24. Owner-facing single source of truth for the desktop
+Status date (analysis): 2026-07-31. Owner-facing single source of truth for the desktop
 app's UI. It exists because tabs were hidden/patched reactively without a written
 decision — that was wrong. Every hide/fix decision is recorded here now.
 

@@ -20,6 +20,10 @@ terminal output as `RunEvent`s, classifies pane
 attention (`needs-you | working | idle`), survives backend restarts via the
 reconciler, and produces a reviewable diff to merge or PR.
 
+**Status note (2026-07-31):** The desktop UI is the Wave fork `recoder-*` views
+only (`apps/desktop/app/frontend/app/view/recoder/`); the old Preact "cockpit" SPA
+was deleted in commit `recoder-flgn`.
+
 The heavy, substrate-pure logic (the `WorkspaceEngine` state machine, the
 reconciler, the run-tailer polling+delta loop, the registry, the real headless
 CLI command resolution, review/diff) **already lives in `@recoder/substrate`**.
@@ -327,7 +331,7 @@ WRITES additionally pass `gate.decide`. `/internal/*` (if any) is
 | POST | `/workspaces/:id/steer` | Send prompt/keys to the live agent | ✅ gated |
 | POST | `/workspaces/:id/stop` | Stop the agent (session kill, worktree preserved) | ✅ gated |
 | POST | `/workspaces/:id/advance` | Advance lifecycle state | ✅ gated |
-| POST | `/workspaces/:id/message` | Continue/chat: another run in the same worktree | ✅ gated |
+| POST | `/workspaces/:id/message` | Continue/chat: another run in the same worktree (diff-comment review feedback routed back into agent loop — #35) | ✅ gated |
 | POST | `/workspaces/:id/merge` | Merge to base (delivery-approval gate) | ✅ gated |
 | POST | `/workspaces/:id/pr` | Open PR (delivery-approval gate) | ✅ gated |
 | POST | `/workspaces/:id/archive` | Archive a finished workspace (teardown) | ✅ gated |

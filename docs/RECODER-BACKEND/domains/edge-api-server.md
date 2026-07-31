@@ -9,11 +9,13 @@ validation, graceful lifecycle, and the `/internal/*` `INTERNAL_SERVICE_KEY` gat
 `GuardPolicy` by convention (`/internal/*` ⇒ internal-key + interop; `/api/*` ⇒ session + interop;
 everything else ⇒ **public**, `interop:false`), with a per-provider `guardOverrides` seam.
 
-> **SHIPPED (not uniform).** The interop chain (`authorize → risk → policy → audit`) is **not** applied
-> uniformly on every mount. Public mounts skip it, and the domain routers **self-guard** — each surface
-> applies its own single auth (`middleware.authenticate` on reads, `authenticateMutating` on writes,
-> signature-auth on billing webhooks, `INTERNAL_SERVICE_KEY` on `/internal/*`), i.e. one-auth-per-surface,
-> not one edge gate for all.
+> **SHIPPED (2026-07-31, architecture clarification).** The bootstrap globally overrides the edge's
+> **default guard to PUBLIC_MOUNT ON PURPOSE** (see `bootstrap/index.ts:216, 1648`). This means every
+> internal/api router **self-gates** behind `requireInternal` (for `/internal/*`) or `authenticate` (for
+> `/api/*`) at the handler level, NOT at the mount. The interop chain (`authorize → risk → policy → audit`)
+> is **not** applied uniformly: public mounts skip it, and the domain routers apply their own single auth
+> (`middleware.authenticate` on reads, `authenticateMutating` on writes, signature-auth on billing
+> webhooks, `INTERNAL_SERVICE_KEY` on `/internal/*`), i.e. one-auth-per-surface, not one edge gate for all.
 
 ---
 

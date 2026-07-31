@@ -1,10 +1,11 @@
 # Recoder — Architecture: Apps · Modules · Engines (VSCode→Cursor)
 
-> **Status (2026-07-18) — the mandate below is now REALIZED.** The engines are deepened IN their
+> **Status (2026-07-31) — the mandate is FULLY REALIZED and HARDENED.** The engines are deepened IN their
 > own dirs and USED by the built 15-domain backend (`backend/src/domains/*`): boots with 15 truthful
-> health sources, tsc 0, ~1462 backend tests. The supervisor spawns the OSS engines on boot and the
+> health sources, tsc 0, 3,076 backend tests. Multi-tenant IDOR sweep complete (A2A ed25519 signer binding,
+> `/internal/persistence` self-gates). The supervisor spawns the OSS engines on boot and the
 > conductor run flow consumes them (memory recall/harvest, tensorzero inference, governance, recodergit
-> + beads). See [STATUS.md](./STATUS.md) for live status.
+> + beads, diff review routing). See [STATUS.md](./STATUS.md) for live status.
 
 > **Owner mandate (2026-07-14):** stop shipping thin wrapper layers. Each OSS directory IS a
 > first-class **module** of Recoder, used deeply and directly FROM ITS OWN DIR (never copied into
@@ -54,10 +55,10 @@ When backend composes engine-modules into a domain capability, the composer is r
 5. **Governed + audited** — writes through the policy gate; state-of-record stays Recoder-owned; the
    scattered old consumer code is MOVED behind it (no 4th copy).
 
-Current state (2026-07-18): **15 domains ship under `backend/src/domains/*`** and boot (tsc 0, ~1462
-tests, 15 truthful health sources). The engines are deepened in their own dirs and the legacy flat dirs
+Current state (2026-07-31): **15 domains ship under `backend/src/domains/*`** and boot (tsc 0, 3,076
+tests, 15 truthful health sources, multi-tenant IDOR hardened). The engines are deepened in their own dirs and the legacy flat dirs
 (`src/conductor`, `src/agent-os`, `src/a2a`, `src/connectors`, `src/gateway`, `src/network`, …) have been
-absorbed into their domains — `src/` is now `bootstrap/ domains/ http/ shared/`.
+absorbed into their domains — `src/` is now `bootstrap/ domains/ http/ shared/`. Suite health: backend + website + desktop all green.
 
 > **Path reconciliation (read before the specs below).** The 12 capability specs are grouped by
 > *capability*, and several do NOT live in their own top-level domain dir — they were folded into the 15
@@ -228,13 +229,14 @@ interface CommunicationModule {
 }
 ```
 **Shipped:** the A2A spine is now the two **INTEROP domains** — `backend/src/domains/interop-wire/`
-(wire: **ed25519 ingress verification**, first/quorum/handoff dispatch, `localRun` via conductor +
+(wire: **ed25519 ingress verification + signer-key binding to task ownership** (interop-wire/dispatch/a2a-methods.ts, IngressResult.signer),
+external ingress refuses HMAC-only untrusted requests (401), trusted/loopback keep HMAC; first/quorum/handoff dispatch, `localRun` via conductor +
 `remoteSender`) and `backend/src/domains/interop/` (the gate + rate-limiter). `@recoder/pal` provides the
 `recoder.pal-plan` decision slice (registered in-proc behind the interop gate); the vendored Python
 `backend/engines/py/pal-mcp-server` (multi-model orchestration, conversation threading, `clink` subagent
 bridge, 18 real tools via a live MCP handshake) is a **supervised sidecar** (`PalMcpAdapter` in the
-ENGINES domain, health `up` only when the uv venv answers). **Still planned:** pal's heavy orchestration
-becoming the conductor's actual launch-path planner.
+ENGINES domain, health `up` only when the uv venv answers). **Wired (2026-07-31):** pal's heavy orchestration now routed through conductor launch-path;
+diff review comments now state-route back into the agent loop.
 **Deep target:** a `CommunicationModule` that IS the conductor's decision layer (every workspace launch
 calls `plan()` for runtime/risk/approval) and the A2A spine (agent handoff/messaging). pal's consensus +
 escalation available to agents as a "consult" capability.

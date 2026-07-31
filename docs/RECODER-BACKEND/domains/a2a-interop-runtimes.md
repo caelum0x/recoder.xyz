@@ -27,6 +27,13 @@ It is the ONE domain every other edge and every MCP tool call passes through
 `Task`/`Run` into a live coding-agent process and streams the result back as
 `RunEvent`s.
 
+**SHIPPED (2026-07-31):** A2A ed25519 external-ingress enforcement + signer-bound ownership.
+External (untrusted) A2A ingress now **refuses HMAC-only** without ed25519 signature (401
+`external_ingress_requires_ed25519`); trusted/loopback keep HMAC. Per-actor internal enforcement
+still pending. A2A JSON-RPC task-dispatch now binds task ownership to the cryptographically-verified
+ed25519 `signer.key_id` via `IngressResult.signer` + `A2ACallContext`, NOT client-supplied `userId`
+(IDOR closure: `interop-wire/dispatch/a2a-methods.ts` + test coverage in `ed25519-ingress.gate.test.ts`).
+
 It has two faces:
 
 1. **Wire face (A2A in/out).** Untrusted inbound A2A envelopes (from other
@@ -74,8 +81,9 @@ backend/src/domains/interop/
   wire/
     a2a-envelope.service.ts             # build/parse/validate A2A envelopes (ingress + egress) — wraps @recoder/a2a-sdk
     agent-card.service.ts               # build + serve this instance's agent-card; cache remote cards
-    signed-ingress.gate.ts              # verify signature (HMAC/ed25519) → admit against MCP tool policy
-    a2a-jsonrpc-server.ts               # A2A standard JSON-RPC method surface (message/send, tasks/get, …)
+    signed-ingress.gate.ts              # verify signature (HMAC/ed25519) → admit against MCP tool policy (legacy)
+    ed25519-ingress.gate.ts             # NEW (2026-07-31): external ingress now REQUIRES ed25519; refuses HMAC-only (401 external_ingress_requires_ed25519)
+    a2a-jsonrpc-server.ts               # A2A standard JSON-RPC method surface (message/send, tasks/get, …); task ownership bound to signer.key_id
 
   gate/
     interop-chain.service.ts            # concrete InteropChain: authorize→risk→policy→audit orchestration
@@ -128,6 +136,7 @@ backend/src/domains/interop/
     interop-chain.test.ts               # chain admits valid, rejects on each stage (authz/risk/policy)
     a2a-envelope.contract.test.ts       # golden envelope round-trip vs @recoder/a2a-sdk canonical vectors
     signed-ingress.gate.test.ts         # ed25519 + HMAC verify; tampered/expired/replay rejection
+    ed25519-ingress.gate.test.ts        # NEW (2026-07-31): external ingress requires ed25519; HMAC-only → 401; signer-bound ownership
     runtime-registry.test.ts            # selection + degrade-safe down path when a runtime key absent
     task-lifecycle.test.ts              # state-machine legal/illegal transitions + RunEvent emission
 ```
@@ -151,8 +160,9 @@ backend/src/domains/interop/
 | `ports/task-store.repo.ts` | ts | port | Repository interface for tasks/messages/scratchpad | `TaskStoreRepo` |
 | `wire/a2a-envelope.service.ts` | ts | service | Build/parse/validate envelopes; zod-validate at boundary | `buildEnvelope`, `parseEnvelope`, `validateInbound` |
 | `wire/agent-card.service.ts` | ts | service | Serve local agent-card; fetch+cache remote cards | `getLocalAgentCard`, `resolveRemoteCard` |
-| `wire/signed-ingress.gate.ts` | ts | middleware | Verify sig → admit against MCP tool policy (wraps `admitSignedMcpCall`) | `signedIngress(deps)`, `admitEnvelope` |
-| `wire/a2a-jsonrpc-server.ts` | ts | service | A2A JSON-RPC methods (`message/send`,`tasks/get`,`tasks/cancel`) → task-lifecycle | `handleA2ARpc`, `A2A_METHODS` |
+| `wire/signed-ingress.gate.ts` | ts | middleware | Verify sig → admit against MCP tool policy (wraps `admitSignedMcpCall`); legacy HMAC path | `signedIngress(deps)`, `admitEnvelope` |
+| `wire/ed25519-ingress.gate.ts` | ts | middleware | NEW (2026-07-31): external ingress now requires ed25519; refuses HMAC-only untrusted (401 `external_ingress_requires_ed25519`); binds signer.key_id for ownership. | `ed25519IngressGate(deps)`, `verifyEd25519Signature` |
+| `wire/a2a-jsonrpc-server.ts` | ts | service | A2A JSON-RPC methods (`message/send`,`tasks/get`,`tasks/cancel`) → task-lifecycle; task ownership bound to signer.key_id via A2ACallContext | `handleA2ARpc`, `A2A_METHODS` |
 | `gate/interop-chain.service.ts` | ts | service | Concrete `InteropChain` orchestration; fail-closed | `createInteropChain(deps)` |
 | `gate/governance-gate.adapter.ts` | ts | client | Degrade-safe adapter over `@recoder/governance`; on gate down → deny writes | `governanceGateAdapter`, `GateDownError` |
 | `gate/approval-gate.service.ts` | ts | service | Await agent-os approval record for risky actions | `requireApproval`, `waitForApproval` |
@@ -183,7 +193,8 @@ backend/src/domains/interop/
 | `migrations/0002_interop_tasks_scratchpad.sql` | sql | migration | tasks + messages + scratchpad tables | — |
 | `__tests__/interop-chain.test.ts` | ts | test | Chain admit/reject per stage | — |
 | `__tests__/a2a-envelope.contract.test.ts` | ts | test | Golden envelope round-trip | — |
-| `__tests__/signed-ingress.gate.test.ts` | ts | test | Sig verify + tamper/replay/expiry | — |
+| `__tests__/signed-ingress.gate.test.ts` | ts | test | Sig verify + tamper/replay/expiry (legacy HMAC) | — |
+| `__tests__/ed25519-ingress.gate.test.ts` | ts | test | NEW (2026-07-31): external ingress requires ed25519; HMAC-only → 401; trusted/loopback keep HMAC; signer.key_id ownership binding | — |
 | `__tests__/runtime-registry.test.ts` | ts | test | Selection + degrade-safe down | — |
 | `__tests__/task-lifecycle.test.ts` | ts | test | State transitions + RunEvent | — |
 

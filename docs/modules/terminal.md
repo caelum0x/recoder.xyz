@@ -100,6 +100,14 @@ deleted):
 > (`recoder-compare.tsx:91-98`). The per-repo setup script is a backend/conductor
 > worktree-create hook; the current Wave shell exposes no dedicated repo-settings panel.
 
+> **SHIPPED — Diff review comments.** Accept line-anchored review feedback on a
+> workspace's diffs and route comments back into the agent loop via
+> `POST /api/conductor/workspaces/:id/review-comments` (gated conductor write).
+> The review loop composes diff context (file/line anchors) into a structured steer
+> prompt that focuses the agent on specific change requests, routing through either
+> a live run's `steer` seam or a new run's `planLaunch` (via the conductor
+> `ConductorPlanPort`). Desktop surface: review surface TBD (Wave shell).
+
 ## Shipped public workspace MCP tools
 
 > **SHIPPED — agent-facing workspace tools.** The governed A2A/MCP surface exposes

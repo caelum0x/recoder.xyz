@@ -17,13 +17,14 @@ truthful about current depth — where a layer is shallow, it says so.
 > `RECODER-MODULES.md` + `docs/modules/*` = the per-engine specs. `RECODER-NEXT-PHASE.md` is
 > superseded.
 
-> **Current reality (2026-07-18) — the layer stack below is largely REALIZED, not aspirational:**
+> **Current reality (2026-07-31) — the layer stack is FULLY REALIZED and VERIFIED:**
 > - **One project:** `apps/` = **desktop only** (wave shell — the `recoder-*` views — + the embedded backend;
->   `apps/social` folded into the backend's social domain; wave + mobile folded/removed).
-> - **Backend BUILT + BOOTS:** the old v1 `server.ts` monolith was replaced by a 15-domain
+>   `apps/social` folded into the backend's social domain; wave + mobile folded/removed; Preact cockpit SPA deleted).
+> - **Backend BUILT + BOOTS + HARDENED:** the old v1 `server.ts` monolith was replaced by a 15-domain
 >   composed backend (`backend/src/{shared,bootstrap,http,domains}` — the legacy flat dirs
->   `a2a/agent-os/conductor/…` were absorbed + removed; **0 tsc errors, ~1462 backend tests**).
->   Boots with 15 truthful health sources. Domains: persistence · identity · governance ·
+>   `a2a/agent-os/conductor/…` were absorbed + removed; **0 tsc errors, 3,076 backend tests**).
+>   All 15 domains boot with truthful health sources. Multi-tenant IDOR sweep complete across all 8 original domains plus
+>   interop + edge (A2A ed25519 signer-key binding, `/internal/persistence` self-gates). Domains: persistence · identity · governance ·
 >   interop · edge · agent-os · conductor · engines · inference · billing · memory · cloud ·
 >   interop-wire · social · observability.
 > - **Engines deepened IN their dirs + USED:** the supervisor spawns the OSS engines on boot
@@ -39,8 +40,14 @@ truthful about current depth — where a layer is shallow, it says so.
 >   Every subject-bearing MCP tool binds identity to the host-authorized `McpToolCaller` (the
 >   cross-tenant class is closed — non-privileged → own subject, foreign → 403, admin/internal →
 >   arbitrary, absent → `AUTH_REQUIRED`).
-> - Billing is merchant-of-record (Polar/Creem/Paddle/Dodo — no Stripe); metering emitters
->   decrement quotas at the conductor + inference call sites.
+> - **Billing is merchant-of-record (Polar/Creem/Paddle/Dodo ONLY — no Stripe):** metering emitters
+>   decrement quotas at the conductor + inference call sites; past-due subscriptions get a 7-day
+>   dunning grace period (`withinDunningGrace`, `DUNNING_GRACE_DAYS`); overage UpgradeHint CTA routes users to upgrade.
+> - **Identity platform-hardened:** org auto-provisioning + principal.orgId now land (OrgProvisioningService, per-owner default org, idempotent);
+>   web-session orgId + user/users reconciliation remain owner-gated.
+> - **Desktop onboarding improved:** agent-auth probe + git-init affordance + mid-run needs-input notification + first-run agent-install.
+> - **Website signin hardened:** main-site signin is OAuth-only (email/password disabled, matches signup); Creem legal/contact/pricing ready.
+> - **SUITE HEALTH (2026-07-31):** backend tsc 0 / 3,076 tests ✓ · website tsc 0 / 436 tests ✓ · desktop tsc 0 / 471 tests ✓
 
 ---
 
@@ -54,11 +61,12 @@ truthful about current depth — where a layer is shallow, it says so.
 └───────────────────────────────────────────────────────────────────────────────────────┘
         ▲ consume ONLY over edges (HTTP/WS/MCP/A2A) — never reach into a module directly
 ┌───────────────────────────────────────────────────────────────────────────────────────┐
-│ EDGES (the backend's public seams — untrusted until proven)                             │
+│ EDGES (the backend's public seams — untrusted until proven, self-gated)                   │
 │   /api/agent-os/*  /api/a2a/*  /api/mcp/*  /api/social/*  /internal/*  conductor.routes    │
 │   MCP host (16 in-proc servers +agent-os/memory) + governed MCP HTTP tool-call edge ·     │
-│   A2A wire · social ingress · WS /terminal + per-workspace /stream                        │
-│   Contract packages (packages/*) are the typed shapes these edges speak.                 │
+│   A2A wire (ed25519 signer-key bound, HMAC-only rejected for external ingress) · social    │
+│   ingress · WS /terminal + per-workspace /stream. Contract packages (packages/*).           │
+│   CRITICAL: PUBLIC_MOUNT default override in bootstrap; routers self-gate (not convention).│
 └───────────────────────────────────────────────────────────────────────────────────────┘
         ▲ expose  │  every write passes the governance gate first
 ┌───────────────────────────────────────────────────────────────────────────────────────┐
@@ -76,6 +84,7 @@ truthful about current depth — where a layer is shallow, it says so.
 │   apps/desktop/engines/*         dmux · recodergit · openclaw (connectors) · tmux         │
 │   apps/desktop/server/engines/*  beads · multica · ziti · recoder-xds                     │
 │   Imported (.node / dist), spawned (loopback sidecar), or driven by CLI — never copied.  │
+│   (Preact cockpit SPA deleted 2026-07-31 — desktop now ONLY Wave recoder-* views.)       │
 └───────────────────────────────────────────────────────────────────────────────────────┘
         ▲ run on
 ┌───────────────────────────────────────────────────────────────────────────────────────┐
@@ -186,5 +195,24 @@ Native-first, subprocess-second, http-last. Every path degrades to a truthful `d
 - **The Python engines are supervised sidecars but their deep loops are unused:** `backend/engines/py/mem0` (`MEM0_BASE_URL`) and `backend/engines/py/browser-use` (`BROWSER_USE_URL`) now health-probe as sidecars, but the live functional path is still the owned TS packages.
 - **AGENT-ENGINE is dispatchable via the in-process spec path but shallow; NETWORKING is registered but not live:** openfang routes through `IN_PROCESS_RUNTIME_SPECS` (not the closed `ConductorRuntimeId` CLI union); recoder-xds gets no live config push. Both are still partial capabilities.
 - **Two GitHub engines, two terminal restart mechanisms, five memory recall copies** — the consolidation work is exactly moving these behind one composer per domain.
+
+---
+
+## Recent completions & owner-gated work (2026-07-31)
+
+**COMPLETED this epoch:**
+- Multi-tenant IDOR sweep across all 10 domains (persistence, identity, governance, interop, edge, agent-os, conductor, engines, inference, billing, memory, cloud, interop-wire, social, observability). Residual: governance approval-clearance principal-binding (bd recoder-xiqj — policy decision pending).
+- A2A ed25519 cryptographic signer-key binding; external ingress refuses HMAC-only untrusted requests (401 `external_ingress_requires_ed25519`); trusted/loopback keep HMAC.
+- Conductor diff review comments now route back into agent loop (state-routed, #35); merge-readiness surface shows worktree open work + PR metadata.
+- Billing dunning grace (7-day) + overage UpgradeHint for MoR providers (Polar/Creem/Paddle/Dodo only).
+- Desktop onboarding: agent-auth probe, git-init affordance, mid-run needs-input, first-run agent-install.
+- Website main-site OAuth-only signin (email/password disabled), Creem legal/pricing/contact.
+- Suite health fully green: backend 3,076 tests ✓ · website 436 tests ✓ · desktop 471 tests ✓
+
+**OWNER-GATED (NOT done — never mark complete without owner sign-off):**
+- Production deploy, canonical trunk (`origin/main`), CI (workflows disabled — user has no GitHub premium).
+- Web-session orgId + user/users model reconciliation (identity Phase A, depends on auth config sync).
+- Billing-provider unification (#4, MoR convergence across platforms).
+- Secret rotation + free-tier policy (runtime defaults).
 
 Keep this doc and RECODER-MODULES.md truthful. When a layer deepens, update the depth-gap column and the "honestly shallow" section — do not claim done without evidence.

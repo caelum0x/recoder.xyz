@@ -8,7 +8,15 @@
 
 Governance & Security is **the moat**: the one place every mutation in the whole
 backend must pass before it happens, and the tamper-evident record of what
-happened. It owns four load-bearing seams the other 14 domains wire to:
+happened.
+
+**SHIPPED (2026-07-31):** Multi-tenant IDOR sweep COMPLETE. All 8 original domains
+audited; the last two (interop + edge, 2026-07-31) now enforce ed25519 signer-bound
+ownership + /internal/* self-gating. **RESIDUAL (filed, not fixed, bd recoder-xiqj):**
+approval-clearance principal-binding — a real gap in the approval-gate service that
+requires a policy decision; only affects high-stakes approval workflows, doubtful reach.
+
+It owns four load-bearing seams the other 14 domains wire to:
 
 1. **`GovernanceGate.decide()`** — the `decide() → risk → audit` pipeline every
    WRITE flows through. Byte-interoperable with the Rust kernel

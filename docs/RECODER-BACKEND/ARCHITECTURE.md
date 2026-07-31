@@ -7,11 +7,12 @@
 > design under [`domains/`](./domains/); the cross-language engine seam is detailed
 > in [`ENGINE-INTEGRATION.md`](./ENGINE-INTEGRATION.md).
 >
-> **Shipped as of 2026-07-18:** the 14
+> **Shipped as of 2026-07-31:** the 14
 > domains live under `backend/src/domains/*` and ship as **15 directories** — the
 > A2A/interop domain is split into a hostile-wire core (`interop/`) and its
 > dispatch/runtime composer (`interop-wire/`) — so the backend boots with **15
-> truthful health sources**. `tsc` is 0; ~1462 backend tests pass.
+> truthful health sources**. `tsc` is 0; **full suite: 3,076 tests green**
+> (multi-tenant IDOR sweep complete, all 8 domains audited, A2A ed25519 signing shipped).
 
 ---
 
@@ -454,7 +455,8 @@ additionally `INTERNAL_SERVICE_KEY`-gated; writes additionally pass
 **Auth / identity:** `ALL /api/auth/[...all]`, `GET /api/auth/session`,
 `GET|POST|DELETE /api/identity/keys`, `POST /api/identity/device/{code,token,approve}`,
 `GET|POST /api/identity/orgs` (+ teams/members/invites), `POST /internal/identity/{resolve,validate-key}`,
-`/api/v1/*` (external programmatic API, api-key gated).
+`/api/v1/*` (external programmatic API, api-key gated). **New (2026-07-31):** org auto-provisioning
+on user first-login; platform keys (sk_*) now backed by Postgres + INTERNAL_SERVICE_KEY gating.
 
 **Agent-OS control plane** `/api/agent-os/*`: `summary`; `agents` (+reconcile);
 `spaces` (+repositories/github, +policies); `tasks` (+route, +history, +context-pack);
@@ -505,7 +507,7 @@ NOT `/api/connectors`.)*
 **Observability** : `/api/agent-os/observability/{slo,alerts,signals,audit}`
 (+`alerts/:id/ack`, +`signals/:id/disposition`).
 
-**Persistence** (internal only): `/internal/persistence/{health,migrate,introspect,backup}`.
+**Persistence** (internal only, `INTERNAL_SERVICE_KEY`-gated since 2026-07-31): `/internal/persistence/{health,migrate,introspect,backup}`.
 
 **MCP tool surface** (all interop-gated, registered via the wiring checklist —
 `IN_PROC_SERVERS` + `ENGINE_SERVERS` + `register*McpTools` in `buildInProcEngineRouter`):
@@ -571,8 +573,17 @@ Non-negotiable laws every domain obeys:
 3. **Every edge + MCP call passes the interop chain** `authorize→risk→policy→audit`.
    Deny → `AUTHZ_PROJECT_ACCESS_DENIED`; audit is recorded even on allow.
 4. **`/internal/*` is `INTERNAL_SERVICE_KEY`-gated** with constant-time compare and
-   fail-fast validation at boot (≥32 chars, no placeholder/dev default in prod).
-5. **Security is enforced below the model.** Never trust agent output, MCP tool
+   fail-fast validation at boot (≥32 chars, no placeholder/dev default in prod). **New (2026-07-31):**
+   `/internal/persistence/*` self-gates; **every internal and /api router SELF-GATES explicitly**
+   (the edge defaultGuard is PUBLIC_MOUNT ON PURPOSE — no convention-enforced boundary).
+5. **Multi-tenant IDOR sweep complete (2026-07-31).** All 8 core domains audited:
+   **(a)** A2A JSON-RPC task ownership binds to the cryptographically-verified ed25519 `key_id`,
+   NOT a client-supplied `params.userId` (interop-wire/dispatch); **(b)** `/internal/persistence/*`
+   now self-gates; **(c)** identity org auto-provisioning landed (per-owner default org, idempotent);
+   **(d)** external ingress REFUSES HMAC-only untrusted requests (401 `external_ingress_requires_ed25519`);
+   **(e)** subject-bearing MCP tools bind caller → subject at the edge only (not to caller-supplied arg).
+   One residual FILED not fixed: governance approval-clearance principal-binding (bd recoder-xiqj).
+6. **Security is enforced below the model.** Never trust agent output, MCP tool
    descriptions, runtime-reported success, browser content, or memory candidates.
    Always verify actor identity, task ownership, envelope validity, lock coverage,
    approval records, artifact provenance. **Subject-bearing MCP tools bind the
