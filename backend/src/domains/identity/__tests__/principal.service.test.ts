@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { PrincipalService } from '../principal.service.js';
+import { PrincipalService, type OrgResolver } from '../principal.service.js';
 import type { AuthSessionVerifier, ResolvedAuthSession } from '../adapters/better-auth.adapter.js';
 import type { ApiKeyValidator } from '../ports/api-key.port.js';
 import type { DeviceTokenValidator } from '../ports/device-flow.port.js';
@@ -34,6 +34,7 @@ function build(overrides?: {
   session?: ResolvedAuthSession | null;
   apiKeyValidator?: ApiKeyValidator;
   deviceTokenValidator?: DeviceTokenValidator;
+  orgResolver?: OrgResolver;
   config?: Partial<IdentityConfig>;
 }): PrincipalService {
   return new PrincipalService({
@@ -42,8 +43,17 @@ function build(overrides?: {
     authSession: sessionAdapter(overrides?.session ?? null),
     ...(overrides?.apiKeyValidator ? { apiKeyValidator: overrides.apiKeyValidator } : {}),
     ...(overrides?.deviceTokenValidator ? { deviceTokenValidator: overrides.deviceTokenValidator } : {}),
+    ...(overrides?.orgResolver ? { orgResolver: overrides.orgResolver } : {}),
   });
 }
+
+const aSession: ResolvedAuthSession = {
+  sessionId: 'sid',
+  userId: 'web-user',
+  email: 'a@b.c',
+  emailVerified: true,
+  expiresAt: new Date(Date.now() + 1e6),
+};
 
 describe('PrincipalService — the SessionVerifier seam', () => {
   it('resolves the internal service key first (highest precedence), even with a session present', async () => {
@@ -104,5 +114,64 @@ describe('PrincipalService — the SessionVerifier seam', () => {
   it('fails closed on internal-key resolution when no key is configured', () => {
     const svc = build({ config: { internalServiceKey: null, internalServiceKeyPresent: false } });
     expect(svc.resolveInternalServiceSession('anything')).toBeNull();
+  });
+});
+
+describe('PrincipalService — orgId resolution on session principals (#9/#11)', () => {
+  it('sets principal.orgId from the resolver for a web session (tenant scoping now functions)', async () => {
+    const orgResolver: OrgResolver = { ensurePersonalOrg: vi.fn(async () => 'org-abc') };
+    const svc = build({ session: aSession, orgResolver });
+    const p = await svc.verify({ cookieHeader: 'recoder.session_token=abc' });
+    expect(p?.kind).toBe('session');
+    expect(p?.userId).toBe('web-user');
+    expect(p?.orgId).toBe('org-abc');
+    expect(orgResolver.ensurePersonalOrg).toHaveBeenCalledWith('web-user');
+  });
+
+  it('resolves orgId undefined (userId-ownership fallback) when no resolver is wired — no regression', async () => {
+    const svc = build({ session: aSession });
+    const p = await svc.verify({ cookieHeader: 'recoder.session_token=abc' });
+    expect(p?.kind).toBe('session');
+    expect(p?.orgId).toBeUndefined();
+  });
+
+  it('degrades safely when the resolver returns undefined (DB-less user with no org)', async () => {
+    const orgResolver: OrgResolver = { ensurePersonalOrg: vi.fn(async () => undefined) };
+    const svc = build({ session: aSession, orgResolver });
+    const p = await svc.verify({ cookieHeader: 'recoder.session_token=abc' });
+    expect(p?.orgId).toBeUndefined();
+  });
+
+  it('never throws when the resolver faults — session still resolves with orgId undefined', async () => {
+    const orgResolver: OrgResolver = {
+      ensurePersonalOrg: vi.fn(async () => {
+        throw new Error('db down');
+      }),
+    };
+    const svc = build({ session: aSession, orgResolver });
+    const p = await svc.verify({ cookieHeader: 'recoder.session_token=abc' });
+    expect(p?.kind).toBe('session');
+    expect(p?.orgId).toBeUndefined();
+  });
+
+  it('does NOT run personal-org resolution for api-key principals (they carry their own org)', async () => {
+    const orgResolver: OrgResolver = { ensurePersonalOrg: vi.fn(async () => 'org-should-not-apply') };
+    const apiKeyValidator: ApiKeyValidator = {
+      validate: vi.fn(async () => ({ keyId: 'k1', userId: 'key-owner', orgId: 'key-org', scopes: ['read'] })),
+    };
+    const svc = build({ apiKeyValidator, orgResolver });
+    const p = await svc.verify({ apiKey: 'sk_live_abc' });
+    expect(p?.kind).toBe('apikey');
+    expect(p?.orgId).toBe('key-org');
+    expect(orgResolver.ensurePersonalOrg).not.toHaveBeenCalled();
+  });
+
+  it('does NOT run personal-org resolution for the internal service key', async () => {
+    const orgResolver: OrgResolver = { ensurePersonalOrg: vi.fn(async () => 'org-x') };
+    const svc = build({ orgResolver });
+    const p = await svc.verify({ internalKey: baseConfig.internalServiceKey });
+    expect(p?.kind).toBe('internal');
+    expect(p?.orgId).toBeUndefined();
+    expect(orgResolver.ensurePersonalOrg).not.toHaveBeenCalled();
   });
 });
