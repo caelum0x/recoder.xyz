@@ -214,6 +214,10 @@ export class InMemoryAgentOsRepository implements AgentOsRepositoryPort {
 
   // — Event log —
   appendEvent(event: RunEvent): RunEvent {
+    // Idempotent by eventId (parity with the postgres driver's
+    // `on conflict (event_id) do nothing`, recoder-4euj): a re-emit of the same
+    // deterministic terminal event is a no-op, never a duplicate row.
+    if (this.events.some((e) => e.eventId === event.eventId)) return event;
     this.events.push(event);
     this.changed();
     return event;

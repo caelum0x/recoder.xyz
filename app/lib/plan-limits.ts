@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { enforcedTierForPlanId } from "@/lib/config/enforced-quotas";
 
 const PLAN_LIMITS: Record<string, Record<string, number>> = {
   free: {
@@ -55,8 +56,13 @@ export async function checkPlanLimit(
     select: { subscriptionPlan: true },
   });
 
-  const plan = (user?.subscriptionPlan ?? "free").toLowerCase();
-  const limits = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
+  // The website persists `subscriptionPlan` as the CHECKOUT plan-id
+  // ('pro-monthly'/'pro-yearly'/'enterprise'/'free'), which is NOT a raw
+  // PLAN_LIMITS key. Route it through the same tier normalization the enforcing
+  // gate uses so a paying 'pro-monthly' user resolves to PRO limits instead of
+  // silently falling back to FREE (the plan-vocabulary drift, recoder-wvth).
+  const tier = enforcedTierForPlanId(user?.subscriptionPlan ?? "free");
+  const limits = PLAN_LIMITS[tier] ?? PLAN_LIMITS.free;
   const max = limits[limitKey] ?? 0;
 
   if (max === -1 || currentUsage < max) {
