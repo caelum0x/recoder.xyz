@@ -30,7 +30,11 @@ function fakeAgent(responder: (method: string) => unknown) {
       if (msg && isAcpRequest(msg)) {
         const result = responder(msg.method);
         if (result !== undefined) {
-          queueMicrotask(() => dataCb?.(encodeAcpMessage(makeResponse((msg as AcpRequest).id, result))));
+          queueMicrotask(() =>
+            dataCb?.(
+              encodeAcpMessage(makeResponse((msg as AcpRequest).id, result))
+            )
+          );
         }
       }
     },
@@ -50,7 +54,10 @@ function fakeAgent(responder: (method: string) => unknown) {
     emit: (line: string) => dataCb?.(line),
     exit: (code: number | null) => exitCb?.(code),
     /** Parse the Nth request the driver wrote. */
-    sentMethods: () => writes.map((w) => (decodeAcpStream(w).messages[0] as { method?: string }).method),
+    sentMethods: () =>
+      writes.map(
+        w => (decodeAcpStream(w).messages[0] as { method?: string }).method
+      ),
   };
 }
 
@@ -65,10 +72,55 @@ describe('AcpAgentDriver lifecycle', () => {
   it('start → newSession → prompt drives the ACP handshake and returns results', async () => {
     const agent = fakeAgent(defaultResponder);
     const driver = new AcpAgentDriver({ spawn: agent.spawn });
-    await expect(driver.start()).resolves.toEqual({ protocolVersion: 1 });
+    // start() surfaces the negotiated version AND the loadSession capability so a
+    // caller can gate session/load; the default responder advertises none → false.
+    await expect(driver.start()).resolves.toEqual({
+      protocolVersion: 1,
+      loadSession: false,
+    });
     await expect(driver.newSession('/wt/ws1')).resolves.toBe('s1');
     await expect(driver.prompt('s1', 'fix the bug')).resolves.toBe('end_turn');
-    expect(agent.sentMethods()).toEqual(['initialize', 'session/new', 'session/prompt']);
+    expect(agent.sentMethods()).toEqual([
+      'initialize',
+      'session/new',
+      'session/prompt',
+    ]);
+  });
+
+  it('start() reports loadSession:true when the agent advertises the capability', async () => {
+    const agent = fakeAgent(m =>
+      m === 'initialize'
+        ? { protocolVersion: 1, agentCapabilities: { loadSession: true } }
+        : defaultResponder(m)
+    );
+    const driver = new AcpAgentDriver({ spawn: agent.spawn });
+    await expect(driver.start()).resolves.toEqual({
+      protocolVersion: 1,
+      loadSession: true,
+    });
+  });
+
+  it('loadSession sends session/load with the sessionId + cwd (v1 resume)', async () => {
+    const agent = fakeAgent(m =>
+      m === 'session/load' ? {} : defaultResponder(m)
+    );
+    const driver = new AcpAgentDriver({ spawn: agent.spawn });
+    await driver.start();
+    await expect(driver.loadSession('s1', '/wt/ws1')).resolves.toBeUndefined();
+    const load = agent.writes
+      .map(
+        w =>
+          decodeAcpStream(w).messages[0] as {
+            method?: string;
+            params?: unknown;
+          }
+      )
+      .find(m => m.method === 'session/load');
+    expect(load?.params).toEqual({
+      sessionId: 's1',
+      cwd: '/wt/ws1',
+      mcpServers: [],
+    });
   });
 
   it('cancel sends a session/cancel notification', async () => {
@@ -80,7 +132,9 @@ describe('AcpAgentDriver lifecycle', () => {
   });
 
   it('a process exit rejects an in-flight prompt', async () => {
-    const agent = fakeAgent((m) => (m === 'initialize' ? { protocolVersion: 1 } : undefined)); // never answers prompt
+    const agent = fakeAgent(m =>
+      m === 'initialize' ? { protocolVersion: 1 } : undefined
+    ); // never answers prompt
     const driver = new AcpAgentDriver({ spawn: agent.spawn });
     await driver.start();
     const p = driver.prompt('s1', 'hang');
@@ -97,7 +151,9 @@ describe('AcpAgentDriver lifecycle', () => {
   });
 
   it('throws truthfully when session/new returns no sessionId', async () => {
-    const agent = fakeAgent((m) => (m === 'initialize' ? { protocolVersion: 1 } : {})); // session/new → {}
+    const agent = fakeAgent(m =>
+      m === 'initialize' ? { protocolVersion: 1 } : {}
+    ); // session/new → {}
     const driver = new AcpAgentDriver({ spawn: agent.spawn });
     await driver.start();
     await expect(driver.newSession('/wt')).rejects.toThrow(/no sessionId/);
@@ -110,11 +166,18 @@ describe('AcpAgentDriver bridges', () => {
     const agent = fakeAgent(defaultResponder);
     const driver = new AcpAgentDriver({ spawn: agent.spawn, onRequest });
     await driver.start();
-    agent.emit(encodeAcpMessage(makeRequest(42, 'session/request_permission', { tool: 'bash' })));
+    agent.emit(
+      encodeAcpMessage(
+        makeRequest(42, 'session/request_permission', { tool: 'bash' })
+      )
+    );
     await vi.waitFor(() => expect(onRequest).toHaveBeenCalledTimes(1));
     // The driver wrote a response for id 42.
-    const answered = agent.writes.some((w) => {
-      const m = decodeAcpStream(w).messages[0] as { id?: number; result?: unknown };
+    const answered = agent.writes.some(w => {
+      const m = decodeAcpStream(w).messages[0] as {
+        id?: number;
+        result?: unknown;
+      };
       return m?.id === 42 && m.result != null;
     });
     expect(answered).toBe(true);
@@ -123,9 +186,16 @@ describe('AcpAgentDriver bridges', () => {
   it('forwards session/update notifications to onNotification', async () => {
     const notes: unknown[] = [];
     const agent = fakeAgent(defaultResponder);
-    const driver = new AcpAgentDriver({ spawn: agent.spawn, onNotification: (n) => notes.push(n) });
+    const driver = new AcpAgentDriver({
+      spawn: agent.spawn,
+      onNotification: n => notes.push(n),
+    });
     await driver.start();
-    agent.emit(encodeAcpMessage(makeNotification('session/update', { chunk: 'working…' })));
+    agent.emit(
+      encodeAcpMessage(
+        makeNotification('session/update', { chunk: 'working…' })
+      )
+    );
     expect(notes).toHaveLength(1);
   });
 });
