@@ -582,7 +582,7 @@ Non-negotiable laws every domain obeys:
    now self-gates; **(c)** identity org auto-provisioning landed (per-owner default org, idempotent);
    **(d)** external ingress REFUSES HMAC-only untrusted requests (401 `external_ingress_requires_ed25519`);
    **(e)** subject-bearing MCP tools bind caller → subject at the edge only (not to caller-supplied arg).
-   One residual FILED not fixed: governance approval-clearance principal-binding (bd recoder-xiqj).
+   One follow-on residual (bd recoder-xiqj), governance approval-clearance principal-binding, now FIXED (clearance binds to requestedBy === principal.userId).
 6. **Security is enforced below the model.** Never trust agent output, MCP tool
    descriptions, runtime-reported success, browser content, or memory candidates.
    Always verify actor identity, task ownership, envelope validity, lock coverage,

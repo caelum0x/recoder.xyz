@@ -201,7 +201,7 @@ Native-first, subprocess-second, http-last. Every path degrades to a truthful `d
 ## Recent completions & owner-gated work (2026-07-31)
 
 **COMPLETED this epoch:**
-- Multi-tenant IDOR sweep across all 10 domains (persistence, identity, governance, interop, edge, agent-os, conductor, engines, inference, billing, memory, cloud, interop-wire, social, observability). Residual: governance approval-clearance principal-binding (bd recoder-xiqj — policy decision pending).
+- Multi-tenant IDOR sweep across all 10 domains (persistence, identity, governance, interop, edge, agent-os, conductor, engines, inference, billing, memory, cloud, interop-wire, social, observability). Follow-on residual (bd recoder-xiqj) now **fixed**: governance approval-clearance binds to the requesting principal.
 - A2A ed25519 cryptographic signer-key binding; external ingress refuses HMAC-only untrusted requests (401 `external_ingress_requires_ed25519`); trusted/loopback keep HMAC.
 - Conductor diff review comments now route back into agent loop (state-routed, #35); merge-readiness surface shows worktree open work + PR metadata.
 - Billing dunning grace (7-day) + overage UpgradeHint for MoR providers (Polar/Creem/Paddle/Dodo only).
