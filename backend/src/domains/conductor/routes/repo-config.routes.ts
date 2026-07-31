@@ -29,18 +29,23 @@ import type { ConductorModule } from '../index.js';
 import type { ConductorWriteResult } from '../conductor-module.js';
 import type { RepoSetupService } from '../services/repo-setup.service.js';
 import type { PrStatusService } from '../services/pr-status.service.js';
+import { requireWorkspaceAccess } from './workspace-access.js';
 
 export interface RepoConfigRouterDeps {
   readonly module: ConductorModule;
   readonly middleware: AuthMiddleware;
   readonly repoSetup: RepoSetupService;
   readonly prStatus: PrStatusService;
+  /** Solo/desktop single-user mode (from `cfg.soloMode`); fails the ownership guard OPEN. */
+  readonly soloMode?: boolean;
 }
 
 /** Build the repo-config + pr-status sub-router (mount under `/api/conductor`). */
 export function buildRepoConfigRoutes(deps: RepoConfigRouterDeps): Router {
   const router = Router();
   const { module, middleware, repoSetup, prStatus } = deps;
+  // Ownership guard for the `:id`-scoped PR-status read (recoder-tf68).
+  const access = requireWorkspaceAccess(module, { soloMode: deps.soloMode === true });
 
   // --- per-repo setup script -------------------------------------------------
 
@@ -76,6 +81,7 @@ export function buildRepoConfigRoutes(deps: RepoConfigRouterDeps): Router {
   router.get(
     '/workspaces/:id/pr-status',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       const workspace = await module.getWorkspace(req.params.id);
       if (!workspace) {

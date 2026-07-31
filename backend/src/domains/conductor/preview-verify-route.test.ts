@@ -23,10 +23,14 @@ import type { PreviewVerification } from './ports/preview-verify.port.js';
 import type { ConductorModule } from './index.js';
 import { buildConductorRoutes } from './routes/conductor.routes.js';
 
+// A privileged (admin) principal: this suite exercises the preview-verify WRITE,
+// not the workspace-ownership guard (recoder-tf68), so it uses the operator path
+// to reach any workspace. Ownership is covered by workspace-ownership-idor.test.ts.
 const PRINCIPAL: Principal = {
+  userId: 'user_test',
   actorId: 'user_test',
   actorType: 'user',
-  scopes: [],
+  scopes: ['admin'],
 } as unknown as Principal;
 
 /** A passthrough auth middleware that stamps a real (non-anonymous) principal. */
@@ -69,6 +73,11 @@ function stubModule(
   recorder: Recorder = {},
 ): ConductorModule {
   return {
+    // The ownership guard resolves the workspace before the handler; return a
+    // present record so the guard admits the privileged PRINCIPAL (recoder-tf68).
+    async getWorkspace(workspaceId: string) {
+      return { workspaceId, createdBy: 'user_test' };
+    },
     async verifyPreview(workspaceId: string, principal: Principal, options?: PreviewVerifyOptions) {
       recorder.workspaceId = workspaceId;
       recorder.principal = principal;

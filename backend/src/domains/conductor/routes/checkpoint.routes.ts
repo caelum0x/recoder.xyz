@@ -22,21 +22,28 @@ import { ErrorCode, createError, sendError, sendSuccess, asyncHandler } from '..
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { ConductorModule } from '../index.js';
 import type { ConductorWriteResult } from '../conductor-module.js';
+import { requireWorkspaceAccess } from './workspace-access.js';
 
 export interface CheckpointRouterDeps {
   readonly module: ConductorModule;
   readonly middleware: AuthMiddleware;
+  /** Solo/desktop single-user mode (from `cfg.soloMode`); fails the ownership guard OPEN. */
+  readonly soloMode?: boolean;
 }
 
 /** Build the checkpoint sub-router (mounted into the `/api/conductor` router). */
 export function buildCheckpointRoutes(deps: CheckpointRouterDeps): Router {
   const router = Router();
   const { module, middleware } = deps;
+  // Ownership guard for every `:id`-scoped checkpoint edge (recoder-tf68). Keyed on
+  // the workspace `:id`; the checkpoint `:cid` is scoped under an owned workspace.
+  const access = requireWorkspaceAccess(module, { soloMode: deps.soloMode === true });
 
   // --- read: list a workspace's checkpoints (newest-first) --------------------
   router.get(
     '/workspaces/:id/checkpoints',
     middleware.authenticate,
+    access,
     asyncHandler(async (req, res) => {
       const checkpoints = await module.listWorkspaceCheckpoints(req.params.id);
       sendSuccess(res, { checkpoints });
@@ -47,6 +54,7 @@ export function buildCheckpointRoutes(deps: CheckpointRouterDeps): Router {
   router.post(
     '/workspaces/:id/checkpoints',
     middleware.authenticateMutating,
+    access,
     asyncHandler(async (req, res) => {
       const body = asObject(req.body);
       const result = await module.checkpointWorkspace(
@@ -65,6 +73,7 @@ export function buildCheckpointRoutes(deps: CheckpointRouterDeps): Router {
   router.post(
     '/workspaces/:id/checkpoints/:cid/restore',
     middleware.authenticateMutating,
+    access,
     asyncHandler(async (req, res) => {
       const result = await module.restoreCheckpoint(req.params.id, req.params.cid, req.principal!);
       finishWrite(res, result, { key: 'restore' });
@@ -75,6 +84,7 @@ export function buildCheckpointRoutes(deps: CheckpointRouterDeps): Router {
   router.post(
     '/workspaces/:id/checkpoints/:cid/branch',
     middleware.authenticateMutating,
+    access,
     asyncHandler(async (req, res) => {
       const body = asObject(req.body);
       const result = await module.branchFromCheckpoint(

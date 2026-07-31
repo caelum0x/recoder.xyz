@@ -51,6 +51,10 @@ import { createGovernanceModule } from '../domains/governance/index.js';
 import { createInteropModule } from '../domains/interop/index.js';
 import { createAgentOsModule } from '../domains/agent-os/index.js';
 import { createConductorModule } from '../domains/conductor/index.js';
+import {
+  reconcileOnBoot,
+  SYSTEM_RECONCILE_PRINCIPAL,
+} from './conductor-reconcile-on-boot.js';
 import { createCliRuntimeSubstrate } from '../domains/conductor/adapters/cli-runtime.adapter.js';
 import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/openfang-runtime.adapter.js';
 import { createAcpSubstrate } from '../domains/conductor/adapters/acp-substrate.adapter.js';
@@ -1661,6 +1665,19 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // Observability starts LAST among domains (its alert-eval loop reads the fused
   // health of everything already started); the tap is already in the edge chain.
   await observability.start();
+
+  // Reconcile-on-boot (item #7): the conductor reconciler is only wired to a
+  // manual operator endpoint, so after a restart surviving `recoder-*` runs stop
+  // streaming and crashed runs stay stuck. Fire the SAME reconcile op ONCE here,
+  // under a fixed internal system principal, fire-and-forget + degrade-safe — a
+  // reconcile fault must never block the server from binding. `void` (not await)
+  // keeps it off the boot critical path; the manual endpoint is unchanged.
+  void reconcileOnBoot({
+    conductor,
+    principal: SYSTEM_RECONCILE_PRINCIPAL,
+    logger: childLogger('conductor-reconcile-boot'),
+  });
+
   await edge.listen();
   const url = `http://${config.server.host}:${config.server.port}`;
   log.info(

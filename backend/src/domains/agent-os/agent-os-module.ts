@@ -258,6 +258,9 @@ export class AgentOsComposer implements AgentOsModule {
       repository: this.repo,
       middleware: deps.middleware,
       onPolicyChange: (event) => this.policyUpdates.emit(event),
+      // Fail-open tenant scoping for the single local desktop owner; owner-scoped
+      // isolation on any cloud deploy (soloMode false).
+      soloMode: this.cfg.soloMode,
     });
     // The INTERNAL_SERVICE_KEY-gated ingest edges (events / steps / runtime-
     // evidence / outbox drain). Exposed via `internalRoutes()` for the canonical

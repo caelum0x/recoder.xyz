@@ -82,6 +82,35 @@ const TO_DISTRIBUTION: Record<PlanTier, DistributionPlan> = {
 
 const KNOWN_TIERS = new Set<string>(['free', 'pro', 'team', 'max', 'enterprise']);
 
+/**
+ * Website checkout plan-id → enforced `PlanTier`.
+ *
+ * The website persists `users.subscriptionPlan = planId`, where planId is the
+ * CHECKOUT id ('pro-monthly'/'pro-yearly'/'enterprise'/'free' —
+ * app/lib/config/subscription-plans.ts), NOT an enforced tier token. Without
+ * this alias, `normalize()` coerced a paying 'pro-monthly'/'pro-yearly' user to
+ * `free`, silently downgrading paying customers to Free capability (P0).
+ *
+ * Only NON-free elevations belong here; unknown/absent ids still fall through to
+ * the deny-safe `free` floor. Billing-interval suffixes ('-monthly'/'-yearly'/
+ * '-annual') collapse onto their tier. Keys are lower-cased/trimmed at lookup.
+ */
+export const PLAN_ALIASES: Readonly<Record<string, PlanTier>> = {
+  'pro-monthly': 'pro',
+  'pro-yearly': 'pro',
+  'pro-annual': 'pro',
+  'pro-annually': 'pro',
+  'team-monthly': 'team',
+  'team-yearly': 'team',
+  'team-annual': 'team',
+  'max-monthly': 'max',
+  'max-yearly': 'max',
+  'max-annual': 'max',
+  'enterprise-monthly': 'enterprise',
+  'enterprise-yearly': 'enterprise',
+  'enterprise-annual': 'enterprise',
+};
+
 export function createPlanCatalog(config: BillingConfig): PlanCatalog {
   const activeProvider = config.provider;
 
@@ -94,7 +123,11 @@ export function createPlanCatalog(config: BillingConfig): PlanCatalog {
 
     normalize(plan) {
       const p = (plan ?? '').toLowerCase().trim();
-      return KNOWN_TIERS.has(p) ? (p as PlanTier) : 'free';
+      if (KNOWN_TIERS.has(p)) return p as PlanTier;
+      // Website checkout plan-id (e.g. 'pro-monthly') → enforced tier.
+      if (PLAN_ALIASES[p]) return PLAN_ALIASES[p];
+      // Unknown / absent ⇒ deny-safe free floor.
+      return 'free';
     },
 
     satisfies: (have, need) => PLAN_RANK[have] >= PLAN_RANK[need],

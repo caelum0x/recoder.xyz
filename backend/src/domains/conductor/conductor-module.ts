@@ -2947,18 +2947,30 @@ export class ConductorComposer implements ConductorModule {
     // Compare routes FIRST: `/workspaces/compare` must resolve before the main
     // router's `/workspaces/:id` (else "compare" is read as a workspace id).
     router.use(
-      buildCompareRoutes({ module: this, middleware: this.middleware })
+      buildCompareRoutes({
+        module: this,
+        middleware: this.middleware,
+        soloMode: this.cfg.soloMode,
+      })
     );
     // Checkpoint routes: static `/checkpoints` segment after `:id`, no collision
     // with the main `/workspaces/:id/*` edges; register before the main router.
     router.use(
-      buildCheckpointRoutes({ module: this, middleware: this.middleware })
+      buildCheckpointRoutes({
+        module: this,
+        middleware: this.middleware,
+        soloMode: this.cfg.soloMode,
+      })
     );
     // Board query routes: the literal `/workspaces/archived` + the query-aware
     // `GET /workspaces` MUST precede the main router so the filtered list shadows
     // the plain list and `/workspaces/archived` resolves before `/workspaces/:id`.
     router.use(
-      buildWorkspaceQueryRoutes({ module: this, middleware: this.middleware })
+      buildWorkspaceQueryRoutes({
+        module: this,
+        middleware: this.middleware,
+        soloMode: this.cfg.soloMode,
+      })
     );
     // Repo-config + PR-status: `/repo-setup-script` (GET/PUT) + the workspace's
     // `/workspaces/:id/pr-status` read. The setup-script PUT is governed inside
@@ -2969,12 +2981,14 @@ export class ConductorComposer implements ConductorModule {
         middleware: this.middleware,
         repoSetup: this.repoSetup,
         prStatus: this.prStatus,
+        soloMode: this.cfg.soloMode,
       })
     );
     router.use(
       buildConductorRoutes({
         module: this,
         middleware: this.middleware,
+        soloMode: this.cfg.soloMode,
         // Read-only `/sessions` attach bridge over the INJECTED engines-owned tmux
         // introspect port (never a cross-domain value import). Absent ⇒ the lister
         // degrades to an empty list (truthful "cannot observe the substrate").

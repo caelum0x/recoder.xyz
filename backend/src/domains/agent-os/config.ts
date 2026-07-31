@@ -98,6 +98,12 @@ export const agentOsConfigSchema = z.object({
   squadAutopilotIntervalMs: z.number().int().positive(),
   /** Max conductor dispatches per autopilot tick (bounds burst launches). */
   squadAutopilotMaxPerTick: z.number().int().positive(),
+  /**
+   * Solo/desktop mode (bootstrap-injected from `RECODER_SOLO_MODE`): a single
+   * local owner with no sign-in plane. The `/api/agent-os` space edges fail OPEN
+   * for tenant scoping so the embedded desktop single-user is never locked out.
+   */
+  soloMode: z.boolean(),
   isProduction: z.boolean(),
 });
 
@@ -169,6 +175,7 @@ export function sliceAgentOsConfig(
       overrides.squadAutopilotMaxPerTick ?? DEFAULT_SQUAD_AUTOPILOT_MAX_PER_TICK,
     squadId: overrides.squadId ?? null,
     squadSeed: overrides.squadSeed ?? null,
+    soloMode: app.runtime.soloMode === true,
     isProduction: app.runtime.isProduction,
   });
 }

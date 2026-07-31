@@ -22,10 +22,17 @@ export interface AgentOsRoutesDeps {
   readonly middleware: AuthMiddleware;
   /** OPTIONAL `policy.updated` sink threaded into the CRUD policy-write edges (§4c). */
   readonly onPolicyChange?: (event: PolicyUpdatedEvent) => void;
+  /**
+   * Solo/desktop mode (bootstrap-injected from `RECODER_SOLO_MODE`). When true
+   * the space tenant-scoping guards fail OPEN (single local owner). Defaults to
+   * false — a cloud deploy keeps the owner-scoped isolation.
+   */
+  readonly soloMode?: boolean;
 }
 
 export function buildAgentOsRouter(deps: AgentOsRoutesDeps): Router {
   const { repository, middleware, onPolicyChange } = deps;
+  const soloMode = deps.soloMode ?? false;
   const router = Router();
 
   // — Read models (authenticated) —
@@ -55,7 +62,12 @@ export function buildAgentOsRouter(deps: AgentOsRoutesDeps): Router {
 
   // — Full per-aggregate CRUD edge table (self-gated per route) —
   router.use(
-    buildAgentOsCrudRouter({ repository, middleware, ...(onPolicyChange ? { onPolicyChange } : {}) }),
+    buildAgentOsCrudRouter({
+      repository,
+      middleware,
+      soloMode,
+      ...(onPolicyChange ? { onPolicyChange } : {}),
+    }),
   );
 
   return router;

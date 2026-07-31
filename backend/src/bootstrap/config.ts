@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { assertSoloModeSafe } from './solo-mode-guard.js';
 import type {
   AppConfig,
   NodeEnv,
@@ -542,5 +543,18 @@ export function loadConfig(rawEnv: EnvSource = process.env): AppConfig {
     throw new Error(`Invalid environment configuration:\n${semanticErrors.map((e) => `  - ${e}`).join('\n')}`);
   }
 
-  return buildConfig(env, rawEnv);
+  const config = buildConfig(env, rawEnv);
+
+  // Boot guardrail (item #19): solo mode fails auth OPEN on mutating routes —
+  // safe for a loopback DB-less desktop, dangerous on a shared/multi-tenant host.
+  // Refuse to start in the genuinely-dangerous combination (non-loopback bind or
+  // a remote/shared DB), while the sanctioned loopback desktop still boots.
+  assertSoloModeSafe({
+    soloMode: config.runtime.soloMode,
+    host: config.server.host,
+    databaseUrl: config.database.url,
+    authDatabaseUrl: config.auth.authDatabaseUrl,
+  });
+
+  return config;
 }

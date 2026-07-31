@@ -25,6 +25,7 @@ import type { Server } from 'node:http';
 import type { Logger } from '../shared/logger.js';
 import type { EdgeChain } from './middleware/chain.js';
 import { notFound, errorEnvelope } from './middleware/error.js';
+import { securityHeaders, type SecurityHeadersConfig } from './middleware/security-headers.js';
 import type { RouteTable } from '../domains/edge/route-table.js';
 import type { MountStatus } from '../domains/edge/types.js';
 import type { RouteProvider } from '../domains/edge/ports/route-provider.port.js';
@@ -38,6 +39,12 @@ export interface EdgeAppDeps {
   readonly logger: Logger;
   /** express `trust proxy` value from `AppConfig.server` (not an env read). */
   readonly trustProxy: boolean | number | string;
+  /**
+   * Optional overrides for the FIRST-in-chain security-header hardening (item
+   * #24). Omitted ⇒ secure defaults (nosniff, DENY frames, no-referrer, HSTS,
+   * restrictive CSP) — see {@link SecurityHeadersConfig}.
+   */
+  readonly security?: Partial<SecurityHeadersConfig>;
 }
 
 export interface EdgeApp {
@@ -71,6 +78,11 @@ export function createEdgeApp(deps: EdgeAppDeps): EdgeApp {
   // Hardening + proxy trust before any middleware runs.
   app.set('trust proxy', deps.trustProxy);
   app.disable('x-powered-by');
+
+  // Security headers FIRST (item #24) — before request-context/cors/body, so every
+  // response (route, 404, error) is hardened. Header-only + always-next(): inert
+  // to the later CORS link and to the WS upgrade path (which skips express).
+  app.use(securityHeaders(deps.security));
 
   // GLOBAL chain (once): request-context → cors → body → rate-limit(api).
   for (const link of deps.chain.buildGlobalChain()) {
