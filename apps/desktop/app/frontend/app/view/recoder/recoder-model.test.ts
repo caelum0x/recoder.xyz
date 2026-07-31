@@ -4,16 +4,20 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    attentionBadgeLabel,
     bucketWorkspaceGroups,
     computePairwise,
     computeSiblingOverlap,
     computeSuggestedWinner,
     detectAttentionTransitions,
+    detectNeedsInputTransitions,
     filterWorkspaces,
     formatRelativeAge,
     groupByTaskGroup,
+    isNeedsInputAttention,
     isTerminalWorkspaceState,
     suggestNextAction,
+    workspaceAttentionMap,
     workspaceStateMap,
     deriveProjectIdentity,
     deriveProjects,
@@ -582,6 +586,112 @@ describe("detectAttentionTransitions", () => {
         ]);
         const events = detectAttentionTransitions(prev, [review, dead, quiet], none);
         expect(events.map((e) => e.kind).sort()).toEqual(["failed", "review"]);
+    });
+});
+
+describe("attention badge + classification helpers", () => {
+    it("isNeedsInputAttention is true only for agent_idle_prompt and awaiting_approval", () => {
+        expect(isNeedsInputAttention("agent_idle_prompt")).toBe(true);
+        expect(isNeedsInputAttention("awaiting_approval")).toBe(true);
+        for (const other of ["review_ready", "working", "error", "unknown", "", undefined]) {
+            expect(isNeedsInputAttention(other as string)).toBe(false);
+        }
+    });
+
+    it("attentionBadgeLabel names only the two needs-human signals, else empty", () => {
+        expect(attentionBadgeLabel("agent_idle_prompt")).toBe("Needs input");
+        expect(attentionBadgeLabel("awaiting_approval")).toBe("Needs approval");
+        for (const other of ["review_ready", "working", "error", "unknown", "", undefined]) {
+            expect(attentionBadgeLabel(other as string)).toBe("");
+        }
+    });
+
+    it("workspaceAttentionMap records every workspace (absent attention → empty string)", () => {
+        const a = makeWs({ attention: "agent_idle_prompt" });
+        const b = makeWs({ attention: undefined });
+        const map = workspaceAttentionMap([a, b]);
+        expect(map.get(a.workspaceId)).toBe("agent_idle_prompt");
+        expect(map.get(b.workspaceId)).toBe("");
+        expect(map.size).toBe(2);
+    });
+});
+
+describe("detectNeedsInputTransitions", () => {
+    const none = new Set<string>();
+
+    it("fires needs_input on working → agent_idle_prompt", () => {
+        const ws = makeWs({ attention: "agent_idle_prompt", branch: "agent/ask" });
+        const prev = new Map([[ws.workspaceId, "working"]]);
+        expect(detectNeedsInputTransitions(prev, [ws], none)).toEqual([
+            {
+                workspaceId: ws.workspaceId,
+                branch: "agent/ask",
+                runtimeId: "claude_code",
+                kind: "needs_input",
+                key: `${ws.workspaceId}:attn:agent_idle_prompt`,
+            },
+        ]);
+    });
+
+    it("fires awaiting_approval on working → awaiting_approval", () => {
+        const ws = makeWs({ attention: "awaiting_approval" });
+        const prev = new Map([[ws.workspaceId, "working"]]);
+        const events = detectNeedsInputTransitions(prev, [ws], none);
+        expect(events).toHaveLength(1);
+        expect(events[0].kind).toBe("awaiting_approval");
+    });
+
+    it("fires from a previously-empty (no-signal) attention into needs-input", () => {
+        const ws = makeWs({ attention: "agent_idle_prompt" });
+        const prev = new Map([[ws.workspaceId, ""]]);
+        expect(detectNeedsInputTransitions(prev, [ws], none)).toHaveLength(1);
+    });
+
+    it("a workspace absent from prev (first successful views read) seeds silently", () => {
+        const ws = makeWs({ attention: "agent_idle_prompt" });
+        expect(detectNeedsInputTransitions(new Map(), [ws], none)).toEqual([]);
+    });
+
+    it("does not re-fire when it was already needing input last poll", () => {
+        const ws = makeWs({ attention: "awaiting_approval" });
+        const prev = new Map([[ws.workspaceId, "agent_idle_prompt"]]);
+        expect(detectNeedsInputTransitions(prev, [ws], none)).toEqual([]);
+    });
+
+    it("an unchanged needs-input attention fires nothing", () => {
+        const ws = makeWs({ attention: "agent_idle_prompt" });
+        const prev = new Map([[ws.workspaceId, "agent_idle_prompt"]]);
+        expect(detectNeedsInputTransitions(prev, [ws], none)).toEqual([]);
+    });
+
+    it("a transition into a non-needs-input attention (working / review_ready) fires nothing", () => {
+        const working = makeWs({ attention: "working" });
+        const review = makeWs({ attention: "review_ready" });
+        const prev = new Map([
+            [working.workspaceId, ""],
+            [review.workspaceId, "working"],
+        ]);
+        expect(detectNeedsInputTransitions(prev, [working, review], none)).toEqual([]);
+    });
+
+    it("an already-notified key is suppressed (de-dupe on bounce)", () => {
+        const ws = makeWs({ attention: "agent_idle_prompt" });
+        const prev = new Map([[ws.workspaceId, "working"]]);
+        const notified = new Set([`${ws.workspaceId}:attn:agent_idle_prompt`]);
+        expect(detectNeedsInputTransitions(prev, [ws], notified)).toEqual([]);
+    });
+
+    it("reports each transitioning workspace independently in one poll", () => {
+        const ask = makeWs({ attention: "agent_idle_prompt" });
+        const approve = makeWs({ attention: "awaiting_approval" });
+        const quiet = makeWs({ attention: "working" });
+        const prev = new Map([
+            [ask.workspaceId, "working"],
+            [approve.workspaceId, "working"],
+            [quiet.workspaceId, "working"],
+        ]);
+        const events = detectNeedsInputTransitions(prev, [ask, approve, quiet], none);
+        expect(events.map((e) => e.kind).sort()).toEqual(["awaiting_approval", "needs_input"]);
     });
 });
 

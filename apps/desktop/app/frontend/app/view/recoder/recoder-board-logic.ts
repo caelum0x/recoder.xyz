@@ -23,6 +23,13 @@ type RecoderWorkspace = Pick<Workspace, "workspaceId" | "branch" | "runtimeId" |
         // deriveProjectIdentity). Absent on legacy rows launched before project
         // identity existed — those group under the DEFAULT_PROJECT_ID bucket.
         projectId?: string;
+        // Live attention classification merged from GET /api/conductor/views (the
+        // backend WorkspaceView.attention: awaiting_approval / agent_idle_prompt /
+        // error / review_ready / working / unknown). Absent when the views probe
+        // degraded or the backend is older — the board then shows NO badge (never a
+        // fabricated attention). Kept as a plain string so an unknown backend value
+        // degrades to "no badge" rather than a type break.
+        attention?: string;
     };
 
 // A per-workspace changed-line summary, folded from GET /workspaces/:id/diff/files.
@@ -552,9 +559,11 @@ function suggestNextAction(
 }
 
 // A needs-human moment observed between two polls: an agent finished and wants
-// review, or a workspace died. `key` (workspaceId:state) is the de-dupe unit —
-// notify at most once per workspace+state per session even if the state bounces.
-type RecoderAttentionKind = "review" | "failed";
+// review, a workspace died, or (attention axis) the agent stopped mid-run and is
+// waiting on the user — for input (`needs_input`) or an approval/permission
+// (`awaiting_approval`). `key` is the de-dupe unit — notify at most once per
+// workspace+signal per session even if it bounces.
+type RecoderAttentionKind = "review" | "failed" | "needs_input" | "awaiting_approval";
 type RecoderAttentionEvent = {
     workspaceId: string;
     branch: string;
@@ -565,6 +574,91 @@ type RecoderAttentionEvent = {
 
 function workspaceStateMap(workspaces: RecoderWorkspace[]): Map<string, string> {
     return new Map(workspaces.map((ws) => [ws.workspaceId, ws.state]));
+}
+
+// The backend AttentionState values that mean "an agent stopped mid-run and is
+// waiting on the human" — the walk-away-get-pinged moment distinct from the
+// state-driven review_ready/failed transitions. `review_ready` is intentionally
+// NOT here: it is already surfaced by the state-based awaiting_review path.
+const NEEDS_INPUT_ATTENTIONS: ReadonlySet<string> = new Set(["agent_idle_prompt", "awaiting_approval"]);
+
+// True only for a backend attention that means the human must act. Absent/unknown/
+// working/review_ready/error all return false — the board badges nothing for them.
+function isNeedsInputAttention(attention: string | undefined): boolean {
+    return attention != null && NEEDS_INPUT_ATTENTIONS.has(attention);
+}
+
+// The board badge text for a needs-input attention; "" for anything else so a row
+// only ever shows a badge for a signal the backend actually reported.
+function attentionBadgeLabel(attention: string | undefined): string {
+    if (attention == "agent_idle_prompt") {
+        return "Needs input";
+    }
+    if (attention == "awaiting_approval") {
+        return "Needs approval";
+    }
+    return "";
+}
+
+// The notification kind for a needs-input attention, or null when the attention
+// is not a needs-input signal. Keeps the mapping in one truthful place.
+function needsInputKind(attention: string): RecoderAttentionKind | null {
+    if (attention == "agent_idle_prompt") {
+        return "needs_input";
+    }
+    if (attention == "awaiting_approval") {
+        return "awaiting_approval";
+    }
+    return null;
+}
+
+// Snapshot every workspace's attention (absent → "") so the next poll can detect a
+// transition INTO a needs-input signal. Mirrors workspaceStateMap: EVERY workspace
+// is recorded so a first-seen row seeds silently rather than firing a stale ping.
+function workspaceAttentionMap(workspaces: RecoderWorkspace[]): Map<string, string> {
+    return new Map(workspaces.map((ws) => [ws.workspaceId, ws.attention ?? ""]));
+}
+
+// Pure: fold the current poll's attention against the previous poll's attention
+// map and return only OBSERVED transitions INTO a needs-input signal
+// (agent_idle_prompt / awaiting_approval) — the "walk away, get pinged" moment. A
+// workspace absent from `prevAttention` (first poll of the session, or launched
+// between polls) is seeded silently; a workspace already needing input last poll
+// does not re-fire (no ping when it merely switches between two needs-input
+// signals). `alreadyNotified` keys (`workspaceId:attn:<attention>`) suppress
+// repeats when a signal bounces. Only the caller's SUCCESSFUL views read feeds
+// this, so a degraded probe never manufactures a transition.
+function detectNeedsInputTransitions(
+    prevAttention: ReadonlyMap<string, string>,
+    workspaces: RecoderWorkspace[],
+    alreadyNotified: ReadonlySet<string>
+): RecoderAttentionEvent[] {
+    const events: RecoderAttentionEvent[] = [];
+    for (const ws of workspaces) {
+        const attention = ws.attention ?? "";
+        const kind = needsInputKind(attention);
+        if (kind == null) {
+            continue;
+        }
+        const prev = prevAttention.get(ws.workspaceId);
+        // First-seen row: seed silently (never notify a signal we didn't watch
+        // begin). A row already needing input last poll is not a fresh transition.
+        if (prev == null || isNeedsInputAttention(prev)) {
+            continue;
+        }
+        const key = `${ws.workspaceId}:attn:${attention}`;
+        if (alreadyNotified.has(key)) {
+            continue;
+        }
+        events.push({
+            workspaceId: ws.workspaceId,
+            branch: ws.branch ?? "",
+            runtimeId: ws.runtimeId ?? "",
+            kind,
+            key,
+        });
+    }
+    return events;
 }
 
 // Pure: fold the current poll against the previous poll's state map and return
@@ -750,6 +844,11 @@ export {
     computeSiblingOverlap,
     computeSuggestedWinner,
     detectAttentionTransitions,
+    detectNeedsInputTransitions,
+    isNeedsInputAttention,
+    attentionBadgeLabel,
+    workspaceAttentionMap,
+    NEEDS_INPUT_ATTENTIONS,
     groupByTaskGroup,
     filterWorkspaces,
     bucketWorkspaceGroups,

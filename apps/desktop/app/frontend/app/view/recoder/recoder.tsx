@@ -5,6 +5,7 @@ import { createBlock, getApi } from "@/app/store/global";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useMemo, useRef } from "react";
 import { agentLabel } from "./recoder-agent-labels";
+import { RecoderAgentSetup } from "./recoder-agent-setup";
 import { RecoderCloneModal } from "./recoder-clone";
 import { RecoderCommandPalette, type RecoderCommand } from "./recoder-command-palette";
 import { RecoderComparePanel } from "./recoder-compare";
@@ -12,6 +13,7 @@ import { isConnectivityError } from "./recoder-errors";
 import { RecoderIdentityAffordance } from "./recoder-identity";
 import { RecoderIdentityModel } from "./recoder-identity-model";
 import {
+    attentionBadgeLabel,
     formatRelativeAge,
     isTerminalWorkspaceState,
     RecoderViewModel,
@@ -29,6 +31,7 @@ import { RecoderShortcutsOverlay } from "./recoder-shortcuts";
 import { RecoderWhatsNew } from "./recoder-whats-new";
 import { RecoderErrorRow, RecoderSkeleton } from "./recoder-states";
 import {
+    ATTN_BADGE,
     CHIP,
     ENTRY_CARD,
     ERROR_ROW,
@@ -128,6 +131,9 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
     }, [selected]);
     const terminal = isTerminalWorkspaceState(ws.state);
     const age = formatRelativeAge(ws.createdAt);
+    // "" for any attention the board must NOT badge (absent/unknown/working/…),
+    // so a row only ever shows a badge the backend actually reported.
+    const attnLabel = attentionBadgeLabel(ws.attention);
     const suggestion = suggestNextAction(ws.state, summary, ws.sessionName != null && ws.sessionName != "");
     // Promote exactly one existing button to primary when it IS the suggested next
     // step; every other button stays quiet. Never invents an action.
@@ -146,6 +152,11 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
             <div className="flex items-center gap-2">
                 <span className={`${ROW_TITLE} truncate font-mono`}>{ws.branch}</span>
                 <span className={META}>{ws.state}</span>
+                {attnLabel != "" && (
+                    <span className={ATTN_BADGE} title="This agent stopped mid-run and is waiting on you">
+                        {attnLabel}
+                    </span>
+                )}
                 {summary != null && summary.files > 0 && (
                     <span className={`${META} font-mono`}>
                         +{summary.additions} -{summary.deletions}
@@ -265,6 +276,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const launchResult = useAtomValue(model.launchResultAtom);
     const notifyOnAttention = useAtomValue(model.notifyOnAttentionAtom);
     const environment = useAtomValue(model.environmentAtom);
+    const setupProbing = useAtomValue(model.setupProbingAtom);
 
     useEffect(() => {
         model.refresh();
@@ -627,6 +639,20 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                 </option>
                             ))}
                         </select>
+                        {setup.probed && readyAgents.length == 0 && (
+                            <div className="flex items-center gap-2">
+                                <span className={META}>
+                                    No agent detected on PATH. Install one, then re-scan — no restart needed.
+                                </span>
+                                <button
+                                    className={QUIET_BTN}
+                                    disabled={setupProbing}
+                                    onClick={() => model.rescanAgents()}
+                                >
+                                    {setupProbing ? "Scanning…" : "Re-scan"}
+                                </button>
+                            </div>
+                        )}
                     </label>
 
                     <label className="flex flex-col gap-1">
@@ -862,12 +888,6 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     {a.available ? "✓" : "✗"} {agentLabel(a.runtimeId)}
                                 </span>
                             ))}
-                            {setup.agents.length == 0 && (
-                                <span>
-                                    No coding agents detected on PATH - install Claude Code (or Codex / opencode) to
-                                    launch a workspace.
-                                </span>
-                            )}
                         </div>
                     ) : setup.probed ? (
                         <div className={META}>
@@ -875,6 +895,9 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         </div>
                     ) : (
                         <div className={META}>Checking local setup...</div>
+                    )}
+                    {setup.loaded && readyAgents.length == 0 && (
+                        <RecoderAgentSetup model={model} probing={setupProbing} />
                     )}
                 </div>
             )}

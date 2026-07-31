@@ -33,6 +33,11 @@ const ERROR_ROW =
 
 const SKELETON_ROW = "h-7 rounded border border-white/8 bg-border/20 animate-pulse";
 
+// Warm "needs a human" badge for a workspace row — only rendered for a backend
+// attention that means the user must act (agent_idle_prompt / awaiting_approval).
+const ATTN_BADGE =
+    "rounded border border-amber-400/40 bg-amber-400/15 text-amber-300 px-1.5 py-0.5 text-xs whitespace-nowrap";
+
 const PAGE_TITLE = "text-sm font-medium tracking-tight text-primary";
 const SECTION_TITLE = "text-sm font-medium tracking-tight text-primary";
 const FIELD_LABEL = "text-xs uppercase tracking-wide text-secondary";
@@ -40,6 +45,7 @@ const ROW_TITLE = "text-sm text-primary tracking-tight";
 const META = "text-xs text-meta tracking-tight";
 
 export {
+    ATTN_BADGE,
     CHIP,
     ENTRY_CARD,
     ERROR_ROW,
