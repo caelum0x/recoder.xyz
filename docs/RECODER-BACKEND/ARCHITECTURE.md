@@ -100,7 +100,7 @@ MCP registration.
 
 ```
         ┌──────────────────────────────────────────────────────────────┐
-        │  DESKTOP (Electron cockpit)          WEBSITE (recoder.xyz)     │  consumers
+        │  DESKTOP (Electron app)              WEBSITE (recoder.xyz)     │  consumers
         │  embeds backend in-process           proxies /api/* /internal  │
         └───────────────┬──────────────────────────────┬───────────────┘
                         │                              │

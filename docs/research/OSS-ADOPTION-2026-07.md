@@ -1,5 +1,11 @@
 # OSS Adoption Plan — 2026-07
 
+> **Note (2026-07-31):** references below to the Preact **`apps/desktop/cockpit`** SPA
+> and the "cockpit preact/react-hooks dup landmine" are **historical** — that SPA was
+> **deleted** (recoder-flgn, 2026-07-31). The current desktop UI is the Wave `recoder-*`
+> frontend (`apps/desktop/app/frontend/app/view/recoder/`); retarget any frontend
+> integration sketch there. The dup-landmine risk no longer applies.
+
 Synthesized from a 4-track candidate scan (agent managers, git tools, backend protocols, product infra).
 Scoring: **(impact on Conductor/Cursor parity) × (integration cheapness) × (license safety)**.
 Bias: wire/port a proven approach over big vendoring. Repo rule: anything vendored gets fully

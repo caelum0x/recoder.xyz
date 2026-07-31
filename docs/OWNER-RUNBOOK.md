@@ -4,7 +4,7 @@ Everything in this repo that can be built and verified **without owner credentia
 
 ## What is already DONE + verified (context)
 - Backend: all 12 OSS engines fully productized (deep-module fusion), backend-src consolidation with a **permanent cross-domain-import guard** (`backend/src/shared/__tests__/domain-boundaries.test.ts`), 2,300+ tests, tsc 0, boots 15 truthful health sources.
-- Desktop: packaging fail-loud gate (arch-aware, lance-optional), env injection, truthful engine roster; cockpit terminal-plain compare-group attach + preview-checked line; the durable-shell **safe subset** (shared tmux-server invariant, `recoder-<id>` naming contract, health emits `tmuxBin`+socket, read bridge, flagged attach).
+- Desktop: packaging fail-loud gate (arch-aware, lance-optional), env injection, truthful engine roster; desktop terminal-plain compare-group attach + preview-checked line; the durable-shell **safe subset** (shared tmux-server invariant, `recoder-<id>` naming contract, health emits `tmuxBin`+socket, read bridge, flagged attach).
 - **Packaged e2e engine layer PROVEN**: booting the backend against the real on-disk release `.node` artifacts, openfang/tensorzero/governance load in-process and the health roster is truthful (6 up, rest down/degraded honestly). The `.dmg` fail-loud gate passes against the real tree (15 required artifacts present + arm64, lance shipped-degraded).
 - bd issue tracker fixed (v52-aware binary). App frontend tsc 18→0.
 
@@ -68,7 +68,7 @@ See `docs/growth/SEARCH-SUBMISSION-RUNBOOK.md`. Code shipped: `robots.ts`, truth
 - GA4: confirm/rotate `NEXT_PUBLIC_GA_ID`; mark `signup_completed` + `subscription_created` as conversions; optionally set `ANALYTICS_INGEST_URL` (the server sink LTV reads — without it LTV shows a truthful empty state, no synthetic CAC).
 
 ## 7. Preview-verify screenshot artifact store  (future — evidence retention)
-The preview-verify loop is closed (verify → persist summary → GET → cockpit "preview checked ✓/✗"), but the screenshot PNG is not retained (only an opaque artifactId is sealed into the audit chain). To show the screenshot inline, add a real artifact store + a `.../preview-verification/screenshot` stream route; then `screenshotRef` becomes a URL. Until then the cockpit truthfully shows "screenshot not retained".
+The preview-verify loop is closed (verify → persist summary → GET → desktop "preview checked ✓/✗"), but the screenshot PNG is not retained (only an opaque artifactId is sealed into the audit chain). To show the screenshot inline, add a real artifact store + a `.../preview-verification/screenshot` stream route; then `screenshotRef` becomes a URL. Until then the desktop truthfully shows "screenshot not retained".
 
 ## 8. OpenShip email  (deferred — do NOT fork)
 Evaluated 2026-07-21: don't fork/vendor. Re-eval in 2+ quarters only for INBOUND mail on a clean non-Hetzner VPS. See the memory note.

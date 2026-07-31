@@ -182,7 +182,7 @@ CREATE INDEX IF NOT EXISTS idx_wsd_space_kind ON work_signal_dispositions(space_
 | GET | `/api/agent-os/observability/audit` | `mw.authenticate` | XDR query over Merkle audit chain (re-verified before return; tamper → `verified:false`, no rows). |
 | GET | `/api/agent-os/observability/logs` | `mw.authenticate` | Recent structured records from the ops ring buffer (bounded). |
 
-> Note: the control edges self-gate through the identity auth middleware (`mw.authenticate` / `mw.authenticateMutating`), not a literal interop `authorize→risk→policy→audit` router chain. `/health`, `/health/full`, and `/api/agent-os/health` are served unauthenticated (shallow-safe, no secrets). A dedicated WS `/sync` telemetry-frame edge is **not shipped**; the edge domain instead exposes a global-middleware seam (`edge-module.ts`) that observability's `telemetryMiddleware` taps for correlation + RED metrics, and the cockpit ops surface reads the `/logs`, `/signals`, and `/health/full` edges.
+> Note: the control edges self-gate through the identity auth middleware (`mw.authenticate` / `mw.authenticateMutating`), not a literal interop `authorize→risk→policy→audit` router chain. `/health`, `/health/full`, and `/api/agent-os/health` are served unauthenticated (shallow-safe, no secrets). A dedicated WS `/sync` telemetry-frame edge is **not shipped**; the edge domain instead exposes a global-middleware seam (`edge-module.ts`) that observability's `telemetryMiddleware` taps for correlation + RED metrics, and the desktop ops surface reads the `/logs`, `/signals`, and `/health/full` edges.
 
 ## 6. Ports exposed & consumed
 
