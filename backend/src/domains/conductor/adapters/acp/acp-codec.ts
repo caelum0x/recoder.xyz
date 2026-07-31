@@ -1,6 +1,6 @@
 /**
  * ACP wire codec — the framing + JSON-RPC 2.0 shapes for the Agent Client
- * Protocol (agentclientprotocol.com, the protocol claude-agent-acp / codex-acp
+ * Protocol (agentclientprotocol.com, the protocol claude-code-acp / codex-acp
  * speak). ACP is newline-delimited JSON (ndjson) over the agent process's stdio:
  * one JSON-RPC message per line, `\n`-terminated.
  *

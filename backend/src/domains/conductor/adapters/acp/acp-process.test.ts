@@ -24,7 +24,7 @@ function fakeChild() {
   return { child, spawn, stdinWrite, emitExit: (c: number | null) => emitter.emit('exit', c), emitError: () => emitter.emit('error', new Error('spawn failed')), emitData: (chunk: Buffer | string) => stdout.emit('data', chunk) };
 }
 
-const baseOpts = (spawn: LowLevelSpawn) => ({ command: 'claude-agent-acp', args: ['--stdio'], cwd: '/wt', spawn });
+const baseOpts = (spawn: LowLevelSpawn) => ({ command: 'claude-code-acp', args: ['--stdio'], cwd: '/wt', spawn });
 
 describe('makeAcpProcess', () => {
   it('write() forwards to the child stdin', () => {
