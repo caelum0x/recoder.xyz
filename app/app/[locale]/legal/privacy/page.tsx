@@ -34,7 +34,7 @@ export default function PrivacyPolicyPage() {
         <div className="container mx-auto max-w-4xl">
           <div className="mb-12">
             <h1 className="text-4xl md:text-5xl font-bold mb-4">Privacy Policy</h1>
-            <p className="text-gray-400">Last updated: November 19, 2024</p>
+            <p className="text-gray-400">Last updated: July 31, 2026</p>
           </div>
 
           <div className="prose prose-invert max-w-none space-y-8">
@@ -103,6 +103,22 @@ export default function PrivacyPolicyPage() {
                 <li>Usage patterns and feature interactions</li>
                 <li>Error logs and diagnostic information</li>
                 <li>Session duration and frequency of use</li>
+              </ul>
+
+              <h3 className="text-xl font-semibold mb-3 mt-6 text-orange-500">2.5 Billing and Subscription Information</h3>
+              <p className="text-gray-300 leading-relaxed mb-4">
+                If you purchase a paid subscription, checkout and payment are handled by our
+                Merchant of Record, <strong className="text-white">Creem</strong>. We do{' '}
+                <strong className="text-white">not</strong> collect or store your full card number
+                or other complete payment credentials on our servers. Creem processes your payment
+                and shares limited billing details back with us so we can provision your plan,
+                including:
+              </p>
+              <ul className="list-disc list-inside space-y-2 text-gray-300">
+                <li>Your subscription plan, status, and billing period</li>
+                <li>Billing name, billing email, and country/region (for tax and invoicing)</li>
+                <li>A payment reference / customer ID and the last four digits and brand of your card</li>
+                <li>Invoice and transaction history for your account</li>
               </ul>
             </section>
 
@@ -173,17 +189,27 @@ export default function PrivacyPolicyPage() {
                 <li><a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">OpenAI Privacy Policy</a></li>
               </ul>
 
-              <h3 className="text-xl font-semibold mb-3 text-orange-500">5.2 Service Providers</h3>
+              <h3 className="text-xl font-semibold mb-3 text-orange-500">5.2 Service Providers (Sub-processors)</h3>
               <p className="text-gray-300 leading-relaxed mb-4">
-                We may share information with trusted service providers who help us operate the Service:
+                We share information with a small number of trusted service providers who help us
+                operate the Service. Each processes data only on our behalf and under contractual
+                confidentiality and data-protection obligations:
               </p>
               <ul className="list-disc list-inside space-y-2 text-gray-300 mb-4">
-                <li><strong className="text-white">Database hosting:</strong> Neon (PostgreSQL database)</li>
+                <li>
+                  <strong className="text-white">Payments &amp; subscriptions:</strong>{' '}
+                  <a href="https://www.creem.io/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">Creem</a>{' '}
+                  &mdash; our Merchant of Record. Creem processes card payments, calculates and remits
+                  applicable sales tax/VAT, and issues invoices. We never receive your full card details.
+                </li>
+                <li><strong className="text-white">Database hosting:</strong> Managed PostgreSQL database hosting</li>
                 <li><strong className="text-white">Authentication:</strong> OAuth providers (GitHub, Google)</li>
-                <li><strong className="text-white">Analytics:</strong> Usage analytics for improving the Service</li>
+                <li><strong className="text-white">Analytics:</strong> Google Analytics and Cloudflare Web Analytics (aggregate usage and traffic measurement)</li>
               </ul>
               <p className="text-gray-300 leading-relaxed">
-                These providers are contractually obligated to protect your data and only use it to provide services to us.
+                These providers are contractually obligated to protect your data and only use it to
+                provide services to us. Payment data handled by Creem is also subject to{' '}
+                <a href="https://www.creem.io/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">Creem&rsquo;s Privacy Policy</a>.
               </p>
 
               <h3 className="text-xl font-semibold mb-3 text-orange-500">5.3 Legal Requirements</h3>
@@ -225,8 +251,7 @@ export default function PrivacyPolicyPage() {
               </ul>
               <p className="text-gray-300 leading-relaxed">
                 To exercise these rights, contact us at{' '}
-                <a href="mailto:recoderxyz@gmail.com" className="text-orange-500 hover:text-orange-400 underline">
-                  recoderxyz@gmail.com
+                <a href="mailto:contact@recoder.xyz" className="text-orange-500 hover:text-orange-400 underline">contact@recoder.xyz
                 </a>
               </p>
             </section>
@@ -305,8 +330,7 @@ export default function PrivacyPolicyPage() {
               </p>
               <ul className="list-none space-y-2 text-gray-300">
                 <li><strong className="text-white">Email:</strong>{' '}
-                  <a href="mailto:recoderxyz@gmail.com" className="text-orange-500 hover:text-orange-400 underline">
-                    recoderxyz@gmail.com
+                  <a href="mailto:contact@recoder.xyz" className="text-orange-500 hover:text-orange-400 underline">contact@recoder.xyz
                   </a>
                 </li>
                 <li><strong className="text-white">Twitter:</strong>{' '}

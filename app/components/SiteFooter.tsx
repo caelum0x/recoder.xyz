@@ -7,6 +7,7 @@ const FOOTER_LINKS = [
   { href: '/docs', label: 'Docs' },
   { href: '/docs/api-reference', label: 'API Reference' },
   { href: '/docs/a2a', label: 'A2A Protocol' },
+  { href: '/contact', label: 'Contact' },
   { href: '/legal/privacy', label: 'Privacy' },
   { href: '/legal/terms', label: 'Terms' },
   { href: 'https://github.com/recoderxyz', label: 'GitHub', external: true },
