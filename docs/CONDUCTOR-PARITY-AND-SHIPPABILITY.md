@@ -4,6 +4,17 @@
 > feature-by-feature + 6 production-readiness dimensions, code-grounded). Living planning
 > doc — the roadmap below is the "here → production multi-user" path. 47 parity features
 > mapped, 46 gaps found (6 blockers, 15 high, 19 medium, 6 low).
+>
+> **Progress update (2026-07-31, later same day).** The code-fixable roadmap is now
+> **largely landed**: both P0 IDORs (#1/#2), billing entitlement drift (#3), auto-reconcile
+> (#7), the durable run/event store (#8), the whole cross-tenant isolation surface across
+> 6 more domains + the conductor group compare/converge residual (#14), the adoption-UX
+> gaps (#15/#16), quota/manage integrity (#17/#18), solo-mode guard (#19), and the web
+> hardening tranche (#24 headers, #25 CSRF+CORS) — plus the diff-comment→agent loop (#35)
+> and onboarding probe (#33). What **truly remains** is now mostly **owner-gated** (canonical
+> trunk, CI re-enable + secret rotation, prod deploy, the web-side auth-model prod-validation)
+> plus **one XL** (billing-provider unification, #4). See the ✅ marks below and the rewritten
+> **Critical path**.
 
 ## TL;DR
 
@@ -11,11 +22,12 @@ On **mechanics, Recoder is at or above Conductor.build across the board**, and s
 **exceeds** it on the thesis-defining features Conductor.build has no equivalent for:
 multi-agent parallelism (different agents — Claude/Codex/opencode/pi — on one task), the
 **N→1 convergence flow**, and the **governance / audit / signed-evidence** layer. The gap
-is **not capability — it is adoption trust and multi-tenant safety.** Two half-wired UX
-affordances (mid-run "needs input" notification + a truthful signed-in profile) are exactly
-what sells the "walk away and it just works" story, and behind the polished surface sit
-correctness/isolation defects (below) that make the current build a strong **single-user
-demo**, not yet a safe **multi-tenant product**.
+was **not capability — it is adoption trust and multi-tenant safety.** The two half-wired UX
+affordances that sell the "walk away and it just works" story (mid-run "needs input"
+notification + in-app agent install) are **now wired** (#15/#16), and the isolation defects
+that made the build a strong **single-user demo** are **now closed** at the read/write seam
+across conductor, agent-os, and 6 further domains — moving it toward a **multi-tenant-safe
+product** once the owner-gated release/auth-model/billing items below land.
 
 ---
 
@@ -37,7 +49,7 @@ demo**, not yet a safe **multi-tenant product**.
 | Merge (governed) | Parity (**exceeds** on governance) | Gated; pre-merge conflict probe; readiness never "ready" without a clean pass; PR path. |
 | **Converge (N→1)** | **Exceeds** | Pure fold of N diffs → pick/synthesize → convergence worktree through the governed merge. **No conductor.build equivalent — the headline thesis.** |
 | Checkpoints + compare | Parity | git-tag checkpoints, restore, branch-from-checkpoint, contested-overlap set. |
-| Reconcile / restart survival | Parity (code) — **not auto-triggered** (P1 #7) | Governed reconcile exists but only a manual endpoint calls it. |
+| Reconcile / restart survival | **✅ Parity** (P1 #7 done) | Governed reconcile now **auto-fires on boot** with a system principal before edges serve, so surviving runs re-attach after a restart (`bootstrap/conductor-reconcile-on-boot.ts`, `51c7ee66d`). |
 | Continue / chat | Parity | message (new run) + steer (live send-keys), both gated. |
 | Governance gate (write seam) | **Exceeds** | Module refuses to construct without a gate; every mutation decide→audit; deny never reaches git/gh. |
 | Convergence evidence / export | **Exceeds** | Signed, content-hashed evidence + SOC2/EU-AI-Act/DORA compliance pack. |
@@ -46,7 +58,7 @@ demo**, not yet a safe **multi-tenant product**.
 | Coordination admission (double-assignment guard) | **Exceeds** | Defers launch + governed reroute when 2+ agents hold the issue. |
 | MCP tool injection | Parity | Secret-free `.mcp.json` into worktree. |
 | Approvals | **Partial** | needs-approval verdicts + `awaiting_approval` surfaced; dedicated approval-queue UI lives in agent-os. |
-| Diff-comment → agent (inline review feeds agent) | **Gap** | Routes exist; comment→agent-prompt plumbing not wired end-to-end (`recoder-aiio`). |
+| Diff-comment → agent (inline review feeds agent) | **✅ Parity** (#35 done) | Line-anchored review comments (incl. old-side deleted lines) compose into an agent prompt and route back to the run (`conductor/review/{review-comments,send-review-comments}.ts`, `84c6e22f1`/`8b240af5c`). |
 
 ### B. Onboarding / UX (adoption surface)
 
@@ -56,8 +68,9 @@ demo**, not yet a safe **multi-tenant product**.
 | Agent auto-detection from PATH | **Exceeds** | GUI PATH root cause fixed; detects multiple runtimes; greys launch truthfully when none. |
 | Environment import ("we found your setup") | **Exceeds** | git identity, agents, gh-auth, shell. |
 | Per-workspace terminal, diff UI, merge, archive, run history, ⌘K palette, clone modal, keyboard shortcuts, quick start, per-message model | Parity | All present. |
-| **Notifications when agent needs input** | **Partial** | Fires on awaiting_review/failed only; the classifier computes needs_input but the notifier ignores it — the "walk away, get pinged" promise is half-wired (`recoder-wupr`). |
-| Identity / profile (name + avatar) | **Partial** | Avatar landed; embedded/cookie desktop path drops real name/email/plan → generic "Signed in FREE" (`recoder-4st1`). |
+| **Notifications when agent needs input** | **✅ Parity** (#15 done) | The `needs_input` classifier verdict now reaches the board badge + notification, not just awaiting_review/failed — the "walk away, get pinged" promise is wired (`desktop/.../recoder-board-logic.ts` + `recoder-model.ts`, `1e5ee10f6`). |
+| In-app agent install / setup | **✅ Parity** (#16 done) | First-run agent-setup surface installs/points at a coding agent so a non-terminal user no longer dead-ends at "No agents found" (`desktop/.../recoder-agent-setup.tsx`, `1e5ee10f6`). |
+| Identity / profile (name + avatar) | **Partial** | Avatar landed; embedded/cookie desktop path still drops real name/email/plan → generic "Signed in FREE" (#42, `recoder-4st1`). |
 
 ---
 
@@ -65,45 +78,69 @@ demo**, not yet a safe **multi-tenant product**.
 
 ### P0 — Blocks any real launch
 
-| # | Title | Effort | Recommendation |
+| # | Title | Effort | Status |
 |---|---|---|---|
-| 1 | **Cross-tenant IDOR: conductor workspaces have no owner/tenant scoping** on read or write | L | Add `principal` to every read; enforce `createdBy`/org match; tenant-filter list/query in SQL. Any authed user can list/diff/steer/stop/**merge** another tenant's workspace by guessing an id. |
-| 2 | **Agent-OS CRUD is cross-tenant** readable; PUT `/spaces/:id/policy` lets anyone rewrite another tenant's forbiddenPaths/approval gates | L | Derive ownerId from `req.principal` (never body); reject unowned upsert; tenant-scope every list/get. |
-| 3 | Paying website customers treated as **Free** by the enforcing gate (plan-ID vocabulary drift `pro-monthly`→?) | M | Alias `pro-monthly/pro-yearly→pro`; unknown coerces to `free`; contract test every website planId → non-free. |
-| 4 | Two disconnected billing systems — the surface that **sells** (Paddle/Dodo) ≠ the one that **enforces** (Polar) | XL | Pick ONE MoR provider + ONE checkout/webhook; website routes thin proxies; drive `subscriptionPlan` from backend webhook projection only. |
-| 5 | **No canonical release line** — origin/main frozen ~2 months; all work on the feature branch; ~552 conflicts | XL | *Owner-gated:* fast-forward/replace main, or staged reconciliation. No repeatable release until one trunk is authoritative. |
-| 6 | **All 33 CI/CD workflows disabled** — zero release automation, zero gate enforcement | L | *Owner-gated:* re-enable a green core (test + secret-scan on PR) first, then deploy/release once trunk is canonical. |
+| 1 | **Cross-tenant IDOR: conductor workspaces have no owner/tenant scoping** on read or write | L | **✅ Done** (`51c7ee66d`). A single `requireWorkspaceAccess` guard covers all 28 workspace-scoped routes + list filtering; a non-owner gets a 404 byte-identical to a missing workspace (no existence oracle); admin/internal operators bypass; org-tenant scoped when present (`conductor/routes/workspace-access.ts`). |
+| 2 | **Agent-OS CRUD is cross-tenant** readable; PUT `/spaces/:id/policy` lets anyone rewrite another tenant's forbiddenPaths/approval gates | L | **✅ Done** (`51c7ee66d`). New `space-authz` seam derives owner from `req.principal` (never the body), tenant-scopes list/get, and guards `PUT /spaces/:id/policy` so only the owner/operator can rewrite forbiddenPaths/approval gates (`agent-os/services/space-authz.ts`). |
+| 3 | Paying website customers treated as **Free** by the enforcing gate (plan-ID vocabulary drift `pro-monthly`→?) | M | **✅ Done** (`51c7ee66d`). Plan-alias map (`pro-monthly/pro-yearly→pro`, unknown→`free`); advertised quotas now derived from the enforced source (`app/lib/config/enforced-quotas.ts`); `subscription/manage` 402-refuses client-driven paid upgrades. |
+| 4 | Two disconnected billing systems — the surface that **sells** (Paddle/Dodo) ≠ the one that **enforces** (Polar) | XL | **Open — the one XL.** Pick ONE MoR provider + ONE checkout/webhook; website routes thin proxies; drive `subscriptionPlan` from backend webhook projection only. The plan-alias fix (#3) stops the Free-misread symptom; unifying the providers is the durable fix. |
+| 5 | **No canonical release line** — origin/main frozen ~2 months; all work on the feature branch; ~552 conflicts | XL | **Open — owner-gated.** Fast-forward/replace main, or staged reconciliation. No repeatable release until one trunk is authoritative. |
+| 6 | **All 33 CI/CD workflows disabled** — zero release automation, zero gate enforcement | L | **Open — owner-gated.** Re-enable a green core (test + secret-scan on PR) first, then deploy/release once trunk is canonical. |
 
 ### P1 — Blocks trustworthy multi-tenant (highlights)
 
-- **#7 reconcile never auto-triggered** — surviving runs stop streaming, crashed runs stay stuck. Auto-run on boot with a system principal. (M)
-- **#8 conductor run/event read model is in-memory-only**, mislabeled "durable" — run history returns `[]` after any restart. Bind to the durable agent-os store. (M)
-- **#9 web sessions carry no `orgId`** → org/RBAC isolation structurally unreachable for the primary login. (M)
-- **#10 RBAC evaluator wired to nothing but org-member mgmt** — attach `requirePermission`/ownership to conductor + agent-os mutating routes. (L)
-- **#11 no org auto-provisioning on signup** — real users have no tenant boundary. Auto-create a personal org on first login. (M)
-- **#12/#13 no CI security gates; secrets in git history unscrubbed** — re-enable dep-audit/CodeQL/gitleaks; rotate historical leaks. (M/L)
-- **#14 8 post-audit domains never reviewed for IDOR** (social/cloud/inference/memory/observability/interop/governance/edge). (L)
-- **#15 mid-run "needs input" attention never reaches board/notifications** — *the adoption-critical UX gap.* (M)
-- **#16 no coding agent bundled/installable in-app** — non-terminal user dead-ends at "No agents found." (L)
-- Plus: quotas advertised ~10× enforced (#17), `subscription/manage` grants paid with no payment (#18), solo-mode fail-open on shared host (#19), desktop signing/notarization uncommitted (#20), `desktop-release.yml` broken (#21), manual deploy bypasses gates (#22), entitlement id-split (#23).
+- **✅ #7 auto-reconcile on boot** — governed reconcile now fires once on boot with a system principal before edges serve; surviving runs re-attach after a restart (`bootstrap/conductor-reconcile-on-boot.ts`, `51c7ee66d`). (M)
+- **✅ #8 durable run/event read model** — the conductor run/event reads are now bound to the durable store (`conductor/adapters/{run-event-sink,workspace-repository}.adapter.ts` + `ports/workspace-repository.port.ts`, `fd6621902`); run history survives restart instead of returning `[]`. (M)
+- **🟡 #9/#10/#11 org identity + RBAC + auto-provisioning — backend landed, web side owner-gated.** The isolation guards derive/scope by `orgId` when a principal carries one (org-tenant scoped in #1/#2), and **backend org auto-provisioning is now committed**: `OrgProvisioningService` auto-provisions a default org per owner (idempotent) and `principal.service` resolves + attaches `principal.orgId` (`domains/identity/{org-provisioning.service,principal.service}.ts`). **Remaining (owner-script-gated):** stamp `orgId` onto the primary **Next/Better-Auth web session** (cross-subdomain), provision on first web login, and reconcile the `user`/`users` split (#40). This is the auth-model prod-validation blocker. (M/L)
+- **#12/#13 no CI security gates; secrets in git history unscrubbed** — re-enable dep-audit/CodeQL/gitleaks; rotate historical leaks. *Owner-gated.* (M/L)
+- **✅ #14 the post-audit IDOR sweep** — 17 cross-tenant holes closed across **6 domains** (memory / governance / social / cloud / observability / inference; `00a12168d`), plus the conductor **group compare/converge** residual (`365fc1c92`). Read-scoping, principal-bound ownership guards, and per-domain configs added, each TDD'd. **Remaining of the original 8:** `interop` and `edge` still to be IDOR-reviewed. (L)
+- **✅ #15 mid-run "needs input" attention reaches board + notifications** — the adoption-critical UX gap is wired (`1e5ee10f6`). (M)
+- **✅ #16 in-app agent install/setup** — non-terminal user no longer dead-ends at "No agents found" (`recoder-agent-setup.tsx`, `1e5ee10f6`). (L)
+- **✅ #17/#18 quota + manage integrity** — advertised quotas derived from the enforced source (no ~10× drift); `subscription/manage` 402-refuses paid grants with no payment (`51c7ee66d`). (M)
+- **✅ #19 solo-mode guard** — refuses to boot `RECODER_SOLO_MODE` on a non-loopback / shared-DB host, so the intentional single-user fail-open can't be reached on a shared host (`bootstrap/solo-mode-guard.ts`, `51c7ee66d`). (M)
+- Still open: desktop signing/notarization uncommitted (#20, owner-gated), `desktop-release.yml` broken (#21, owner-gated), manual deploy bypasses gates (#22, owner-gated), entitlement id-split (#23).
 
 ### P2 — Polish / hardening (highlights)
 
-Security headers/helmet (#24), CSRF + credentialed CORS (#25), distributed rate-limit (#26),
-A2A ed25519 over shared HMAC (#27), non-root images (#28); dunning grace (#29), overage/proration (#30);
-durable run-history fallout (#31/#32); agent auth probe at onboarding (#33), git-init affordance (#34),
-diff-comment→agent loop (#35), collapse the two Better-Auth configs (#36), deploy entrypoint cleanup (#37/#38),
-in-app agent re-scan (#39), users→user backfill (#40), indexed `tenant_id` column (#41), embedded-path identity (#42),
-assorted low-risk security (#43).
+- **✅ #24 security headers** — CSP/HSTS/nosniff/frame-deny as the first middleware, dependency-free, safe for a JSON backend (`51c7ee66d`).
+- **✅ #25 CSRF + credentialed CORS** — CSRF middleware + a boot-time credentialed-CORS guard (`http/middleware/csrf.ts` + `bootstrap/cors-credentials-guard`, `365fc1c92`).
+- **✅ #35 diff-comment→agent loop** — line-anchored review comments (incl. old-side deleted lines) route back to the agent (`84c6e22f1`/`8b240af5c`).
+- **✅ #33 onboarding auth probe** — first-run `GET /environment` import probes git identity, agent configs, gh-auth, and shell; surfaced by the "We found your setup" card (`4ee503971` + `b532c9c52`). **✅ #34 git-init affordance** — an explicit in-app git-init action for a non-repo workspace root is now wired via the `recoder:git-init` emain bridge, with re-verify after init.
+- **✅ #43 (partial)** — agent-os **event-log idempotency** (`postgres`/`in-memory` repos, `recoder-4euj`) + `app/lib/plan-limits.ts` vocabulary-drift fix (`recoder-wvth`), both in `7cceb681e`; plus the assorted low-risk items from the 21-vuln batch (`12477bc34`).
+- **🟡 #41 indexed `tenant_id`** — cross-tenant scoping is now **enforced in the guard/query layer** (principal/orgId-bound) by #1/#2/#14; a dedicated **indexed** `tenant_id` column for SQL-level filtering at scale is the remaining refinement.
+- **🟢 #27 A2A ed25519 — external ingress enforced.** The signed-envelope schema carries `ed25519` alongside `hmac-sha256`, and the ingress gate now **refuses untrusted external HMAC-only requests** (`401 external_ingress_requires_ed25519`; `domains/interop-wire/wire/ed25519-ingress.gate.ts` + `signed-ingress` carries a `trusted` flag so internal/loopback callers keep HMAC). **Remaining:** per-actor ed25519 enforcement for internal actors.
+- **🟢 #29/#30 dunning grace + overage CTA — code-landed.** `past_due` subscriptions retain entitlements for a **7-day dunning-grace** window (`DUNNING_GRACE_DAYS`, `withinDunningGrace`) instead of hard-failing on the first missed webhook, and quota exhaustion surfaces an `UpgradeHint` naming the next tier that clears the limit (`upgradeTierForQuota`) for a real CTA (`domains/billing/services/{entitlement,plan-catalog}.service.ts`). Sits **on top of** billing-provider unification (#4, still open). Overage **proration** is the remaining slice.
+- **Open:** distributed rate-limit / Redis (#26), non-root images / Docker (#28), overage proration on the #4 unification, durable run-history fallout (#31/#32), collapse the two Better-Auth configs (#36), deploy entrypoint cleanup (#37/#38), in-app agent re-scan (#39), `users→user` backfill (#40, owner-gated), embedded-path identity (#42).
 
 ---
 
-## Critical path (the 5–8 that most move the needle)
+## Critical path (what TRULY remains — now mostly owner-gated + one XL)
 
-1. **Establish a canonical trunk (#5).** *Owner-gated.* Nothing ships repeatably until one branch is authoritative.
-2. **Re-enable a minimal green CI core (#6, #12, #13)** + rotate historical secrets. The gate every subsequent fix passes through.
-3. **Close the two blocker IDORs (#1, #2), backed by a queryable `tenant_id` column (#41).** The single biggest correctness/safety win — unblocks multi-user at all.
-4. **Fix entitlement + billing coherence (#3, #4).** Alias the plan vocabulary (same-day) so paying customers stop reading Free; then unify to one MoR provider so revenue unlocks capability.
-5. **Wire org identity + RBAC + auto-provisioning (#9, #10, #11).** The isolation primitives exist; connect them.
-6. **Durable + automatic restart-survival (#7, #8).** Auto-reconcile on boot; back run/event reads with the durable store — else a routine restart is the classic "backend 200s but nothing works."
-7. **Wire mid-run "needs input" notification + badge (#15) and remove the agent-install dead-end (#16).** The adoption unlock — what makes the "walk away and it just works" thesis true for a non-terminal user. The engine already exceeds Conductor.build; this is where the *perceived* gap lives.
+Most of the original critical path is **done** (see the ✅ marks above): both blocker IDORs
+(#1/#2) and the 6-domain + group-IDOR sweep (#14) are closed; billing entitlement drift is
+aliased (#3); auto-reconcile (#7) + the durable run/event store (#8) survive restart; the
+adoption UX (#15/#16), quota/manage integrity (#17/#18), solo-mode guard (#19), and web
+hardening (#24/#25) all landed. What is left is **not code we can freely write** — it is
+release/auth-model/billing decisions and infra:
+
+1. **Establish a canonical trunk (#5).** *Owner-gated.* Nothing ships repeatably until one
+   branch is authoritative (origin/main frozen ~2 months; ~552 conflicts).
+2. **Re-enable a minimal green CI core (#6, #12) + rotate historical secrets (#13).**
+   *Owner-gated.* The gate every subsequent change passes through.
+3. **Auth-model prod-validation (web side of #9/#10/#11 + #40).** The backend isolation seam
+   is in place and scopes by `orgId` when present; the remaining work is on the primary
+   **Next/Better-Auth** login: stamp `orgId` on the cross-subdomain web session,
+   auto-provision a personal org on first login, run the `users→user` backfill, and validate
+   cross-subdomain session behavior with the existing scripts before claiming multi-tenant.
+   *Owner-script-gated* (prod DB + cross-subdomain access).
+4. **Billing-provider unification (#4).** *The one XL.* Collapse the sells-vs-enforces split
+   to one MoR provider + one checkout/webhook so revenue durably unlocks capability. Then the
+   dunning-grace / overage / overage-CTA polish (#29/#30) sits on top.
+5. **Prod deploy + infra hardening.** Deploy from the canonical trunk once CI is green
+   (owner-gated), then distributed rate-limit / Redis (#26) and run-as-non-root images (#28)
+   before opening a shared multi-tenant host.
+
+Net: the build is now a **security-hardened, isolation-correct** product; the ship-blockers
+are **owner decisions** (trunk, CI, prod deploy, auth-model prod-validation, secret rotation)
+plus **one XL** (billing unification). See **[SECURITY-POSTURE.md](./SECURITY-POSTURE.md)** for
+the fixed-vs-residual security picture and **[STATUS.md](./STATUS.md)** for the headline.
