@@ -183,6 +183,51 @@ describe('createAcpSubstrate', () => {
     expect(out).toContain('hello from acp');
   });
 
+  it('appends a STRUCTURED marker to capture for a tool_call session/update', async () => {
+    // A fake agent that emits a tool_call session/update mid-turn, then ends.
+    function toolCallAgent(): AcpProcess {
+      let onData: ((c: string) => void) | null = null;
+      const deliver = (m: Parameters<typeof encodeAcpMessage>[0]) =>
+        queueMicrotask(() => onData?.(encodeAcpMessage(m)));
+      return {
+        write: line => {
+          for (const m of decodeAcpStream(line).messages) {
+            if (!isAcpRequest(m)) continue;
+            if (m.method === 'initialize')
+              deliver(makeResponse(m.id, { protocolVersion: 1 }));
+            else if (m.method === 'session/new')
+              deliver(makeResponse(m.id, { sessionId: 'sess-1' }));
+            else if (m.method === 'session/prompt') {
+              deliver(
+                makeNotification('session/update', {
+                  sessionId: 'sess-1',
+                  update: {
+                    sessionUpdate: 'tool_call',
+                    toolCallId: 't1',
+                    title: 'run tests',
+                    kind: 'execute',
+                    status: 'in_progress',
+                  },
+                })
+              );
+              deliver(makeResponse(m.id, { stopReason: 'end_turn' }));
+            }
+          }
+        },
+        onData: cb => {
+          onData = cb;
+        },
+        onExit: () => {},
+        kill: () => {},
+      };
+    }
+    const s = createAcpSubstrate(baseDeps({ spawn: () => toolCallAgent() }));
+    const handle = await s.launch(launchInput);
+    await flush();
+    const out = await s.capture(handle);
+    expect(out).toContain('[acp tool: run tests [execute] — in_progress]');
+  });
+
   it('alive → false and exitCode → 0 after a clean end_turn', async () => {
     const s = createAcpSubstrate(
       baseDeps({ spawn: () => fakeAgent({ stopReason: 'end_turn' }).proc })

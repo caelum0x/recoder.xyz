@@ -54,6 +54,7 @@ import {
   type AcpPermissionContext,
   type AcpPermissionDecision,
 } from './acp/acp-client-requests.js';
+import { structuredUpdateLine } from './acp/acp-session-update.js';
 
 export type ExecFn = (
   bin: string,
@@ -236,8 +237,14 @@ export function createAcpSubstrate(
             cwd: worktreePath,
             ...(input.env ? { env: { ...process.env, ...input.env } } : {}),
           }),
-        onNotification: (n: AcpNotification) =>
-          appendOutput(state, extractUpdateText(n.params)),
+        onNotification: (n: AcpNotification) => {
+          // Streaming text goes into the buffer verbatim; a DISCRETE structured
+          // update (tool-call lifecycle / plan) additionally appends a one-line
+          // marker, so the transcript shows WHAT the agent is doing, not just its
+          // prose. Both ride the existing poll-tailer (which carries run context).
+          appendOutput(state, extractUpdateText(n.params));
+          appendOutput(state, structuredUpdateLine(n.params));
+        },
         onRequest,
         warn: m => logger.warn(m, { workspaceId: input.workspaceId }),
       });

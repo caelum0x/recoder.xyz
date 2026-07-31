@@ -25,6 +25,12 @@ export {
   type AcpToolCall,
   type AcpToolKind,
 } from './acp-client-requests.js';
+export {
+  mapSessionUpdate,
+  summarizeStructuredUpdate,
+  structuredUpdateLine,
+  type AcpStructuredUpdate,
+} from './acp-session-update.js';
 export { AcpClient, type AcpClientDeps } from './acp-client.js';
 export {
   AcpAgentDriver,
