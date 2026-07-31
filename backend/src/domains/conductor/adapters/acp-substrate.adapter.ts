@@ -19,12 +19,18 @@
  * RESTART-SURVIVABLE: the agent process + session live in an in-memory `byRef`
  * map, so a backend restart drops them. Because launch returns the agent's ACP
  * `sessionId` as the handle's `sessionName` (the engine persists it to the
- * Workspace record), `capture`/`alive`/`exitCode`/`continueRun` can LAZILY
- * reattach a persisted handle: spawn a fresh agent → `initialize` → `session/load`
- * (v1 resume; the agent replays history into the buffer). Reattach is GATED on the
+ * Workspace record), `continueRun` can EXPLICITLY reattach a persisted handle:
+ * spawn a fresh agent → `initialize` → `session/load` (v1 resume; the agent
+ * replays history into the buffer). Reattach happens ONLY on that explicit resume
+ * — the read-only probes (`capture`/`alive`/`exitCode`) never spawn, so an
+ * unresumed restarted workspace reads truthfully "no live session" and a passive
+ * reconcile/UI poll can neither boot nor leak an agent. Reattach is GATED on the
  * agent advertising `loadSession`; when it can't (capability absent, worktree gone,
- * agent/git missing), it degrades truthfully to "lost" (`null`) rather than
- * fabricating a live handle, and the interrupted turn's outcome stays `undefined`.
+ * agent/git missing), continueRun degrades truthfully to a thrown "lost" rather
+ * than fabricating a live handle. Launch, reattach, and teardown are leak-safe: a
+ * failed handshake removes the worktree + stops the agent, teardown gracefully
+ * `session/cancel`s a live turn (bounded) before the kill, and a teardown racing an
+ * in-flight reattach tombstones it so no orphan agent survives.
  *
  * Config-injected (NO `process.env` read here — ARCHITECTURE §10.8); the spawn +
  * exec + permission seams are injectable so it is unit-tested with a fake agent
@@ -76,6 +82,13 @@ export type ExecFn = (
 export const DEFAULT_ACP_COMMAND = 'claude-code-acp';
 /** Bound the per-handle output buffer so a chatty agent can't grow unbounded. */
 const MAX_BUFFER_LINES = 4000;
+/**
+ * Bound the buffer by BYTES as well as lines — a `session/load` history replay (or
+ * a tool dump) can arrive as one enormous newline-free line that evades the line
+ * cap, so cap aggregate bytes and truncate any single over-long line.
+ */
+const MAX_BUFFER_BYTES = 1_000_000;
+const MAX_LINE_BYTES = 64_000;
 
 const NOOP_LOGGER: LoggerPort = { info() {}, warn() {}, error() {} };
 
@@ -105,6 +118,11 @@ export interface CreateAcpSubstrateDeps {
   readonly probe?: (bin: string) => Promise<boolean>;
   /** Filesystem-presence probe for the worktree (default: `existsSync`); injected in tests. */
   readonly exists?: (path: string) => boolean;
+  /**
+   * Grace window (ms) `teardown` waits for a `session/cancel`ed turn to wind down
+   * before hard-killing the agent. Default 2000; tests inject a small value.
+   */
+  readonly cancelGraceMs?: number;
 }
 
 /** Per-handle live state — the ACP driver + its streamed output + turn status. */
@@ -118,6 +136,8 @@ interface AcpRunState {
   done: boolean;
   /** `number` = final code, `null` = clean-but-unset, `undefined` = unknown (interrupted). */
   exit: number | null | undefined;
+  /** The in-flight turn promise, so teardown can await a `session/cancel`ed turn. */
+  turn?: Promise<void>;
 }
 
 /** Best-effort text extraction from a `session/update` notification (any nested `text`). */
@@ -150,10 +170,14 @@ export function createAcpSubstrate(
   const spawnProcess = deps.spawn ?? (opts => makeAcpProcess(opts));
 
   const byRef = new Map<string, AcpRunState>();
-  // In-flight reattach promises, keyed by workspaceId, so concurrent poll callers
-  // (capture/alive/exitCode all fire on the same tick) trigger ONE re-spawn, not N.
+  // In-flight reattach promises, keyed by workspaceId, so concurrent continueRun
+  // callers trigger ONE re-spawn, not N.
   const reattaching = new Map<string, Promise<AcpRunState | null>>();
+  // Refs torn down while a reattach was in-flight — a tombstone the reattach checks
+  // before installing its live agent, so teardown can't be raced into an orphan.
+  const tornDown = new Set<string>();
   const exists: (path: string) => boolean = deps.exists ?? existsSync;
+  const cancelGraceMs = deps.cancelGraceMs ?? 2000;
 
   const present: (bin: string) => Promise<boolean> =
     deps.probe ??
@@ -167,10 +191,48 @@ export function createAcpSubstrate(
 
   function appendOutput(state: AcpRunState, text: string): void {
     if (text === '') return;
-    for (const line of text.split('\n')) state.output.push(line);
+    for (const line of text.split('\n')) {
+      // Truncate a single pathological (newline-free) line so one huge replayed
+      // update can't sit in the buffer unbounded.
+      state.output.push(
+        line.length > MAX_LINE_BYTES
+          ? line.slice(0, MAX_LINE_BYTES) + '…[truncated]'
+          : line
+      );
+    }
+    // Bound by line count first (cheap), then by aggregate bytes (drop oldest).
     if (state.output.length > MAX_BUFFER_LINES) {
       state.output.splice(0, state.output.length - MAX_BUFFER_LINES);
     }
+    let total = 0;
+    for (const l of state.output) total += l.length + 1;
+    while (total > MAX_BUFFER_BYTES && state.output.length > 1) {
+      total -= (state.output.shift() as string).length + 1;
+    }
+  }
+
+  /**
+   * Drive one agent turn on a live state — used by BOTH launch and continueRun so
+   * exit mapping and buffering are identical. Fires in the background (the poller
+   * tails `capture` for progress) and records the turn on `state.turn` so teardown
+   * can await a cancelled turn. Only an explicit `end_turn` is success (0); any
+   * other stop reason (incl. `unknown` from an off-spec reply) is a truthful 1.
+   */
+  function driveTurn(state: AcpRunState, instruction: string): void {
+    state.done = false;
+    state.exit = null;
+    state.turn = state.driver
+      .prompt(state.sessionId, instruction)
+      .then(stopReason => {
+        state.done = true;
+        state.exit = stopReason === 'end_turn' ? 0 : 1;
+        appendOutput(state, `\n[acp: turn ended — ${stopReason}]`);
+      })
+      .catch(err => {
+        state.done = true;
+        state.exit = 1;
+        appendOutput(state, `\n[acp: turn failed — ${message(err)}]`);
+      });
   }
 
   /** Build the agent→client request handler bound to a worktree (permission + fs). */
@@ -191,8 +253,10 @@ export function createAcpSubstrate(
    * persisted sessionId — GATED on the agent advertising `loadSession`. Returns the
    * rehydrated state, or `null` when reattach is impossible (no sessionId, worktree
    * removed, agent/git absent, or the agent can't reload) — truthfully "lost", never
-   * a fabricated live handle. The interrupted prior turn is NOT resumed: the session
-   * is idle (`done`, `exit=undefined`) and ready for the next `continueRun`.
+   * a fabricated live handle. Called ONLY from `continueRun` (an EXPLICIT resume) —
+   * the read-only probes (capture/alive/exitCode) never spawn — so an idle restarted
+   * workspace stays truthfully "no live session" and a passive reconcile/UI poll
+   * cannot boot or leak an agent. The interrupted prior turn is NOT resumed.
    */
   async function reattach(
     handle: SubstrateHandle
@@ -256,6 +320,12 @@ export function createAcpSubstrate(
         /* leave repoPath empty — teardown degrades to a directory remove */
       }
       await driver.loadSession(sessionId, worktreePath);
+      // If teardown ran while we were spawning, do NOT install a live agent it can
+      // never stop — honor the tombstone and clean up ourselves.
+      if (tornDown.has(handle.ref)) {
+        driver.stop();
+        return null;
+      }
       byRef.set(handle.ref, state);
       logger.info('acp workspace reattached via session/load', {
         workspaceId: handle.ref,
@@ -278,10 +348,13 @@ export function createAcpSubstrate(
   }
 
   /**
-   * Resolve the live state for a handle: the in-memory entry, or — after a restart
-   * emptied `byRef` — a lazily reattached session (deduped across concurrent callers).
+   * Resolve the live state for continueRun: the in-memory entry, or — after a
+   * restart emptied `byRef` — a reattached session, deduped so concurrent
+   * continueRun callers trigger ONE re-spawn.
    */
-  async function resolve(handle: SubstrateHandle): Promise<AcpRunState | null> {
+  async function reattachOnce(
+    handle: SubstrateHandle
+  ): Promise<AcpRunState | null> {
     const live = byRef.get(handle.ref);
     if (live) return live;
     let inflight = reattaching.get(handle.ref);
@@ -378,28 +451,28 @@ export function createAcpSubstrate(
         warn: m => logger.warn(m, { workspaceId: input.workspaceId }),
       });
       (state as { driver: AcpAgentDriver }).driver = driver;
-      byRef.set(input.workspaceId, state);
 
-      // Handshake + session, then fire the task prompt in the BACKGROUND so launch
-      // returns a handle promptly (the poller tails `capture` for progress).
-      await driver.start();
-      state.sessionId = await driver.newSession(worktreePath);
-      void driver
-        .prompt(state.sessionId, input.command)
-        .then(stopReason => {
-          state.done = true;
-          // A clean turn end is success (0); any other stop reason is a truthful non-zero.
-          state.exit = stopReason === 'end_turn' ? 0 : 1;
-          appendOutput(state, `\n[acp: turn ended — ${stopReason}]`);
-        })
-        .catch(err => {
-          state.done = true;
-          state.exit = 1;
-          appendOutput(
-            state,
-            `\n[acp: turn failed — ${err instanceof Error ? err.message : String(err)}]`
-          );
-        });
+      // Handshake + open the session BEFORE registering the state. Leak-safety: if
+      // the handshake or session/new throws (agent crash, no sessionId, unsupported
+      // version), stop the spawned agent and remove the just-created worktree, then
+      // rethrow — nothing is orphaned and no half-open session sits in `byRef`.
+      try {
+        await driver.start();
+        state.sessionId = await driver.newSession(worktreePath);
+      } catch (err) {
+        try {
+          driver.stop();
+        } catch {
+          /* best effort */
+        }
+        await removeIsolation(input.repoPath, worktreePath);
+        throw err;
+      }
+      tornDown.delete(input.workspaceId); // a fresh launch clears any stale tombstone
+      byRef.set(input.workspaceId, state);
+      // Fire the task prompt in the BACKGROUND so launch returns a handle promptly
+      // (the poller tails `capture` for progress).
+      driveTurn(state, input.command);
 
       logger.info('acp workspace launched', {
         workspaceId: input.workspaceId,
@@ -420,59 +493,58 @@ export function createAcpSubstrate(
       handle: SubstrateHandle,
       input: ContinueRunInput
     ): Promise<SubstrateHandle> {
-      // Resolve reattaches after a restart, so a continued turn survives one.
-      const state = await resolve(handle);
+      // continueRun is the EXPLICIT resume: it reattaches after a restart (the
+      // read-only probes never do). This is the only path that may re-spawn.
+      const state = await reattachOnce(handle);
       if (!state)
         throw new Error(
           'acp continueRun requires a live or reattachable session'
         );
+      // Don't overlap turns: a second prompt on a live turn's session would race
+      // two `.then`s onto shared done/exit and fabricate a terminal state for a
+      // still-running turn. Refuse truthfully instead.
+      if (!state.done)
+        throw new Error('acp continueRun: a turn is already in flight');
       // ACP is in-process style — it accepts a rendered `prompt`; fall back to the
       // shell `command` field so either launch shape can drive the next turn.
       const instruction = input.prompt ?? input.command;
       if (!instruction)
         throw new Error('acp continueRun requires a prompt or command');
       // Reuse the SAME session (the prior turn's worktree changes are intact).
-      state.done = false;
-      state.exit = null;
-      void state.driver
-        .prompt(state.sessionId, instruction)
-        .then(stopReason => {
-          state.done = true;
-          state.exit = stopReason === 'end_turn' ? 0 : 1;
-        })
-        .catch(() => {
-          state.done = true;
-          state.exit = 1;
-        });
+      driveTurn(state, instruction);
       return {
         ref: handle.ref,
         worktreePath: state.worktreePath,
-        sessionName: handle.sessionName ?? tmuxNameFor(handle.ref),
+        sessionName: handle.sessionName ?? state.sessionId,
       };
     },
 
+    // The probes are strictly READ-ONLY: they consult the in-memory `byRef` map and
+    // NEVER reattach/spawn. After a restart an unresumed workspace truthfully reads
+    // "no live session" (capture null / alive false / exitCode null), so a passive
+    // reconcile or UI poll cannot boot — or leak — an agent process.
     async capture(
       handle: SubstrateHandle,
       lines = 200
     ): Promise<string | null> {
-      const state = await resolve(handle);
+      const state = byRef.get(handle.ref);
       if (!state) return null;
       const tail = state.output.slice(-lines).join('\n').trimEnd();
       return tail ? tail + '\n' : '';
     },
 
     async alive(handle: SubstrateHandle): Promise<boolean> {
-      const state = await resolve(handle);
+      const state = byRef.get(handle.ref);
       return state ? !state.done : false;
     },
 
     async exitCode(
       handle: SubstrateHandle
     ): Promise<number | null | undefined> {
-      const state = await resolve(handle);
-      if (!state) return null; // gone / not reattachable
+      const state = byRef.get(handle.ref);
+      if (!state) return null; // gone / not reattached (probes never spawn)
       if (!state.done) return undefined; // still running — unknown, NEVER 0
-      return state.exit; // undefined here = interrupted (reattached), still unknown
+      return state.exit;
     },
 
     async diff(
@@ -499,8 +571,35 @@ export function createAcpSubstrate(
       handle: SubstrateHandle,
       options?: { removeIsolation?: boolean }
     ): Promise<void> {
+      // Tombstone FIRST so an in-flight reattach won't install a live agent we can
+      // no longer stop; then await + stop any reattach already spawning.
+      tornDown.add(handle.ref);
+      const pending = reattaching.get(handle.ref);
+      if (pending) {
+        try {
+          (await pending)?.driver.stop();
+        } catch {
+          /* best effort */
+        }
+      }
       const state = byRef.get(handle.ref);
       if (state) {
+        // Graceful: if a turn is still running, ask the agent to cancel it (ACP
+        // `session/cancel`) and give it a bounded window to wind down its own
+        // in-flight file writes before the hard kill.
+        if (!state.done && state.sessionId) {
+          try {
+            state.driver.cancel(state.sessionId);
+          } catch {
+            /* the process may already be gone — fall straight to stop */
+          }
+          if (state.turn) {
+            await Promise.race([
+              state.turn.catch(() => {}),
+              delay(cancelGraceMs),
+            ]);
+          }
+        }
         try {
           state.driver.stop();
         } catch {
@@ -508,39 +607,57 @@ export function createAcpSubstrate(
         }
       }
       if (options?.removeIsolation !== false) {
-        const repo = state?.repoPath;
         const wtPath =
           handle.worktreePath ??
           state?.worktreePath ??
           path.join(worktreeRoot, tmuxNameFor(handle.ref));
-        if (repo) {
-          try {
-            await exec('git', [
-              '-C',
-              repo,
-              'worktree',
-              'remove',
-              '--force',
-              wtPath,
-            ]);
-          } catch (err) {
-            logger.warn('acp worktree remove failed (best effort)', {
-              ref: handle.ref,
-              err: message(err),
-            });
-          }
-        } else if (exists(wtPath)) {
-          try {
-            rmSync(wtPath, { recursive: true, force: true });
-          } catch {
-            /* best effort */
-          }
-        }
+        await removeIsolation(state?.repoPath, wtPath);
       }
       byRef.delete(handle.ref);
       logger.info('acp workspace torn down', { ref: handle.ref });
     },
   };
+
+  /**
+   * Remove a workspace's isolation: `git worktree remove --force` when the owning
+   * repo is known, else a best-effort directory remove (a reattached state may not
+   * have recovered its repo). Best-effort throughout — never throws.
+   */
+  async function removeIsolation(
+    repo: string | undefined,
+    wtPath: string
+  ): Promise<void> {
+    if (repo) {
+      try {
+        await exec('git', [
+          '-C',
+          repo,
+          'worktree',
+          'remove',
+          '--force',
+          wtPath,
+        ]);
+      } catch (err) {
+        logger.warn('acp worktree remove failed (best effort)', {
+          err: message(err),
+        });
+      }
+    } else if (exists(wtPath)) {
+      try {
+        rmSync(wtPath, { recursive: true, force: true });
+      } catch {
+        /* best effort */
+      }
+    }
+  }
+}
+
+/** A cancellable-free bounded delay (unref'd so it never keeps the loop alive). */
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => {
+    const t = setTimeout(resolve, ms);
+    (t as { unref?: () => void }).unref?.();
+  });
 }
 
 function message(err: unknown): string {
