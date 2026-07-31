@@ -19,7 +19,12 @@ import express, { type Router } from 'express';
 
 import type { AppConfig } from '../shared/app-config.js';
 import { childLogger, rootLogger, type Logger } from '../shared/logger.js';
-import { TOKENS, createToken, DOMAIN_TOKENS, CAPABILITY_TOKENS } from '../shared/di-tokens.js';
+import {
+  TOKENS,
+  createToken,
+  DOMAIN_TOKENS,
+  CAPABILITY_TOKENS,
+} from '../shared/di-tokens.js';
 import { DOMAIN_REGISTRY } from '../shared/domain-registry.js';
 import { createEdgeModule, type EdgeModule } from '../domains/edge/index.js';
 import type { RouteProvider } from '../domains/edge/ports/route-provider.port.js';
@@ -30,7 +35,10 @@ import { createContainer, Container } from './container.js';
 import { createHealthRegistry, HealthRegistry } from './health-registry.js';
 import { createLifecycle, Lifecycle } from './lifecycle.js';
 import { createPersistenceModule } from '../domains/persistence/index.js';
-import { createIdentityModule, createBetterAuthPlanReader } from '../domains/identity/index.js';
+import {
+  createIdentityModule,
+  createBetterAuthPlanReader,
+} from '../domains/identity/index.js';
 import { createDeviceFlow } from '../domains/identity/device-flow.service.js';
 import { buildDeviceRouter } from '../domains/identity/routes/device.routes.js';
 import { sliceIdentityConfig } from '../domains/identity/config.js';
@@ -45,6 +53,7 @@ import { createAgentOsModule } from '../domains/agent-os/index.js';
 import { createConductorModule } from '../domains/conductor/index.js';
 import { createCliRuntimeSubstrate } from '../domains/conductor/adapters/cli-runtime.adapter.js';
 import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/openfang-runtime.adapter.js';
+import { createAcpSubstrate } from '../domains/conductor/adapters/acp-substrate.adapter.js';
 import { createBrainMemoryAdapter } from '../domains/conductor/adapters/brain-memory.adapter.js';
 import { createConductorCodeIntel } from '../domains/conductor/adapters/code-intel.adapter.js';
 import { createBrowserPreviewVerifier } from '../domains/conductor/adapters/browser-preview-verify.adapter.js';
@@ -60,7 +69,10 @@ import { createDmuxGridAdapter } from '../domains/conductor/adapters/dmux-grid.a
 import { createRecoderMcpInjector } from '../domains/conductor/adapters/mcp-inject.adapter.js';
 import { createConductorAuditReader } from '../domains/conductor/adapters/audit-reader.adapter.js';
 import { createCloudSandboxSubstrate } from '../domains/conductor/adapters/cloud-sandbox-substrate.adapter.js';
-import { createEnginesModule, createOpenfangWorkflowDriver } from '../domains/engines/index.js';
+import {
+  createEnginesModule,
+  createOpenfangWorkflowDriver,
+} from '../domains/engines/index.js';
 import { createInferenceModule } from '../domains/inference/index.js';
 import { createInferenceRoutePalAdapter } from '../domains/inference/adapters/pal-route.adapter.js';
 // The composition root owns the engines→inference config bridge: the concrete
@@ -95,19 +107,29 @@ import {
   createConductorRunSink,
   createCliMintClosure,
 } from './conductor-seams.js';
-import { createMemoryEmbedFallback, createSquadIssueAdapter } from './memory-seams.js';
+import {
+  createMemoryEmbedFallback,
+  createSquadIssueAdapter,
+} from './memory-seams.js';
 import {
   createSocialTargetResolver,
   createSocialConductorDispatch,
   createSocialReplyInference,
 } from './social-seams.js';
 import { createObservabilityDelivery } from './observability-seams.js';
-import { createSquadAutopilotDispatch, parseSquadSeedEnv } from './agent-os-seams.js';
+import {
+  createSquadAutopilotDispatch,
+  parseSquadSeedEnv,
+} from './agent-os-seams.js';
 import { createMemoryModule } from '../domains/memory/index.js';
 import type { Mem0EnginePort } from '../domains/memory/ports/mem0-engine.port.js';
 // Composition root: value-imports the engines mem0 client, injected as the memory
 // consumer-owned `Mem0EnginePort` so the mem0 adapter holds no value edge into engines.
-import { mem0Add, mem0Search, mem0Health } from '../domains/engines/mem0-client.js';
+import {
+  mem0Add,
+  mem0Search,
+  mem0Health,
+} from '../domains/engines/mem0-client.js';
 import {
   createCloudModule,
   createDnsTlsVerifier,
@@ -117,7 +139,10 @@ import {
   createInteropWireComposer,
   type InteropWireComposite,
 } from '../domains/interop-wire/interop-wire-module.js';
-import { createSocialComposer, type SocialComposite } from '../domains/social/social-module.js';
+import {
+  createSocialComposer,
+  type SocialComposite,
+} from '../domains/social/social-module.js';
 import { createSealedIngressVouch } from '../domains/social/adapters/signed-vouch.adapter.js';
 import { createObservabilityModule } from '../domains/observability/index.js';
 import { createNotifyEngine, type NotifyFetch } from '@recoder/agent-notify';
@@ -162,7 +187,11 @@ export interface StartOptions {
  * `public` per-mount guard — so the edge adds NO second auth/interop layer over a
  * router that already guards itself (conflict-free: exactly one mount, one auth).
  */
-function routerProvider(key: string, basePath: string, router: Router): RouteProvider {
+function routerProvider(
+  key: string,
+  basePath: string,
+  router: Router
+): RouteProvider {
   return {
     key,
     basePath,
@@ -185,11 +214,17 @@ export { parseSquadSeedEnv };
 export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // 1. Config — the only env read.
   const config = loadConfig(options.env);
-  const log = childLogger('bootstrap', { instanceId: config.runtime.instanceId });
+  const log = childLogger('bootstrap', {
+    instanceId: config.runtime.instanceId,
+  });
   rootLogger.level = config.logging.level;
   log.info(
-    { env: config.runtime.env, port: config.server.port, host: config.server.host },
-    'booting recoder-backend',
+    {
+      env: config.runtime.env,
+      port: config.server.port,
+      host: config.server.host,
+    },
+    'booting recoder-backend'
   );
 
   // 2. Container + foundations.
@@ -212,7 +247,10 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // --- Phase 1: Persistence — the data authority beneath every stateful
   //     domain. Registered into the container + health registry; its routes
   //     mount under /internal/persistence; boot-time migrate is degrade-safe. ---
-  const persistence = createPersistenceModule({ config, logger: childLogger('persistence') });
+  const persistence = createPersistenceModule({
+    config,
+    logger: childLogger('persistence'),
+  });
   container.registerValue(DOMAIN_TOKENS.persistence, persistence);
   healthRegistry.register(persistence);
 
@@ -248,7 +286,9 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     ? new PgApiKeyStore(persistence.executor(), apiKeyLog)
     : new FilesystemApiKeyStore({
         logger: apiKeyLog,
-        filePath: apiKeyEnv.API_KEY_STORE_PATH ?? resolvePath(process.cwd(), 'data', 'api-keys.json'),
+        filePath:
+          apiKeyEnv.API_KEY_STORE_PATH ??
+          resolvePath(process.cwd(), 'data', 'api-keys.json'),
       });
   const apiKeyService = createApiKeyService({
     store: apiKeyStore,
@@ -310,7 +350,10 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // NOT the launched agent's native in-worktree bash/file/secret ops — those never
   // cross this executor and stay under conductor's coarse `guardConductorWrite→decide`.
   // Absent enforcer ⇒ pass-through (truthful, never a fake-allow).
-  container.registerValue(CAPABILITY_TOKENS.toolExecGate, governance.toolExecGate());
+  container.registerValue(
+    CAPABILITY_TOKENS.toolExecGate,
+    governance.toolExecGate()
+  );
   container.registerValue(CAPABILITY_TOKENS.secrets, governance.secrets());
   container.registerValue(CAPABILITY_TOKENS.workLock, governance.workLocks());
   container.registerValue(CAPABILITY_TOKENS.approval, governance.approvals());
@@ -332,8 +375,12 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   const notifyEngine = createNotifyEngine({
     fetch: globalThis.fetch as unknown as NotifyFetch,
     env: {
-      ...(bootEnv.RECODER_NOTIFY_URL ? { RECODER_NOTIFY_URL: bootEnv.RECODER_NOTIFY_URL } : {}),
-      ...(bootEnv.SLACK_WEBHOOK_URL ? { SLACK_WEBHOOK_URL: bootEnv.SLACK_WEBHOOK_URL } : {}),
+      ...(bootEnv.RECODER_NOTIFY_URL
+        ? { RECODER_NOTIFY_URL: bootEnv.RECODER_NOTIFY_URL }
+        : {}),
+      ...(bootEnv.SLACK_WEBHOOK_URL
+        ? { SLACK_WEBHOOK_URL: bootEnv.SLACK_WEBHOOK_URL }
+        : {}),
     },
   });
   const engines = await createEnginesModule({
@@ -375,8 +422,12 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // folded HERE (bootstrap is the sanctioned env read), never in domain code.
     platformProviderKeys: {
       ...(bootEnv.OPENAI_API_KEY ? { openai: bootEnv.OPENAI_API_KEY } : {}),
-      ...(bootEnv.ANTHROPIC_API_KEY ? { anthropic: bootEnv.ANTHROPIC_API_KEY } : {}),
-      ...(bootEnv.OPENROUTER_API_KEY ? { openrouter: bootEnv.OPENROUTER_API_KEY } : {}),
+      ...(bootEnv.ANTHROPIC_API_KEY
+        ? { anthropic: bootEnv.ANTHROPIC_API_KEY }
+        : {}),
+      ...(bootEnv.OPENROUTER_API_KEY
+        ? { openrouter: bootEnv.OPENROUTER_API_KEY }
+        : {}),
       ...(bootEnv.GROQ_API_KEY ? { groq: bootEnv.GROQ_API_KEY } : {}),
       ...(bootEnv.GOOGLE_API_KEY ? { google: bootEnv.GOOGLE_API_KEY } : {}),
     },
@@ -405,7 +456,10 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   //     its own fault. ---
   if (palBrain) {
     governance.setConsensusReview(
-      createPalConsensusReview({ pal: palBrain, logger: childLogger('governance') }),
+      createPalConsensusReview({
+        pal: palBrain,
+        logger: childLogger('governance'),
+      })
     );
   }
 
@@ -499,14 +553,22 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     try {
       const result = await governance.reloadPolicies(configJson);
       governanceReloadLog.info(
-        { reloaded: result.reloaded, ...(result.reason ? { reason: result.reason } : {}), source },
-        'policy hot-swap',
+        {
+          reloaded: result.reloaded,
+          ...(result.reason ? { reason: result.reason } : {}),
+          source,
+        },
+        'policy hot-swap'
       );
     } catch (err) {
       // Deny-bias: a reload fault leaves the OLD policy live and is logged truthfully.
       governanceReloadLog.warn(
-        { err: err instanceof Error ? err.message : String(err), reloaded: false, source },
-        'policy hot-swap failed',
+        {
+          err: err instanceof Error ? err.message : String(err),
+          reloaded: false,
+          source,
+        },
+        'policy hot-swap failed'
       );
     }
   });
@@ -649,6 +711,19 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     }),
     logger: childLogger('conductor-daytona'),
   });
+  // PATH (d) ACP: the `acp` substrate drives an Agent Client Protocol agent
+  // (`claude-code-acp`) over JSON-RPC/stdio in a local git worktree — the same
+  // worktree isolation as tmux, but a structured protocol (typed permission
+  // requests, streamed session updates) instead of a scraped PTY. Fully OPT-IN and
+  // additive: no runtime selects `acp` by default (the selector keeps tmux as the
+  // CLI default), so it activates ONLY when a caller explicitly requests
+  // `substrate: 'acp'`. Degrade-truthful: the `claude-code-acp` binary absent from
+  // PATH ⇒ `available:false` + `launch()` refuses (never a fabricated session).
+  // Permission requests default to DENY until the approval-gate bridge is wired.
+  const acpSub = createAcpSubstrate({
+    config: conductorSubstrateConfig,
+    logger: childLogger('conductor-acp'),
+  });
   // The memory-backed brain: recall on launch (mem0 ∪ beads ∪ candidates → rerank)
   // + harvest on completion. Built over the memory module's PUBLIC seams only.
   const conductorBrain = createBrainMemoryAdapter({
@@ -722,7 +797,10 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // launch. `internalUrl` is the non-secret loopback backend URL.
   const bridgeServerAbsPath =
     bootEnv.RECODER_MCP_BRIDGE_PATH ??
-    resolvePath(bootEnv.CONDUCTOR_REPO_ROOT ?? process.cwd(), 'mcp/recoder-a2a-server.js');
+    resolvePath(
+      bootEnv.CONDUCTOR_REPO_ROOT ?? process.cwd(),
+      'mcp/recoder-a2a-server.js'
+    );
   const conductorMcpInject = createRecoderMcpInjector({
     config: {
       args: [bridgeServerAbsPath],
@@ -737,7 +815,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     middleware: identity.middleware(),
     gate: governance.gate(),
     runEventSink: conductorRunSink,
-    substrates: [cliSub, openfangSub, cloudDaytonaSub],
+    substrates: [cliSub, openfangSub, cloudDaytonaSub, acpSub],
     brain: conductorBrain,
     codeIntel: conductorCodeIntel,
     // Browsing facet (item 21): the conductor verifies a stored preview URL
@@ -750,7 +828,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // hung preview can never stall the caller or the completion hook.
     previewVerify: createBrowserPreviewVerifier(
       engines.client('browser-use'),
-      executeBrowserVerification,
+      executeBrowserVerification
     ),
     // Double-assignment admission over the Multica coordination fabric, consulted
     // in createWorkspace on the axis resource-governor → coordination-admission →
@@ -773,13 +851,19 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     githubStatus: conductorGithub,
     steerTransport: conductorSteer,
     mcpInject: conductorMcpInject,
-    ...(conductorSubstrateScan ? { substrateScan: conductorSubstrateScan } : {}),
-    ...(conductorWorkspaceGrid ? { workspaceGrid: conductorWorkspaceGrid } : {}),
+    ...(conductorSubstrateScan
+      ? { substrateScan: conductorSubstrateScan }
+      : {}),
+    ...(conductorWorkspaceGrid
+      ? { workspaceGrid: conductorWorkspaceGrid }
+      : {}),
     // Read-only `/sessions` attach bridge (durable-shell unify §A2): inject the
     // SAME engines-owned tmux introspect the substrate scan uses so the conductor
     // surfaces its live `recoder-*` sessions WITHOUT value-importing the engines
     // domain. Absent ⇒ the lister degrades truthfully to an empty list.
-    ...(conductorTmuxIntrospect ? { tmuxIntrospect: conductorTmuxIntrospect } : {}),
+    ...(conductorTmuxIntrospect
+      ? { tmuxIntrospect: conductorTmuxIntrospect }
+      : {}),
     // READ seam over the durable governance audit chain, scoped by workspace
     // (`GET …/audit`). The READ half of the merge→audit seam: `recordAudit` seals
     // every conductor mutation with the `workspaceId` in payload, and this reader
@@ -831,7 +915,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     createSquadAutopilotDispatch({
       conductor,
       repoRoot: bootEnv.CONDUCTOR_REPO_ROOT ?? process.cwd(),
-    }),
+    })
   );
 
   // --- Phase 9: Billing — THE EntitlementGate (plans/metering/quotas/webhooks).
@@ -854,13 +938,16 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // (fail-safe: absent token ⇒ no port ⇒ deny-on-miss grants + free tier still
   // serves; the adapter itself raises FailSafeError + unhealthy on any drift).
   const polarAccessToken = config.billing.polar?.apiKey ?? null;
-  const polarPlanEntries = polarCatalogEntries(config.billing.planProducts?.polar);
+  const polarPlanEntries = polarCatalogEntries(
+    config.billing.planProducts?.polar
+  );
   const billingDistributionPort = polarAccessToken
     ? createPolarBillingAdapter({
         secrets: {
-          get: (name) => (name === 'POLAR_ACCESS_TOKEN' ? polarAccessToken : undefined),
-          has: (name) => name === 'POLAR_ACCESS_TOKEN',
-          require: (name) => {
+          get: name =>
+            name === 'POLAR_ACCESS_TOKEN' ? polarAccessToken : undefined,
+          has: name => name === 'POLAR_ACCESS_TOKEN',
+          require: name => {
             if (name === 'POLAR_ACCESS_TOKEN') return polarAccessToken;
             throw new Error(`required secret missing: ${name}`);
           },
@@ -878,10 +965,16 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // CAVEAT: `subjectId` is the principal userId (web Better Auth `user.id`). If a
   // subject's web id diverges from the legacy `users.id` in prod the lookup misses
   // and returns null — truthful non-elevation (never over-grants).
-  const authPlanReader = createBetterAuthPlanReader(childLogger('identity-authplan'));
-  const resolveAuthPlan = async (subject: BillingSubject): Promise<PlanTier | null> => {
+  const authPlanReader = createBetterAuthPlanReader(
+    childLogger('identity-authplan')
+  );
+  const resolveAuthPlan = async (
+    subject: BillingSubject
+  ): Promise<PlanTier | null> => {
     if (subject.kind !== 'user') return null;
-    return (await authPlanReader.readPlan(subject.subjectId)) as PlanTier | null;
+    return (await authPlanReader.readPlan(
+      subject.subjectId
+    )) as PlanTier | null;
   };
   const billing = createBillingModule({
     config,
@@ -891,7 +984,9 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     overrides: config.billing,
     resolveByok: billingResolveByok,
     resolveAuthPlan,
-    ...(billingDistributionPort ? { billingPort: billingDistributionPort } : {}),
+    ...(billingDistributionPort
+      ? { billingPort: billingDistributionPort }
+      : {}),
   });
   // Wire the governance write gate into billing so checkout/cancel MUTATIONS pass
   // through `decide → policy → durable audit` (governance is composed before billing,
@@ -935,9 +1030,11 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   inference.setRunInferenceSink({
     record: async ({ workspaceId, inferenceId }) => {
       // Reached ONLY for napi-tier ids (the routing service gates on tier === 'napi').
-      await conductor.recordRunInferenceId(workspaceId, inferenceId).catch(() => {
-        /* never throws into delivery */
-      });
+      await conductor
+        .recordRunInferenceId(workspaceId, inferenceId)
+        .catch(() => {
+          /* never throws into delivery */
+        });
     },
   });
 
@@ -984,7 +1081,9 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // The REAL DNS TXT + TLS-cert ownership prober, so custom domains can actually
     // be ACTIVATED (node:dns + node:tls). Absent it, `verify` stays truthfully
     // pending; the prober itself degrades truthfully on a resolve/probe fault.
-    domainVerifier: createDnsTlsVerifier({ logger: childLogger('cloud-domain-verify') }),
+    domainVerifier: createDnsTlsVerifier({
+      logger: childLogger('cloud-domain-verify'),
+    }),
   });
   container.registerValue(DOMAIN_TOKENS.cloud, cloud);
   healthRegistry.register(cloud);
@@ -1067,7 +1166,9 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // Signed connector-ingress vouch over SOCIAL_INGRESS_SECRET (null ⇒ inert,
   // the gate skips the step) + the governance secret vault for connector creds
   // (vault down ⇒ null secrets, channels stay down truthfully).
-  const socialVouch = createSealedIngressVouch({ secret: config.social.ingressSecret ?? null });
+  const socialVouch = createSealedIngressVouch({
+    secret: config.social.ingressSecret ?? null,
+  });
   const SOCIAL_SECRET_OWNER = 'service:social';
   const social = createSocialComposer({
     config,
@@ -1133,7 +1234,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   const signalsSyncEnabled = signalsPollIntervalMs > 0 && signalsSyncRequested;
   if (signalsSyncRequested && !signalsSyncEnabled) {
     childLogger('observability').warn(
-      'OPS_RECORDER_SYNC_ENABLED set but the signals poller is off (interval 0); the detector tick will not run',
+      'OPS_RECORDER_SYNC_ENABLED set but the signals poller is off (interval 0); the detector tick will not run'
     );
   }
   // The three delivery objects the observability module consumes — signals bridge
@@ -1197,7 +1298,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // push can never stall or fail a run completion; an unwired/down sidecar is a
   // truthful no-op (never a fabricated signal).
   conductor.setRunSignalPush({
-    forwardRunSignal: (input) => observability.forwardRunSignal(input),
+    forwardRunSignal: input => observability.forwardRunSignal(input),
   });
 
   // --- MCP tool registration: bridge every domain's flat `mcp()` tools onto the ONE
@@ -1236,14 +1337,17 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     if (registration.collisions.length > 0) {
       log.warn(
         { serverId: domain.name, collisions: registration.collisions },
-        'duplicate MCP tool names skipped during host registration (first wins)',
+        'duplicate MCP tool names skipped during host registration (first wins)'
       );
     }
     if (!registration.skipped) {
       mcpRegistered.push(`${domain.name}(${registration.registered.length})`);
     }
   }
-  log.info({ mcpRegistered }, 'registered domain MCP tools into the interop-gated host');
+  log.info(
+    { mcpRegistered },
+    'registered domain MCP tools into the interop-gated host'
+  );
 
   // --- Phase 4: Edge & API Server — the STATELESS HTTP/WS surface. Built AFTER
   //     persistence/identity/governance/interop so it can consume their frozen
@@ -1272,65 +1376,136 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     routerProvider(
       'observability',
       DOMAIN_REGISTRY.observability.mountBase,
-      observability.routes(),
+      observability.routes()
     ),
     // Persistence internal edges.
-    routerProvider('persistence', DOMAIN_REGISTRY.persistence.mountBase, persistence.routes()),
+    routerProvider(
+      'persistence',
+      DOMAIN_REGISTRY.persistence.mountBase,
+      persistence.routes()
+    ),
     // Better Auth host at /api/auth/* (public: login/signup can't require a session).
     routerProvider('identity-auth', '/api/auth', identity.authRoutes()),
     // /api/identity/* health + read edges.
-    routerProvider('identity', DOMAIN_REGISTRY.identity.mountBase, identity.routes()),
+    routerProvider(
+      'identity',
+      DOMAIN_REGISTRY.identity.mountBase,
+      identity.routes()
+    ),
     // sk_ platform API key edges (self-gated by identity.middleware()).
     routerProvider(
       'identity-apikeys',
       DOMAIN_REGISTRY.identity.mountBase,
-      buildApiKeysRouter({ service: apiKeyService, mw: identity.middleware(), logger: apiKeyLog }),
+      buildApiKeysRouter({
+        service: apiKeyService,
+        mw: identity.middleware(),
+        logger: apiKeyLog,
+      })
     ),
     // CLI device-flow edges (poll/exchange are public; approve self-gates).
     routerProvider(
       'identity-device',
       '/api/identity/device',
-      buildDeviceRouter({ service: deviceFlow, middleware: identity.middleware() }),
+      buildDeviceRouter({
+        service: deviceFlow,
+        middleware: identity.middleware(),
+      })
     ),
     // Orgs + RBAC edges (self-gated by identity.middleware() + RBAC evaluator).
-    routerProvider('identity-orgs', DOMAIN_REGISTRY.identity.mountBase, orgsRbac.buildRouter(identity.middleware())),
+    routerProvider(
+      'identity-orgs',
+      DOMAIN_REGISTRY.identity.mountBase,
+      orgsRbac.buildRouter(identity.middleware())
+    ),
     // Internal identity resolution edges (INTERNAL_SERVICE_KEY-gated internally).
-    routerProvider('identity-internal', '/internal/identity', identity.internalRoutes()),
+    routerProvider(
+      'identity-internal',
+      '/internal/identity',
+      identity.internalRoutes()
+    ),
     // Governance edges: approvals + work-locks + secrets (mutations self-gated).
-    routerProvider('governance', DOMAIN_REGISTRY.governance.mountBase, governance.routes()),
+    routerProvider(
+      'governance',
+      DOMAIN_REGISTRY.governance.mountBase,
+      governance.routes()
+    ),
     // Interop edges: A2A health + agent-card + ext-authz-guarded JSON-RPC ingress.
-    routerProvider('interop', DOMAIN_REGISTRY.interop.mountBase, interop.routes()),
+    routerProvider(
+      'interop',
+      DOMAIN_REGISTRY.interop.mountBase,
+      interop.routes()
+    ),
     // Agent-OS state-of-record edges: read models + INTERNAL_SERVICE_KEY ingest.
-    routerProvider('agent-os', DOMAIN_REGISTRY['agent-os'].mountBase, agentOs.routes()),
+    routerProvider(
+      'agent-os',
+      DOMAIN_REGISTRY['agent-os'].mountBase,
+      agentOs.routes()
+    ),
     // Internal agent-os ingest edges (INTERNAL_SERVICE_KEY-gated internally).
-    routerProvider('agent-os-internal', '/internal/agent-os', agentOs.internalRoutes()),
+    routerProvider(
+      'agent-os-internal',
+      '/internal/agent-os',
+      agentOs.internalRoutes()
+    ),
     // Conductor terminal-product edges: workspaces + substrates + reconcile (gated).
-    routerProvider('conductor', DOMAIN_REGISTRY.conductor.mountBase, conductor.routes()),
+    routerProvider(
+      'conductor',
+      DOMAIN_REGISTRY.conductor.mountBase,
+      conductor.routes()
+    ),
     // Engines read-only edges: declared-engine list + per-engine live health.
-    routerProvider('engines', DOMAIN_REGISTRY.engines.mountBase, engines.routes()),
+    routerProvider(
+      'engines',
+      DOMAIN_REGISTRY.engines.mountBase,
+      engines.routes()
+    ),
     // Internal engines worker surface (INTERNAL_SERVICE_KEY-gated internally):
     // GET /internal/engines/health — truthful per-engine health for workers.
-    routerProvider('engines-internal', '/internal/engines', engines.internalRoutes()),
+    routerProvider(
+      'engines-internal',
+      '/internal/engines',
+      engines.internalRoutes()
+    ),
     // Inference LLM-gateway edges: control + OpenAI-compatible surface (self-gated).
-    routerProvider('inference', DOMAIN_REGISTRY.inference.mountBase, inference.routes()),
+    routerProvider(
+      'inference',
+      DOMAIN_REGISTRY.inference.mountBase,
+      inference.routes()
+    ),
     // ALIAS: the built-in AI panel POSTs the flat `/api/gateway/v1/chat/completions`.
     // The canonical mount nests the OpenAI-compatible sub-router under `/gateway`
     // (→ `/api/gateway/gateway/v1/...`), so mount the SAME memoized gateway
     // sub-router (same handler instance + self-guard) at `/api/gateway` root so the
     // un-nested `/api/gateway/v1/chat/completions` (+ `/v1/embeddings`) resolves.
     // Canonical mount above stays intact; this only ADDS the flat path.
-    routerProvider('inference-gateway-alias', '/api/gateway', inference.gatewayRoutes()),
+    routerProvider(
+      'inference-gateway-alias',
+      '/api/gateway',
+      inference.gatewayRoutes()
+    ),
     // Billing edges: plan/checkout/portal/cancel + RAW-BODY provider webhooks. The
     // global JSON parser stashes `req.rawBody` (chain.ts) so webhook signatures verify.
-    routerProvider('billing', DOMAIN_REGISTRY.billing.mountBase, billing.routes()),
+    routerProvider(
+      'billing',
+      DOMAIN_REGISTRY.billing.mountBase,
+      billing.routes()
+    ),
     // Internal billing usage ingest (INTERNAL_SERVICE_KEY-gated internally):
     // POST /internal/billing/meter — workers report per-run/token/engine usage.
-    routerProvider('billing-internal', '/internal/billing', billing.internalRoutes()),
+    routerProvider(
+      'billing-internal',
+      '/internal/billing',
+      billing.internalRoutes()
+    ),
     // Memory + retrieval edges (mount under /api/agent-os alongside agent-os).
     routerProvider('memory', DOMAIN_REGISTRY.memory.mountBase, memory.routes()),
     // Internal memory harvest ingest (INTERNAL_SERVICE_KEY-gated internally):
     // workers POST completion-harvest candidates through this self-gated router.
-    routerProvider('memory-internal', '/internal/agent-os/memory', memory.internalRoutes()),
+    routerProvider(
+      'memory-internal',
+      '/internal/agent-os/memory',
+      memory.internalRoutes()
+    ),
     // Cloud edges: tenancy/sandboxes/preview/mesh (self-gated; degrade-safe).
     routerProvider('cloud', DOMAIN_REGISTRY.cloud.mountBase, cloud.routes()),
     // Internal cloud worker surface (INTERNAL_SERVICE_KEY-gated internally): the
@@ -1348,7 +1523,11 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     routerProvider('interop-wire-a2a', '/api/a2a', interopWire.wireRoutes()),
     // RFC 8615: peers probe the ORIGIN ROOT for /.well-known/agent.json — the
     // same local card /api/a2a/agent-card serves, at the standard location.
-    routerProvider('interop-wire-wellknown', '/.well-known', interopWire.wellKnownRoutes()),
+    routerProvider(
+      'interop-wire-wellknown',
+      '/.well-known',
+      interopWire.wellKnownRoutes()
+    ),
   ];
 
   const edge = createEdgeModule(
@@ -1373,10 +1552,12 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       wsBackends: conductor
         .terminal()
         .terminalBackends()
-        .filter((b) => b.path === '/terminal' || b.path === '/api/conductor/workspaces'),
+        .filter(
+          b => b.path === '/terminal' || b.path === '/api/conductor/workspaces'
+        ),
     },
     // Every mount keeps its own guard; the edge adds only the GLOBAL chain.
-    { routeTable: { defaultGuard: () => PUBLIC_MOUNT } },
+    { routeTable: { defaultGuard: () => PUBLIC_MOUNT } }
   );
   container.registerValue(DOMAIN_TOKENS.edge, edge);
   healthRegistry.register(edge);
@@ -1406,7 +1587,10 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   await observability.start();
   await edge.listen();
   const url = `http://${config.server.host}:${config.server.port}`;
-  log.info({ url, healthSources: healthRegistry.count }, 'recoder-backend listening');
+  log.info(
+    { url, healthSources: healthRegistry.count },
+    'recoder-backend listening'
+  );
 
   // 6. Lifecycle wiring. The edge drains its server + closes live WS sockets first.
   lifecycle
@@ -1433,5 +1617,15 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     await lifecycle.shutdown('handle.stop');
   };
 
-  return { config, container, healthRegistry, lifecycle, edge, app, server, url, stop };
+  return {
+    config,
+    container,
+    healthRegistry,
+    lifecycle,
+    edge,
+    app,
+    server,
+    url,
+    stop,
+  };
 }
