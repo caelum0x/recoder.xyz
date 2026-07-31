@@ -18,14 +18,14 @@ flow, and the backend route mounts. File:line references throughout.
 
 ---
 
-## 0. Honest one-paragraph status
+## 0. Honest one-paragraph status (updated 2026-07-31)
 
-**The terminal works. Most of the rest does not — and the deepest reason is that
-there are TWO overlapping frontends.** Creating a workspace + running an agent in
-an isolated git worktree works end-to-end (verified). But auth shows a sign-in
-wall the desktop should never show, several side "tabs" are broken/empty/infra,
-OSS names (openfang, PAL) leak in *both* frontends, and the app ships a second
-full UI (the cockpit) that duplicates the first.
+**The core loop works and the plan largely shipped.** Creating a workspace +
+running an agent in an isolated git worktree, then reviewing and merging, works
+end-to-end. The §9 Wave-canonical decision is complete: the second frontend (the
+cockpit) is **deleted** (recoder-flgn), the rail is the 8-widget set in §7, infra
+dashboards are tombstoned, and OSS names no longer leak. What remains is small and
+enumerated in §8 (sign-in port, Board↔bd wiring, merge-readiness todos/hard-gate).
 
 ---
 
@@ -263,135 +263,30 @@ only bug is that it's presented as a *forced wall* in the wrong frontend.
 
 ---
 
-## 8. Work log — shipped vs staged vs pending
+## 8. Remaining work (only what's LEFT — done/decided history removed 2026-07-31)
 
-**Shipped + pushed** (`feat/enterprise-s0-p0`): `dcd6d6a86` (green→graphite;
-openfang/PAL removed in Wave; labels; launcher trim), `3c1028963` (Approvals
-solo→empty), plus the earlier solo-mode gate cascade (memory
-`project_desktop_solo_mode_gates`).
+The bulk of this plan SHIPPED — the Wave-canonical drop-cockpit decision (§9,
+LOCKED) is complete: the cockpit tree is deleted (recoder-flgn), the rail is the
+8-widget set in §7, infra dashboards are tombstoned, and the parallel-agents loop
+(board → review → merge) is live. Full history is in the git log on
+`feat/enterprise-s0-p0` and the `bd` issue graph (`bd search --status all`).
 
-**Shipped (was staged):** Launch Agent shape fix landed (`3606e9fbc` — reads
-`data.runtimes`, drops the recoder.xyz default homepage), then the tab was
-retired outright: `recoder-launch-model.ts` is now a redirect into the
-Workspaces hub (`bc2b7d85e`) — it no longer posts anything.
+What's actually left:
 
-**2026-07-25 rail trim (this doc's §5 revision):** default widgets first cut to 5
-(`defaultconfig/widgets.json`), `removeCockpitWidgetConfig` generalized to
-`removeRetiredWidgetConfig` (nulls all 14 retired keys in user config on every
-start), board "Pick up" retargeted to the hub, webview devtools unmount crash
-fixed (`webview.tsx` cleanup guarded — the "WebView must be attached to the
-DOM" error on leaving the web tab). Audit found 3 NEW broken wirings (session
-stream frame shape; approvals list shape + decide endpoints; memory list
-shape) — FIXED in `8597b41ee` (unit tests added for terminal-model +
-memory-model; tsc clean, 97/97).
+- **Sign-in port (recoder-po7g):** move "Sign in with Recoder" into the Wave
+  hub/onboarding (drive `emain-device-auth-core` device flow via IPC), OPTIONAL —
+  never a blocking wall. Verify recoder.xyz prod has `GITHUB_CLIENT_ID/SECRET` +
+  `GOOGLE_CLIENT_ID/SECRET` (else only email login works).
+- **Board ↔ bd wiring (recoder-uou2):** start a workspace from a bd issue,
+  close/link on merge; repoint work-signals to
+  `/api/agent-os/observability/signals`.
+- **Merge-readiness remainder (recoder-elhh):** a `todos` signal (needs an
+  agent-todo source) + whether to HARD-gate the merge route on open work
+  (governance/owner call — currently a soft "discouraged").
 
-**Rail restored to 8 (as of 2026-07-27):** once the Approvals/Memory wirings were
-fixed they returned to `defaultconfig/widgets.json`, and the wired Board
-(`55d1a9fc0`) was added — the shipped rail is now **workspaces, board, approvals,
-memory, runs, terminal, files, web** (see §7). NOTE (still current): the Go server
-must be rebuilt for any `defaultconfig` change to ship —
-`task build:backend:quickdev --force`; the task cache does **NOT** invalidate on
-`defaultconfig` JSON edits, so a plain build silently keeps the old rail.
+Everything else in this doc above (§0–§7 status, rules, differentiator, target
+layout) is CURRENT and enforced; §9's decision is LOCKED and done.
 
-**Pending (needs your decision, §9):** frontend consolidation; cockpit auth
-solo-bypass + PAL/openfang scrub + label map; Board (repoint work-signals /
-defer issues-ready). (recoder.xyz default url: DONE — `settings.json:21`
-`web:defaulturl` is now `""`, `3606e9fbc`.)
-
----
-
-## 9. Architecture decision — LOCKED (2026-07-24)
-
-The app cannot keep shipping two full UIs. **DECIDED: Wave-canonical (Option A),
-reframed per §4d.**
-
-- **Face of the loop = the native Wave Workspaces hub**, elevated to match the
-  cockpit board (board of running agents + launch + review + merge). Terminals
-  stay Wave-native (agents are interactive TUIs in tmux; the iframe can't host
-  them).
-- **Drop the cockpit iframe.** This collapses F1 (sign-in wall), F4 (web tiles),
-  F5 (cockpit OSS leaks), and the §2 duplication in one direction.
-- **Infra = 4-bucket (§4d):** hide Tools/Connectors/Engine/Hands; keep
-  Approvals/Memory (governance differentiators); keep Board in the vision but
-  defer wiring (needs `bd`/beads).
-- **Accent = graphite `rgb(70,75,86)`** (kept).
-
-This is NOT "strip to a bare terminal" — the parallel-agent loop + governed Agent
-OS is the moat (§4d) and stays the hero; only the duplicate cockpit + pure-infra
-dashboards + sign-in wall + OSS names are removed.
-
----
-
-## 10. Implementation roadmap (phased; no code changes made in the planning turn)
-
-**Phase 1 — Quick wins (low-risk): SHIPPED.**
-- Launch Agent shape fix (F2) shipped (`3606e9fbc`); the tab was later retired
-  into a Workspaces-hub redirect (`bc2b7d85e`, see Phase 3 gap note).
-- Marketing homepage removed (F4): `defaultconfig/settings.json:21`
-  `web:defaulturl` is now `""` (`3606e9fbc`).
-
-**Phase 2 — Drop the cockpit + REAL optional sign-in in Wave (F1, §6):**
-- ~~Remove `defwidget@recoder-cockpit` from the launcher (source + live override);
-  stop packaging/serving the cockpit once unsurfaced.~~ **DONE (2026-07-25,
-  recoder-k9c4):** launcher widget suppressed (`emain-backend-core.ts`
-  `RetiredWidgetKeys`); electron-builder no longer packages the cockpit; the
-  backend `/cockpit` static mount + `COCKPIT_DIST` env and the desktop
-  `cockpitDist` plumbing were removed; the cockpit-only IPC bridge
-  (`recoder:cockpit-config`/`backend-status`/`device-login`/`auth-refresh`/
-  `auth-signout`, `cockpit-origin.ts` gate, `preload-webview` bridge) was
-  ripped out. The `apps/desktop/cockpit/` source tree has been **DELETED**
-  (`git rm`, 2026-07-31, recoder-flgn — 155 tracked files + ~93 MB on disk); the
-  historical references below describe the now-removed second frontend.
-- Port "Sign in with Recoder" into the Wave hub/onboarding — drive the existing
-  `emain-device-auth-core` (Google/GitHub device flow) via an IPC bridge; retire
-  `cockpit/SignIn.tsx`. Make it **optional** (button + "continue offline"), never
-  a blocking wall; show identity when signed in.
-- Verify recoder.xyz prod has `GITHUB_CLIENT_ID/SECRET` + `GOOGLE_CLIENT_ID/
-  SECRET` set (else only email login works).
-
-**Phase 3 — Elevate the Wave Workspaces hub (the real work): SHIPPED.**
-- `recoder` is now the product face: a live polling board of workspaces (friendly
-  agent label, state, branch, `+adds −dels` diff summary), an inline Launch panel
-  with the "also run in parallel" multi-agent option (one `POST /workspaces` per
-  agent sharing a `taskGroup`), and per-row Session / Terminal / Review / Merge /
-  Archive wired to existing conductor endpoints.
-- No raw runtime ids (all via `AGENT_LABELS`), openfang filtered, graphite buttons,
-  quiet borders. Files: `app/frontend/app/view/recoder/recoder.tsx` +
-  `recoder-model.ts`.
-- Endpoints used: `GET /api/conductor/workspaces` (real shape is
-  `{data:{workspaces:[…]}}` — the model now reads `data.workspaces` with a bare-array
-  fallback; the prior `body.data`-as-array read was a latent empty-board bug),
-  `GET …/:id/diff/files` (per-file numstat → summed adds/dels; `available:false`
-  ⇒ no summary, never fabricated), `POST /workspaces` (full required body:
-  `spaceId/projectId/taskId/repoPath/runtimeId` + optional `taskGroup`),
-  `POST …/:id/merge` (gated; solo click IS the approval), `POST …/:id/archive`.
-
-**Gap discovered — RESOLVED (retired):** the separate **Launch Agent** tab used
-to post a MINIMAL body missing the `spaceId/projectId/taskId` that the
-`POST /workspaces` handler hard-requires (`conductor.routes.ts`
-`requireString`), so its launch likely 400'd. Resolved by retiring the tab:
-`recoder-launch/recoder-launch-model.ts` is now a redirect into the Workspaces
-hub (`bc2b7d85e`) — no POST body exists anymore; the hub's inline Launch is the
-only launch path.
-
-**Phase 4 — Loop-core launcher + default layout:**
-- Launcher rail (ORIGINAL Phase-4 plan; SUPERSEDED by §7 — the shipped rail is
-  workspaces, board, approvals, memory, runs, terminal, files, web): Workspaces,
-  Session, Launch, Review, Runs, Approvals, Memory + built-in
-  terminal/files/web/sysinfo/processes. (Infra stays hidden.)
-- Default tab/layout = the Workspaces hub + a terminal. No wall of tiles.
-
-**Phase 5 — Verify (fresh launch):** no sign-in, no OSS names, no green, no
-broken tabs; loop works end-to-end (launch parallel agents → board → review →
-merge).
-
-**Deferred (tracked, not now):** Board wiring (repoint work-signals to
-`/api/agent-os/observability/signals`; `issues/ready` needs `bd`); a real
-offline-safe identity story if sign-in is ever wanted on desktop.
-
----
-
-## 11. Status of decisions
-- Frontend: **Wave-canonical, drop cockpit** — LOCKED.
-- Infra tabs: **hide infra, defer Board** — LOCKED.
-- Accent: **graphite `rgb(70,75,86)`** — LOCKED.
+Operational note (still current): the Go server must be rebuilt for any
+`defaultconfig` change to ship — `task build:backend:quickdev --force`; the task
+cache does NOT invalidate on `defaultconfig` JSON edits.
