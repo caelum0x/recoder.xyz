@@ -34,7 +34,7 @@ export default function TermsOfServicePage() {
         <div className="container mx-auto max-w-4xl">
           <div className="mb-12">
             <h1 className="text-4xl md:text-5xl font-bold mb-4">Terms of Service</h1>
-            <p className="text-gray-400">Last updated: November 19, 2024</p>
+            <p className="text-gray-400">Last updated: July 31, 2026</p>
           </div>
 
           <div className="prose prose-invert max-w-none space-y-8">
@@ -48,20 +48,17 @@ export default function TermsOfServicePage() {
               </p>
             </section>
 
-            {/* Beta Service */}
+            {/* Service Description */}
             <section>
-              <h2 className="text-2xl font-bold mb-4">2. Beta Service Status</h2>
-              <p className="text-gray-300 leading-relaxed mb-4">
-                Recoder.xyz is currently operating as a <strong className="text-white">FREE BETA</strong> service.
-                This means:
+              <h2 className="text-2xl font-bold mb-4">2. Description of the Service</h2>
+              <p className="text-gray-300 leading-relaxed">
+                Recoder is a self-hosted convergence workspace for AI coding agents, available as a
+                desktop application and a companion web platform. It lets you run coding agents (such
+                as Claude Code, Codex, and other agent CLIs) in parallel, isolated git worktrees using
+                your own API keys (BYOK), compare their divergent changes, and merge one reviewed,
+                evidence-backed result. Features and functionality may change over time, and the
+                Service may occasionally experience downtime or interruptions.
               </p>
-              <ul className="list-disc list-inside space-y-2 text-gray-300">
-                <li>The Service is provided at no charge during the beta period</li>
-                <li>Features and functionality may change without notice</li>
-                <li>The Service may experience downtime or interruptions</li>
-                <li>We may introduce pricing or subscription plans in the future</li>
-                <li>Beta users may receive special pricing or grandfather benefits when paid tiers launch</li>
-              </ul>
             </section>
 
             {/* BYOK Model */}
@@ -208,19 +205,59 @@ export default function TermsOfServicePage() {
               </p>
             </section>
 
-            {/* Future Pricing */}
+            {/* Subscriptions, Billing & Refunds */}
             <section>
-              <h2 className="text-2xl font-bold mb-4">10. Future Pricing and Subscriptions</h2>
+              <h2 className="text-2xl font-bold mb-4">10. Subscriptions, Billing, and Refunds</h2>
+
+              <h3 className="text-xl font-semibold mb-3 text-orange-500">10.1 Plans</h3>
               <p className="text-gray-300 leading-relaxed mb-4">
-                While Recoder.xyz is currently free during beta, we may introduce paid subscription tiers
-                or premium features in the future. If we do:
+                Recoder offers a free tier (bring your own API key) alongside optional paid subscription
+                plans that add hosted model access, higher usage limits, and additional features. The
+                free BYOK tier remains available; you are never obligated to upgrade to a paid plan.
+                Current plans and prices are shown on our{' '}
+                <Link href="/pricing" className="text-orange-500 hover:text-orange-400 underline">pricing page</Link>.
               </p>
-              <ul className="list-disc list-inside space-y-2 text-gray-300">
-                <li>We will provide advance notice to beta users</li>
-                <li>The BYOK (free tier) model will remain available</li>
-                <li>Beta users may receive special pricing or grandfather benefits</li>
-                <li>You are not obligated to upgrade to any paid plan</li>
+
+              <h3 className="text-xl font-semibold mb-3 text-orange-500">10.2 Merchant of Record (Creem)</h3>
+              <p className="text-gray-300 leading-relaxed mb-4">
+                Paid subscriptions are sold and processed by our Merchant of Record,{' '}
+                <a href="https://www.creem.io" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">Creem</a>.
+                When you purchase a plan, Creem is the seller of record: it handles checkout, payment
+                processing, and the collection and remittance of any applicable sales tax or VAT, and
+                it issues your invoice. Your purchase is therefore also subject to{' '}
+                <a href="https://www.creem.io/legal/terms" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">Creem&rsquo;s Terms</a>{' '}
+                and{' '}
+                <a href="https://www.creem.io/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:text-orange-400 underline">Privacy Policy</a>.
+              </p>
+
+              <h3 className="text-xl font-semibold mb-3 text-orange-500">10.3 Recurring Billing</h3>
+              <ul className="list-disc list-inside space-y-2 text-gray-300 mb-4">
+                <li>Paid plans are billed in advance on a recurring basis (weekly or monthly, per the plan you choose) until cancelled.</li>
+                <li>By subscribing, you authorize Creem to charge your payment method for each renewal at the then-current price.</li>
+                <li>We will give reasonable advance notice of any change to your subscription price before it takes effect.</li>
+                <li>Applicable taxes may be added at checkout based on your billing location.</li>
               </ul>
+
+              <h3 className="text-xl font-semibold mb-3 text-orange-500">10.4 Cancellation</h3>
+              <p className="text-gray-300 leading-relaxed mb-4">
+                You may cancel your subscription at any time from your account settings or via the
+                billing portal linked in your receipt. Cancellation stops future renewals; your plan
+                remains active until the end of the current paid period, after which your account
+                reverts to the free tier. You are responsible for cancelling before a renewal date to
+                avoid being charged for the next period.
+              </p>
+
+              <h3 className="text-xl font-semibold mb-3 text-orange-500">10.5 Refunds</h3>
+              <p className="text-gray-300 leading-relaxed mb-4">
+                If you are not satisfied, contact us at{' '}
+                <a href="mailto:contact@recoder.xyz" className="text-orange-500 hover:text-orange-400 underline">contact@recoder.xyz</a>{' '}
+                within <strong className="text-white">14 days</strong> of a charge and we will review
+                your request for a refund of that most recent payment. Refunds for duplicate or clearly
+                erroneous charges are always honored. Because payments are processed by Creem as
+                Merchant of Record, approved refunds are issued through Creem to your original payment
+                method. This policy does not limit any statutory refund or cancellation rights you may
+                have under the consumer-protection laws of your jurisdiction.
+              </p>
             </section>
 
             {/* Governing Law */}
@@ -237,8 +274,7 @@ export default function TermsOfServicePage() {
               <h2 className="text-2xl font-bold mb-4">12. Contact Information</h2>
               <p className="text-gray-300 leading-relaxed">
                 If you have any questions about these Terms, please contact us at:{' '}
-                <a href="mailto:recoderxyz@gmail.com" className="text-orange-500 hover:text-orange-400 underline">
-                  recoderxyz@gmail.com
+                <a href="mailto:contact@recoder.xyz" className="text-orange-500 hover:text-orange-400 underline">contact@recoder.xyz
                 </a>
               </p>
               <p className="text-gray-300 leading-relaxed mt-2">

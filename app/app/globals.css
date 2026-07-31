@@ -3,6 +3,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Font-family wiring (UNLAYERED — must win the cascade).
+ *
+ * @recoder/design-tokens/tokens.css ships an UNLAYERED `:root` that sets
+ * `--font-sans: Roobert` / `--font-mono: Roobert Mono` — bare family names that
+ * are NOT the family the app actually loads. The real font is loaded by
+ * next/font/local and exposed through `var(--font-roobert)` /
+ * `var(--font-roobert-mono)`. Because unlayered declarations always beat
+ * `@layer base`, defining these inside `@layer base` (as before) let the token
+ * default win → anything reading `var(--font-sans)` fell back to a system font.
+ * We re-point them here in an UNLAYERED block placed AFTER the token import, so
+ * this declaration wins by source order and the loaded Roobert is used.
+ */
+:root {
+  --font-sans: var(--font-roobert), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-roobert-mono), Consolas, monospace;
+}
+
 @layer base {
   :root {
     /* Safe area support for mobile notch/home indicator */
@@ -10,10 +28,6 @@
     --safe-area-bottom: env(safe-area-inset-bottom, 0px);
     --safe-area-left: env(safe-area-inset-left, 0px);
     --safe-area-right: env(safe-area-inset-right, 0px);
-
-    /* Roobert font family */
-    --font-sans: var(--font-roobert), system-ui, -apple-system, sans-serif;
-    --font-mono: var(--font-roobert-mono), Consolas, monospace;
 
     /* Professional Black/Orange/Purple Theme */
     --background: 0 0% 100%;
