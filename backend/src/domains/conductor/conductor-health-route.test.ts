@@ -37,7 +37,7 @@ const middleware = {
 /** A stub module that only implements `substrates()` (the only method `/health` hits). */
 function stubModule(substrates: readonly SubstrateAvailabilityView[]): ConductorModule {
   return {
-    substrates(): readonly SubstrateAvailabilityView[] {
+    async substrates(): Promise<readonly SubstrateAvailabilityView[]> {
       return substrates;
     },
   } as unknown as ConductorModule;

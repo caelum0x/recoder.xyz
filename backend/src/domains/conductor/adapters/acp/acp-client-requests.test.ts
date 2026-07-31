@@ -186,7 +186,8 @@ describe('createAcpClientRequestHandler', () => {
 
   it('fs/read_text_file reads within the worktree and applies the line window', async () => {
     const readFile = vi.fn(async () => 'a\nb\nc\nd');
-    const h = createAcpClientRequestHandler({ ...base(), readFile });
+    const realpath = vi.fn(async (p: string) => p); // identity: stays within root
+    const h = createAcpClientRequestHandler({ ...base(), readFile, realpath });
     const res = await h(
       makeRequest(5, 'fs/read_text_file', {
         path: 'src/app.ts',
@@ -223,7 +224,8 @@ describe('createAcpClientRequestHandler', () => {
 
   it('fs/write_text_file writes within the worktree and returns empty', async () => {
     const writeFile = vi.fn(async () => {});
-    const h = createAcpClientRequestHandler({ ...base(), writeFile });
+    const realpath = vi.fn(async (p: string) => p); // identity: stays within root
+    const h = createAcpClientRequestHandler({ ...base(), writeFile, realpath });
     const res = await h(
       makeRequest(8, 'fs/write_text_file', {
         path: 'out.txt',
@@ -248,6 +250,63 @@ describe('createAcpClientRequestHandler', () => {
       )
     ).rejects.toThrow(/escapes/);
     expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it('fs/read_text_file REFUSES a committed symlink whose realpath escapes the worktree', async () => {
+    // 'creds' is lexically inside the worktree, but is a symlink to a host key.
+    const readFile = vi.fn(async () => 'PRIVATE KEY MATERIAL');
+    const realpath = vi.fn(async () => '/root/.ssh/id_ed25519');
+    const h = createAcpClientRequestHandler({ ...base(), readFile, realpath });
+    await expect(
+      h(
+        makeRequest(11, 'fs/read_text_file', {
+          path: 'creds',
+          sessionId: 's1',
+        })
+      )
+    ).rejects.toThrow(/escapes/);
+    expect(realpath).toHaveBeenCalledWith('/wt/ws-1/creds');
+    expect(readFile).not.toHaveBeenCalled();
+  });
+
+  it('fs/write_text_file REFUSES when the parent dir realpaths outside the worktree', async () => {
+    // 'subdir' is a committed symlink to /etc; the new leaf does not exist yet,
+    // so containment must realpath the nearest existing ancestor (the parent).
+    const writeFile = vi.fn(async () => {});
+    const realpath = vi.fn(async (p: string) => {
+      if (p === '/wt/ws-1/subdir/evil.conf') {
+        const e = new Error('ENOENT') as NodeJS.ErrnoException;
+        e.code = 'ENOENT';
+        throw e;
+      }
+      return '/etc'; // realpath of the symlinked parent 'subdir'
+    });
+    const h = createAcpClientRequestHandler({ ...base(), writeFile, realpath });
+    await expect(
+      h(
+        makeRequest(12, 'fs/write_text_file', {
+          path: 'subdir/evil.conf',
+          content: 'x',
+          sessionId: 's1',
+        })
+      )
+    ).rejects.toThrow(/escapes/);
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it('fs/write_text_file allows a write whose realpath stays within the worktree', async () => {
+    const writeFile = vi.fn(async () => {});
+    const realpath = vi.fn(async (p: string) => p); // identity: stays within root
+    const h = createAcpClientRequestHandler({ ...base(), writeFile, realpath });
+    const res = await h(
+      makeRequest(13, 'fs/write_text_file', {
+        path: 'sub/out.txt',
+        content: 'hi',
+        sessionId: 's1',
+      })
+    );
+    expect(writeFile).toHaveBeenCalledWith('/wt/ws-1/sub/out.txt', 'hi');
+    expect(res).toEqual({});
   });
 
   it('an unsupported method throws a truthful error (becomes a JSON-RPC error)', async () => {

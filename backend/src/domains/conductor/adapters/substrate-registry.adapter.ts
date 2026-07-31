@@ -35,8 +35,16 @@ const KNOWN_SUBSTRATES: readonly SubstrateKind[] = [
 export interface ConductorRegistry {
   /** The narrow registry port the `WorkspaceEngine` drives (get/list). */
   readonly registry: SubstrateRegistryPort;
-  /** Truthful per-substrate availability surfaced by `GET /substrates`. */
-  availability(): readonly SubstrateAvailabilityView[];
+  /**
+   * Truthful per-substrate availability surfaced by `GET /substrates`.
+   *
+   * ASYNC because it is the REAL probe: for every registered substrate it awaits
+   * that substrate's own `available()` (git/tmux/CLI/creds probe) and reports the
+   * truthful `{ available, reason? }` — NOT merely "is it registered?". A substrate
+   * can be bootstrapped/registered yet unusable (e.g. `acp` with `claude-code-acp`
+   * absent); mere registration must never be reported as availability.
+   */
+  availability(): Promise<readonly SubstrateAvailabilityView[]>;
   /**
    * Resolve the FULL contract (capture/diff/teardown/continueRun) for the review/
    * publish/continue ops — the engine's narrow `registry.get` deliberately omits
@@ -66,24 +74,69 @@ export function createConductorRegistry(
     substrates.map(s => [s.id, s])
   );
 
-  const availability = (): readonly SubstrateAvailabilityView[] =>
-    KNOWN_SUBSTRATES.map(id => {
-      // The effective pinned tmux binary (config pin, else PATH `tmux`) is a config
-      // fact independent of whether the substrate is wired, so surface it on the
-      // `tmux_worktree` entry in BOTH branches. This gives the shared-tmux-server
-      // invariant (durable-shell unify §A1a) a real source for the wave-side attach.
-      const pin =
-        id === 'tmux_worktree'
-          ? { tmuxBin: deps.config.tmuxBin ?? 'tmux' }
-          : {};
-      if (registered.has(id)) return { id, available: true, ...pin };
-      return {
-        id,
-        available: false,
-        reason: reasonUnavailable(id, deps.config),
-        ...pin,
-      };
-    });
+  const availability = async (): Promise<
+    readonly SubstrateAvailabilityView[]
+  > =>
+    Promise.all(
+      KNOWN_SUBSTRATES.map(async id => {
+        // The effective pinned tmux binary (config pin, else PATH `tmux`) is a config
+        // fact independent of whether the substrate is wired, so surface it on the
+        // `tmux_worktree` entry in EVERY branch. This gives the shared-tmux-server
+        // invariant (durable-shell unify §A1a) a real source for the wave-side attach.
+        const pin =
+          id === 'tmux_worktree'
+            ? { tmuxBin: deps.config.tmuxBin ?? 'tmux' }
+            : {};
+
+        // Not registered ⇒ truthfully unavailable with the wiring/creds reason.
+        if (!registered.has(id)) {
+          return {
+            id,
+            available: false,
+            reason: reasonUnavailable(id, deps.config),
+            ...pin,
+          };
+        }
+
+        // Registered ⇒ ask the substrate's OWN probe for the truthful answer. Mere
+        // registration is NOT availability: a bootstrapped substrate (e.g. `acp`)
+        // can be unusable when its binary/creds are absent.
+        const substrate = fullById.get(id);
+        if (!substrate) {
+          // Registered in the engine registry but no full contract to probe — we
+          // genuinely cannot confirm it, so report unavailable rather than fake true.
+          return {
+            id,
+            available: false,
+            reason: `${id} registered but no probe contract available`,
+            ...pin,
+          };
+        }
+
+        try {
+          const probe = await substrate.available();
+          return {
+            id,
+            available: probe.available,
+            // Only carry a reason when the substrate is down (mirrors the shape
+            // callers already tolerate; a reason-less `available:true` stays clean).
+            ...(probe.available ? {} : { reason: probe.reason ?? 'unavailable' }),
+            ...pin,
+          };
+        } catch (err) {
+          // DEGRADE-TRUTHFUL: a throwing probe never crashes the whole endpoint —
+          // that one substrate is reported down with the error as its reason.
+          return {
+            id,
+            available: false,
+            reason: `availability probe failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+            ...pin,
+          };
+        }
+      })
+    );
 
   const getFull = (id: SubstrateKind): ConductorSubstrate => {
     const substrate = fullById.get(id);

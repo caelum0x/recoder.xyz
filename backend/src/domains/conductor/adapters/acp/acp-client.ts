@@ -120,8 +120,15 @@ export class AcpClient {
       const result = await this.deps.onRequest(req);
       this.deps.send(encodeAcpMessage(makeResponse(req.id, result ?? null)));
     } catch (err) {
+      // Preserve a public JSON-RPC code carried by the handler's error
+      // (MethodNotFound / InvalidParams); only synthesize InternalError when
+      // the thrown value has no numeric code. Duck-typed to keep this file
+      // disjoint from the request handler's error class.
+      const code = typeof (err as { code?: unknown })?.code === 'number'
+        ? (err as { code: number }).code
+        : AcpErrorCode.InternalError;
       const message = err instanceof Error ? err.message : 'handler failed';
-      this.deps.send(encodeAcpMessage(makeError(req.id, AcpErrorCode.InternalError, message)));
+      this.deps.send(encodeAcpMessage(makeError(req.id, code, message)));
     }
   }
 }

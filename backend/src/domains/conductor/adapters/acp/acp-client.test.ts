@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { AcpClient } from './acp-client.js';
-import { encodeAcpMessage, makeResponse, makeError, makeRequest, makeNotification, decodeAcpStream } from './acp-codec.js';
+import { AcpErrorCode, encodeAcpMessage, makeResponse, makeError, makeRequest, makeNotification, decodeAcpStream } from './acp-codec.js';
 
 function harness(onRequest?: (req: { method: string; params?: unknown; id: number | string }) => unknown) {
   const sent: string[] = [];
@@ -83,6 +83,49 @@ describe('AcpClient agent-initiated requests', () => {
     client.feed(encodeAcpMessage(makeRequest(9, 'terminal/create', {})));
     const resp = lastSent() as { id: number; error?: { code: number } };
     expect(resp.error?.code).toBe(-32601);
+  });
+
+  it('preserves a MethodNotFound (-32601) code thrown by the handler', async () => {
+    const { client, lastSent } = harness(() => {
+      throw Object.assign(new Error('unknown method: session/mystery'), {
+        code: AcpErrorCode.MethodNotFound,
+      });
+    });
+    client.feed(encodeAcpMessage(makeRequest(10, 'session/mystery', {})));
+    await vi.waitFor(() => {
+      const resp = lastSent() as { id: number; error?: { code: number; message: string } };
+      expect(resp.id).toBe(10);
+      expect(resp.error?.code).toBe(-32601);
+      expect(resp.error?.message).toBe('unknown method: session/mystery');
+    });
+  });
+
+  it('preserves an InvalidParams (-32602) code thrown by an fs path-escape refusal', async () => {
+    const { client, lastSent } = harness(() => {
+      throw Object.assign(new Error('path escapes workspace'), {
+        code: AcpErrorCode.InvalidParams,
+      });
+    });
+    client.feed(encodeAcpMessage(makeRequest(11, 'fs/read_text_file', { path: '../../etc/passwd' })));
+    await vi.waitFor(() => {
+      const resp = lastSent() as { id: number; error?: { code: number; message: string } };
+      expect(resp.id).toBe(11);
+      expect(resp.error?.code).toBe(-32602);
+      expect(resp.error?.message).toBe('path escapes workspace');
+    });
+  });
+
+  it('falls back to InternalError (-32603) for a plain Error with no numeric code', async () => {
+    const { client, lastSent } = harness(() => {
+      throw new Error('gate denied');
+    });
+    client.feed(encodeAcpMessage(makeRequest(12, 'fs/read_text_file', {})));
+    await vi.waitFor(() => {
+      const resp = lastSent() as { id: number; error?: { code: number; message: string } };
+      expect(resp.id).toBe(12);
+      expect(resp.error?.code).toBe(-32603);
+      expect(resp.error?.message).toBe('gate denied');
+    });
   });
 });
 

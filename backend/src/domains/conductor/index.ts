@@ -564,8 +564,8 @@ export interface ConductorModule {
    * truthful no-op (no push); a push fault NEVER blocks or delays the completion.
    */
   setRunSignalPush(port: RunSignalPushPort): void;
-  /** Truthful per-substrate availability (`GET /substrates`). */
-  substrates(): readonly SubstrateAvailabilityView[];
+  /** Truthful per-substrate availability (`GET /substrates`) — awaits each substrate's live `available()` probe. */
+  substrates(): Promise<readonly SubstrateAvailabilityView[]>;
   /**
    * Every selectable runtime (`GET /runtimes`): PATH-probed CLIs + the native
    * in-process openfang runtime with its live engine availability (truthful

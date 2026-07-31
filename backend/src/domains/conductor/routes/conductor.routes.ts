@@ -82,7 +82,10 @@ export interface ConductorRouterDeps {
   readonly listRecoderSessions?: () => Promise<readonly string[]>;
 }
 
-const SUBSTRATES: readonly WorkspaceSubstrate[] = ['tmux_worktree', 'daytona', 'in_process', 'ssh'];
+// Must match the full WorkspaceSubstrate union. `'acp'` is opt-in and degrades
+// truthfully downstream (its adapter's available()/launch() throw `acp unavailable`
+// when `claude-code-acp` is absent), so allowing selection here loses no gating.
+const SUBSTRATES: readonly WorkspaceSubstrate[] = ['tmux_worktree', 'daytona', 'in_process', 'ssh', 'acp'];
 
 /** Every canonical workspace state (validation surface for `/advance` bodies). */
 const WORKSPACE_STATES: readonly WorkspaceState[] = [
@@ -138,7 +141,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     '/substrates',
     middleware.authenticate,
     asyncHandler(async (_req, res) => {
-      sendSuccess(res, { substrates: module.substrates() });
+      sendSuccess(res, { substrates: await module.substrates() });
     }),
   );
 
@@ -649,7 +652,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     '/health',
     middleware.authenticate,
     asyncHandler(async (_req, res) => {
-      const substrates = module.substrates();
+      const substrates = await module.substrates();
       const tmux = substrates.find((s) => s.id === 'tmux_worktree');
       const available = substrates.some((s) => s.available);
       sendSuccess(res, {

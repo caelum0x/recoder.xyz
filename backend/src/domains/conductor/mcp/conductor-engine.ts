@@ -128,7 +128,7 @@ export function buildConductorMcpTools(module: ConductorModule): readonly McpToo
     {
       name: 'conductor_substrates',
       description: 'Truthful per-substrate availability (tmux_worktree/daytona/in_process/ssh).',
-      handler: () => ({ substrates: module.substrates() }),
+      handler: async () => ({ substrates: await module.substrates() }),
     },
     {
       name: 'conductor_reconcile_findings',
