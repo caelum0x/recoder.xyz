@@ -1,26 +1,14 @@
-# Recoder.xyz Documentation
+# Recoder Documentation
 
-## Contents
+The canonical, code-grounded documentation lives at the repo root:
 
-- [User Guide](./USER_GUIDE.md) - Getting started, features, and usage
-- [API Documentation](./API.md) - REST API reference
-- [CLI Guide](./CLI.md) - Command-line interface documentation
-
-## Quick Links
-
-### For Users
-- [Getting Started](./USER_GUIDE.md#getting-started)
-- [Web IDE Usage](./USER_GUIDE.md#using-the-web-ide)
-- [CLI Commands](./CLI.md)
-- [Troubleshooting](./USER_GUIDE.md#troubleshooting)
-
-### For Developers
-- [API Reference](./API.md)
-- [Authentication](./API.md#authentication)
-- [MCP Integration](./API.md#mcp-model-context-protocol)
+- **[/docs/README.md](../../docs/README.md)** — the documentation map (start here)
+- **[Product thesis](../../docs/PRODUCT-THESIS.md)** — what Recoder is and why
+- **[Architecture](../../docs/RECODER-ARCHITECTURE.md)** — the layer stack + engine→module map
+- **[Status](../../docs/STATUS.md)** — the single source of truth for current state
 
 ## Support
 
 - Website: [recoder.xyz](https://recoder.xyz)
-- GitHub: [github.com/recoder-team/recoder](https://github.com/recoder-team/recoder)
-- Discord: [discord.gg/recoder](https://discord.gg/recoder)
+- GitHub: [github.com/caelum0x/recoder.xyz](https://github.com/caelum0x/recoder.xyz)
+- Email: contact@recoder.xyz
