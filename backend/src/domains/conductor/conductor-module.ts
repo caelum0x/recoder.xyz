@@ -1311,7 +1311,7 @@ export class ConductorComposer implements ConductorModule {
     }
   }
 
-  substrates(): readonly SubstrateAvailabilityView[] {
+  async substrates(): Promise<readonly SubstrateAvailabilityView[]> {
     return this.registry.availability();
   }
 
@@ -2493,7 +2493,7 @@ export class ConductorComposer implements ConductorModule {
   async health(): Promise<ComponentHealth> {
     return buildConductorHealth({
       config: this.cfg,
-      substrates: this.registry.availability(),
+      substrates: await this.registry.availability(),
       repositoryAvailable: true,
       liveConnections: this.terminalService.liveConnections(),
     });
@@ -2504,7 +2504,9 @@ export class ConductorComposer implements ConductorModule {
     this.started = true;
     this.log.info(
       {
-        substrates: this.registry.availability().filter((s) => s.available).map((s) => s.id),
+        substrates: (await this.registry.availability())
+          .filter((s) => s.available)
+          .map((s) => s.id),
         tmuxControlMode: this.cfg.tmuxControlMode,
       },
       'conductor module started',

@@ -27,6 +27,7 @@ import path from 'node:path';
 import {
   readFile as fsReadFile,
   writeFile as fsWriteFile,
+  realpath as fsRealpath,
 } from 'node:fs/promises';
 import { AcpErrorCode, type AcpRequest } from './acp-codec.js';
 
@@ -176,6 +177,12 @@ export interface AcpClientRequestHandlerDeps {
   readonly readFile?: (absPath: string) => Promise<string>;
   /** Write a file (default: node fs, utf8); injected in tests. */
   readonly writeFile?: (absPath: string, content: string) => Promise<void>;
+  /**
+   * Canonicalize a path by resolving symlinks (default: node fs.realpath);
+   * injected in tests. Used to re-check containment against the REAL
+   * filesystem so a committed symlink can't escape the worktree.
+   */
+  readonly realpath?: (absPath: string) => Promise<string>;
   readonly warn?: (message: string, meta?: unknown) => void;
 }
 
@@ -203,13 +210,59 @@ export function createAcpClientRequestHandler(
   const readFile = deps.readFile ?? ((p: string) => fsReadFile(p, 'utf8'));
   const writeFile =
     deps.writeFile ?? ((p: string, c: string) => fsWriteFile(p, c, 'utf8'));
+  const realpath = deps.realpath ?? ((p: string) => fsRealpath(p));
   const root = path.resolve(deps.workspaceRoot);
 
-  /** Resolve a requested path INTO the worktree, or null if it escapes. */
+  /** True if an already-absolute path lies at or under the worktree root. */
+  const isWithin = (abs: string): boolean =>
+    abs === root || abs.startsWith(root + path.sep);
+
+  /** Lexical containment: `../` traversal + absolute escape, or null if it escapes. */
   const contain = (requested: string): string | null => {
     if (typeof requested !== 'string' || requested === '') return null;
     const abs = path.resolve(root, requested);
-    return abs === root || abs.startsWith(root + path.sep) ? abs : null;
+    return isWithin(abs) ? abs : null;
+  };
+
+  /**
+   * Canonicalize the nearest EXISTING path on the way to `abs`, resolving
+   * symlinks. If `abs` exists it is realpath'd directly (catching a symlinked
+   * leaf); if it does not, we walk up to the closest existing ancestor and
+   * realpath THAT (catching a symlinked parent that redirects a new file).
+   * A non-ENOENT failure is propagated so the caller can DENY — never fall open.
+   */
+  const realNearestExisting = async (abs: string): Promise<string> => {
+    let current = abs;
+    for (;;) {
+      try {
+        return await realpath(current);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') throw err;
+        const parent = path.dirname(current);
+        if (parent === current) throw err; // reached fs root, nothing exists
+        current = parent;
+      }
+    }
+  };
+
+  /**
+   * Full containment: the cheap lexical gate FIRST, then a realpath re-check of
+   * the real filesystem target (or its nearest existing ancestor for a new
+   * file). `path.resolve` normalizes `..` but does NOT follow symlinks, so a
+   * committed symlink (git mode 120000) could otherwise pass the lexical check
+   * and let `fsReadFile`/`fsWriteFile` follow it outside the worktree. Returns
+   * the absolute path to operate on, or null if it escapes / cannot be verified.
+   */
+  const containReal = async (requested: string): Promise<string | null> => {
+    const abs = contain(requested);
+    if (abs === null) return null;
+    let real: string;
+    try {
+      real = await realNearestExisting(abs);
+    } catch {
+      return null; // degrade-truthful: any realpath failure DENIES
+    }
+    return isWithin(real) ? abs : null;
   };
 
   return async (req: AcpRequest): Promise<unknown> => {
@@ -232,7 +285,7 @@ export function createAcpClientRequestHandler(
 
       case 'fs/read_text_file': {
         const p = (req.params ?? {}) as Record<string, unknown>;
-        const abs = contain(String(p.path ?? ''));
+        const abs = await containReal(String(p.path ?? ''));
         if (!abs) {
           deps.warn?.('acp fs read outside worktree — refused', p.path);
           throw new AcpHandlerError(
@@ -252,7 +305,7 @@ export function createAcpClientRequestHandler(
 
       case 'fs/write_text_file': {
         const p = (req.params ?? {}) as Record<string, unknown>;
-        const abs = contain(String(p.path ?? ''));
+        const abs = await containReal(String(p.path ?? ''));
         if (!abs) {
           deps.warn?.('acp fs write outside worktree — refused', p.path);
           throw new AcpHandlerError(
