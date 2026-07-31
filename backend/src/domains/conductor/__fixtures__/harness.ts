@@ -32,7 +32,11 @@ import type {
   SteerTransportPort,
 } from '../ports/index.js';
 import type { GovernanceEffect } from '../../governance/types.js';
-import { createConductorModule, type ConductorModule, type ConductorModuleDeps } from '../index.js';
+import {
+  createConductorModule,
+  type ConductorModule,
+  type ConductorModuleDeps,
+} from '../index.js';
 
 /** A no-op structured logger with a self-returning `child` (pino-shaped). */
 export function makeLogger(): Logger {
@@ -135,10 +139,20 @@ export function makeGate(effect: GovernanceEffect = 'allow'): FakeGate {
       return verdict(action);
     },
     async enforceTool() {
-      return { outcome: current === 'allow' ? 'allowed' : 'denied', reason: 'x', degraded: false, engine: 'ts' };
+      return {
+        outcome: current === 'allow' ? 'allowed' : 'denied',
+        reason: 'x',
+        degraded: false,
+        engine: 'ts',
+      };
     },
     async route(action) {
-      return { routable: current === 'allow', tier: 'low', reason: 'x', target: action };
+      return {
+        routable: current === 'allow',
+        tier: 'low',
+        reason: 'x',
+        target: action,
+      };
     },
     async recordAudit(entry) {
       audits.push(entry);
@@ -176,6 +190,12 @@ export interface FakeSubstrateOptions {
   available?: boolean;
   unavailableReason?: string;
   diff?: SubstrateDiff;
+  /**
+   * exitCode() for a handle with no live run (default `null` = gone/clean). Set to
+   * `undefined` to model a substrate that can't determine an orphan's outcome (an
+   * interrupted ACP session), which reconcile must finalize as failed, not exit-0.
+   */
+  missingExitCode?: number | null | undefined;
 }
 
 /**
@@ -188,6 +208,7 @@ export class FakeSubstrate implements ConductorSubstrate {
   readonly #available: boolean;
   readonly #reason: string;
   readonly #diff: SubstrateDiff;
+  readonly #missingExit: number | null | undefined;
   readonly #runs = new Map<string, FakeRun>();
   #counter = 0;
 
@@ -195,7 +216,15 @@ export class FakeSubstrate implements ConductorSubstrate {
     this.id = options.id ?? 'tmux_worktree';
     this.#available = options.available ?? true;
     this.#reason = options.unavailableReason ?? 'fake substrate disabled';
-    this.#diff = options.diff ?? { stat: '', patch: '', untracked: [], changedFiles: 0 };
+    this.#diff = options.diff ?? {
+      stat: '',
+      patch: '',
+      untracked: [],
+      changedFiles: 0,
+    };
+    // Distinguish an explicit `undefined` (interrupted/unknown orphan) from "not set".
+    this.#missingExit =
+      'missingExitCode' in options ? options.missingExitCode : null;
   }
 
   capabilities(): SubstrateCapabilities {
@@ -210,7 +239,9 @@ export class FakeSubstrate implements ConductorSubstrate {
   }
 
   async available(): Promise<SubstrateAvailability> {
-    return this.#available ? { available: true } : { available: false, reason: this.#reason };
+    return this.#available
+      ? { available: true }
+      : { available: false, reason: this.#reason };
   }
 
   async launch(input: SubstrateLaunchInput): Promise<SubstrateHandle> {
@@ -245,7 +276,7 @@ export class FakeSubstrate implements ConductorSubstrate {
 
   async exitCode(handle: SubstrateHandle): Promise<number | null | undefined> {
     const run = this.#runs.get(handle.ref);
-    if (!run || run.removed) return null;
+    if (!run || run.removed) return this.#missingExit; // gone (null) or interrupted (undefined)
     if (run.alive) return undefined; // NEVER a fabricated 0 while running
     return run.exitCode;
   }
@@ -254,7 +285,10 @@ export class FakeSubstrate implements ConductorSubstrate {
     return this.#diff;
   }
 
-  async teardown(handle: SubstrateHandle, options?: { removeIsolation?: boolean }): Promise<void> {
+  async teardown(
+    handle: SubstrateHandle,
+    options?: { removeIsolation?: boolean }
+  ): Promise<void> {
     const run = this.#runs.get(handle.ref);
     if (!run) return;
     run.alive = false;
@@ -262,7 +296,10 @@ export class FakeSubstrate implements ConductorSubstrate {
   }
 
   /** In-place relaunch (continue/chat): a fresh run in the SAME worktree. */
-  async continueRun(handle: SubstrateHandle, input: ContinueRunInput): Promise<SubstrateHandle> {
+  async continueRun(
+    handle: SubstrateHandle,
+    input: ContinueRunInput
+  ): Promise<SubstrateHandle> {
     const run = this.#runs.get(handle.ref);
     if (run) {
       run.alive = true;
@@ -341,7 +378,8 @@ export function composeConductor(options: ComposeOptions = {}): {
   const module = createConductorModule({
     config: makeConfig(),
     logger: makeLogger(),
-    executor: options.executor ?? makeExecutor(options.executorAvailable ?? false),
+    executor:
+      options.executor ?? makeExecutor(options.executorAvailable ?? false),
     middleware: makeMiddleware(),
     gate,
     ...(options.substrates ? { substrates: options.substrates } : {}),
@@ -351,10 +389,16 @@ export function composeConductor(options: ComposeOptions = {}): {
     ...(options.previewVerify ? { previewVerify: options.previewVerify } : {}),
     ...(options.plan ? { plan: options.plan } : {}),
     ...(options.colbertIndex ? { colbertIndex: options.colbertIndex } : {}),
-    ...(options.steerTransport ? { steerTransport: options.steerTransport } : {}),
+    ...(options.steerTransport
+      ? { steerTransport: options.steerTransport }
+      : {}),
     ...(options.mcpInject ? { mcpInject: options.mcpInject } : {}),
-    ...(options.checkpointStore ? { checkpointStore: options.checkpointStore } : {}),
-    ...(options.repoSetupStore ? { repoSetupStore: options.repoSetupStore } : {}),
+    ...(options.checkpointStore
+      ? { checkpointStore: options.checkpointStore }
+      : {}),
+    ...(options.repoSetupStore
+      ? { repoSetupStore: options.repoSetupStore }
+      : {}),
     ...(options.repoSetupExec ? { repoSetupExec: options.repoSetupExec } : {}),
     ...(options.substrateScan ? { substrateScan: options.substrateScan } : {}),
     ...(options.workspaceGrid ? { workspaceGrid: options.workspaceGrid } : {}),
