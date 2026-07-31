@@ -1,6 +1,6 @@
 # Conductor Design Reference
 
-Screenshots of Conductor (conductor.build) macOS app, captured 2026-07-25. Competitor reference for the Recoder desktop cockpit — same product space (parallel coding-agent workspaces over git worktrees).
+Screenshots of Conductor (conductor.build) macOS app, captured 2026-07-25. Competitor reference for the Recoder desktop app — same product space (parallel coding-agent workspaces over git worktrees).
 
 | File | Surface | Notes |
 | --- | --- | --- |

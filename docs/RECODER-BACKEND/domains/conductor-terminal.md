@@ -343,16 +343,18 @@ WRITES additionally pass `gate.decide`. `/internal/*` (if any) is
 > Note: the `/continue` edge shipped as `/workspaces/:id/message`; cancellation
 > flows only through `/stop` (not `/advance`).
 
-> **Shipped product features (cockpit UI + this domain's API):** (1) **Checkpoints**
+> **Shipped product features (desktop UI + this domain's API).** The desktop surface
+> is the Wave `recoder-*` frontend (`apps/desktop/app/frontend/app/view/recoder/`); the
+> old Preact "cockpit" SPA was deleted (2026-07-31, recoder-flgn). (1) **Checkpoints**
 > — snapshot git + context, restore, or branch a new workspace from a checkpoint
-> (`/workspaces/:id/checkpoints[/…]`); cockpit `CheckpointsPanel`. (2) **Multi-agent
-> compare** — parallel agents in a task group shown side-by-side
-> (`/workspaces/compare?taskGroup=` + `/workspaces/:id/siblings`); cockpit
-> `ComparePanel` + `CompareGroupsBar`. (3) **Board search/history** — search + filter
-> the board by query/repo/agent/state/archived (`/workspaces?q=&repo=&agent=&state=&archived=`
-> + `/workspaces/archived`); cockpit `BoardSearch`. (4) **Repo setup + PR status** —
-> a per-repo setup script runs on worktree create, and `/workspaces/:id/pr-status`
-> reports branch PR state via `gh`; cockpit `RepoSettings` + PR chip.
+> (`/workspaces/:id/checkpoints[/…]`). (2) **Multi-agent compare** — parallel agents in
+> a task group shown side-by-side (`/workspaces/compare?taskGroup=` +
+> `/workspaces/:id/siblings`); desktop `recoder-compare.tsx`. (3) **Board search/history**
+> — search + filter the board by query/repo/agent/state/archived
+> (`/workspaces?q=&repo=&agent=&state=&archived=` + `/workspaces/archived`); desktop
+> `recoder-board-logic.ts`. (4) **Repo setup + PR status** — a per-repo setup script runs
+> on worktree create, and `/workspaces/:id/pr-status` reports branch PR state via `gh`;
+> the PR chip renders in the desktop compare panel.
 
 ### WebSocket
 | Path | Purpose |
