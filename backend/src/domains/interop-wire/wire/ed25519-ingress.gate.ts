@@ -31,7 +31,7 @@ import type { Ed25519Mode } from '../config.js';
 import type { AgentRegistryRepo } from '../ports/agent-registry.repo.js';
 import type { IngressResult } from '../types.js';
 import type { EnvelopeService } from './a2a-envelope.service.js';
-import type { SignedIngressGate } from './signed-ingress.gate.js';
+import type { IngressAdmissionContext, SignedIngressGate } from './signed-ingress.gate.js';
 
 /** Resolve the ed25519 public key trusted for a signature `key_id`; `null` ⇒ unknown. */
 export type PeerKeyResolver = (keyId: string) => Promise<string | null>;
@@ -77,6 +77,16 @@ export interface Ed25519IngressGateDeps {
   readonly envelope: EnvelopeService;
   readonly resolveKey: PeerKeyResolver;
   readonly mode: Ed25519Mode;
+  /**
+   * Refuse an EXTERNAL (untrusted) shared-HMAC SIGNED envelope rather than
+   * verifying it against the symmetric secret (audit #27). The shared HMAC is a
+   * secret ANY holder can forge, so when this is `true` (production posture,
+   * wired from `requireSignedIngress`) a cross-tenant sender MUST present a
+   * per-sender ed25519 signature; the shared-HMAC path is reserved for
+   * `trusted` intra-cluster callers. When `false` (local-dev insecure posture)
+   * non-ed25519 traffic falls through to the inner gate unchanged.
+   */
+  readonly refuseExternalHmac: boolean;
   /** Max ms of future clock skew tolerated on `signed_at` (SDK default: 5 min). */
   readonly maxFutureSkewMs?: number;
   readonly logger?: Logger;
@@ -124,7 +134,7 @@ function checkTiming(env: SignedEnvelope, maxFutureSkewMs: number, now?: Date): 
  * gate). Pure factory; never throws on untrusted input.
  */
 export function createEd25519IngressGate(deps: Ed25519IngressGateDeps): SignedIngressGate {
-  const { inner, envelope, resolveKey, mode, logger } = deps;
+  const { inner, envelope, resolveKey, mode, refuseExternalHmac, logger } = deps;
   const maxFutureSkewMs = deps.maxFutureSkewMs ?? DEFAULT_MAX_FUTURE_SKEW_MS;
 
   async function verify(env: SignedEnvelope, now?: Date): Promise<Rejection | null> {
@@ -155,9 +165,31 @@ export function createEd25519IngressGate(deps: Ed25519IngressGateDeps): SignedIn
   }
 
   return {
-    async admit<TPayload = unknown>(value: unknown, now?: Date): Promise<IngressResult<TPayload>> {
+    async admit<TPayload = unknown>(
+      value: unknown,
+      now?: Date,
+      context?: IngressAdmissionContext,
+    ): Promise<IngressResult<TPayload>> {
       if (!isSignedEnvelope(value) || value.signature.algorithm !== 'ed25519') {
-        return inner.admit<TPayload>(value, now);
+        // Non-ed25519: a shared-HMAC SIGNED envelope, or a bare/non-envelope value.
+        // The symmetric shared-HMAC secret is forgeable by any holder, so an
+        // EXTERNAL (untrusted) caller that presents a shared-HMAC signature is
+        // REFUSED here — it must use a per-sender ed25519 signature. Fail-closed:
+        // we never verify an external envelope against the shared secret. Bare /
+        // non-envelope values are NOT refused here (they carry no shared-HMAC
+        // claim); they fall through so the inner gate fail-closes per its posture.
+        if (refuseExternalHmac && !context?.trusted && isSignedEnvelope(value)) {
+          logger?.warn(
+            { keyId: value.signature.key_id, algorithm: value.signature.algorithm },
+            'external A2A ingress presented a shared-HMAC signature — refused (per-sender ed25519 required)',
+          );
+          return denied(
+            401,
+            'external_ingress_requires_ed25519',
+            'External A2A ingress must present a per-sender ed25519 signature; the shared-HMAC path is reserved for intra-cluster callers.',
+          );
+        }
+        return inner.admit<TPayload>(value, now, context);
       }
       let rejection: Rejection | null;
       try {

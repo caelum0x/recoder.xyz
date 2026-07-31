@@ -74,14 +74,27 @@ function fakeLogger(): { logger: Logger; warn: ReturnType<typeof vi.fn> } {
   return { logger, warn };
 }
 
-function buildGate(opts: { mode: 'permissive' | 'enforce'; keys?: Record<string, string>; resolveKey?: (keyId: string) => Promise<string | null> }) {
+function buildGate(opts: {
+  mode: 'permissive' | 'enforce';
+  keys?: Record<string, string>;
+  resolveKey?: (keyId: string) => Promise<string | null>;
+  /** Production posture (default): refuse EXTERNAL shared-HMAC ingress. */
+  refuseExternalHmac?: boolean;
+  /** Dev posture: the inner HMAC gate admits unsigned/insecure ingress. */
+  allowInsecure?: boolean;
+}) {
   const envelope = createEnvelopeService({ hmacSecret: HMAC_SECRET, keyId: 'k', requireSignature: true });
-  const inner = createSignedIngressGate(envelope, { requireSigned: true, hmacSecret: HMAC_SECRET, allowInsecure: false });
+  const inner = createSignedIngressGate(envelope, {
+    requireSigned: true,
+    hmacSecret: HMAC_SECRET,
+    allowInsecure: opts.allowInsecure ?? false,
+  });
   const { logger, warn } = fakeLogger();
   const gate = createEd25519IngressGate({
     inner,
     envelope,
     mode: opts.mode,
+    refuseExternalHmac: opts.refuseExternalHmac ?? true,
     resolveKey: opts.resolveKey ?? createPeerKeyResolver({ staticKeys: opts.keys ?? { 'peer:golden': PUBLIC_HEX } }),
     logger,
   });
@@ -166,12 +179,47 @@ describe('ed25519 ingress gate', () => {
     expect(result).toMatchObject({ admitted: false, status: 400, code: 'envelope_payload_malformed' });
   });
 
-  it('falls through to the frozen HMAC gate for non-ed25519 traffic (both directions)', async () => {
-    const { gate, envelope } = buildGate({ mode: 'enforce' });
-    const sealed = envelope.sealEnvelope(envelope.buildEnvelope({ from: 'a', kind: 'k', payload: { ok: true } }));
-    await expect(gate.admit(sealed)).resolves.toMatchObject({ admitted: true, payload: { ok: true } });
+  it('bare / garbage non-envelope values still fall through fail-closed (inner gate posture)', async () => {
+    // Not signed envelopes ⇒ never the ed25519-required refusal; the inner HMAC
+    // gate denies them per its posture (requireSigned here ⇒ deny).
+    const { gate } = buildGate({ mode: 'enforce' });
     await expect(gate.admit({ garbage: true })).resolves.toMatchObject({ admitted: false });
     await expect(gate.admit(null)).resolves.toMatchObject({ admitted: false });
+  });
+});
+
+describe('external shared-HMAC is refused — external A2A ingress must use per-sender ed25519', () => {
+  it('refuses an EXTERNAL shared-HMAC signed envelope (401) — never verifies it against the shared secret', async () => {
+    // The forgeable path (audit #27): a valid shared-HMAC envelope from an
+    // external/cross-tenant sender must NOT be admitted via the symmetric secret.
+    const { gate, envelope } = buildGate({ mode: 'enforce' });
+    const sealed = envelope.sealEnvelope(envelope.buildEnvelope({ from: 'peer:external', kind: 'k', payload: { ok: true } }));
+    const result = await gate.admit(sealed);
+    expect(result).toMatchObject({ admitted: false, status: 401, code: 'external_ingress_requires_ed25519' });
+  });
+
+  it('still admits an EXTERNAL ed25519 envelope for a REGISTERED sender (the sanctioned external path)', async () => {
+    const domain = domainEnvelope();
+    const { gate } = buildGate({ mode: 'enforce' }); // peer:golden ⇒ PUBLIC_HEX by default
+    const result = await gate.admit(ed25519Envelope(domain, signDomain(domain)), NOW);
+    expect(result).toMatchObject({ admitted: true, status: 200, code: 'ingress_admitted' });
+    expect(result.payload).toEqual({ n: 1, s: 'golden' });
+  });
+
+  it('admits an INTRA-CLUSTER HMAC caller (trusted context) — the delimited shared-HMAC path still works', async () => {
+    // Backward-compat: a trusted intra-cluster caller may still use shared HMAC.
+    const { gate, envelope } = buildGate({ mode: 'enforce' });
+    const sealed = envelope.sealEnvelope(envelope.buildEnvelope({ from: 'svc:internal', kind: 'k', payload: { ok: true } }));
+    const result = await gate.admit(sealed, undefined, { trusted: true });
+    expect(result).toMatchObject({ admitted: true, payload: { ok: true } });
+  });
+
+  it('dev posture (refuseExternalHmac:false) still falls through to the HMAC gate for external callers', async () => {
+    // Local-dev convenience is preserved: when the wire does not require signing,
+    // non-ed25519 traffic falls through to the inner gate unchanged.
+    const { gate, envelope } = buildGate({ mode: 'permissive', refuseExternalHmac: false });
+    const sealed = envelope.sealEnvelope(envelope.buildEnvelope({ from: 'peer', kind: 'k', payload: { ok: true } }));
+    await expect(gate.admit(sealed)).resolves.toMatchObject({ admitted: true, payload: { ok: true } });
   });
 });
 

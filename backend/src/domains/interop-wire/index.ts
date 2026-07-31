@@ -113,11 +113,15 @@ export function createInteropWireModule(deps: InteropWireModuleDeps): InteropWir
     maxFutureSkewMs: cfg.maxFutureSkewMs,
   });
   // ed25519 envelopes are verified asymmetrically (peer public keys: config map
-  // → peer registry); everything else falls through to the frozen HMAC gate.
+  // → peer registry). Non-ed25519 traffic falls through to the frozen HMAC gate
+  // ONLY for trusted intra-cluster callers; in the signature-required (production)
+  // posture an EXTERNAL shared-HMAC envelope is refused — cross-tenant senders
+  // must present a per-sender ed25519 signature (audit #27, fail-closed).
   const signedIngress = createEd25519IngressGate({
     inner: hmacIngress,
     envelope,
     mode: cfg.ed25519Mode,
+    refuseExternalHmac: cfg.requireSignedIngress,
     maxFutureSkewMs: cfg.maxFutureSkewMs,
     resolveKey: createPeerKeyResolver({
       staticKeys: cfg.ed25519PeerKeys,
