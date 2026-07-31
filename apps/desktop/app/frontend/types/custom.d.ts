@@ -161,6 +161,8 @@ declare global {
         recoderSignOut: () => Promise<{ ok: boolean }>; // recoder:sign-out
         selectDirectory: () => Promise<string>; // recoder:select-directory
         isGitRepo: (dirPath: string) => Promise<boolean>; // recoder:is-git-repo
+        gitInit: (dirPath: string) => Promise<boolean>; // recoder:git-init
+        probeAgentAuth: (runtimeId: string) => Promise<string>; // recoder:probe-agent-auth
         onRecoderSignInPrompt: (callback: (prompt: RecoderSignInPrompt) => void) => void; // recoder:device-login-prompt
         showAttentionNotification: (workspaceId: string, title: string, body: string) => void; // recoder:attention-notify
         onAttentionNotificationClick: (callback: (workspaceId: string) => void) => void; // recoder:attention-click

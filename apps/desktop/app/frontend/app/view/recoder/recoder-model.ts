@@ -32,6 +32,7 @@ import {
     type RecoderWorkspaceGroup,
     type RecoderWorkspaceReadiness,
 } from "./recoder-board-logic";
+import { parseAgentAuthState, type AgentAuthState } from "./recoder-agent-auth";
 import { isGitHubRepoUrl, parseCloneResponse } from "./recoder-clone-logic";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { readErrorReason } from "./recoder-errors";
@@ -224,6 +225,10 @@ class RecoderViewModel implements ViewModel {
     loadingAtom: PrimitiveAtom<boolean>;
     errorAtom: PrimitiveAtom<string>;
     setupAtom: PrimitiveAtom<RecoderSetup>;
+    // Best-effort per-runtime auth verdict (runtimeId → state), seeded by the
+    // main-process credential probe. Absent/`unknown` ⇒ "detected, login not
+    // verified" — never a fabricated "authenticated".
+    agentAuthAtom: PrimitiveAtom<Record<string, AgentAuthState>>;
     // First-run environment import (git identity, agent configs, gh, shell); null until probed.
     environmentAtom: PrimitiveAtom<RecoderEnvironment>;
     diffSummariesAtom: PrimitiveAtom<Record<string, RecoderDiffSummary>>;
@@ -317,6 +322,7 @@ class RecoderViewModel implements ViewModel {
         this.loadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
         this.setupAtom = atom({ agents: [], git: false, loaded: false, probed: false, tmuxBin: "" }) as PrimitiveAtom<RecoderSetup>;
+        this.agentAuthAtom = atom({}) as PrimitiveAtom<Record<string, AgentAuthState>>;
         this.environmentAtom = atom(null) as PrimitiveAtom<RecoderEnvironment>;
         this.diffSummariesAtom = atom({}) as PrimitiveAtom<Record<string, RecoderDiffSummary>>;
         this.launchOpenAtom = atom(false) as PrimitiveAtom<boolean>;
@@ -408,10 +414,42 @@ class RecoderViewModel implements ViewModel {
                 : [];
             const tmuxBin = typeof h?.substrate?.tmuxBin == "string" ? h.substrate.tmuxBin : "";
             globalStore.set(this.setupAtom, { agents, git: Boolean(h?.available), loaded: true, probed: true, tmuxBin });
+            void this.refreshAgentAuth(agents);
         } catch {
             globalStore.set(this.setupAtom, { agents: [], git: false, loaded: false, probed: true, tmuxBin: "" });
+            globalStore.set(this.agentAuthAtom, {});
         }
         this.refreshEnvironment();
+    }
+
+    // Best-effort, POSITIVE-ONLY per-agent auth probe. `/runtimes` reports PATH
+    // availability but carries no login signal, so for each DETECTED runtime we ask
+    // the main-process bridge whether it can see that CLI's own saved credential. A
+    // confirmed credential ⇒ "authenticated" (the picker may say "ready"); anything
+    // unverifiable ⇒ "unknown" (the picker says "detected", never a false "ready",
+    // and offers the login path). Degrade-safe: no bridge / a throwing probe leaves
+    // the runtime "unknown" — it never fabricates an "authenticated".
+    async refreshAgentAuth(agents: { runtimeId: string; available: boolean }[]) {
+        let probe: ((runtimeId: string) => Promise<string>) | undefined;
+        try {
+            probe = getApi()?.probeAgentAuth;
+        } catch {
+            probe = undefined;
+        }
+        if (typeof probe != "function") {
+            return;
+        }
+        const detected = agents.filter((a) => a.available);
+        const results = await Promise.all(
+            detected.map(async (a): Promise<readonly [string, AgentAuthState]> => {
+                try {
+                    return [a.runtimeId, parseAgentAuthState(await probe(a.runtimeId))];
+                } catch {
+                    return [a.runtimeId, "unknown"];
+                }
+            })
+        );
+        globalStore.set(this.agentAuthAtom, Object.fromEntries(results));
     }
 
     // Manual "Re-scan agents" (first-run setup): re-probe installed agent CLIs

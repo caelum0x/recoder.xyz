@@ -10,6 +10,7 @@
 // launch only enables once one is actually detected.
 
 import { useState } from "react";
+import { agentLoginGuide, type AgentPresentation } from "./recoder-agent-auth";
 import { agentLabel } from "./recoder-agent-labels";
 import type { RecoderViewModel } from "./recoder-model";
 import { FIELD_LABEL, META, QUIET_BTN, ROW_TITLE } from "./recoder-styles";
@@ -133,4 +134,61 @@ function RecoderAgentSetup({ model, probing }: RecoderAgentSetupProps) {
 
 RecoderAgentSetup.displayName = "RecoderAgentSetup";
 
-export { AGENT_INSTALL_GUIDES, copyToClipboard, RecoderAgentSetup, type AgentInstallGuide };
+type AgentAuthAffordanceProps = {
+    runtimeId: string;
+    badge: AgentPresentation["badge"];
+};
+
+// The "detected · authenticate" affordance for an installed-but-unverified agent.
+// `/runtimes` carries no login signal, so the picker can't promise the agent is
+// ready — this hands the user the real fix path (the CLI's own login command +
+// vendor docs) without ever hard-blocking launch. Renders nothing for an agent we
+// have no login recipe for, so it never invents guidance.
+function AgentAuthAffordance({ runtimeId, badge }: AgentAuthAffordanceProps) {
+    const [copied, setCopied] = useState(false);
+    const guide = agentLoginGuide(runtimeId);
+    if (guide == null) {
+        return null;
+    }
+    const onCopy = async () => {
+        const ok = await copyToClipboard(guide.loginCommand);
+        if (!ok) {
+            return;
+        }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+    };
+    const lead =
+        badge == "sign-in needed"
+            ? `${agentLabel(runtimeId)} isn’t signed in. Authenticate, then launch:`
+            : `${agentLabel(runtimeId)} detected — sign-in isn’t verified. If launch fails, authenticate:`;
+    return (
+        <div className="flex flex-wrap items-center gap-2">
+            <span className={META}>{lead}</span>
+            <code className="min-w-0 rounded border border-white/8 bg-white/[0.04] px-2 py-0.5 font-mono text-xs text-secondary">
+                {guide.loginCommand}
+            </code>
+            <button className={QUIET_BTN} onClick={onCopy}>
+                {copied ? "Copied" : "Copy"}
+            </button>
+            <a
+                className={`${META} shrink-0 hover:text-primary`}
+                href={guide.docsUrl}
+                target="_blank"
+                rel="noreferrer"
+            >
+                Docs
+            </a>
+        </div>
+    );
+}
+
+AgentAuthAffordance.displayName = "AgentAuthAffordance";
+
+export {
+    AGENT_INSTALL_GUIDES,
+    AgentAuthAffordance,
+    copyToClipboard,
+    RecoderAgentSetup,
+    type AgentInstallGuide,
+};

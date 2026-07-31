@@ -30,6 +30,18 @@ import { ElectronWshClient } from "./emain-wsh";
 
 const electronApp = electron.app;
 
+// Home-relative credential files each coding-agent CLI writes on its OWN login.
+// Presence is a truthful POSITIVE auth signal; absence is inconclusive (a CLI may
+// keep its login in the OS keychain), so a miss reports "unknown", never "signed
+// out". Keyed by conductor runtimeId. Runtimes absent here always probe "unknown".
+const AGENT_CREDENTIAL_FILES: Record<string, string[]> = {
+    claude_code: [".claude/.credentials.json"],
+    codex: [".codex/auth.json"],
+    opencode: [".local/share/opencode/auth.json", ".config/opencode/auth.json"],
+    gemini_cli: [".gemini/oauth_creds.json"],
+    qwen_code: [".qwen/oauth_creds.json"],
+};
+
 let webviewFocusId: number = null;
 let webviewKeys: string[] = [];
 
@@ -606,6 +618,49 @@ export function initIpcHandlers() {
                 }
             );
         });
+    });
+
+    electron.ipcMain.handle("recoder:git-init", async (_event, dirPath: string) => {
+        if (dirPath == null || dirPath == "") {
+            return false;
+        }
+        return await new Promise<boolean>((resolve) => {
+            child_process.execFile("git", ["-C", dirPath, "init"], { timeout: 8000 }, (err) => {
+                // Truthful: report only whether `git init` itself exited cleanly. The
+                // renderer re-runs isGitRepo() afterwards and gates launch on THAT, so a
+                // false success here can never enable a launch into a non-repo.
+                resolve(err == null);
+            });
+        });
+    });
+
+    // Best-effort, POSITIVE-ONLY per-agent auth probe. Returns "authenticated" ONLY
+    // when the CLI's own on-disk login credential is present; otherwise "unknown".
+    // Never returns a fabricated "not signed in": a CLI that keeps its login in the
+    // OS keychain (e.g. Claude Code on macOS) legitimately reports "unknown" here,
+    // and the UI degrades to "detected" — never a false "ready", never a hard block.
+    electron.ipcMain.handle("recoder:probe-agent-auth", async (_event, runtimeId: string) => {
+        const rels = AGENT_CREDENTIAL_FILES[runtimeId];
+        if (rels == null) {
+            return "unknown";
+        }
+        let home = "";
+        try {
+            home = electron.app.getPath("home");
+        } catch {
+            return "unknown";
+        }
+        for (const rel of rels) {
+            try {
+                const st = fs.statSync(path.join(home, rel));
+                if (st.isFile() && st.size > 0) {
+                    return "authenticated";
+                }
+            } catch {
+                // absent / unreadable — inconclusive, keep probing the next candidate
+            }
+        }
+        return "unknown";
     });
 
     electron.ipcMain.on("recoder:attention-notify", (event, workspaceId: string, title: string, body: string) => {
