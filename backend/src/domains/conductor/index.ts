@@ -58,7 +58,12 @@ import type {
   SubstrateAvailabilityView,
   WorkspaceView,
 } from './types.js';
-import type { CreateConductorWorkspaceInput, ConductorWriteResult, WorkspaceRunConfigView } from './conductor-module.js';
+import type {
+  CreateConductorWorkspaceInput,
+  ConductorWriteResult,
+  ReviewCommentDelivery,
+  WorkspaceRunConfigView,
+} from './conductor-module.js';
 import type { ReviewComment } from './review/review-comments.js';
 import type { EnvironmentImportView } from './services/environment-import.js';
 import type { TranscriptSearchView } from './services/session-transcript.service.js';
@@ -356,15 +361,18 @@ export interface ConductorModule {
   /** Steer a live agent (send-keys) — GATED (`workspace.steer`). */
   steerWorkspace(input: SteerInput, principal: Principal): Promise<ConductorWriteResult<void>>;
   /**
-   * Send line-anchored diff-review comments to a live agent — GATED
-   * (`workspace.steer`): folds the comments into one structured prompt and steers
-   * it, so the reviewer's `file:line` notes become precise context the agent acts
-   * on. Delegates to {@link steerWorkspace} for all governance.
+   * The review→agent roundtrip — folds line-anchored diff comments into one
+   * structured `file:line — comment` prompt and DRIVES the agent with it. Routes by
+   * state: a `running` workspace is STEERED (GATED `workspace.steer`); a reviewed,
+   * non-running workspace (`awaiting_review` / `changes_requested` /
+   * `awaiting_approval`) gets a NEW gated run in its worktree via the continue path
+   * (GATED `workspace.message`). Both inherit governance from the delegated method;
+   * a workspace that cannot continue surfaces the real reason (never a fake delivery).
    */
   sendReviewComments(
     input: { readonly workspaceId: string; readonly comments: readonly ReviewComment[] },
     principal: Principal,
-  ): Promise<ConductorWriteResult<void>>;
+  ): Promise<ConductorWriteResult<ReviewCommentDelivery>>;
   /**
    * Gracefully STOP a running workspace — GATED (`workspace.stop`): substrate
    * session kill (worktree preserved for review) + `cancelled` transition +
