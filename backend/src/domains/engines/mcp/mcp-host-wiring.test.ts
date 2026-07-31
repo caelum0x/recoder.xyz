@@ -176,11 +176,23 @@ describe('engines MCP host — bindInProcEngines binds only real handlers', () =
 
     // Unbound-but-advertised server → NO delegating handler was registered, so
     // the executor surfaces a truthful "no executor wired" failure (NOT a silent
-    // fake handler that then throws "No MCP handler registered").
-    const unbound = await host.call(gatedCall(workflowMcpServer, 'workflow.verify', {}));
+    // fake handler that then throws "No MCP handler registered"). Probe with the
+    // low-risk `workflow.capture_hook`: `workflow.verify` (which can run shell
+    // verification) is now governance-gated to needs_approval BEFORE the executor
+    // check, so it can no longer reach this path.
+    const unbound = await host.call(
+      gatedCall(workflowMcpServer, 'workflow.capture_hook', {})
+    );
     expect(unbound.status).toBe('failed');
     if (unbound.status === 'failed') {
       expect(unbound.reason).toContain('No in-proc executor wired');
     }
+
+    // Defense-in-depth (recoder-x-audit): the RCE-prone workflow.verify is gated by
+    // governance to needs_approval before it can reach any executor.
+    const gated = await host.call(
+      gatedCall(workflowMcpServer, 'workflow.verify', {})
+    );
+    expect(gated.status).toBe('needs_approval');
   });
 });

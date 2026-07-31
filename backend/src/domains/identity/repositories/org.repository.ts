@@ -170,6 +170,14 @@ export class PgMembershipStore implements MembershipStore {
     return row ? mapMembership(row) : null;
   }
 
+  async findById(id: string): Promise<Membership | null> {
+    const row = await this.executor.one<QueryRow>(
+      `select * from ${MEMBERSHIP_TABLE} where id = :id`,
+      { id },
+    );
+    return row ? mapMembership(row) : null;
+  }
+
   async listForOrg(orgId: string): Promise<readonly Membership[]> {
     const rows = await this.executor.read<QueryRow>(
       `select * from ${MEMBERSHIP_TABLE} where org_id = :orgId order by created_at asc`,

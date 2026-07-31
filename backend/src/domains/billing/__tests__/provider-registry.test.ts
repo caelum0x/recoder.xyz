@@ -28,6 +28,9 @@ const intent: CheckoutIntent = {
 };
 
 const WHSEC = `whsec_${Buffer.from('supersecretkey0123456789').toString('base64')}`;
+// A fresh Unix-seconds timestamp — the adapters now enforce webhook timestamp
+// freshness (replay defense), so signatures must be signed against "now".
+const FRESH_TS = String(Math.floor(Date.now() / 1000));
 
 function signStandard(id: string, ts: string, body: string): string {
   const stripped = WHSEC.slice('whsec_'.length);
@@ -81,8 +84,8 @@ describe('webhook signature verification', () => {
     const body = JSON.stringify({ type: 'subscription.active', data: { id: 'sub_1', status: 'active' } });
     const headers = {
       'webhook-id': 'evt_1',
-      'webhook-timestamp': '1700000000',
-      'webhook-signature': signStandard('evt_1', '1700000000', body),
+      'webhook-timestamp': FRESH_TS,
+      'webhook-signature': signStandard('evt_1', FRESH_TS, body),
     };
     expect(adapter.verifyWebhook(Buffer.from(body), headers)).toBe(true);
     const parsed = adapter.parseEvent(Buffer.from(body), headers);
@@ -96,8 +99,8 @@ describe('webhook signature verification', () => {
     const body = JSON.stringify({ type: 'subscription.active', data: { id: 'sub_1' } });
     const headers = {
       'webhook-id': 'evt_1',
-      'webhook-timestamp': '1700000000',
-      'webhook-signature': signStandard('evt_1', '1700000000', body),
+      'webhook-timestamp': FRESH_TS,
+      'webhook-signature': signStandard('evt_1', FRESH_TS, body),
     };
     const tampered = Buffer.from(body.replace('sub_1', 'sub_HACK'));
     expect(adapter.verifyWebhook(tampered, headers)).toBe(false);
@@ -109,8 +112,8 @@ describe('webhook signature verification', () => {
     const body = JSON.stringify({ type: 'subscription.active', data: { subscription_id: 'sub_d1', status: 'active' } });
     const headers = {
       'webhook-id': 'evt_d',
-      'webhook-timestamp': '1700000000',
-      'webhook-signature': signStandard('evt_d', '1700000000', body),
+      'webhook-timestamp': FRESH_TS,
+      'webhook-signature': signStandard('evt_d', FRESH_TS, body),
     };
     const parsed = adapter.parseEvent(Buffer.from(body), headers);
     expect(parsed?.subscription?.providerSubId).toBe('sub_d1');
@@ -135,7 +138,7 @@ describe('webhook signature verification', () => {
       event_id: 'ntf_1',
       data: { id: 'sub_p1', status: 'active' },
     });
-    const ts = '1700000000';
+    const ts = FRESH_TS;
     const h1 = createHmac('sha256', secret).update(`${ts}:${body}`).digest('hex');
     const parsed = adapter.parseEvent(Buffer.from(body), { 'paddle-signature': `ts=${ts};h1=${h1}` });
     expect(parsed?.type).toBe('subscription.active');

@@ -75,6 +75,112 @@ function referencedRelations(sql: string): readonly string[] {
   return [...found];
 }
 
+/**
+ * Copy of `sql` with the CONTENTS of single-quoted and dollar-quoted literals
+ * replaced by spaces (positions preserved), so a comma living inside a string is
+ * not mistaken for a relation separator. Comments/statement-separators are
+ * already rejected upstream ({@link UNSAFE_SQL_TOKENS}), so only literals need
+ * masking here. (Same technique as the named-param compiler's `maskLiterals`.)
+ */
+function maskSqlLiterals(sql: string): string {
+  const out = sql.split('');
+  let i = 0;
+  while (i < sql.length) {
+    const ch = sql[i];
+    if (ch === "'") {
+      out[i] = ' ';
+      i++;
+      while (i < sql.length) {
+        if (sql[i] === "'" && sql[i + 1] === "'") {
+          out[i] = ' ';
+          out[i + 1] = ' ';
+          i += 2;
+          continue;
+        }
+        if (sql[i] === "'") {
+          out[i] = ' ';
+          i++;
+          break;
+        }
+        out[i] = ' ';
+        i++;
+      }
+      continue;
+    }
+    if (ch === '$') {
+      const tagMatch = /^\$[A-Za-z0-9_]*\$/.exec(sql.slice(i));
+      if (tagMatch) {
+        const tag = tagMatch[0];
+        const end = sql.indexOf(tag, i + tag.length);
+        const stop = end === -1 ? sql.length : end + tag.length;
+        for (let j = i; j < stop; j++) out[j] = ' ';
+        i = stop;
+        continue;
+      }
+    }
+    i++;
+  }
+  return out.join('');
+}
+
+/** Clause/join keywords that end a top-level FROM relation list. */
+const FROM_CLAUSE_BOUNDARY =
+  /^(where|group|order|limit|having|window|union|intersect|except|join|left|right|inner|outer|cross|full|natural|on|using|offset|fetch|for)\b/;
+
+/**
+ * True when the top-level FROM clause references more than one relation via a
+ * comma (`FROM a, b`). The keyword-anchored {@link RELATION_RE} only captures the
+ * relation immediately after `from`/`join`, so a comma-joined table would slip
+ * past the allowlist scan — a single-relation FROM is required for a
+ * non-privileged read. String literals are masked and parenthesised subqueries /
+ * function args (depth > 0) are ignored, so only a top-level comma trips this.
+ */
+function fromClauseHasTopLevelComma(sql: string): boolean {
+  const s = maskSqlLiterals(sql);
+  const lower = s.toLowerCase();
+  const isWordChar = (c: string | undefined): boolean => !!c && /[a-z0-9_$]/i.test(c);
+  let depth = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === '(') {
+      depth++;
+      continue;
+    }
+    if (c === ')') {
+      if (depth > 0) depth--;
+      continue;
+    }
+    if (depth !== 0) continue;
+    // A top-level FROM keyword: scan its relation list for a depth-0 comma.
+    if (
+      (c === 'f' || c === 'F') &&
+      lower.startsWith('from', i) &&
+      !isWordChar(s[i - 1]) &&
+      !isWordChar(s[i + 4])
+    ) {
+      let d = 0;
+      for (let j = i + 4; j < s.length; j++) {
+        const cj = s[j];
+        if (cj === '(') {
+          d++;
+          continue;
+        }
+        if (cj === ')') {
+          if (d > 0) d--;
+          continue;
+        }
+        if (d !== 0) continue;
+        if (cj === ',') return true;
+        if (!isWordChar(s[j - 1]) && isWordChar(cj) && FROM_CLAUSE_BOUNDARY.test(lower.slice(j))) {
+          break; // reached the next clause/join — the relation list ended
+        }
+      }
+      return false; // a single top-level FROM clause with no top-level comma
+    }
+  }
+  return false;
+}
+
 interface QueryReadonlyInput {
   readonly sql?: string;
   readonly params?: Record<string, unknown>;
@@ -114,13 +220,25 @@ export function buildPersistenceMcpTools(module: PersistenceModule): readonly Mc
       name: 'db_schema_inspect',
       description: 'Read-only introspection of control-plane tables/columns/indexes.',
       handler: async (raw: unknown, caller?: McpToolCaller) => {
-        requireCaller(caller, 'db_schema_inspect');
+        const authCaller = requireCaller(caller, 'db_schema_inspect');
         const input = (raw ?? {}) as SchemaInspectInput;
         if (!module.executor().isAvailable()) {
           throw new AppError(ErrorCode.SERVICE_UNAVAILABLE, 'database is unavailable');
         }
         const inspector = module.schema();
         if (input.schema && input.table) {
+          // Tenant/metadata safety: the column/index drill-down accepts an
+          // ARBITRARY schema+table and would let a NON-privileged (edge/agent)
+          // caller enumerate billing/identity/system metadata. Mirror
+          // db_query_readonly's default-deny — only a TRUSTED internal/admin
+          // caller may drill down; everyone else is limited to the aggregate
+          // table list below.
+          if (!isPrivileged(authCaller)) {
+            throw new AppError(
+              ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+              'db_schema_inspect: column/index introspection is restricted to privileged callers',
+            );
+          }
           const [columns, indexes] = await Promise.all([
             inspector.inspectColumns(input.schema, input.table),
             inspector.inspectIndexes(input.schema, input.table),
@@ -153,6 +271,14 @@ export function buildPersistenceMcpTools(module: PersistenceModule): readonly Mc
         // not exposed to agents. A TRUSTED internal/admin service principal is
         // exempted (it is not free-form agent SQL), so its raw read runs.
         if (!isPrivileged(authCaller)) {
+          // Require a single-relation FROM: a comma-joined `FROM a, b` would let a
+          // non-allowlisted `b` escape the keyword-anchored relation scan.
+          if (fromClauseHasTopLevelComma(sql)) {
+            throw new AppError(
+              ErrorCode.INVALID_INPUT,
+              'db_query_readonly: FROM must reference a single relation (no comma-joins)',
+            );
+          }
           const relations = referencedRelations(sql);
           const disallowed = relations.filter((r) => !ALLOWED_RELATIONS.has(r));
           if (relations.length === 0 || disallowed.length > 0) {

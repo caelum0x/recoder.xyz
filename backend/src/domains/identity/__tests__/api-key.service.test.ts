@@ -160,6 +160,57 @@ describe('ApiKeyService — DB-backed sk_ platform keys', () => {
     expect(await service.validate('sk_whatever')).toBeNull();
   });
 
+  it('refuses to mint scopes the granting principal does not hold (privilege escalation)', async () => {
+    const { service } = build();
+    // A normal session principal holds ['read','write']. It MUST NOT be able to
+    // mint an sk_ key carrying 'admin'/'internal' and become a platform super-user.
+    await expect(
+      service.mint({ userId: 'u1', name: 'evil', scopes: ['admin', 'internal'], granterScopes: ['read', 'write'] }),
+    ).rejects.toMatchObject({ code: 'AUTHZ_PROJECT_ACCESS_DENIED' });
+    await expect(
+      service.mint({ userId: 'u1', name: 'evil', scopes: ['admin'], granterScopes: ['read', 'write'] }),
+    ).rejects.toMatchObject({ code: 'AUTHZ_PROJECT_ACCESS_DENIED' });
+  });
+
+  it('intersects requested scopes with the granter — a non-held scope is rejected', async () => {
+    const { service } = build();
+    await expect(
+      service.mint({ userId: 'u1', name: 'k', scopes: ['read', 'billing'], granterScopes: ['read', 'write'] }),
+    ).rejects.toMatchObject({ code: 'AUTHZ_PROJECT_ACCESS_DENIED' });
+  });
+
+  it('allows a granter to mint a subset of the scopes it actually holds', async () => {
+    const { service } = build();
+    const { record } = await service.mint({
+      userId: 'u1',
+      name: 'k',
+      scopes: ['read'],
+      granterScopes: ['read', 'write'],
+    });
+    expect(record.scopes).toEqual(['read']);
+  });
+
+  it('lets a granter that already holds admin mint an admin key', async () => {
+    const { service } = build();
+    const { record } = await service.mint({
+      userId: 'u1',
+      name: 'k',
+      scopes: ['admin'],
+      granterScopes: ['read', 'write', 'admin'],
+    });
+    expect(record.scopes).toEqual(['admin']);
+  });
+
+  it('never mints privileged scopes on a trusted server-side mint with no granter scopes', async () => {
+    const { service } = build();
+    await expect(
+      service.mint({ userId: 'u1', name: 'k', scopes: ['internal'] }),
+    ).rejects.toMatchObject({ code: 'AUTHZ_PROJECT_ACCESS_DENIED' });
+    // ...but non-privileged scopes on that trusted path are still fine (e.g. device-flow read/write).
+    const { record } = await service.mint({ userId: 'u1', name: 'k', scopes: ['read', 'write'] });
+    expect(record.scopes).toEqual(['read', 'write']);
+  });
+
   it('enforces an injected governance gate on mint and revoke', async () => {
     const store = new FakeApiKeyStore();
     const governance = {

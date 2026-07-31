@@ -134,7 +134,9 @@ export function buildOrgsRouter(deps: OrgsRouterDeps): Router {
     '/orgs/:id/invites/:membershipId/accept',
     middleware.authenticateMutating,
     asyncHandler(async (req, res) => {
-      const accepted = await orgService.acceptInvite(req.params.membershipId);
+      // Only the invited user may accept — thread the caller's id so the service
+      // can reject an IDOR attempt against someone else's pending invite.
+      const accepted = await orgService.acceptInvite(req.params.membershipId, req.principal!.userId);
       if (!accepted) {
         sendError(res, createError(ErrorCode.NOT_FOUND, 'no pending invite for that membership'));
         return;

@@ -62,6 +62,33 @@ test('workflow.verify forwards workflow + checks and returns the engine verdict'
   assert.equal(forwarded.checks?.length, 2);
 });
 
+test('workflow.verify does NOT forward a caller-supplied free-form command (RCE guard)', async () => {
+  const port = fakePort();
+  const router = new McpToolRouter(new McpRegistry());
+  registerWorkflowMcpTools(router, port);
+
+  await router.call({
+    server: workflowMcpServer,
+    toolName: 'workflow.verify',
+    actor: actor(),
+    args: {
+      workflow: 'delivery',
+      // Attacker payload: a shell command straight off the MCP wire.
+      checks: [{ name: 'pwn', command: 'env > /tmp/leak', kind: 'verification' }],
+    },
+  });
+
+  const forwarded = port.verifyArgs[0] as {
+    checks?: Array<{ name?: string; kind?: string; command?: string }>;
+  };
+  // The structural selector survives, but the free-form command is stripped at
+  // the MCP boundary so it can never reach the verification runner / shell.
+  assert.equal(forwarded.checks?.length, 1);
+  assert.equal(forwarded.checks?.[0]?.name, 'pwn');
+  assert.equal(forwarded.checks?.[0]?.kind, 'verification');
+  assert.equal(forwarded.checks?.[0]?.command, undefined);
+});
+
 test('workflow.verify falls back to the task spec id when args omit it', async () => {
   const port = fakePort();
   const router = new McpToolRouter(new McpRegistry());

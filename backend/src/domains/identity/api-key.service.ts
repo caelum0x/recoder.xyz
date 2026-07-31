@@ -42,6 +42,12 @@ const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 const KEY_ENTROPY_BYTES = 32;
 /** Scopes minted onto a key when the caller specifies none. */
 const DEFAULT_SCOPES: readonly string[] = ['read', 'write'];
+/**
+ * Scopes that confer elevated platform privilege (a `sk_` key carrying `admin`
+ * passes `requireAdmin`). They are NEVER mintable unless the minting principal
+ * already holds them, so a normal session can't escalate itself to super-user.
+ */
+const PRIVILEGED_SCOPES: ReadonlySet<string> = new Set(['admin', 'internal']);
 
 /**
  * The narrow governance gate the mint/revoke path consults. Kept as a local
@@ -119,6 +125,10 @@ export class ApiKeyServiceImpl implements ApiKeyService {
       throw new AppError(ErrorCode.SERVICE_UNAVAILABLE, 'key store is unavailable');
     }
 
+    // Enforce BEFORE the governance gate + any write: a minted key can never
+    // carry higher privilege than the principal minting it.
+    const scopes = this.resolveGrantableScopes(params.scopes, params.granterScopes);
+
     await this.gate('key.mint', { userId: params.userId, orgId: params.orgId ?? null, name });
 
     const rawKey = this.generateRawKey();
@@ -129,7 +139,7 @@ export class ApiKeyServiceImpl implements ApiKeyService {
       name,
       keyPrefix: rawKey.slice(0, this.prefixLength),
       keyHash: this.hash(rawKey),
-      scopes: params.scopes && params.scopes.length > 0 ? params.scopes : DEFAULT_SCOPES,
+      scopes,
       expiresAt: this.resolveExpiry(params.expiresAt),
     };
 
@@ -190,6 +200,34 @@ export class ApiKeyServiceImpl implements ApiKeyService {
   }
 
   // --- internals ---
+
+  /**
+   * Resolve the scopes a key may carry, refusing any privilege escalation.
+   *
+   *  - No scopes requested → the non-privileged {@link DEFAULT_SCOPES}.
+   *  - `granterScopes` supplied (the request path) → every requested scope must
+   *    be a subset of them; a normal session (`['read','write']`) therefore
+   *    cannot mint `admin`/`internal`. Any non-held scope is a 403.
+   *  - `granterScopes` omitted (trusted server-side mint, e.g. device-flow) →
+   *    non-privileged scopes pass, but the privileged scopes are still refused.
+   */
+  private resolveGrantableScopes(
+    requested: readonly string[] | undefined,
+    granterScopes: readonly string[] | undefined,
+  ): readonly string[] {
+    if (!requested || requested.length === 0) return DEFAULT_SCOPES;
+    const granter = granterScopes ? new Set(granterScopes) : null;
+    for (const scope of requested) {
+      const grantable = granter ? granter.has(scope) : !PRIVILEGED_SCOPES.has(scope);
+      if (!grantable) {
+        throw new AppError(
+          ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+          `scope "${scope}" is not grantable by the minting principal`,
+        );
+      }
+    }
+    return requested;
+  }
 
   /** Consult the optional governance gate; deny → 403, absent → allow (logged). */
   private async gate(

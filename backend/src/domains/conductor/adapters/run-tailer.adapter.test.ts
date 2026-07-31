@@ -19,15 +19,16 @@
  *    attach so a later reconcile can re-attach.
  */
 import { EventEmitter } from 'node:events';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { RunEvent } from '@recoder/agent-os';
-import type {
-  ClockPort,
-  ExecOptions,
-  ExecResult,
-  IdPort,
-  SubstrateHandle,
-  TailSubstrate,
+import {
+  DEFAULT_INTERVAL_MS,
+  type ClockPort,
+  type ExecOptions,
+  type ExecResult,
+  type IdPort,
+  type SubstrateHandle,
+  type TailSubstrate,
 } from '@recoder/substrate';
 import type { RunEventSinkPort } from '../ports/index.js';
 import { createRunTailer, type LiveTailDriver } from './run-tailer.adapter.js';
@@ -104,6 +105,26 @@ function makeExec(version: string | Error): ExecFn {
   return async (_bin: string, _args: readonly string[], _o?: ExecOptions): Promise<ExecResult> => {
     if (version instanceof Error) throw version;
     return { stdout: `${version}\n`, stderr: '', code: 0 };
+  };
+}
+
+/**
+ * A `-V` probe seam whose resolution is GATED on `release()` — lets a test hold
+ * two probes in-flight simultaneously to exercise the stop()/start() probe race.
+ */
+function makeGatedExec(version: string): { exec: ExecFn; release: () => void } {
+  let waiters: Array<() => void> = [];
+  const exec: ExecFn = async (): Promise<ExecResult> => {
+    await new Promise<void>((resolve) => waiters.push(resolve));
+    return { stdout: `${version}\n`, stderr: '', code: 0 };
+  };
+  return {
+    exec,
+    release: () => {
+      const pending = waiters;
+      waiters = [];
+      for (const resolve of pending) resolve();
+    },
   };
 }
 
@@ -280,5 +301,88 @@ describe('createRunTailer (live driver — control mode)', () => {
     // The client that attached after the detach was stopped immediately.
     for (const child of children) expect(child.killed).toBe('SIGTERM');
     expect(tailer.isTailing('ws_1')).toBe(false);
+  });
+});
+
+// === continued-run re-attach — the `attached` guard clears on completion ===
+
+describe('createRunTailer (continued run re-attaches after completion)', () => {
+  it('clears the attach when the poll tailer self-completes so a follow-up run re-attaches & streams', async () => {
+    vi.useFakeTimers();
+    try {
+      const { sink, events } = makeSink();
+      // The substrate reports the agent dead on its first poll tick, so the poll
+      // tailer emits a terminal `completed` and self-stops (an agent that exits).
+      const substrate = makeSubstrate({ aliveTicks: 0, exitCode: 0 }).substrate;
+      const tailer = createRunTailer({ sink, logger: makeLogger(), live: liveDriver({ substrate }) });
+
+      // Run 1 attaches and drives the poll tailer (`started` is emitted at once).
+      tailer.start(ATTACH);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(events.filter((e) => e.type === 'started')).toHaveLength(1);
+      expect(tailer.isTailing('ws_1')).toBe(true);
+
+      // The agent exits → the next poll tick emits `completed`, the tailer self-
+      // stops, and (the fix) the workspace's attach is cleared.
+      await vi.advanceTimersByTimeAsync(DEFAULT_INTERVAL_MS + 1);
+      expect(events.some((e) => e.type === 'completed')).toBe(true);
+      expect(tailer.isTailing('ws_1')).toBe(false);
+
+      // Run 2 (continueWorkspace → start the SAME workspaceId) re-attaches and
+      // streams a SECOND `started` instead of silently no-opping on a stale guard.
+      tailer.start(ATTACH);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(events.filter((e) => e.type === 'started')).toHaveLength(2);
+      expect(tailer.isTailing('ws_1')).toBe(true);
+
+      tailer.stop('ws_1');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// === control-mode probe race — a stale probe must not leak/double-register ===
+
+describe('createRunTailer (control-mode probe stop()+start() race)', () => {
+  it('stops the stale control client when a stop()+start() interleave supersedes an in-flight probe', async () => {
+    const { sink, events } = makeSink();
+    const { spawn, children } = makeSpawn();
+    const gated = makeGatedExec('tmux 3.7b');
+    const substrate = makeSubstrate({ aliveTicks: Infinity }).substrate;
+    const tailer = createRunTailer({
+      sink,
+      logger: makeLogger(),
+      live: liveDriver({
+        substrate,
+        config: { tmuxBin: '/opt/recoder/tmux', tmuxControlMode: true },
+        spawn,
+        exec: gated.exec,
+      }),
+    });
+
+    // Start #1 begins its `-V` probe (gated, in-flight). Then a stop()+start()
+    // interleave supersedes it while the probe is still pending.
+    tailer.start(ATTACH);
+    tailer.stop('ws_1');
+    tailer.start(ATTACH);
+
+    // Release BOTH probes together — each selection spawns a control client.
+    gated.release();
+    await sleep(20);
+
+    // Both probes spawned a client, but exactly ONE (the winning generation's)
+    // stays registered/live; the stale one is stopped — never leaked, never a
+    // double poll-tail register.
+    expect(children).toHaveLength(2);
+    const live = children.filter((c) => c.killed === undefined);
+    const killed = children.filter((c) => c.killed === 'SIGTERM');
+    expect(live).toHaveLength(1);
+    expect(killed).toHaveLength(1);
+    // A single poll tail attached (one `started`), and the workspace is tailing.
+    expect(events.filter((e) => e.type === 'started')).toHaveLength(1);
+    expect(tailer.isTailing('ws_1')).toBe(true);
+
+    tailer.stop('ws_1');
   });
 });

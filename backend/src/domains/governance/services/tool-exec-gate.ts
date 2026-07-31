@@ -26,22 +26,63 @@ import type { ToolEnforcement } from '../types.js';
 const SECRET_KEY_PATTERN = /key|secret|token|password|passwd|credential|auth/i;
 
 /**
+ * Bounds on the secret-free projection so a hostile/huge payload can neither
+ * blow up the description string nor recurse without limit. A nested
+ * `command`/`path`/`url` value is the whole point of the recursion — but a
+ * multi-megabyte blob or a pathologically deep object must stay cheap.
+ */
+const MAX_DESCRIPTION_LEN = 8192;
+const MAX_DEPTH = 6;
+const MAX_STRING_LEN = 512;
+
+/**
+ * Recursively project a value into its secret-free shadow: drop secret-named
+ * keys at EVERY level, keep scalars (bounded), and descend into arrays/objects
+ * up to {@link MAX_DEPTH} so a nested command/path reaches the classifier.
+ * Returns `undefined` for values that must not appear (too deep, non-JSON).
+ */
+function projectValue(value: unknown, depth: number): unknown {
+  if (value === null) return null;
+  const t = typeof value;
+  if (t === 'string') return (value as string).slice(0, MAX_STRING_LEN);
+  if (t === 'number' || t === 'boolean') return value;
+  if (t !== 'object') return undefined; // functions/symbols/bigint/undefined dropped
+  if (depth >= MAX_DEPTH) return undefined; // recursion cap — stops circular refs too
+  if (Array.isArray(value)) {
+    const out: unknown[] = [];
+    for (const item of value) {
+      const projected = projectValue(item, depth + 1);
+      if (projected !== undefined) out.push(projected);
+    }
+    return out;
+  }
+  const safe: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (SECRET_KEY_PATTERN.test(k)) continue; // secret VALUES never leak into the description
+    const projected = projectValue(v, depth + 1);
+    if (projected !== undefined) safe[k] = projected;
+  }
+  return safe;
+}
+
+/**
  * Project raw tool args to a secret-free string for enforcement. Drops keys whose
- * NAME looks like a credential and keeps only scalar values — the kernel's
- * forbidden-path / risk classifier needs the shape (command/path), never the
- * secret VALUES, and the audit row records only the projected length.
+ * NAME looks like a credential (at every nesting level) and keeps the value SHAPE
+ * — the kernel's forbidden-path / risk classifier needs to see a nested
+ * `command`/`path`/`url` wherever it appears, never the secret VALUES, and the
+ * audit row records only the projected length. Bounded in depth and total size.
  */
 export function describeToolInput(rawArgs: unknown): string {
   if (rawArgs == null) return '';
   if (typeof rawArgs === 'string') return rawArgs;
   if (typeof rawArgs !== 'object') return String(rawArgs);
-  const safe: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(rawArgs as Record<string, unknown>)) {
-    if (SECRET_KEY_PATTERN.test(k)) continue;
-    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') safe[k] = v;
-  }
   try {
-    return JSON.stringify(safe);
+    const safe = projectValue(rawArgs, 0);
+    const serialized = JSON.stringify(safe);
+    if (typeof serialized !== 'string') return '';
+    return serialized.length > MAX_DESCRIPTION_LEN
+      ? serialized.slice(0, MAX_DESCRIPTION_LEN)
+      : serialized;
   } catch {
     return '';
   }

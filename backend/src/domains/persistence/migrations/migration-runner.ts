@@ -162,21 +162,90 @@ function sha256(content: string): string {
 }
 
 /**
- * Split a SQL file into statements on top-level semicolons, stripping full-line
- * `--` comments. The foundational migrations are plain DDL (no functions /
- * dollar-quoted bodies), so a simple split is correct here.
+ * Split a SQL file into statements on top-level semicolons.
+ *
+ * A single left-to-right scan that is aware of SQL lexical structure, so a `;`
+ * that lives inside a string/dollar-quoted literal or a comment never severs a
+ * statement:
+ *  - single-quoted string literals (with `''` escapes) are preserved verbatim;
+ *  - `$tag$ ... $tag$` dollar-quoted literals are preserved verbatim;
+ *  - `-- ...` line comments and `/* ... *\/` block comments are DROPPED
+ *    (including any `;` inside them — the source of the original mis-split where
+ *    an inline `-- TTL; ...` comment cut a CREATE TABLE into invalid fragments).
+ *
+ * Only a `;` seen at top level (outside every literal/comment) ends a statement.
+ * A failure here previously returned `ok:false` and, under degrade-safe boot,
+ * left the DB half-migrated in silence.
  */
 export function splitStatements(sql: string): string[] {
-  // Strip full-line `--` comments BEFORE splitting on ';' — a comment that
-  // itself contains a semicolon (e.g. "-- enable ext; used by ledger") would
-  // otherwise cut the surrounding statement in two, failing every FRESH-database
-  // migration with a bogus syntax error (the degrade-safe boot then hides it and
-  // the DB silently stays schemaless).
-  return sql
-    .split('\n')
-    .filter((line) => !/^\s*--/.test(line))
-    .join('\n')
-    .split(';')
-    .map((chunk) => chunk.trim())
-    .filter((statement) => statement.length > 0);
+  const statements: string[] = [];
+  let current = '';
+  const flush = (): void => {
+    const trimmed = current.trim();
+    if (trimmed.length > 0) statements.push(trimmed);
+    current = '';
+  };
+
+  const n = sql.length;
+  let i = 0;
+  while (i < n) {
+    const ch = sql[i];
+    const next = sql[i + 1];
+
+    // Line comment: drop to end of line (its `;` must not split a statement).
+    if (ch === '-' && next === '-') {
+      i += 2;
+      while (i < n && sql[i] !== '\n') i++;
+      continue;
+    }
+    // Block comment: drop to closing `*/`.
+    if (ch === '/' && next === '*') {
+      i += 2;
+      while (i < n && !(sql[i] === '*' && sql[i + 1] === '/')) i++;
+      i += 2;
+      continue;
+    }
+    // Single-quoted string literal (kept verbatim, incl. `''` escapes).
+    if (ch === "'") {
+      current += ch;
+      i++;
+      while (i < n) {
+        if (sql[i] === "'" && sql[i + 1] === "'") {
+          current += "''";
+          i += 2;
+          continue;
+        }
+        if (sql[i] === "'") {
+          current += "'";
+          i++;
+          break;
+        }
+        current += sql[i];
+        i++;
+      }
+      continue;
+    }
+    // Dollar-quoted literal `$tag$ ... $tag$` (kept verbatim).
+    if (ch === '$') {
+      const tagMatch = /^\$[A-Za-z0-9_]*\$/.exec(sql.slice(i));
+      if (tagMatch) {
+        const tag = tagMatch[0];
+        const end = sql.indexOf(tag, i + tag.length);
+        const stop = end === -1 ? n : end + tag.length;
+        current += sql.slice(i, stop);
+        i = stop;
+        continue;
+      }
+    }
+    // Top-level statement separator.
+    if (ch === ';') {
+      flush();
+      i++;
+      continue;
+    }
+    current += ch;
+    i++;
+  }
+  flush();
+  return statements;
 }

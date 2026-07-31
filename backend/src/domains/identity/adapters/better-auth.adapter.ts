@@ -163,17 +163,35 @@ class BetterAuthAdapterImpl implements BetterAuthAdapter {
   }
 }
 
-/** Build a degrade-safe logging stub when no real senders are wired. */
-function stubSenders(log: Logger): AuthSenders {
+/**
+ * Build a degrade-safe logging stub when no real senders are wired.
+ *
+ * SECURITY: the `url` handed to each sender embeds a single-use bearer token
+ * (magic-link / reset / verification). It is NEVER logged — observability
+ * redaction only matches key names like `token`/`secret`/`authorization`, not a
+ * `url` that carries the token in its query string, so logging it would leak an
+ * account-takeover credential. We log only the recipient email + a
+ * delivery-not-wired marker.
+ */
+export function stubSenders(log: Logger): AuthSenders {
   return {
-    async sendMagicLink({ email, url }) {
-      log.warn({ email, url }, 'magic-link email delivery not wired (observability/notify edge pending)');
+    async sendMagicLink({ email }) {
+      log.warn(
+        { email, delivery: 'not-wired' },
+        'magic-link email delivery not wired (observability/notify edge pending); token-bearing URL withheld from logs',
+      );
     },
-    async sendResetPassword({ user, url }) {
-      log.warn({ email: user.email, url }, 'reset-password email delivery not wired');
+    async sendResetPassword({ user }) {
+      log.warn(
+        { email: user.email, delivery: 'not-wired' },
+        'reset-password email delivery not wired; token-bearing URL withheld from logs',
+      );
     },
-    async sendVerificationEmail({ user, url }) {
-      log.warn({ email: user.email, url }, 'verification email delivery not wired');
+    async sendVerificationEmail({ user }) {
+      log.warn(
+        { email: user.email, delivery: 'not-wired' },
+        'verification email delivery not wired; token-bearing URL withheld from logs',
+      );
     },
   };
 }

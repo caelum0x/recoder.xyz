@@ -134,21 +134,49 @@ export function header(
   return undefined;
 }
 
+/** Default webhook timestamp tolerance (5 minutes), per the Standard-Webhooks spec. */
+export const WEBHOOK_TIMESTAMP_TOLERANCE_MS = 300_000;
+
+/** Injectable clock/tolerance for the replay-defense freshness check (testable + deterministic). */
+export interface WebhookFreshnessOptions {
+  /** Current wall-clock in ms (defaults to `Date.now()`). */
+  readonly nowMs?: number;
+  /** Max allowed skew between `nowMs` and the signed timestamp (defaults to 5 min). */
+  readonly toleranceMs?: number;
+}
+
+/**
+ * Replay defense: the provider timestamp is Unix *seconds* (Standard-Webhooks +
+ * Paddle). Reject when it is missing, non-numeric, or further than `toleranceMs`
+ * from `nowMs` — a captured-but-valid webhook cannot re-verify forever.
+ */
+export function isFreshWebhookTimestamp(timestamp: string, opts?: WebhookFreshnessOptions): boolean {
+  const seconds = Number(timestamp);
+  if (!Number.isFinite(seconds)) return false;
+  const nowMs = opts?.nowMs ?? Date.now();
+  const toleranceMs = opts?.toleranceMs ?? WEBHOOK_TIMESTAMP_TOLERANCE_MS;
+  return Math.abs(nowMs - seconds * 1000) <= toleranceMs;
+}
+
 /**
  * Verify a Standard-Webhooks signature (Polar + Dodo Payments). The signed
  * content is `${id}.${timestamp}.${payload}`; the secret is a `whsec_`-prefixed
  * base64 value. The `webhook-signature` header is a space-delimited list of
  * `v1,<base64sig>` entries — a match on ANY entry passes (key rotation).
+ *
+ * Rejects a stale timestamp (replay defense) BEFORE the HMAC compare.
  */
 export function verifyStandardWebhook(
   rawBody: Buffer,
   headers: Readonly<Record<string, string>>,
   secret: string,
+  freshness?: WebhookFreshnessOptions,
 ): boolean {
   const id = header(headers, 'webhook-id');
   const timestamp = header(headers, 'webhook-timestamp');
   const sigHeader = header(headers, 'webhook-signature');
   if (!id || !timestamp || !sigHeader) return false;
+  if (!isFreshWebhookTimestamp(timestamp, freshness)) return false;
 
   const key = decodeWebhookSecret(secret);
   const signed = `${id}.${timestamp}.${rawBody.toString('utf8')}`;
@@ -187,11 +215,14 @@ export function verifyHmacHex(
 /**
  * Verify a Paddle `Paddle-Signature` header of the form `ts=<unix>;h1=<hex>`.
  * The signed payload is `${ts}:${rawBody}` HMAC-SHA256 hex against the secret.
+ *
+ * Rejects a stale `ts` (replay defense) BEFORE the HMAC compare.
  */
 export function verifyPaddleSignature(
   rawBody: Buffer,
   headers: Readonly<Record<string, string>>,
   secret: string,
+  freshness?: WebhookFreshnessOptions,
 ): boolean {
   const raw = header(headers, 'paddle-signature');
   if (!raw) return false;
@@ -203,6 +234,7 @@ export function verifyPaddleSignature(
     else if (k === 'h1') h1 = v;
   }
   if (!ts || !h1) return false;
+  if (!isFreshWebhookTimestamp(ts, freshness)) return false;
   const expected = createHmac('sha256', secret)
     .update(`${ts}:${rawBody.toString('utf8')}`)
     .digest('hex');

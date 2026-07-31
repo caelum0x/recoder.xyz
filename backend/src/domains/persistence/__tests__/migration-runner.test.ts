@@ -104,4 +104,28 @@ describe('splitStatements', () => {
       '-- enable the ext; used by the ledger below\ncreate table a (id int);\ncreate index i on a (id);';
     expect(splitStatements(sql)).toEqual(['create table a (id int)', 'create index i on a (id)']);
   });
+
+  it('a `;` inside an INLINE comment does not sever the surrounding CREATE TABLE', () => {
+    // Regression (cloud_0001_core.sql:43): an inline `-- ...;...` comment lives on
+    // a line that does NOT start with `--`, so full-line stripping missed it and
+    // the embedded `;` cut the CREATE TABLE into invalid fragments.
+    const sql =
+      'create table t (\n' +
+      '  a int,\n' +
+      '  expires_at timestamptz, -- TTL; reaped when passed (null = no expiry)\n' +
+      '  b int\n' +
+      ');\n' +
+      'create index i on t (a);';
+    const stmts = splitStatements(sql);
+    expect(stmts).toHaveLength(2);
+    expect(stmts[0]).toContain('create table t');
+    // The statement survived intact past the comment's `;` (would be missing if severed).
+    expect(stmts[0]).toContain('b int');
+    expect(stmts[1]).toBe('create index i on t (a)');
+  });
+
+  it('a `;` inside a STRING literal does not split the statement', () => {
+    const sql = "insert into t (msg) values ('a; b');\nselect 1;";
+    expect(splitStatements(sql)).toEqual(["insert into t (msg) values ('a; b')", 'select 1']);
+  });
 });

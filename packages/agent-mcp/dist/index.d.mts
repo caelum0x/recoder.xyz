@@ -458,7 +458,6 @@ type WorkflowPort = {
         checks?: Array<{
             name: string;
             kind?: string;
-            command?: string;
             config?: Record<string, unknown>;
         }>;
     }): Promise<unknown>;

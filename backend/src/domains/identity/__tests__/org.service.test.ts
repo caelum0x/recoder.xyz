@@ -60,6 +60,9 @@ class FakeExecutor implements QueryExecutor {
       const found = [...this.memberships.values()].find((r) => r.org_id === p.orgId && r.user_id === p.userId);
       return ((found as T | undefined) ?? null) as T | null;
     }
+    if (s.includes('from identity.org_membership') && s.includes('where id')) {
+      return ((this.memberships.get(String(p.id)) as T | undefined) ?? null) as T | null;
+    }
     return null;
   }
 
@@ -149,13 +152,25 @@ describe('OrgServiceImpl — lifecycle', () => {
     await expect(svc.invite({ orgId: org.id, userId: 'u2', invitedBy: 'owner1' })).rejects.toThrow(/already a member/);
   });
 
-  it('acceptInvite transitions invited → active', async () => {
+  it('acceptInvite transitions invited → active for the invited user', async () => {
     const { svc } = build();
     const org = await svc.createOrg({ name: 'Acme', slug: 'acme', ownerUserId: 'owner1' });
     const m = await svc.invite({ orgId: org.id, userId: 'u2', invitedBy: 'owner1' });
-    expect(await svc.acceptInvite(m.id)).toBe(true);
+    expect(await svc.acceptInvite(m.id, 'u2')).toBe(true);
     // a second accept is a no-op (already active)
-    expect(await svc.acceptInvite(m.id)).toBe(false);
+    expect(await svc.acceptInvite(m.id, 'u2')).toBe(false);
+  });
+
+  it('acceptInvite rejects a caller who does not own the membership (IDOR)', async () => {
+    const { svc, db } = build();
+    const org = await svc.createOrg({ name: 'Acme', slug: 'acme', ownerUserId: 'owner1' });
+    const m = await svc.invite({ orgId: org.id, userId: 'victim', invitedBy: 'owner1' });
+    // An attacker who merely learns the membershipId cannot activate the victim's invite.
+    expect(await svc.acceptInvite(m.id, 'attacker')).toBe(false);
+    // The victim's membership is still 'invited' — never silently activated.
+    expect(db.memberships.get(m.id)?.status).toBe('invited');
+    // The rightful owner can still accept.
+    expect(await svc.acceptInvite(m.id, 'victim')).toBe(true);
   });
 
   it('a denying governance gate blocks org creation', async () => {
