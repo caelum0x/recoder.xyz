@@ -50,7 +50,9 @@ function readLockScope(workspace: Workspace): PersistedLockScope | undefined {
  * non-terminal workspaces are finalized to a terminal record state with truthful
  * metadata, never fabricated success.
  */
-export async function reconcile(deps: WorkspaceEngineDeps): Promise<ReconcileReport> {
+export async function reconcile(
+  deps: WorkspaceEngineDeps
+): Promise<ReconcileReport> {
   const { repository, scan, clock, logger } = deps;
 
   const [workspaces, liveSessions, conductorWorktrees] = await Promise.all([
@@ -85,13 +87,18 @@ export async function reconcile(deps: WorkspaceEngineDeps): Promise<ReconcileRep
       // record + run to a terminal state, and free its lock — instead of leaving
       // it dangling forever.
       orphanedWorkspaces.push(ws.workspaceId);
-      if (await finalizeOrphanedWorkspace(deps, ws)) finalized.push(ws.workspaceId);
+      if (await finalizeOrphanedWorkspace(deps, ws))
+        finalized.push(ws.workspaceId);
     }
   }
 
-  const knownWorkspaceIds = new Set(workspaces.map((w) => w.workspaceId));
-  const orphanedSessions = liveSessions.filter((name) => !knownSessionNames.has(name));
-  const orphanedWorktrees = [...worktreeWorkspaceIds].filter((id) => !knownWorkspaceIds.has(id));
+  const knownWorkspaceIds = new Set(workspaces.map(w => w.workspaceId));
+  const orphanedSessions = liveSessions.filter(
+    name => !knownSessionNames.has(name)
+  );
+  const orphanedWorktrees = [...worktreeWorkspaceIds].filter(
+    id => !knownWorkspaceIds.has(id)
+  );
 
   const report: ReconcileReport = {
     live,
@@ -103,7 +110,10 @@ export async function reconcile(deps: WorkspaceEngineDeps): Promise<ReconcileRep
     orphanedWorktrees,
     checkedAt: clock.now(),
   };
-  logger.info('conductor reconcile complete', report as unknown as Record<string, unknown>);
+  logger.info(
+    'conductor reconcile complete',
+    report as unknown as Record<string, unknown>
+  );
   return report;
 }
 
@@ -114,7 +124,10 @@ export async function reconcile(deps: WorkspaceEngineDeps): Promise<ReconcileRep
  * when a (re)bind was attempted, false when the record lacks a run/session to
  * tail. Never throws — a tail rebind failure must not fail reconcile.
  */
-async function rebindLiveWorkspace(deps: WorkspaceEngineDeps, ws: Workspace): Promise<boolean> {
+async function rebindLiveWorkspace(
+  deps: WorkspaceEngineDeps,
+  ws: Workspace
+): Promise<boolean> {
   if (!ws.runId || !ws.sessionName) return false;
   try {
     deps.runTailer.start({
@@ -127,7 +140,10 @@ async function rebindLiveWorkspace(deps: WorkspaceEngineDeps, ws: Workspace): Pr
     });
     return true;
   } catch (err) {
-    deps.logger.warn('reconcile: run-tail rebind failed', { workspaceId: ws.workspaceId, err });
+    deps.logger.warn('reconcile: run-tail rebind failed', {
+      workspaceId: ws.workspaceId,
+      err,
+    });
     return false;
   }
 }
@@ -139,7 +155,10 @@ async function rebindLiveWorkspace(deps: WorkspaceEngineDeps, ws: Workspace): Pr
  * itself). Returns true when the lock is (re)held for this workspace, false when
  * no scope was recorded or the engine is degraded. Never throws.
  */
-async function relockLiveWorkspace(deps: WorkspaceEngineDeps, ws: Workspace): Promise<boolean> {
+async function relockLiveWorkspace(
+  deps: WorkspaceEngineDeps,
+  ws: Workspace
+): Promise<boolean> {
   if (!deps.lock) return false;
   const scope = readLockScope(ws);
   if (!scope) return false;
@@ -153,28 +172,37 @@ async function relockLiveWorkspace(deps: WorkspaceEngineDeps, ws: Workspace): Pr
     });
     if (result.status === 'acquired') return true;
     if (result.status === 'conflict') {
-      deps.logger.warn('reconcile: live workspace lost its lock to a peer (scope contended)', {
-        workspaceId: ws.workspaceId,
-        conflicts: result.conflicts,
-      });
+      deps.logger.warn(
+        'reconcile: live workspace lost its lock to a peer (scope contended)',
+        {
+          workspaceId: ws.workspaceId,
+          conflicts: result.conflicts,
+        }
+      );
     }
     return false;
   } catch (err) {
-    deps.logger.warn('reconcile: lock re-acquire failed', { workspaceId: ws.workspaceId, err });
+    deps.logger.warn('reconcile: lock re-acquire failed', {
+      workspaceId: ws.workspaceId,
+      err,
+    });
     return false;
   }
 }
 
 /**
  * Finalize a crashed orphan: its session is gone but the record is non-terminal.
- * Read the true substrate exit code, emit a terminal RunEvent (completed on exit
- * 0 / handle-gone, failed on a non-zero exit), advance the run + workspace to a
- * terminal state, and release the write-lock. Best-effort and idempotent: a
- * partial failure logs and reports false rather than throwing out of reconcile.
+ * Read the true substrate exit code and emit a terminal RunEvent: `completed` on a
+ * clean finish (exit 0, or a session that ended leaving no exit sentinel — `null`),
+ * `failed` on a non-zero exit (crash) OR an `undefined` exit code (the substrate
+ * couldn't determine the outcome — e.g. an ACP session interrupted by the restart;
+ * genuinely unknown, so NEVER booked as a fabricated success). Advance the run +
+ * workspace to a terminal state and release the write-lock. Best-effort and
+ * idempotent: a partial failure logs and reports false rather than throwing.
  */
 async function finalizeOrphanedWorkspace(
   deps: WorkspaceEngineDeps,
-  ws: Workspace,
+  ws: Workspace
 ): Promise<boolean> {
   const { repository, registry, lock, clock, logger } = deps;
   const at = clock.now();
@@ -192,44 +220,67 @@ async function finalizeOrphanedWorkspace(
       });
     }
   } catch (err) {
-    logger.warn('reconcile: orphan exit-code probe failed', { workspaceId: ws.workspaceId, err });
+    logger.warn('reconcile: orphan exit-code probe failed', {
+      workspaceId: ws.workspaceId,
+      err,
+    });
     exitCode = undefined;
   }
   const crashed = typeof exitCode === 'number' && exitCode !== 0;
+  // `undefined` = the substrate could not determine the outcome (an ACP session
+  // interrupted by the restart is not visible to the tmux-keyed liveness scan, so
+  // its exit is genuinely UNKNOWN) → finalize as failed, never a fabricated
+  // completed/exit-0. `null` = the session ended leaving no exit sentinel (the
+  // established clean-finish reading) → completed. A numeric non-zero is a crash.
+  const interrupted = exitCode === undefined;
+  const clean = !crashed && !interrupted;
+  const reportedExit = interrupted ? null : (exitCode ?? 0);
 
   // Emit a terminal RunEvent into the audit log (truthful: what the substrate
   // reports, not a fabricated success).
   if (ws.runId) {
     const event: RunEvent = {
       eventId: `event_${ws.runId}_reconcile_${clock.nowMs()}`,
-      type: crashed ? 'failed' : 'completed',
+      type: clean ? 'completed' : 'failed',
       taskId: ws.taskId,
       runId: ws.runId,
       message: crashed
         ? `Agent session gone after restart; exited with code ${exitCode}`
-        : 'Agent session ended (finalized by reconcile after restart)',
+        : interrupted
+          ? 'Agent session interrupted by restart; outcome unknown (finalized by reconcile)'
+          : 'Agent session ended (finalized by reconcile after restart)',
       createdAt: at,
-      data: { sessionName: ws.sessionName, exitCode: exitCode ?? 0, finalizedBy: 'reconcile' },
+      data: {
+        sessionName: ws.sessionName,
+        exitCode: reportedExit,
+        finalizedBy: 'reconcile',
+      },
     };
     try {
       await repository.appendEvent(event);
     } catch (err) {
-      logger.warn('reconcile: terminal event append failed', { workspaceId: ws.workspaceId, err });
+      logger.warn('reconcile: terminal event append failed', {
+        workspaceId: ws.workspaceId,
+        err,
+      });
     }
 
     // Advance the control-plane run to a terminal state when it is still open.
     try {
       const runs = await repository.listRuns();
-      const run = runs.find((r) => r.runId === ws.runId);
+      const run = runs.find(r => r.runId === ws.runId);
       if (run && !isTerminalTaskRunState(run.state)) {
         await repository.upsertRun(
-          transitionTaskRun(run, crashed ? 'failed' : 'completed', {
-            metadata: { finalizedBy: 'reconcile', exitCode: exitCode ?? 0 },
-          }),
+          transitionTaskRun(run, clean ? 'completed' : 'failed', {
+            metadata: { finalizedBy: 'reconcile', exitCode: reportedExit },
+          })
         );
       }
     } catch (err) {
-      logger.warn('reconcile: run finalize failed', { workspaceId: ws.workspaceId, err });
+      logger.warn('reconcile: run finalize failed', {
+        workspaceId: ws.workspaceId,
+        err,
+      });
     }
   }
 
@@ -247,10 +298,11 @@ async function finalizeOrphanedWorkspace(
             finalized: true,
             exitCode: exitCode ?? null,
             crashed,
+            interrupted,
             at,
           },
         },
-      }),
+      })
     );
     advanced = true;
   } catch (err) {
@@ -263,9 +315,16 @@ async function finalizeOrphanedWorkspace(
   // Free the write-lock so the orphan's scope is released for the next workspace.
   if (lock) {
     try {
-      await lock.release({ workspaceId: ws.workspaceId, spaceId: ws.spaceId, taskId: ws.taskId });
+      await lock.release({
+        workspaceId: ws.workspaceId,
+        spaceId: ws.spaceId,
+        taskId: ws.taskId,
+      });
     } catch (err) {
-      logger.warn('reconcile: orphan lock release failed', { workspaceId: ws.workspaceId, err });
+      logger.warn('reconcile: orphan lock release failed', {
+        workspaceId: ws.workspaceId,
+        err,
+      });
     }
   }
 

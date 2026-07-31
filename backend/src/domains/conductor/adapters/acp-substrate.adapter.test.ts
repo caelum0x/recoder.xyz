@@ -370,7 +370,11 @@ describe('createAcpSubstrate — restart reattach (explicit, via continueRun)', 
     const s = createAcpSubstrate(baseDeps({ exists: () => true, spawn }));
     expect(await s.capture(persistedHandle)).toBeNull();
     expect(await s.alive(persistedHandle)).toBe(false);
-    expect(await s.exitCode?.(persistedHandle)).toBeNull();
+    // A persisted-but-not-live handle is INTERRUPTED (outcome unknown) → undefined,
+    // NOT a fabricated exit; reconcile maps that to a truthful `failed`, never 0.
+    expect(await s.exitCode?.(persistedHandle)).toBeUndefined();
+    // A handle that never carried a session id is genuinely gone → null.
+    expect(await s.exitCode?.({ ref: 'ws-1' })).toBeNull();
     expect(spawn).not.toHaveBeenCalled();
   });
 

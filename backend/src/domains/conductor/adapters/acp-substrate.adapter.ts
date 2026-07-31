@@ -542,7 +542,13 @@ export function createAcpSubstrate(
       handle: SubstrateHandle
     ): Promise<number | null | undefined> {
       const state = byRef.get(handle.ref);
-      if (!state) return null; // gone / not reattached (probes never spawn)
+      if (!state)
+        // No live session in THIS process (probes never spawn). A handle carrying a
+        // persisted ACP sessionId WAS a real run whose outcome the restart made
+        // genuinely unknown → `undefined` (interrupted), so reconcile finalizes it
+        // as failed, never a fabricated completed/exit-0. A handle with no session
+        // id never ran → `null` (gone).
+        return handle.sessionName ? undefined : null;
       if (!state.done) return undefined; // still running — unknown, NEVER 0
       return state.exit;
     },
