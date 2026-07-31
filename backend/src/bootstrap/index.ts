@@ -54,6 +54,12 @@ import { createConductorModule } from '../domains/conductor/index.js';
 import { createCliRuntimeSubstrate } from '../domains/conductor/adapters/cli-runtime.adapter.js';
 import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/openfang-runtime.adapter.js';
 import { createAcpSubstrate } from '../domains/conductor/adapters/acp-substrate.adapter.js';
+import { createAcpPermissionGate } from '../domains/conductor/adapters/acp-permission-gate.adapter.js';
+import type {
+  AcpPermissionContext,
+  AcpPermissionDecision,
+} from '../domains/conductor/adapters/acp/acp-client-requests.js';
+import type { Principal as AcpGatePrincipal } from '../domains/identity/types.js';
 import { createBrainMemoryAdapter } from '../domains/conductor/adapters/brain-memory.adapter.js';
 import { createConductorCodeIntel } from '../domains/conductor/adapters/code-intel.adapter.js';
 import { createBrowserPreviewVerifier } from '../domains/conductor/adapters/browser-preview-verify.adapter.js';
@@ -204,6 +210,15 @@ function routerProvider(
 
 /** Every edge mount keeps its router's own guards — the edge adds no second layer. */
 const PUBLIC_MOUNT: GuardPolicy = { auth: 'public', interop: false };
+
+/** The fixed internal-service identity an ACP agent's permission checks run under. */
+const ACP_GATE_PRINCIPAL: AcpGatePrincipal = {
+  userId: 'conductor-acp',
+  scopes: ['internal', 'write'],
+  kind: 'internal',
+  isAnonymous: false,
+  raw: null,
+};
 
 // The OPT-IN squad-seed env parser is re-homed in `agent-os-seams.ts` (bootstrap
 // is the sole sanctioned env read; agent-os owns the seed shape). Re-exported here
@@ -719,15 +734,24 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // CLI default), so it activates ONLY when a caller explicitly requests
   // `substrate: 'acp'`. Degrade-truthful: the `claude-code-acp` binary absent from
   // PATH ⇒ `available:false` + `launch()` refuses (never a fabricated session).
-  // Permission requests use the worktree-isolation policy by default (the agent
-  // works freely in its isolated, disposable worktree — read/edit/move/delete/
-  // search, reviewed as a diff at merge — while shell `execute` + network `fetch`
-  // + unknown kinds are denied); a future `resolvePermission` injection here
-  // bridges the gated kinds to the human approval gate. The agent's delegated
-  // `fs/*` reads/writes are path-CONTAINED to that worktree by the handler.
+  // Permission requests use the worktree-isolation policy for the safe kinds (the
+  // agent works freely in its isolated, disposable worktree — read/edit/move/
+  // delete/search, reviewed as a diff at merge). The GATED kinds — shell `execute`
+  // + network `fetch` + unknown — are routed to the REAL governance gate via
+  // `resolvePermission`, late-bound below once the conductor module (workspace
+  // lookup) exists. The agent's delegated `fs/*` reads/writes are path-CONTAINED
+  // to that worktree by the handler.
+  let acpPermissionGate:
+    ((ctx: AcpPermissionContext) => Promise<AcpPermissionDecision>) | null =
+    null;
   const acpSub = createAcpSubstrate({
     config: conductorSubstrateConfig,
     logger: childLogger('conductor-acp'),
+    // Stable closure → the late-bound gate; denies until the module is wired.
+    resolvePermission: ctx =>
+      acpPermissionGate
+        ? acpPermissionGate(ctx)
+        : Promise.resolve<AcpPermissionDecision>('deny'),
   });
   // The memory-backed brain: recall on launch (mem0 ∪ beads ∪ candidates → rerank)
   // + harvest on completion. Built over the memory module's PUBLIC seams only.
@@ -908,6 +932,22 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   });
   container.registerValue(DOMAIN_TOKENS.conductor, conductor);
   healthRegistry.register(conductor);
+
+  // Late-bind the ACP permission gate (the substrate is built BEFORE the conductor
+  // module, so the workspace-lookup seam attaches here). A gated ACP tool call —
+  // shell `execute`, network `fetch`, unknown — now flows through the SAME
+  // `governance.gate().decide` that guards every conductor write (mapped to
+  // `command.run` / `tool.call` / `file.*`, correlated by the workspace's
+  // taskId/runId + contained to its worktree). `allow` → the tool runs (sealed to
+  // the audit chain); `needs_approval`/`deny` → refused. Degrade-truthful: gate
+  // error ⇒ deny (never a fabricated allow). The worktree-safe kinds never reach
+  // here — the substrate's default policy already allows them.
+  acpPermissionGate = createAcpPermissionGate({
+    gate: governance.gate(),
+    getWorkspace: id => conductor.getWorkspace(id),
+    principal: ACP_GATE_PRINCIPAL,
+    logger: childLogger('conductor-acp-gate'),
+  });
 
   // Late-bind the squad-autopilot → conductor dispatch seam (agent-os is built
   // BEFORE the conductor, so the port attaches here). The autopilot pulls ready
