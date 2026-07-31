@@ -121,6 +121,18 @@ export interface CompareDeps {
    * and degrade-safe: unreadable ⇒ `{ reason }` (never a fabricated list).
    */
   changedFiles(workspace: Workspace): Promise<{ files?: readonly string[]; reason?: string }>;
+  /**
+   * OPTIONAL per-caller access predicate (recoder-kybr). A group is keyed on a
+   * shared `taskGroup`, NOT a single workspace id, so the `:id` ownership guard
+   * cannot cover it — without this, an authed caller could aggregate/converge
+   * across siblings they do not own. When present, a workspace for which it returns
+   * FALSE is EXCLUDED from the aggregate, so a group-scoped compare/converge folds
+   * ONLY the siblings the caller may access. ABSENT (internal callers — e.g. the
+   * merge-time evidence read) ⇒ the FULL group is seen. This pure service merely
+   * applies the predicate; the ownership semantics (createdBy/tenant + admin/solo
+   * fail-open) live in the caller (routes/workspace-access `canAccessWorkspace`).
+   */
+  canAccess?(workspace: Workspace): boolean;
 }
 
 /** Read a workspace's shared group key from its metadata (absent/blank ⇒ undefined). */
@@ -232,7 +244,11 @@ export async function compareTaskGroup(
   if (!group) return { taskGroup: null, count: 0, siblings: [], contested: [] };
 
   const all = await deps.listWorkspaces();
-  const members = all.filter((ws) => taskGroupOf(ws) === group);
+  // recoder-kybr: fold ONLY the group siblings the caller may access. `canAccess`
+  // absent (an internal, principal-less read) ⇒ the full group, unchanged.
+  const members = all.filter(
+    (ws) => taskGroupOf(ws) === group && (deps.canAccess ? deps.canAccess(ws) : true),
+  );
   const siblings = await Promise.all(members.map((ws) => buildEntry(deps, ws)));
   siblings.sort(bySiblingOrder);
   const contested = computeContested(siblings);
@@ -250,6 +266,9 @@ export async function workspaceSiblings(
 ): Promise<CompareView | null> {
   const workspace = await deps.getWorkspace(workspaceId);
   if (!workspace) return null;
+  // recoder-kybr: an inaccessible workspace is a no-oracle null (the route maps it
+  // to the SAME 404 as a genuinely-missing one) — never confirm it exists.
+  if (deps.canAccess && !deps.canAccess(workspace)) return null;
 
   const group = taskGroupOf(workspace);
   if (!group) {

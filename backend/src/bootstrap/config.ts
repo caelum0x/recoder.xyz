@@ -214,6 +214,33 @@ function guardDatabaseUrl(url: string | undefined, isProduction: boolean, errors
   }
 }
 
+/**
+ * Fail-fast guard for the critical CORS misconfiguration (audit item #43):
+ * advertising credentials WHILE reflecting any origin. A `*` (reflect-any) entry
+ * in the allowlist causes the CORS middleware to echo back an arbitrary caller's
+ * origin AND `Access-Control-Allow-Credentials: true`, which lets any website
+ * make authenticated cross-origin requests — a full CSRF/credential-theft hole.
+ *
+ * A SPECIFIC allowlist + credentials is fine (the normal cross-subdomain shape).
+ * An EMPTY allowlist + credentials is fine too: this backend's CORS reflects
+ * nothing for an empty list (the desktop / self-host default), so it is not
+ * reflect-any. Only `*` + credentials is fatal. Pure + side-effect free so it is
+ * trivially unit-testable; `loadConfig` aggregates its output with the other
+ * boot guards.
+ */
+export function corsCredentialsGuardErrors(cors: CorsConfig): string[] {
+  const errors: string[] = [];
+  if (!cors.allowCredentials) return errors;
+  if (cors.origins.includes('*')) {
+    errors.push(
+      'CORS is configured to send credentials while the origin allowlist contains "*" (reflect-any). ' +
+        'A wildcard origin with credentials lets any website make authenticated cross-origin requests. ' +
+        'Set an explicit CORS_ORIGINS allowlist or disable credentials.',
+    );
+  }
+  return errors;
+}
+
 /** Fail-fast validation for the internal service key in production. */
 function guardInternalKey(key: string | undefined, isProduction: boolean, errors: string[]): void {
   if (!isProduction) return;
@@ -539,11 +566,16 @@ export function loadConfig(rawEnv: EnvSource = process.env): AppConfig {
   guardDatabaseUrl(env.DATABASE_URL, isProduction, semanticErrors);
   guardInternalKey(env.INTERNAL_SERVICE_KEY, isProduction, semanticErrors);
 
+  const config = buildConfig(env, rawEnv);
+
+  // Boot guardrail (item #43): credentials + a wildcard/reflect-any origin is a
+  // critical CORS misconfig — refuse to start rather than expose credentialed
+  // cross-origin access to any site. Guards the RESOLVED cors slice.
+  semanticErrors.push(...corsCredentialsGuardErrors(config.cors));
+
   if (semanticErrors.length > 0) {
     throw new Error(`Invalid environment configuration:\n${semanticErrors.map((e) => `  - ${e}`).join('\n')}`);
   }
-
-  const config = buildConfig(env, rawEnv);
 
   // Boot guardrail (item #19): solo mode fails auth OPEN on mutating routes —
   // safe for a loopback DB-less desktop, dangerous on a shared/multi-tenant host.

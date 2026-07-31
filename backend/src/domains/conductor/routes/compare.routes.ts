@@ -13,6 +13,15 @@
  * workspace is a 404, and an uncomputable per-sibling diff is an absent stat with
  * a reason (never a fabricated one).
  *
+ * GROUP OWNERSHIP (recoder-kybr): these edges are keyed on a shared `taskGroup`
+ * (NOT a single workspace id), so the single-id `requireWorkspaceAccess` guard the
+ * `:id` routes carry does NOT cover them. Each group aggregation therefore threads
+ * the caller's `principal` into the module so it folds ONLY the siblings the caller
+ * may access (same createdBy/tenant + admin + solo fail-open semantics as the `:id`
+ * guard, via `canAccessWorkspace`). A group the caller owns NO sibling of is a
+ * no-oracle 404 (byte-identical to a genuinely-unknown group) — never a leak of
+ * another tenant's parallel run, and a converge folds only the caller's worktrees.
+ *
  * MOUNT ORDER (critical): this router MUST be mounted BEFORE `buildConductorRoutes`
  * so `GET /workspaces/compare` resolves here and never falls through to the main
  * router's `GET /workspaces/:id` (which would read a workspace literally named
@@ -39,8 +48,10 @@ export function buildCompareRoutes(deps: CompareRouterDeps): Router {
   // Ownership guard for the `:id`-scoped sibling read (recoder-tf68).
   const access = requireWorkspaceAccess(module, { soloMode: deps.soloMode === true });
 
-  // Aggregate every sibling of a parallel-run group for side-by-side review.
-  // A blank/absent `taskGroup` is a truthful empty view (never an error).
+  // Aggregate every sibling of a parallel-run group the CALLER OWNS for side-by-side
+  // review (recoder-kybr: the group is narrowed to the caller's own siblings). A
+  // group the caller owns no sibling of is a no-oracle 404 — identical to a
+  // genuinely-unknown group, so it never confirms another tenant's group exists.
   router.get(
     '/workspaces/compare',
     middleware.authenticate,
@@ -50,7 +61,13 @@ export function buildCompareRoutes(deps: CompareRouterDeps): Router {
         sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`taskGroup` query param is required'));
         return;
       }
-      sendSuccess(res, { compare: await module.compareTaskGroup(taskGroup) });
+      const compare = await module.compareTaskGroup(taskGroup, req.principal!);
+      if (compare.count === 0) {
+        // No accessible sibling ⇒ no-oracle 404 (byte-identical to a missing workspace).
+        sendError(res, createError(ErrorCode.NOT_FOUND, 'workspace not found'));
+        return;
+      }
+      sendSuccess(res, { compare });
     }),
   );
 
@@ -61,7 +78,10 @@ export function buildCompareRoutes(deps: CompareRouterDeps): Router {
     middleware.authenticate,
     access,
     asyncHandler(async (req, res) => {
-      const compare = await module.workspaceSiblings(req.params.id);
+      // The `access` guard already proved the caller owns `:id`; the principal
+      // additionally narrows the RETURNED group to the caller's own siblings
+      // (recoder-kybr) — a foreign sibling of the same taskGroup never leaks in.
+      const compare = await module.workspaceSiblings(req.params.id, req.principal!);
       if (!compare) {
         sendError(res, createError(ErrorCode.NOT_FOUND, 'workspace not found'));
         return;
@@ -112,7 +132,14 @@ export function buildCompareRoutes(deps: CompareRouterDeps): Router {
       // contested paths. Off by default so the desktop's debounced plan poll never
       // pays for the probe unless it explicitly asks.
       const probe = isTruthyFlag(req.query.probe);
-      sendSuccess(res, { plan: await module.planConvergence(taskGroup, selection, { probe }) });
+      // recoder-kybr: plan over ONLY the caller's own siblings of the group.
+      const plan = await module.planConvergence(taskGroup, selection, { probe }, req.principal!);
+      if (plan.siblingCount === 0) {
+        // Caller owns no sibling of this group ⇒ no-oracle 404.
+        sendError(res, createError(ErrorCode.NOT_FOUND, 'workspace not found'));
+        return;
+      }
+      sendSuccess(res, { plan });
     }),
   );
 
@@ -139,7 +166,14 @@ export function buildCompareRoutes(deps: CompareRouterDeps): Router {
 
       // Pre-validate as a READ so a bad selection is a 400 (not a governance/service
       // error). `complete` requires ≥1 winning file AND no unresolved contested path.
-      const plan = await module.planConvergence(taskGroup, selection);
+      // recoder-kybr: the plan (and the compose below) fold ONLY the caller's own
+      // siblings — a group is keyed on taskGroup, so the `:id` guard cannot cover it.
+      const plan = await module.planConvergence(taskGroup, selection, undefined, req.principal!);
+      if (plan.siblingCount === 0) {
+        // Caller owns no sibling of this group ⇒ no-oracle 404 (before any compose).
+        sendError(res, createError(ErrorCode.NOT_FOUND, 'workspace not found'));
+        return;
+      }
       if (plan.siblingCount < 2) {
         sendError(res, createError(ErrorCode.VALIDATION_ERROR, `convergence needs ≥2 candidate workspaces (found ${plan.siblingCount})`));
         return;
