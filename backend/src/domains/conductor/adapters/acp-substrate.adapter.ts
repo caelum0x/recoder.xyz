@@ -32,9 +32,13 @@
  * `session/cancel`s a live turn (bounded) before the kill, and a teardown racing an
  * in-flight reattach tombstones it so no orphan agent survives.
  *
- * Config-injected (NO `process.env` read here — ARCHITECTURE §10.8); the spawn +
- * exec + permission seams are injectable so it is unit-tested with a fake agent
- * and fake git. Degrade-truthful: an unavailable substrate refuses to launch, a
+ * Config-injected (ARCHITECTURE §10.8): the spawn + exec + permission + base-env
+ * seams are injectable so it is unit-tested with a fake agent and fake git. The
+ * agent's base env defaults to `process.env` but is DENYLIST-stripped of known
+ * backend secrets (DB URLs, INTERNAL_SERVICE_KEY, auth/billing/cloud credentials)
+ * before the spawn, and can be replaced with a curated env via `processEnv`, so a
+ * prompt-injectable agent never inherits the backend's secrets (recoder-x4n1).
+ * Degrade-truthful: an unavailable substrate refuses to launch, a
  * dead handle captures `null`. Agent-initiated requests (permission + delegated
  * `fs/*`) are handled by {@link createAcpClientRequestHandler}, bound per-launch
  * to the worktree: permissions use the worktree-isolation policy by default (or an
@@ -90,6 +94,33 @@ const MAX_BUFFER_LINES = 4000;
 const MAX_BUFFER_BYTES = 1_000_000;
 const MAX_LINE_BYTES = 64_000;
 
+/**
+ * Backend-infrastructure secrets the coding agent has NO business seeing — stripped
+ * from the env handed to the (prompt-injectable) agent subprocess. Conservative by
+ * design (denylist, not allowlist): infra/auth/billing/cloud secrets only, so the
+ * agent KEEPS what it needs (PATH, HOME, ANTHROPIC_API_KEY / OPENAI_API_KEY for LLM
+ * auth, GITHUB_TOKEN for git ops, locale). A full curated allowlist can be injected
+ * via `processEnv` when a deployment wants to lock this down further.
+ */
+const SECRET_ENV_PATTERNS: readonly RegExp[] = [
+  /SECRET/i, // BETTER_AUTH_SECRET, SESSION_SECRET, JWT_SECRET, *_WEBHOOK_SECRET
+  /PASSWORD/i,
+  /PASSWD/i,
+  /PRIVATE_KEY/i,
+  /DATABASE_URL/i, // DATABASE_URL, AUTH_DATABASE_URL, *_DATABASE_URL
+  /^DIRECT_URL$/i,
+  /^REDIS_URL$/i,
+  /^INTERNAL_SERVICE_KEY$/i,
+  /^API_KEY_HASH_SALT$/i,
+  /^(POLAR|CREEM|PADDLE|DODO)_/i, // MoR billing provider credentials
+  /^(CLOUDFLARE|HETZNER|AWS|AZURE|DAYTONA|E2B)_/i, // cloud/infra credentials
+];
+
+/** Default predicate: is this env key a known backend secret to withhold from the agent? */
+export function isSecretAgentEnvKey(key: string): boolean {
+  return SECRET_ENV_PATTERNS.some(re => re.test(key));
+}
+
 const NOOP_LOGGER: LoggerPort = { info() {}, warn() {}, error() {} };
 
 export interface CreateAcpSubstrateDeps {
@@ -131,6 +162,14 @@ export interface CreateAcpSubstrateDeps {
   readonly readAgentMarker?: (worktreePath: string) => string | null;
   /** Persist the launched ACP agent binary for restart-safe reattach (default: marker file). */
   readonly writeAgentMarker?: (worktreePath: string, agent: string) => void;
+  /**
+   * The base environment the agent subprocess inherits (default: `process.env`).
+   * Injectable so a deployment can hand a curated allowlist AND so tests avoid the
+   * real env. Known backend secrets are denylist-stripped from it before the spawn.
+   */
+  readonly processEnv?: NodeJS.ProcessEnv;
+  /** Override the "is this a backend secret to withhold?" predicate (default: {@link isSecretAgentEnvKey}). */
+  readonly isSecretEnvKey?: (key: string) => boolean;
 }
 
 /** Per-handle live state — the ACP driver + its streamed output + turn status. */
@@ -186,6 +225,23 @@ export function createAcpSubstrate(
   const tornDown = new Set<string>();
   const exists: (path: string) => boolean = deps.exists ?? existsSync;
   const cancelGraceMs = deps.cancelGraceMs ?? 2000;
+  const isSecretEnvKey = deps.isSecretEnvKey ?? isSecretAgentEnvKey;
+
+  /**
+   * The env handed to the agent subprocess: the base env (injected or `process.env`)
+   * with known backend secrets (DB URLs, INTERNAL_SERVICE_KEY, auth/billing/cloud
+   * credentials) DENYLIST-stripped, so a prompt-injectable agent can't exfiltrate
+   * them. Used by BOTH launch and reattach so the two spawn paths give the agent the
+   * SAME, minimal privilege set.
+   */
+  function agentBaseEnv(): NodeJS.ProcessEnv {
+    const base = deps.processEnv ?? process.env;
+    const out: NodeJS.ProcessEnv = {};
+    for (const [key, value] of Object.entries(base)) {
+      if (value !== undefined && !isSecretEnvKey(key)) out[key] = value;
+    }
+    return out;
+  }
 
   // Per-launch ACP agent binary: a sibling marker file next to the worktree (NOT
   // inside it, so it never pollutes the reviewable diff) records the binary a
@@ -325,7 +381,14 @@ export function createAcpSubstrate(
       exit: undefined, // its outcome is genuinely unknown — NEVER a fabricated 0
     };
     const driver = new AcpAgentDriver({
-      spawn: () => spawnProcess({ command: agentBin, cwd: worktreePath }),
+      // Same secret-stripped base env as launch (input.env isn't persisted across a
+      // restart, so it can't be restored here — see recoder-x4n1 follow-up).
+      spawn: () =>
+        spawnProcess({
+          command: agentBin,
+          cwd: worktreePath,
+          env: agentBaseEnv(),
+        }),
       onNotification: (n: AcpNotification) => {
         // `session/load` replays the conversation history as session/update
         // notifications — the same buffering as a live turn restores the transcript.
@@ -496,7 +559,10 @@ export function createAcpSubstrate(
           spawnProcess({
             command: agentBin,
             cwd: worktreePath,
-            ...(input.env ? { env: { ...process.env, ...input.env } } : {}),
+            // Secret-stripped base env + the workspace's own env (BYOK keys,
+            // RECODER_* markers). Always passed, so no spawn path falls back to the
+            // raw process.env default.
+            env: { ...agentBaseEnv(), ...(input.env ?? {}) },
           }),
         onNotification: (n: AcpNotification) => {
           // Streaming text goes into the buffer verbatim; a DISCRETE structured
