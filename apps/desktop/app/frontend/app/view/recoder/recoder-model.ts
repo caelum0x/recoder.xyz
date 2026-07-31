@@ -9,10 +9,12 @@ import {
     deriveProjectIdentity,
     deriveProjects,
     detectAttentionTransitions,
+    detectNeedsInputTransitions,
     filterByProject,
     filterWorkspaces,
     groupByTaskGroup,
     isTerminalWorkspaceState,
+    workspaceAttentionMap,
     workspaceStateMap,
     type ProjectSummary,
     type CompareView,
@@ -296,6 +298,15 @@ class RecoderViewModel implements ViewModel {
     prevWorkspaceStates: Map<string, string>;
     // workspaceId:state keys already notified this session (de-dupe on bounce).
     notifiedAttentionKeys: ReadonlySet<string>;
+    // Per-workspace ATTENTION as of the LAST successful /views merge; null until
+    // the first successful views read, which seeds silently. Separate from the
+    // durable-state map above: attention is the live "agent stopped, needs you"
+    // axis (needs_input / awaiting_approval) the board badges and pings on.
+    prevWorkspaceAttention: Map<string, string>;
+    // workspaceId:attn:<attention> keys already notified this session (de-dupe).
+    notifiedNeedsInputKeys: ReadonlySet<string>;
+    // True while a manual "Re-scan agents" probe is in flight (first-run setup).
+    setupProbingAtom: PrimitiveAtom<boolean>;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -339,6 +350,9 @@ class RecoderViewModel implements ViewModel {
         this.notifyOnAttentionAtom = atom(loadNotifyOnAttention()) as PrimitiveAtom<boolean>;
         this.prevWorkspaceStates = null;
         this.notifiedAttentionKeys = new Set();
+        this.prevWorkspaceAttention = null;
+        this.notifiedNeedsInputKeys = new Set();
+        this.setupProbingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.boardFilterAtom = atom("") as PrimitiveAtom<string>;
         this.boardShowAtom = atom("active") as PrimitiveAtom<RecoderBoardShow>;
         this.boardProjectAtom = atom("") as PrimitiveAtom<string>;
@@ -400,6 +414,20 @@ class RecoderViewModel implements ViewModel {
         this.refreshEnvironment();
     }
 
+    // Manual "Re-scan agents" (first-run setup): re-probe installed agent CLIs
+    // WITHOUT an app restart. The conductor's /runtimes does a fresh PATH probe
+    // per request, so an agent installed into an already-known PATH dir is picked
+    // up immediately. Toggles setupProbingAtom so the panel can show "Scanning…"
+    // and stays truthful — launch only enables once an agent is actually detected.
+    async rescanAgents() {
+        globalStore.set(this.setupProbingAtom, true);
+        try {
+            await this.refreshSetup();
+        } finally {
+            globalStore.set(this.setupProbingAtom, false);
+        }
+    }
+
     // GET /api/conductor/environment → the first-run import summary. Degrade-safe:
     // any failure or a non-object payload leaves environmentAtom null (the "we
     // found your setup" card simply doesn't render), never a throw.
@@ -428,10 +456,28 @@ class RecoderViewModel implements ViewModel {
             // Keep the UNFILTERED list: archived + failed workspaces are terminal
             // history, hidden by the board's default Active view, but retained here
             // so the All / Archived views switch without a refetch.
+            const base = getRecoderBackendUrl();
             const all = list as RecoderWorkspace[];
-            globalStore.set(this.allWorkspacesAtom, all);
-            this.noteAttentionTransitions(all);
-            workspaces = all.filter((w) => !isTerminalWorkspaceState(w.state));
+            // Enrich with the backend's attention classification (/views). A null
+            // map = the probe degraded: rows keep no attention (no badge, no
+            // needs-input ping) rather than a fabricated one.
+            const attentionById = await this.fetchAttentionMap(base);
+            const merged =
+                attentionById != null
+                    ? all.map((ws) =>
+                          attentionById.has(ws.workspaceId)
+                              ? { ...ws, attention: attentionById.get(ws.workspaceId) }
+                              : ws
+                      )
+                    : all;
+            globalStore.set(this.allWorkspacesAtom, merged);
+            this.noteAttentionTransitions(merged);
+            // Only fold the attention axis on a SUCCESSFUL views read, so a degraded
+            // probe never reseeds the map and can never manufacture a needs-input ping.
+            if (attentionById != null) {
+                this.noteNeedsInputTransitions(merged);
+            }
+            workspaces = merged.filter((w) => !isTerminalWorkspaceState(w.state));
         } catch (e) {
             globalStore.set(this.errorAtom, e instanceof Error ? e.message : String(e));
         } finally {
@@ -464,6 +510,54 @@ class RecoderViewModel implements ViewModel {
         }
     }
 
+    // GET /api/conductor/views → the attention-enriched read model. Returns a
+    // Map<workspaceId, attention> for every view that carries a string attention;
+    // null on any failure / non-2xx / missing shape so the caller keeps the rows
+    // un-enriched (no badge, no ping) rather than fabricating an attention. The
+    // WorkspaceView list omits metadata, so this is a SIDE read merged onto the
+    // /workspaces list — never a replacement for it.
+    async fetchAttentionMap(base: string): Promise<Map<string, string> | null> {
+        try {
+            const res = await fetch(`${base}/api/conductor/views`);
+            if (!res.ok) {
+                return null;
+            }
+            const data = (await res.json())?.data;
+            const list = Array.isArray(data?.workspaces) ? data.workspaces : [];
+            const map = new Map<string, string>();
+            for (const v of list) {
+                if (v != null && typeof v.workspaceId == "string" && typeof v.attention == "string") {
+                    map.set(v.workspaceId, v.attention);
+                }
+            }
+            return map;
+        } catch {
+            return null;
+        }
+    }
+
+    // Compare this poll's attention against the last SUCCESSFUL views merge and
+    // fire an OS notification per observed transition INTO a needs-input signal
+    // (agent stopped mid-run, waiting on the user for input or an approval) — the
+    // "walk away, get pinged" promise. Only called on a successful views read, so
+    // a degraded probe never reseeds the map. The first successful read seeds
+    // silently (no storm when reopening onto already-waiting workspaces).
+    noteNeedsInputTransitions(all: RecoderWorkspace[]) {
+        const prev = this.prevWorkspaceAttention;
+        this.prevWorkspaceAttention = workspaceAttentionMap(all);
+        if (prev == null || !globalStore.get(this.notifyOnAttentionAtom)) {
+            return;
+        }
+        const events = detectNeedsInputTransitions(prev, all, this.notifiedNeedsInputKeys);
+        if (events.length == 0) {
+            return;
+        }
+        this.notifiedNeedsInputKeys = new Set([...this.notifiedNeedsInputKeys, ...events.map((e) => e.key)]);
+        for (const event of events) {
+            this.showAttentionNotification(event);
+        }
+    }
+
     // Prefer the Electron main-process Notification (native OS delivery; the
     // click handler lives in main so it survives renderer GC, restores/focuses
     // the window natively, and badges the dock while the app is unfocused).
@@ -472,7 +566,14 @@ class RecoderViewModel implements ViewModel {
     // — the board itself still shows the state truthfully.
     showAttentionNotification(event: RecoderAttentionEvent) {
         const name = event.branch != "" ? event.branch : event.workspaceId;
-        const title = event.kind == "review" ? `${name} is ready for review` : `${name} failed`;
+        const title =
+            event.kind == "review"
+                ? `${name} is ready for review`
+                : event.kind == "needs_input"
+                  ? `${name} needs your input`
+                  : event.kind == "awaiting_approval"
+                    ? `${name} needs your approval`
+                    : `${name} failed`;
         const body = event.runtimeId != "" ? agentLabel(event.runtimeId) : "";
         try {
             const api = getApi();
