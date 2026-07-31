@@ -719,7 +719,12 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // CLI default), so it activates ONLY when a caller explicitly requests
   // `substrate: 'acp'`. Degrade-truthful: the `claude-code-acp` binary absent from
   // PATH ⇒ `available:false` + `launch()` refuses (never a fabricated session).
-  // Permission requests default to DENY until the approval-gate bridge is wired.
+  // Permission requests use the worktree-isolation policy by default (the agent
+  // works freely in its isolated, disposable worktree — read/edit/move/delete/
+  // search, reviewed as a diff at merge — while shell `execute` + network `fetch`
+  // + unknown kinds are denied); a future `resolvePermission` injection here
+  // bridges the gated kinds to the human approval gate. The agent's delegated
+  // `fs/*` reads/writes are path-CONTAINED to that worktree by the handler.
   const acpSub = createAcpSubstrate({
     config: conductorSubstrateConfig,
     logger: childLogger('conductor-acp'),

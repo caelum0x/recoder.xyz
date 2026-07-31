@@ -22,9 +22,12 @@ import {
   decodeAcpStream,
   encodeAcpMessage,
   isAcpRequest,
+  isAcpResponse,
   makeNotification,
+  makeRequest,
   makeResponse,
   type AcpRequest,
+  type AcpResponse,
 } from './acp/acp-codec.js';
 
 /** An in-memory ACP agent: parses requests off stdin and replies via onData. */
@@ -280,5 +283,95 @@ describe('extractUpdateText', () => {
       ''
     );
     expect(extractUpdateText(null)).toBe('');
+  });
+});
+
+describe('createAcpSubstrate — permission wiring', () => {
+  const PERM_OPTS = [
+    { kind: 'allow_once', name: 'Allow', optionId: 'a1' },
+    { kind: 'reject_once', name: 'Reject', optionId: 'r1' },
+  ];
+
+  /** A fake agent that asks a `session/request_permission` mid-turn and records the client's reply. */
+  function permissionAgent(kind: string, sentBack: AcpResponse[]) {
+    let onData: ((chunk: string) => void) | null = null;
+    const deliver = (m: Parameters<typeof encodeAcpMessage>[0]) =>
+      queueMicrotask(() => onData?.(encodeAcpMessage(m)));
+    const proc: AcpProcess = {
+      write: line => {
+        for (const m of decodeAcpStream(line).messages) {
+          if (isAcpRequest(m)) {
+            if (m.method === 'initialize')
+              deliver(makeResponse(m.id, { protocolVersion: 1 }));
+            else if (m.method === 'session/new')
+              deliver(makeResponse(m.id, { sessionId: 'sess-1' }));
+            else if (m.method === 'session/prompt') {
+              deliver(
+                makeRequest(999, 'session/request_permission', {
+                  sessionId: 'sess-1',
+                  toolCall: { kind },
+                  options: PERM_OPTS,
+                })
+              );
+              deliver(makeResponse(m.id, { stopReason: 'end_turn' }));
+            }
+          } else if (isAcpResponse(m)) {
+            sentBack.push(m); // the client's reply to our agent-initiated request
+          }
+        }
+      },
+      onData: cb => {
+        onData = cb;
+      },
+      onExit: () => {},
+      kill: () => {},
+    };
+    return proc;
+  }
+
+  const settle = async () => {
+    for (let i = 0; i < 6; i++) await new Promise(r => setTimeout(r, 0));
+  };
+
+  it('routes an agent permission request through the worktree-isolation policy (allow edit)', async () => {
+    const sentBack: AcpResponse[] = [];
+    const s = createAcpSubstrate(
+      baseDeps({ spawn: () => permissionAgent('edit', sentBack) })
+    );
+    await s.launch(launchInput);
+    await settle();
+    const reply = sentBack.find(m => m.id === 999);
+    expect(reply?.result).toEqual({
+      outcome: { outcome: 'selected', optionId: 'a1' },
+    });
+  });
+
+  it('denies a shell execute request by default (reject option)', async () => {
+    const sentBack: AcpResponse[] = [];
+    const s = createAcpSubstrate(
+      baseDeps({ spawn: () => permissionAgent('execute', sentBack) })
+    );
+    await s.launch(launchInput);
+    await settle();
+    const reply = sentBack.find(m => m.id === 999);
+    expect(reply?.result).toEqual({
+      outcome: { outcome: 'selected', optionId: 'r1' },
+    });
+  });
+
+  it('an injected resolvePermission overrides the default (allow execute → gate bridge)', async () => {
+    const sentBack: AcpResponse[] = [];
+    const s = createAcpSubstrate(
+      baseDeps({
+        resolvePermission: async () => 'allow',
+        spawn: () => permissionAgent('execute', sentBack),
+      })
+    );
+    await s.launch(launchInput);
+    await settle();
+    const reply = sentBack.find(m => m.id === 999);
+    expect(reply?.result).toEqual({
+      outcome: { outcome: 'selected', optionId: 'a1' },
+    });
   });
 });
