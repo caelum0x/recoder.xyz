@@ -1,10 +1,10 @@
 # @recoder/shared
 
-Shared TypeScript code for AgentPress frontend (Next.js) and mobile (React Native) applications.
+Shared, platform-agnostic TypeScript code for Recoder frontends (Next.js web, and React-Native-compatible surfaces — the icon resolution and streaming utilities work on both).
 
 ## Overview
 
-This package contains platform-agnostic code that is used by both the web frontend and mobile app:
+This package contains platform-agnostic code (types, streaming/tool utilities, icon resolution) that a Recoder frontend can consume regardless of renderer:
 
 - **Types**: Core message types, streaming types, and interfaces
 - **Streaming Utils**: Functions for parsing streaming tool calls and extracting text
