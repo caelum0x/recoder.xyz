@@ -27,7 +27,9 @@ export type WorkspaceState =
   | 'cancelled'
   | 'archived';
 
-export const TERMINAL_WORKSPACE_STATES: readonly WorkspaceState[] = ['archived'] as const;
+export const TERMINAL_WORKSPACE_STATES: readonly WorkspaceState[] = [
+  'archived',
+] as const;
 
 /**
  * Substrate the workspace's execution runs on.
@@ -43,8 +45,12 @@ export const TERMINAL_WORKSPACE_STATES: readonly WorkspaceState[] = ['archived']
  *                     selected solely when SSH host env is configured (else the
  *                     substrate is never registered and the selection degrades to
  *                     `tmux_worktree`).
+ * - `acp`           — local git worktree driving an Agent Client Protocol agent
+ *                     (`claude-code-acp`) over JSON-RPC/stdio instead of a PTY.
+ *                     Opt-in only; registered when the ACP agent binary is on PATH.
  */
-export type WorkspaceSubstrate = 'tmux_worktree' | 'daytona' | 'in_process' | 'ssh';
+export type WorkspaceSubstrate =
+  'tmux_worktree' | 'daytona' | 'in_process' | 'ssh' | 'acp';
 
 export type Workspace = {
   workspaceId: string;
@@ -78,7 +84,13 @@ const ALLOWED_TRANSITIONS: Record<WorkspaceState, readonly WorkspaceState[]> = {
   created: ['setting_up', 'failed', 'cancelled'],
   setting_up: ['ready', 'failed', 'cancelled'],
   ready: ['running', 'failed', 'cancelled'],
-  running: ['awaiting_approval', 'awaiting_review', 'running', 'failed', 'cancelled'],
+  running: [
+    'awaiting_approval',
+    'awaiting_review',
+    'running',
+    'failed',
+    'cancelled',
+  ],
   awaiting_approval: ['running', 'failed', 'cancelled'],
   awaiting_review: ['merging', 'changes_requested', 'failed', 'cancelled'],
   changes_requested: ['running', 'failed', 'cancelled'],
@@ -95,7 +107,10 @@ export function isTerminalWorkspaceState(state: WorkspaceState): boolean {
   return TERMINAL_WORKSPACE_STATES.includes(state);
 }
 
-export function isAllowedWorkspaceTransition(from: WorkspaceState, to: WorkspaceState): boolean {
+export function isAllowedWorkspaceTransition(
+  from: WorkspaceState,
+  to: WorkspaceState
+): boolean {
   return ALLOWED_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
@@ -106,10 +121,15 @@ export function isAllowedWorkspaceTransition(from: WorkspaceState, to: Workspace
 export function transitionWorkspace(
   workspace: Workspace,
   to: WorkspaceState,
-  options: { now?: string; metadata?: Record<string, unknown> } = {},
+  options: { now?: string; metadata?: Record<string, unknown> } = {}
 ): Workspace {
-  if (workspace.state !== to && !isAllowedWorkspaceTransition(workspace.state, to)) {
-    throw new Error(`Invalid workspace transition: ${workspace.state} -> ${to}`);
+  if (
+    workspace.state !== to &&
+    !isAllowedWorkspaceTransition(workspace.state, to)
+  ) {
+    throw new Error(
+      `Invalid workspace transition: ${workspace.state} -> ${to}`
+    );
   }
 
   const now = options.now ?? new Date().toISOString();
