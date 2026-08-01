@@ -46,6 +46,16 @@ The finish line is a **3-step convergence loop**:
 | **Website** (`app/`) | ~90% | 110 pages + 169 API routes, live in prod. Now installs + builds cleanly from the monorepo (#22 fixed 2026-07-25 — full `next build` produces BUILD_ID + standalone). Remaining gaps: Phase A auth migration written-but-unrun, dual auth seams. |
 | **Convergence thesis** | 3 of 3 shipped | Parallel worktrees ✅; converge engine ✅ (`domains/conductor/converge/` — whole-file pick or `git merge-file` 3-way synthesis); governed evidence-merge ✅ (`domains/conductor/evidence/convergence-evidence.ts` + framework-mapped export + Ed25519 signing). Remaining refinement: AST/semantic (not line-level) same-file merge. |
 
+### Session progress (2026-08-01) — parity hardening
+
+Toward conductor.build/cursor.sh parity (see **[PRODUCTION-PARITY-ROADMAP.md](./PRODUCTION-PARITY-ROADMAP.md)**):
+
+- **P0-a moat/thin-domain test hardening** (all re-verified green, not just agent-reported): the six thinnest security-critical backend domains got fail-closed regression coverage — **interop** (wire/gate + DoS rate-limiter), **governance** (vault AES-GCM / request-mapper / config), **identity** (authenticate / api-key / device-flow), **persistence** (SQL guards / executor / state-of-record), **observability** (alerting / health-rollup), **social** (inbound trust-boundary / live-health). **~260 new tests.**
+- **P1 desktop wiring foundations** (pure, unit-tested — JSX render is the GUI-gated follow-up): structured **RunEvent classifier** (`recoder-run-event.ts`, severity/icon/label + terminal detection), **inline-approval** decide-contract (`recoder-approval-action.ts`, single-sourced with the side-list, threads `approvalId` onto approval descriptors), and **cost/token metering** formatter (`recoder-metering.ts`) over the real `GET /inference/usage`.
+- **Website→desktop install path**: no-CI local publisher (`scripts/publish-desktop-release-local.sh`, verified against the real signed+notarized+stapled DMG) + honest, checksum-verifiable Download page + owner-runbook publish flow. Hardware-gated step (run `publish`, upload to `dl.recoder.xyz`, set site env) is staged for the owner.
+- **Compliance catalog** broadened 4→6 controls (SOC2-CC7.2 + EU-AI-Act-Art.14, each derived-not-fabricated).
+- **Docs**: detailed end-user guide (`docs/guide/`, per-runtime setup for all 9 agents).
+
 Detail: backend → **[RECODER-BACKEND/ARCHITECTURE.md](./RECODER-BACKEND/ARCHITECTURE.md)**,
 engines → **[RECODER-BACKEND/FUSION-STATUS.md](./RECODER-BACKEND/FUSION-STATUS.md)**,
 desktop/product → **[DESKTOP-UX-STATE-AND-PLAN.md](./DESKTOP-UX-STATE-AND-PLAN.md)**,
