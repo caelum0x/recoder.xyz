@@ -59,7 +59,12 @@ describe('readSince', () => {
 describe('SyncHub history (DT-7.3)', () => {
   it('is history-less and cursor-free by default (backward compatible)', () => {
     const hub = new SyncHub();
+    // A live subscriber on a history-less hub sees byte-for-byte bare frames —
+    // no ring id exists, so no `seq` is stamped (the pre-DT-7.3a wire).
+    const live = new FakeSocket();
+    hub.subscribe('ws_1', live as never);
     hub.publishRaw('ws_1', { n: 1 });
+    expect(live.sent.map((f) => JSON.parse(f))).toEqual([{ n: 1 }]);
     expect(hub.historyEnabled()).toBe(false);
     expect(hub.lastEventId('ws_1')).toBe(0);
     const late = new FakeSocket();
@@ -79,17 +84,25 @@ describe('SyncHub history (DT-7.3)', () => {
     const resumer = new FakeSocket();
     const cursor = hub.replaySince('ws_1', resumer as never, 1);
     expect(cursor).toBe(3);
-    expect(resumer.sent.map((f) => JSON.parse(f))).toEqual([{ n: 2 }, { n: 3 }]);
+    // DT-7.3a: each replayed frame carries the ring's numeric id as `seq`,
+    // additively, with every original field byte-intact.
+    expect(resumer.sent.map((f) => JSON.parse(f))).toEqual([
+      { n: 2, seq: 2 },
+      { n: 3, seq: 3 },
+    ]);
   });
 
-  it('keeps the live wire bare and replays-then-continues with no gap or dup', () => {
+  it('stamps each live frame with its ring seq and continues after replay with no gap or dup', () => {
     const hub = new SyncHub({ historyLimit: 100 });
-    // A live subscriber present from the start receives bare frames only.
+    // A live subscriber present from the start: bare original fields + numeric seq.
     const live = new FakeSocket();
     hub.subscribe('ws_1', live as never);
     hub.publishRaw('ws_1', { n: 1 });
     hub.publishRaw('ws_1', { n: 2 });
-    expect(live.sent.map((f) => JSON.parse(f))).toEqual([{ n: 1 }, { n: 2 }]);
+    expect(live.sent.map((f) => JSON.parse(f))).toEqual([
+      { n: 1, seq: 1 },
+      { n: 2, seq: 2 },
+    ]);
 
     // A reconnecting client that already saw id 1: replay id 2, then subscribe.
     const resumer = new FakeSocket();
@@ -97,8 +110,21 @@ describe('SyncHub history (DT-7.3)', () => {
     hub.subscribe('ws_1', resumer as never);
     hub.publishRaw('ws_1', { n: 3 });
 
-    // Replayed [2], then live [3] — no missing frame, no duplicate of id 2.
-    expect(resumer.sent.map((f) => JSON.parse(f))).toEqual([{ n: 2 }, { n: 3 }]);
+    // Replayed [2], then live [3] — no missing frame, no duplicate of id 2 — and
+    // both carry the matching ring seq.
+    expect(resumer.sent.map((f) => JSON.parse(f))).toEqual([
+      { n: 2, seq: 2 },
+      { n: 3, seq: 3 },
+    ]);
+  });
+
+  it('replays ascending seq values matching the ring', () => {
+    const hub = new SyncHub({ historyLimit: 100 });
+    for (let n = 1; n <= 5; n++) hub.publishRaw('ws_1', { n });
+    const resumer = new FakeSocket();
+    hub.replaySince('ws_1', resumer as never, 0);
+    const seqs = resumer.sent.map((f) => JSON.parse(f).seq as number);
+    expect(seqs).toEqual([1, 2, 3, 4, 5]);
   });
 
   it('bounds replay to the ring capacity, evicting the oldest frames', () => {
@@ -106,8 +132,11 @@ describe('SyncHub history (DT-7.3)', () => {
     for (let n = 1; n <= 4; n++) hub.publishRaw('ws_1', { n });
     const resumer = new FakeSocket();
     hub.replaySince('ws_1', resumer as never, 0);
-    // Only the last 2 frames survive the bound.
-    expect(resumer.sent.map((f) => JSON.parse(f))).toEqual([{ n: 3 }, { n: 4 }]);
+    // Only the last 2 frames survive the bound, each with its retained seq.
+    expect(resumer.sent.map((f) => JSON.parse(f))).toEqual([
+      { n: 3, seq: 3 },
+      { n: 4, seq: 4 },
+    ]);
   });
 
   it('does not replay to a socket that is no longer OPEN', () => {
@@ -160,10 +189,49 @@ describe('backend ?since= wiring (DT-7.3)', () => {
       ...ctx({ since: '1' }),
       path: '/api/conductor/workspaces/ws_1/stream',
     });
-    // Replayed the full bare RunEvent e2 (ring id 2).
-    expect(resumer.sent.map((f) => JSON.parse(f))).toEqual([e2]);
+    // Replayed the full RunEvent e2 (ring id 2) with every field intact + `seq`.
+    expect(resumer.sent.map((f) => JSON.parse(f))).toEqual([{ ...e2, seq: 2 }]);
     const e3 = { eventId: 'e3', type: 'log', message: 'three' };
     runHub.publishRaw('ws_1', e3);
-    expect(resumer.sent.map((f) => JSON.parse(f))).toEqual([e2, e3]);
+    expect(resumer.sent.map((f) => JSON.parse(f))).toEqual([
+      { ...e2, seq: 2 },
+      { ...e3, seq: 3 },
+    ]);
+  });
+});
+
+describe('seq is additive (existing consumers unaffected) (DT-7.3a)', () => {
+  it('leaves every RunEvent field byte-intact and reads it back through a field-consuming parser', () => {
+    const runHub = new SyncHub({ historyLimit: 100 });
+    const event = {
+      eventId: 'e_str',
+      type: 'log',
+      taskId: 'ws_1',
+      message: 'hello',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      data: { source: 'agent' },
+    };
+    const live = new FakeSocket();
+    runHub.subscribe('ws_1', live as never);
+    runHub.publishRaw('ws_1', event);
+
+    // A field-reading consumer (mirrors conductor-ui parseRunEvent / desktop
+    // parseStreamFrame: it keys off known fields and ignores unknown ones).
+    const parsed = JSON.parse(live.sent[0]!) as {
+      eventId: string;
+      type: string;
+      message: string;
+      data: { source: string };
+      seq: number;
+    };
+    expect(parsed.eventId).toBe('e_str');
+    expect(parsed.type).toBe('log');
+    expect(parsed.message).toBe('hello');
+    expect(parsed.data).toEqual({ source: 'agent' });
+    // The string `eventId` and the numeric `seq` coexist without collision.
+    expect(parsed.seq).toBe(1);
+    // Byte-intact: dropping seq recovers the exact original event.
+    const { seq: _seq, ...rest } = parsed;
+    expect(rest).toEqual(event);
   });
 });

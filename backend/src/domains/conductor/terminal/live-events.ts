@@ -20,6 +20,17 @@ import { RunEventRing } from './run-event-ring.js';
 /** WS close code for a client that omitted the required `workspaceId`. */
 const WS_POLICY_VIOLATION = 1008;
 
+/**
+ * Additively stamp the ring's monotonic numeric id onto an outgoing frame as
+ * `seq`, so a reconnecting client can read the cursor to resume from (`?since=`).
+ * Every original field is kept byte-intact — consumers key off their known fields
+ * and ignore `seq`. A non-object payload is returned unchanged (nothing to stamp).
+ */
+function stampSeq(payload: unknown, seq: number): unknown {
+  if (payload === null || typeof payload !== 'object') return payload;
+  return { ...(payload as Record<string, unknown>), seq };
+}
+
 /** Optional wiring for {@link SyncHub}. */
 export interface SyncHubOptions {
   /**
@@ -38,9 +49,11 @@ export interface SyncHubOptions {
  * When constructed with a positive `historyLimit`, every fanned frame is also
  * stamped with a monotonic per-workspace id and retained in a bounded
  * {@link RunEventRing}, so a reconnecting client can {@link replaySince} the
- * frames it missed and then continue live. The live wire is UNCHANGED: subscribers
- * still receive the bare frame, and a hub built without a history limit behaves
- * exactly as before.
+ * frames it missed and then continue live. That numeric id also rides the wire
+ * as an additive `seq` field (DT-7.3a) — every original field stays byte-intact,
+ * so field-reading consumers are unaffected while a client gains the cursor it
+ * needs to resume. A hub built WITHOUT a history limit assigns no id and its live
+ * wire stays byte-for-byte bare — exactly as before.
  */
 export class SyncHub {
   private readonly subscribers = new Map<string, Set<WebSocket>>();
@@ -78,10 +91,11 @@ export class SyncHub {
     // Stamp + retain for the resume path BEFORE fan-out (no-op when history-less).
     // Retaining even with zero live subscribers lets a client that reconnects
     // during a quiet window still replay what it missed.
-    this.ring?.append(workspaceId, payload);
+    const seq = this.ring?.append(workspaceId, payload);
     const set = this.subscribers.get(workspaceId);
     if (!set || set.size === 0) return;
-    const frame = JSON.stringify(payload);
+    // History-less hubs assign no id, so the live wire stays byte-for-byte bare.
+    const frame = JSON.stringify(seq === undefined ? payload : stampSeq(payload, seq));
     for (const socket of set) {
       if (socket.readyState === socket.OPEN) socket.send(frame);
     }
@@ -99,8 +113,9 @@ export class SyncHub {
 
   /**
    * Replay the retained frames strictly newer than `sinceId` to a single socket,
-   * oldest-first, in the SAME bare wire shape the live stream uses — then the
-   * caller subscribes the socket for the live continuation. Returns the latest id
+   * oldest-first, in the SAME wire shape the live stream uses (each frame carries
+   * its additive `seq`) — then the caller subscribes the socket for the live
+   * continuation. Returns the latest id
    * known for the workspace so the caller can log/track the resume cursor. A no-op
    * (returns 0) when the hub is history-less or the socket is not OPEN.
    *
@@ -114,7 +129,7 @@ export class SyncHub {
     if (socket.readyState !== socket.OPEN) return this.ring.lastEventId(workspaceId);
     for (const entry of this.ring.since(workspaceId, sinceId)) {
       if (socket.readyState !== socket.OPEN) break;
-      socket.send(JSON.stringify(entry.payload));
+      socket.send(JSON.stringify(stampSeq(entry.payload, entry.eventId)));
     }
     return this.ring.lastEventId(workspaceId);
   }

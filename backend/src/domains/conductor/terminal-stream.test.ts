@@ -108,7 +108,8 @@ describe('TerminalStreamService', () => {
     service.publishRunEvent('ws_other', { ...event, eventId: 'e2' });
 
     expect(socket.sent).toHaveLength(1);
-    expect(JSON.parse(socket.sent[0])).toEqual(event);
+    // Every RunEvent field is byte-intact; the ring's numeric id rides as `seq` (DT-7.3a).
+    expect(JSON.parse(socket.sent[0])).toEqual({ ...event, seq: 1 });
   });
 
   it('closes a stream upgrade whose path is not /workspaces/:id/stream', () => {
