@@ -21,9 +21,12 @@ import type { Workspace } from '@recoder/agent-os';
 import type { Logger } from '../../../shared/logger.js';
 import {
   composeConvergence,
+  parseConflictRegions,
   probeSynthesizability,
   EmptyConvergenceError,
   UnresolvedConvergenceError,
+  MAX_CONFLICT_REGIONS,
+  MAX_CONFLICT_SIDE_LINES,
   type ConvergeOpsDeps,
 } from './converge.ops.js';
 import { SYNTHESIZE_SELECTION } from './converge-plan.service.js';
@@ -501,18 +504,29 @@ describe('probeSynthesizability (read-only dry-run, real git)', () => {
 
   const contestedShared = [{ path: 'shared.ts', workspaceIds: ['ws-a', 'ws-b'] }];
 
-  it('reports synthesizable:true for a non-overlapping contested file', async () => {
+  it('reports synthesizable:true for a non-overlapping contested file (no regions)', async () => {
     const wtA = addSibling('ws-a', (L) => (L[0] = 'l1-A'));
     const wtB = addSibling('ws-b', (L) => (L[4] = 'l5-B'));
     const out = await probeSynthesizability(deps([{ id: 'ws-a', wt: wtA }, { id: 'ws-b', wt: wtB }]), contestedShared);
     expect(out).toEqual([{ path: 'shared.ts', workspaceIds: ['ws-a', 'ws-b'], synthesizable: true }]);
+    expect(out[0].regions).toBeUndefined();
   });
 
-  it('reports synthesizable:false + overlap for overlapping same-line edits', async () => {
+  it('reports synthesizable:false + overlap WITH the conflict regions (WHERE they collided)', async () => {
     const wtA = addSibling('ws-a', (L) => (L[2] = 'l3-A'));
     const wtB = addSibling('ws-b', (L) => (L[2] = 'l3-B'));
     const out = await probeSynthesizability(deps([{ id: 'ws-a', wt: wtA }, { id: 'ws-b', wt: wtB }]), contestedShared);
-    expect(out[0]).toEqual({ path: 'shared.ts', workspaceIds: ['ws-a', 'ws-b'], synthesizable: false, reason: 'overlap' });
+    expect(out[0]).toMatchObject({
+      path: 'shared.ts',
+      workspaceIds: ['ws-a', 'ws-b'],
+      synthesizable: false,
+      reason: 'overlap',
+    });
+    // The merged-with-markers content is `l1 l2 <<<<<<< l3-A ======= l3-B >>>>>>> l4 l5`
+    // — ours is the sorted-first sibling (ws-a), theirs the next (ws-b).
+    expect(out[0].regions).toEqual([
+      { startLine: 3, endLine: 7, ours: ['l3-A'], theirs: ['l3-B'], truncated: false },
+    ]);
   });
 
   it('reports synthesizable:false + delete-modify when a contributor deleted the path', async () => {
@@ -546,5 +560,108 @@ describe('probeSynthesizability (read-only dry-run, real git)', () => {
     expect(execFileSync('git', ['-C', repo, 'worktree', 'list'], { encoding: 'utf8' })).toBe(worktreesBefore);
     expect(execFileSync('git', ['-C', repo, 'branch', '--list'], { encoding: 'utf8' })).toBe(branchesBefore);
     expect(readdirSync(root).sort()).toEqual(dirsBefore); // no `repo-converge-*`, no leftover
+  });
+});
+
+/**
+ * PURE conflict-region parse of `git merge-file` merged-with-markers output —
+ * the "WHERE did the agents collide" surface the probe attaches on `overlap`.
+ *
+ * Proves: single/multiple regions with 1-indexed marker line positions; a region
+ * closing on the file's last line (no trailing newline); marker labels containing
+ * spaces; malformed/nested marker input NEVER throws (regions parsed so far are
+ * returned, dangling partials discarded); and the payload is BOUNDED — regions per
+ * file and lines per side are capped with `truncated:true` (degrade-truthful).
+ */
+describe('parseConflictRegions (pure marker parse)', () => {
+  /** Build one marker region from ours/theirs lines (labels mimic merge-file's paths). */
+  function region(ours: readonly string[], theirs: readonly string[], label = 'tmp/ours'): string {
+    return [`<<<<<<< ${label}`, ...ours, '=======', ...theirs, `>>>>>>> tmp/theirs`].join('\n');
+  }
+
+  it('parses a single region with 1-indexed marker positions', () => {
+    const content = ['l1', 'l2', region(['l3-A'], ['l3-B']), 'l4', ''].join('\n');
+    expect(parseConflictRegions(content)).toEqual([
+      { startLine: 3, endLine: 7, ours: ['l3-A'], theirs: ['l3-B'], truncated: false },
+    ]);
+  });
+
+  it('parses multiple regions in order', () => {
+    const content = ['a', region(['x1'], ['y1']), 'b', region(['x2', 'x2b'], ['y2']), 'c', ''].join('\n');
+    expect(parseConflictRegions(content)).toEqual([
+      { startLine: 2, endLine: 6, ours: ['x1'], theirs: ['y1'], truncated: false },
+      { startLine: 8, endLine: 13, ours: ['x2', 'x2b'], theirs: ['y2'], truncated: false },
+    ]);
+  });
+
+  it('parses a region whose close marker is the last line (no trailing newline)', () => {
+    const content = ['head', '<<<<<<< a', 'x', '=======', 'y', '>>>>>>> b'].join('\n');
+    expect(parseConflictRegions(content)).toEqual([
+      { startLine: 2, endLine: 6, ours: ['x'], theirs: ['y'], truncated: false },
+    ]);
+  });
+
+  it('accepts marker labels with spaces (worktree paths, merge-file labels)', () => {
+    const content = [
+      '<<<<<<< /tmp/recoder 3way abc/ours',
+      'mine',
+      '=======',
+      'theirs',
+      '>>>>>>> /tmp/recoder 3way abc/theirs',
+      '',
+    ].join('\n');
+    expect(parseConflictRegions(content)).toEqual([
+      { startLine: 1, endLine: 5, ours: ['mine'], theirs: ['theirs'], truncated: false },
+    ]);
+  });
+
+  it('returns [] for clean content (no markers) and empty content', () => {
+    expect(parseConflictRegions('')).toEqual([]);
+    expect(parseConflictRegions('l1\nl2\n')).toEqual([]);
+    // A bare separator outside any region is plain content, not a marker.
+    expect(parseConflictRegions('l1\n=======\nl2\n')).toEqual([]);
+  });
+
+  it('malformed input never throws — the regions parsed so far are returned', () => {
+    // A dangling open marker with no close: the partial region is discarded.
+    expect(parseConflictRegions('<<<<<<< a\nx\n=======\ny\n')).toEqual([]);
+    expect(parseConflictRegions('<<<<<<< a\nx\n')).toEqual([]);
+    // One complete region followed by a dangling one keeps the complete region.
+    const content = [region(['x'], ['y']), '<<<<<<< dangling', 'zzz', ''].join('\n');
+    expect(parseConflictRegions(content)).toEqual([
+      { startLine: 1, endLine: 5, ours: ['x'], theirs: ['y'], truncated: false },
+    ]);
+    // A close marker with no open region is plain content.
+    expect(parseConflictRegions('>>>>>>> b\n')).toEqual([]);
+  });
+
+  it('a nested open marker restarts the region (never throws, never nests)', () => {
+    const content = ['<<<<<<< outer', '<<<<<<< inner', 'x', '=======', 'y', '>>>>>>> close', ''].join('\n');
+    expect(parseConflictRegions(content)).toEqual([
+      { startLine: 2, endLine: 6, ours: ['x'], theirs: ['y'], truncated: false },
+    ]);
+  });
+
+  it('caps lines per side at MAX_CONFLICT_SIDE_LINES with truncated:true', () => {
+    const ours = Array.from({ length: MAX_CONFLICT_SIDE_LINES + 10 }, (_, i) => `o${i}`);
+    const parsed = parseConflictRegions(region(ours, ['t']) + '\n');
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].truncated).toBe(true);
+    expect(parsed[0].ours).toHaveLength(MAX_CONFLICT_SIDE_LINES);
+    expect(parsed[0].ours[0]).toBe('o0');
+    expect(parsed[0].theirs).toEqual(['t']);
+  });
+
+  it('caps regions per file at MAX_CONFLICT_REGIONS, marking the last kept region truncated', () => {
+    const many = Array.from({ length: MAX_CONFLICT_REGIONS + 5 }, (_, i) => region([`x${i}`], [`y${i}`])).join('\n');
+    const parsed = parseConflictRegions(many + '\n');
+    expect(parsed).toHaveLength(MAX_CONFLICT_REGIONS);
+    expect(parsed[0].truncated).toBe(false);
+    expect(parsed[parsed.length - 1].truncated).toBe(true); // signals "more regions existed"
+    // Exactly at the cap: nothing is cut, nothing marked truncated.
+    const exact = Array.from({ length: MAX_CONFLICT_REGIONS }, (_, i) => region([`x${i}`], [`y${i}`])).join('\n');
+    const parsedExact = parseConflictRegions(exact + '\n');
+    expect(parsedExact).toHaveLength(MAX_CONFLICT_REGIONS);
+    expect(parsedExact.every((r) => !r.truncated)).toBe(true);
   });
 });

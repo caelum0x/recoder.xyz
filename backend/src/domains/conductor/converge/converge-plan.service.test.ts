@@ -14,6 +14,8 @@ import { describe, it, expect } from 'vitest';
 import {
   planConvergence,
   SYNTHESIZE_SELECTION,
+  type ContestedProbe,
+  type ConvergencePlan,
   type ConvergencePlanInput,
   type ConvergencePlanSiblingInput,
 } from './converge-plan.service.js';
@@ -99,6 +101,24 @@ describe('planConvergence', () => {
     expect(
       planConvergence(input({ selection: { 'src/shared.ts': SYNTHESIZE_SELECTION } })).contested,
     ).toBeUndefined();
+  });
+
+  it('a probed plan carries the probe conflict REGIONS through the spread (additive)', () => {
+    const plan = planConvergence(input());
+    const probe: ContestedProbe = {
+      path: 'src/shared.ts',
+      workspaceIds: ['ws-a', 'ws-b'],
+      synthesizable: false,
+      reason: 'overlap',
+      regions: [{ startLine: 3, endLine: 7, ours: ['l3-A'], theirs: ['l3-B'], truncated: false }],
+    };
+    // The ops layer attaches probes exactly like this (`{...plan, contested}`) —
+    // the regions must survive verbatim, and the unprobed source plan stays bare.
+    const probed: ConvergencePlan = { ...plan, contested: [probe] };
+    expect(probed.contested?.[0].regions).toEqual([
+      { startLine: 3, endLine: 7, ours: ['l3-A'], theirs: ['l3-B'], truncated: false },
+    ]);
+    expect(plan.contested).toBeUndefined();
   });
 
   it('flags a contested path with NO selection as unresolved (no-selection)', () => {

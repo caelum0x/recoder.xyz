@@ -38,12 +38,15 @@ import { resolveRepoDefaultBranch } from '../git-default-branch.js';
 import {
   planConvergence,
   winnerSources,
+  type ConflictRegion,
   type ContestedProbe,
   type ConvergenceMode,
   type ConvergencePlan,
   type ConvergencePlanSiblingInput,
   type ConvergenceUnresolved,
 } from './converge-plan.service.js';
+
+export type { ConflictRegion } from './converge-plan.service.js';
 
 /** Thrown when the plan still has unresolved contested paths — mapped to a 4xx. */
 export class UnresolvedConvergenceError extends Error {
@@ -445,15 +448,17 @@ async function gatherContributorVersions(
  * probe (dry-run). `running := versions[0]`, then for each next version `running :=
  * merge-file(ours=running, base=ancestor, theirs=next)` with the ORIGINAL base as
  * the common ancestor at every step (deterministic in the given order). A clean fold
- * returns the merged content; ANY conflict returns `{clean:false}`. A real git fault
- * PROPAGATES (never masqueraded as a conflict). Operands are temp files in `tmpDir`.
+ * returns the merged content; ANY conflict returns `{clean:false}` carrying git's
+ * merged-with-markers `content` from the first conflicting pairwise step (so the
+ * probe can parse WHERE the collision is). A real git fault PROPAGATES (never
+ * masqueraded as a conflict). Operands are temp files in `tmpDir`.
  */
 async function threeWayFold(
   deps: ConvergeOpsDeps,
   baseContent: string,
   versions: readonly string[],
   tmpDir: string,
-): Promise<{ clean: true; content: string } | { clean: false }> {
+): Promise<{ clean: true; content: string } | { clean: false; content?: string }> {
   if (versions.length === 0) return { clean: false };
   const baseFile = path.join(tmpDir, 'base');
   const oursFile = path.join(tmpDir, 'ours');
@@ -465,10 +470,78 @@ async function threeWayFold(
     await writeFile(oursFile, running);
     await writeFile(theirsFile, versions[i]);
     const merged = await mergeFile(deps, oursFile, baseFile, theirsFile);
-    if (!merged.clean) return { clean: false };
+    if (!merged.clean) return { clean: false, content: merged.content };
     running = merged.content;
   }
   return { clean: true, content: running };
+}
+
+/** Bounded-payload caps for {@link parseConflictRegions} — degrade-truthful, never unbounded. */
+export const MAX_CONFLICT_REGIONS = 20;
+export const MAX_CONFLICT_SIDE_LINES = 40;
+
+/** A line that OPENS/CLOSES a merge-file conflict region (label optional, may contain spaces). */
+function isOpenMarker(line: string): boolean {
+  return line === '<<<<<<<' || line.startsWith('<<<<<<< ');
+}
+
+function isCloseMarker(line: string): boolean {
+  return line === '>>>>>>>' || line.startsWith('>>>>>>> ');
+}
+
+/**
+ * Parse `git merge-file` merged-with-markers output into the per-file conflict
+ * regions — WHERE the contesting siblings collided. PURE + TOTAL: malformed or
+ * nested marker input NEVER throws (the regions parsed so far are returned; a
+ * dangling/unterminated region is discarded, a nested open marker restarts the
+ * region). BOUNDED: at most {@link MAX_CONFLICT_REGIONS} regions per file (the last
+ * kept region is marked `truncated` when more existed) and at most
+ * {@link MAX_CONFLICT_SIDE_LINES} lines per side (`truncated:true` marks the cut).
+ * `startLine`/`endLine` are 1-indexed positions of the marker lines in `content`.
+ */
+export function parseConflictRegions(content: string): ConflictRegion[] {
+  const lines = content.split('\n');
+  const regions: ConflictRegion[] = [];
+  let startLine = 0;
+  let side: 'ours' | 'theirs' | null = null;
+  let ours: string[] = [];
+  let theirs: string[] = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (isOpenMarker(line)) {
+      if (regions.length >= MAX_CONFLICT_REGIONS) {
+        // More regions exist beyond the cap — mark the last kept one truncated.
+        regions[regions.length - 1] = { ...regions[regions.length - 1], truncated: true };
+        return regions;
+      }
+      startLine = i + 1;
+      side = 'ours';
+      ours = [];
+      theirs = [];
+      continue;
+    }
+    if (line === '=======' && side === 'ours') {
+      side = 'theirs';
+      continue;
+    }
+    if (isCloseMarker(line) && side === 'theirs') {
+      const cut = ours.length > MAX_CONFLICT_SIDE_LINES || theirs.length > MAX_CONFLICT_SIDE_LINES;
+      regions.push({
+        startLine,
+        endLine: i + 1,
+        ours: ours.slice(0, MAX_CONFLICT_SIDE_LINES),
+        theirs: theirs.slice(0, MAX_CONFLICT_SIDE_LINES),
+        truncated: cut,
+      });
+      side = null;
+      continue;
+    }
+    if (side === 'ours') ours.push(line);
+    else if (side === 'theirs') theirs.push(line);
+  }
+  // EOF inside a region: the dangling partial is discarded (never a throw).
+  return regions;
 }
 
 /**
@@ -575,7 +648,7 @@ async function probeOne(
     readonly worktrees: Map<string, string>;
     readonly tmpDir: string;
   },
-): Promise<{ synthesizable: boolean; reason?: string }> {
+): Promise<{ synthesizable: boolean; reason?: string; regions?: ConflictRegion[] }> {
   const { repoPath, base, relPath, contributors, worktrees, tmpDir } = args;
   if (!isSafeRelPath(relPath)) return { synthesizable: false, reason: 'unreadable' };
   // A contributor with no RESOLVED worktree is unreadable (distinct from a deletion).
@@ -585,7 +658,15 @@ async function probeOne(
   const baseContent = await showFileAtRef(deps, repoPath, base, relPath);
   try {
     const fold = await threeWayFold(deps, baseContent, gathered.versions, tmpDir);
-    return fold.clean ? { synthesizable: true } : { synthesizable: false, reason: 'overlap' };
+    if (fold.clean) return { synthesizable: true };
+    // Surface WHERE the collision is: parse the fold's merged-with-markers content
+    // into bounded regions ('overlap' only — the other reasons have no markers).
+    const regions = fold.content != null ? parseConflictRegions(fold.content) : [];
+    return {
+      synthesizable: false,
+      reason: 'overlap',
+      ...(regions.length > 0 ? { regions } : {}),
+    };
   } catch {
     // A real git/read fault during the dry-run — truthfully "could not judge".
     return { synthesizable: false, reason: 'unreadable' };

@@ -13,15 +13,30 @@ type ConvergeSelection = Record<string, string>;
 // is "" when the backend named the path but gave no reason — never invented.
 type ConvergeUnresolved = { path: string; reason: string };
 
+// One conflict region from the probe: WHERE two agents collided in a file.
+// startLine/endLine are 1-indexed marker positions in git's merged-with-markers
+// output; ours/theirs are each side's lines; `truncated` marks a server-side cap
+// (more lines/regions existed than the bounded payload carries).
+type ConvergeConflictRegion = {
+    startLine: number;
+    endLine: number;
+    ours: string[];
+    theirs: string[];
+    truncated: boolean;
+};
+
 // A probed contested path: whether a clean line-level 3-way synthesize is possible
 // (the "Synthesize" option) and, when not, the backend's verbatim reason
-// ('overlap' | 'delete-modify' | 'unreadable'). Present ONLY on a probed plan
-// (`?probe=1`); an unprobed/old backend omits `plan.contested` entirely.
+// ('overlap' | 'delete-modify' | 'unreadable'). An 'overlap' may also carry the
+// parsed conflict `regions` (absent on an older backend — never fabricated).
+// Present ONLY on a probed plan (`?probe=1`); an unprobed/old backend omits
+// `plan.contested` entirely.
 type ConvergeContestedProbe = {
     path: string;
     workspaceIds: string[];
     synthesizable: boolean;
     reason?: string;
+    regions?: ConvergeConflictRegion[];
 };
 
 // The selection value that requests an auto 3-way merge for a path instead of a
@@ -124,6 +139,35 @@ function normalizeSources(value: unknown): { workspaceId: string; count: number 
     return out;
 }
 
+// The probe's conflict regions for one path. Only well-formed regions survive
+// (positive 1-indexed lines); garbage entries are dropped, and an empty result
+// yields `undefined` so the panel's "location unavailable" fallback stays honest.
+function normalizeRegions(value: unknown): ConvergeConflictRegion[] {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+    const out: ConvergeConflictRegion[] = [];
+    for (const item of value) {
+        const obj = asObject(item);
+        if (obj == null) {
+            continue;
+        }
+        const startLine = typeof obj.startLine == "number" ? obj.startLine : 0;
+        const endLine = typeof obj.endLine == "number" ? obj.endLine : 0;
+        if (startLine <= 0 || endLine <= 0) {
+            continue;
+        }
+        out.push({
+            startLine,
+            endLine,
+            ours: stringArray(obj.ours),
+            theirs: stringArray(obj.theirs),
+            truncated: obj.truncated === true,
+        });
+    }
+    return out.length > 0 ? out : undefined;
+}
+
 // The probed synthesizability list. A non-array (absent) yields `undefined` so the
 // panel keeps "unprobed" distinct from "probed, none synthesizable" ([]). Each
 // entry degrades to synthesizable=false and drops an empty reason.
@@ -149,9 +193,51 @@ function normalizeContested(value: unknown): ConvergeContestedProbe[] {
         if (typeof obj.reason == "string" && obj.reason != "") {
             entry.reason = obj.reason;
         }
+        const regions = normalizeRegions(obj.regions);
+        if (regions != null) {
+            entry.regions = regions;
+        }
         out.push(entry);
     }
     return out;
+}
+
+// A conflict region ready to render: the "L12–L27" range label plus each side's
+// text (rendered font-mono by the panel) and the server-side truncation flag.
+type ConflictRegionRow = {
+    label: string;
+    ours: string[];
+    theirs: string[];
+    truncated: boolean;
+};
+
+// The collision view for one contested path: rows when the probe carried parsed
+// regions, else a truthful fallback line for an 'overlap' whose location the
+// backend could not provide (older backend / unparsed) — never an invented spot.
+type ConflictRegionView = {
+    rows: ConflictRegionRow[];
+    fallback: string;
+};
+
+// Map a contested probe entry's regions to display rows. Pure. Regions only ever
+// exist for reason 'overlap'; any other reason (or no probe data) shows nothing.
+function presentConflictRegions(probe: {
+    reason?: string;
+    regions?: ConvergeConflictRegion[];
+}): ConflictRegionView {
+    const regions = probe.regions ?? [];
+    if (regions.length > 0) {
+        return {
+            rows: regions.map((r) => ({
+                label: r.startLine == r.endLine ? `L${r.startLine}` : `L${r.startLine}–L${r.endLine}`,
+                ours: r.ours,
+                theirs: r.theirs,
+                truncated: r.truncated,
+            })),
+            fallback: "",
+        };
+    }
+    return { rows: [], fallback: probe.reason == "overlap" ? "conflict location unavailable" : "" };
 }
 
 // Project the backend plan body into the truthful view the panel renders. Every
@@ -325,9 +411,13 @@ export {
     composeStatusFallback,
     fetchConvergePlan,
     parseConvergePlan,
+    presentConflictRegions,
     SYNTHESIZE_VALUE,
     toggleSelection,
+    type ConflictRegionRow,
+    type ConflictRegionView,
     type ConvergeComposeResult,
+    type ConvergeConflictRegion,
     type ConvergeContestedProbe,
     type ConvergePlan,
     type ConvergePlanResult,
