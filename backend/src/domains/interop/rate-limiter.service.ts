@@ -82,6 +82,25 @@ export const DEFAULT_AGENT_LIMITS: RateLimitConfig = {
   maxConcurrent: 20,
 };
 
+/** Tuning for the bounded per-key map (idle-entry eviction). */
+export interface RateLimiterOptions {
+  /**
+   * Run a full idle-eviction sweep after this many `checkLimit` calls. The sweep
+   * is amortized (O(map)/interval per check) and timer-free, so behavior stays
+   * deterministic under test. Default 256.
+   */
+  readonly sweepIntervalOps?: number;
+  /**
+   * Soft safety cap: when the live key count exceeds this, force a sweep on the
+   * next `checkLimit` regardless of the interval. Only idle keys are ever
+   * dropped — active keys are always retained. Default 50_000.
+   */
+  readonly maxEntries?: number;
+}
+
+const DEFAULT_SWEEP_INTERVAL_OPS = 256;
+const DEFAULT_MAX_ENTRIES = 50_000;
+
 // ---------------------------------------------------------------------------
 // A2ARateLimiter
 // ---------------------------------------------------------------------------
@@ -92,6 +111,14 @@ export class A2ARateLimiter {
   private totalChecks = 0;
   private totalAllowed = 0;
   private totalDenied = 0;
+  private readonly sweepIntervalOps: number;
+  private readonly maxEntries: number;
+  private opsSinceSweep = 0;
+
+  constructor(options: RateLimiterOptions = {}) {
+    this.sweepIntervalOps = Math.max(1, options.sweepIntervalOps ?? DEFAULT_SWEEP_INTERVAL_OPS);
+    this.maxEntries = Math.max(1, options.maxEntries ?? DEFAULT_MAX_ENTRIES);
+  }
 
   /** Set config for a specific key (e.g., 'adapter:rest-1' or 'agent:claude-connector'). */
   setConfig(key: string, config: RateLimitConfig): void {
@@ -127,11 +154,52 @@ export class A2ARateLimiter {
   }
 
   /**
+   * Amortized idle-eviction. Runs a full sweep once every `sweepIntervalOps`
+   * checks, or immediately when the live key count exceeds `maxEntries`. Lazy and
+   * timer-free so behavior stays deterministic under test. The key being checked
+   * is skipped so an in-progress request never loses its freshly-set config.
+   */
+  private maybeSweep(now: number, skipKey: string): void {
+    this.opsSinceSweep++;
+    if (this.opsSinceSweep >= this.sweepIntervalOps || this.entries.size > this.maxEntries) {
+      this.opsSinceSweep = 0;
+      this.evictIdle(now, skipKey);
+    }
+  }
+
+  /**
+   * Evict every key whose sliding window has fully elapsed AND that holds no
+   * in-flight (concurrent) request. An idle key carries no live budget, so its
+   * removal cannot cause a wrongful allow/deny — a later touch rebuilds it fresh.
+   * Bounds both the entry and the config map. Returns the number of keys evicted.
+   */
+  evictIdle(now: number = Date.now(), skipKey?: string): number {
+    let evicted = 0;
+    for (const [key, entry] of this.entries) {
+      if (key === skipKey) continue;
+      const windowMs = (this.configs.get(key) ?? DEFAULT_ADAPTER_LIMITS).windowMs;
+      this.cleanExpired(entry, windowMs, now);
+      if (entry.timestamps.length === 0 && entry.concurrent === 0) {
+        this.entries.delete(key);
+        this.configs.delete(key);
+        evicted++;
+      }
+    }
+    return evicted;
+  }
+
+  /** Number of live keys currently tracked (observability / bounded-memory checks). */
+  size(): number {
+    return this.entries.size;
+  }
+
+  /**
    * Check if a request is allowed for the given key.
    * If allowed, the current timestamp is recorded in the sliding window.
    */
   checkLimit(key: string): RateLimitResult {
     const now = Date.now();
+    this.maybeSweep(now, key);
     const config = this.getConfig(key);
     const entry = this.getEntry(key);
 
