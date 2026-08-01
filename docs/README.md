@@ -8,8 +8,7 @@ through a single MCP host. The product is a terminal; everything below is the
 power behind it.
 
 > Start here, then follow the map. Every doc is code-grounded and reconciled to
-> what actually shipped — status/tracker docs for completed work live in
-> [`archive/`](archive/).
+> what actually shipped.
 
 ---
 
@@ -91,8 +90,3 @@ references):
 |---|---|
 | [research/OSS-ADOPTION-2026-07.md](research/OSS-ADOPTION-2026-07.md) | OSS adoption roadmap (actively executed). |
 | [design-reference/conductor/README.md](design-reference/conductor/README.md) | Competitor design reference. |
-
-## Archive
-
-Completed plans and closed audits, preserved for provenance —
-[`archive/`](archive/): build order, gap audit, and the superseded next-phase plan.

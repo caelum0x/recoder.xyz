@@ -14,8 +14,7 @@ truthful about current depth — where a layer is shallow, it says so.
 > **[RECODER-BACKEND/](./RECODER-BACKEND/)** (start at `ARCHITECTURE.md`). The **product + frontend
 > design** (clean conductor.build UX, zero-config onboarding, engines-invisible) is
 > **[RECODER-PRODUCT-DESIGN.md](./RECODER-PRODUCT-DESIGN.md)**.
-> `RECODER-MODULES.md` + `docs/modules/*` = the per-engine specs. `RECODER-NEXT-PHASE.md` is
-> superseded.
+> `RECODER-MODULES.md` + `docs/modules/*` = the per-engine specs.
 
 > **Current reality (2026-07-31) — the layer stack is FULLY REALIZED and VERIFIED:**
 > - **One project:** `apps/` = **desktop only** (wave shell — the `recoder-*` views — + the embedded backend;
