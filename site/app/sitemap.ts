@@ -6,6 +6,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "",
     "/download",
     "/how-it-works",
+    "/docs",
     "/enterprise",
     "/self-host",
     "/pricing",
