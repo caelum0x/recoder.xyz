@@ -24,11 +24,13 @@ import type { ComponentHealth, HealthStatus } from '../../../shared/health-types
 import type { HealthSourceRegistry } from '../ports/health-source.port.js';
 import type { SloRepository } from '../ports/observability.repository.js';
 import type { MetricsPort } from '../ports/metrics.port.js';
+import type { SloEvaluator } from './slo-evaluator.service.js';
 import type {
   EngineHealth,
   HealthFull,
   HealthShallow,
   SloAttainment,
+  SloTarget,
 } from '../types.js';
 
 /** Worst-of rollup across component statuses. Empty registry ⇒ `up`. */
@@ -52,6 +54,22 @@ export function countStatuses(sources: readonly ComponentHealth[]): Record<Healt
   return counts;
 }
 
+/**
+ * SLO contributions folded into the health rollup. ONLY a BREACHED SLO
+ * (`met === false`) degrades the aggregate — that is a real, measured objective
+ * miss, so `/health/full` must not read green while an SLO is being violated.
+ *
+ * A met SLO and an INSUFFICIENT-DATA SLO (`observed`/`met` `null`) contribute
+ * NOTHING to the rollup: "no data" is never a breach, so it must not perpetually
+ * degrade an idle/low-traffic system, and its own attainment cell already carries
+ * the truthful `null` (never fake-healthy — the evaluator never invents a number).
+ * With no SLOs (or none breached) this returns `[]`, leaving the source-only
+ * rollup unchanged — the additive, degrade-safe default.
+ */
+export function sloRollupContributions(slo: readonly SloAttainment[]): readonly HealthStatus[] {
+  return slo.filter((s) => s.met === false).map((): HealthStatus => 'degraded');
+}
+
 export interface HealthAggregatorDeps {
   /** The registry of all domain HealthSources (from bootstrap). */
   readonly registry: HealthSourceRegistry;
@@ -59,6 +77,13 @@ export interface HealthAggregatorDeps {
   readonly slo?: SloRepository;
   /** The metrics registry, so SLO attainment can read current values (optional). */
   readonly metrics?: MetricsPort;
+  /**
+   * The recording-rule evaluator that turns {@link SloTarget}s + the recorded RED
+   * counter into observed attainment (optional). When present, `/health/full`
+   * surfaces REAL per-SLO attainment; when absent the rollup stays degrade-safe
+   * with truthful `null` attainment (never a fabricated number).
+   */
+  readonly sloEvaluator?: SloEvaluator;
   readonly service: string;
   readonly instanceId: string;
   /** Space id SLO targets are read under. */
@@ -78,7 +103,12 @@ export function buildHealthFull(input: {
   readonly instanceId: string;
   readonly checkedAt?: string;
 }): HealthFull {
-  const status = rollupStatus(input.sources.map((s) => s.status));
+  // The rollup fuses every source's status AND any breached-SLO contribution, so a
+  // measured objective miss degrades `/health/full` even when all sources are up.
+  const status = rollupStatus([
+    ...input.sources.map((s) => s.status),
+    ...sloRollupContributions(input.slo),
+  ]);
   return {
     status,
     degraded: status !== 'up',
@@ -130,25 +160,29 @@ export class HealthAggregator {
   }
 
   /**
-   * Current SLO attainment. Without an SLO repo (or the metrics backing) this is
-   * empty — never a fabricated attainment. `observed` is `null` (met `null`) when
-   * the backing metric can't be read, so an SLO panel shows "no data" truthfully.
+   * Current SLO attainment. Without an SLO repo this is empty — never a fabricated
+   * attainment. With the {@link SloEvaluator} wired, each target is evaluated
+   * against the recorded RED counter, so `/health/full` surfaces REAL attainment;
+   * zero traffic / an absent series yields `observed`/`met` `null` ("no data",
+   * never a faked number). Without an evaluator (or when target load fails) it
+   * stays degrade-safe: truthful `null` attainment per target.
    */
   private async attainment(): Promise<readonly SloAttainment[]> {
     if (!this.deps.slo) return [];
-    let targets;
+    let targets: readonly SloTarget[];
     try {
       targets = await this.deps.slo.listTargets(this.deps.defaultSpaceId);
     } catch {
       return [];
     }
+    if (targets.length === 0) return [];
+    if (this.deps.sloEvaluator) {
+      return this.deps.sloEvaluator.attainment(targets);
+    }
     return targets.map((t) => ({
       id: t.id,
       name: t.name,
       target: t.target,
-      // SLO evaluation against a live metric backend is not wired to a query
-      // engine here; observed is truthfully null until a recording-rule evaluator
-      // is attached (never a faked attainment number).
       observed: null,
       met: null,
     }));

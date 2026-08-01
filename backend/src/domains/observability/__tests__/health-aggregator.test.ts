@@ -11,8 +11,12 @@ import {
   buildHealthFull,
   rollupStatus,
   countStatuses,
+  sloRollupContributions,
 } from '../services/health-aggregator.service.js';
-import type { EngineHealth } from '../types.js';
+import { SloEvaluator } from '../services/slo-evaluator.service.js';
+import type { MetricSample, MetricsReader } from '../ports/metrics.port.js';
+import type { SloRepository } from '../ports/observability.repository.js';
+import type { EngineHealth, SloAttainment, SloTarget } from '../types.js';
 
 const engines: readonly EngineHealth[] = [
   { engine: 'logging', status: 'up', degraded: false },
@@ -111,5 +115,204 @@ describe('HealthAggregator over the registry', () => {
     expect(shallow.sources).toBe(1);
     expect(shallow.status).toBe('up');
     expect(shallow).not.toHaveProperty('sources.0.name');
+  });
+});
+
+// --- SLO folded into the rollup (BE-7.2) ------------------------------------
+
+function attainment(partial: Partial<SloAttainment> = {}): SloAttainment {
+  return { id: 's1', name: 'http-availability', target: 0.99, observed: 0.999, met: true, ...partial };
+}
+
+describe('sloRollupContributions', () => {
+  it('a breached SLO (met false) contributes degraded', () => {
+    expect(sloRollupContributions([attainment({ met: false, observed: 0.5 })])).toEqual(['degraded']);
+  });
+  it('a met SLO contributes nothing (rollup stays as sources dictate)', () => {
+    expect(sloRollupContributions([attainment({ met: true })])).toEqual([]);
+  });
+  it('insufficient-data (observed/met null) contributes nothing (never fake-degraded)', () => {
+    expect(sloRollupContributions([attainment({ observed: null, met: null })])).toEqual([]);
+  });
+  it('empty SLO set contributes nothing (degrade-safe default)', () => {
+    expect(sloRollupContributions([])).toEqual([]);
+  });
+});
+
+describe('buildHealthFull folds a breached SLO into the rollup', () => {
+  it('all sources up but one SLO breached → overall degraded (truthful, not green)', () => {
+    const full = buildHealthFull({
+      sources: [comp('edge', 'up'), comp('conductor', 'up')],
+      engines,
+      slo: [attainment({ met: false, observed: 0.9 })],
+      service: 'svc',
+      instanceId: 'i',
+    });
+    expect(full.status).toBe('degraded');
+    expect(full.degraded).toBe(true);
+    // counts stay a SOURCE tally — the SLO breach does not invent a phantom source.
+    expect(full.counts).toEqual({ up: 2, down: 0, degraded: 0, unknown: 0 });
+  });
+
+  it('insufficient-data SLO does NOT drag an all-up system to degraded', () => {
+    const full = buildHealthFull({
+      sources: [comp('edge', 'up')],
+      engines,
+      slo: [attainment({ observed: null, met: null })],
+      service: 'svc',
+      instanceId: 'i',
+    });
+    expect(full.status).toBe('up');
+    // the SLO cell still tells the truth: no data, never a fabricated attainment.
+    expect(full.slo[0].observed).toBeNull();
+    expect(full.slo[0].met).toBeNull();
+  });
+
+  it('a met SLO keeps an all-up system green', () => {
+    const full = buildHealthFull({
+      sources: [comp('edge', 'up')],
+      engines,
+      slo: [attainment({ met: true, observed: 0.999 })],
+      service: 'svc',
+      instanceId: 'i',
+    });
+    expect(full.status).toBe('up');
+  });
+});
+
+// --- HealthAggregator.full() wired to the SloEvaluator ----------------------
+
+function fakeReader(samples: readonly MetricSample[]): MetricsReader {
+  return {
+    getSamples: (name) => (name === 'http_requests_total' ? samples : []),
+    getValue: () => null,
+  };
+}
+
+function fakeSloRepo(targets: readonly SloTarget[]): SloRepository {
+  return {
+    listTargets: async () => targets,
+    upsertTarget: async (t) => t,
+  };
+}
+
+function sloTarget(overrides: Partial<SloTarget> = {}): SloTarget {
+  return {
+    id: 's1',
+    spaceId: 'default',
+    name: 'http-availability',
+    target: 0.99,
+    windowSecs: 3600,
+    metricQuery: '1 - rate(http_requests_total{status=~"5.."}[1h])',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('HealthAggregator.full surfaces REAL SLO attainment via the evaluator', () => {
+  const registry = createHealthRegistry();
+  registry.register({ name: 'edge', health: () => comp('edge', 'up') });
+
+  it('computes observed attainment from the recorded RED counter and marks met', async () => {
+    const reader = fakeReader([
+      { labels: { status: '200' }, value: 995 },
+      { labels: { status: '500' }, value: 5 },
+    ]);
+    const agg = new HealthAggregator({
+      registry,
+      slo: fakeSloRepo([sloTarget({ target: 0.99 })]),
+      sloEvaluator: new SloEvaluator(reader),
+      service: 'svc',
+      instanceId: 'i',
+      defaultSpaceId: 'default',
+    });
+    const full = await agg.full(engines);
+    expect(full.slo).toHaveLength(1);
+    expect(full.slo[0].observed).toBeCloseTo(0.995, 10);
+    expect(full.slo[0].met).toBe(true);
+    // met SLO + up source → overall up.
+    expect(full.status).toBe('up');
+  });
+
+  it('a BREACHED SLO degrades /health/full even when every source is up', async () => {
+    const reader = fakeReader([
+      { labels: { status: '200' }, value: 500 },
+      { labels: { status: '500' }, value: 500 },
+    ]);
+    const agg = new HealthAggregator({
+      registry,
+      slo: fakeSloRepo([sloTarget({ target: 0.99 })]),
+      sloEvaluator: new SloEvaluator(reader),
+      service: 'svc',
+      instanceId: 'i',
+      defaultSpaceId: 'default',
+    });
+    const full = await agg.full(engines);
+    expect(full.slo[0].observed).toBeCloseTo(0.5, 10);
+    expect(full.slo[0].met).toBe(false);
+    expect(full.status).toBe('degraded');
+  });
+
+  it('zero traffic → insufficient data (null), never a fabricated 100%, and stays up', async () => {
+    const agg = new HealthAggregator({
+      registry,
+      slo: fakeSloRepo([sloTarget()]),
+      sloEvaluator: new SloEvaluator(fakeReader([])),
+      service: 'svc',
+      instanceId: 'i',
+      defaultSpaceId: 'default',
+    });
+    const full = await agg.full(engines);
+    expect(full.slo[0].observed).toBeNull();
+    expect(full.slo[0].met).toBeNull();
+    expect(full.status).toBe('up');
+  });
+
+  it('no SLO targets → empty attainment, degrade-safe (no evaluator call surfaced)', async () => {
+    const agg = new HealthAggregator({
+      registry,
+      slo: fakeSloRepo([]),
+      sloEvaluator: new SloEvaluator(fakeReader([])),
+      service: 'svc',
+      instanceId: 'i',
+      defaultSpaceId: 'default',
+    });
+    const full = await agg.full(engines);
+    expect(full.slo).toEqual([]);
+    expect(full.status).toBe('up');
+  });
+
+  it('target-load failure is degrade-safe: empty attainment, no throw', async () => {
+    const failingRepo: SloRepository = {
+      listTargets: async () => {
+        throw new Error('db down');
+      },
+      upsertTarget: async (t) => t,
+    };
+    const agg = new HealthAggregator({
+      registry,
+      slo: failingRepo,
+      sloEvaluator: new SloEvaluator(fakeReader([])),
+      service: 'svc',
+      instanceId: 'i',
+      defaultSpaceId: 'default',
+    });
+    const full = await agg.full(engines);
+    expect(full.slo).toEqual([]);
+    expect(full.status).toBe('up');
+  });
+
+  it('without an evaluator wired, attainment stays truthfully null (backward-compatible)', async () => {
+    const agg = new HealthAggregator({
+      registry,
+      slo: fakeSloRepo([sloTarget()]),
+      service: 'svc',
+      instanceId: 'i',
+      defaultSpaceId: 'default',
+    });
+    const full = await agg.full(engines);
+    expect(full.slo).toHaveLength(1);
+    expect(full.slo[0].observed).toBeNull();
+    expect(full.slo[0].met).toBeNull();
   });
 });
