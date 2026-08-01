@@ -35,6 +35,8 @@
 import { createError, ErrorCode } from '../../../shared/errors.js';
 import type { Workspace } from '@recoder/agent-os';
 import type { McpToolCaller, McpToolRegistration } from '../../../shared/module-base.js';
+import type { Principal } from '../../identity/types.js';
+import type { CompareView, SiblingCompareEntry } from '../services/compare.service.js';
 import type { ConductorModule } from '../index.js';
 
 interface GetWorkspaceInput {
@@ -42,6 +44,12 @@ interface GetWorkspaceInput {
 }
 interface FindingsInput {
   readonly workspaceId?: string;
+}
+interface SiblingsInput {
+  readonly workspaceId?: string;
+}
+interface CompareGroupInput {
+  readonly taskGroup?: string;
 }
 
 /** Trim to a non-empty string, or `undefined`. */
@@ -77,6 +85,56 @@ function callerOwnsWorkspace(caller: McpToolCaller, workspace: Workspace): boole
   if (authUserId && workspace.createdBy === authUserId) return true;
   const orgId = str(caller.orgId);
   return Boolean(orgId && workspace.tenant?.orgId === orgId);
+}
+
+/**
+ * Mint the minimal `Principal` the conductor module's own compare narrowing
+ * (`compareAccessFilter` → `canAccessWorkspace`) scopes by — the MCP mirror of
+ * the HTTP routes' `req.principal`. Carries ONLY the host-authorized identity
+ * fields the predicate reads (userId/orgId/scopes/isAnonymous); never elevated
+ * beyond what the host granted the caller. Privileged (admin/internal) callers
+ * bypass this and pass NO principal ⇒ the module's full-group internal read.
+ */
+function principalFromMcpCaller(caller: McpToolCaller): Principal {
+  const orgId = str(caller.orgId);
+  return {
+    userId: caller.userId,
+    ...(orgId ? { orgId } : {}),
+    scopes: caller.scopes ?? [],
+    kind: 'apikey',
+    isAnonymous: false,
+    raw: null,
+  };
+}
+
+/**
+ * Project one compare-view sibling row to the compact agent-facing shape: who
+ * ran it, its state/branch, and its truthful change footprint (stat + changed
+ * files, or the reason either is absent). DROPS the operator grid/attach
+ * internals (`sessionName`, `worktreePath`, attention plumbing) — agents get
+ * collision awareness, not each other's live sessions.
+ */
+function projectSibling(sibling: SiblingCompareEntry) {
+  return {
+    workspaceId: sibling.workspaceId,
+    agent: sibling.agent,
+    state: sibling.state,
+    branch: sibling.branch,
+    ...(sibling.diffStat ? { diffStat: sibling.diffStat } : {}),
+    ...(sibling.diffStatReason ? { diffStatReason: sibling.diffStatReason } : {}),
+    ...(sibling.changedFiles ? { changedFiles: sibling.changedFiles } : {}),
+    ...(sibling.changedFilesReason ? { changedFilesReason: sibling.changedFilesReason } : {}),
+  };
+}
+
+/** Project a `CompareView` to the compact agent payload (never the `grid` hint). */
+function projectCompareView(view: CompareView) {
+  return {
+    taskGroup: view.taskGroup,
+    count: view.count,
+    siblings: view.siblings.map(projectSibling),
+    contested: view.contested,
+  };
 }
 
 export function buildConductorMcpTools(module: ConductorModule): readonly McpToolRegistration[] {
@@ -165,6 +223,59 @@ export function buildConductorMcpTools(module: ConductorModule): readonly McpToo
         const all = await module.listReconcileFindings();
         const findings = all.filter((f) => f.workspaceId != null && owned.has(f.workspaceId));
         return { count: findings.length, findings };
+      },
+    },
+    {
+      name: 'conductor_siblings',
+      description:
+        'Sibling awareness for one workspace: see what sibling parallel runs in the same task group changed and which files are CONTESTED (touched by 2+ siblings), so agents build on each other instead of duplicating. Scoped to workspaces the caller owns; admin/internal reads across tenants.',
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
+        const authorized = requireCaller(caller);
+        const input = (raw ?? {}) as SiblingsInput;
+        const workspaceId = str(input.workspaceId);
+        if (!workspaceId) return { error: 'workspaceId is required' };
+        // Anchor on the named workspace first: unknown ⇒ truthful miss; owned by
+        // another tenant ⇒ the same 403 as `conductor_get_workspace` (no oracle).
+        const anchor = await module.getWorkspace(workspaceId);
+        if (!anchor) return { workspace: null };
+        const privileged = isPrivileged(authorized);
+        if (!privileged && !callerOwnsWorkspace(authorized, anchor)) {
+          throw createError(
+            ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+            'conductor: caller may only read siblings of workspaces it owns',
+          );
+        }
+        // The module's own compare narrowing (canAccessWorkspace) scopes the GROUP
+        // to the caller's siblings via the minted principal — exactly as HTTP does.
+        // Privileged callers pass no principal ⇒ the full-group internal read.
+        const view = await module.workspaceSiblings(
+          workspaceId,
+          privileged ? undefined : principalFromMcpCaller(authorized),
+        );
+        // The module may still degrade to null (no-oracle inaccessible/missing) —
+        // the same truthful miss as an unknown workspace, never a fabricated group.
+        if (!view) return { workspace: null };
+        return projectCompareView(view);
+      },
+    },
+    {
+      name: 'conductor_compare_group',
+      description:
+        'Compare a whole parallel-run task group side by side: what each sibling run changed and which files are CONTESTED (touched by 2+ siblings), so agents build on each other instead of duplicating. Scoped to workspaces the caller owns (an empty narrowed group is a truthful count 0); admin/internal reads across tenants.',
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
+        const authorized = requireCaller(caller);
+        const input = (raw ?? {}) as CompareGroupInput;
+        const taskGroup = str(input.taskGroup);
+        if (!taskGroup) return { error: 'taskGroup is required' };
+        // Group reads are keyed on the shared taskGroup, not a single id, so the
+        // minted principal IS the guard: the module narrows to the caller's own
+        // siblings; a group the caller owns nothing of is a truthful {count: 0}
+        // — never another tenant's rows. Privileged ⇒ full-group internal read.
+        const view = await module.compareTaskGroup(
+          taskGroup,
+          isPrivileged(authorized) ? undefined : principalFromMcpCaller(authorized),
+        );
+        return projectCompareView(view);
       },
     },
   ];
