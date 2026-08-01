@@ -224,7 +224,7 @@ export default function PlanPage() {
                   <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-center">
                     <Sparkles className="w-6 h-6 text-white" />
                   </div>
-                  <h2 className="text-2xl font-bold text-white">Coming Soon</h2>
+                  <h2 className="text-2xl font-bold text-white">Upgrade your plan</h2>
                 </div>
                 <button onClick={() => setShowBetaModal(false)} className="text-gray-400 hover:text-white transition-colors">
                   <X className="w-6 h-6" />
@@ -232,9 +232,9 @@ export default function PlanPage() {
               </div>
             </div>
             <div className="p-6 space-y-4">
-              <h3 className="text-lg font-semibold text-white">You Already Have Everything!</h3>
+              <h3 className="text-lg font-semibold text-white">Free with your keys — upgrade for more</h3>
               <p className="text-gray-300">
-                During beta, all platform services are free with BYOK (Bring Your Own Key). Paid plans with platform-provided API keys are coming soon.
+                Free is yours forever with BYOK (Bring Your Own Key). Pro ($29/mo) and Team ($99/mo) add higher limits, longer retention, and team features — billed securely through Creem.
               </p>
               <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
                 <div className="flex items-start space-x-3">
@@ -247,10 +247,10 @@ export default function PlanPage() {
             </div>
             <div className="p-6 border-t border-white/10 bg-white/5 flex flex-col sm:flex-row gap-3">
               <Link
-                href="/auth/signup"
+                href="/pricing"
                 className="flex-1 text-center px-6 py-3 bg-white text-black hover:bg-neutral-200 rounded-lg font-medium transition-all"
               >
-                Get Started Free
+                See plans &amp; pricing
               </Link>
               <Link
                 href="/dashboard"

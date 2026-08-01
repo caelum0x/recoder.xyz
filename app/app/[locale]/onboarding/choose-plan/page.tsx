@@ -17,8 +17,7 @@ import {
   ArrowLeft,
   Zap,
   Star,
-  Crown,
-  Clock
+  Crown
 } from 'lucide-react';
 
 export default function ChoosePlanPage() {
@@ -95,7 +94,8 @@ export default function ChoosePlanPage() {
   ];
 
   const createCheckoutSession = async (plan: string) => {
-    const providers = ['paddle', 'dodo'] as const;
+    // Creem is the Merchant of Record; the others remain as configured fallbacks.
+    const providers = ['creem', 'paddle', 'dodo'] as const;
 
     for (const paymentMethod of providers) {
       const response = await fetch('/api/billing/create-checkout', {
@@ -106,14 +106,9 @@ export default function ChoosePlanPage() {
         body: JSON.stringify({ plan, paymentMethod }),
       });
 
+      // A provider that isn't configured/available → try the next one.
       if (!response.ok) {
-        // Try next provider if this one is not configured.
-        if (response.status === 503) {
-          continue;
-        }
-
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.error ?? `Checkout failed with status ${response.status}`);
+        continue;
       }
 
       const data = (await response.json()) as {
@@ -128,7 +123,7 @@ export default function ChoosePlanPage() {
     }
 
     throw new Error(
-      'Paid checkout is not configured yet. You can finish onboarding now and add billing later.',
+      'Checkout is being connected. You can finish onboarding now and subscribe from Settings → Billing.',
     );
   };
 
@@ -138,17 +133,24 @@ export default function ChoosePlanPage() {
     // Save selected plan to session
     sessionStorage.setItem('onboarding_plan', selectedPlan);
 
-    // During beta, all plans route to API key setup (paid plans not yet available)
-    if (selectedPlan !== 'free') {
-      setCheckoutError('Paid plans are coming soon! During the free beta, all features are available with BYOK.');
-      // Still allow them to continue after seeing the message
-      setTimeout(() => {
-        router.push('/onboarding/setup-api-key');
-      }, 2000);
+    if (selectedPlan === 'free') {
+      router.push('/onboarding/setup-api-key');
       return;
     }
 
-    router.push('/onboarding/setup-api-key');
+    // Paid plan → real hosted checkout (Creem). If the checkout isn't wired yet,
+    // fall back honestly and let the user finish onboarding + subscribe later —
+    // never a dead end and never "coming soon".
+    try {
+      await createCheckoutSession(selectedPlan);
+    } catch (err) {
+      setCheckoutError(
+        err instanceof Error ? err.message : 'Checkout is being connected — you can subscribe from Settings later.',
+      );
+      setTimeout(() => {
+        router.push('/onboarding/setup-api-key');
+      }, 2500);
+    }
   };
 
   if (loading || isPending) {
@@ -225,11 +227,10 @@ export default function ChoosePlanPage() {
                   } ${plan.popular ? 'md:scale-110' : ''}`}
                   onClick={() => setSelectedPlan(plan.id)}
                 >
-                  {plan.id !== 'free' && (
+                  {plan.popular && plan.id !== 'free' && (
                     <div className="absolute -top-4 right-4">
-                      <div className="px-3 py-1 rounded-full bg-gray-700 text-gray-300 text-xs font-medium flex items-center space-x-1">
-                        <Clock className="w-3 h-3" />
-                        <span>Coming Soon</span>
+                      <div className="px-3 py-1 rounded-full bg-white text-black text-xs font-medium">
+                        Most popular
                       </div>
                     </div>
                   )}
@@ -295,8 +296,8 @@ export default function ChoosePlanPage() {
 
           {/* Additional Info */}
           <div className="text-center text-sm text-gray-400 mb-8">
-            <p>All features are free during the beta with your own API key (BYOK).</p>
-            <p>Paid plans with platform-provided credits are coming soon.</p>
+            <p>Free forever with your own API key (BYOK). Pro and Team add higher limits, retention, and team features — billed through Creem.</p>
+            <p>You always bring your own model keys; Recoder never resells tokens.</p>
           </div>
 
           {/* Navigation */}
