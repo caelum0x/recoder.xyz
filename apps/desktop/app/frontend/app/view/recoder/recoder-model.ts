@@ -1179,6 +1179,44 @@ class RecoderViewModel implements ViewModel {
             globalStore.set(this.busyRowAtom, "");
         }
     }
+
+    // Gracefully stop a running agent: the backend kills the live session, KEEPS the
+    // worktree, transitions the workspace to `cancelled`, and seals an audit entry.
+    // Governed → surface a gated (403) / illegal-transition (503) / unreachable
+    // outcome truthfully; never fake a stop.
+    async stopWorkspace(workspaceId: string) {
+        if (!workspaceId) {
+            return;
+        }
+        globalStore.set(this.busyRowAtom, workspaceId);
+        this.setRowStatus(workspaceId, "");
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/stop`,
+                { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
+            );
+            if (res.ok) {
+                this.setRowStatus(workspaceId, "Stopped.");
+                await this.refresh();
+                return;
+            }
+            const body = await res.json().catch(() => null);
+            const reason = readErrorReason(body);
+            if (res.status == 403) {
+                this.setRowStatus(workspaceId, reason || "Stop blocked - needs approval.");
+                return;
+            }
+            if (res.status == 503 && reason != null && /invalid workspace transition/i.test(reason)) {
+                this.setRowStatus(workspaceId, "Nothing to stop — this run isn’t active.");
+                return;
+            }
+            this.setRowStatus(workspaceId, reason || `Stop failed (${res.status}).`);
+        } catch {
+            this.setRowStatus(workspaceId, "Stop unavailable - Recoder isn’t reachable.");
+        } finally {
+            globalStore.set(this.busyRowAtom, "");
+        }
+    }
 }
 
 export { RecoderViewModel, parseEnvironmentImport, type RecoderSetup, type RecoderEnvironment, type RecoderLaunchResult };

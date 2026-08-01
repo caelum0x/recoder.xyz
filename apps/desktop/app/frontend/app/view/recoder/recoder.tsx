@@ -175,6 +175,16 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
                         Terminal
                     </button>
                 )}
+                {!terminal && ws.state != "awaiting_review" && (
+                    <button
+                        className={QUIET_BTN}
+                        disabled={busy}
+                        title="Stop this run (keeps the worktree)"
+                        onClick={() => model.stopWorkspace(ws.workspaceId)}
+                    >
+                        {busy ? "..." : "Stop"}
+                    </button>
+                )}
                 <button className={btnClass("review")} onClick={() => openReview(ws.workspaceId)}>
                     Review
                 </button>
