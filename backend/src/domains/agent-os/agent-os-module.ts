@@ -262,6 +262,9 @@ export class AgentOsComposer implements AgentOsModule {
       // Fail-open tenant scoping for the single local desktop owner; owner-scoped
       // isolation on any cloud deploy (soloMode false).
       soloMode: this.cfg.soloMode,
+      // Idempotency-Key replay guard on POST /runs (BE-10.3): absent ⇒ identity
+      // (no behavior change).
+      ...(deps.idempotency ? { idempotency: deps.idempotency } : {}),
     });
     // The INTERNAL_SERVICE_KEY-gated ingest edges (events / steps / runtime-
     // evidence / outbox drain). Exposed via `internalRoutes()` for the canonical

@@ -10,7 +10,7 @@
  * artifacts/memory/instructions/policies/events) lives in
  * `agent-os-crud.routes.ts` and is mounted here after the summary surfaces.
  */
-import { Router, type Request, type Response } from 'express';
+import { Router, type Request, type RequestHandler, type Response } from 'express';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { AgentOsRepositoryPort } from '../ports/agent-os-repository.port.js';
 import { sendSuccess, sendError, createError, ErrorCode } from '../../../shared/errors.js';
@@ -28,6 +28,11 @@ export interface AgentOsRoutesDeps {
    * false — a cloud deploy keeps the owner-scoped isolation.
    */
   readonly soloMode?: boolean;
+  /**
+   * OPTIONAL `Idempotency-Key` replay guard (BE-10.3), threaded into the CRUD
+   * router's duplicate-spawning `POST /runs` edge. Absent ⇒ no behavior change.
+   */
+  readonly idempotency?: RequestHandler;
 }
 
 export function buildAgentOsRouter(deps: AgentOsRoutesDeps): Router {
@@ -67,6 +72,7 @@ export function buildAgentOsRouter(deps: AgentOsRoutesDeps): Router {
       middleware,
       soloMode,
       ...(onPolicyChange ? { onPolicyChange } : {}),
+      ...(deps.idempotency ? { idempotency: deps.idempotency } : {}),
     }),
   );
 

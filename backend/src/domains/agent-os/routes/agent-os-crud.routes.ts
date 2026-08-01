@@ -73,6 +73,13 @@ export interface AgentOsCrudRoutesDeps {
    * locked out). Defaults to false — cloud deploys keep owner-scoped isolation.
    */
   readonly soloMode?: boolean;
+  /**
+   * OPTIONAL `Idempotency-Key` replay guard (BE-10.3), mounted on exactly the
+   * duplicate-spawning `POST /runs` edge AFTER `authenticateMutating` so a client
+   * retry replays the original run instead of minting a second one. Absent ⇒
+   * identity (no behavior change).
+   */
+  readonly idempotency?: RequestHandler;
 }
 
 /** The actor recorded on writes when the body names none (never anonymous — gate is upstream). */
@@ -109,6 +116,8 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
 
   const read = middleware.authenticate;
   const write = middleware.authenticateMutating;
+  // Optional Idempotency-Key replay seam (BE-10.3): absent ⇒ identity passthrough.
+  const idempotency: RequestHandler = deps.idempotency ?? ((_req, _res, next) => next());
 
   // — Spaces (tenant-isolated: owner-scoped, with operator + solo bypass) —
   router.get('/spaces', read, handle(async (req, res) => {
@@ -264,6 +273,7 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
   router.post(
     '/runs',
     write,
+    idempotency,
     validateBody(runCreateSchema),
     handle(async (req, res) => {
       const body = req.body as z.infer<typeof runCreateSchema>;

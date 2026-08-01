@@ -52,7 +52,7 @@
  *  - Bodies validated fail-fast with the uniform `sendError` envelope.
  */
 import nodePath from 'node:path';
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import { ErrorCode, createError, sendError, sendSuccess, asyncHandler } from '../../../shared/errors.js';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { WorkspaceState, WorkspaceSubstrate } from '@recoder/agent-os';
@@ -97,6 +97,13 @@ export interface ConductorRouterDeps {
    * workspaces. A cloud deploy leaves this false, so ownership is enforced.
    */
   readonly soloMode?: boolean;
+  /**
+   * OPTIONAL `Idempotency-Key` replay guard (BE-10.3), mounted on exactly the
+   * duplicate-spawning `POST /workspaces` edge AFTER `authenticateMutating` so a
+   * client retry replays the original create instead of spawning a second
+   * worktree+agent. Absent ⇒ identity (no behavior change).
+   */
+  readonly idempotency?: RequestHandler;
 }
 
 // Must match the full WorkspaceSubstrate union. `'acp'` is opt-in and degrades
@@ -136,6 +143,8 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   // inaccessible workspace is a 404 identical to a missing one (no existence oracle).
   const accessOpts: WorkspaceAccessOptions = { soloMode: deps.soloMode === true };
   const access = requireWorkspaceAccess(module, accessOpts);
+  // Optional Idempotency-Key replay seam (BE-10.3): absent ⇒ identity passthrough.
+  const idempotency: RequestHandler = deps.idempotency ?? ((_req, _res, next) => next());
 
   // --- reads -----------------------------------------------------------------
 
@@ -776,6 +785,7 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
   router.post(
     '/workspaces',
     middleware.authenticateMutating,
+    idempotency,
     asyncHandler(async (req, res) => {
       const body = asObject(req.body);
       const input: CreateConductorWorkspaceInput = {
