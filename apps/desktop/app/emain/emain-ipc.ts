@@ -19,6 +19,7 @@ import {
     incrementTermCommandsWsl,
     setWasActive,
 } from "./emain-activity";
+import { getBackendAuth } from "./emain-backend";
 import { getDeviceAuthManager } from "./emain-device-auth";
 import { createBuilderWindow, getAllBuilderWindows, getBuilderWindowByWebContentsId } from "./emain-builder";
 import { callWithOriginalXdgCurrentDesktopAsync, unamePlatform } from "./emain-platform";
@@ -266,6 +267,14 @@ export function initIpcHandlers() {
     });
     electron.ipcMain.handle("recoder:sign-out", () => {
         return getDeviceAuthManager().signOut();
+    });
+    // DT-7.1: hand the renderer the embedded backend's REAL loopback URL. The
+    // supervisor prefers 3100 but falls back to a free port, so the renderer's
+    // hardcoded default would target the wrong one. Sync so the renderer can read
+    // it at boot; null before the backend is truthfully READY (the renderer then
+    // keeps its default and picks up the pushed URL below once ready).
+    electron.ipcMain.on("recoder:get-backend-url", (event) => {
+        event.returnValue = getBackendAuth()?.backendUrl ?? null;
     });
     electron.ipcMain.on("open-external", (event, url) => {
         if (url && typeof url === "string") {
