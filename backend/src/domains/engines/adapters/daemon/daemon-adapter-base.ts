@@ -23,6 +23,13 @@
  * these engines only through the typed `EngineClientPort`.
  */
 import type { Logger } from '../../../../shared/logger.js';
+import {
+  CircuitBreaker,
+  CircuitOpenError,
+  withRetry,
+  type Random,
+  type Sleep,
+} from '../../../../shared/outbound-resilience.js';
 import { DEFAULT_LOOPBACK } from '../../constants.js';
 import type {
   DaemonSpec,
@@ -171,24 +178,101 @@ export function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/* ------------------------------------------------------------------ *
+ * Outbound resilience for the shared sidecar transport (Slice BE-8.5)  *
+ * ------------------------------------------------------------------ */
+
+/** Fetch signature `daemonFetch` calls — injectable so tests never touch net. */
+export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+
+/** Init the shared sidecar `fetch` accepts (unchanged wire contract). */
+export interface DaemonFetchInit {
+  readonly method?: string;
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly body?: unknown;
+  readonly timeoutMs?: number;
+}
+
 /**
- * A bounded `fetch` helper every daemon adapter shares: hard-timeout, never
- * throws into the caller — a network error / non-2xx becomes a typed
- * `{ ok:false, reason }`. JSON body parsed on success; a non-JSON 2xx yields the
- * raw text under `{ raw }`.
+ * Optional resilience seam layered around `daemonFetch`. Every field is
+ * injectable so the breaker/retry are deterministically testable; production
+ * callers pass nothing and get the shared process-wide breaker + real timers.
  */
-export async function daemonFetch<T = unknown>(
+export interface DaemonFetchResilience {
+  /** The per-sidecar breaker to gate on. Default: the shared module breaker. */
+  readonly breaker?: CircuitBreaker;
+  /** Override the breaker key (default: the URL's `scheme//host:port` origin). */
+  readonly breakerKey?: string;
+  /** Injected fetch (default `globalThis.fetch`). */
+  readonly fetchImpl?: FetchLike;
+  /** Total probe attempts for IDEMPOTENT reads (GET/HEAD). Clamped >=1. Default 3. */
+  readonly maxAttempts?: number;
+  /** Backoff base for the retry (ms). Default 50. */
+  readonly baseDelayMs?: number;
+  /** Backoff ceiling for the retry (ms). Default 1_000. */
+  readonly maxDelayMs?: number;
+  /** Injected RNG for jitter (default Math.random). */
+  readonly random?: Random;
+  /** Injected abortable delay (default a real setTimeout). */
+  readonly sleep?: Sleep;
+}
+
+/**
+ * The ONE process-wide breaker shared across every daemon adapter. Keyed by the
+ * sidecar origin so one dead sidecar (colbert) can never trip calls to a healthy
+ * one (ops-recorder). A "failure" here is a TRANSPORT-level outage (connection
+ * refused / timeout — the sidecar is unreachable), NOT an HTTP error status: a
+ * 4xx/5xx means the sidecar answered, so the circuit stays closed and the caller
+ * degrades on the specific status instead.
+ */
+export const sidecarBreaker = new CircuitBreaker({ failureThreshold: 5, cooldownMs: 10_000 });
+
+/** Derive a per-sidecar breaker key from a URL (its origin, so all paths share). */
+export function sidecarKeyForUrl(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    // Un-parseable URL: fall back to the raw string so we still isolate by target.
+    return url;
+  }
+}
+
+/** A read is retry-safe only for the idempotent probe methods (never a POST/PATCH). */
+function isIdempotentMethod(method: string): boolean {
+  const m = method.toUpperCase();
+  return m === 'GET' || m === 'HEAD';
+}
+
+/** Classified outcome of a single fetch attempt (drives retry + breaker bookkeeping). */
+interface FetchOutcome<T> {
+  readonly result: InvokeResult<T>;
+  /** True when the sidecar was UNREACHABLE (network error / timeout) — trips the breaker. */
+  readonly transportFailure: boolean;
+  /** True on a 5xx (the sidecar answered but erred) — retry-worthy, but not a breaker trip. */
+  readonly serverError: boolean;
+}
+
+/** Internal sentinel: thrown inside the retry op so `withRetry` backs off + retries. */
+class RetryableFetchError<T> extends Error {
+  constructor(readonly outcome: FetchOutcome<T>) {
+    super('retryable daemon fetch outcome');
+    this.name = 'RetryableFetchError';
+  }
+}
+
+/**
+ * One real fetch attempt against the sidecar. Never throws — a network error /
+ * timeout / non-2xx becomes a typed `{ ok:false, reason }`, classified so the
+ * caller can decide about retry (transient) vs breaker (unreachable).
+ */
+async function attemptDaemonFetch<T>(
   url: string,
-  init: {
-    readonly method?: string;
-    readonly headers?: Readonly<Record<string, string>>;
-    readonly body?: unknown;
-    readonly timeoutMs?: number;
-  } = {},
-): Promise<InvokeResult<T>> {
+  init: DaemonFetchInit,
+  fetchImpl: FetchLike,
+): Promise<FetchOutcome<T>> {
   const timeoutMs = init.timeoutMs ?? 15_000;
   try {
-    const res = await (globalThis.fetch as typeof fetch)(url, {
+    const res = await fetchImpl(url, {
       method: init.method ?? 'GET',
       ...(init.headers ? { headers: { ...init.headers } } : {}),
       ...(init.body !== undefined
@@ -200,20 +284,109 @@ export async function daemonFetch<T = unknown>(
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) {
-      return fail(`HTTP ${res.status} from ${url}`, `http_${res.status}`);
+      return {
+        result: fail(`HTTP ${res.status} from ${url}`, `http_${res.status}`),
+        transportFailure: false,
+        serverError: res.status >= 500,
+      };
     }
     const text = await res.text();
-    if (!text) return { ok: true, value: undefined as T };
+    if (!text) {
+      return { result: { ok: true, value: undefined as T }, transportFailure: false, serverError: false };
+    }
     try {
-      return { ok: true, value: JSON.parse(text) as T };
+      return { result: { ok: true, value: JSON.parse(text) as T }, transportFailure: false, serverError: false };
     } catch {
-      return { ok: true, value: { raw: text } as unknown as T };
+      return {
+        result: { ok: true, value: { raw: text } as unknown as T },
+        transportFailure: false,
+        serverError: false,
+      };
     }
   } catch (err) {
     const reason =
       err instanceof Error && err.name === 'TimeoutError'
         ? `request timed out after ${timeoutMs}ms`
         : `request failed: ${message(err)}`;
-    return fail(reason, 'request_failed');
+    return { result: fail(reason, 'request_failed'), transportFailure: true, serverError: false };
   }
+}
+
+/**
+ * A bounded, resilient `fetch` helper every daemon adapter shares. On top of the
+ * original contract (hard-timeout; never throws; non-2xx / network error → typed
+ * `{ ok:false, reason }`; JSON parsed on success; non-JSON 2xx → `{ raw }`) it now:
+ *
+ *  - Gates each call through a PER-SIDECAR `CircuitBreaker`. While the breaker is
+ *    OPEN (the sidecar was recently unreachable) it FAST-FAILS truthfully with
+ *    `{ ok:false, code:'circuit_open' }` — the same degrade-to-unavailable path
+ *    the caller already handles, never a fabricated result.
+ *  - Retries ONLY idempotent probe reads (GET/HEAD) on a transient failure
+ *    (transport error / timeout / 5xx) with bounded jittered backoff. A stateful
+ *    POST/PATCH/DELETE is NEVER re-sent — it fails fast on the first error.
+ *  - Records breaker outcome by REACHABILITY: an unreachable sidecar (transport
+ *    error / timeout) is a breaker failure; any HTTP answer (2xx…5xx) is a success
+ *    so a single bad request never trips the whole sidecar.
+ *
+ * Fully backward compatible: existing callers pass `(url, init)` and get the same
+ * `InvokeResult` shape; the resilience seam is an optional third argument.
+ */
+export async function daemonFetch<T = unknown>(
+  url: string,
+  init: DaemonFetchInit = {},
+  resilience: DaemonFetchResilience = {},
+): Promise<InvokeResult<T>> {
+  const breaker = resilience.breaker ?? sidecarBreaker;
+  const key = resilience.breakerKey ?? sidecarKeyForUrl(url);
+  const fetchImpl = resilience.fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
+  const idempotent = isIdempotentMethod(init.method ?? 'GET');
+
+  // 1. Circuit gate — fast-fail truthfully while OPEN (or half-open probe in flight).
+  try {
+    breaker.guard(key);
+  } catch (err) {
+    if (err instanceof CircuitOpenError) {
+      return fail(
+        `${key} sidecar circuit open (retry after ${err.retryAfterMs}ms) — recently unreachable`,
+        'circuit_open',
+      );
+    }
+    throw err; // unexpected: never swallow a non-breaker programming error
+  }
+
+  // 2. Run the call. Idempotent reads get bounded jittered retry; stateful writes
+  //    fail fast (a non-idempotent op is never silently re-sent).
+  let outcome: FetchOutcome<T>;
+  if (idempotent) {
+    try {
+      outcome = await withRetry<FetchOutcome<T>>(
+        async () => {
+          const o = await attemptDaemonFetch<T>(url, init, fetchImpl);
+          if (o.transportFailure || o.serverError) throw new RetryableFetchError(o);
+          return o;
+        },
+        {
+          idempotent: true,
+          maxAttempts: resilience.maxAttempts ?? 3,
+          baseDelayMs: resilience.baseDelayMs ?? 50,
+          maxDelayMs: resilience.maxDelayMs ?? 1_000,
+          ...(resilience.random ? { random: resilience.random } : {}),
+          ...(resilience.sleep ? { sleep: resilience.sleep } : {}),
+          isRetryable: (e) => e instanceof RetryableFetchError,
+        },
+      );
+    } catch (err) {
+      // The final attempt's classified outcome is carried on the sentinel.
+      if (err instanceof RetryableFetchError) outcome = err.outcome as FetchOutcome<T>;
+      else throw err;
+    }
+  } else {
+    outcome = await attemptDaemonFetch<T>(url, init, fetchImpl);
+  }
+
+  // 3. Record reachability with the breaker (pairs the earlier guard exactly once).
+  if (outcome.transportFailure) breaker.recordFailure(key);
+  else breaker.recordSuccess(key);
+
+  return outcome.result;
 }
