@@ -15,6 +15,7 @@ import type { MergeabilityView } from './mergeability.service.js';
 import type { PrStatusView } from './pr-status.service.js';
 import type { WorktreeStatusView } from './worktree-status.service.js';
 import type { PreviewVerificationView } from '../ports/preview-verify.port.js';
+import type { PrReviewEvidenceView } from '../ports/pr-review.port.js';
 import {
   composeConductor,
   makeCreateInput,
@@ -335,6 +336,122 @@ describe('foldReadiness — worktree open-work signal', () => {
   it('always emits exactly 5 signals in fixed order', () => {
     const view = foldReadiness({ ...base, worktree: cleanWorktree() });
     expect(view.signals.map((s) => s.id)).toEqual(['lifecycle', 'worktree', 'merge', 'checks', 'preview']);
+  });
+});
+
+describe('foldReadiness — advisory review facet (NEVER a 6th signal)', () => {
+  const reviewEvidence: PrReviewEvidenceView = {
+    available: true,
+    pr: 7,
+    diffTruncated: true,
+    impact: {
+      available: true,
+      symbolCount: 2,
+      topSymbols: [{ symbol: 'foldReadiness', references: 4 }],
+    },
+  };
+
+  it('(a) a present review facet passes through UNCHANGED and verdict/signals are identical', () => {
+    const input: ReadinessInput = {
+      state: 'awaiting_review' as WorkspaceState,
+      mergeability: cleanMerge(),
+      prStatus: passingChecks(),
+      preview: previewView('passed'),
+    };
+    const without = foldReadiness(input);
+    const view = foldReadiness({ ...input, review: reviewEvidence });
+    expect(view.review).toEqual(reviewEvidence);
+    // ADVISORY law: the review facet must not move the verdict fold at all.
+    expect(view.verdict).toBe(without.verdict);
+    expect(view.signals).toEqual(without.signals);
+    expect(view.blockers).toEqual(without.blockers);
+    // …and stays evidence, never a 6th signal.
+    expect(view.signals.map((s) => s.id)).toEqual(['lifecycle', 'worktree', 'merge', 'checks', 'preview']);
+  });
+
+  it('(b) no review input → review: null (truthful absence)', () => {
+    expect(foldReadiness({ state: 'awaiting_review' as WorkspaceState }).review).toBeNull();
+    expect(foldReadiness({ state: 'running' as WorkspaceState }).review).toBeNull();
+  });
+
+  it('(c) an available:false review (gh missing) still passes through truthfully', () => {
+    const view = foldReadiness({
+      state: 'awaiting_review' as WorkspaceState,
+      mergeability: cleanMerge(),
+      review: { available: false, reason: 'gh not installed', pr: 7 },
+    });
+    expect(view.review).toEqual({ available: false, reason: 'gh not installed', pr: 7 });
+    expect(view.verdict).toBe('ready');
+  });
+});
+
+describe('workspaceReadiness — advisory review probe', () => {
+  async function composeWithWorkspace() {
+    const { module } = composeConductor({ substrates: [new FakeSubstrate()] });
+    const created = await module.createWorkspace(
+      makeCreateInput({ command: 'agent-run' }),
+      makePrincipal(),
+    );
+    const workspaceId = created.value!.workspaceId;
+    const probed = module as unknown as {
+      mergeability: { probe: (w: unknown) => Promise<MergeabilityView> };
+      prStatus: { status: (w: unknown) => Promise<PrStatusView> };
+    };
+    probed.mergeability = { probe: async () => cleanMerge() };
+    return { module, workspaceId, probed };
+  }
+
+  it('does NOT invoke the review port when prStatus has no PR (review stays null)', async () => {
+    const { module, workspaceId, probed } = await composeWithWorkspace();
+    probed.prStatus = { status: async () => ({ available: true, hasPr: false }) };
+    let calls = 0;
+    module.setPrReview({
+      review: async () => {
+        calls += 1;
+        return { available: true, pr: 1 };
+      },
+    });
+    const view = await module.workspaceReadiness(workspaceId);
+    expect(calls).toBe(0);
+    expect(view.review).toBeNull();
+  });
+
+  it('a REJECTING review port degrades to review:null without failing the read', async () => {
+    const { module, workspaceId, probed } = await composeWithWorkspace();
+    probed.prStatus = { status: async () => passingChecks() };
+    module.setPrReview({
+      review: async () => {
+        throw new Error('review exploded');
+      },
+    });
+    const view = await module.workspaceReadiness(workspaceId);
+    expect(view.review).toBeNull();
+    // The rest of the fold is untouched — the checks probe still shows through.
+    expect(signalOf(view, 'checks')?.status).toBe('pass');
+  });
+
+  it('a fulfilled review port lands as the advisory facet (PR number + worktree repoRoot)', async () => {
+    const { module, workspaceId, probed } = await composeWithWorkspace();
+    probed.prStatus = { status: async () => passingChecks() };
+    let seen: { prNumber: number; repoRoot: string; workspaceId: string } | undefined;
+    module.setPrReview({
+      review: async (input) => {
+        seen = input;
+        return { available: true, pr: input.prNumber, diffTruncated: true };
+      },
+    });
+    const view = await module.workspaceReadiness(workspaceId);
+    expect(view.review).toEqual({ available: true, pr: 7, diffTruncated: true });
+    expect(seen?.prNumber).toBe(7);
+    expect(seen?.workspaceId).toBe(workspaceId);
+    expect(seen?.repoRoot).toContain('/tmp/fake/');
+  });
+
+  it('an UNWIRED port keeps review null (truthful absence, no probe)', async () => {
+    const { module, workspaceId, probed } = await composeWithWorkspace();
+    probed.prStatus = { status: async () => passingChecks() };
+    const view = await module.workspaceReadiness(workspaceId);
+    expect(view.review).toBeNull();
   });
 });
 

@@ -23,6 +23,7 @@ import type { MergeabilityView } from './mergeability.service.js';
 import type { PrStatusView } from './pr-status.service.js';
 import type { WorktreeStatusView } from './worktree-status.service.js';
 import type { PreviewVerificationView } from '../ports/preview-verify.port.js';
+import type { PrReviewEvidenceView } from '../ports/pr-review.port.js';
 
 /** One of the five merge-decision signals, projected truthfully. */
 export interface ReadinessSignal {
@@ -55,6 +56,13 @@ export interface ReadinessView {
   readonly blockers: readonly string[];
   /** The open PR's identity (number/state/draft/url); null when there is no PR. */
   readonly pr: ReadinessPr | null;
+  /**
+   * ADVISORY AI review evidence (the bounded `reviewPR` projection: gh pr view
+   * + diff-truncation flag + recodergit blast radius). NEVER a 6th signal and
+   * NEVER folded into the verdict — pure pass-through evidence. `null` when the
+   * probe was unwired/skipped/rejected (truthful absence).
+   */
+  readonly review: PrReviewEvidenceView | null;
 }
 
 /** The already-probed inputs the fold reads — each optional so it degrades independently. */
@@ -68,6 +76,8 @@ export interface ReadinessInput {
   readonly worktree?: WorktreeStatusView;
   /** `null` ⇒ never verified; absent ⇒ the probe rejected. */
   readonly preview?: PreviewVerificationView | null;
+  /** ADVISORY auto-review evidence; absent ⇒ probe unwired/skipped/rejected. */
+  readonly review?: PrReviewEvidenceView;
 }
 
 /**
@@ -286,26 +296,29 @@ export function foldReadiness(input: ReadinessInput): ReadinessView {
   const checks = deriveChecks(input.prStatus);
   const preview = derivePreview(input.preview);
   const pr = derivePr(input.prStatus);
+  // ADVISORY pass-through: the review evidence NEVER joins the signals array
+  // and NEVER moves the verdict fold below — it rides the view untouched.
+  const review = input.review ?? null;
   const signals: readonly ReadinessSignal[] = [lifecycle, worktree, merge, checks, preview];
 
   // Delivered/closed states are decided by lifecycle truth BEFORE the merge/checks
   // fold: an already-merged or closed workspace is never reported as blocked or
   // "agent still working" on the panel meant to prove its convergence.
   if (lifecycleClass === 'delivered') {
-    return { verdict: 'delivered', signals, pr, blockers: [] };
+    return { verdict: 'delivered', signals, pr, review, blockers: [] };
   }
   if (lifecycleClass === 'terminal') {
-    return { verdict: 'terminal', signals, pr, blockers: [] };
+    return { verdict: 'terminal', signals, pr, review, blockers: [] };
   }
   if (lifecycleClass === 'failed') {
-    return { verdict: 'blocked', signals, pr, blockers: ['workspace delivery failed'] };
+    return { verdict: 'blocked', signals, pr, review, blockers: ['workspace delivery failed'] };
   }
 
   if (merge.status === 'fail' || checks.status === 'fail') {
-    return { verdict: 'blocked', signals, pr, blockers: deriveBlockers(merge, checks, input) };
+    return { verdict: 'blocked', signals, pr, review, blockers: deriveBlockers(merge, checks, input) };
   }
   if (lifecycleClass === 'working') {
-    return { verdict: 'not_ready', signals, pr, blockers: [] };
+    return { verdict: 'not_ready', signals, pr, review, blockers: [] };
   }
   if (merge.status === 'pass' && preview.status !== 'fail') {
     // Open (uncommitted) work DISCOURAGES a merge: the merge operates on committed
@@ -313,12 +326,12 @@ export function foldReadiness(input: ReadinessInput): ReadinessView {
     // This is a soft downgrade to not_ready, NOT a hard blocker — the reviewer can
     // still merge, but the panel tells the truth that work is uncommitted.
     if (worktree.status === 'pending') {
-      return { verdict: 'not_ready', signals, pr, blockers: [] };
+      return { verdict: 'not_ready', signals, pr, review, blockers: [] };
     }
-    return { verdict: 'ready', signals, pr, blockers: [] };
+    return { verdict: 'ready', signals, pr, review, blockers: [] };
   }
   if (merge.status === 'unknown') {
-    return { verdict: 'unknown', signals, pr, blockers: [] };
+    return { verdict: 'unknown', signals, pr, review, blockers: [] };
   }
-  return { verdict: 'not_ready', signals, pr, blockers: [] };
+  return { verdict: 'not_ready', signals, pr, review, blockers: [] };
 }
