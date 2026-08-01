@@ -54,6 +54,8 @@ export type {
 // Ports (the seams other domains consume).
 export type {
   MetricsPort,
+  MetricsReader,
+  MetricSample,
   MetricSpec,
   MetricLabels,
   CounterHandle,
@@ -123,6 +125,13 @@ export {
 } from './adapters/pino-logger.adapter.js';
 export { WorkSignalsService, normalizeSignal, toRunEvent, classifyKind } from './services/work-signals.service.js';
 export { AlertingService, evaluateExpr } from './services/alerting.service.js';
+export {
+  SloEvaluator,
+  DEFAULT_RED_CONFIG,
+  type RedAvailabilityConfig,
+  type SloEvaluation,
+  type SloInsufficientReason,
+} from './services/slo-evaluator.service.js';
 
 // Repositories (concrete impls over the persistence executor).
 export {

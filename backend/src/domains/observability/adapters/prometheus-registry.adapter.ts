@@ -19,8 +19,10 @@ import type {
   GaugeHandle,
   HistogramHandle,
   MetricLabels,
+  MetricSample,
   MetricSpec,
   MetricsPort,
+  MetricsReader,
   TimerHandle,
 } from '../ports/metrics.port.js';
 
@@ -74,7 +76,7 @@ type Series = CounterSeries | GaugeSeries | HistogramSeries;
 
 const DEFAULT_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
 
-export class PrometheusMetrics implements MetricsPort {
+export class PrometheusMetrics implements MetricsPort, MetricsReader {
   private readonly registry = new Map<string, Series>();
   private readonly startedAt = Date.now();
 
@@ -133,6 +135,39 @@ export class PrometheusMetrics implements MetricsPort {
         return elapsedSec;
       },
     };
+  }
+
+  // --- Read surface (MetricsReader) -----------------------------------------
+  // In-process reads for evaluators (SLO attainment / recording rules). No
+  // scraping, no allocation on the hot write path — this only reads the maps.
+
+  /** Current value of the exact series (all labels match), or `null` if absent. */
+  getValue(name: string, labels?: MetricLabels): number | null {
+    const series = this.registry.get(name);
+    if (!series) return null;
+    if (series.kind === 'histogram') {
+      const entry = series.observations.get(seriesKey(labels));
+      return entry ? entry.count : null;
+    }
+    const value = series.values.get(seriesKey(labels));
+    return value === undefined ? null : value;
+  }
+
+  /** Every recorded sample for a counter/gauge (histogram → per-series count). */
+  getSamples(name: string): readonly MetricSample[] {
+    const series = this.registry.get(name);
+    if (!series) return [];
+    if (series.kind === 'histogram') {
+      return [...series.observations.values()].map((e) => ({
+        labels: e.labels ?? {},
+        value: e.count,
+      }));
+    }
+    const out: MetricSample[] = [];
+    for (const [key, value] of series.values.entries()) {
+      out.push({ labels: series.labelSets.get(key) ?? {}, value });
+    }
+    return out;
   }
 
   private ensure(spec: MetricSpec, kind: 'counter' | 'gauge'): Series {

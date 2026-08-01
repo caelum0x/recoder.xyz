@@ -61,3 +61,30 @@ export interface MetricsPort {
   /** Start a histogram timer; `stop()` records elapsed seconds. */
   startTimer(spec: MetricSpec): TimerHandle;
 }
+
+/** One recorded series sample: its label set + current value. */
+export interface MetricSample {
+  readonly labels: MetricLabels;
+  readonly value: number;
+}
+
+/**
+ * `MetricsReader` — the READ half of the metrics seam, kept as a SEPARATE
+ * (additive) interface so the write-only {@link MetricsPort} that all 14 domains
+ * inject stays frozen. In-process evaluators (SLO attainment, recording rules)
+ * inject this to read current counter/gauge values WITHOUT scraping `/metrics`.
+ * Pure + synchronous: it returns the registry's current snapshot, never blocks.
+ */
+export interface MetricsReader {
+  /**
+   * Current value of the EXACT series (all `labels` match), or `null` when no such
+   * series has been recorded. For a histogram, returns the observation `count` of
+   * the matching series. `null` is truthful "no data" — never a fabricated 0.
+   */
+  getValue(name: string, labels?: MetricLabels): number | null;
+  /**
+   * Every recorded sample for a counter/gauge metric (histograms report their
+   * per-series observation `count`). Empty when the metric was never recorded.
+   */
+  getSamples(name: string): readonly MetricSample[];
+}
