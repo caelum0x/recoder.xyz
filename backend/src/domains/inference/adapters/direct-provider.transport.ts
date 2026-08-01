@@ -16,6 +16,7 @@
  * log, an error envelope, or the delivery-outcome audit trail.
  */
 import type { Logger } from '../../../shared/logger.js';
+import { CircuitBreaker, CircuitOpenError } from '../../../shared/outbound-resilience.js';
 import type { ByokKeyResolver } from '../ports/byok-resolver.port.js';
 import type { InferenceRequest, InferenceResult, TokenUsage } from '../types.js';
 import { notRouted, tokenUsage } from '../types.js';
@@ -67,6 +68,16 @@ export interface DirectProviderTransportDeps {
   readonly timeoutMs?: number;
   /** Per-provider base-URL overrides (tests / self-hosted proxies). */
   readonly endpoints?: Readonly<Partial<Record<string, string>>>;
+  /**
+   * Per-provider circuit breaker. After repeated failures to a given provider
+   * its circuit trips OPEN and further calls FAST-FAIL with a truthful decline
+   * (`routed:false`, reason names the open circuit) instead of hammering a
+   * downstream that is already failing — never a fabricated completion. The
+   * completion is a NON-idempotent POST, so it is guarded but NEVER retried.
+   * Injectable so tests drive the clock/threshold; defaults to a fresh breaker
+   * with the library defaults (5 consecutive failures, 30s cooldown).
+   */
+  readonly breaker?: CircuitBreaker;
 }
 
 /** Build the rung-3 direct multi-provider transport. */
@@ -76,6 +87,7 @@ export function createDirectProviderTransport(deps: DirectProviderTransportDeps)
   const platformKeys = normalizeKeys(deps.platformKeys ?? {});
   const doFetch: ProviderFetchLike = deps.fetch ?? defaultFetch;
   const timeoutMs = deps.timeoutMs ?? 60_000;
+  const breaker = deps.breaker ?? new CircuitBreaker();
 
   return {
     available(): boolean {
@@ -110,6 +122,24 @@ export function createDirectProviderTransport(deps: DirectProviderTransportDeps)
         );
       }
 
+      // Per-provider circuit breaker: fast-fail (truthfully) while this
+      // provider's circuit is OPEN so a failing downstream is not hammered. The
+      // completion POST is NON-idempotent — it is guarded but never retried.
+      // Every guard that returns here MUST be paired with exactly one
+      // recordSuccess/recordFailure on all exit paths below.
+      try {
+        breaker.guard(parsed.provider);
+      } catch (err) {
+        if (err instanceof CircuitOpenError) {
+          log.debug({ provider: parsed.provider, retryAfterMs: err.retryAfterMs }, 'direct provider circuit open — fast-failing');
+          return notRouted(
+            req.model,
+            `direct ${parsed.provider} circuit open — recent failures are fast-failing to protect the provider (retry in ~${err.retryAfterMs}ms)`,
+          );
+        }
+        throw err;
+      }
+
       const base = (deps.endpoints?.[parsed.provider] ?? spec.baseUrl).replace(/\/+$/, '');
       const wire = buildWireCall(spec.wire, base, parsed.model, req, key);
 
@@ -126,10 +156,12 @@ export function createDirectProviderTransport(deps: DirectProviderTransportDeps)
         bodyText = await res.text();
         if (!res.ok) {
           // NEVER include the provider error body (it may echo credentials).
+          breaker.recordFailure(parsed.provider);
           log.debug({ provider: parsed.provider, status }, 'direct provider call failed');
           return notRouted(req.model, `direct ${parsed.provider} call failed (status ${status})`);
         }
       } catch (err) {
+        breaker.recordFailure(parsed.provider);
         const reason = redactSecret(message(err), key);
         log.debug({ provider: parsed.provider, err: reason }, 'direct provider call errored');
         return notRouted(req.model, `direct ${parsed.provider} call errored: ${reason}`);
@@ -137,9 +169,12 @@ export function createDirectProviderTransport(deps: DirectProviderTransportDeps)
 
       const parsedResult = parseWireResponse(spec.wire, bodyText);
       if (!parsedResult) {
+        // A 2xx with an unparseable body is still a failed delivery.
+        breaker.recordFailure(parsed.provider);
         return notRouted(req.model, `direct ${parsed.provider} returned a malformed response`);
       }
 
+      breaker.recordSuccess(parsed.provider);
       if (source === 'byok' && req.userId) resolver.markUsed(req.userId, parsed.provider);
       log.debug(
         { provider: parsed.provider, model: req.model, source, status },
