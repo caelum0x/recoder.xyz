@@ -31,6 +31,7 @@ import type { Ed25519Mode } from '../config.js';
 import type { AgentRegistryRepo } from '../ports/agent-registry.repo.js';
 import type { IngressResult } from '../types.js';
 import type { EnvelopeService } from './a2a-envelope.service.js';
+import { createReplayGuard, type ReplayGuard } from './replay-guard.js';
 import type { IngressAdmissionContext, SignedIngressGate } from './signed-ingress.gate.js';
 
 /** Resolve the ed25519 public key trusted for a signature `key_id`; `null` ⇒ unknown. */
@@ -89,6 +90,14 @@ export interface Ed25519IngressGateDeps {
   readonly refuseExternalHmac: boolean;
   /** Max ms of future clock skew tolerated on `signed_at` (SDK default: 5 min). */
   readonly maxFutureSkewMs?: number;
+  /**
+   * The TTL-bounded seen-cache that rejects a REPLAYED signed envelope (same
+   * `jti`) within its validity window. Injectable/clearable for tests; when
+   * absent a fresh in-process guard is created so production is protected by
+   * default. Only SIGNED envelopes (which carry a unique `jti`) are guarded —
+   * bare/insecure-dev payloads are untouched.
+   */
+  readonly replayGuard?: ReplayGuard;
   readonly logger?: Logger;
 }
 
@@ -136,6 +145,39 @@ function checkTiming(env: SignedEnvelope, maxFutureSkewMs: number, now?: Date): 
 export function createEd25519IngressGate(deps: Ed25519IngressGateDeps): SignedIngressGate {
   const { inner, envelope, resolveKey, mode, refuseExternalHmac, logger } = deps;
   const maxFutureSkewMs = deps.maxFutureSkewMs ?? DEFAULT_MAX_FUTURE_SKEW_MS;
+  const replayGuard = deps.replayGuard ?? createReplayGuard();
+
+  /**
+   * REPLAY protection for an already-verified signed envelope: require a unique
+   * `jti` (the signed-envelope id) and reject a second presentation of the same
+   * signature within its validity window. Returns a `Rejection` to deny, or
+   * `null` to let admission proceed. Records the jti only on first sight so a
+   * rejected/unverified envelope never poisons the cache.
+   */
+  function enforceReplay(env: SignedEnvelope, now?: Date): Rejection | null {
+    const jti = env.id;
+    if (typeof jti !== 'string' || jti.length === 0) {
+      return {
+        status: 400,
+        code: 'signed_envelope_missing_jti',
+        reason: 'Signed A2A envelope is missing a unique id (jti) required for replay protection.',
+      };
+    }
+    const nowMs = now?.getTime() ?? Date.now();
+    const expiresRaw = env.signature.expires_at !== undefined ? Date.parse(env.signature.expires_at) : NaN;
+    const first = replayGuard.remember(jti, {
+      nowMs,
+      ...(Number.isFinite(expiresRaw) ? { expiresAtMs: expiresRaw } : {}),
+    });
+    if (!first) {
+      return {
+        status: 401,
+        code: 'signed_envelope_replayed',
+        reason: 'Signed A2A envelope replay detected — this signature was already admitted within its validity window.',
+      };
+    }
+    return null;
+  }
 
   async function verify(env: SignedEnvelope, now?: Date): Promise<Rejection | null> {
     const timing = checkTiming(env, maxFutureSkewMs, now);
@@ -200,7 +242,15 @@ export function createEd25519IngressGate(deps: Ed25519IngressGateDeps): SignedIn
             'External A2A ingress must present a per-sender ed25519 signature; the shared-HMAC path is reserved for intra-cluster callers.',
           );
         }
-        return inner.admit<TPayload>(value, now, context);
+        const innerResult = await inner.admit<TPayload>(value, now, context);
+        // Replay-guard the trusted shared-HMAC path too: a signed envelope the
+        // inner gate admitted must not be re-admitted within its validity window.
+        // Bare/insecure-dev values carry no signature/jti and are left untouched.
+        if (innerResult.admitted && isSignedEnvelope(value)) {
+          const replay = enforceReplay(value, now);
+          if (replay) return denied(replay.status, replay.code, replay.reason);
+        }
+        return innerResult;
       }
       let rejection: Rejection | null;
       try {
@@ -214,6 +264,9 @@ export function createEd25519IngressGate(deps: Ed25519IngressGateDeps): SignedIn
         return denied(503, 'ed25519_verifier_fault', 'ed25519 ingress verifier faulted — rejected (fail-closed).');
       }
       if (rejection === null) {
+        // Verified: enforce replay protection before admitting the payload.
+        const replay = enforceReplay(value, now);
+        if (replay) return denied(replay.status, replay.code, replay.reason);
         return admitDomain<TPayload>(value, 'ingress_admitted', 'Verified ed25519 A2A envelope.', value.signature.key_id);
       }
       if (mode === 'enforce') {
