@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { releasesArePublic } from "@/lib/releases";
 
 /**
  * Public GitHub URL, only rendered when explicitly configured. The source repo
@@ -8,10 +9,16 @@ import Image from "next/image";
  */
 export const PUBLIC_GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL?.trim();
 
-/** The single primary action on every page. One CTA discipline (Cursor). */
+/**
+ * The single primary action on every page. One CTA discipline (Cursor). The
+ * label is honest about availability: a real "Download" only once public builds
+ * exist, otherwise "Get early access" — the /download page is a request-access
+ * flow until then, so we never tell a visitor they can download a build that
+ * isn't public yet.
+ */
 export function DownloadButton({
   className = "",
-  label = "Download",
+  label = releasesArePublic() ? "Download" : "Get early access",
 }: {
   className?: string;
   label?: string;
@@ -122,7 +129,7 @@ export function Footer() {
         <FooterCol
           title="Product"
           links={[
-            { href: "/download", label: "Download" },
+            { href: "/download", label: releasesArePublic() ? "Download" : "Get early access" },
             { href: "/features", label: "Features" },
             { href: "/how-it-works", label: "How it works" },
             { href: "/self-host", label: "Self-host" },

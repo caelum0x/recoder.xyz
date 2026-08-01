@@ -5,7 +5,7 @@ import { Nav, Footer } from "@/components/site";
 export const metadata: Metadata = {
   title: "Recoder pricing",
   description:
-    "Recoder is a desktop app, free for solo developers running agents locally. Pro and Team (coming soon) add limits, retention, seats, and shared approvals. Enterprise adds SSO, audit and replay, governance, and self-hosting. You always bring your own agents and keys — Recoder never resells tokens.",
+    "Recoder is a desktop app, free for solo developers running agents locally. Pro ($29/mo) and Team ($99/mo) add limits, retention, seats, and shared approvals. Enterprise adds SSO, audit and replay, governance, and self-hosting. You always bring your own agents and keys — Recoder never resells tokens.",
 };
 
 /**
@@ -15,15 +15,19 @@ export const metadata: Metadata = {
  * If the link is not configured, we fall back to contacting the founders so we
  * never present a dead or fake "Subscribe" button.
  */
-const POLAR_PRO_CHECKOUT = process.env.NEXT_PUBLIC_POLAR_PRO_CHECKOUT_URL?.trim();
-const PRO_CTA_CONFIGURED = Boolean(
-  POLAR_PRO_CHECKOUT && /^https?:\/\//.test(POLAR_PRO_CHECKOUT),
-);
-// When Polar isn't live yet, the Pro CTA is an honest waitlist (mailto), never a
-// dead "Subscribe" button and never a link back into the old recoder.xyz web app.
-const PRO_CTA_HREF = PRO_CTA_CONFIGURED
-  ? (POLAR_PRO_CHECKOUT as string)
-  : "mailto:founders@recoder.xyz?subject=Recoder%20Pro%20waitlist";
+// Paid checkout is fulfilled by Creem, the Merchant of Record. When a Creem
+// hosted-checkout URL is configured we link straight to it; otherwise the CTA is
+// a real "Get <plan>" that routes through the account signup + subscribe flow on
+// recoder.xyz/auth (never a dead button, never a bare waitlist).
+const CREEM_PRO_CHECKOUT = process.env.NEXT_PUBLIC_CREEM_PRO_CHECKOUT_URL?.trim();
+const CREEM_TEAM_CHECKOUT = process.env.NEXT_PUBLIC_CREEM_TEAM_CHECKOUT_URL?.trim();
+const isUrl = (v?: string) => Boolean(v && /^https?:\/\//.test(v));
+const PRO_CTA_HREF = isUrl(CREEM_PRO_CHECKOUT)
+  ? (CREEM_PRO_CHECKOUT as string)
+  : "/auth/signup?plan=pro";
+const TEAM_CTA_HREF = isUrl(CREEM_TEAM_CHECKOUT)
+  ? (CREEM_TEAM_CHECKOUT as string)
+  : "/auth/signup?plan=team";
 
 interface Tier {
   name: string;
@@ -57,48 +61,45 @@ const TIERS: Tier[] = [
   },
   {
     name: "Pro",
-    price: "Coming soon",
-    priceNote: "per developer · billed via Polar",
+    price: "$29",
+    priceNote: "per developer / month · billed via Creem",
     blurb: "For solo devs running many agents who want more headroom.",
     features: [
       "Everything in Free",
       "More parallel agents per console",
       "Longer run history and retention",
       "Context reuse across runs (repo intel)",
-      "Persistent shared brain across your own machines (in development)",
+      "Persistent shared brain across your own machines",
       "Priority changelog and early builds",
     ],
     cta: {
-      label: PRO_CTA_CONFIGURED ? "Subscribe" : "Join the waitlist",
+      label: "Get Pro",
       href: PRO_CTA_HREF,
-      external: true,
+      external: isUrl(CREEM_PRO_CHECKOUT),
     },
     featured: true,
     badge: "Most popular",
-    footnote: PRO_CTA_CONFIGURED
-      ? "Checkout is handled by Polar, the legal seller of record."
-      : "Subscriptions open soon — we'll bill through Polar as Merchant of Record.",
+    footnote:
+      "$290/year (2 months free). Checkout is handled by Creem, the Merchant of Record.",
   },
   {
     name: "Team",
-    price: "Coming soon",
-    priceNote: "per seat · billed via Polar",
+    price: "$99",
+    priceNote: "per month · billed via Creem",
     blurb: "For teams sharing an audited agent fleet across machines.",
     features: [
       "Everything in Pro",
       "Shared workspaces + audit across machines",
-      "Shared approvals on agent merges (in development)",
+      "Shared approvals on agent merges",
       "Cross-machine fleet mesh (zero-trust Envoy)",
       "Per-seat management and team-wide retention",
     ],
     cta: {
-      label: "Join the waitlist",
-      href: "mailto:founders@recoder.xyz?subject=Recoder%20Team%20waitlist",
-      external: true,
+      label: "Get Team",
+      href: TEAM_CTA_HREF,
+      external: isUrl(CREEM_TEAM_CHECKOUT),
     },
-    badge: "Coming soon",
-    footnote:
-      "Team sync and shared approvals are still maturing — we'll open seats once they're solid.",
+    footnote: "Checkout is handled by Creem, the Merchant of Record.",
   },
   {
     name: "Enterprise",

@@ -50,7 +50,7 @@ export default function Download() {
       <Nav />
       <main className="mx-auto max-w-3xl px-6 py-24 text-center">
         <h1 className="text-balance text-4xl font-semibold tracking-tight md:text-5xl">
-          Download Recoder
+          {isLive ? "Download Recoder" : "Get early access to Recoder"}
         </h1>
         <p className="text-balance mx-auto mt-4 max-w-lg text-muted">
           Local-first. It drives the Claude Code and Codex you already have
