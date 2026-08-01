@@ -161,6 +161,7 @@ declare global {
         getRecoderIdentity: () => Promise<RecoderIdentity>; // recoder:get-identity
         recoderSignIn: () => Promise<RecoderSignInResult>; // recoder:sign-in
         recoderSignOut: () => Promise<{ ok: boolean }>; // recoder:sign-out
+        ensureRecoderSession: () => Promise<RecoderSignInResult>; // recoder:ensure-session
         selectDirectory: () => Promise<string>; // recoder:select-directory
         isGitRepo: (dirPath: string) => Promise<boolean>; // recoder:is-git-repo
         gitInit: (dirPath: string) => Promise<boolean>; // recoder:git-init

@@ -48,6 +48,8 @@ interface StoredDeviceSession {
     accessToken: string;
     refreshToken?: string;
     identity?: DeviceIdentity;
+    /** Epoch ms the access token expires (from the grant's expires_in). */
+    expiresAt?: number;
 }
 
 export interface DeviceAuthDeps {
@@ -69,6 +71,8 @@ export const DefaultAuthBaseUrl = "https://recoder.xyz";
 const ClientId = "recoder-desktop";
 const DefaultPollIntervalMs = 5000;
 const MaxPollIntervalMs = 15000;
+/** Refresh this far before the stored token actually expires. */
+export const SessionRefreshSkewMs = 5 * 60 * 1000;
 
 export function identityFromUser(user: unknown): DeviceIdentity | undefined {
     if (user == null || typeof user !== "object") {
@@ -199,6 +203,9 @@ export class DeviceAuthManager {
                     accessToken: body.access_token,
                     ...(typeof body.refresh_token === "string" ? { refreshToken: body.refresh_token } : {}),
                     ...(identityFromUser(body.user) ? { identity: identityFromUser(body.user) } : {}),
+                    ...(typeof body.expires_in === "number"
+                        ? { expiresAt: this.now() + body.expires_in * 1000 }
+                        : {}),
                 };
                 this.persistSession(session);
                 return { ok: true, identity: session.identity };
@@ -261,9 +268,31 @@ export class DeviceAuthManager {
             accessToken: body.access_token as string,
             refreshToken: typeof body.refresh_token === "string" ? body.refresh_token : session.refreshToken,
             ...(identity ? { identity } : {}),
+            ...(typeof body.expires_in === "number" ? { expiresAt: this.now() + body.expires_in * 1000 } : {}),
         };
         this.persistSession(next);
         return { ok: true, identity: next.identity };
+    }
+
+    /**
+     * Return the current identity, refreshing FIRST when the stored token is at
+     * (or within skew of) its expiry. A legacy session with no expiresAt is left
+     * as-is so it never loop-refreshes; a refresh failure degrades to the stored
+     * identity with ok:false rather than throwing.
+     */
+    async ensureFreshSession(): Promise<DeviceAuthResult> {
+        const session = this.loadSession();
+        if (session == null) {
+            return { ok: false, reason: "no stored session" };
+        }
+        if (session.expiresAt == null || this.now() < session.expiresAt - SessionRefreshSkewMs) {
+            return { ok: true, identity: session.identity };
+        }
+        const result = await this.refresh();
+        if (result.ok) {
+            return result;
+        }
+        return { ok: false, reason: result.reason, identity: session.identity };
     }
 
     /** Clear the stored session. Best-effort — always leaves us signed out. */

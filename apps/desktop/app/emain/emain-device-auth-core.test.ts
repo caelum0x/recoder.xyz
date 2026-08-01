@@ -11,7 +11,12 @@
  * session; a corrupt session file reads as signed out (never a crash).
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { DeviceAuthManager, DeviceLoginPrompt, identityFromUser } from "./emain-device-auth-core";
+import {
+    DeviceAuthManager,
+    DeviceLoginPrompt,
+    identityFromUser,
+    SessionRefreshSkewMs,
+} from "./emain-device-auth-core";
 
 interface FakeFile {
     content?: string;
@@ -120,6 +125,13 @@ function makeManager(fetchFn: typeof fetch, nowRef?: { t: number }): DeviceAuthM
     });
 }
 
+/** Decode the fake-encrypted session that persistSession wrote to `file`. */
+function readStoredSession(): Record<string, unknown> {
+    const outer = JSON.parse(file.content);
+    const inner = String(outer.ciphertext).slice(4);
+    return JSON.parse(Buffer.from(inner, "base64").toString());
+}
+
 beforeEach(() => {
     file = {};
     opened = [];
@@ -201,6 +213,67 @@ describe("refresh", () => {
         const result = await makeManager(fetchFn).refresh();
         expect(result.ok).toBe(false);
         expect(result.reason).toContain("no stored refresh token");
+    });
+});
+
+describe("ensureFreshSession — expiry-driven refresh", () => {
+    it("login stores expiresAt = capture-time + expires_in*1000", async () => {
+        const nowRef = { t: 1_000 };
+        const { fetchFn } = makeFetch([
+            { status: 200, body: { access_token: "at1", refresh_token: "rt1", expires_in: 90, user: identity } },
+        ]);
+        await makeManager(fetchFn, nowRef).deviceLogin();
+        // nowRef.t reflects the clock at the authorized poll (the capture point).
+        expect(readStoredSession().expiresAt).toBe(nowRef.t + 90 * 1000);
+    });
+
+    it("refreshes exactly once when the clock is past expiresAt - skew, keeping identity", async () => {
+        const nowRef = { t: 1_000 };
+        const login = makeFetch([
+            { status: 200, body: { access_token: "at1", refresh_token: "rt1", expires_in: 90, user: identity } },
+        ]);
+        await makeManager(login.fetchFn, nowRef).deviceLogin();
+
+        nowRef.t += 90 * 1000 + SessionRefreshSkewMs;
+        const refresh = makeFetch([{ status: 200, body: { access_token: "at2", refresh_token: "rt2", expires_in: 90 } }]);
+        const result = await makeManager(refresh.fetchFn, nowRef).ensureFreshSession();
+
+        expect(result.ok).toBe(true);
+        expect(result.identity).toEqual(identity);
+        const tokenCalls = refresh.calls.filter((c) => c.url.endsWith("/cli/token"));
+        expect(tokenCalls).toHaveLength(1);
+        expect(tokenCalls[0].body.grant_type).toBe("refresh_token");
+        expect(tokenCalls[0].body.refresh_token).toBe("rt1");
+        expect(readStoredSession().accessToken).toBe("at2");
+    });
+
+    it("makes zero token calls when the stored session is still fresh", async () => {
+        const nowRef = { t: 1_000 };
+        const login = makeFetch([
+            { status: 200, body: { access_token: "at1", refresh_token: "rt1", expires_in: 7_776_000, user: identity } },
+        ]);
+        await makeManager(login.fetchFn, nowRef).deviceLogin();
+
+        const refresh = makeFetch([]);
+        const result = await makeManager(refresh.fetchFn, nowRef).ensureFreshSession();
+
+        expect(result.ok).toBe(true);
+        expect(result.identity).toEqual(identity);
+        expect(refresh.calls).toHaveLength(0);
+    });
+
+    it("degrades truthfully (no throw, no network) when an expired session has no refresh token", async () => {
+        const nowRef = { t: 1_000 };
+        const login = makeFetch([{ status: 200, body: { access_token: "at1", expires_in: 90, user: identity } }]);
+        await makeManager(login.fetchFn, nowRef).deviceLogin();
+
+        nowRef.t += 90 * 1000 + SessionRefreshSkewMs;
+        const refresh = makeFetch([]);
+        const result = await makeManager(refresh.fetchFn, nowRef).ensureFreshSession();
+
+        expect(result.ok).toBe(false);
+        expect(result.identity).toEqual(identity);
+        expect(refresh.calls).toHaveLength(0);
     });
 });
 

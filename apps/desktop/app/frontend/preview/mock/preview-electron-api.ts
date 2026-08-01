@@ -65,6 +65,7 @@ const previewElectronApi: ElectronApi = {
     getRecoderIdentity: () => Promise.resolve(null),
     recoderSignIn: () => Promise.resolve({ ok: false }),
     recoderSignOut: () => Promise.resolve({ ok: true }),
+    ensureRecoderSession: () => Promise.resolve({ ok: true }),
     selectDirectory: () => Promise.resolve(null),
     isGitRepo: (_dirPath: string) => Promise.resolve(true),
     gitInit: (_dirPath: string) => Promise.resolve(false),
