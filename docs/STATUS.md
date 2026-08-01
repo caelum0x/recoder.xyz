@@ -151,8 +151,7 @@ unification**, not more app-security code.
 3. **Desktop distribution** — no signed/notarized dmg, arm64-only; Lance vector
    store + Python sidecars ship dead-by-design (owner-gated packaging Bucket B).
 4. **Phase A auth consolidation** — `users → user` backfill written but unrun on
-   prod; `RECODER_AUTH_BACKEND_SEAM` off; compat bridge still live. See
-   **[archive/RECODER-NEXT-PHASE.md](./archive/RECODER-NEXT-PHASE.md)**.
+   prod; `RECODER_AUTH_BACKEND_SEAM` off; compat bridge still live.
 5. **(closed 2026-07-25)** ~~tensorzero CLI-run inference routing~~ — now wired
    (`bootstrap/index.ts:598-601`); CLI agent tokens route through the gateway.
    Remaining tensorzero item: `feedback()` RLHF on merge/approve has no caller.
@@ -166,33 +165,3 @@ unification**, not more app-security code.
 - Desktop packaging Bucket B (x64/universal native, Lance, Python sidecars, signed dmg).
 - **Establish a canonical trunk** (origin/main frozen ~2 months; ~552 conflicts) — nothing ships repeatably until one branch is authoritative (parity P0 #5).
 - **Re-enable a minimal green CI core** (test + secret-scan on PR) — all 33 workflows currently disabled (parity P0 #6); then rotate historical git-history secrets (#12/#13).
-
-## Doc hygiene (2026-07-25 cleanup)
-
-Removed (stale/misleading): `app/PROJECT_STATUS.txt`, `app/PHASE_6_SUMMARY.txt`,
-`app/REBUILD_SUMMARY.txt`, `docs/RECODER-BACKEND/FILE-TREE.md`, `docs/ideas/*` junk.
-Archived (historical/completed): `docs/archive/GAP-AUDIT.md`,
-`docs/archive/BUILD-ORDER.md`. Rewrote: `backend/README.md` (was the retired
-Docker backend). Corrected: FUSION-STATUS tensorzero row; `AGENTS.md` dead
-capability-map link. This file is the new top-level status entry point.
-
-**2026-07-31 pass:** added the *Security* + *Multi-tenant hardening* sections and the
-parity-roadmap links above; fixed the dead `RECODER-NEXT-PHASE.md` link (now under
-`archive/`); scrubbed stale present-tense "cockpit" references from the live docs
-(the Preact cockpit SPA was deleted 2026-07-31, recoder-flgn); added
-**[SECURITY-POSTURE.md](./SECURITY-POSTURE.md)** to the index.
-
-**2026-07-31 end-of-day pass:** reflected the isolation/hardening tranche that landed
-after the earlier pass — both P0 IDORs, the 17-hole 6-domain IDOR wave + group residual,
-auto-reconcile, durable run/event store + event-log idempotency, solo-mode boot guard,
-security headers, CSRF/CORS guard, billing plan-alias/quota/no-free-paid, desktop
-needs-input + agent-install, diff-comment→agent, onboarding probe, plan-limits drift,
-and the completion of the last two IDOR domains (`interop`/`edge`; 2 holes fixed, 1 residual
-filed). Reframed the multi-tenant section from "in progress" to "isolation closed; enablement
-owner-gated," and marked the corresponding ✅ items in **CONDUCTOR-PARITY-AND-SHIPPABILITY.md**
-and **SECURITY-POSTURE.md** §1.2 with commit refs. Truthful residuals kept: the web-side
-auth-model prod-validation (Next/Better-Auth `orgId` + `user`/`users` reconciliation);
-billing-provider unification (#4) remains, but dunning-grace + overage upgrade-CTA (#29/#30)
-are now code-landed; A2A ed25519 (#27) is now enforced for **external ingress** (HMAC-only
-untrusted requests refused), internal per-actor enforcement pending; backend org auto-provisioning
-+ `principal.orgId` landed (web session `orgId` still owner-gated).
