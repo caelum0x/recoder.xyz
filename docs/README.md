@@ -12,6 +12,25 @@ power behind it.
 
 ---
 
+## 📘 User guide (how to use Recoder)
+
+New here, or looking for end-user instructions? The **[User Guide](guide/README.md)**
+is the task-oriented walkthrough — install, first parallel run, connecting agents
+(Claude Code, Codex, opencode, …), review/converge/merge, governance, and BYOK.
+
+| Guide | What it covers |
+|---|---|
+| [What is Recoder?](guide/01-what-is-recoder.md) | The idea, who it's for, how it differs. |
+| [Install](guide/02-install.md) | Signed macOS DMG, first run, what the app starts. |
+| [Quickstart](guide/03-quickstart.md) | Your first parallel run, end to end. |
+| [Connect your agents](guide/04-connect-agents.md) | Claude Code, Codex, opencode, Cursor, Gemini CLI, and more. |
+| [Review, converge & merge](guide/05-review-converge-merge.md) | Compare N runs → converge → governed merge. |
+| [Governance & approvals](guide/06-governance-and-approvals.md) | Policy gate, approvals, audit trail, compliance export. |
+| [Bring your own keys (BYOK)](guide/07-byok-and-keys.md) | Provider keys vs platform keys; never proxied. |
+| [Troubleshooting](guide/08-troubleshooting.md) | Not-connected/not-available states and fixes. |
+
+---
+
 ## Product & strategy
 
 | Doc | What it is |
