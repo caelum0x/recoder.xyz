@@ -105,7 +105,10 @@ import { createSubstrateScan } from './adapters/substrate-scan.adapter.js';
 import { TerminalStreamService } from './terminal/terminal-stream.js';
 import { buildConductorRoutes } from './routes/conductor.routes.js';
 import { buildConductorMcpTools } from './mcp/conductor-engine.js';
-import { buildConductorWriteTools } from './mcp/conductor-write-tools.js';
+import {
+  buildConductorWriteTools,
+  buildConductorPreviewEvidenceTools,
+} from './mcp/conductor-write-tools.js';
 import type { McpInjectPort } from './ports/mcp-inject.port.js';
 import { buildConductorHealth } from './health.js';
 import {
@@ -232,6 +235,11 @@ import {
   loadEvidenceSigningKey,
   signEvidenceExport,
 } from './evidence/evidence-signing.js';
+import {
+  renderPreviewEvidence,
+  signPreviewEvidence,
+  type PreviewEvidencePack,
+} from './evidence/preview-evidence.js';
 import type { KeyObject } from 'node:crypto';
 import {
   planConvergence as planConvergenceOp,
@@ -2409,6 +2417,50 @@ export class ConductorComposer implements ConductorModule {
     );
   }
 
+  /**
+   * VERIFY the workspace's preview URL AND attach the outcome as a SIGNED,
+   * content-hashed evidence pack (BE-6.2) — the "preview browser-verify +
+   * evidence-attach" governed composition. Runs the already-gated
+   * {@link verifyPreview} (browser navigate → assert → screenshot, sealed into the
+   * durable audit chain), then lifts the SAME verification outcome into a portable
+   * {@link PreviewEvidencePack} and SIGNS it with the configured Ed25519 evidence
+   * key (reusing the convergence-export signing primitive). Degrade-truthful: a
+   * blocked verdict / missing workspace / no stored preview URL returns the
+   * verification's own `ok:false` + reason (no pack); a `skipped(degraded)` browser
+   * run yields a truthful skipped-but-signed pack, never a fabricated pass; an
+   * absent signing key ⇒ an UNSIGNED pack (`signature:null`), never a forged one.
+   */
+  async attachPreviewEvidence(
+    workspaceId: string,
+    principal: Principal,
+    options?: PreviewVerifyOptions
+  ): Promise<ConductorWriteResult<PreviewEvidencePack>> {
+    const result = await this.verifyPreview(workspaceId, principal, options);
+    if (!result.ok || !result.value) {
+      return {
+        ok: false,
+        verdict: result.verdict,
+        ...(result.reason ? { reason: result.reason } : {}),
+      };
+    }
+    // Read-only provenance enrichment (the workspace exists — verify returned ok).
+    // A missing record or absent url degrades the subject fields, never the pack.
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    const url =
+      (workspace?.metadata as Record<string, unknown> | undefined)?.previewUrl;
+    const pack = renderPreviewEvidence({
+      workspaceId,
+      url: typeof url === 'string' ? url : '',
+      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+      verification: result.value,
+    });
+    const sealed = signPreviewEvidence(pack, {
+      privateKey: this.resolveEvidenceSigningKey(),
+      logger: this.log,
+    });
+    return { ok: true, verdict: result.verdict, value: sealed };
+  }
+
   async archiveWorkspace(
     workspaceId: string,
     principal: Principal
@@ -3139,7 +3191,11 @@ export class ConductorComposer implements ConductorModule {
     // Read-only introspection tools + the governed write tools (steer/stop/advance).
     // Every write tool delegates to this composer's already-gated method, so the
     // host-boundary gate and the module's own write seam BOTH apply.
-    return [...buildConductorMcpTools(this), ...buildConductorWriteTools(this)];
+    return [
+      ...buildConductorMcpTools(this),
+      ...buildConductorWriteTools(this),
+      ...buildConductorPreviewEvidenceTools(this),
+    ];
   }
 
   async health(): Promise<ComponentHealth> {
