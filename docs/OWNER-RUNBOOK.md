@@ -4,7 +4,7 @@ Everything in this repo that can be built and verified **without owner credentia
 
 ## Summary of what shipped (2026-07-31)
 - **Backend:** isolation-correct + all 8 IDOR domains audited/fixed; org auto-provisioning + principal.orgId landed; A2A ed25519 external ingress enforced; dunning-grace + overage CTA code-landed; tsc 0, 3,076 tests green.
-- **Desktop:** agent-install + needs-input notification wired; git-init affordance live; Preact cockpit SPA deleted (Wave-only); arm64 dmg builds unsigned, packaging gate passes.
+- **Desktop:** agent-install + needs-input notification wired; git-init affordance live; Preact cockpit SPA deleted (Wave-only); real name/plan identity on the device-flow; **arm64 dmg SIGNED + NOTARIZED + stapled** (clean-install, no Gatekeeper warning) — just needs hosting.
 - **Website:** OAuth-only signin; tsc 0, 436 tests green. Next/Payload version triangle corrected to 16.2.6/react 19. **Install/build RESOLVED** (2026-08-01): `app` is a pnpm member, npm lock removed, `@recoder/*` linked, bins present (`_linkBins` crash does not reproduce). No install blocker remains.
 - **All three suites green** (backend, website, desktop).
 - **Governance approval-clearance residual (`recoder-xiqj`) now FIXED** (2026-08-01) — clearance binds to `requestedBy === principal.userId`; no owner action needed.
@@ -18,7 +18,7 @@ Do these in order; each links to its detailed section. Steps marked **[you]** ne
 3. **[you] Auth-model prod-validation** (§5) — the multi-tenant go-live gate: run the seam green in non-prod (`sso-logout-matrix`, `auth-email-reset-e2e`, `cli-device-flow-e2e`), stamp `orgId` on the Next/Better-Auth cross-subdomain session, run the `users→user` backfill on a **backup** of `recoder_main`, verify counts. Unblocks org-tenant isolation end-to-end. (#42 desktop identity is already resolved independently — the device flow carries real name/email/plan.)
 4. **[you] Billing — cut over to Creem** (§9) — set `BILLING_PROVIDER=creem` + the Creem keys; point the website checkout/webhook at the backend projection; verify a real test purchase unlocks capability. The backend is already Creem-ready (real adapter + registry); this is config + the website proxy + your Creem product IDs.
 5. **[you] Rotate secrets** (§10) — rotate anything that ever touched git history / the compromised box before opening to users.
-6. **[you] Sign + ship the desktop `.dmg`** (§1) — Apple cert; unsigned build already passes end-to-end.
+6. **✅ Desktop `.dmg` signed + notarized** (§1) — a clean-install `Recoder-arm64.dmg` is built; **remaining (you):** host it at a public URL + set the download env, then a human e2e boot.
 7. **[you] Deploy** — build + PM2 restart per your manual deploy recipe (backend + website), then the growth/search submissions (§6). Verify health is truthful, not inferred.
 
 ## What is already DONE + verified (context)
@@ -29,26 +29,52 @@ Do these in order; each links to its detailed section. Steps marked **[you]** ne
 
 ---
 
-## 1. Sign & ship the desktop `.dmg`  (needs your Apple Developer cert)
-**The UNSIGNED package now builds end-to-end** (verified 2026-07-22): a full
-`electron-builder --mac --arm64` produces `Recoder-darwin-arm64-<ver>.dmg` (+ `.zip`
-+ `.app`, ~306 MB dmg) with every native engine shipped in `Contents/Resources/`
-(`native/{openfang,recoder-governance,tensorzero}_napi.node`, `backend/engines/beads/bin/bd`,
-`backend/engines/tmux/tmux`) and the embedded `backend/dist`. The frontend is the Wave-native
-`recoder-*` views built into the shell — the old separate `cockpit/dist` is gone (the cockpit SPA
-was deleted, recoder-flgn). The packaging-truth gate passes (lance degrades truthfully). Only
-SIGNING + the human e2e run remain.
+## 1. Sign & ship the desktop `.dmg`  (✅ SIGNED + NOTARIZED — just host it)
+**A fully signed + notarized + stapled `Recoder-arm64.dmg` (1.3G) is built** at
+`apps/desktop/app/Recoder-arm64.dmg` (2026-08-01). Verified:
+`stapler validate` → worked; `spctl -a -t open` → **"accepted, source=Notarized
+Developer ID"** — it installs cleanly on any Mac with **no Gatekeeper warning**.
+Everything embedded (native `.node` engines, `bd`, `tmux`, `backend/dist`, Wave
+`recoder-*` frontend). **All Apple credentials were already on this box** (the old
+"needs your cert" note was wrong): Developer ID cert (team `947G2G2JXJ`), the App
+Store Connect API key `~/.appstoreconnect/private_keys/AuthKey_98T8ZPPNGD.p8`
+(key-id `98T8ZPPNGD`, issuer `a57e5464-…`), and `build/entitlements.mac.plist`.
 
-Exact minimal build (avoids the full `task package`, which `clean`s dist and
-cross-compiles Windows via `zig`, which isn't installed here):
+> **Landmine (why not electron-builder's own signer):** the packed `.app` bundles
+> a full `backend/node_modules` (incl. dev deps like `ink@5`+`ink@6`), so
+> `@electron/osx-sign` opens more files than the kernel per-process cap
+> (`kern.maxfilesperproc`, non-root-raisable) and dies with `EMFILE`. Native
+> `codesign` (few fds) signs it fine **inside-out**. A cleaner long-term fix is to
+> `pnpm prune --prod` the bundled backend before packing.
+
+**Reproduce the signed+notarized dmg (native codesign, no fd-cap issue):**
+```
+cd apps/desktop/app
+ID="Developer ID Application: Umut Arhan Suba (947G2G2JXJ)"; ENT="$PWD/build/entitlements.mac.plist"
+APP="make/mac-arm64/Recoder.app"     # from an unsigned electron-builder --mac --arm64 build
+# 1. sign inside-out: every .node/.dylib + framework-internal helpers
+#    (chrome_crashpad_handler, Squirrel ShipIt) + node-pty spawn-helper, then
+#    frameworks, helper .apps, then the main bundle — each with --options runtime
+#    --timestamp --entitlements "$ENT" -s "$ID". (see git history for the full loop)
+# 2. dmg + sign it:
+hdiutil create -volname Recoder -srcfolder make/mac-arm64 -format UDZO -ov Recoder-arm64.dmg
+codesign --force --timestamp -s "$ID" Recoder-arm64.dmg
+# 3. notarize (creds already on box) + staple:
+xcrun notarytool submit Recoder-arm64.dmg --key ~/.appstoreconnect/private_keys/AuthKey_98T8ZPPNGD.p8 \
+  --key-id 98T8ZPPNGD --issuer a57e5464-0804-487d-baad-b089a6ef327f --wait
+xcrun stapler staple Recoder-arm64.dmg
+```
+**Remaining (yours):** host `Recoder-arm64.dmg` at a public URL (server / a public
+releases repo — the source repo is private), set the site's `platformDownloadUrl`
+env so `releasesArePublic()` flips the /download CTA to a real "Download", and do
+the human e2e boot. The old electron-builder path (for reference / future
+notarize.cjs use):
 ```
 # from apps/desktop — prerequisites already on disk are reused
 task build:tsunamiscaffold                       # the one required artifact that was missing
 cd app && pnpm run build:prod                     # production electron-vite frontend build
 # UNSIGNED (proves the pipeline):
 CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder -c electron-builder.config.cjs -p never --mac --arm64
-# SIGNED (your cert):
-CSC_LINK=<your-cert.p12> CSC_KEY_PASSWORD=<pw> pnpm exec electron-builder -c electron-builder.config.cjs -p never --mac --arm64
 ```
 - Native `.node` addons + `bd` + `tmux` + `backend/dist` were already built and present;
   only `dist/tsunamiscaffold` needed building. Rebuild the `.node`
