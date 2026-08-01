@@ -18,13 +18,11 @@ import { blockViewToIcon, blockViewToName } from "./blockutil";
 import { HelpViewModel } from "@/view/helpview/helpview";
 import { RecoderViewModel } from "@/app/view/recoder/recoder-model";
 import { RecoderTerminalViewModel } from "@/app/view/recoder/recoder-terminal-model";
-import { RecoderLaunchViewModel } from "@/app/view/recoder-launch/recoder-launch-model";
 import { RecoderApprovalsViewModel } from "@/app/view/recoder-approvals/recoder-approvals-model";
 import { RecoderDiffViewModel } from "@/app/view/recoder-diff/recoder-diff-model";
 import { RecoderBoardViewModel } from "@/app/view/recoder-board/recoder-board-model";
 import { RecoderMemoryViewModel } from "@/app/view/recoder-memory/recoder-memory-model";
 import { RecoderRunsViewModel } from "@/app/view/recoder-runs/recoder-runs-model";
-import { RetiredViewModel } from "@/app/view/retired/retired";
 import { RecoderSettingsViewModel } from "@/app/view/recoder-settings/recoder-settings-model";
 import { TermViewModel } from "@/view/term/term-model";
 import { WaveAiModel } from "@/view/waveai/waveai";
@@ -47,22 +45,15 @@ BlockRegistry.set("waveconfig", WaveConfigViewModel);
 BlockRegistry.set("processviewer", ProcessViewerViewModel);
 BlockRegistry.set("recoder", RecoderViewModel);
 BlockRegistry.set("recoder-terminal", RecoderTerminalViewModel);
-BlockRegistry.set("recoder-launch", RecoderLaunchViewModel);
 BlockRegistry.set("recoder-approvals", RecoderApprovalsViewModel);
 BlockRegistry.set("recoder-diff", RecoderDiffViewModel);
 BlockRegistry.set("recoder-board", RecoderBoardViewModel);
-// recoder-tools / recoder-hands / recoder-connectors: retired infra dashboards
-// (OpenHands-derived "hands", OSS engine names, green success pills) — tombstoned
-// like recoder-openfang per rule 4b + the "no infra dashboards" north star, so a
-// saved layout renders the tombstone instead of the dashboard. Files kept (owner
-// precedent); their bg-success greens are now unreachable.
-BlockRegistry.set("recoder-tools", RetiredViewModel);
 BlockRegistry.set("recoder-memory", RecoderMemoryViewModel);
 BlockRegistry.set("recoder-runs", RecoderRunsViewModel);
-BlockRegistry.set("recoder-hands", RetiredViewModel);
-BlockRegistry.set("recoder-openfang", RetiredViewModel);
-BlockRegistry.set("recoder-connectors", RetiredViewModel);
 BlockRegistry.set("recoder-settings", RecoderSettingsViewModel);
+// Retired views (recoder-tools/-hands/-openfang/-connectors/-health/-launch) were
+// removed 2026-08-01; an old saved layout referencing one falls through to a
+// neutral default view (makeDefaultViewModel), never a crash.
 
 function makeDefaultViewModel(viewType: string): ViewModel {
     const viewModel: ViewModel = {
