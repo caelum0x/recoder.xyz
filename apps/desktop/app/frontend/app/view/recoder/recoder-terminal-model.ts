@@ -47,6 +47,17 @@ type ParsedStreamFrame =
     | { kind: "complete" };
 
 const MaxScrollbackLines = 5000;
+const ReconnectBaseMs = 500;
+const ReconnectCapMs = 15_000;
+const MaxReconnectAttempts = 6;
+
+// Capped exponential backoff with jitter for the run-event socket (pure/testable):
+// the delay for `attempt` falls within [half, full] of min(cap, base * 2^attempt),
+// so a backend crash-restart or loopback blip recovers without a thundering herd.
+function reconnectDelayMs(attempt: number): number {
+    const ceiling = Math.min(ReconnectCapMs, ReconnectBaseMs * 2 ** Math.max(0, attempt));
+    return Math.round(ceiling / 2 + Math.random() * (ceiling / 2));
+}
 const WorkspaceIdMetaKey = "recoder:workspaceid";
 // RunEventType values from packages/agent-os domain/event.ts, mirrored (like
 // RecoderRunEvent above) so bare frames can be recognized without coupling to
@@ -124,6 +135,8 @@ class RecoderTerminalViewModel implements ViewModel {
     sendStatusAtom: PrimitiveAtom<string>;
     socket: WebSocket;
     disposed: boolean;
+    reconnectAttempt: number;
+    reconnectTimer: ReturnType<typeof setTimeout> | null;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -140,14 +153,19 @@ class RecoderTerminalViewModel implements ViewModel {
         this.sendStatusAtom = atom("") as PrimitiveAtom<string>;
         this.socket = null;
         this.disposed = false;
+        this.reconnectAttempt = 0;
+        this.reconnectTimer = null;
     }
 
     get viewComponent(): ViewComponent {
         return RecoderTerminalView;
     }
 
-    connect(): void {
+    connect(isRetry = false): void {
         if (this.disposed) return;
+        this.clearReconnectTimer();
+        // A manual (re)connect resets the backoff budget; an auto-retry preserves it.
+        if (!isRetry) this.reconnectAttempt = 0;
         this.teardownSocket();
 
         const block = globalStore.get(this.blockAtom);
@@ -180,6 +198,7 @@ class RecoderTerminalViewModel implements ViewModel {
 
         socket.onopen = () => {
             if (this.socket !== socket) return;
+            this.reconnectAttempt = 0;
             globalStore.set(this.statusAtom, "connected");
         };
         socket.onmessage = (ev: MessageEvent) => {
@@ -197,10 +216,39 @@ class RecoderTerminalViewModel implements ViewModel {
             if (this.socket !== socket) return;
             this.socket = null;
             if (this.disposed) return;
-            if (globalStore.get(this.statusAtom) != "error") {
-                globalStore.set(this.statusAtom, "closed");
-            }
+            // An unexpected close (deliberate teardown nulls this handler first) —
+            // auto-reconnect with capped backoff instead of sitting dead.
+            this.scheduleReconnect();
         };
+    }
+
+    // Reconnect the run-event socket after an unexpected drop, with capped
+    // exponential backoff + jitter; give up truthfully after MaxReconnectAttempts
+    // so the view shows "press Reconnect" rather than spinning forever.
+    scheduleReconnect(): void {
+        if (this.disposed) return;
+        this.clearReconnectTimer();
+        if (this.reconnectAttempt >= MaxReconnectAttempts) {
+            globalStore.set(this.statusAtom, "closed");
+            if (globalStore.get(this.errorAtom) == "") {
+                globalStore.set(this.errorAtom, "disconnected — press Reconnect to resume the stream");
+            }
+            return;
+        }
+        const delay = reconnectDelayMs(this.reconnectAttempt);
+        globalStore.set(this.statusAtom, "connecting");
+        this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            this.reconnectAttempt += 1;
+            this.connect(true);
+        }, delay);
+    }
+
+    clearReconnectTimer(): void {
+        if (this.reconnectTimer != null) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
     }
 
     handleMessage(raw: unknown): void {
@@ -311,12 +359,14 @@ class RecoderTerminalViewModel implements ViewModel {
 
     dispose(): void {
         this.disposed = true;
+        this.clearReconnectTimer();
         this.teardownSocket();
     }
 }
 
 export {
     parseStreamFrame,
+    reconnectDelayMs,
     RecoderTerminalViewModel,
     toWebSocketUrl,
     type ParsedStreamFrame,
