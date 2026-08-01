@@ -125,3 +125,31 @@ describe("RecoderTerminalViewModel.handleMessage", () => {
         expect(globalStore.get(model.linesAtom)).toHaveLength(0);
     });
 });
+
+describe("RecoderTerminalViewModel.entriesAtom (structured run stream)", () => {
+    it("accumulates a classified descriptor entry per RunEvent", () => {
+        const model = makeModel();
+        model.handleMessage(JSON.stringify(BareLogEvent));
+        const entries = globalStore.get(model.entriesAtom);
+        expect(entries).toHaveLength(1);
+        expect(entries[0]).toMatchObject({ kind: "event", descriptor: { label: "Log", severity: "info" } });
+    });
+
+    it("threads a decidable approvalId onto an approval_requested entry", () => {
+        const model = makeModel();
+        model.handleMessage(
+            JSON.stringify({ ...BareLogEvent, type: "approval_requested", data: { approvalId: "appr-7" } })
+        );
+        const [entry] = globalStore.get(model.entriesAtom);
+        expect(entry).toMatchObject({ kind: "event", descriptor: { label: "Needs approval", approvalId: "appr-7" } });
+    });
+
+    it("records stream error/complete as toned system entries", () => {
+        const model = makeModel();
+        model.handleMessage(JSON.stringify({ type: "error", message: "boom" }));
+        model.handleMessage(JSON.stringify({ type: "complete" }));
+        const entries = globalStore.get(model.entriesAtom);
+        expect(entries[0]).toEqual({ kind: "system", text: "[stream error] boom", tone: "error" });
+        expect(entries[1]).toEqual({ kind: "system", text: "[stream complete]", tone: "muted" });
+    });
+});

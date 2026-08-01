@@ -4,8 +4,15 @@
 import { globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
-import { describeRunEvent, formatRunEventLine } from "./recoder-run-event";
+import { describeRunEvent, formatRunEventLine, type RunEventDescriptor } from "./recoder-run-event";
 import { RecoderTerminalView } from "./recoder-terminal";
+
+// A structured entry the rich run view renders: either a classified RunEvent
+// (rendered as an icon/severity block, with inline approve/deny when it carries a
+// decidable approvalId) or a system line (stream error/complete).
+type RunStreamEntry =
+    | { kind: "event"; descriptor: RunEventDescriptor }
+    | { kind: "system"; text: string; tone: "error" | "muted" };
 
 type RecoderTerminalStatus = "idle" | "no-workspace" | "connecting" | "connected" | "closed" | "error";
 
@@ -109,6 +116,7 @@ class RecoderTerminalViewModel implements ViewModel {
     blockId: string;
     blockAtom: Atom<Block>;
     linesAtom: PrimitiveAtom<string[]>;
+    entriesAtom: PrimitiveAtom<RunStreamEntry[]>;
     statusAtom: PrimitiveAtom<RecoderTerminalStatus>;
     errorAtom: PrimitiveAtom<string>;
     workspaceIdAtom: PrimitiveAtom<string>;
@@ -124,6 +132,7 @@ class RecoderTerminalViewModel implements ViewModel {
         this.viewName = atom("Recoder Session");
         this.blockAtom = initOpts.waveEnv.wos.getWaveObjectAtom<Block>(`block:${initOpts.blockId}`);
         this.linesAtom = atom([]) as PrimitiveAtom<string[]>;
+        this.entriesAtom = atom([]) as PrimitiveAtom<RunStreamEntry[]>;
         this.statusAtom = atom("idle") as PrimitiveAtom<RecoderTerminalStatus>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
         this.workspaceIdAtom = atom("") as PrimitiveAtom<string>;
@@ -202,14 +211,17 @@ class RecoderTerminalViewModel implements ViewModel {
             // the socket is workspace-scoped and follow-up sendMessage runs
             // stream through it, so a finished RUN must not close the stream.
             this.appendLine(formatEvent(frame.event));
+            this.appendEntry({ kind: "event", descriptor: describeRunEvent(frame.event) });
             return;
         }
         if (frame.kind == "error") {
             globalStore.set(this.errorAtom, frame.message);
             this.appendLine(`[stream error] ${frame.message}`);
+            this.appendEntry({ kind: "system", text: `[stream error] ${frame.message}`, tone: "error" });
             return;
         }
         this.appendLine("[stream complete]");
+        this.appendEntry({ kind: "system", text: "[stream complete]", tone: "muted" });
     }
 
     appendLine(text: string): void {
@@ -219,6 +231,15 @@ class RecoderTerminalViewModel implements ViewModel {
                 ? [...prev.slice(prev.length - MaxScrollbackLines + 1), text]
                 : [...prev, text];
         globalStore.set(this.linesAtom, next);
+    }
+
+    appendEntry(entry: RunStreamEntry): void {
+        const prev = globalStore.get(this.entriesAtom);
+        const next =
+            prev.length >= MaxScrollbackLines
+                ? [...prev.slice(prev.length - MaxScrollbackLines + 1), entry]
+                : [...prev, entry];
+        globalStore.set(this.entriesAtom, next);
     }
 
     // Send a follow-up instruction: POST it as a NEW agent run in the same
@@ -301,4 +322,5 @@ export {
     type ParsedStreamFrame,
     type RecoderRunEvent,
     type RecoderTerminalStatus,
+    type RunStreamEntry,
 };
