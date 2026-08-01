@@ -16,6 +16,12 @@ import type { ProviderCredential } from '../config.js';
 import type { Logger } from '../../../shared/logger.js';
 import { AppError, ErrorCode, createError } from '../../../shared/errors.js';
 import {
+  CircuitBreaker,
+  type Clock,
+  type Random,
+  type Sleep,
+} from '../../../shared/outbound-resilience.js';
+import {
   degraded,
   healthy,
   unhealthy,
@@ -35,6 +41,12 @@ export interface ProviderAdapterDeps {
   /** The plan catalog — used to map provider product ids ↔ plan tiers. */
   readonly catalog: PlanCatalog;
   readonly logger?: Logger;
+  /**
+   * Optional outbound-resilience knobs (breaker + idempotent-GET retry). Absent
+   * in production ⇒ a fresh per-adapter {@link CircuitBreaker} with default
+   * thresholds and the real clock/RNG/timer. Injected in tests for determinism.
+   */
+  readonly resilience?: ProviderResilienceOptions;
 }
 
 /** Resolve the API base URL: injected override wins, else the provider default. */
@@ -102,6 +114,133 @@ export async function providerFetch<T>(opts: ProviderFetchOptions): Promise<T> {
     );
   }
   return json as T;
+}
+
+/* ------------------------------------------------------------------ *
+ * Outbound resilience: per-provider circuit breaker + idempotent retry *
+ * ------------------------------------------------------------------ */
+
+/**
+ * Injectable resilience knobs. Every field is optional and defaults to a
+ * production-safe value; tests inject a shared `breaker`, a fake `now`/`sleep`/
+ * `random`, or tighter budgets to make the state machine deterministic. Read-only
+ * consumer of `../../../shared/outbound-resilience` — that primitive is never
+ * modified here.
+ */
+export interface ProviderResilienceOptions {
+  /** Reuse an existing breaker instead of minting a fresh per-adapter one. */
+  readonly breaker?: CircuitBreaker;
+  /** Consecutive failures that trip the provider circuit OPEN. Default 5. */
+  readonly failureThreshold?: number;
+  /** How long the circuit stays OPEN before a half-open probe, in ms. Default 30s. */
+  readonly cooldownMs?: number;
+  /** Injected clock for the breaker (defaults to the real `Date.now`). */
+  readonly now?: Clock;
+  /** Total attempts (incl. the first) for an IDEMPOTENT GET. Default 3. */
+  readonly maxAttempts?: number;
+  /** Backoff base for the idempotent-GET retry, in ms. Default 100. */
+  readonly baseDelayMs?: number;
+  /** Upper bound on any single idempotent-GET backoff delay, in ms. Default 30s. */
+  readonly maxDelayMs?: number;
+  /** Injected RNG in [0,1) for the retry jitter (defaults to `Math.random`). */
+  readonly random?: Random;
+  /** Injected abortable delay for the retry backoff (defaults to a real timer). */
+  readonly sleep?: Sleep;
+}
+
+/** The resilient outbound transport shared by an adapter's read + write calls. */
+export interface ProviderTransport {
+  /**
+   * Perform one provider HTTP call under the circuit breaker. A `GET` is treated
+   * as IDEMPOTENT and wrapped in a bounded jittered retry; every other method
+   * (checkout-create POST, usage-ingest POST, cancel PATCH, …) runs exactly ONCE
+   * and is NEVER re-sent. While the circuit is OPEN this fast-fails with a
+   * truthful `CircuitOpenError` — never a fabricated response.
+   */
+  call<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    opts?: { readonly extraHeaders?: Readonly<Record<string, string>>; readonly timeoutMs?: number },
+  ): Promise<T>;
+  /** The breaker gating this transport (per provider) — exposed for inspection. */
+  readonly breaker: CircuitBreaker;
+}
+
+export interface ProviderTransportOptions {
+  /** The provider this transport speaks to — used as the breaker key. */
+  readonly provider: BillingProviderName;
+  /** Resolved API base URL (already trailing-slash-trimmed). */
+  readonly baseUrl: string;
+  /** The bearer / x-api-key credential (may be empty when unconfigured). */
+  readonly apiKey: string;
+  /** How the key is presented on the wire (defaults to bearer). */
+  readonly authScheme?: AuthScheme;
+  /** Optional resilience overrides (breaker reuse + deterministic seams). */
+  readonly resilience?: ProviderResilienceOptions;
+}
+
+/** A method is retry-safe only when it cannot duplicate a side effect. */
+function isIdempotentMethod(method: string): boolean {
+  return method.toUpperCase() === 'GET';
+}
+
+/**
+ * Build a per-provider resilient transport around {@link providerFetch}.
+ *
+ * The circuit breaker isolates this provider's downstream: once it trips OPEN,
+ * `call` fast-fails truthfully (the adapter maps that to `down` / `null` /
+ * `SERVICE_UNAVAILABLE`, never a faked success) until the cooldown allows a
+ * single half-open probe. Bounded retry is applied ONLY to idempotent `GET`
+ * reads (subscription lookups, health probes); a checkout-create or webhook-side
+ * `POST` is never retried, so a payment/usage side effect can never be duplicated.
+ */
+export function createProviderTransport(options: ProviderTransportOptions): ProviderTransport {
+  const r = options.resilience;
+  const breaker =
+    r?.breaker ??
+    new CircuitBreaker({
+      failureThreshold: r?.failureThreshold,
+      cooldownMs: r?.cooldownMs,
+      now: r?.now,
+    });
+  const key = options.provider;
+
+  async function call<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    opts?: { readonly extraHeaders?: Readonly<Record<string, string>>; readonly timeoutMs?: number },
+  ): Promise<T> {
+    const run = (): Promise<T> =>
+      providerFetch<T>({
+        baseUrl: options.baseUrl,
+        apiKey: options.apiKey,
+        method,
+        path,
+        body,
+        authScheme: options.authScheme,
+        extraHeaders: opts?.extraHeaders,
+        timeoutMs: opts?.timeoutMs,
+      });
+
+    // Non-idempotent writes: breaker-gated, but executed exactly once (no retry).
+    if (!isIdempotentMethod(method)) {
+      return breaker.execute(key, run);
+    }
+
+    // Idempotent reads/health: breaker-gated AND bounded jittered retry.
+    return breaker.execute(key, run, {
+      idempotent: true,
+      maxAttempts: r?.maxAttempts,
+      baseDelayMs: r?.baseDelayMs,
+      maxDelayMs: r?.maxDelayMs,
+      random: r?.random,
+      sleep: r?.sleep,
+    });
+  }
+
+  return { call, breaker };
 }
 
 /** Parse JSON, returning `{}` on malformed input (never throws). */
