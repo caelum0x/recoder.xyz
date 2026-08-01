@@ -37,9 +37,7 @@ is the task-oriented walkthrough — install, first parallel run, connecting age
 |---|---|
 | [PRODUCT-THESIS.md](PRODUCT-THESIS.md) | The convergence thesis + locked product decisions. **Read first.** |
 | [RECODER-PRODUCT-DESIGN.md](RECODER-PRODUCT-DESIGN.md) | Design principles: clean-first, backend/frontend split, no engine names in the UI. |
-| [STATUS.md](STATUS.md) | Single source of truth for where the product is right now. |
 | [SECURITY-POSTURE.md](SECURITY-POSTURE.md) | Honest security posture: the 21-vuln sweep (fixed) + residual risk + before-multi-tenant-launch checklist. |
-| [CONDUCTOR-PARITY-AND-SHIPPABILITY.md](CONDUCTOR-PARITY-AND-SHIPPABILITY.md) | Recoder vs Conductor.build parity + the "here → production multi-user" roadmap (P0/P1/P2 + critical path). |
 | [DESIGN-REFERENCE.md](DESIGN-REFERENCE.md) | Graphite / terminal-plain design system. |
 | [OWNER-RUNBOOK.md](OWNER-RUNBOOK.md) | Credential/release-gated owner actions. |
 
@@ -99,13 +97,11 @@ references):
 
 | Doc | What it is |
 |---|---|
-| [DESKTOP-UX-STATE-AND-PLAN.md](DESKTOP-UX-STATE-AND-PLAN.md) | Desktop UX state + remaining tracked work. |
-| [DESKTOP-PACKAGING-RUNBOOK.md](DESKTOP-PACKAGING-RUNBOOK.md) | Arch-aware packaging, signing, dmg. |
+| [OWNER-RUNBOOK.md](OWNER-RUNBOOK.md) | Credential/release-gated owner actions: sign/notarize/publish the dmg, sidecars, x64. |
 | [growth/SEARCH-SUBMISSION-RUNBOOK.md](growth/SEARCH-SUBMISSION-RUNBOOK.md) | GSC/Bing/IndexNow search submission. |
 
 ## Research & reference
 
 | Doc | What it is |
 |---|---|
-| [research/OSS-ADOPTION-2026-07.md](research/OSS-ADOPTION-2026-07.md) | OSS adoption roadmap (actively executed). |
 | [design-reference/conductor/README.md](design-reference/conductor/README.md) | Competitor design reference. |

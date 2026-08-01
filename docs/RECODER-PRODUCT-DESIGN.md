@@ -132,7 +132,7 @@ workspace/board mental model. The marketing home carries a dependency-free CSS-3
 `TiltCard` depth (Core-Web-Vitals-safe, reduced-motion aware, `aria-hidden`).
 
 Remaining product polish rides on real usage feedback; the desktop remainder is tracked in
-[DESKTOP-UX-STATE-AND-PLAN.md](./DESKTOP-UX-STATE-AND-PLAN.md) and backend follow-ups in
+`bd`, and backend follow-ups in
 [RECODER-BACKEND/ARCHITECTURE.md](./RECODER-BACKEND/ARCHITECTURE.md). The Wave shell hosts these
 views and consumes the backend workspace/auth edges only.
 
