@@ -143,6 +143,45 @@ function deriveSoc2Cc81(record: ConvergenceEvidenceRecord): EvidenceControl {
 }
 
 /**
+ * SOC 2 CC7.2 (detect + verify before promotion): the change was verified
+ * (readiness/checks) before it was promoted to the trusted branch. Verification
+ * unavailable OR a non-clean verdict ⇒ `partial` (truthful), never `met`. (A SOC 2
+ * lens on the same verification evidence DORA-ICT-CHANGE cites — auditors map both.)
+ */
+function deriveSoc2Cc72(record: ConvergenceEvidenceRecord): EvidenceControl {
+  const { verification } = record.evidence;
+  const base = {
+    id: 'SOC2-CC7.2',
+    framework: 'SOC 2',
+    title: 'Change verification before promotion',
+    requirement:
+      'The change is verified (readiness / checks) before it is promoted to the trusted branch.',
+    evidenceRefs: ['verification.available', 'verification.verdict', 'verification.blockers'],
+  } as const;
+
+  if (!verification.available) {
+    return {
+      ...base,
+      status: 'partial',
+      reason: verification.reason
+        ? `pre-merge verification unavailable: ${verification.reason}`
+        : 'pre-merge verification was unavailable',
+    };
+  }
+  const verdict = verification.verdict;
+  if (verdict !== 'ready' && verdict !== 'delivered') {
+    return {
+      ...base,
+      status: 'partial',
+      reason: verdict
+        ? `verification ran but the verdict is not delivery-clean (verdict='${verdict}')`
+        : 'verification available but no verdict was recorded',
+    };
+  }
+  return { ...base, status: 'met' };
+}
+
+/**
  * EU AI Act Art. 12 (record-keeping / logging): automatically generated, immutable
  * logs — actor + timestamp + candidate run provenance + a tamper-evident hash.
  */
@@ -170,6 +209,37 @@ function deriveEuAiActArt12(record: ConvergenceEvidenceRecord, integrityVerified
     return { ...base, status: 'partial', reason: 'no candidate run ids recorded (run provenance incomplete)' };
   }
   return { ...base, status: 'met' };
+}
+
+/**
+ * EU AI Act Art. 14 (human oversight): a high-risk / gated AI-produced change is
+ * subject to human oversight — evidenced by an explicit human approval, not merged
+ * fully autonomously. `met` requires a recorded `approvalId`. A high-risk change
+ * auto-allowed WITHOUT one is `partial` (oversight should have applied but didn't);
+ * a low/medium auto-allowed change is `not-evidenced` (no human touched it — truthful,
+ * not a failure). Never `met` without the backing approval.
+ */
+function deriveEuAiActArt14(record: ConvergenceEvidenceRecord): EvidenceControl {
+  const { governance } = record.evidence;
+  const base = {
+    id: 'EU-AI-ACT-ART14',
+    framework: 'EU AI Act',
+    title: 'Human oversight',
+    requirement:
+      'High-risk / gated changes are subject to human oversight (an explicit recorded approval), not merged fully autonomously.',
+    evidenceRefs: ['governance.approvalId', 'governance.riskTier', 'governance.effect'],
+  } as const;
+
+  if (governance.effect !== 'allow') {
+    return { ...base, status: 'not-evidenced', reason: `merge was not governance-allowed (effect='${governance.effect}')` };
+  }
+  if (governance.approvalId) {
+    return { ...base, status: 'met' };
+  }
+  if (HIGH_RISK_TIERS.includes(governance.riskTier)) {
+    return { ...base, status: 'partial', reason: `high-risk change (tier='${governance.riskTier}') auto-allowed without a recorded human approval` };
+  }
+  return { ...base, status: 'not-evidenced', reason: `low/medium change (tier='${governance.riskTier}') auto-allowed — no human oversight was exercised on this change` };
 }
 
 /**
@@ -303,7 +373,9 @@ export function renderEvidenceExport(
 
   const controls: readonly EvidenceControl[] = [
     deriveSoc2Cc81(record),
+    deriveSoc2Cc72(record),
     deriveEuAiActArt12(record, integrityVerified),
+    deriveEuAiActArt14(record),
     deriveDoraChangeControl(record),
     deriveConvergenceIntegrity(record, integrityVerified),
   ];
