@@ -4,8 +4,9 @@
 import { RecoderEmpty, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
-import { useEffect, useState } from "react";
-import { computeDiffLineAnchors } from "./recoder-diff-comments";
+import { useEffect, useRef, useState } from "react";
+import { computeDiffLineAnchors, type DiffLineAnchor } from "./recoder-diff-comments";
+import { parseDiffFileSections, type DiffFileSection } from "./recoder-diff-files";
 import {
     isFailedConclusion,
     RecoderDiffViewModel,
@@ -131,50 +132,166 @@ function InlineCommentComposer({
     );
 }
 
+// One rendered diff line. Keyed by its GLOBAL index into patch.split("\n") so the
+// anchor lookup and the open-composer state survive per-file grouping unchanged —
+// the composer's file:line context is exactly what it was in the flat render.
+function DiffLineRow({
+    line,
+    globalIndex,
+    anchor,
+    activeLine,
+    setActiveLine,
+    model,
+}: {
+    line: string;
+    globalIndex: number;
+    anchor: DiffLineAnchor;
+    activeLine: number;
+    setActiveLine: (i: number) => void;
+    model: RecoderDiffViewModel;
+}) {
+    const kind = diffLineKind(line);
+    const commentable = anchor != null && anchor.file != "" && anchor.line != null;
+    const anchorLabel = commentable ? `${anchor.file}:${anchor.line}${anchor.side == "old" ? " (old)" : ""}` : "";
+    return (
+        <div className="group">
+            <div className={cn("flex min-h-[1.25rem]", diffRowClass(kind))}>
+                <span className="select-none w-4 text-center opacity-70 font-mono">{diffGutter(kind)}</span>
+                <span className="flex-1 whitespace-pre">{line == "" ? " " : line}</span>
+                {commentable && (
+                    <button
+                        className="select-none opacity-0 group-hover:opacity-100 text-secondary/70 hover:text-accent transition-opacity px-1 text-[11px] cursor-pointer"
+                        title={`Comment on ${anchorLabel}`}
+                        onClick={() => setActiveLine(activeLine == globalIndex ? -1 : globalIndex)}
+                    >
+                        +💬
+                    </button>
+                )}
+            </div>
+            {activeLine == globalIndex && commentable && (
+                <InlineCommentComposer
+                    anchorLabel={anchorLabel}
+                    onSubmit={(bodyText) => {
+                        model.addComment(anchor.file, anchor.line, bodyText, anchor.side ?? undefined);
+                        setActiveLine(-1);
+                    }}
+                    onCancel={() => setActiveLine(-1)}
+                />
+            )}
+        </div>
+    );
+}
+
+function fileLabel(section: DiffFileSection): string {
+    return section.path != "" ? section.path : "(file)";
+}
+
+// The jump list above the diff: one row per file (path · +adds/-dels) that
+// scrolls to — and expands — its section. Only shown for multi-file diffs.
+function DiffFileList({ sections, onJump }: { sections: DiffFileSection[]; onJump: (i: number) => void }) {
+    return (
+        <div className="flex flex-col gap-0.5 rounded border border-border p-2 bg-panel">
+            <div className="text-xs uppercase tracking-wide text-secondary">{sections.length} files</div>
+            {sections.map((section, i) => (
+                <button
+                    key={i}
+                    className="flex items-center gap-2 text-left text-xs font-mono text-secondary hover:text-primary transition-colors cursor-pointer"
+                    title={`Jump to ${fileLabel(section)}`}
+                    onClick={() => onJump(i)}
+                >
+                    <span className="flex-1 truncate">{fileLabel(section)}</span>
+                    <span className="text-primary/70 shrink-0">+{section.adds}</span>
+                    <span className="text-error/70 shrink-0">-{section.dels}</span>
+                </button>
+            ))}
+        </div>
+    );
+}
+
+// The collapsible per-file header inside the diff. Sticky so the filename stays
+// visible while scrolling its hunks; the caret encodes collapsed/expanded.
+function DiffFileHeader({
+    section,
+    collapsed,
+    onToggle,
+}: {
+    section: DiffFileSection;
+    collapsed: boolean;
+    onToggle: () => void;
+}) {
+    return (
+        <button
+            className="flex w-full items-center gap-2 text-left text-xs font-mono text-secondary hover:text-primary transition-colors cursor-pointer py-0.5 sticky top-0 bg-panel z-10"
+            onClick={onToggle}
+        >
+            <span className="select-none w-3 text-center opacity-70">{collapsed ? "▸" : "▾"}</span>
+            <span className="flex-1 truncate text-primary/80">{fileLabel(section)}</span>
+            <span className="text-primary/70 shrink-0">+{section.adds}</span>
+            <span className="text-error/70 shrink-0">-{section.dels}</span>
+        </button>
+    );
+}
+
 function DiffBody({ patch, model }: { patch: string; model: RecoderDiffViewModel }) {
     const lines = patch.split("\n");
     const anchors = computeDiffLineAnchors(patch);
+    const sections = parseDiffFileSections(patch);
     // Which rendered line has its comment composer open (-1 = none). Local UI
     // state: the enqueued comments themselves live on the model.
     const [activeLine, setActiveLine] = useState(-1);
+    // Per-section collapsed flags (default expanded). Keyed by section index.
+    const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
+    const sectionRefs = useRef<Record<number, HTMLDivElement>>({});
+
+    const setCollapsedFor = (i: number, value: boolean) => setCollapsed((prev) => ({ ...prev, [i]: value }));
+
+    const jumpTo = (i: number) => {
+        setCollapsedFor(i, false);
+        // Expand first, then scroll on the next frame so the section is mounted.
+        requestAnimationFrame(() => sectionRefs.current[i]?.scrollIntoView({ block: "start" }));
+    };
+
     return (
-        <pre className="text-xs leading-5 font-mono whitespace-pre overflow-auto rounded border border-border p-2 bg-panel">
-            {lines.map((line, i) => {
-                const kind = diffLineKind(line);
-                const anchor = anchors[i];
-                const commentable = anchor != null && anchor.file != "" && anchor.line != null;
-                const anchorLabel = commentable
-                    ? `${anchor.file}:${anchor.line}${anchor.side == "old" ? " (old)" : ""}`
-                    : "";
-                return (
-                    <div key={i} className="group">
-                        <div className={cn("flex min-h-[1.25rem]", diffRowClass(kind))}>
-                            <span className="select-none w-4 text-center opacity-70 font-mono">{diffGutter(kind)}</span>
-                            <span className="flex-1 whitespace-pre">{line == "" ? " " : line}</span>
-                            {commentable && (
-                                <button
-                                    className="select-none opacity-0 group-hover:opacity-100 text-secondary/70 hover:text-accent transition-opacity px-1 text-[11px] cursor-pointer"
-                                    title={`Comment on ${anchorLabel}`}
-                                    onClick={() => setActiveLine(activeLine == i ? -1 : i)}
-                                >
-                                    +💬
-                                </button>
-                            )}
-                        </div>
-                        {activeLine == i && commentable && (
-                            <InlineCommentComposer
-                                anchorLabel={anchorLabel}
-                                onSubmit={(bodyText) => {
-                                    model.addComment(anchor.file, anchor.line, bodyText, anchor.side ?? undefined);
-                                    setActiveLine(-1);
-                                }}
-                                onCancel={() => setActiveLine(-1)}
+        <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
+            {sections.length > 1 && <DiffFileList sections={sections} onJump={jumpTo} />}
+            <div className="text-xs leading-5 font-mono overflow-auto rounded border border-border p-2 bg-panel">
+                {sections.map((section, si) => {
+                    const isCollapsed = collapsed[si] ?? false;
+                    return (
+                        <div
+                            key={si}
+                            ref={(el) => {
+                                if (el != null) {
+                                    sectionRefs.current[si] = el;
+                                }
+                            }}
+                            className="flex flex-col"
+                        >
+                            <DiffFileHeader
+                                section={section}
+                                collapsed={isCollapsed}
+                                onToggle={() => setCollapsedFor(si, !isCollapsed)}
                             />
-                        )}
-                    </div>
-                );
-            })}
-        </pre>
+                            {!isCollapsed &&
+                                lines.slice(section.startIndex, section.endIndex).map((line, offset) => {
+                                    const globalIndex = section.startIndex + offset;
+                                    return (
+                                        <DiffLineRow
+                                            key={globalIndex}
+                                            line={line}
+                                            globalIndex={globalIndex}
+                                            anchor={anchors[globalIndex]}
+                                            activeLine={activeLine}
+                                            setActiveLine={setActiveLine}
+                                            model={model}
+                                        />
+                                    );
+                                })}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
     );
 }
 
