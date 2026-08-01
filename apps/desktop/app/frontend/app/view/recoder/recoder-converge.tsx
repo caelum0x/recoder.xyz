@@ -9,8 +9,10 @@ import {
     autoResolveSynthesizable,
     composeConvergence,
     fetchConvergePlan,
+    presentConflictRegions,
     SYNTHESIZE_VALUE,
     toggleSelection,
+    type ConvergeConflictRegion,
     type ConvergePlan,
     type ConvergeSelection,
 } from "./recoder-converge-logic";
@@ -21,8 +23,9 @@ import { FIELD_LABEL, META, PICK_BTN_ON, PRIMARY_BTN, QUIET_BTN, QUIET_BTN_XS } 
 const PLAN_DEBOUNCE_MS = 250;
 
 // Per-path synthesizability from the one-shot probe: `null` for a path the probe
-// never covered (unprobed/old backend) so the row degrades to pick-only.
-type SynthInfo = { synthesizable: boolean; reason: string };
+// never covered (unprobed/old backend) so the row degrades to pick-only. An
+// 'overlap' may carry the parsed conflict regions (WHERE the agents collided).
+type SynthInfo = { synthesizable: boolean; reason: string; regions?: ConvergeConflictRegion[] };
 
 type ConvergePanelProps = {
     taskGroup: string;
@@ -31,11 +34,30 @@ type ConvergePanelProps = {
     onReview: (workspaceId: string) => void;
 };
 
+// One side of a conflict region: the agent's colliding lines, font-mono. An empty
+// line renders as a non-breaking space so the region keeps its true line count.
+function ConflictSide({ label, lines, tone }: { label: string; lines: string[]; tone: string }) {
+    return (
+        <div className={cn("flex flex-col border-l-2 pl-2", tone)}>
+            <span className={META}>{label}</span>
+            {lines.map((line, i) => (
+                <span key={i} className="truncate font-mono text-xs text-secondary" title={line}>
+                    {line == "" ? " " : line}
+                </span>
+            ))}
+        </div>
+    );
+}
+
+ConflictSide.displayName = "ConflictSide";
+
 // One contested path with its winner picker: a button per sibling that touched the
 // path (from the group's contested set), the picked one lit like the A/B picker.
 // When a probe covered the path, it also offers "Synthesize" (auto 3-way merge)
 // with a truthful ✓/✗ indicator; a non-synthesizable path dims that option and
-// keeps the reason visible so the user picks a winner instead.
+// keeps the reason visible so the user picks a winner instead. An 'overlap' also
+// gets a collapsed "Where?" toggle showing the exact colliding line regions (or a
+// truthful "location unavailable" when the backend sent none).
 function ContestedPickRow({
     path,
     candidates,
@@ -53,52 +75,89 @@ function ContestedPickRow({
     synth: SynthInfo;
     onPick: (value: string) => void;
 }) {
+    const [showRegions, setShowRegions] = useState(false);
     const canSynth = synth != null && synth.synthesizable;
+    const regionView = synth != null ? presentConflictRegions(synth) : null;
+    const hasCollision = regionView != null && (regionView.rows.length > 0 || regionView.fallback != "");
+    // The fold merges sorted siblings pairwise: with exactly 2, ours/theirs map 1:1
+    // to the agents; with more, the running fold makes per-agent labels untruthful.
+    const oursLabel = candidates.length == 2 ? agentLabel(agentByWs.get(candidates[0]) ?? candidates[0]) : "one side";
+    const theirsLabel =
+        candidates.length == 2 ? agentLabel(agentByWs.get(candidates[1]) ?? candidates[1]) : "other side";
     return (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="min-w-[10rem] flex-1 truncate font-mono text-sm" title={path}>
-                {path}
-            </span>
-            <div className="flex items-center gap-1">
-                {candidates.map((id) => {
-                    const label = agentLabel(agentByWs.get(id) ?? id);
-                    return (
+        <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="min-w-[10rem] flex-1 truncate font-mono text-sm" title={path}>
+                    {path}
+                </span>
+                <div className="flex items-center gap-1">
+                    {candidates.map((id) => {
+                        const label = agentLabel(agentByWs.get(id) ?? id);
+                        return (
+                            <button
+                                key={id}
+                                className={picked == id ? PICK_BTN_ON : QUIET_BTN_XS}
+                                disabled={disabled}
+                                onClick={() => onPick(id)}
+                                title={`Take ${label}'s version of ${path}`}
+                            >
+                                {label}
+                            </button>
+                        );
+                    })}
+                    {synth != null && (
                         <button
-                            key={id}
-                            className={picked == id ? PICK_BTN_ON : QUIET_BTN_XS}
-                            disabled={disabled}
-                            onClick={() => onPick(id)}
-                            title={`Take ${label}'s version of ${path}`}
+                            className={picked == SYNTHESIZE_VALUE ? PICK_BTN_ON : QUIET_BTN_XS}
+                            disabled={disabled || !canSynth}
+                            onClick={() => onPick(SYNTHESIZE_VALUE)}
+                            title={
+                                canSynth
+                                    ? `Auto 3-way merge both agents' edits to ${path}`
+                                    : `Can't auto-merge ${path}${synth.reason ? ` — ${synth.reason}` : ""}; pick a winner instead`
+                            }
                         >
-                            {label}
+                            Synthesize
                         </button>
-                    );
-                })}
+                    )}
+                </div>
                 {synth != null && (
-                    <button
-                        className={picked == SYNTHESIZE_VALUE ? PICK_BTN_ON : QUIET_BTN_XS}
-                        disabled={disabled || !canSynth}
-                        onClick={() => onPick(SYNTHESIZE_VALUE)}
-                        title={
-                            canSynth
-                                ? `Auto 3-way merge both agents' edits to ${path}`
-                                : `Can't auto-merge ${path}${synth.reason ? ` — ${synth.reason}` : ""}; pick a winner instead`
-                        }
+                    <span
+                        className={cn("text-xs", canSynth ? "text-accent" : "text-error")}
+                        title={synth.reason || undefined}
                     >
-                        Synthesize
+                        {canSynth ? "✓ auto-mergeable" : `✗ ${synth.reason || "not auto-mergeable"}`}
+                    </span>
+                )}
+                {hasCollision && (
+                    <button
+                        className={QUIET_BTN_XS}
+                        onClick={() => setShowRegions((v) => !v)}
+                        title={`Show where the agents collided in ${path}`}
+                    >
+                        {showRegions ? "Hide collision" : "Where?"}
                     </button>
                 )}
+                {picked == "" && (
+                    <span className={META}>{canSynth ? "pick a winner or synthesize" : "pick a winner"}</span>
+                )}
             </div>
-            {synth != null && (
-                <span
-                    className={cn("text-xs", canSynth ? "text-accent" : "text-error")}
-                    title={synth.reason || undefined}
-                >
-                    {canSynth ? "✓ auto-mergeable" : `✗ ${synth.reason || "not auto-mergeable"}`}
-                </span>
-            )}
-            {picked == "" && (
-                <span className={META}>{canSynth ? "pick a winner or synthesize" : "pick a winner"}</span>
+            {showRegions && regionView != null && (
+                <div className="flex flex-col gap-1.5 rounded border border-white/8 px-2 py-1.5">
+                    {regionView.rows.length == 0 ? (
+                        <span className={META}>{regionView.fallback}</span>
+                    ) : (
+                        regionView.rows.map((row) => (
+                            <div key={row.label} className="flex flex-col gap-0.5">
+                                <span className="text-xs text-secondary">
+                                    {row.label}
+                                    {row.truncated ? " — truncated" : ""}
+                                </span>
+                                <ConflictSide label={oursLabel} lines={row.ours} tone="border-accent/40" />
+                                <ConflictSide label={theirsLabel} lines={row.theirs} tone="border-error/40" />
+                            </div>
+                        ))
+                    )}
+                </div>
             )}
         </div>
     );
@@ -186,7 +245,11 @@ function ConvergePanel({ taskGroup, contested, siblings, onReview }: ConvergePan
             }
             const map: Record<string, SynthInfo> = {};
             for (const c of result.plan.contested) {
-                map[c.path] = { synthesizable: c.synthesizable, reason: c.reason ?? "" };
+                map[c.path] = {
+                    synthesizable: c.synthesizable,
+                    reason: c.reason ?? "",
+                    ...(c.regions != null ? { regions: c.regions } : {}),
+                };
             }
             setSynthMap(map);
         })();

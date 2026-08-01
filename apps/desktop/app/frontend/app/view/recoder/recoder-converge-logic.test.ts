@@ -10,6 +10,7 @@ import {
     composeStatusFallback,
     fetchConvergePlan,
     parseConvergePlan,
+    presentConflictRegions,
     SYNTHESIZE_VALUE,
     toggleSelection,
 } from "./recoder-converge-logic";
@@ -146,6 +147,89 @@ describe("parseConvergePlan — truthful projection, never fabricated", () => {
             { path: "a.ts", workspaceIds: ["ws1", "ws2"], synthesizable: true },
             { path: "b.ts", workspaceIds: ["ws1", "ws3"], synthesizable: false, reason: "overlap" },
         ]);
+    });
+
+    it("reads a contested entry's conflict regions (WHERE the agents collided)", () => {
+        const plan = parseConvergePlan({
+            contested: [
+                {
+                    path: "b.ts",
+                    workspaceIds: ["ws1", "ws2"],
+                    synthesizable: false,
+                    reason: "overlap",
+                    regions: [
+                        { startLine: 3, endLine: 7, ours: ["l3-A"], theirs: ["l3-B"], truncated: false },
+                        { startLine: 12, endLine: 27, ours: ["x"], theirs: ["y", "z"], truncated: true },
+                    ],
+                },
+            ],
+        });
+        expect(plan.contested[0].regions).toEqual([
+            { startLine: 3, endLine: 7, ours: ["l3-A"], theirs: ["l3-B"], truncated: false },
+            { startLine: 12, endLine: 27, ours: ["x"], theirs: ["y", "z"], truncated: true },
+        ]);
+    });
+
+    it("drops garbage regions and omits `regions` when none survive (never fabricated)", () => {
+        const plan = parseConvergePlan({
+            contested: [
+                {
+                    path: "b.ts",
+                    workspaceIds: ["ws1", "ws2"],
+                    synthesizable: false,
+                    reason: "overlap",
+                    regions: [
+                        "not-a-region",
+                        { startLine: 0, endLine: 5, ours: [], theirs: [] },
+                        { startLine: "3", endLine: 7, ours: ["x"], theirs: ["y"] },
+                    ],
+                },
+                { path: "c.ts", workspaceIds: ["ws1", "ws2"], synthesizable: false, reason: "overlap" },
+            ],
+        });
+        expect(plan.contested[0].regions).toBeUndefined();
+        expect(plan.contested[1].regions).toBeUndefined();
+    });
+});
+
+describe("presentConflictRegions — truthful collision rows, never an invented location", () => {
+    it("maps regions to rows with a line-range label, side texts, and truncation flag", () => {
+        const view = presentConflictRegions({
+            reason: "overlap",
+            regions: [
+                { startLine: 12, endLine: 27, ours: ["a1", "a2"], theirs: ["b1"], truncated: false },
+                { startLine: 40, endLine: 44, ours: ["x"], theirs: ["y"], truncated: true },
+            ],
+        });
+        expect(view.fallback).toBe("");
+        expect(view.rows).toEqual([
+            { label: "L12–L27", ours: ["a1", "a2"], theirs: ["b1"], truncated: false },
+            { label: "L40–L44", ours: ["x"], theirs: ["y"], truncated: true },
+        ]);
+    });
+
+    it("collapses a same-line region to a single-line label", () => {
+        const view = presentConflictRegions({
+            reason: "overlap",
+            regions: [{ startLine: 5, endLine: 5, ours: [], theirs: [], truncated: false }],
+        });
+        expect(view.rows[0].label).toBe("L5");
+    });
+
+    it("falls back truthfully for an 'overlap' probe with no regions (older backend)", () => {
+        expect(presentConflictRegions({ reason: "overlap" })).toEqual({
+            rows: [],
+            fallback: "conflict location unavailable",
+        });
+        expect(presentConflictRegions({ reason: "overlap", regions: [] }).fallback).toBe(
+            "conflict location unavailable"
+        );
+    });
+
+    it("shows nothing for non-overlap reasons or a synthesizable probe (no regions exist)", () => {
+        expect(presentConflictRegions({ reason: "delete-modify" })).toEqual({ rows: [], fallback: "" });
+        expect(presentConflictRegions({ reason: "unreadable" })).toEqual({ rows: [], fallback: "" });
+        expect(presentConflictRegions({})).toEqual({ rows: [], fallback: "" });
     });
 });
 

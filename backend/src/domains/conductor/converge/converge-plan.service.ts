@@ -102,6 +102,21 @@ export interface ConvergencePlanSource {
 }
 
 /**
+ * One conflict region parsed from `git merge-file`'s merged-with-markers output —
+ * WHERE the contesting siblings collided in a file. `startLine`/`endLine` are the
+ * 1-indexed positions of the `<<<<<<<`/`>>>>>>>` marker lines IN that marker
+ * content; `ours`/`theirs` are each side's lines. `truncated:true` marks a
+ * server-side cap (more lines/regions existed than the bounded payload carries).
+ */
+export interface ConflictRegion {
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly ours: readonly string[];
+  readonly theirs: readonly string[];
+  readonly truncated: boolean;
+}
+
+/**
  * A per-contested-file synthesizability probe result — an OPTIONAL, opt-in
  * enrichment produced by the OPS layer (a read-only dry-run 3-way merge), NEVER by
  * the pure fold. Present on {@link ConvergencePlan.contested} only when the plan was
@@ -116,6 +131,12 @@ export interface ContestedProbe {
   readonly synthesizable: boolean;
   /** When `synthesizable:false`: `'overlap'` | `'delete-modify'` | `'unreadable'`. */
   readonly reason?: string;
+  /**
+   * For `reason:'overlap'` ONLY: the parsed conflict regions of the dry-run merge —
+   * WHERE the agents collided. Optional + additive: an older/unparsed probe simply
+   * omits it, and unprobed plans are unaffected (see {@link ConvergencePlan.contested}).
+   */
+  readonly regions?: readonly ConflictRegion[];
 }
 
 /** The folded convergence plan (`GET …/converge-plan`) — the compose blueprint. */
