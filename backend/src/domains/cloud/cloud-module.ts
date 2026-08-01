@@ -298,6 +298,7 @@ export class CloudComposer implements CloudModule {
         tenancy: this.tenancyService,
         provisioner: this.provisionerService,
         domains: this.domainsService,
+        preview: this.previewService,
         logger: this.log,
         ...(this.gate ? { gate: this.gate } : {}),
       }),

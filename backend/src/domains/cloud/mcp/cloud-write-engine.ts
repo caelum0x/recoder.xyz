@@ -27,10 +27,12 @@ import type { McpToolRegistration, McpToolCaller } from '../../../shared/module-
 import type { Logger } from '../../../shared/logger.js';
 import { createError, ErrorCode, type AppError } from '../../../shared/errors.js';
 import type { Principal } from '../../identity/types.js';
-import type { Tenant } from '../types.js';
+import type { DeployTargetKind, Tenant } from '../types.js';
+import { DEPLOY_TARGET_KINDS } from '../types.js';
 import type { TenancyService, TenantRef } from '../services/tenancy.service.js';
 import type { SandboxProvisionerService } from '../services/sandbox-provisioner.service.js';
 import type { DomainsService } from '../services/domains.service.js';
+import type { PreviewDeployService } from '../services/preview-deploy.service.js';
 import type { CloudGovernanceGatePort, GovernanceAction, GateDecisionContext } from '../ports/governance-gate.port.js';
 import { guardCloudWrite, recordCloudAudit } from '../services/cloud-write-gate.js';
 
@@ -38,6 +40,8 @@ export interface CloudWriteMcpDeps {
   readonly tenancy: TenancyService;
   readonly provisioner: SandboxProvisionerService;
   readonly domains: DomainsService;
+  /** The preview surface: governed deploy + signed-URL (token) mint. */
+  readonly preview: PreviewDeployService;
   readonly logger: Logger;
   /** The injected governance gate; absent ⇒ degrade-open (warn-logged, auth-elsewhere). */
   readonly gate?: CloudGovernanceGatePort;
@@ -104,8 +108,16 @@ function errorEnvelope(error: AppError): { ok: false; error: string; code: strin
   return { ok: false, error: error.message, code: error.code };
 }
 
+/** Coerce an args-named deploy target to a known kind (defaults to `preview`). */
+function deployTargetKind(raw: unknown): DeployTargetKind {
+  const value = str((raw as { target?: unknown })?.target);
+  return value && (DEPLOY_TARGET_KINDS as readonly string[]).includes(value)
+    ? (value as DeployTargetKind)
+    : 'preview';
+}
+
 export function buildCloudWriteMcpTools(deps: CloudWriteMcpDeps): readonly McpToolRegistration[] {
-  const { tenancy, provisioner, domains, logger, gate } = deps;
+  const { tenancy, provisioner, domains, preview, logger, gate } = deps;
 
   /**
    * Resolve (optionally auto-provisioning) the tenant + a governance decision for
@@ -218,6 +230,74 @@ export function buildCloudWriteMcpTools(deps: CloudWriteMcpDeps): readonly McpTo
           tenantId: auth.tenant.id,
         }, logger);
         return { ok: true, sandboxId, destroyed: true };
+      },
+    },
+    {
+      name: 'cloud_preview_deploy',
+      description: 'Deploy a run artifact to a governed preview target for the authorized caller (persists a deployment; mutating, governed).',
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
+        const args = (raw ?? {}) as Record<string, unknown>;
+        const target = deployTargetKind(raw);
+        const auth = await authorize(raw, caller, 'cloud.preview.deploy', {
+          via: 'mcp',
+          target,
+          runId: str(args.runId) ?? null,
+        }, { ensure: true });
+        if (!auth.ok) return auth.envelope;
+        const result = await preview.deploy({
+          tenantId: auth.tenant.id,
+          target,
+          runId: str(args.runId) ?? null,
+          sandboxId: str(args.sandboxId) ?? null,
+          commitSha: str(args.commitSha) ?? null,
+          source: str(args.source) ?? null,
+          ttlSeconds: typeof args.ttlSeconds === 'number' ? args.ttlSeconds : null,
+        });
+        if (!result.ok) return errorEnvelope(result.error);
+        await recordCloudAudit(gate, 'cloud.preview.deploy', auth.principal, auth.verdict, {
+          via: 'mcp',
+          deploymentId: result.value.id,
+          tenantId: auth.tenant.id,
+          target: result.value.target,
+          status: result.value.status,
+        }, logger);
+        return {
+          ok: true,
+          deployment: {
+            id: result.value.id,
+            status: result.value.status,
+            target: result.value.target,
+            previewBaseUrl: result.value.previewBaseUrl,
+            healthStatus: result.value.healthStatus,
+            expiresAt: result.value.expiresAt,
+          },
+        };
+      },
+    },
+    {
+      name: 'cloud_preview_url',
+      description: "Mint a signed, expiring preview URL for one of the caller's deployments (ledgers the token; mutating, governed).",
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
+        const deploymentId = str((raw as { deploymentId?: unknown })?.deploymentId);
+        if (!deploymentId) return { ok: false, error: 'deploymentId is required' };
+        const auth = await authorize(raw, caller, 'cloud.preview.url', { via: 'mcp', deploymentId });
+        if (!auth.ok) return auth.envelope;
+        const result = await preview.getSignedUrl(deploymentId, auth.tenant.id);
+        if (!result.ok) return errorEnvelope(result.error);
+        // Audit sanitized metadata only — NEVER the signed URL / raw token.
+        await recordCloudAudit(gate, 'cloud.preview.url', auth.principal, auth.verdict, {
+          via: 'mcp',
+          deploymentId,
+          tenantId: auth.tenant.id,
+          exp: result.value.claims.exp,
+        }, logger);
+        return {
+          ok: true,
+          preview: {
+            url: result.value.url,
+            expiresAt: new Date(result.value.claims.exp * 1000).toISOString(),
+          },
+        };
       },
     },
     {
