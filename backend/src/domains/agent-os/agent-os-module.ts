@@ -61,6 +61,7 @@ import { buildAgentOsRouter } from './routes/agent-os.routes.js';
 import { buildInternalAgentOsRouter } from './routes/internal-agent-os.routes.js';
 import { buildAgentOsMcpTools } from './mcp/agent-os-engine.js';
 import { buildCoordinationMcpTools } from './mcp/coordination-engine.js';
+import { buildOssComponentsMcpTools } from './mcp/oss-components-engine.js';
 import { buildAgentOsHealth } from './health.js';
 
 export class AgentOsComposer implements AgentOsModule {
@@ -391,6 +392,7 @@ export class AgentOsComposer implements AgentOsModule {
   mcp(): readonly McpToolRegistration[] {
     return [
       ...buildAgentOsMcpTools(this.repo),
+      ...buildOssComponentsMcpTools(this.repo),
       ...buildCoordinationMcpTools({
         engine: this.coordination,
         gate: this.governanceGate,
