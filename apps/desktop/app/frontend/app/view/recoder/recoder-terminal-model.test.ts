@@ -14,7 +14,7 @@ vi.mock("./recoder-terminal", () => ({
 
 import { globalStore } from "@/app/store/global";
 import { atom } from "jotai";
-import { parseStreamFrame, reconnectDelayMs, RecoderTerminalViewModel } from "./recoder-terminal-model";
+import { buildStreamUrl, parseStreamFrame, reconnectDelayMs, RecoderTerminalViewModel } from "./recoder-terminal-model";
 
 const BareLogEvent = {
     eventId: "e1",
@@ -149,6 +149,66 @@ describe("reconnectDelayMs (capped backoff + jitter)", () => {
         const d = reconnectDelayMs(-3);
         expect(d).toBeGreaterThanOrEqual(250);
         expect(d).toBeLessThanOrEqual(500);
+    });
+});
+
+describe("buildStreamUrl (resume cursor query)", () => {
+    it("omits the query when no cursor is given", () => {
+        expect(buildStreamUrl("http://localhost:3100", "ws-1")).toBe(
+            "ws://localhost:3100/api/conductor/workspaces/ws-1/stream"
+        );
+    });
+
+    it("appends ?since=<seq> for a valid non-negative integer cursor (0 included)", () => {
+        expect(buildStreamUrl("http://localhost:3100", "ws-1", 7)).toBe(
+            "ws://localhost:3100/api/conductor/workspaces/ws-1/stream?since=7"
+        );
+        expect(buildStreamUrl("http://localhost:3100", "ws-1", 0)).toBe(
+            "ws://localhost:3100/api/conductor/workspaces/ws-1/stream?since=0"
+        );
+    });
+
+    it("omits the query for garbage cursors (negative, NaN, fractional)", () => {
+        const base = "ws://localhost:3100/api/conductor/workspaces/ws-1/stream";
+        expect(buildStreamUrl("http://localhost:3100", "ws-1", -1)).toBe(base);
+        expect(buildStreamUrl("http://localhost:3100", "ws-1", Number.NaN)).toBe(base);
+        expect(buildStreamUrl("http://localhost:3100", "ws-1", 1.5)).toBe(base);
+    });
+
+    it("encodes the workspace id and preserves an https/wss base", () => {
+        expect(buildStreamUrl("https://api.recoder.xyz", "a/b", 3)).toBe(
+            "wss://api.recoder.xyz/api/conductor/workspaces/a%2Fb/stream?since=3"
+        );
+    });
+});
+
+describe("RecoderTerminalViewModel resume cursor (?since reconnect)", () => {
+    it("advances lastEventId to the frame's seq", () => {
+        const model = makeModel();
+        expect(model.lastEventId).toBe(0);
+        model.handleMessage(JSON.stringify({ ...BareLogEvent, seq: 4 }));
+        expect(model.lastEventId).toBe(4);
+    });
+
+    it("holds its last good cursor when a frame lacks a valid seq", () => {
+        const model = makeModel();
+        model.handleMessage(JSON.stringify({ ...BareLogEvent, seq: 9 }));
+        model.handleMessage(JSON.stringify(BareLogEvent));
+        model.handleMessage(JSON.stringify({ ...BareLogEvent, seq: -2 }));
+        expect(model.lastEventId).toBe(9);
+    });
+
+    it("threads lastEventId as ?since on a retry but omits it on a fresh connect", () => {
+        const model = makeModel();
+        model.handleMessage(JSON.stringify({ ...BareLogEvent, seq: 12 }));
+        const base = "http://localhost:3100";
+        expect(buildStreamUrl(base, "ws-1", model.lastEventId)).toBe(
+            "ws://localhost:3100/api/conductor/workspaces/ws-1/stream?since=12"
+        );
+        model.lastEventId = 0;
+        expect(buildStreamUrl(base, "ws-1", undefined)).toBe(
+            "ws://localhost:3100/api/conductor/workspaces/ws-1/stream"
+        );
     });
 });
 
