@@ -1,10 +1,17 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { globalStore } from "@/app/store/global";
+import { createBlock, globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readErrorReason } from "../recoder/recoder-errors";
+import {
+    correlateRunToWorkspace,
+    correlateRuns,
+    parseWorkspaceEvents,
+    parseWorkspaceList,
+    type WorkspaceCorrelation,
+} from "./recoder-runs-correlation";
 import { RecoderRunsView } from "./recoder-runs";
 
 // Mirrors the Agent OS TaskRun domain type (packages/agent-os/src/domain/task-spec.ts).
@@ -34,8 +41,22 @@ type RecoderRunEvent = {
     createdAt: string;
 };
 
+// The state of the selected-run drilldown events panel. Distinguishes the honest
+// reasons the panel may be empty so the view never fakes a transcript:
+//   idle           — no run selected
+//   loading        — fetching the correlated workspace's events
+//   not-correlated — the run has no conductor workspace to stream from
+//   not-connected  — the per-workspace events read failed (backend/transport)
+//   empty          — correlated + connected, but the run has no events yet
+//   ready          — events loaded
+type SelectedRunStatus = "idle" | "loading" | "not-correlated" | "not-connected" | "empty" | "ready";
+
 // Show the most recent events first, capped so the stream stays readable.
 const MaxEvents = 40;
+
+// The selected-run transcript reads oldest→newest; cap the tail so a long run
+// stays readable without dropping the latest activity.
+const MaxSelectedEvents = 100;
 
 class RecoderRunsViewModel implements ViewModel {
     viewType: string;
@@ -47,6 +68,14 @@ class RecoderRunsViewModel implements ViewModel {
     loadingAtom: PrimitiveAtom<boolean>;
     errorAtom: PrimitiveAtom<string>;
     connectedAtom: PrimitiveAtom<boolean>;
+    // Correlation state: the live workspace records + a Map<runId, workspaceId> so
+    // each row knows whether it can open a Session/Review and drill into events.
+    workspacesAtom: PrimitiveAtom<WorkspaceCorrelation[]>;
+    correlationAtom: PrimitiveAtom<Map<string, string>>;
+    // The run the user drilled into ("" = none) and its per-run events panel.
+    selectedRunIdAtom: PrimitiveAtom<string>;
+    selectedEventsAtom: PrimitiveAtom<RecoderRunEvent[]>;
+    selectedStatusAtom: PrimitiveAtom<SelectedRunStatus>;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -58,6 +87,11 @@ class RecoderRunsViewModel implements ViewModel {
         this.loadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
         this.connectedAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.workspacesAtom = atom([]) as PrimitiveAtom<WorkspaceCorrelation[]>;
+        this.correlationAtom = atom(new Map()) as PrimitiveAtom<Map<string, string>>;
+        this.selectedRunIdAtom = atom("") as PrimitiveAtom<string>;
+        this.selectedEventsAtom = atom([]) as PrimitiveAtom<RecoderRunEvent[]>;
+        this.selectedStatusAtom = atom("idle") as PrimitiveAtom<SelectedRunStatus>;
     }
 
     get viewComponent(): ViewComponent {
@@ -70,17 +104,143 @@ class RecoderRunsViewModel implements ViewModel {
         globalStore.set(this.loadingAtom, true);
         globalStore.set(this.errorAtom, "");
         try {
-            const [runs, events] = await Promise.all([this.fetchRuns(), this.fetchEvents()]);
+            // Workspaces power correlation only; a workspaces-read failure must NOT
+            // fail the runs list, so it degrades to an empty list (rows still render,
+            // just without Session/Review affordances) rather than throwing.
+            const [runs, events, workspaces] = await Promise.all([
+                this.fetchRuns(),
+                this.fetchEvents(),
+                this.fetchWorkspaces(),
+            ]);
             globalStore.set(this.runsAtom, runs);
             globalStore.set(this.eventsAtom, events);
+            globalStore.set(this.workspacesAtom, workspaces);
+            globalStore.set(this.correlationAtom, correlateRuns(runs, workspaces));
             globalStore.set(this.connectedAtom, true);
+            await this.refreshSelectedEvents();
         } catch (e) {
             globalStore.set(this.connectedAtom, false);
             globalStore.set(this.runsAtom, []);
             globalStore.set(this.eventsAtom, []);
+            globalStore.set(this.workspacesAtom, []);
+            globalStore.set(this.correlationAtom, new Map());
             globalStore.set(this.errorAtom, e instanceof Error ? e.message : String(e));
         } finally {
             globalStore.set(this.loadingAtom, false);
+        }
+    }
+
+    // Degrade-safe: any failure yields [] so correlation simply produces no links
+    // (rows stay non-actionable) instead of taking down the whole runs refresh.
+    async fetchWorkspaces(): Promise<WorkspaceCorrelation[]> {
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/workspaces`);
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                return [];
+            }
+            return parseWorkspaceList(body);
+        } catch {
+            return [];
+        }
+    }
+
+    // Look up the workspace a run belongs to from the live workspaces list. Returns
+    // "" when the run isn't linked to any workspace (see correlateRunToWorkspace).
+    workspaceIdForRun(runId: string): string {
+        const run = globalStore.get(this.runsAtom).find((r) => r.runId == runId);
+        if (run == null) {
+            return "";
+        }
+        return correlateRunToWorkspace(run, globalStore.get(this.workspacesAtom)) ?? "";
+    }
+
+    // Drilldown: select a run (toggle off if it's already selected) and load THAT
+    // run's events from its correlated workspace. selectedStatusAtom carries the
+    // truthful reason whenever the panel is empty.
+    async selectRun(runId: string) {
+        const current = globalStore.get(this.selectedRunIdAtom);
+        if (current == runId) {
+            globalStore.set(this.selectedRunIdAtom, "");
+            globalStore.set(this.selectedEventsAtom, []);
+            globalStore.set(this.selectedStatusAtom, "idle");
+            return;
+        }
+        globalStore.set(this.selectedRunIdAtom, runId);
+        globalStore.set(this.selectedEventsAtom, []);
+        await this.refreshSelectedEvents();
+    }
+
+    // (Re)load the currently-selected run's per-workspace events. Guards against a
+    // stale in-flight fetch by re-checking the selection after the await, so a fast
+    // re-select never lets an older response clobber the newer one.
+    async refreshSelectedEvents() {
+        const runId = globalStore.get(this.selectedRunIdAtom);
+        if (runId == "") {
+            globalStore.set(this.selectedStatusAtom, "idle");
+            globalStore.set(this.selectedEventsAtom, []);
+            return;
+        }
+        const workspaceId = this.workspaceIdForRun(runId);
+        if (workspaceId == "") {
+            globalStore.set(this.selectedStatusAtom, "not-correlated");
+            globalStore.set(this.selectedEventsAtom, []);
+            return;
+        }
+        if (globalStore.get(this.selectedEventsAtom).length == 0) {
+            globalStore.set(this.selectedStatusAtom, "loading");
+        }
+        const events = await this.fetchWorkspaceEvents(workspaceId);
+        if (globalStore.get(this.selectedRunIdAtom) != runId) {
+            return;
+        }
+        if (events == null) {
+            globalStore.set(this.selectedStatusAtom, "not-connected");
+            globalStore.set(this.selectedEventsAtom, []);
+            return;
+        }
+        globalStore.set(this.selectedEventsAtom, events.slice(-MaxSelectedEvents));
+        globalStore.set(this.selectedStatusAtom, events.length == 0 ? "empty" : "ready");
+    }
+
+    // GET /api/conductor/workspaces/:id/events (oldest→newest). null signals a
+    // transport/backend failure (distinct from an empty [] transcript).
+    async fetchWorkspaceEvents(workspaceId: string): Promise<RecoderRunEvent[] | null> {
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/events`,
+            );
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                return null;
+            }
+            return parseWorkspaceEvents(body);
+        } catch {
+            return null;
+        }
+    }
+
+    // Open the correlated workspace's Session (live terminal) or Review (diff) as
+    // its own block — the same view meta the hub uses. Fire-and-forget from event
+    // handlers: a missing correlation is a no-op and a failed open never throws.
+    async openRunSession(runId: string) {
+        await this.openRunWorkspace(runId, "recoder-terminal");
+    }
+
+    async openRunReview(runId: string) {
+        await this.openRunWorkspace(runId, "recoder-diff");
+    }
+
+    async openRunWorkspace(runId: string, view: string) {
+        const workspaceId = this.workspaceIdForRun(runId);
+        if (workspaceId == "") {
+            return;
+        }
+        const meta: Record<string, unknown> = { view, "recoder:workspaceid": workspaceId };
+        try {
+            await createBlock({ meta });
+        } catch {
+            // degrade-safe: opening a block must never take down the runs view
         }
     }
 
@@ -105,4 +265,4 @@ class RecoderRunsViewModel implements ViewModel {
     }
 }
 
-export { RecoderRunsViewModel, type RecoderRun, type RecoderRunEvent };
+export { RecoderRunsViewModel, type RecoderRun, type RecoderRunEvent, type SelectedRunStatus };

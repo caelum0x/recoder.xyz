@@ -5,7 +5,7 @@ import { RecoderEmpty, RecoderErrorRow, RecoderSkeleton } from "@/app/view/recod
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
-import { RecoderRun, RecoderRunEvent, RecoderRunsViewModel } from "./recoder-runs-model";
+import { RecoderRun, RecoderRunEvent, RecoderRunsViewModel, SelectedRunStatus } from "./recoder-runs-model";
 
 const REFRESH_MS = 6000;
 
@@ -39,10 +39,41 @@ function shortTime(iso?: string): string {
     return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function RunRow({ run }: { run: RecoderRun }) {
+interface RunRowProps {
+    run: RecoderRun;
+    correlated: boolean;
+    selected: boolean;
+    onSelect: () => void;
+    onSession: () => void;
+    onReview: () => void;
+}
+
+function RunRow({ run, correlated, selected, onSelect, onSession, onReview }: RunRowProps) {
+    // Session/Review live inside the row; stop propagation so opening a block
+    // doesn't also toggle the drilldown selection.
+    const openSession = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        onSession();
+    };
+    const openReview = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        onReview();
+    };
     return (
         <div
-            className="flex items-center gap-2 rounded border border-border px-2 py-1"
+            role="button"
+            tabIndex={0}
+            onClick={onSelect}
+            onKeyDown={(e) => {
+                if (e.key == "Enter" || e.key == " ") {
+                    e.preventDefault();
+                    onSelect();
+                }
+            }}
+            className={cn(
+                "flex items-center gap-2 rounded border px-2 py-1 cursor-pointer recoder-transition",
+                selected ? "border-accent/60 bg-accent/10" : "border-border hover:bg-white/[0.03]",
+            )}
             title={`${run.runId} · ${run.taskId}`}
         >
             <span
@@ -58,6 +89,26 @@ function RunRow({ run }: { run: RecoderRun }) {
                 <span className="text-xs text-secondary truncate">{run.assigneeAgentId}</span>
             )}
             <span className="text-xs text-secondary ml-auto whitespace-nowrap">{shortTime(run.updatedAt)}</span>
+            {correlated ? (
+                <span className="flex items-center gap-1 whitespace-nowrap">
+                    <button
+                        type="button"
+                        onClick={openSession}
+                        className="rounded border border-border px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:border-accent/50 cursor-pointer recoder-transition"
+                    >
+                        Session
+                    </button>
+                    <button
+                        type="button"
+                        onClick={openReview}
+                        className="rounded border border-border px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:border-accent/50 cursor-pointer recoder-transition"
+                    >
+                        Review
+                    </button>
+                </span>
+            ) : (
+                <span className="text-xs text-meta whitespace-nowrap">no workspace</span>
+            )}
         </div>
     );
 }
@@ -72,12 +123,56 @@ function EventLine({ event }: { event: RecoderRunEvent }) {
     );
 }
 
+// Honest empty-reason copy for the drilldown panel. Each state names WHY there's
+// no transcript so the view never implies a run has events it can't show.
+const SELECTED_EMPTY: Partial<Record<SelectedRunStatus, { title: string; hint: string }>> = {
+    "not-correlated": {
+        title: "Not linked to a workspace",
+        hint: "Per-run events stream from a conductor workspace — this run has none yet.",
+    },
+    "not-connected": {
+        title: "Couldn't load this run's events",
+        hint: "The workspace events read didn't connect. It will retry on the next refresh.",
+    },
+    empty: {
+        title: "No events for this run yet",
+        hint: "Activity will appear here as the run progresses.",
+    },
+};
+
+function SelectedRunPanel({ status, events, label }: { status: SelectedRunStatus; events: RecoderRunEvent[]; label: string }) {
+    if (status == "idle") {
+        return null;
+    }
+    const empty = SELECTED_EMPTY[status];
+    return (
+        <div className="flex flex-col gap-1">
+            <div className="text-xs uppercase tracking-wide text-secondary">Run events · {label}</div>
+            {status == "loading" && <RecoderSkeleton rows={3} />}
+            {empty != null && <RecoderEmpty title={empty.title} hint={empty.hint} />}
+            {status == "ready" && (
+                <div className="flex flex-col gap-0.5">
+                    {events.map((event) => (
+                        <EventLine key={event.eventId} event={event} />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+SelectedRunPanel.displayName = "SelectedRunPanel";
+
 function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
     const runs = useAtomValue(model.runsAtom);
     const events = useAtomValue(model.eventsAtom);
     const loading = useAtomValue(model.loadingAtom);
     const error = useAtomValue(model.errorAtom);
     const connected = useAtomValue(model.connectedAtom);
+    const correlation = useAtomValue(model.correlationAtom);
+    const selectedRunId = useAtomValue(model.selectedRunIdAtom);
+    const selectedEvents = useAtomValue(model.selectedEventsAtom);
+    const selectedStatus = useAtomValue(model.selectedStatusAtom);
 
     useEffect(() => {
         model.refresh();
@@ -87,6 +182,7 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
 
     const showDisconnected = !connected && !loading;
     const showEmptyRuns = connected && !loading && runs.length == 0;
+    const selectedRun = runs.find((r) => r.runId == selectedRunId);
 
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-3">
@@ -108,9 +204,20 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
                         />
                     )}
                     {runs.map((run) => (
-                        <RunRow key={run.runId} run={run} />
+                        <RunRow
+                            key={run.runId}
+                            run={run}
+                            correlated={correlation.has(run.runId)}
+                            selected={run.runId == selectedRunId}
+                            onSelect={() => model.selectRun(run.runId)}
+                            onSession={() => model.openRunSession(run.runId)}
+                            onReview={() => model.openRunReview(run.runId)}
+                        />
                     ))}
                 </div>
+            )}
+            {connected && selectedRun != null && (
+                <SelectedRunPanel status={selectedStatus} events={selectedEvents} label={runLabel(selectedRun)} />
             )}
             {connected && events.length > 0 && (
                 <div className="flex flex-col gap-1">
