@@ -32,6 +32,7 @@ import {
   keyringFromMasterKey,
   type VaultKeyring,
 } from './adapters/keyring.adapter.js';
+import { createAuditTipSigner } from './adapters/audit-signer.adapter.js';
 import { createAuditRepository } from './repositories/audit.repository.js';
 import {
   createApprovalRepository,
@@ -91,8 +92,15 @@ export class GovernanceComposer implements GovernanceModule {
     const workLockRepo = createWorkLockRepository(this.executor);
     const secretRepo = createSecretRepository(this.executor);
 
-    // The tamper-evident chain writer/verifier (cross-checks the kernel tip).
-    this.auditChain = new AuditChainService(auditRepo, kernel, this.log);
+    // The tamper-evident chain writer/verifier (cross-checks the kernel tip) plus
+    // an ADDITIVE server-held ed25519 signer over the current tip hash. Absent
+    // `auditSigningKey` ⇒ an unavailable signer ⇒ the tip is UNSIGNED (never forged).
+    this.auditChain = new AuditChainService(
+      auditRepo,
+      kernel,
+      this.log,
+      createAuditTipSigner({ auditSigningKey: cfg.auditSigningKey }),
+    );
 
     // THE write seam: decide → risk → audit. Fail-closed on any kernel fault. The
     // durable Postgres approval repository is the SOLE clearance store (the former

@@ -16,6 +16,9 @@ import type { Logger } from '../../../shared/logger.js';
 import type { GovernanceKernelPort } from '../ports/kernel.port.js';
 import type { AuditRepository, AuditRangeQuery, AuditSealer } from '../ports/audit-repo.port.js';
 import type { AuditEntryInput, AuditRecord, AuditVerification } from '../types.js';
+import type { AuditTipSigner, TipSignature } from '../adapters/audit-signer.adapter.js';
+
+export type { TipSignature } from '../adapters/audit-signer.adapter.js';
 
 export class AuditChainService {
   /** The deterministic sealer shared by append + verify (same bytes both ways). */
@@ -26,6 +29,12 @@ export class AuditChainService {
     private readonly repo: AuditRepository,
     private readonly kernel?: GovernanceKernelPort,
     private readonly log?: Logger,
+    /**
+     * OPTIONAL server-held signer over the CURRENT tip hash. ADDITIVE + SEPARATE
+     * from the Merkle link — it does not change `entryDigest` or the chain format.
+     * Absent/unavailable ⇒ `signTip()` returns `null` (UNSIGNED, degrade-truthful).
+     */
+    private readonly signer?: AuditTipSigner,
   ) {}
 
   /** Seal an entry into the durable Merkle chain and return the persisted record. */
@@ -70,6 +79,58 @@ export class AuditChainService {
       this.log?.warn({ err }, 'governance audit: kernel tip probe failed');
       return dbResult;
     }
+  }
+
+  /** True when a server signing key is configured (else the tip is UNSIGNED). */
+  get signingEnabled(): boolean {
+    return this.signer?.available === true;
+  }
+
+  /** The server's public key (base64 raw ed25519) for external verifiers, or `null`. */
+  get signerPublicKey(): string | null {
+    return this.signer?.publicKey ?? null;
+  }
+
+  /**
+   * Produce a DETACHED, server-held signature over the CURRENT durable tip's
+   * content hash (`AuditRecord.entryHash`). This is a SEPARATE additive artifact:
+   * it does NOT re-seal the chain, touch `entryDigest`, or migrate anything. Where
+   * {@link verify} proves the chain is internally consistent, this proves the tip
+   * was produced by THIS server.
+   *
+   * Degrade-truthful: returns `null` when the chain is empty (nothing to sign) OR
+   * when no signing key is configured (UNSIGNED) — NEVER a forged signature.
+   */
+  async signTip(): Promise<TipSignature | null> {
+    if (!this.signer?.available) return null;
+    const tip = await this.repo.tip();
+    if (!tip) return null;
+    return this.signer.signHash(tip.entryHash, tip.seq);
+  }
+
+  /**
+   * Verify a detached tip signature against the CURRENT durable tip, proving the
+   * tip was produced by THIS server (not just internally consistent). Accepts
+   * either a raw base64 signature string or a {@link TipSignature} artifact; when
+   * an artifact is given its `contentHash` must equal the current tip hash (binds
+   * the signature to the present tip). `publicKey` (base64 raw ed25519 or PEM)
+   * defaults to the artifact's key, then the server's own key.
+   *
+   * Pure/degrade-safe: returns `false` on an empty chain, a tip-hash mismatch, a
+   * malformed key/signature, or a failed cryptographic check — never throws.
+   */
+  async verifyTip(signature: TipSignature | string, publicKey?: string | null): Promise<boolean> {
+    if (!this.signer) return false;
+    const tip = await this.repo.tip();
+    if (!tip) return false;
+
+    const sigString = typeof signature === 'string' ? signature : signature.signature;
+    // An artifact pins a specific tip hash — reject if it doesn't match the current tip.
+    if (typeof signature !== 'string' && signature.contentHash !== tip.entryHash) return false;
+
+    const key =
+      publicKey ?? (typeof signature === 'string' ? undefined : signature.publicKey) ?? undefined;
+    return this.signer.verifyHash(tip.entryHash, sigString, key);
   }
 }
 
