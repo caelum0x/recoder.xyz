@@ -47,6 +47,11 @@ const AGENT_LOGIN_GUIDES: readonly AgentLoginGuide[] = [
         docsUrl: "https://opencode.ai/docs/",
     },
     {
+        runtimeId: "cursor",
+        loginCommand: "cursor-agent login",
+        docsUrl: "https://docs.cursor.com/en/cli/overview",
+    },
+    {
         runtimeId: "gemini_cli",
         loginCommand: "gemini",
         docsUrl: "https://github.com/google-gemini/gemini-cli",

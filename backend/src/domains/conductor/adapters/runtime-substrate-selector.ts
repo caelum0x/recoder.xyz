@@ -16,22 +16,23 @@
  * CLI-only `resolveRuntimeCommand` fails truthfully rather than faking a run).
  *
  * NOTE — openfang is NOT a member of the package's CLI `ConductorRuntimeId` union
- * (it is an in-process runtime), so classification is done HERE against the
- * conductor's own runtime list; the CLI check delegates to the package guard so
- * the two never drift on which ids are real headless CLIs.
+ * (it is an in-process runtime). BOTH classifications delegate to the package
+ * guards (`isConductorRuntimeId` / `isInProcessRuntimeId`) and the in-process id
+ * list is re-exported from the package, so the two never drift on which ids are
+ * real headless CLIs vs in-process runtimes.
  */
-import { isConductorRuntimeId } from '@recoder/substrate';
+import { isConductorRuntimeId, isInProcessRuntimeId, IN_PROCESS_RUNTIME_IDS } from '@recoder/substrate';
 import type { SubstrateKind } from '../types.js';
+
+/** The in-process (non-CLI) runtimes — re-exported from the substrate package. */
+export { IN_PROCESS_RUNTIME_IDS };
 
 /** Which execution path a runtime maps to. */
 export type ExecutionPath = 'cli' | 'openfang';
 
-/** The in-process (non-CLI) runtimes this deployment can drive natively. */
-export const IN_PROCESS_RUNTIME_IDS: readonly string[] = ['openfang'];
-
 /** True when `runtimeId` names the native in-process openfang runtime. */
 export function isOpenfangRuntime(runtimeId: string): boolean {
-  return IN_PROCESS_RUNTIME_IDS.includes(runtimeId);
+  return isInProcessRuntimeId(runtimeId);
 }
 
 /** True when `runtimeId` names a real headless coding-agent CLI (path a). */

@@ -8,3 +8,4 @@ export { shellQuote } from './shell-quote.js';
 export { modelFlag } from './model-flag.js';
 export { extraArgs } from './extra-args.js';
 export { isConductorRuntimeId, asConductorRuntime } from './is-conductor-runtime.js';
+export { isInProcessRuntimeId } from './is-in-process-runtime.js';
