@@ -73,6 +73,9 @@ contextBridge.exposeInMainWorld("api", {
     getPathForFile: (file: File): string => webUtils.getPathForFile(file),
     saveTextFile: (fileName: string, content: string) => ipcRenderer.invoke("save-text-file", fileName, content),
     setIsActive: () => ipcRenderer.invoke("set-is-active"),
+    getRecoderBackendUrl: () => ipcRenderer.sendSync("recoder:get-backend-url"),
+    onRecoderBackendUrl: (callback: (url: string) => void) =>
+        ipcRenderer.on("recoder:backend-url", (_event, url: string) => callback(url)),
     getRecoderIdentity: () => ipcRenderer.invoke("recoder:get-identity"),
     recoderSignIn: () => ipcRenderer.invoke("recoder:sign-in"),
     recoderSignOut: () => ipcRenderer.invoke("recoder:sign-out"),

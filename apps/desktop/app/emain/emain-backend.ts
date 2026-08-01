@@ -33,6 +33,7 @@ import {
 } from "./emain-backend-core";
 import { CONNECTOR_SECRET_ENV_NAMES, readByokSecretsFromStore } from "./emain-backend-runtime-env";
 import { getElectronAppBasePath, getWaveConfigDir } from "./emain-platform";
+import { broadcastRecoderBackendUrl } from "./emain-util";
 
 let supervisor: BackendSupervisor = null;
 let plannedPort: number = null;
@@ -125,6 +126,11 @@ export async function startBackendSupervisor(): Promise<void> {
             },
             onReady: ({ port, apiKey }) => {
                 plannedPort = port;
+                try {
+                    broadcastRecoderBackendUrl(`http://127.0.0.1:${port}`);
+                } catch (e) {
+                    console.log("[backend-supervisor] failed to broadcast backend URL", e);
+                }
                 try {
                     const result = writeWaveAIGatewayConfig({ configDir: getWaveConfigDir(), port, apiKey });
                     console.log(

@@ -27,6 +27,24 @@ function broadcastZoomFactorChanged(newZoomFactor: number): void {
     }
 }
 
+// DT-7.1: push the embedded backend's real loopback URL to every renderer once
+// the supervisor reports READY (the sync `recoder:get-backend-url` getter covers
+// boot; this covers the common case where the backend readies AFTER the window
+// loaded). A renderer that does not subscribe ignores the message, so this is
+// safe to broadcast to all WebContents. Lives here (not emain-ipc) to avoid a
+// cycle with emain-backend, whose supervisor onReady calls it.
+export function broadcastRecoderBackendUrl(backendUrl: string): void {
+    if (!backendUrl) {
+        return;
+    }
+    for (const wc of electron.webContents.getAllWebContents()) {
+        if (wc.isDestroyed()) {
+            continue;
+        }
+        wc.send("recoder:backend-url", backendUrl);
+    }
+}
+
 export function increaseZoomLevel(webContents: electron.WebContents): void {
     const newZoom = Math.min(MaxZoomLevel, webContents.getZoomFactor() + ZoomDelta);
     webContents.setZoomFactor(newZoom);

@@ -156,6 +156,8 @@ declare global {
         getPathForFile: (file: File) => string; // webUtils.getPathForFile
         saveTextFile: (fileName: string, content: string) => Promise<boolean>; // save-text-file
         setIsActive: () => Promise<void>; // set-is-active
+        getRecoderBackendUrl: () => string; // recoder:get-backend-url (null before backend READY)
+        onRecoderBackendUrl: (callback: (url: string) => void) => void; // recoder:backend-url
         getRecoderIdentity: () => Promise<RecoderIdentity>; // recoder:get-identity
         recoderSignIn: () => Promise<RecoderSignInResult>; // recoder:sign-in
         recoderSignOut: () => Promise<{ ok: boolean }>; // recoder:sign-out

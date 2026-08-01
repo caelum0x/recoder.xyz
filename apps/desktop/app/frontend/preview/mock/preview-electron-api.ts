@@ -60,6 +60,8 @@ const previewElectronApi: ElectronApi = {
     doRefresh: () => {},
     saveTextFile: (_fileName: string, _content: string) => Promise.resolve(false),
     setIsActive: async () => {},
+    getRecoderBackendUrl: () => null,
+    onRecoderBackendUrl: (_callback: (url: string) => void) => {},
     getRecoderIdentity: () => Promise.resolve(null),
     recoderSignIn: () => Promise.resolve({ ok: false }),
     recoderSignOut: () => Promise.resolve({ ok: true }),
