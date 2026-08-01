@@ -15,6 +15,7 @@ type RunEventLike = {
     state?: string;
     artifactId?: string;
     createdAt?: string;
+    data?: Record<string, unknown>;
 };
 
 type RunEventSeverity = "info" | "active" | "success" | "warn" | "danger";
@@ -26,6 +27,9 @@ interface RunEventDescriptor {
     icon: string;
     severity: RunEventSeverity;
     detail: string;
+    // Present on an approval_requested event that carries a decidable approval —
+    // lets the rich run view render inline approve/deny in place of the side-list.
+    approvalId?: string;
 }
 
 type RunEventStyle = {
@@ -70,10 +74,22 @@ function isTerminalRunEvent(event: RunEventLike): boolean {
     return event?.type == "completed" || event?.type == "failed";
 }
 
+// The decidable approval id an approval_requested event carries (backend emits it
+// on data.approvalId; data.id tolerated). Absent ⇒ nothing to act on inline.
+function extractApprovalId(event: RunEventLike): string | null {
+    const data = event?.data;
+    if (data == null) return null;
+    for (const key of ["approvalId", "id"]) {
+        const value = data[key];
+        if (typeof value == "string" && value != "") return value;
+    }
+    return null;
+}
+
 function describeRunEvent(event: RunEventLike): RunEventDescriptor {
     const kind = typeof event.type == "string" && event.type != "" ? event.type : "event";
     const style = RunEventStyles[kind] ?? UnknownStyle;
-    return {
+    const descriptor: RunEventDescriptor = {
         time: formatEventTime(event.createdAt),
         kind,
         label: style.label,
@@ -81,6 +97,11 @@ function describeRunEvent(event: RunEventLike): RunEventDescriptor {
         severity: style.severity,
         detail: eventDetail(event),
     };
+    if (kind == "approval_requested") {
+        const approvalId = extractApprovalId(event);
+        if (approvalId != null) descriptor.approvalId = approvalId;
+    }
+    return descriptor;
 }
 
 // Reproduce the legacy single-line text form from the structured descriptor so the
@@ -92,6 +113,7 @@ function formatRunEventLine(descriptor: RunEventDescriptor): string {
 
 export {
     describeRunEvent,
+    extractApprovalId,
     formatRunEventLine,
     isTerminalRunEvent,
     type RunEventDescriptor,
