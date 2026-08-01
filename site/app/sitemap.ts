@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { DOC_PAGES } from "./docs/content";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = "https://recoder.xyz";
@@ -7,6 +8,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/download",
     "/how-it-works",
     "/docs",
+    ...DOC_PAGES.map((p) => `/docs/${p.slug}`),
     "/enterprise",
     "/self-host",
     "/pricing",
