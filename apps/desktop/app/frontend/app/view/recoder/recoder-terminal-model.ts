@@ -4,6 +4,7 @@
 import { globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
+import { describeRunEvent, formatRunEventLine } from "./recoder-run-event";
 import { RecoderTerminalView } from "./recoder-terminal";
 
 type RecoderTerminalStatus = "idle" | "no-workspace" | "connecting" | "connected" | "closed" | "error";
@@ -69,25 +70,8 @@ function readWorkspaceId(block: Block): string {
     return typeof raw === "string" ? raw.trim() : "";
 }
 
-function formatTime(iso?: string): string {
-    if (!iso) return "--:--:--";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "--:--:--";
-    return d.toTimeString().slice(0, 8);
-}
-
 function formatEvent(event: RecoderRunEvent): string {
-    const ts = formatTime(event.createdAt);
-    const kind = typeof event.type === "string" && event.type != "" ? event.type : "event";
-    const detail =
-        typeof event.message === "string" && event.message != ""
-            ? event.message
-            : typeof event.state === "string" && event.state != ""
-              ? `→ ${event.state}`
-              : typeof event.artifactId === "string" && event.artifactId != ""
-                ? `artifact ${event.artifactId}`
-                : "";
-    return detail != "" ? `[${ts}] ${kind}  ${detail}` : `[${ts}] ${kind}`;
+    return formatRunEventLine(describeRunEvent(event));
 }
 
 function parseStreamFrame(raw: unknown): ParsedStreamFrame {
