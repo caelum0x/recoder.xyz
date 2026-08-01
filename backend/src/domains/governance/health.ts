@@ -19,14 +19,24 @@
 import type { ComponentHealth, EngineStatus, HealthStatus } from '../../shared/health-types.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
 import type { GovernanceKernelPort } from './ports/kernel.port.js';
-import type { VaultAdapter } from './adapters/vault.adapter.js';
+
+/**
+ * The minimal vault posture health needs: liveness + a truthful engine status.
+ * Both the single-key {@link VaultAdapter} and the versioned `VaultKeyring`
+ * satisfy this structurally, so health can report whichever seam the secrets
+ * engine actually consumes (the keyring, once wired).
+ */
+export interface VaultHealthSource {
+  readonly available: boolean;
+  status(): EngineStatus;
+}
 
 export interface GovernanceHealthDeps {
   readonly kernel: GovernanceKernelPort;
   /** The persistence executor the durable audit chain + repos bind to. */
   readonly executor: QueryExecutor;
-  /** The envelope-encryption seam behind the secrets engine. */
-  readonly vault: VaultAdapter;
+  /** The envelope-encryption seam behind the secrets engine (vault or keyring). */
+  readonly vault: VaultHealthSource;
   /** Whether durable audit sealing is enabled (config). */
   readonly auditEnabled: boolean;
 }
