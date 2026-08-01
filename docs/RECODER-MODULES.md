@@ -5,7 +5,7 @@
 > health sources, tsc 0, 3,076 backend tests. Multi-tenant IDOR sweep complete (A2A ed25519 signer binding,
 > `/internal/persistence` self-gates). The supervisor spawns the OSS engines on boot and the
 > conductor run flow consumes them (memory recall/harvest, tensorzero inference, governance, recodergit
-> + beads, diff review routing). See [STATUS.md](./STATUS.md) for live status.
+> + beads, diff review routing). Live status is tracked in `bd`.
 
 > **Owner mandate (2026-07-14):** stop shipping thin wrapper layers. Each OSS directory IS a
 > first-class **module** of Recoder, used deeply and directly FROM ITS OWN DIR (never copied into

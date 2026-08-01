@@ -8,8 +8,7 @@
 >
 > Per repo policy: **truthful health, never fake success.** The audits were **scoped,
 > not exhaustive** — a full independent pre-launch security pass is still warranted.
-> Roadmap + gap IDs: **[CONDUCTOR-PARITY-AND-SHIPPABILITY.md](./CONDUCTOR-PARITY-AND-SHIPPABILITY.md)**.
-> Live status: **[STATUS.md](./STATUS.md)**.
+> Roadmap, gap IDs, and live status are tracked in `bd`.
 >
 > **Update (2026-07-31, later same day).** Beyond the 21-vuln sweep (§1), the **entire
 > cross-tenant isolation surface** is now owner-bound: both P0 IDORs (conductor + agent-os),
@@ -88,7 +87,6 @@ closed as their own TDD'd tranche. **All fixed:**
 
 The 21-vuln sweep (§1) plus the isolation/hardening wave (§1.2) closed the moat +
 the cross-tenant read/write surface. What the parity+shippability audit
-(**[CONDUCTOR-PARITY-AND-SHIPPABILITY.md](./CONDUCTOR-PARITY-AND-SHIPPABILITY.md)**)
 still flags as **RESIDUAL — open or partial** is below. The isolation defects that made
 this a single-user-only build are now closed; the residuals are the **owner-gated auth-model
 prod-validation, CI/secret work, billing unification, and infra hardening**.
