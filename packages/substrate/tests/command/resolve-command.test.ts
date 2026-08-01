@@ -15,6 +15,7 @@ const EXPECTED: Record<string, string> = {
   claude_code: "claude -p 'fix the bug' --permission-mode acceptEdits",
   codex: "codex exec 'fix the bug' --sandbox workspace-write",
   opencode: "opencode run 'fix the bug'",
+  cursor: "cursor-agent -p 'fix the bug' --force",
   recoder_code: "recoder-code --prompt 'fix the bug'",
   pi: "pi --print 'fix the bug' -ne",
   gemini_cli: "gemini --prompt 'fix the bug'",
@@ -26,6 +27,7 @@ const EXPECTED_BIN: Record<string, string> = {
   claude_code: 'claude',
   codex: 'codex',
   opencode: 'opencode',
+  cursor: 'cursor-agent',
   recoder_code: 'recoder-code',
   pi: 'pi',
   gemini_cli: 'gemini',
@@ -57,6 +59,20 @@ test('model override is appended and shell-quoted for each runtime', () => {
   );
   const codex = resolveRuntimeCommand('codex', { prompt: PROMPT, model: 'gpt-5' });
   assert.equal(codex.commandLine, "codex exec 'fix the bug' --sandbox workspace-write --model 'gpt-5'");
+  const cursor = resolveRuntimeCommand('cursor', { prompt: PROMPT, model: 'composer-1' });
+  assert.equal(cursor.commandLine, "cursor-agent -p 'fix the bug' --force --model 'composer-1'");
+});
+
+test('cursor extraArgs are appended verbatim after the model flag', () => {
+  const resolved = resolveRuntimeCommand('cursor', {
+    prompt: PROMPT,
+    model: 'composer-1',
+    extraArgs: ['--output-format', 'text'],
+  });
+  assert.equal(
+    resolved.commandLine,
+    "cursor-agent -p 'fix the bug' --force --model 'composer-1' --output-format text",
+  );
 });
 
 test('extraArgs are appended verbatim after the model flag', () => {
@@ -84,6 +100,10 @@ test('interactive request builds the TUI variant (no -p / exec / run / --print)'
   assert.equal(
     resolveRuntimeCommand('pi', { prompt: PROMPT, interactive: true }).commandLine,
     "pi 'fix the bug'",
+  );
+  assert.equal(
+    resolveRuntimeCommand('cursor', { prompt: PROMPT, interactive: true }).commandLine,
+    "cursor-agent 'fix the bug'",
   );
 });
 

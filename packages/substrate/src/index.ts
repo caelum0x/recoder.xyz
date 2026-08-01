@@ -49,6 +49,10 @@ export type {
   SubstrateReconcileReport,
 } from './types/index.js';
 export { CONDUCTOR_RUNTIME_IDS } from './types/index.js';
+// In-process (non-CLI) runtime ids — exported from the source module directly
+// because the types barrel re-exports only the CLI runtime surface.
+export type { InProcessRuntimeId } from './types/runtime-id.js';
+export { IN_PROCESS_RUNTIME_IDS } from './types/runtime-id.js';
 
 // === Command — resolve runtime+prompt → the REAL headless CLI line ===
 export {
@@ -60,6 +64,7 @@ export {
   extraArgs,
   isConductorRuntimeId,
   asConductorRuntime,
+  isInProcessRuntimeId,
 } from './command/index.js';
 
 // === Exec — low-level process primitives ===

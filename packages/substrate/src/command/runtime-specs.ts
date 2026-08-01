@@ -51,6 +51,17 @@ export const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
     // Interactive: the opencode TUI (no `run`), started with the prompt.
     buildInteractive: (o) => `opencode ${initialPrompt(o)}${modelFlag('--model', o.model)}${extraArgs(o)}`.trimEnd(),
   },
+  cursor: {
+    // cursor-agent is Cursor's CLI agent. `-p` runs it in headless print mode
+    // (execute the task and exit); `--force` auto-approves edits so it can write
+    // in its isolated worktree, mirroring the siblings' auto-approve posture.
+    bin: 'cursor-agent',
+    build: (o) =>
+      `cursor-agent -p ${shellQuote(o.prompt)} --force${modelFlag('--model', o.model)}${extraArgs(o)}`,
+    // Interactive: the cursor-agent TUI, opened with the initial prompt (no `-p`).
+    buildInteractive: (o) =>
+      `cursor-agent ${initialPrompt(o)}${modelFlag('--model', o.model)}${extraArgs(o)}`.trimEnd(),
+  },
   recoder_code: {
     bin: 'recoder-code',
     build: (o) => `recoder-code --prompt ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${extraArgs(o)}`,
