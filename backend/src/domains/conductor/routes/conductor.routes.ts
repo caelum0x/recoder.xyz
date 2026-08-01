@@ -29,6 +29,7 @@
  *   POST   /api/conductor/workspaces/:id/pr       push branch + open PR (GATED)
  *   POST   /api/conductor/workspaces/:id/merge    merge into base, gh or local (GATED)
  *   POST   /api/conductor/workspaces/:id/files/discard  file-level reject: restore paths to review base (GATED)
+ *   POST   /api/conductor/workspaces/:id/files/discard-hunks  hunk-level reject: reverse-apply selected hunks of one path (GATED)
  *   POST   /api/conductor/workspaces/:id/archive  teardown + archive (GATED)
  *   POST   /api/conductor/workspaces/:id/preview-url  persist sniffed preview URL (GATED)
  *   POST   /api/conductor/workspaces/:id/preview-verify  verify the stored preview URL (GATED)
@@ -613,6 +614,31 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     }),
   );
 
+  // HUNK-LEVEL REJECT in review: reverse-apply the selected hunks of ONE path
+  // against the review base so Apply (= merge) delivers only the accepted edits.
+  // Body `{path: string, hunkIndexes: number[]}` is validated fail-fast BEFORE
+  // the module is touched — `path` under the same safe-path guard as
+  // `/files/discard` (the op re-guards as defense in depth), `hunkIndexes` a
+  // non-empty bounded array of non-negative integers. GATED (`workspace.discard`);
+  // a missing workspace is a truthful 404 from the ownership guard above.
+  router.post(
+    '/workspaces/:id/files/discard-hunks',
+    middleware.authenticateMutating,
+    access,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const filePath = readDiscardHunkPath(body.path);
+      const hunkIndexes = readDiscardHunkIndexes(body.hunkIndexes);
+      const result = await module.discardWorkspaceHunks(
+        req.params.id,
+        filePath,
+        hunkIndexes,
+        req.principal!,
+      );
+      finishWrite(res, result, { key: 'discard' });
+    }),
+  );
+
   router.post(
     '/workspaces/:id/archive',
     middleware.authenticateMutating,
@@ -994,6 +1020,36 @@ function readDiscardPaths(value: unknown): string[] {
     }
   }
   return value as string[];
+}
+
+/** Bound one hunk-reject batch — each request costs one diff + one apply + one commit. */
+const MAX_DISCARD_HUNKS = 200;
+
+/** Validate the `path` body of `/files/discard-hunks` fail-fast (same safe-path law as `/files/discard`). */
+function readDiscardHunkPath(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0 || !isSafeDiscardPath(value)) {
+    throw createError(
+      ErrorCode.VALIDATION_ERROR,
+      '`path` must be a safe repo-relative path (no absolute, no "..", no leading "-")',
+    );
+  }
+  return value;
+}
+
+/** Validate the `hunkIndexes` body of `/files/discard-hunks` fail-fast (400 on any bad entry). */
+function readDiscardHunkIndexes(value: unknown): number[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw createError(ErrorCode.VALIDATION_ERROR, '`hunkIndexes` must be a non-empty array of non-negative integers');
+  }
+  if (value.length > MAX_DISCARD_HUNKS) {
+    throw createError(ErrorCode.VALIDATION_ERROR, `\`hunkIndexes\` must contain at most ${MAX_DISCARD_HUNKS} entries`);
+  }
+  for (const index of value) {
+    if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) {
+      throw createError(ErrorCode.VALIDATION_ERROR, '`hunkIndexes` must be a non-empty array of non-negative integers');
+    }
+  }
+  return value as number[];
 }
 
 /** A positive-integer query param (e.g. `?limit=50`), or `undefined` when absent/invalid. */

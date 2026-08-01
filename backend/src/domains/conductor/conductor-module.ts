@@ -137,6 +137,10 @@ import {
   type WorkspaceDiscardView,
 } from './review/workspace-discard.ops.js';
 import {
+  discardWorkspaceHunks as discardWorkspaceHunksOp,
+  type WorkspaceDiscardHunksView,
+} from './review/workspace-discard-hunks.ops.js';
+import {
   createWorkspacePr as createWorkspacePrOp,
   mergeWorkspace as mergeWorkspaceOp,
   type CreatePrInput,
@@ -2674,6 +2678,71 @@ export class ConductorComposer implements ConductorModule {
         ok: false,
         verdict,
         reason: err instanceof Error ? err.message : 'discard failed',
+      };
+    }
+  }
+
+  /**
+   * HUNK-LEVEL REJECT in review (`POST …/files/discard-hunks`) — reverse-apply
+   * the selected hunks of ONE path against the review base so Apply (= merge)
+   * delivers only the accepted edits. GATED (`workspace.discard` — the SAME
+   * action as the file-level reject: same risk, same approval seam) and sealed
+   * into the audit chain like every other workspace write. Degrade-truthful:
+   * per-hunk outcomes come back individually (an out-of-range index fails that
+   * index, not the batch); the assembled patch applies atomically; a
+   * zero-effect call is a truthful no-op (`committed:false`).
+   */
+  async discardWorkspaceHunks(
+    workspaceId: string,
+    filePath: string,
+    hunkIndexes: readonly number[],
+    principal: Principal
+  ): Promise<ConductorWriteResult<WorkspaceDiscardHunksView>> {
+    const action = 'workspace.discard';
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+        metadata: { workspaceId, path: filePath, hunkCount: hunkIndexes.length },
+      }
+    );
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    if (!workspace)
+      return {
+        ok: false,
+        verdict,
+        reason: `workspace not found: ${workspaceId}`,
+      };
+    try {
+      const view = await discardWorkspaceHunksOp(
+        this.reviewDeps(),
+        workspace,
+        filePath,
+        hunkIndexes
+      );
+      const count = (a: string) =>
+        view.hunks.filter(h => h.action === a).length;
+      await recordConductorAudit(
+        this.gate,
+        conductorAuditEntry(action, principal, verdict, {
+          workspaceId,
+          path: filePath,
+          requested: hunkIndexes.length,
+          discarded: count('discarded'),
+          failed: count('failed'),
+          committed: view.committed,
+        })
+      );
+      return { ok: true, verdict, value: view };
+    } catch (err) {
+      return {
+        ok: false,
+        verdict,
+        reason: err instanceof Error ? err.message : 'discard hunks failed',
       };
     }
   }
