@@ -48,6 +48,30 @@ export function platformDownloadUrl(platform: PlatformId): string | undefined {
   }
 }
 
+/** A 64-char SHA-256 hex digest, if configured — never renders a malformed one. */
+function sha256Hex(raw: string | undefined): string | undefined {
+  const value = raw?.trim().toLowerCase();
+  if (!value) return undefined;
+  return /^[a-f0-9]{64}$/.test(value) ? value : undefined;
+}
+
+/**
+ * The published SHA-256 checksum for a platform's artifact, if configured. Lets
+ * the Download page show a `shasum -a 256` verify affordance so users can prove
+ * integrity before installing. Emitted by publish-desktop-release-local.sh
+ * (SHA256SUMS) and surfaced via NEXT_PUBLIC_DOWNLOAD_<PLATFORM>_SHA256.
+ */
+export function platformChecksum(platform: PlatformId): string | undefined {
+  switch (platform) {
+    case "macos":
+      return sha256Hex(process.env.NEXT_PUBLIC_DOWNLOAD_MACOS_SHA256);
+    case "windows":
+      return sha256Hex(process.env.NEXT_PUBLIC_DOWNLOAD_WINDOWS_SHA256);
+    case "linux":
+      return sha256Hex(process.env.NEXT_PUBLIC_DOWNLOAD_LINUX_SHA256);
+  }
+}
+
 /**
  * The best download href for a platform: its direct artifact if set, otherwise
  * the releases page. Returns undefined when nothing is configured (no public

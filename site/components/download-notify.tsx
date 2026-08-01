@@ -11,22 +11,25 @@ interface Platform {
 }
 
 const PLATFORMS: Platform[] = [
-  { os: "macOS", note: "Apple silicon & Intel", value: "macos" },
+  { os: "macOS", note: "Apple Silicon (arm64)", value: "macos" },
   { os: "Windows", note: "x64", value: "windows" },
   { os: "Linux", note: "AppImage & deb", value: "linux" },
 ];
 
 /**
- * Live-release variant: real GitHub release artifacts exist (ROADMAP M4.3), so
- * each card is a direct "Download" link to the build for that platform. The
- * hrefs are resolved server-side from environment config and passed in, so this
- * component never hardcodes a URL that could 404.
+ * Live-release variant: real signed release artifacts exist, so each card is a
+ * direct "Download" link to the build for that platform. The hrefs (and optional
+ * SHA-256 checksums) are resolved server-side from environment config and passed
+ * in, so this component never hardcodes a URL that could 404, and users can
+ * verify integrity before installing.
  */
 export function DownloadReleases({
   hrefs,
+  checksums,
   versionLabel,
 }: {
   hrefs: Partial<Record<PlatformId, string>>;
+  checksums?: Partial<Record<PlatformId, string>>;
   versionLabel?: string;
 }) {
   return (
@@ -36,23 +39,46 @@ export function DownloadReleases({
           const href = hrefs[p.value];
           if (!href) return null;
           const external = !href.startsWith("/");
+          const sum = checksums?.[p.value];
+          const file = href.split("/").pop() || "the download";
           return (
-            <a
+            <div
               key={p.value}
-              href={href}
-              {...(external ? { target: "_blank", rel: "noreferrer" } : {})}
-              className="group rounded-xl border border-border bg-bg-soft p-6 text-left transition-colors hover:border-accent"
+              className="rounded-xl border border-border bg-bg-soft p-6 text-left"
             >
-              <div className="text-lg font-medium">{p.os}</div>
-              <div className="mt-1 text-xs text-faint">{p.note}</div>
-              <div className="mt-4 text-sm text-accent">Download</div>
-            </a>
+              <a
+                href={href}
+                {...(external ? { target: "_blank", rel: "noreferrer" } : {})}
+                className="group block transition-colors hover:text-accent"
+              >
+                <div className="text-lg font-medium">{p.os}</div>
+                <div className="mt-1 text-xs text-faint">{p.note}</div>
+                <div className="mt-4 text-sm text-accent">Download</div>
+              </a>
+              {sum ? (
+                <details className="mt-4 border-t border-border pt-3">
+                  <summary className="cursor-pointer text-xs text-muted hover:text-fg">
+                    Verify checksum
+                  </summary>
+                  <p className="mt-2 text-[11px] text-faint">
+                    Confirm the SHA-256 matches before installing:
+                  </p>
+                  <code className="mt-2 block break-all rounded bg-bg px-2 py-1.5 text-[11px] text-muted">
+                    shasum -a 256 {file}
+                  </code>
+                  <code className="mt-1 block break-all rounded bg-bg px-2 py-1.5 text-[11px] text-faint">
+                    {sum}
+                  </code>
+                </details>
+              ) : null}
+            </div>
           );
         })}
       </div>
       <p className="mt-6 text-center text-xs text-faint">
-        {versionLabel ? `${versionLabel} · ` : ""}Builds are served from GitHub
-        Releases. Your agents, your keys — Recoder never proxies tokens.
+        {versionLabel ? `${versionLabel} · ` : ""}Self-hosted builds, served
+        directly from Recoder. macOS is signed with a Developer ID and notarized
+        by Apple. Your agents, your keys — Recoder never proxies tokens.
       </p>
     </div>
   );
