@@ -35,6 +35,7 @@ import { createContainer, Container } from './container.js';
 import { createHealthRegistry, HealthRegistry } from './health-registry.js';
 import { createLifecycle, Lifecycle } from './lifecycle.js';
 import { createPersistenceModule } from '../domains/persistence/index.js';
+import { createIdempotencyMiddleware } from '../http/middleware/idempotency.js';
 import {
   createIdentityModule,
   createBetterAuthPlanReader,
@@ -273,6 +274,15 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   });
   container.registerValue(DOMAIN_TOKENS.persistence, persistence);
   healthRegistry.register(persistence);
+
+  // `Idempotency-Key` replay guard (BE-10.3) over the durable (degrade-safe)
+  // KvStore: threaded into the conductor (`POST /workspaces`) + agent-os
+  // (`POST /runs`) route builders so a client retry after a network failure
+  // replays the original success instead of spawning a second worktree/run.
+  const idempotency = createIdempotencyMiddleware({
+    kv: persistence.kvStore(),
+    logger: childLogger('idempotency'),
+  });
 
   // --- Phase 2: Identity & Auth — the credential seam. Hosts Better Auth
   //     in-process, resolves any credential → Principal via SessionVerifier, and
@@ -522,6 +532,8 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     executor: persistence.executor(),
     middleware: identity.middleware(),
     gate: governance.gate(),
+    // Idempotency-Key replay guard on the duplicate-spawning POST /runs (BE-10.3).
+    idempotency,
     // browser-use EngineClientPort (a supervised sidecar): the workflow
     // `browser-check` node handler auto-resolves its `.ext()` deep-op port and
     // runs `run_task` against the LIVE sidecar. Absent/down ⇒ the node degrades
@@ -849,6 +861,8 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     executor: persistence.executor(),
     middleware: identity.middleware(),
     gate: governance.gate(),
+    // Idempotency-Key replay guard on the duplicate-spawning POST /workspaces (BE-10.3).
+    idempotency,
     runEventSink: conductorRunSink,
     // DURABLE canonical run/event store (P1 #8): the conductor delegates its
     // TaskRun/RunEvent/TaskSpec reads+writes to the agent-os state-of-record so run

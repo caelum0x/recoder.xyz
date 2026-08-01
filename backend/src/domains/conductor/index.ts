@@ -14,7 +14,7 @@
  * the repository degrades to a bounded in-process store; without the gate the
  * module refuses to construct (writes must be governed).
  */
-import type { Router } from 'express';
+import type { RequestHandler, Router } from 'express';
 import type { RunEvent, Workspace, WorkspaceState } from '@recoder/agent-os';
 import type { ReconcileReport } from '@recoder/substrate';
 import type { ConductorSubstrate, WorkLockPort, AdmissionPort } from '@recoder/substrate';
@@ -346,6 +346,14 @@ export interface ConductorModuleDeps {
    * (`[]`), never a fabricated record. See `adapters/audit-reader.adapter.ts`.
    */
   readonly auditReader?: AuditReaderPort;
+  /**
+   * OPTIONAL `Idempotency-Key` replay guard (BE-10.3), threaded into the route
+   * builder and mounted on exactly `POST /workspaces` (after
+   * `authenticateMutating`) so a client retry after a network failure replays
+   * the original create instead of spawning a second worktree+agent. Bootstrap
+   * builds it over the persistence `KvStore`; absent ⇒ no behavior change.
+   */
+  readonly idempotency?: RequestHandler;
 }
 
 /** The public surface bootstrap registers and the edge/interop consume. */

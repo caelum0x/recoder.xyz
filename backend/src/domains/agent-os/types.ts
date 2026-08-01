@@ -5,7 +5,7 @@
  * `ports/*`. This file carries only the composer's assembly + runtime-stat
  * shapes (domain doc §2 `types.ts`).
  */
-import type { Router } from 'express';
+import type { RequestHandler, Router } from 'express';
 import type { AppConfig } from '../../shared/app-config.js';
 import type { Logger } from '../../shared/logger.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
@@ -94,6 +94,14 @@ export interface AgentOsDeps {
    * coordination MCP tools degrade truthfully (`available:false`).
    */
   readonly coordinationEngine?: CoordinationEnginePort;
+  /**
+   * OPTIONAL `Idempotency-Key` replay guard (BE-10.3), threaded into the CRUD
+   * router and mounted on exactly `POST /runs` (after `authenticateMutating`) so
+   * a client retry after a network failure replays the original run instead of
+   * minting a duplicate. Bootstrap builds it over the persistence `KvStore`;
+   * absent ⇒ no behavior change.
+   */
+  readonly idempotency?: RequestHandler;
 }
 
 /**
