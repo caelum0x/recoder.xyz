@@ -12,7 +12,9 @@
 import { describe, it, expect } from 'vitest';
 import type { Workspace } from '@recoder/agent-os';
 import type { McpToolCaller, McpToolRegistration } from '../../../shared/module-base.js';
+import type { Principal } from '../../identity/types.js';
 import type { ReconcileFindingView } from '../types.js';
+import type { CompareView, SiblingCompareEntry } from '../services/compare.service.js';
 import type { ConductorModule } from '../index.js';
 import { buildConductorMcpTools } from './conductor-engine.js';
 
@@ -149,5 +151,184 @@ describe('conductor read MCP tools — cross-tenant binding', () => {
       substrates: unknown[];
     };
     expect(Array.isArray(res.substrates)).toBe(true);
+  });
+});
+
+/**
+ * W8-D1 — agent-callable sibling awareness. `conductor_siblings` /
+ * `conductor_compare_group` give an agent read access to its OWN parallel-run
+ * group (who else is on the task group, what each sibling changed, which files
+ * are CONTESTED). These tests prove the engine (1) refuses an absent caller,
+ * (2) anchors ownership on the named workspace with the no-oracle 403, (3) hands
+ * the module a MINTED minimal principal mirroring the caller so the module's own
+ * `compareAccessFilter`/`canAccessWorkspace` narrowing scopes the group exactly
+ * as HTTP does (privileged callers pass NO principal ⇒ full-group internal read),
+ * and (4) projects the compact agent payload — never the operator grid/attach
+ * internals (`grid`, `sessionName`, `worktreePath`).
+ */
+describe('conductor sibling-awareness MCP tools (conductor_siblings / conductor_compare_group)', () => {
+  /** A full compare-view sibling row INCLUDING internal fields the projection must drop. */
+  function sibling(id: string, files: readonly string[]): SiblingCompareEntry {
+    return {
+      workspaceId: id,
+      agent: 'claude_code',
+      runtimeId: 'claude_code',
+      branch: `branch-${id}`,
+      state: 'running',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      diffStat: { files: files.length, additions: 5, deletions: 1 },
+      changedFiles: files,
+      sessionName: `sess-${id}`, // internal attach seam — must NOT reach the agent
+      worktreePath: `/wt/${id}`, // internal attach seam — must NOT reach the agent
+    };
+  }
+
+  interface CapturedCall {
+    readonly method: 'workspaceSiblings' | 'compareTaskGroup';
+    readonly arg: string;
+    readonly principal: Principal | undefined;
+  }
+
+  /** The grouped view the fake module serves (two siblings contesting `shared.ts`). */
+  const groupView: CompareView = {
+    taskGroup: 'tg-1',
+    count: 2,
+    siblings: [sibling('ws-alice', ['a.ts', 'shared.ts']), sibling('ws-alice-2', ['b.ts', 'shared.ts'])],
+    contested: [{ path: 'shared.ts', workspaceIds: ['ws-alice', 'ws-alice-2'] }],
+  };
+
+  /** A compare module capturing (arg, principal) per call; `siblingsResult` overrides the view. */
+  function makeCompareModule(overrides?: { readonly siblingsResult: CompareView | null }): {
+    module: ConductorModule;
+    calls: CapturedCall[];
+  } {
+    const calls: CapturedCall[] = [];
+    const alice = workspace('ws-alice', 'alice');
+    const bob = workspace('ws-bob', 'bob');
+    const module = {
+      async getWorkspace(id: string) {
+        return [alice, bob].find((w) => w.workspaceId === id) ?? null;
+      },
+      async workspaceSiblings(id: string, principal?: Principal) {
+        calls.push({ method: 'workspaceSiblings', arg: id, principal });
+        return overrides ? overrides.siblingsResult : groupView;
+      },
+      async compareTaskGroup(taskGroup: string, principal?: Principal) {
+        calls.push({ method: 'compareTaskGroup', arg: taskGroup, principal });
+        return groupView;
+      },
+    } as unknown as ConductorModule;
+    return { module, calls };
+  }
+
+  it('both tools refuse an absent caller (AUTH_REQUIRED)', async () => {
+    const { module } = makeCompareModule();
+    const tools = buildConductorMcpTools(module);
+    await expect(
+      tool(tools, 'conductor_siblings').handler({ workspaceId: 'ws-alice' }, undefined),
+    ).rejects.toThrow(/AUTH_REQUIRED|authorized caller/i);
+    await expect(
+      tool(tools, 'conductor_compare_group').handler({ taskGroup: 'tg-1' }, undefined),
+    ).rejects.toThrow(/AUTH_REQUIRED|authorized caller/i);
+  });
+
+  it('conductor_siblings: owner gets the projected payload and the module sees a MINTED principal mirroring the caller', async () => {
+    const { module, calls } = makeCompareModule();
+    const tools = buildConductorMcpTools(module);
+    const res = (await tool(tools, 'conductor_siblings').handler(
+      { workspaceId: 'ws-alice' },
+      caller('alice', ['read'], 'org-1'),
+    )) as {
+      taskGroup: string | null;
+      count: number;
+      siblings: Record<string, unknown>[];
+      contested: unknown[];
+    };
+    // Projected payload only — no grid/sessionName/worktreePath internals.
+    expect(Object.keys(res).sort()).toEqual(['contested', 'count', 'siblings', 'taskGroup']);
+    expect(res.taskGroup).toBe('tg-1');
+    expect(res.count).toBe(2);
+    expect(res.siblings.map((s) => s.workspaceId)).toEqual(['ws-alice', 'ws-alice-2']);
+    expect(res.siblings[0].diffStat).toEqual({ files: 2, additions: 5, deletions: 1 });
+    expect(res.siblings[0].changedFiles).toEqual(['a.ts', 'shared.ts']);
+    expect(res.contested).toEqual([{ path: 'shared.ts', workspaceIds: ['ws-alice', 'ws-alice-2'] }]);
+    expect(JSON.stringify(res)).not.toContain('sessionName');
+    expect(JSON.stringify(res)).not.toContain('worktreePath');
+    // The module was invoked WITH a minted minimal principal mirroring the caller.
+    expect(calls).toHaveLength(1);
+    expect(calls[0].method).toBe('workspaceSiblings');
+    expect(calls[0].arg).toBe('ws-alice');
+    expect(calls[0].principal).toMatchObject({
+      userId: 'alice',
+      orgId: 'org-1',
+      scopes: ['read'],
+      kind: 'apikey',
+      isAnonymous: false,
+    });
+  });
+
+  it('conductor_siblings: an anchor owned by another tenant is refused (403) and the module is never asked', async () => {
+    const { module, calls } = makeCompareModule();
+    const tools = buildConductorMcpTools(module);
+    await expect(
+      tool(tools, 'conductor_siblings').handler({ workspaceId: 'ws-bob' }, caller('alice')),
+    ).rejects.toThrow(/AUTHZ_PROJECT_ACCESS_DENIED|workspaces it owns/i);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('conductor_siblings: an unknown workspaceId is a truthful miss (no throw, module never asked)', async () => {
+    const { module, calls } = makeCompareModule();
+    const tools = buildConductorMcpTools(module);
+    const res = (await tool(tools, 'conductor_siblings').handler(
+      { workspaceId: 'ws-nope' },
+      caller('alice'),
+    )) as { workspace: null };
+    expect(res.workspace).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+
+  it('conductor_siblings: an admin caller passes NO principal (full-group internal read)', async () => {
+    const { module, calls } = makeCompareModule();
+    const tools = buildConductorMcpTools(module);
+    await tool(tools, 'conductor_siblings').handler({ workspaceId: 'ws-bob' }, caller('ops', ['admin']));
+    expect(calls).toHaveLength(1);
+    expect(calls[0].principal).toBeUndefined();
+  });
+
+  it('conductor_siblings: module returning null degrades to the same truthful miss (never a throw)', async () => {
+    const { module } = makeCompareModule({ siblingsResult: null });
+    const tools = buildConductorMcpTools(module);
+    const res = (await tool(tools, 'conductor_siblings').handler(
+      { workspaceId: 'ws-alice' },
+      caller('alice'),
+    )) as { workspace: null };
+    expect(res.workspace).toBeNull();
+  });
+
+  it('conductor_compare_group: happy path projects {taskGroup,count,siblings,contested} and mints the caller principal', async () => {
+    const { module, calls } = makeCompareModule();
+    const tools = buildConductorMcpTools(module);
+    const res = (await tool(tools, 'conductor_compare_group').handler(
+      { taskGroup: 'tg-1' },
+      caller('alice', ['read'], 'org-1'),
+    )) as { taskGroup: string | null; count: number; siblings: Record<string, unknown>[] };
+    expect(Object.keys(res).sort()).toEqual(['contested', 'count', 'siblings', 'taskGroup']);
+    expect(res.count).toBe(2);
+    expect(Object.keys(res.siblings[0]).sort()).toEqual([
+      'agent',
+      'branch',
+      'changedFiles',
+      'diffStat',
+      'state',
+      'workspaceId',
+    ]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].method).toBe('compareTaskGroup');
+    expect(calls[0].arg).toBe('tg-1');
+    expect(calls[0].principal).toMatchObject({ userId: 'alice', orgId: 'org-1' });
+    // Internal (`internal` scope) callers read the full group with NO principal.
+    await tool(tools, 'conductor_compare_group').handler({ taskGroup: 'tg-1' }, caller('ops', ['internal']));
+    expect(calls[1].principal).toBeUndefined();
   });
 });
