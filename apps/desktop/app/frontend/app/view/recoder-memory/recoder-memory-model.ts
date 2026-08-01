@@ -50,6 +50,9 @@ class RecoderMemoryViewModel implements ViewModel {
     errorAtom: PrimitiveAtom<string>;
     searchNoticeAtom: PrimitiveAtom<string>;
     connectedAtom: PrimitiveAtom<boolean>;
+    actingAtom: PrimitiveAtom<string>;
+    actionErrorAtom: PrimitiveAtom<string>;
+    actionNoticeAtom: PrimitiveAtom<string>;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -65,6 +68,9 @@ class RecoderMemoryViewModel implements ViewModel {
         this.errorAtom = atom("") as PrimitiveAtom<string>;
         this.searchNoticeAtom = atom("") as PrimitiveAtom<string>;
         this.connectedAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.actingAtom = atom("") as PrimitiveAtom<string>;
+        this.actionErrorAtom = atom("") as PrimitiveAtom<string>;
+        this.actionNoticeAtom = atom("") as PrimitiveAtom<string>;
     }
 
     get viewComponent(): ViewComponent {
@@ -77,6 +83,7 @@ class RecoderMemoryViewModel implements ViewModel {
     async refresh() {
         globalStore.set(this.loadingAtom, true);
         globalStore.set(this.errorAtom, "");
+        globalStore.set(this.actionErrorAtom, "");
         try {
             const base = getRecoderBackendUrl();
             // Both edges answer with the sendSuccess envelope around a BARE array
@@ -164,6 +171,92 @@ class RecoderMemoryViewModel implements ViewModel {
             globalStore.set(this.searchingAtom, false);
         }
     }
+
+    // Promote a pending candidate → durable memory via POST /candidates/:id/accept.
+    // The edge is GATED: a { promoted:false } response is a TRUTHFUL non-promotion
+    // (policy-denied or pending approval), surfaced as a notice — never faked as a
+    // success. Refreshes on the success path so the list reflects the real state.
+    async acceptCandidate(candidateId: string) {
+        if (candidateId == "") {
+            return;
+        }
+        globalStore.set(this.actingAtom, candidateId);
+        globalStore.set(this.actionErrorAtom, "");
+        globalStore.set(this.actionNoticeAtom, "");
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/agent-os/memory/candidates/${encodeURIComponent(candidateId)}/accept`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}),
+                }
+            );
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                globalStore.set(this.actionErrorAtom, readErrorReason(body) || `Could not accept (${res.status})`);
+                return;
+            }
+            globalStore.set(this.actionNoticeAtom, acceptOutcomeNotice(body?.data));
+        } catch (e) {
+            globalStore.set(this.actionErrorAtom, e instanceof Error ? e.message : String(e));
+            return;
+        } finally {
+            globalStore.set(this.actingAtom, "");
+        }
+        await this.refresh();
+    }
+
+    // Reject a pending candidate via POST /candidates/:id/reject. Low-risk audited
+    // state change; the backend requires a reason, so a default reviewer note is
+    // sent. Refreshes on the success path so the rejected wisp drops from pending.
+    async rejectCandidate(candidateId: string) {
+        if (candidateId == "") {
+            return;
+        }
+        globalStore.set(this.actingAtom, candidateId);
+        globalStore.set(this.actionErrorAtom, "");
+        globalStore.set(this.actionNoticeAtom, "");
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/agent-os/memory/candidates/${encodeURIComponent(candidateId)}/reject`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ reason: "Rejected by reviewer" }),
+                }
+            );
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                globalStore.set(this.actionErrorAtom, readErrorReason(body) || `Could not reject (${res.status})`);
+                return;
+            }
+            globalStore.set(this.actionNoticeAtom, "Candidate rejected.");
+        } catch (e) {
+            globalStore.set(this.actionErrorAtom, e instanceof Error ? e.message : String(e));
+            return;
+        } finally {
+            globalStore.set(this.actingAtom, "");
+        }
+        await this.refresh();
+    }
+}
+
+// Translate the gated AcceptResult into a truthful one-line outcome. `promoted`
+// is the ONLY signal that a durable item was written; every other verdict is a
+// non-promotion reported honestly (pending approval, or policy-denied).
+function acceptOutcomeNotice(data: unknown): string {
+    const d = data != null && typeof data == "object" ? (data as Record<string, unknown>) : {};
+    if (d.promoted === true) {
+        return "Promoted to durable memory.";
+    }
+    const verdict = d.verdict != null && typeof d.verdict == "object" ? (d.verdict as Record<string, unknown>) : {};
+    const effect = typeof verdict.effect == "string" ? verdict.effect : "";
+    const reason = typeof verdict.reason == "string" ? verdict.reason : "";
+    if (effect == "needs_approval") {
+        return reason || "Accept sent for approval — pending review.";
+    }
+    return reason || "Accept was not permitted by policy.";
 }
 
 export {
