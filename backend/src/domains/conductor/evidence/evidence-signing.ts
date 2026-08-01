@@ -54,6 +54,31 @@ function wrapBase64(b64: string): string {
 }
 
 /**
+ * Build a DETACHED Ed25519 signature block over an already-computed `contentHash`
+ * — the SHARED signing primitive both {@link signEvidenceExport} (convergence
+ * evidence) and the preview-evidence signer compose. The embedded SPKI PEM public
+ * key makes the resulting block self-verifying. MAY throw for a signing fault; the
+ * degrade-truthful callers wrap it and fall back to an unsigned pack. Pure over its
+ * inputs (deterministic for a fixed `contentHash`/`now`) — never touches config or
+ * the network.
+ */
+export function buildDetachedSignature(
+  contentHash: string,
+  privateKey: KeyObject,
+  now: () => string,
+): EvidenceSignature {
+  const publicKeyPem = createPublicKey(privateKey).export({ type: 'spki', format: 'pem' }).toString();
+  const signature = cryptoSign(null, Buffer.from(contentHash), privateKey).toString('base64');
+  return {
+    algorithm: 'ed25519',
+    publicKeyPem,
+    signedContentHash: contentHash,
+    signature,
+    signedAt: now(),
+  };
+}
+
+/**
  * Attach a DETACHED Ed25519 signature over `pack.contentHash`. When `privateKey` is
  * `null` the pack is returned unsigned (`signature: null`). The embedded SPKI PEM
  * public key makes the pack self-verifying. Never throws for a signing fault — a
@@ -67,15 +92,7 @@ export function signEvidenceExport(
   if (!privateKey) return { ...pack, signature: null };
   try {
     const now = options.now ?? (() => new Date().toISOString());
-    const publicKeyPem = createPublicKey(privateKey).export({ type: 'spki', format: 'pem' }).toString();
-    const signature = cryptoSign(null, Buffer.from(pack.contentHash), privateKey).toString('base64');
-    const block: EvidenceSignature = {
-      algorithm: 'ed25519',
-      publicKeyPem,
-      signedContentHash: pack.contentHash,
-      signature,
-      signedAt: now(),
-    };
+    const block = buildDetachedSignature(pack.contentHash, privateKey, now);
     return { ...pack, signature: block };
   } catch (err) {
     options.logger?.warn({ err }, 'evidence export signing failed — returning UNSIGNED pack');

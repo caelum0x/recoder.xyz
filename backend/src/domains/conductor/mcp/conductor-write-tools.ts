@@ -34,6 +34,9 @@ import type { Principal } from '../../identity/types.js';
 import type { SteerInput } from '../types.js';
 import type { ConductorWriteResult } from '../conductor-module.js';
 import { ADVANCE_TARGET_STATES } from '../conductor-module.js';
+import type { PreviewVerifyOptions } from '../services/preview-verify.service.js';
+import type { PreviewVerifyAssertion } from '../ports/preview-verify.port.js';
+import type { PreviewEvidencePack } from '../evidence/preview-evidence.js';
 
 /**
  * The narrow slice of the conductor module these tools bind to — the three
@@ -201,6 +204,89 @@ export function buildConductorWriteTools(
           return inputError(`to must be one of: ${ADVANCE_TARGET_STATES.join(', ')}`);
         }
         const result = await surface.advanceWorkspaceState(workspaceId, to, resolved.principal);
+        return toResponse(result);
+      },
+    },
+  ];
+}
+
+/**
+ * The narrow module seam the preview-verify + evidence-attach tool binds to (BE-6.2).
+ * Kept as a one-method contract so the tool composes against an interface (trivially
+ * fakeable in tests), not the whole conductor composer. The method is the module's
+ * ALREADY-gated `attachPreviewEvidence`, which runs the governed browser verification
+ * and returns the SIGNED, content-hashed evidence pack.
+ */
+export interface ConductorPreviewEvidenceSurface {
+  attachPreviewEvidence(
+    workspaceId: string,
+    principal: Principal,
+    options?: PreviewVerifyOptions,
+  ): Promise<ConductorWriteResult<PreviewEvidencePack>>;
+}
+
+/** Parse the optional caller-supplied text assertions (`[{ expected, target? }]`). */
+function parseAssertions(raw: unknown): readonly PreviewVerifyAssertion[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const assertions: PreviewVerifyAssertion[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const record = entry as Record<string, unknown>;
+    const expected = typeof record.expected === 'string' ? record.expected.trim() : '';
+    if (!expected) continue;
+    assertions.push({
+      expected,
+      ...(typeof record.target === 'string' && record.target.trim()
+        ? { target: record.target.trim() }
+        : {}),
+    });
+  }
+  return assertions.length > 0 ? assertions : undefined;
+}
+
+/** Read the optional preview-verify options off the tool args (defensive, untrusting). */
+function parsePreviewOptions(body: Record<string, unknown>): PreviewVerifyOptions {
+  const assertions = parseAssertions(body.assertions);
+  const timeoutMs =
+    typeof body.timeoutMs === 'number' && Number.isFinite(body.timeoutMs) && body.timeoutMs > 0
+      ? body.timeoutMs
+      : undefined;
+  return {
+    ...(assertions ? { assertions } : {}),
+    ...(typeof body.screenshot === 'boolean' ? { screenshot: body.screenshot } : {}),
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+  };
+}
+
+/**
+ * Build the governed preview-verify + evidence-attach MCP tool (BE-6.2). It BINDS the
+ * acting identity to the HOST-AUTHORIZED caller (never a free-form `args.userId`),
+ * delegates to the module's already-gated `attachPreviewEvidence`, and returns the
+ * SIGNED evidence pack. Governance flows straight back: a blocked verdict surfaces as
+ * `{ ok:false, gated:true }` with NO verification run and NO faked evidence. A
+ * degraded browser (no engine) yields a truthful `skipped` pack, never a fabricated
+ * pass. Kept SEPARATE from {@link buildConductorWriteTools} so the steer/stop/advance
+ * registration stays exactly those three.
+ */
+export function buildConductorPreviewEvidenceTools(
+  surface: ConductorPreviewEvidenceSurface,
+): readonly McpToolRegistration[] {
+  return [
+    {
+      name: 'conductor_preview_verify',
+      description:
+        'Verify a conductor workspace\'s stored preview URL in a real browser (navigate → assert expected text → evidence screenshot) and return a SIGNED, content-hashed evidence pack. Governed + audit-sealed: a blocked verdict refuses without a run; no browser engine ⇒ a truthful skipped(degraded) pack, never a fabricated pass.',
+      handler: async (raw: unknown, caller?: McpToolCaller) => {
+        const body = asObject(raw);
+        const resolved = resolveCaller(body, caller);
+        if (isCallerError(resolved)) return resolved;
+        const workspaceId = reqString(body, 'workspaceId');
+        if (!workspaceId) return inputError('workspaceId is required');
+        const result = await surface.attachPreviewEvidence(
+          workspaceId,
+          resolved.principal,
+          parsePreviewOptions(body),
+        );
         return toResponse(result);
       },
     },
