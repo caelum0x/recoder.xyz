@@ -911,10 +911,11 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     auditReader: createConductorAuditReader(governance.audit()),
     // Delivery-feedback seam: a MERGED workspace fires the inference routing
     // feedback sink (`task_success` on the run's persisted inference_id) so the
-    // BYOK LLM gateway learns from real deliveries. Degrade-truthful: the merge
-    // flow only fires when an inference_id was persisted onto the workspace
-    // record — until that persistence lands the sink is a silent no-op and
-    // feedback still reaches the gateway via the `/inference/feedback` route.
+    // BYOK LLM gateway learns from real deliveries. The persistence IS wired
+    // (the run-inference sink below, :1115 → `recordRunInferenceId`), so a napi
+    // completion carrying a `correlationWorkspaceId` anchors its inference_id and
+    // the merge fires real feedback. Degrade-truthful: a non-napi run (no anchor)
+    // ⇒ silent no-op; feedback still reaches the gateway via `/inference/feedback`.
     onDeliveryFeedback: (inferenceId, userId, success) => {
       void inference
         .routing()
