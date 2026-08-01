@@ -100,13 +100,15 @@ describe('mergeWorkspace — local fallback', () => {
       'git remote get-url origin': { fail: 'no such remote' },
       'git status --porcelain': { stdout: '' },
       'git worktree list --porcelain': { stdout: 'worktree /tmp/main-repo\n' },
-      'git merge --no-ff': { fail: 'CONFLICT (content): merge conflict' },
+      'git merge --squash': { fail: 'CONFLICT (content): merge conflict' },
     });
     const { deps, transitions } = makeDeps(exec, makeWorkspace());
 
     await expect(mergeWorkspace(deps, 'ws_1', {})).rejects.toThrow(/merge failed/);
-    // The half-done merge was aborted so the main tree is clean.
+    // The half-done merge was aborted so the main tree is clean — a conflicted
+    // squash leaves no MERGE_HEAD, so the abort is followed by `reset --merge`.
     expect(calls.some((c) => c.args.join(' ') === 'merge --abort')).toBe(true);
+    expect(calls.some((c) => c.args.join(' ') === 'reset --merge')).toBe(true);
     // Re-mergeable: back to review with the truthful error on metadata.
     const last = transitions[transitions.length - 1];
     expect(last.to).toBe('awaiting_review');

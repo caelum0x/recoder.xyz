@@ -193,8 +193,10 @@ async function resolveMainWorktree(deps: PublishOpsDeps, worktreePath: string): 
  * Best-effort cleanup of a half-completed merge in the main working tree: a
  * failing `git merge` can leave MERGE_HEAD + conflict markers behind, making
  * the on-disk state untruthful and the next re-merge attempt permanently stuck.
- * `git merge --abort` is a no-op when no merge is in progress. Swallowed: this
- * is a safety net for the truthful error already being surfaced to the caller.
+ * `git merge --abort` is a no-op when no merge is in progress — but a conflicted
+ * `git merge --squash` creates NO MERGE_HEAD, so its staged/partial state needs
+ * the follow-up `git reset --merge`. Both are swallowed: this is a safety net
+ * for the truthful error already being surfaced to the caller.
  */
 async function abortInProgressMerge(deps: PublishOpsDeps, mainRepo: string): Promise<void> {
   const run = makeRun(deps);
@@ -203,12 +205,21 @@ async function abortInProgressMerge(deps: PublishOpsDeps, mainRepo: string): Pro
   } catch {
     /* no merge in progress, or repo can't abort — nothing more we can do safely */
   }
+  try {
+    await run(mainRepo, 'git', ['reset', '--merge']);
+  } catch {
+    /* nothing to reset — the tree is already as clean as we can make it */
+  }
 }
 
 /**
  * Perform a LOCAL merge of the workspace branch into the base branch, on disk,
- * in the repo's main working tree: checkout base, merge the agent branch
- * (`--no-ff` by default, fast-forward-only when the strategy is `rebase`).
+ * in the repo's main working tree: checkout base, then land the branch per the
+ * strategy — 'squash' (the default) stages the branch's combined diff and
+ * commits it as exactly ONE squashed commit (single parent, no merge parents);
+ * 'merge' is an explicit `--no-ff` merge commit; 'rebase' is the closest local
+ * analogue, fast-forward-only. A squash that stages nothing (branch already
+ * merged) truthfully SKIPS the commit instead of failing on an empty commit.
  * On ANY merge failure the in-progress merge is aborted before re-throwing, so
  * the main tree is left CLEAN on the base branch — never a half-merged folder.
  */
@@ -226,13 +237,47 @@ async function localMerge(
     if (strategy === 'rebase') {
       // Closest local analogue to a rebase/linear merge: fast-forward only.
       await run(mainRepo, 'git', ['merge', '--ff-only', branch]);
-    } else {
-      // Default ('merge'/'squash'): a real merge commit so the change is explicit.
+    } else if (strategy === 'merge') {
+      // Explicit 'merge': a real merge commit so the change is explicit.
       await run(mainRepo, 'git', ['merge', '--no-ff', '-m', `Merge ${branch} into ${base}`, branch]);
+    } else {
+      // Default ('squash'): stage the branch's combined diff, then land it as
+      // ONE squashed commit — the doc-specified single-commit Apply.
+      await run(mainRepo, 'git', ['merge', '--squash', branch]);
+      if (await hasStagedChanges(deps, mainRepo)) {
+        await run(mainRepo, 'git', [
+          '-c',
+          'user.email=agent@recoder.dev',
+          '-c',
+          'user.name=Recoder Agent',
+          '-c',
+          'commit.gpgsign=false',
+          'commit',
+          '-m',
+          `Squash ${branch} into ${base}`,
+        ]);
+      } else {
+        // Already up to date — committing would fail on an empty commit.
+        deps.logger.info(
+          { branch, base },
+          'squash merge staged nothing (already up to date) — skipping commit',
+        );
+      }
     }
   } catch (err) {
     await abortInProgressMerge(deps, mainRepo);
     throw err;
+  }
+}
+
+/** True when the index differs from HEAD (`git diff --cached --quiet` exits 1). */
+async function hasStagedChanges(deps: PublishOpsDeps, mainRepo: string): Promise<boolean> {
+  const run = makeRun(deps);
+  try {
+    await run(mainRepo, 'git', ['diff', '--cached', '--quiet']);
+    return false; // exit 0 — nothing staged
+  } catch {
+    return true; // non-zero exit — staged changes present
   }
 }
 
