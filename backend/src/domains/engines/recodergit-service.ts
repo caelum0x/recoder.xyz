@@ -40,9 +40,18 @@
  */
 
 import { spawn } from 'node:child_process';
+import { lookup } from 'node:dns/promises';
 import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { assertEgressAllowedResolved, type HostResolver } from '../../shared/egress-guard.js';
+
+// Resolve every address for a host so the egress guard can block a name that maps
+// into private/metadata space (SSRF via a public-looking clone URL).
+const dnsResolver: HostResolver = async host => {
+  const records = await lookup(host, { all: true });
+  return records.map(r => r.address);
+};
 
 const CODE_GRAPH_FLAG_ENV = 'RECODER_CODE_GRAPH_ENABLED';
 const RECODERGIT_BIN_ENV = 'RECODERGIT_BIN';
@@ -651,6 +660,9 @@ function makeDefaultGit(): GitProvider {
     currentBranch: repoRoot =>
       run(['rev-parse', '--abbrev-ref', 'HEAD'], repoRoot),
     clone: async (cloneUrl, dest, ref) => {
+      // SSRF boundary: refuse a non-http(s) scheme or a URL that resolves into
+      // loopback/private/link-local/metadata space before spawning git.
+      await assertEgressAllowedResolved(cloneUrl, dnsResolver);
       mkdirSync(path.dirname(dest), { recursive: true });
       const args = ['clone', '--depth', '1'];
       if (ref) {
