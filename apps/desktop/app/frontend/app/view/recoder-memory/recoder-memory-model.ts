@@ -30,10 +30,21 @@ type RecoderMemoryCandidate = {
 };
 
 // Fused recall record projected from POST /api/agent-os/memory/recall
-// (RecalledMemory { id, body, provenance }); only the fields the terminal renders.
+// (RecalledMemory { id, title?, body, provenance }); only the fields the
+// terminal renders. Provenance is optional here because the projection drops
+// malformed attribution rather than fabricating it.
+type RecoderMemoryProvenance = {
+    source: string;
+    ref: string;
+    score: number;
+    scope?: string;
+};
+
 type RecoderMemoryResult = {
     id: string;
     memory: string;
+    title?: string;
+    provenance?: RecoderMemoryProvenance;
 };
 
 class RecoderMemoryViewModel implements ViewModel {
@@ -49,6 +60,7 @@ class RecoderMemoryViewModel implements ViewModel {
     searchingAtom: PrimitiveAtom<boolean>;
     errorAtom: PrimitiveAtom<string>;
     searchNoticeAtom: PrimitiveAtom<string>;
+    sourcesNoticeAtom: PrimitiveAtom<string>;
     connectedAtom: PrimitiveAtom<boolean>;
     actingAtom: PrimitiveAtom<string>;
     actionErrorAtom: PrimitiveAtom<string>;
@@ -67,6 +79,7 @@ class RecoderMemoryViewModel implements ViewModel {
         this.searchingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
         this.searchNoticeAtom = atom("") as PrimitiveAtom<string>;
+        this.sourcesNoticeAtom = atom("") as PrimitiveAtom<string>;
         this.connectedAtom = atom(false) as PrimitiveAtom<boolean>;
         this.actingAtom = atom("") as PrimitiveAtom<string>;
         this.actionErrorAtom = atom("") as PrimitiveAtom<string>;
@@ -131,10 +144,12 @@ class RecoderMemoryViewModel implements ViewModel {
         if (query === "") {
             globalStore.set(this.resultsAtom, []);
             globalStore.set(this.searchNoticeAtom, "");
+            globalStore.set(this.sourcesNoticeAtom, "");
             return;
         }
         globalStore.set(this.searchingAtom, true);
         globalStore.set(this.searchNoticeAtom, "");
+        globalStore.set(this.sourcesNoticeAtom, "");
         try {
             const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/memory/recall`, {
                 method: "POST",
@@ -149,14 +164,14 @@ class RecoderMemoryViewModel implements ViewModel {
             }
             const data = body?.data ?? {};
             const memories = Array.isArray(data?.memories) ? data.memories : [];
-            const results: RecoderMemoryResult[] = memories.map((m: { id?: string; body?: string }) => ({
-                id: String(m?.id ?? ""),
-                memory: String(m?.body ?? ""),
-            }));
+            const results: RecoderMemoryResult[] = memories.map((m: unknown) => projectRecalledMemory(m));
             globalStore.set(this.resultsAtom, results);
+            const sources = Array.isArray(data?.sources) ? data.sources : [];
+            const down = sources.filter((s: { available?: boolean }) => s?.available === false);
+            if (down.length > 0 && down.length < sources.length) {
+                globalStore.set(this.sourcesNoticeAtom, partialRecallNotice(down));
+            }
             if (results.length === 0) {
-                const sources = Array.isArray(data?.sources) ? data.sources : [];
-                const down = sources.filter((s: { available?: boolean }) => s?.available === false);
                 if (sources.length > 0 && down.length === sources.length) {
                     const reason = down.find((s: { reason?: string }) => s?.reason)?.reason;
                     globalStore.set(this.searchNoticeAtom, reason ? String(reason) : "memory sources unavailable");
@@ -240,6 +255,56 @@ class RecoderMemoryViewModel implements ViewModel {
         }
         await this.refresh();
     }
+}
+
+// Project one RecalledMemory defensively. Provenance is kept only when the
+// source/ref are strings and the score is a finite number (clamped to [0,1]
+// for display); anything malformed drops the field rather than fabricating
+// attribution or crashing the render.
+function projectRecalledMemory(value: unknown): RecoderMemoryResult {
+    const m = value != null && typeof value == "object" ? (value as Record<string, unknown>) : {};
+    const result: RecoderMemoryResult = {
+        id: String(m.id ?? ""),
+        memory: String(m.body ?? ""),
+    };
+    if (typeof m.title == "string" && m.title != "") {
+        result.title = m.title;
+    }
+    const provenance = readProvenance(m.provenance);
+    if (provenance != null) {
+        result.provenance = provenance;
+    }
+    return result;
+}
+
+function readProvenance(value: unknown): RecoderMemoryProvenance {
+    const p = value != null && typeof value == "object" ? (value as Record<string, unknown>) : null;
+    if (p == null || typeof p.source != "string" || typeof p.ref != "string") {
+        return null;
+    }
+    if (typeof p.score != "number" || !Number.isFinite(p.score)) {
+        return null;
+    }
+    const provenance: RecoderMemoryProvenance = {
+        source: p.source,
+        ref: p.ref,
+        score: Math.min(1, Math.max(0, p.score)),
+    };
+    if (typeof p.scope == "string" && p.scope != "") {
+        return { ...provenance, scope: p.scope };
+    }
+    return provenance;
+}
+
+// Truthful partial-degrade line: names every faulted source (and its reason
+// when the backend reported one) so a half-empty recall never reads as complete.
+function partialRecallNotice(down: { source?: unknown; reason?: unknown }[]): string {
+    const parts = down.map((s) => {
+        const source = typeof s?.source == "string" && s.source != "" ? s.source : "unknown source";
+        const reason = typeof s?.reason == "string" && s.reason != "" ? ` (${s.reason})` : "";
+        return `${source} unavailable${reason}`;
+    });
+    return `partial recall: ${parts.join(", ")}`;
 }
 
 // Translate the gated AcceptResult into a truthful one-line outcome. `promoted`
