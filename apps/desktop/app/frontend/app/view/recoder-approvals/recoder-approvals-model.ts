@@ -3,6 +3,7 @@
 
 import { globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
+import { decideApproval } from "../recoder/recoder-approval-action";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readFetchError } from "../recoder/recoder-errors";
 import { RecoderApprovalsView } from "./recoder-approvals";
@@ -86,24 +87,11 @@ class RecoderApprovalsViewModel implements ViewModel {
     async decide(approvalId: string, action: "approve" | "reject") {
         globalStore.set(this.actingAtom, approvalId);
         globalStore.set(this.actionErrorAtom, "");
-        try {
-            // The backend resolves the decider from the authenticated principal;
-            // an identity sent in the body would never be trusted, so none is sent.
-            const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/approvals/${approvalId}/decide`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ decision: action == "approve" ? "approved" : "denied" }),
-            });
-            if (!res.ok) {
-                const detail = await readFetchError(res);
-                globalStore.set(this.actionErrorAtom, detail || `Could not ${action} (${res.status})`);
-                return;
-            }
-        } catch (e) {
-            globalStore.set(this.actionErrorAtom, e instanceof Error ? e.message : String(e));
+        const result = await decideApproval(approvalId, action);
+        globalStore.set(this.actingAtom, "");
+        if (!result.ok) {
+            globalStore.set(this.actionErrorAtom, result.error);
             return;
-        } finally {
-            globalStore.set(this.actingAtom, "");
         }
         await this.refresh();
     }

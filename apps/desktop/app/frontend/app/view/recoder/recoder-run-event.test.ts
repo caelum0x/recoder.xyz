@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from "vitest";
-import { describeRunEvent, formatRunEventLine, isTerminalRunEvent } from "./recoder-run-event";
+import { describeRunEvent, extractApprovalId, formatRunEventLine, isTerminalRunEvent } from "./recoder-run-event";
 
 describe("describeRunEvent", () => {
     it("classifies each known RunEvent type with a friendly label + severity", () => {
@@ -54,6 +54,31 @@ describe("formatRunEventLine", () => {
     it("omits the trailing detail separator when there is no detail", () => {
         const d = describeRunEvent({ type: "completed", createdAt: "2026-07-25T12:00:00.000Z" });
         expect(formatRunEventLine(d)).toBe(`[${d.time}] completed`);
+    });
+});
+
+describe("extractApprovalId / descriptor.approvalId", () => {
+    it("pulls data.approvalId (backend emits it there), with data.id tolerated", () => {
+        expect(extractApprovalId({ type: "approval_requested", data: { approvalId: "appr-1" } })).toBe("appr-1");
+        expect(extractApprovalId({ type: "approval_requested", data: { id: "appr-2" } })).toBe("appr-2");
+    });
+
+    it("returns null when there is no decidable id", () => {
+        expect(extractApprovalId({ type: "approval_requested" })).toBeNull();
+        expect(extractApprovalId({ type: "approval_requested", data: {} })).toBeNull();
+        expect(extractApprovalId({ type: "log", data: { approvalId: "x" } })).toBe("x"); // extractor is type-agnostic
+    });
+
+    it("attaches approvalId to the descriptor ONLY for approval_requested events", () => {
+        const appr = describeRunEvent({ type: "approval_requested", data: { approvalId: "appr-9" } });
+        expect(appr.severity).toBe("warn");
+        expect(appr.approvalId).toBe("appr-9");
+
+        const log = describeRunEvent({ type: "log", data: { approvalId: "appr-9" } });
+        expect(log.approvalId).toBeUndefined();
+
+        const bare = describeRunEvent({ type: "approval_requested" });
+        expect(bare.approvalId).toBeUndefined();
     });
 });
 
