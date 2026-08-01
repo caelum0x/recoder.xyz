@@ -134,6 +134,10 @@ import {
   buildBeadsGraphMcpTools,
   beadsGraphMcpServer,
 } from './mcp/beads-graph.mcp.js';
+import {
+  AGENT_ENGINE_MCP_SERVER_ID,
+  buildAgentEngineMcpTools,
+} from './mcp/agent-engine.mcp.js';
 import { browserExtEngineBinder } from './mcp/browser-ext-engine.js';
 import { tensorzeroInferenceEngineBinder } from './mcp/tensorzero-inference-engine.js';
 import { dmuxLayoutEngineBinder } from './mcp/dmux-layout-engine.js';
@@ -817,12 +821,14 @@ export class EnginesComposer implements EnginesModule {
     this.bindEnginesMcpTools();
     // Bind the DEEP daemon/sidecar MCP servers that self-register directly on the
     // host (not via IN_PROC_SERVERS/ENGINE_SERVERS binders): mem0 memory insights,
-    // ops-recorder signals query/stats, and the colbert base + index-management
-    // servers. Each is gated (authorize → risk → execute → audit) and degrade-safe.
+    // ops-recorder signals query/stats, the agent-engine Hands lifecycle, and the
+    // colbert base + index-management servers. Each is gated
+    // (authorize → risk → execute → audit) and degrade-safe.
     this.bindMem0MemoryMcpTools();
     this.bindRecodergitIntelMcpTools();
     this.bindTmuxIntrospectMcpTools();
     this.bindBeadsGraphMcpTools();
+    this.bindAgentEngineMcpTools();
     this.bindOpsRecorderSignalsMcpTools();
     this.bindOpsRecorderWriteMcpTools();
     const colbert = this.adapters.get('colbert');
@@ -1025,6 +1031,25 @@ export class EnginesComposer implements EnginesModule {
         })
       );
     }
+  }
+
+  /**
+   * Bind the agent-engine Hands lifecycle + event tools
+   * (`agent_engine_hands_list` / `agent_engine_hand_activate` /
+   * `agent_engine_hand_pause` / `agent_engine_hand_resume` /
+   * `agent_engine_hand_deactivate` / `agent_engine_publish_event`) into the
+   * gated host via the COLLISION-SAFE `registerDomainTools` bridge (server
+   * descriptor derived from the tool names + one gated delegating handler per
+   * tool, `callerFromInput` threaded — the mutating tools refuse an absent
+   * caller). The facet getter is LAZY (`this.agentEngine()` resolves per call),
+   * so an unbound openfang engine degrades truthfully at call time —
+   * `{ ok:false, reason }` — instead of skipping registration.
+   */
+  private bindAgentEngineMcpTools(): void {
+    this.registerDomainTools(
+      AGENT_ENGINE_MCP_SERVER_ID,
+      buildAgentEngineMcpTools(() => this.agentEngine())
+    );
   }
 
   /**
