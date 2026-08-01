@@ -4,6 +4,7 @@
  *
  *   GET /api/conductor/workspaces/compare?taskGroup=<id>   aggregate a group's siblings
  *   GET /api/conductor/workspaces/:id/siblings             the group a workspace belongs to
+ *   GET /api/conductor/workspaces/compare/:taskGroup/pairwise       true line-level A-vs-B per-file diff (`?a=&b=&paths=`)
  *   GET /api/conductor/workspaces/compare/:taskGroup/converge-plan  step-2 per-file converge plan (read; `?probe=1` adds synthesizability)
  *   POST /api/conductor/workspaces/compare/:taskGroup/converge      step-2 compose (GATED workspace.branch)
  *
@@ -140,6 +141,37 @@ export function buildCompareRoutes(deps: CompareRouterDeps): Router {
         return;
       }
       sendSuccess(res, { plan });
+    }),
+  );
+
+  // Pairwise A/B line-level diff (BE-W8-PAIRWISE) — the TRUE per-file unified
+  // diff of the SAME path across the TWO picked siblings' worktrees, the edge the
+  // desktop PairwisePanel needs. Read-only, no gate (same as siblings/converge-plan).
+  // recoder-kybr: the module resolves the group with the caller's principal and
+  // requires BOTH `a` and `b` to be members of the caller-narrowed sibling set —
+  // either missing ⇒ a no-oracle 404 byte-identical to an unknown workspace.
+  router.get(
+    '/workspaces/compare/:taskGroup/pairwise',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      const taskGroup = req.params.taskGroup?.trim();
+      if (!taskGroup) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`taskGroup` path param is required'));
+        return;
+      }
+      const a = firstString(req.query.a);
+      const b = firstString(req.query.b);
+      if (!a || !b) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`a` and `b` workspace-id query params are required'));
+        return;
+      }
+      const paths = parsePathsQuery(req.query.paths);
+      const pairwise = await module.pairwiseDiff(taskGroup, a, b, paths, req.principal!);
+      if (!pairwise) {
+        sendError(res, createError(ErrorCode.NOT_FOUND, 'workspace not found'));
+        return;
+      }
+      sendSuccess(res, { pairwise });
     }),
   );
 
@@ -301,6 +333,20 @@ function finishGridWrite<T>(res: import('express').Response, result: ConductorWr
     res,
     createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, result.reason ?? 'blocked by governance gate'),
   );
+}
+
+/**
+ * Parse the optional `paths` query (a comma list) into a trimmed path array.
+ * Absent/blank ⇒ `undefined` (the module defaults to the pair's shared files).
+ */
+function parsePathsQuery(value: unknown): readonly string[] | undefined {
+  const raw = firstString(value);
+  if (!raw) return undefined;
+  const paths = raw
+    .split(',')
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  return paths.length > 0 ? paths : undefined;
 }
 
 /** First non-empty string from a query value (handles the `?k=a&k=b` array form). */

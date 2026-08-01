@@ -267,6 +267,11 @@ import {
   type CompareDeps,
   type CompareView,
 } from './services/compare.service.js';
+import {
+  pairwiseDiff as pairwiseDiffOp,
+  sharedPairPaths,
+  type PairwiseDiffView,
+} from './services/pairwise-diff.service.js';
 import type {
   WorkspaceGridPort,
   GroupGridArrangement,
@@ -2007,6 +2012,41 @@ export class ConductorComposer implements ConductorModule {
       workspaceId
     );
     return view ? this.withGridHint(view) : view;
+  }
+
+  /**
+   * The TRUE line-level A-vs-B pairwise diff of a parallel-run pair — one unified
+   * patch per shared file across the TWO sibling worktrees (the Compare view's
+   * PairwisePanel edge). Read-only. recoder-kybr: the group is resolved with the
+   * SAME principal narrowing as {@link compareTaskGroup}, and BOTH `aId` and `bId`
+   * must be members of the caller-narrowed sibling set — either missing ⇒ `null`
+   * (the route's no-oracle 404, byte-identical to an unknown workspace). `paths`
+   * defaults to the pair's shared changed files from the compare view.
+   */
+  async pairwiseDiff(
+    taskGroup: string,
+    aId: string,
+    bId: string,
+    paths: readonly string[] | undefined,
+    principal?: Principal
+  ): Promise<PairwiseDiffView | null> {
+    const view = await compareTaskGroupOp(
+      this.compareDeps(principal),
+      taskGroup
+    );
+    const aSibling = view.siblings.find(s => s.workspaceId === aId);
+    const bSibling = view.siblings.find(s => s.workspaceId === bId);
+    if (!aSibling || !bSibling) return null;
+    const [a, b] = await Promise.all([
+      this.engine.getWorkspace(aId),
+      this.engine.getWorkspace(bId),
+    ]);
+    if (!a || !b) return null;
+    const resolved =
+      paths && paths.length > 0
+        ? paths
+        : sharedPairPaths(aSibling, bSibling, view.contested);
+    return pairwiseDiffOp({ logger: this.log }, { a, b, paths: resolved });
   }
 
   /**

@@ -2,7 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useAtomValue } from "jotai";
+import { useEffect, useState } from "react";
 import { agentLabel } from "./recoder-agent-labels";
+import {
+    fetchPairwiseDiff,
+    pairwiseLineKind,
+    type PairwiseFetchResult,
+    type PairwiseFileRow,
+    type PairwiseLineKind,
+    type PairwiseView,
+} from "./recoder-compare-pairwise";
 import { ConvergePanel } from "./recoder-converge";
 import { buildConvergenceEvidence, saveConvergenceEvidence } from "./recoder-evidence";
 import {
@@ -400,14 +409,89 @@ function PairwiseStatLine({ label, stat, reason }: { label: string; stat: Recode
 
 PairwiseStatLine.displayName = "PairwiseStatLine";
 
-// The focused A-vs-B view: the honest diffStat delta (A minus B) and the files
-// BOTH picked agents touched. There is no true line-level pairwise diff — that
-// needs a backend edge the conductor does not expose yet — so this stays a
-// truthful client-side delta + shared-file view, and says so.
-function PairwisePanel({ pair }: { pair: PairwiseCompareView }) {
+// Change type encoded like the Review diff: a luminance step + a left-border
+// bar, crimson only as the thin del marker — never green, never colored text.
+const PairwiseRowStyle: Record<PairwiseLineKind, string> = {
+    add: "bg-white/[0.05] text-primary/90 border-l-2 border-white/25",
+    del: "bg-black/25 text-primary/50 border-l-2 border-error/50",
+    hunk: "text-accent",
+    meta: "text-secondary",
+    ctx: "text-primary/70",
+};
+
+function PairwiseFileBlock({ file }: { file: PairwiseFileRow }) {
+    return (
+        <div className="flex flex-col rounded border border-white/8">
+            <div className="flex flex-wrap items-center gap-x-2 px-2 py-1">
+                <span className="truncate font-mono text-xs">{file.path}</span>
+                {file.binary && <span className={META}>binary file differs</span>}
+                {!file.available && <span className={META}>{file.unavailableReason || "diff unavailable"}</span>}
+                {file.available && !file.binary && file.lines.length == 0 && (
+                    <span className={META}>identical in A and B</span>
+                )}
+            </div>
+            {file.lines.length > 0 && (
+                <div className="overflow-x-auto font-mono text-xs leading-relaxed">
+                    {file.lines.map((line, i) => (
+                        <div key={i} className={`whitespace-pre px-2 ${PairwiseRowStyle[pairwiseLineKind(line)]}`}>
+                            {line == "" ? " " : line}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+PairwiseFileBlock.displayName = "PairwiseFileBlock";
+
+function PairwiseDiffSection({ view, aAgent, bAgent }: { view: PairwiseView; aAgent: string; bAgent: string }) {
+    if (view.files.length == 0) {
+        return (
+            <div className={META}>
+                No shared changed files between {aAgent} and {bAgent} to diff line-by-line.
+            </div>
+        );
+    }
+    return (
+        <div className="flex flex-col gap-1">
+            <div className={META}>
+                Line-level diff — A ({aAgent}) as −, B ({bAgent}) as + · {view.files.length} file
+                {view.files.length == 1 ? "" : "s"}
+                {view.capped ? " · list capped by the backend" : ""}
+            </div>
+            {view.files.map((file) => (
+                <PairwiseFileBlock key={file.path} file={file} />
+            ))}
+        </div>
+    );
+}
+
+PairwiseDiffSection.displayName = "PairwiseDiffSection";
+
+// The focused A-vs-B view: the honest diffStat delta (A minus B) plus the TRUE
+// line-level per-file diff fetched from the conductor's pairwise edge
+// (…/compare/:taskGroup/pairwise). When the fetch degrades (older backend,
+// unreachable, foreign pair) the panel keeps the truthful client-side
+// shared-file fallback and says WHY the line-level view is missing.
+function PairwisePanel({ pair, taskGroup }: { pair: PairwiseCompareView; taskGroup: string }) {
     const a = pair.a;
     const b = pair.b;
     const delta = pair.delta;
+    const [remote, setRemote] = useState<PairwiseFetchResult>(null);
+    useEffect(() => {
+        let cancelled = false;
+        setRemote(null);
+        fetchPairwiseDiff(taskGroup, a.workspaceId, b.workspaceId).then((result) => {
+            if (cancelled) {
+                return;
+            }
+            setRemote(result);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [taskGroup, a.workspaceId, b.workspaceId]);
     return (
         <div className="flex flex-col gap-1.5 rounded border border-accent/30 px-2 py-2">
             <div className={FIELD_LABEL}>
@@ -426,27 +510,33 @@ function PairwisePanel({ pair }: { pair: PairwiseCompareView }) {
             ) : (
                 <div className={META}>Δ unavailable — a diffStat is missing on one side.</div>
             )}
-            {pair.shared.length > 0 ? (
-                <div className="flex flex-col gap-0.5">
-                    <div className={META}>
-                        Both touched — {pair.shared.length} file{pair.shared.length == 1 ? "" : "s"}
-                        {pair.sharedReason ? ` (${pair.sharedReason})` : ""}
-                    </div>
-                    {pair.shared.map((path) => (
-                        <span key={path} className="text-sm truncate font-mono">
-                            {path}
-                        </span>
-                    ))}
-                </div>
+            {remote == null ? (
+                <div className={META}>Loading line-level A/B diff…</div>
+            ) : remote.ok ? (
+                <PairwiseDiffSection view={remote.view} aAgent={agentLabel(a.agent)} bAgent={agentLabel(b.agent)} />
             ) : (
-                <div className={META}>
-                    No files touched by both {agentLabel(a.agent)} and {agentLabel(b.agent)}
-                    {pair.sharedReason ? ` (${pair.sharedReason})` : ""}.
-                </div>
+                <>
+                    {pair.shared.length > 0 ? (
+                        <div className="flex flex-col gap-0.5">
+                            <div className={META}>
+                                Both touched — {pair.shared.length} file{pair.shared.length == 1 ? "" : "s"}
+                                {pair.sharedReason ? ` (${pair.sharedReason})` : ""}
+                            </div>
+                            {pair.shared.map((path) => (
+                                <span key={path} className="text-sm truncate font-mono">
+                                    {path}
+                                </span>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className={META}>
+                            No files touched by both {agentLabel(a.agent)} and {agentLabel(b.agent)}
+                            {pair.sharedReason ? ` (${pair.sharedReason})` : ""}.
+                        </div>
+                    )}
+                    <div className={META}>Line-level A/B diff unavailable — {remote.error} Showing the client-side delta.</div>
+                </>
             )}
-            <div className={META}>
-                Client-side delta + shared-file view — a full line-level pairwise diff isn’t available yet.
-            </div>
         </div>
     );
 }
@@ -493,7 +583,7 @@ function RecoderComparePanel({
                     onReview={onReview}
                 />
             )}
-            {pair != null && <PairwisePanel pair={pair} />}
+            {pair != null && <PairwisePanel pair={pair} taskGroup={compareView.taskGroup ?? ""} />}
             <div className="flex flex-col gap-1">
                 {compareView.siblings.map((sibling) => {
                     const merge = readinessMap[sibling.workspaceId];
