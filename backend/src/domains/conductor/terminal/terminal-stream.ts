@@ -30,6 +30,13 @@ import {
 /** WS close code for a client that omitted the required `workspaceId`. */
 const WS_POLICY_VIOLATION = 1008;
 
+/**
+ * Frames retained per workspace for the `?since=` resume path (DT-7.3). Bounds
+ * memory to a recent window; a client offline longer than this replays what is
+ * still retained and resumes live (the ring reports a truthful history gap).
+ */
+const SYNC_HISTORY_LIMIT = 512;
+
 export interface TerminalStreamDeps {
   readonly logger: Logger;
   /**
@@ -41,9 +48,9 @@ export interface TerminalStreamDeps {
 }
 
 export class TerminalStreamService implements TerminalStreamPort {
-  private readonly hub = new SyncHub();
+  private readonly hub = new SyncHub({ historyLimit: SYNC_HISTORY_LIMIT });
   /** Full-RunEvent fan-out for `/workspaces/:id/stream` (the conductor-ui client). */
-  private readonly streamHub = new SyncHub();
+  private readonly streamHub = new SyncHub({ historyLimit: SYNC_HISTORY_LIMIT });
   private readonly logger: Logger;
   private readonly steerFn: TerminalStreamDeps['steer'];
 
