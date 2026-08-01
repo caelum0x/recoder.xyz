@@ -129,6 +129,10 @@ import {
   type WorkspaceTreeView,
 } from './review/workspace-review.ops.js';
 import {
+  discardWorkspacePaths as discardWorkspacePathsOp,
+  type WorkspaceDiscardView,
+} from './review/workspace-discard.ops.js';
+import {
   createWorkspacePr as createWorkspacePrOp,
   mergeWorkspace as mergeWorkspaceOp,
   type CreatePrInput,
@@ -2488,6 +2492,69 @@ export class ConductorComposer implements ConductorModule {
         ok: false,
         verdict,
         reason: err instanceof Error ? err.message : 'archive failed',
+      };
+    }
+  }
+
+  /**
+   * FILE-LEVEL REJECT in review (`POST …/files/discard`) — restore the selected
+   * paths to the review base so Apply (= merge) delivers only the accepted set.
+   * GATED (`workspace.discard`): the governance gate runs BEFORE any git write
+   * (a deny never reaches the worktree) and the performed discard is sealed
+   * into the audit chain like every other workspace write. Degrade-truthful:
+   * per-path outcomes come back individually (a bad path fails that path, not
+   * the batch); a zero-effect call is a truthful no-op (`committed:false`).
+   */
+  async discardWorkspaceFiles(
+    workspaceId: string,
+    paths: readonly string[],
+    principal: Principal
+  ): Promise<ConductorWriteResult<WorkspaceDiscardView>> {
+    const action = 'workspace.discard';
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    const { allowed, verdict } = await guardConductorWrite(
+      this.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+        metadata: { workspaceId, pathCount: paths.length },
+      }
+    );
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    if (!workspace)
+      return {
+        ok: false,
+        verdict,
+        reason: `workspace not found: ${workspaceId}`,
+      };
+    try {
+      const view = await discardWorkspacePathsOp(
+        this.reviewDeps(),
+        workspace,
+        paths
+      );
+      const count = (a: string) =>
+        view.results.filter(r => r.action === a).length;
+      await recordConductorAudit(
+        this.gate,
+        conductorAuditEntry(action, principal, verdict, {
+          workspaceId,
+          requested: paths.length,
+          restored: count('restored'),
+          removed: count('removed'),
+          unchanged: count('unchanged'),
+          failed: count('failed'),
+          committed: view.committed,
+        })
+      );
+      return { ok: true, verdict, value: view };
+    } catch (err) {
+      return {
+        ok: false,
+        verdict,
+        reason: err instanceof Error ? err.message : 'discard failed',
       };
     }
   }

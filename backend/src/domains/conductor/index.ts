@@ -77,6 +77,8 @@ export type {
   WorkspaceDiffFilesView,
   WorkspaceFilePatchView,
 } from './review/workspace-review.ops.js';
+import type { WorkspaceDiscardView } from './review/workspace-discard.ops.js';
+export type { WorkspaceDiscardView } from './review/workspace-discard.ops.js';
 import type { MergeabilityView } from './services/mergeability.service.js';
 import type { ReadinessView } from './services/readiness.service.js';
 export type { ReadinessView, ReadinessSignal } from './services/readiness.service.js';
@@ -511,6 +513,17 @@ export interface ConductorModule {
   getPreviewVerification(workspaceId: string): Promise<PreviewVerificationView | null>;
   /** Archive a finished workspace (teardown + archived) — GATED (`workspace.archive`). */
   archiveWorkspace(workspaceId: string, principal: Principal): Promise<ConductorWriteResult<Workspace>>;
+  /**
+   * FILE-LEVEL REJECT in review — restore the selected paths to the review base
+   * so Apply (= merge) delivers only the accepted set — GATED (`workspace.discard`).
+   * Per-path outcomes are individual (a bad path fails that path, not the batch);
+   * a zero-effect call is a truthful no-op (`committed: false`).
+   */
+  discardWorkspaceFiles(
+    workspaceId: string,
+    paths: readonly string[],
+    principal: Principal,
+  ): Promise<ConductorWriteResult<WorkspaceDiscardView>>;
   /** Push the branch + open a PR — GATED (`workspace.pr`). */
   createWorkspacePr(
     workspaceId: string,

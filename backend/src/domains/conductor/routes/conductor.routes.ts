@@ -28,6 +28,7 @@
  *   POST   /api/conductor/workspaces/:id/message  chat → next agent run (GATED)
  *   POST   /api/conductor/workspaces/:id/pr       push branch + open PR (GATED)
  *   POST   /api/conductor/workspaces/:id/merge    merge into base, gh or local (GATED)
+ *   POST   /api/conductor/workspaces/:id/files/discard  file-level reject: restore paths to review base (GATED)
  *   POST   /api/conductor/workspaces/:id/archive  teardown + archive (GATED)
  *   POST   /api/conductor/workspaces/:id/preview-url  persist sniffed preview URL (GATED)
  *   POST   /api/conductor/workspaces/:id/preview-verify  verify the stored preview URL (GATED)
@@ -50,12 +51,16 @@
  *    with the verdict reason), never a faked 200.
  *  - Bodies validated fail-fast with the uniform `sendError` envelope.
  */
+import nodePath from 'node:path';
 import { Router } from 'express';
 import { ErrorCode, createError, sendError, sendSuccess, asyncHandler } from '../../../shared/errors.js';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { WorkspaceState, WorkspaceSubstrate } from '@recoder/agent-os';
 import type { ConductorModule } from '../index.js';
-import type { CreateConductorWorkspaceInput, ConductorWriteResult } from '../conductor-module.js';
+import type {
+  CreateConductorWorkspaceInput,
+  ConductorWriteResult,
+} from '../conductor-module.js';
 import type { PreviewVerifyOptions } from '../services/preview-verify.service.js';
 import type { CloneRepoErrorCode } from '../services/repo-clone.service.js';
 import type { PreviewVerifyAssertion } from '../ports/preview-verify.port.js';
@@ -576,6 +581,29 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     }),
   );
 
+  // FILE-LEVEL REJECT in review: restore the selected paths to the review base so
+  // Apply (= merge) delivers only the accepted set. Body `{paths: string[]}` is
+  // validated fail-fast BEFORE the module is touched — a non-empty string array of
+  // SAFE repo-relative paths (no absolute, no `..`, no leading `-`, no NUL — the
+  // canonical option-injection reject; the op re-guards per path as defense in
+  // depth). GATED (`workspace.discard`); a missing workspace is a truthful 404
+  // from the ownership guard above.
+  router.post(
+    '/workspaces/:id/files/discard',
+    middleware.authenticateMutating,
+    access,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const paths = readDiscardPaths(body.paths);
+      const result = await module.discardWorkspaceFiles(
+        req.params.id,
+        paths,
+        req.principal!,
+      );
+      finishWrite(res, result, { key: 'discard' });
+    }),
+  );
+
   router.post(
     '/workspaces/:id/archive',
     middleware.authenticateMutating,
@@ -920,6 +948,42 @@ const MERGE_STRATEGIES = ['squash', 'merge', 'rebase'] as const;
 
 function isMergeStrategy(value: unknown): value is (typeof MERGE_STRATEGIES)[number] {
   return typeof value === 'string' && (MERGE_STRATEGIES as readonly string[]).includes(value);
+}
+
+/** Bound one discard batch — each path costs a bounded number of git spawns. */
+const MAX_DISCARD_PATHS = 500;
+
+/**
+ * A discard path that can never escape the worktree or become a git option (the
+ * `isSafeRelPath` pattern from `converge.ops.ts`): no absolute path, no `..`
+ * segment, no leading `-`, no NUL.
+ */
+function isSafeDiscardPath(p: string): boolean {
+  if (!p || p.startsWith('-') || p.includes('\0')) return false;
+  if (nodePath.isAbsolute(p)) return false;
+  return !p.split(/[\\/]/).some((seg) => seg === '..');
+}
+
+/** Validate the `{paths}` body of `/files/discard` fail-fast (400 on any bad entry). */
+function readDiscardPaths(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw createError(ErrorCode.VALIDATION_ERROR, '`paths` must be a non-empty string array');
+  }
+  if (value.length > MAX_DISCARD_PATHS) {
+    throw createError(ErrorCode.VALIDATION_ERROR, `\`paths\` must contain at most ${MAX_DISCARD_PATHS} entries`);
+  }
+  for (const p of value) {
+    if (typeof p !== 'string' || p.length === 0) {
+      throw createError(ErrorCode.VALIDATION_ERROR, '`paths` must be a non-empty string array');
+    }
+    if (!isSafeDiscardPath(p)) {
+      throw createError(
+        ErrorCode.VALIDATION_ERROR,
+        '`paths` entries must be safe repo-relative paths (no absolute, no "..", no leading "-")',
+      );
+    }
+  }
+  return value as string[];
 }
 
 /** A positive-integer query param (e.g. `?limit=50`), or `undefined` when absent/invalid. */
