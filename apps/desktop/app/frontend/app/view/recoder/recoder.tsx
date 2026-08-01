@@ -33,6 +33,11 @@ import { RecoderShortcutsOverlay } from "./recoder-shortcuts";
 import { RecoderWhatsNew } from "./recoder-whats-new-panel";
 import { RecoderErrorRow, RecoderSkeleton } from "./recoder-states";
 import {
+    fetchTranscriptSearch,
+    projectTranscriptSearchResult,
+    transcriptCommands,
+} from "./recoder-transcript-search";
+import {
     ATTN_BADGE,
     CHIP,
     ENTRY_CARD,
@@ -109,6 +114,17 @@ function launchDisabledReason(
         return "Add a first message, or turn on interactive session.";
     }
     return "";
+}
+
+// The palette's Sessions provider: backend transcript search → pure projection
+// → palette commands, with truthful unavailable/failed/capped-scan notices kept
+// as visible rows. The search result (the matching snippet) is the capability
+// itself; opening a hit lands on the Runs surface where session activity lives —
+// there is no deep per-session view to fake a jump into. Module-scope (no
+// component state) so the palette's debounce effect sees a stable reference.
+async function paletteSessionSearch(query: string): Promise<RecoderCommand[]> {
+    const result = await fetchTranscriptSearch(query);
+    return transcriptCommands(projectTranscriptSearchResult(result), () => openView("recoder-runs"));
 }
 
 // A parallel-run group is keyed by a generated grp_<id>; strip the prefix and
@@ -1121,7 +1137,13 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             {/* Rendered before the palette/shortcuts so those paint above it; its
                 Escape handler stands down while either of them is open. */}
             {cloneOpen && <RecoderCloneModal model={model} onClose={() => setCloneOpen(false)} />}
-            {paletteOpen && <RecoderCommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
+            {paletteOpen && (
+                <RecoderCommandPalette
+                    commands={commands}
+                    onClose={() => setPaletteOpen(false)}
+                    sessionSearch={paletteSessionSearch}
+                />
+            )}
             {shortcutsOpen && <RecoderShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
         </div>
     );
