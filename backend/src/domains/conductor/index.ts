@@ -81,6 +81,8 @@ export type {
 } from './review/workspace-review.ops.js';
 import type { WorkspaceDiscardView } from './review/workspace-discard.ops.js';
 export type { WorkspaceDiscardView } from './review/workspace-discard.ops.js';
+import type { WorkspaceDiscardHunksView } from './review/workspace-discard-hunks.ops.js';
+export type { WorkspaceDiscardHunksView } from './review/workspace-discard-hunks.ops.js';
 import type { MergeabilityView } from './services/mergeability.service.js';
 import type { ReadinessView } from './services/readiness.service.js';
 export type { ReadinessView, ReadinessSignal } from './services/readiness.service.js';
@@ -553,6 +555,19 @@ export interface ConductorModule {
     paths: readonly string[],
     principal: Principal,
   ): Promise<ConductorWriteResult<WorkspaceDiscardView>>;
+  /**
+   * HUNK-LEVEL REJECT in review — reverse-apply the selected hunks of ONE path
+   * against the review base — GATED (`workspace.discard`, the SAME action as
+   * the file-level reject). Per-hunk outcomes are individual (an out-of-range
+   * index fails that index, not the batch); the assembled patch applies
+   * atomically; a zero-effect call is a truthful no-op (`committed: false`).
+   */
+  discardWorkspaceHunks(
+    workspaceId: string,
+    path: string,
+    hunkIndexes: readonly number[],
+    principal: Principal,
+  ): Promise<ConductorWriteResult<WorkspaceDiscardHunksView>>;
   /** Push the branch + open a PR — GATED (`workspace.pr`). */
   createWorkspacePr(
     workspaceId: string,
