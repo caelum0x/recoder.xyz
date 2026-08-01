@@ -40,6 +40,23 @@ Everything embedded (native `.node` engines, `bd`, `tmux`, `backend/dist`, Wave
 Store Connect API key `~/.appstoreconnect/private_keys/AuthKey_98T8ZPPNGD.p8`
 (key-id `98T8ZPPNGD`, issuer `a57e5464-…`), and `build/entitlements.mac.plist`.
 
+> **Notarize is now the config default (2026-08-01).** `electron-builder.config.cjs`
+> auto-enables `hardenedRuntime + notarize` whenever the Apple creds are present
+> (`APPLE_API_KEY`/`_KEY_ID`/`_ISSUER`, or `APPLE_ID`/`APPLE_APP_SPECIFIC_PASSWORD`/
+> `APPLE_TEAM_ID`); keyless dev builds stay unsigned. The old untracked
+> `electron-builder.notarize.cjs` helper is **obsolete — delete it.**
+
+### 1b. x64 / universal build  (needs cross-built natives + an Intel boot-test)
+The mac target arch is env-switchable: `RECODER_MAC_ARCH=x64` (or `universal`) flips
+`electron-builder.config.cjs`. Before it will produce a working dmg, every
+arch-sensitive native must be rebuilt for x64: the 3 Rust napi addons
+(`recoder-governance`, `openfang`, `tensorzero`), the `bd` beads binary, and any
+`.node`/`.dylib` in `node_modules`. The `beforePack` gate reads each Mach-O header
+and **aborts on an arch mismatch**, so a half-cross-built x64 dmg fails loud rather
+than shipping arm64 binaries. Build the x64 natives, then
+`RECODER_MAC_ARCH=x64 pnpm exec electron-builder …`, sign inside-out, notarize, and
+**boot-test on a real Intel Mac** before publishing.
+
 > **Landmine (why not electron-builder's own signer):** the packed `.app` bundles
 > the backend's self-contained `node_modules` (~2.1G, **139K files**), so
 > `@electron/osx-sign` opens more files than the kernel per-process cap
@@ -143,10 +160,31 @@ Then (owner):
 > script regenerates a correct one. Never hand-host the DMG without regenerating it.
 
 ## 2. Build the Lance native addon  (optional — embedded vector store)
-`crates/lance/npm-bindings` **does not exist at the repo root** (only in stale worktrees). To make Lance real: vendor/create `crates/lance/npm-bindings` with its own Cargo.toml (napi + cdylib), add `build_lance()` to `scripts/build-native-addons.sh`, build release. Until then Lance degrades truthfully to Qdrant (already handled).
+`crates/lance/npm-bindings` **does not exist at the repo root** (only in stale worktrees). The extraResources entry for it is already OPTIONAL in `electron-builder.config.cjs` (ships if built, degrade-line if not). To make Lance real: vendor/create `crates/lance/npm-bindings` with its own Cargo.toml (napi + cdylib), add `build_lance()` to `scripts/build-native-addons.sh`, build release → `crates/lance/npm-bindings/target/release/lance_npm_bindings.node`, then remove it from `OPTIONAL_EXTRA_RESOURCES` so its absence fails loud. Until then Lance degrades truthfully to Qdrant (already handled).
 
-## 3. Bundle the Python sidecars  (optional — mem0/colbert/browser-use/ops-recorder in the dmg)
-Not bundled today → those engines are dead-but-degrade-truthful in a packaged app. Bundling needs per-arch venvs or a bundled interpreter (heavy). Alternative: point `MEM0_BASE_URL` / `COLBERT_RERANK_URL` at cloud sidecars via env.
+## 3. Bundle the Python sidecars  (optional — mem0/colbert/browser-use/ops-recorder/pal-mcp in the dmg)
+Not bundled today → those engines are dead-but-degrade-truthful in a packaged app. A bundling script now exists:
+
+```bash
+# Build relocatable, self-contained bundles (uv standalone CPython + deps).
+# Light sidecars by default; native-heavy ones (colbert=torch, browser-use=playwright) opt-in.
+scripts/bundle-py-sidecars.sh                 # → backend/engines/py/<name>/.bundle
+INCLUDE_HEAVY=1 scripts/bundle-py-sidecars.sh # + colbert + browser-use (multi-GB)
+```
+
+Then, on the signing Mac:
+1. **Sign** every `.dylib`/`.so` inside each `.bundle` inside-out with the Developer ID (same inside-out pass the app uses), or notarization fails.
+2. **Ship** them — add OPTIONAL extraResources entries (mirror the Lance pattern) to `electron-builder.config.cjs`, e.g.:
+   ```js
+   { from: "../../../backend/engines/py/mem0/.bundle",      to: "backend/engines/py/mem0" },
+   { from: "../../../backend/engines/py/pal-mcp-server/.bundle", to: "backend/engines/py/pal-mcp-server" },
+   { from: "../../../backend/engines/py/ops-recorder/.bundle",   to: "backend/engines/py/ops-recorder" },
+   ```
+   and add those `from` paths to `OPTIONAL_EXTRA_RESOURCES`.
+3. **Point** each sidecar at its bundled interpreter (`<Resources>/backend/engines/py/<name>/.bundle/bin/python`) instead of the system `uv`/`python3`.
+4. **Rebuild + notarize + staple**, then boot-test that `recoder_memory_search` / colbert rerank / pal consensus report `ready` instead of `not_configured`.
+
+Alternative (no bundling): point `MEM0_BASE_URL` / `COLBERT_RERANK_URL` at externally-hosted sidecars via env.
 
 ## 4. Terminal durable-shell lifecycle merge  (release gate — customer-visible terminal)
 See `docs/architecture/TERMINAL-UNIFICATION.md` (Bucket B). The safe foundation (shared server, naming contract, health, read bridge) is shipped; the load-bearing merge (route the wave durable-shell block through tmux attach, retire the JobManager, collapse to one reconciler) needs owner sign-off + a **packaged-app integration test** (per `.claude/rules/production.md`). Do not run autonomously.
