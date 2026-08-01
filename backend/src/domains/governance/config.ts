@@ -16,6 +16,19 @@
 import { z } from 'zod';
 import type { AppConfig } from '../../shared/app-config.js';
 
+/**
+ * One versioned master-key ring entry (`{ version, masterKey }`). The keyring
+ * (see `adapters/keyring.adapter.ts`) opens a stored row by ITS OWN version and
+ * seals/re-keys new writes under the active (highest) version. `masterKey` may be
+ * `null` for a rotated-out generation that must still ROUTE (open old rows) even
+ * though it can no longer be the active sealer.
+ */
+export const vaultKeyringKeySchema = z.object({
+  version: z.number().int().positive(),
+  masterKey: z.string().nullable(),
+});
+export type VaultKeyringKeyConfig = z.infer<typeof vaultKeyringKeySchema>;
+
 export const governanceConfigSchema = z.object({
   /** True when an `INTERNAL_SERVICE_KEY` is configured (gates `/internal/*`). */
   internalServiceKeyPresent: z.boolean(),
@@ -31,6 +44,14 @@ export const governanceConfigSchema = z.object({
    * or dropped write.
    */
   vaultMasterKey: z.string().nullable(),
+  /**
+   * OPTIONAL versioned master-key ring. When supplied (2+ entries, or an explicit
+   * ring), the secrets engine opens a row by its stored `keyVersion`, seals new
+   * writes under the active version, and rotates v(n)→v(n+1) via `keyring.rekey`.
+   * `null`/empty (default) ⇒ single-key mode = a v1-only ring derived from
+   * `vaultMasterKey`, i.e. exactly today's behavior.
+   */
+  vaultKeys: z.array(vaultKeyringKeySchema).nullable(),
   /** Whether audit sealing into the durable Merkle chain is enabled. */
   auditEnabled: z.boolean(),
   /** Solo/desktop mode — click-is-approval clearance + audit fail-open (see `RuntimeConfig.soloMode`). */
@@ -46,6 +67,8 @@ export interface GovernanceConfigOverrides {
   readonly daemonSocketPath?: string | null;
   readonly allowInsecureDaemon?: boolean;
   readonly vaultMasterKey?: string | null;
+  /** Optional versioned key ring (additive); absent ⇒ single-key mode. */
+  readonly vaultKeys?: readonly VaultKeyringKeyConfig[] | null;
   readonly auditEnabled?: boolean;
 }
 
@@ -65,6 +88,7 @@ export function sliceGovernanceConfig(
     daemonSocketPath: overrides.daemonSocketPath ?? null,
     allowInsecureDaemon: overrides.allowInsecureDaemon ?? !app.runtime.isProduction,
     vaultMasterKey: overrides.vaultMasterKey ?? null,
+    vaultKeys: overrides.vaultKeys ? [...overrides.vaultKeys] : null,
     auditEnabled: overrides.auditEnabled ?? true,
     soloMode: app.runtime.soloMode === true,
     isProduction: app.runtime.isProduction,

@@ -27,7 +27,11 @@ import type { GovernanceGate } from './ports/gate.port.js';
 import type { ToolExecEnforcementPort } from './ports/tool-exec-gate.port.js';
 import type { ConsensusReviewPort } from './ports/consensus.port.js';
 import type { SecretsPort } from './ports/secrets.port.js';
-import { createVaultAdapter, type VaultAdapter } from './adapters/vault.adapter.js';
+import {
+  createVaultKeyring,
+  keyringFromMasterKey,
+  type VaultKeyring,
+} from './adapters/keyring.adapter.js';
 import { createAuditRepository } from './repositories/audit.repository.js';
 import {
   createApprovalRepository,
@@ -54,7 +58,7 @@ export class GovernanceComposer implements GovernanceModule {
   private readonly kernelPort: GovernanceKernelPort;
   private readonly executor: QueryExecutor;
   private readonly middleware: AuthMiddleware;
-  private readonly vault: VaultAdapter;
+  private readonly keyring: VaultKeyring;
   private readonly auditChain: AuditChainService;
   private readonly gateService: GovernanceGateService;
   private readonly toolExecGatePort: ToolExecEnforcementPort;
@@ -70,9 +74,16 @@ export class GovernanceComposer implements GovernanceModule {
     this.executor = deps.executor;
     this.middleware = deps.middleware;
 
-    // Envelope-encryption seam. A null/invalid master key yields a permanently
-    // `down` vault whose seal/open throw — secrets fail-safe, never plaintext.
-    this.vault = createVaultAdapter({ vaultMasterKey: cfg.vaultMasterKey });
+    // Versioned master-key ring the secrets engine consumes — the envelope seam.
+    // An explicit `vaultKeys` config engages real rotation (open-by-stored-version,
+    // seal-active, rekey v(n)→v(n+1)); absent/empty ⇒ a v1-only ring over
+    // `vaultMasterKey`, i.e. exactly today's single-key behavior. A null/invalid
+    // active key yields a permanently `down` ring whose seal/rekey throw — secrets
+    // fail-safe, never a plaintext fallback.
+    this.keyring =
+      cfg.vaultKeys && cfg.vaultKeys.length > 0
+        ? createVaultKeyring({ keys: cfg.vaultKeys })
+        : keyringFromMasterKey(cfg.vaultMasterKey, 1);
 
     // Durable repositories over the single persistence executor.
     const auditRepo = createAuditRepository(this.executor);
@@ -104,7 +115,7 @@ export class GovernanceComposer implements GovernanceModule {
     // Secrets seal mutations into the SAME durable chain via the gate.
     this.secretsService = createSecretsService({
       repo: secretRepo,
-      vault: this.vault,
+      keyring: this.keyring,
       gate: this.gateService,
       logger: this.log,
     });
@@ -195,7 +206,8 @@ export class GovernanceComposer implements GovernanceModule {
     return buildGovernanceHealth({
       kernel: this.kernelPort,
       executor: this.executor,
-      vault: this.vault,
+      // Report the seam the secrets engine actually consumes (the keyring).
+      vault: this.keyring,
       auditEnabled: this.cfg.auditEnabled,
     });
   }
@@ -209,7 +221,8 @@ export class GovernanceComposer implements GovernanceModule {
       {
         kernel: ks.engine,
         kernelDegraded: ks.degraded,
-        vaultAvailable: this.vault.available,
+        vaultAvailable: this.keyring.available,
+        activeKeyVersion: this.keyring.activeVersion,
         auditEnabled: this.cfg.auditEnabled,
       },
       'governance module started',
