@@ -34,6 +34,7 @@ import {
 } from "./recoder-board-logic";
 import { parseAgentAuthState, type AgentAuthState } from "./recoder-agent-auth";
 import { isGitHubRepoUrl, parseCloneResponse } from "./recoder-clone-logic";
+import { RecoderConnectionModel } from "./recoder-connection-model";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { readErrorReason } from "./recoder-errors";
 import { RecoderConductorView } from "./recoder";
@@ -516,8 +517,10 @@ class RecoderViewModel implements ViewModel {
                 this.noteNeedsInputTransitions(merged);
             }
             workspaces = merged.filter((w) => !isTerminalWorkspaceState(w.state));
+            RecoderConnectionModel.getInstance().noteRefresh(true);
         } catch (e) {
             globalStore.set(this.errorAtom, e instanceof Error ? e.message : String(e));
+            RecoderConnectionModel.getInstance().noteRefresh(false);
         } finally {
             globalStore.set(this.loadingAtom, false);
         }

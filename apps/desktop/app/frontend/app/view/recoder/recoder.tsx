@@ -10,6 +10,7 @@ import { AgentAuthAffordance, RecoderAgentSetup } from "./recoder-agent-setup";
 import { RecoderCloneModal } from "./recoder-clone";
 import { RecoderCommandPalette, type RecoderCommand } from "./recoder-command-palette";
 import { RecoderComparePanel } from "./recoder-compare";
+import { RecoderConnectionModel } from "./recoder-connection-model";
 import { isConnectivityError } from "./recoder-errors";
 import { RecoderIdentityAffordance } from "./recoder-identity";
 import { RecoderIdentityModel } from "./recoder-identity-model";
@@ -274,6 +275,26 @@ function EnvironmentImportSummary({ env }: { env: RecoderEnvironment }) {
 }
 
 EnvironmentImportSummary.displayName = "EnvironmentImportSummary";
+
+// Honest liveness for the whole recoder surface: nothing while live, an amber
+// "Stale — reconnecting" once the last successful poll ages out or the newest
+// poll failed while old data is still shown, red "Offline" until the first
+// success. Reads the shared connection model so the Hub never presents stale
+// data as live.
+function RecoderConnectionBadge() {
+    const state = useAtomValue(RecoderConnectionModel.getInstance().connectionStateAtom);
+    if (state == "live") {
+        return null;
+    }
+    const label = state == "offline" ? "Offline" : "Stale — reconnecting";
+    const tone =
+        state == "offline"
+            ? "border-red-400/40 bg-red-400/15 text-red-300"
+            : "border-amber-400/40 bg-amber-400/15 text-amber-300";
+    return <span className={`rounded border px-1.5 py-0.5 text-xs whitespace-nowrap ${tone}`}>{label}</span>;
+}
+
+RecoderConnectionBadge.displayName = "RecoderConnectionBadge";
 
 function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const workspaces = useAtomValue(model.workspacesAtom);
@@ -650,6 +671,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         <div className="flex flex-col h-full overflow-auto p-3 gap-2" onKeyDown={onBoardKeyDown}>
             <div className="flex items-center gap-2">
                 <span className={PAGE_TITLE}>Recoder - Workspaces</span>
+                <RecoderConnectionBadge />
                 <div className="flex-1" />
                 <RecoderIdentityAffordance />
                 <button className={PRIMARY_BTN} onClick={() => setLaunchOpen(!launchOpen)}>
