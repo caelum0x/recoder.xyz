@@ -82,6 +82,21 @@ function toWebSocketUrl(httpUrl: string): string {
     return httpUrl;
 }
 
+// A resume cursor is the numeric `seq` DT-7.3a stamps on each run-event frame;
+// only a finite non-negative integer is a real cursor (0 replays all retained).
+function isResumeCursor(value: unknown): value is number {
+    return typeof value == "number" && Number.isInteger(value) && value >= 0;
+}
+
+// Build the workspace run-event stream URL, appending `?since=<cursor>` only for
+// a valid cursor so a reconnect replays buffered frames while a fresh connect
+// (no cursor) stays live-only — garbage never leaks into the query.
+function buildStreamUrl(base: string, workspaceId: string, sinceId?: number): string {
+    const url = `${toWebSocketUrl(base)}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/stream`;
+    if (!isResumeCursor(sinceId)) return url;
+    return `${url}?since=${sinceId}`;
+}
+
 function readWorkspaceId(block: Block): string {
     const meta = (block?.meta ?? {}) as Record<string, unknown>;
     const raw = meta[WorkspaceIdMetaKey];
@@ -136,6 +151,7 @@ class RecoderTerminalViewModel implements ViewModel {
     socket: WebSocket;
     disposed: boolean;
     reconnectAttempt: number;
+    lastEventId: number;
     reconnectTimer: ReturnType<typeof setTimeout> | null;
 
     constructor(initOpts: ViewModelInitType) {
@@ -154,6 +170,7 @@ class RecoderTerminalViewModel implements ViewModel {
         this.socket = null;
         this.disposed = false;
         this.reconnectAttempt = 0;
+        this.lastEventId = 0;
         this.reconnectTimer = null;
     }
 
@@ -164,8 +181,12 @@ class RecoderTerminalViewModel implements ViewModel {
     connect(isRetry = false): void {
         if (this.disposed) return;
         this.clearReconnectTimer();
-        // A manual (re)connect resets the backoff budget; an auto-retry preserves it.
-        if (!isRetry) this.reconnectAttempt = 0;
+        // A manual (re)connect resets the backoff budget and resume cursor; an
+        // auto-retry preserves both so buffered frames replay from ?since.
+        if (!isRetry) {
+            this.reconnectAttempt = 0;
+            this.lastEventId = 0;
+        }
         this.teardownSocket();
 
         const block = globalStore.get(this.blockAtom);
@@ -183,7 +204,7 @@ class RecoderTerminalViewModel implements ViewModel {
             return;
         }
 
-        const url = `${toWebSocketUrl(getRecoderBackendUrl())}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/stream`;
+        const url = buildStreamUrl(getRecoderBackendUrl(), workspaceId, isRetry ? this.lastEventId : undefined);
         globalStore.set(this.statusAtom, "connecting");
 
         let socket: WebSocket;
@@ -255,6 +276,10 @@ class RecoderTerminalViewModel implements ViewModel {
         const frame = parseStreamFrame(raw);
         if (frame == null) return;
         if (frame.kind == "event") {
+            // Track the transport's `seq` (DT-7.3a) as the resume cursor so a
+            // reconnect can replay from ?since without a gap or duplicate.
+            const seq = (frame.event as { seq?: unknown }).seq;
+            if (isResumeCursor(seq)) this.lastEventId = seq;
             // A bare completed/failed event renders as a line and nothing more:
             // the socket is workspace-scoped and follow-up sendMessage runs
             // stream through it, so a finished RUN must not close the stream.
@@ -365,6 +390,7 @@ class RecoderTerminalViewModel implements ViewModel {
 }
 
 export {
+    buildStreamUrl,
     parseStreamFrame,
     reconnectDelayMs,
     RecoderTerminalViewModel,
