@@ -4,6 +4,7 @@ import { Nav, Footer } from "@/components/site";
 import { DownloadNotify, DownloadReleases } from "@/components/download-notify";
 import {
   downloadHref,
+  platformChecksum,
   releasesArePublic,
   releaseVersionLabel,
   type PlatformId,
@@ -44,6 +45,14 @@ export default function Download() {
     },
     {},
   );
+  const checksums = platforms.reduce<Partial<Record<PlatformId, string>>>(
+    (acc, p) => {
+      const sum = platformChecksum(p);
+      if (sum) acc[p] = sum;
+      return acc;
+    },
+    {},
+  );
 
   return (
     <>
@@ -58,12 +67,10 @@ export default function Download() {
         </p>
         {isLive ? (
           <p className="text-balance mx-auto mt-4 max-w-lg text-sm text-faint">
-            Pick your platform to download the latest build. macOS is signed and
-            notarized; Homebrew users can{" "}
-            <code className="rounded bg-bg-soft px-1.5 py-0.5 text-xs text-muted">
-              brew install --cask recoder
-            </code>
-            .
+            Pick your platform to download the latest build. The macOS build is
+            signed with a Developer ID and notarized by Apple, so it installs
+            without Gatekeeper warnings. Expand &ldquo;Verify checksum&rdquo; to
+            confirm integrity before installing.
           </p>
         ) : (
           <p className="text-balance mx-auto mt-4 max-w-lg text-sm text-faint">
@@ -73,7 +80,11 @@ export default function Download() {
         )}
 
         {isLive ? (
-          <DownloadReleases hrefs={hrefs} versionLabel={versionLabel} />
+          <DownloadReleases
+            hrefs={hrefs}
+            checksums={checksums}
+            versionLabel={versionLabel}
+          />
         ) : (
           <DownloadNotify />
         )}
