@@ -2556,7 +2556,9 @@ export class ConductorComposer implements ConductorModule {
       // outcome. When the run's routed inference_id was persisted onto the record
       // (`metadata.inferenceId`), fire the inference routing feedback seam so the
       // LLM gateway learns `task_success` from real deliveries. Degrade-truthful:
-      // no persisted inference_id (not tracked today) ⇒ a silent skip, never faked.
+      // no persisted inference_id (non-napi run / no correlation) ⇒ a silent skip, never faked.
+      // The anchor IS persisted by the run-inference sink (bootstrap:1115 →
+      // recordRunInferenceId) for napi-tier completions carrying a correlationWorkspaceId.
       if (result.merged && this.onDeliveryFeedback) {
         const inferenceId = workspace?.metadata?.inferenceId;
         if (typeof inferenceId === 'string' && inferenceId.length > 0) {

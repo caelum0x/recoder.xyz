@@ -154,7 +154,13 @@ unification**, not more app-security code.
    prod; `RECODER_AUTH_BACKEND_SEAM` off; compat bridge still live.
 5. **(closed 2026-07-25)** ~~tensorzero CLI-run inference routing~~ — now wired
    (`bootstrap/index.ts:598-601`); CLI agent tokens route through the gateway.
-   Remaining tensorzero item: `feedback()` RLHF on merge/approve has no caller.
+6. **(closed)** ~~`feedback()` RLHF on merge/approve has no caller~~ — the loop is
+   wired end-to-end + tested: a napi completion with a `correlationWorkspaceId`
+   fires the run-inference sink → `conductor.recordRunInferenceId` (persists
+   `metadata.inferenceId`), and `mergeWorkspace` reads it → `onDeliveryFeedback`
+   → `inference.routing().feedback({metricName:'task_success'})`
+   (`bootstrap/index.ts:1115`; tests `workspace-merge-feedback`,
+   `record-run-inference`, `inference-routing.run-sink`).
 
 ## Owner-gated (need prod access or an owner decision — do not self-run)
 
