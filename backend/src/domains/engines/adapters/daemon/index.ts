@@ -9,9 +9,14 @@
 export {
   DaemonEngineAdapter,
   daemonFetch,
+  sidecarBreaker,
+  sidecarKeyForUrl,
   message,
   type DaemonAdapterConfig,
   type ResolvedBinding,
+  type DaemonFetchInit,
+  type DaemonFetchResilience,
+  type FetchLike,
 } from './daemon-adapter-base.js';
 
 export {
