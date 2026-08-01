@@ -3,8 +3,8 @@
 
 import { cn } from "@/util/util";
 import { useAtom, useAtomValue } from "jotai";
-import { RecoderSettingsViewModel } from "./recoder-settings-model";
 import { DefaultRecoderBackend } from "../recoder/recoder-endpoints";
+import { RecoderSettingsViewModel } from "./recoder-settings-model";
 
 const PRIMARY_BTN =
     "bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer";
@@ -16,6 +16,7 @@ function RecoderSettingsView({ model }: ViewComponentProps<RecoderSettingsViewMo
     const savedUrl = useAtomValue(model.savedUrlAtom);
     const testStatus = useAtomValue(model.testStatusAtom);
     const testMessage = useAtomValue(model.testMessageAtom);
+    const testDetail = useAtomValue(model.testDetailAtom);
 
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-3">
@@ -33,8 +34,8 @@ function RecoderSettingsView({ model }: ViewComponentProps<RecoderSettingsViewMo
                     Currently using: <span className="font-mono">{savedUrl}</span>
                 </div>
                 <div className="text-xs text-secondary">
-                    The conductor + engine blocks fetch this backend. Point it at a remote Recoder to drive agents
-                    on another machine.
+                    The conductor + engine blocks fetch this backend. Point it at a remote Recoder to drive agents on
+                    another machine.
                 </div>
             </div>
             <div className="flex items-center gap-2">
@@ -52,10 +53,25 @@ function RecoderSettingsView({ model }: ViewComponentProps<RecoderSettingsViewMo
                 <div
                     className={cn(
                         "text-sm",
-                        testStatus == "ok" ? "text-success" : testStatus == "fail" ? "text-error" : "text-secondary",
+                        testStatus == "ok"
+                            ? "text-success"
+                            : testStatus == "degraded"
+                              ? "text-warning"
+                              : testStatus == "fail"
+                                ? "text-error"
+                                : "text-secondary"
                     )}
                 >
                     {testStatus == "testing" ? "Testing…" : testMessage}
+                </div>
+            )}
+            {testStatus != "" && testStatus != "testing" && testDetail.length > 0 && (
+                <div className="flex flex-col gap-0.5">
+                    {testDetail.map((line, idx) => (
+                        <div key={idx} className="text-xs text-secondary font-mono whitespace-pre">
+                            {line}
+                        </div>
+                    ))}
                 </div>
             )}
         </div>
