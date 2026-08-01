@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import type { Logger } from '../../../shared/logger.js';
+import { CircuitBreaker } from '../../../shared/outbound-resilience.js';
 import type { ByokKeyResolver } from '../ports/byok-resolver.port.js';
 import type { InferenceRequest } from '../types.js';
 import {
@@ -217,6 +218,92 @@ describe('rung-3 direct router — truthful declines', () => {
     expect(viaPlatform.available()).toBe(true);
     const viaByok = createDirectProviderTransport({ logger: log, resolver: fakeResolver(null, true) });
     expect(viaByok.available()).toBe(true);
+  });
+});
+
+describe('rung-3 direct router — per-provider circuit breaker', () => {
+  /** A fetch double that counts calls and serves a scripted status per URL. */
+  function countingFetch(
+    respond: (url: string) => { ok: boolean; status: number; body: unknown },
+  ): { fetch: ProviderFetchLike; calls: () => number } {
+    let calls = 0;
+    const fetch: ProviderFetchLike = async (url) => {
+      calls += 1;
+      const r = respond(url);
+      return { ok: r.ok, status: r.status, text: async () => JSON.stringify(r.body) };
+    };
+    return { fetch, calls: () => calls };
+  }
+
+  const OK_OPENAI = { ok: true, status: 200, body: { choices: [{ message: { content: 'ok' } }] } };
+  const FAIL_500 = { ok: false, status: 500, body: {} };
+
+  it('opens a provider circuit after the failure threshold, then fast-fails truthfully with NO further fetch', async () => {
+    let now = 0;
+    const breaker = new CircuitBreaker({ failureThreshold: 2, cooldownMs: 1_000, now: () => now });
+    const { fetch, calls } = countingFetch(() => FAIL_500);
+    const router = createDirectProviderTransport({ logger: log, resolver: fakeResolver(KEY), fetch, breaker });
+
+    const r1 = await router.complete(REQ);
+    const r2 = await router.complete(REQ);
+    expect(r1.routed).toBe(false);
+    expect(r2.routed).toBe(false);
+    // The non-idempotent POST is called EXACTLY ONCE per attempt — never retried.
+    expect(calls()).toBe(2);
+
+    // Circuit now OPEN: the next call fast-fails truthfully with no network call.
+    const r3 = await router.complete(REQ);
+    expect(r3.routed).toBe(false);
+    expect(r3.tier).toBe('none');
+    expect(r3.reason).toContain('circuit open');
+    expect(calls()).toBe(2); // no additional egress while the circuit is open
+  });
+
+  it('isolates circuits per provider — a tripped provider never blocks a healthy one', async () => {
+    let now = 0;
+    const breaker = new CircuitBreaker({ failureThreshold: 1, cooldownMs: 1_000, now: () => now });
+    const { fetch } = countingFetch((url) => (url.includes('openai') ? FAIL_500 : OK_OPENAI));
+    const router = createDirectProviderTransport({ logger: log, resolver: fakeResolver(KEY), fetch, breaker });
+
+    // Trip openai (threshold 1) — its circuit opens after the first failure.
+    await router.complete(REQ);
+    const openaiAgain = await router.complete(REQ);
+    expect(openaiAgain.reason).toContain('circuit open');
+
+    // openrouter (a different provider key, openai wire) is unaffected and routes.
+    const other = await router.complete({ ...REQ, model: 'openrouter/some-model' });
+    expect(other.routed).toBe(true);
+  });
+
+  it('recovers via a half-open probe after the cooldown and closes on success', async () => {
+    let now = 0;
+    const breaker = new CircuitBreaker({ failureThreshold: 1, cooldownMs: 1_000, now: () => now });
+    let mode: 'fail' | 'ok' = 'fail';
+    const { fetch } = countingFetch(() => (mode === 'fail' ? FAIL_500 : OK_OPENAI));
+    const router = createDirectProviderTransport({ logger: log, resolver: fakeResolver(KEY), fetch, breaker });
+
+    await router.complete(REQ); // fails → opens (threshold 1)
+    expect((await router.complete(REQ)).reason).toContain('circuit open');
+
+    now += 1_000; // cooldown elapsed → half-open probe permitted
+    mode = 'ok';
+    const probe = await router.complete(REQ);
+    expect(probe.routed).toBe(true); // probe succeeds → circuit closes
+    const after = await router.complete(REQ);
+    expect(after.routed).toBe(true); // fully closed → normal routing resumes
+  });
+
+  it('a thrown transport error also feeds the breaker (opens after threshold)', async () => {
+    let now = 0;
+    const breaker = new CircuitBreaker({ failureThreshold: 1, cooldownMs: 1_000, now: () => now });
+    const fetch: ProviderFetchLike = async () => {
+      throw new Error('ECONNRESET');
+    };
+    const router = createDirectProviderTransport({ logger: log, resolver: fakeResolver(KEY), fetch, breaker });
+
+    expect((await router.complete(REQ)).reason).toContain('errored');
+    const open = await router.complete(REQ);
+    expect(open.reason).toContain('circuit open');
   });
 });
 

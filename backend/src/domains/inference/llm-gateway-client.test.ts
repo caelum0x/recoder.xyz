@@ -260,3 +260,87 @@ describe('gateway client — configured health() reachability', () => {
     expect(probe).toHaveBeenCalledWith('http://gw:3778/health', expect.objectContaining({ method: 'GET' }));
   });
 });
+
+describe('gateway client — health() bounded retry (IDEMPOTENT GET only)', () => {
+  it('retries a rejecting probe up to the bounded attempts, then degrades truthfully (never throws)', async () => {
+    const sleeps: number[] = [];
+    const sleep = async (ms: number): Promise<void> => {
+      sleeps.push(ms);
+    };
+    let calls = 0;
+    const fetch: FetchLike = async () => {
+      calls += 1;
+      throw new Error('network down');
+    };
+    const c = createTensorzeroGatewayClient({
+      endpoint: 'http://gw:3778',
+      env: {},
+      fetch,
+      healthRetry: { maxAttempts: 3, sleep, random: () => 0.5 },
+    });
+
+    const health = await c.health();
+    expect(calls).toBe(3); // bounded retry: exactly 3 attempts
+    expect(sleeps).toHaveLength(2); // slept BETWEEN attempts only, never after the last
+    expect(health).toMatchObject({ configured: true, reachable: false });
+    expect(health.reason).toContain('network down');
+  });
+
+  it('does not retry a healthy probe (single GET, no sleep)', async () => {
+    let calls = 0;
+    const sleep = vi.fn(async () => {});
+    const fetch: FetchLike = async () => {
+      calls += 1;
+      return { ok: true, status: 200, text: async () => '' };
+    };
+    const c = createTensorzeroGatewayClient({
+      endpoint: 'http://gw:3778',
+      env: {},
+      fetch,
+      healthRetry: { maxAttempts: 3, sleep },
+    });
+
+    const health = await c.health();
+    expect(calls).toBe(1);
+    expect(sleep).not.toHaveBeenCalled();
+    expect(health).toMatchObject({ configured: true, reachable: true });
+  });
+
+  it('retries a non-2xx probe then surfaces the HTTP status truthfully', async () => {
+    const sleep = async (): Promise<void> => {};
+    let calls = 0;
+    const fetch: FetchLike = async () => {
+      calls += 1;
+      return { ok: false, status: 503, text: async () => '' };
+    };
+    const c = createTensorzeroGatewayClient({
+      endpoint: 'http://gw:3778',
+      env: {},
+      fetch,
+      healthRetry: { maxAttempts: 2, sleep, random: () => 0 },
+    });
+
+    const health = await c.health();
+    expect(calls).toBe(2);
+    expect(health).toMatchObject({ configured: true, reachable: false });
+    expect(health.reason).toContain('HTTP 503');
+  });
+
+  it('never retries the non-idempotent complete() POST (single call on failure)', async () => {
+    let calls = 0;
+    const fetch: FetchLike = async () => {
+      calls += 1;
+      return { ok: false, status: 500, text: async () => JSON.stringify({ error: { message: 'boom' } }) };
+    };
+    const c = createTensorzeroGatewayClient({
+      endpoint: 'http://gw:3778',
+      env: {},
+      fetch,
+      healthRetry: { maxAttempts: 5, sleep: async () => {} },
+    });
+
+    const result = await c.complete({ model: 'm', messages: [] });
+    expect(calls).toBe(1); // the completion POST is NEVER retried
+    expect(result.routed).toBe(false);
+  });
+});

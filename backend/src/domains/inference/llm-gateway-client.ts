@@ -30,6 +30,8 @@
  *     this unit-tests with a fake fetch and no network/subprocess.
  */
 
+import { withRetry, type Random, type Sleep } from '../../shared/outbound-resilience.js';
+
 /** Env var: base URL of a TensorZero (or compatible) gateway. Primary. */
 export const TENSORZERO_URL_ENV = 'TENSORZERO_URL';
 
@@ -46,6 +48,15 @@ const DEFAULT_EMBED_PATH = '/openai/v1/embeddings';
 /** Default per-call timeouts (ms). Completions get a longer budget. */
 const DEFAULT_COMPLETE_TIMEOUT_MS = 60_000;
 const DEFAULT_EMBED_TIMEOUT_MS = 30_000;
+
+/**
+ * Bounded-retry defaults for the IDEMPOTENT `health()` GET probe ONLY. Kept
+ * small so a failing health check stays fast (one retry, short backoff). The
+ * non-idempotent `complete()`/`embed()` POSTs are NEVER retried (a re-send could
+ * duplicate a completion), so they carry no retry.
+ */
+const DEFAULT_HEALTH_RETRY_ATTEMPTS = 2;
+const DEFAULT_HEALTH_RETRY_BASE_DELAY_MS = 50;
 
 /** Minimal fetch shape so the client is injectable without DOM lib coupling. */
 export type FetchLike = (
@@ -150,6 +161,21 @@ export interface GatewayClientOptions {
   completePath?: string;
   /** Override the OpenAI-compatible embedding path. */
   embedPath?: string;
+  /**
+   * Bounded-retry tuning for the IDEMPOTENT `health()` GET probe ONLY. Never
+   * applied to the `complete()`/`embed()` POSTs (non-idempotent — a re-send
+   * could duplicate a completion). Injectable so tests drive the backoff
+   * deterministically without a real timer. A failing probe still degrades
+   * truthfully to `{ reachable:false, reason }` after the attempts are spent —
+   * it NEVER throws and NEVER fabricates reachability.
+   */
+  healthRetry?: {
+    maxAttempts?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+    sleep?: Sleep;
+    random?: Random;
+  };
 }
 
 /** Resolve the gateway base URL from options or env. Trailing slash trimmed. */
@@ -221,6 +247,7 @@ export function createTensorzeroGatewayClient(
   const doFetch: FetchLike | undefined = options.fetch ?? (globalThis.fetch as FetchLike | undefined);
   const completePath = options.completePath ?? DEFAULT_COMPLETE_PATH;
   const embedPath = options.embedPath ?? DEFAULT_EMBED_PATH;
+  const healthRetry = options.healthRetry ?? {};
 
   function headers(): Record<string, string> {
     const h: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -362,18 +389,30 @@ export function createTensorzeroGatewayClient(
         return { configured: true, endpoint, reachable: false, reason: 'no fetch implementation available' };
       }
       try {
-        const resp = await doFetch(joinUrl(endpoint, '/health'), {
-          method: 'GET',
-          headers: headers(),
-          signal: timeoutSignal(3_000),
-        });
-        return {
-          configured: true,
-          endpoint,
-          reachable: resp.ok,
-          reason: resp.ok ? undefined : `HTTP ${resp.status}`,
-        };
+        // Bounded retry on the IDEMPOTENT GET probe: a transient blip should not
+        // read as a hard outage. A non-2xx throws so the retry can re-probe; the
+        // op is re-runnable (idempotent GET), so re-sending is safe.
+        await withRetry(
+          async () => {
+            const resp = await doFetch(joinUrl(endpoint, '/health'), {
+              method: 'GET',
+              headers: headers(),
+              signal: timeoutSignal(3_000),
+            });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          },
+          {
+            idempotent: true,
+            maxAttempts: healthRetry.maxAttempts ?? DEFAULT_HEALTH_RETRY_ATTEMPTS,
+            baseDelayMs: healthRetry.baseDelayMs ?? DEFAULT_HEALTH_RETRY_BASE_DELAY_MS,
+            ...(healthRetry.maxDelayMs !== undefined ? { maxDelayMs: healthRetry.maxDelayMs } : {}),
+            ...(healthRetry.sleep ? { sleep: healthRetry.sleep } : {}),
+            ...(healthRetry.random ? { random: healthRetry.random } : {}),
+          },
+        );
+        return { configured: true, endpoint, reachable: true };
       } catch (err) {
+        // Truthful degrade after the bounded attempts are spent — never throws.
         return {
           configured: true,
           endpoint,
