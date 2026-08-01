@@ -18,6 +18,7 @@ import { buildCloudWriteMcpTools } from '../mcp/cloud-write-engine.js';
 import type { TenancyService } from '../services/tenancy.service.js';
 import type { SandboxProvisionerService } from '../services/sandbox-provisioner.service.js';
 import type { DomainsService } from '../services/domains.service.js';
+import type { PreviewDeployService } from '../services/preview-deploy.service.js';
 import type { CloudGovernanceGatePort, GateVerdict } from '../ports/governance-gate.port.js';
 import type { McpToolRegistration, McpToolCaller } from '../../../shared/module-base.js';
 import type { Tenant, Sandbox, DomainRecord } from '../types.js';
@@ -59,6 +60,11 @@ const domains = {
   remove: vi.fn(async () => ok({ id: 'dom_1', removed: true })),
 } as unknown as DomainsService;
 
+const preview = {
+  deploy: vi.fn(async () => ok({ id: 'dep_1' })),
+  getSignedUrl: vi.fn(async () => ok({ id: 'url_1' })),
+} as unknown as PreviewDeployService;
+
 const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as never;
 
 function makeGate(over: Partial<CloudGovernanceGatePort> = {}): CloudGovernanceGatePort {
@@ -73,7 +79,7 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('cloud write MCP — subject + gating', () => {
   it('errors truthfully when no caller is authorized (never guesses identity)', async () => {
-    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, logger, gate: makeGate() }));
+    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, preview, logger, gate: makeGate() }));
     const res = (await tools.get('cloud_domain_add')!.handler({ hostname: 'app.example.com' })) as Record<string, unknown>;
     expect(res.ok).toBe(false);
     expect(res.code).toBe(ErrorCode.AUTH_REQUIRED);
@@ -82,7 +88,7 @@ describe('cloud write MCP — subject + gating', () => {
 
   it('a DENY verdict blocks cloud_domain_add and never audits', async () => {
     const gate = makeGate({ decide: vi.fn(async () => verdict('deny')) });
-    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, logger, gate }));
+    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, preview, logger, gate }));
     const res = (await tools.get('cloud_domain_add')!.handler({ hostname: 'app.example.com' }, owner)) as Record<string, unknown>;
     expect(res.ok).toBe(false);
     expect(res.effect).toBe('blocked');
@@ -92,7 +98,7 @@ describe('cloud write MCP — subject + gating', () => {
 
   it('an ALLOW verdict runs the add + seals the audit; actor is the tenant owner', async () => {
     const gate = makeGate();
-    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, logger, gate }));
+    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, preview, logger, gate }));
     const res = (await tools.get('cloud_domain_add')!.handler({ hostname: 'app.example.com' }, owner)) as Record<string, unknown>;
     expect(res.ok).toBe(true);
     // Gate decided with a principal whose userId is the (caller-bound) tenant owner.
@@ -102,7 +108,7 @@ describe('cloud write MCP — subject + gating', () => {
   });
 
   it('an ABSENT gate degrades open (mutation proceeds, warn-logged)', async () => {
-    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, logger }));
+    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, preview, logger }));
     const res = (await tools.get('cloud_domain_add')!.handler({ hostname: 'app.example.com' }, owner)) as Record<string, unknown>;
     expect(res.ok).toBe(true);
     expect(domains.add).toHaveBeenCalledTimes(1);
@@ -114,7 +120,7 @@ describe('cloud write MCP — tenant subject binding (cross-tenant defence)', ()
     // The fixture tenancy resolves `owner_1`; a caller of `owner_1` who passes a
     // DIFFERENT args.userId still governs under their own identity (args ignored).
     const gate = makeGate();
-    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, logger, gate }));
+    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, preview, logger, gate }));
     const res = (await tools.get('cloud_sandbox_provision')!.handler(
       { userId: 'victim_evil', image: 'node:22' },
       owner,
@@ -129,7 +135,7 @@ describe('cloud write MCP — tenant subject binding (cross-tenant defence)', ()
     // The attacker calls with a victim subject in args, but the resolved tenant is
     // owned by `owner_1` — the ownership guard blocks before decide/mutation.
     const gate = makeGate();
-    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, logger, gate }));
+    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, preview, logger, gate }));
     const attacker: McpToolCaller = { userId: 'attacker_1' };
     const res = (await tools.get('cloud_sandbox_provision')!.handler(
       { userId: 'owner_1', tenantId: 'ten_1', image: 'node:22' },
@@ -145,7 +151,7 @@ describe('cloud write MCP — tenant subject binding (cross-tenant defence)', ()
 
   it('REFUSES cross-tenant domain detach for a non-owner caller (no mutation)', async () => {
     const gate = makeGate();
-    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, logger, gate }));
+    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, preview, logger, gate }));
     const attacker: McpToolCaller = { userId: 'attacker_1' };
     const res = (await tools.get('cloud_domain_remove')!.handler(
       { tenantId: 'ten_1', domainId: 'dom_1' },
@@ -158,7 +164,7 @@ describe('cloud write MCP — tenant subject binding (cross-tenant defence)', ()
 
   it('ALLOWS an admin/internal caller to target an args-named subject', async () => {
     const gate = makeGate();
-    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, logger, gate }));
+    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, preview, logger, gate }));
     const ops: McpToolCaller = { userId: 'ops_1', scopes: ['internal'] };
     const res = (await tools.get('cloud_sandbox_provision')!.handler(
       { userId: 'owner_1', image: 'node:22' },
@@ -175,7 +181,7 @@ describe('cloud write MCP — tenant subject binding (cross-tenant defence)', ()
 describe('cloud write MCP — sandbox tools', () => {
   it('provisions a sandbox and audits', async () => {
     const gate = makeGate();
-    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, logger, gate }));
+    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, preview, logger, gate }));
     const res = (await tools.get('cloud_sandbox_provision')!.handler({ image: 'node:22' }, owner)) as Record<string, unknown>;
     expect(res.ok).toBe(true);
     expect(provisioner.provision).toHaveBeenCalledWith(expect.objectContaining({ tenant, userId: 'owner_1', image: 'node:22' }));
@@ -183,7 +189,7 @@ describe('cloud write MCP — sandbox tools', () => {
   });
 
   it('requires sandboxId for destroy', async () => {
-    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, logger, gate: makeGate() }));
+    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, preview, logger, gate: makeGate() }));
     const res = (await tools.get('cloud_sandbox_destroy')!.handler({}, owner)) as Record<string, unknown>;
     expect(res.ok).toBe(false);
     expect(String(res.error)).toContain('sandboxId');
@@ -192,7 +198,7 @@ describe('cloud write MCP — sandbox tools', () => {
 
   it('destroys a sandbox and audits', async () => {
     const gate = makeGate();
-    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, logger, gate }));
+    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, preview, logger, gate }));
     const res = (await tools.get('cloud_sandbox_destroy')!.handler({ sandboxId: 'sbx_1' }, owner)) as Record<string, unknown>;
     expect(res.ok).toBe(true);
     expect(provisioner.destroy).toHaveBeenCalledWith('sbx_1', 'ten_1');
@@ -202,7 +208,7 @@ describe('cloud write MCP — sandbox tools', () => {
 
 describe('cloud write MCP — domain verify/remove + error propagation', () => {
   it('verifies + removes a domain', async () => {
-    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, logger, gate: makeGate() }));
+    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, preview, logger, gate: makeGate() }));
     const v = (await tools.get('cloud_domain_verify')!.handler({ domainId: 'dom_1' }, owner)) as Record<string, unknown>;
     expect(v.ok).toBe(true);
     const r = (await tools.get('cloud_domain_remove')!.handler({ domainId: 'dom_1' }, owner)) as Record<string, unknown>;
@@ -215,7 +221,7 @@ describe('cloud write MCP — domain verify/remove + error propagation', () => {
     (domains.verify as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
       err(createError(ErrorCode.SERVICE_UNAVAILABLE, 'DNS verifier not configured — domain stays pending.')),
     );
-    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, logger, gate: makeGate() }));
+    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, preview, logger, gate: makeGate() }));
     const res = (await tools.get('cloud_domain_verify')!.handler({ domainId: 'dom_1' }, owner)) as Record<string, unknown>;
     expect(res.ok).toBe(false);
     expect(res.code).toBe(ErrorCode.SERVICE_UNAVAILABLE);
@@ -223,7 +229,7 @@ describe('cloud write MCP — domain verify/remove + error propagation', () => {
 
   it('propagates an unresolvable tenant as a truthful error (no mutation)', async () => {
     (tenancy.resolve as ReturnType<typeof vi.fn>).mockResolvedValueOnce(err(createError(ErrorCode.NOT_FOUND, 'no tenant')));
-    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, logger, gate: makeGate() }));
+    const tools = toolMap(buildCloudWriteMcpTools({ tenancy, provisioner, domains, preview, logger, gate: makeGate() }));
     const res = (await tools.get('cloud_domain_remove')!.handler({ domainId: 'dom_1' }, owner)) as Record<string, unknown>;
     expect(res.ok).toBe(false);
     expect(res.code).toBe(ErrorCode.NOT_FOUND);
