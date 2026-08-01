@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { base64ToArrayBuffer } from "@/util/util";
+import { atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readErrorReason } from "../recoder/recoder-errors";
 
@@ -337,6 +338,131 @@ async function fetchEvidenceMarkdown(workspaceId: string): Promise<EvidenceMarkd
     }
 }
 
+// One check line from the persisted preview verification (open / assert /
+// screenshot), projected for the panel. `name` carries the backend's `tool`.
+type PreviewCheckRow = {
+    name: string;
+    status: string;
+    detail?: string;
+};
+
+// The persisted preview-verification record projected for the panel. `status` is
+// the backend's verbatim vocabulary (passed | failed | skipped) kept as a plain
+// string so an unknown value can never be coerced into a pass. `screenshotNote`
+// is ALWAYS "screenshot not retained": the backend seals only an opaque artifact
+// id (screenshotRef is always null), so the panel says so — never a broken image.
+type PreviewVerificationViewModel = {
+    status: string;
+    checkedAt: string;
+    summary: string;
+    degraded: boolean;
+    reason?: string;
+    checks: PreviewCheckRow[];
+    screenshotNote: string;
+};
+
+// The truthful failure split of the read: `not-verified` and `workspace-missing`
+// mirror the backend's two distinct 404 messages; `unreachable` covers transport
+// faults and other non-2xx (the read proved nothing — never a fabricated pass).
+type PreviewVerificationFailure = "not-verified" | "workspace-missing" | "unreachable";
+
+type PreviewVerificationResult = {
+    ok: boolean;
+    view?: PreviewVerificationViewModel;
+    reason?: PreviewVerificationFailure;
+};
+
+// The model-fetched preview verification, tagged with the workspace it describes.
+// Module-scoped rather than on the diff model because the evidence panel mounts
+// with only a workspaceId (no model reference), and importing the model from the
+// panel would close an import cycle (model → view → panel). The tag keeps the
+// read honest: a panel whose workspace doesn't match renders its not-loaded line,
+// never another workspace's verdict.
+type PreviewVerificationState = {
+    workspaceId: string;
+    loading: boolean;
+    result?: PreviewVerificationResult;
+};
+
+const previewVerificationStateAtom = atom(null) as PrimitiveAtom<PreviewVerificationState>;
+
+const ScreenshotNotRetainedNote = "screenshot not retained";
+
+function normalizePreviewChecks(value: unknown): PreviewCheckRow[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    const out: PreviewCheckRow[] = [];
+    for (const item of value) {
+        const obj = asObject(item);
+        if (obj == null) {
+            continue;
+        }
+        const name = stringOr(obj.tool, "");
+        if (name == "") {
+            continue;
+        }
+        const row: PreviewCheckRow = { name, status: stringOr(obj.status, "") };
+        const detail = stringOr(obj.message, "");
+        if (detail != "") {
+            row.detail = detail;
+        }
+        out.push(row);
+    }
+    return out;
+}
+
+// Project the persisted verification into the panel view. Defensive like
+// parseEvidenceExport: missing/garbage fields degrade to neutral empties, never a
+// throw; `degraded` is only true on a real `true`, so garbage can't fake either
+// a pass or a degrade.
+function parsePreviewVerification(raw: unknown): PreviewVerificationViewModel {
+    const obj = asObject(raw) ?? {};
+    const view: PreviewVerificationViewModel = {
+        status: stringOr(obj.status, ""),
+        checkedAt: stringOr(obj.checkedAt, ""),
+        summary: stringOr(obj.summary, ""),
+        degraded: obj.degraded === true,
+        checks: normalizePreviewChecks(obj.checks),
+        screenshotNote: ScreenshotNotRetainedNote,
+    };
+    const reason = stringOr(obj.reason, "");
+    if (reason != "") {
+        view.reason = reason;
+    }
+    return view;
+}
+
+// GET the last preview verification for a workspace. Degrade-safe tri-state: the
+// backend's two truthful 404s ("preview not verified" vs "workspace not found")
+// each surface as their own reason so the panel can name the real gap; transport
+// faults and other non-2xx land on `unreachable`. Never throws, never fabricates.
+async function fetchPreviewVerification(workspaceId: string): Promise<PreviewVerificationResult> {
+    const id = (workspaceId ?? "").trim();
+    if (id == "") {
+        return { ok: false, reason: "workspace-missing" };
+    }
+    try {
+        const res = await fetch(
+            `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(id)}/preview-verification`
+        );
+        const body = await res.json().catch(() => null);
+        if (res.status == 404) {
+            const reason = readErrorReason(body);
+            return { ok: false, reason: reason.includes("workspace not found") ? "workspace-missing" : "not-verified" };
+        }
+        if (!res.ok) {
+            return { ok: false, reason: "unreachable" };
+        }
+        // Backend envelope: `{ data: { verification } }` — unwrap `.verification`
+        // (fall back to the envelope itself for tolerance).
+        const envelope = asObject(asObject(body)?.data) ?? asObject(body) ?? {};
+        return { ok: true, view: parsePreviewVerification(envelope.verification ?? envelope) };
+    } catch {
+        return { ok: false, reason: "unreachable" };
+    }
+}
+
 function sanitizeForFilename(value: string): string {
     const clean = (value ?? "").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
     return clean == "" ? "workspace" : clean;
@@ -375,8 +501,11 @@ export {
     evidenceFilename,
     fetchEvidenceExport,
     fetchEvidenceMarkdown,
+    fetchPreviewVerification,
     normalizeStatus,
     parseEvidenceExport,
+    parsePreviewVerification,
+    previewVerificationStateAtom,
     signaturePublicKeyFingerprint,
     triggerTextDownload,
     type EvidenceControlView,
@@ -386,6 +515,11 @@ export {
     type EvidenceMarkdownResult,
     type EvidenceSignatureView,
     type EvidenceStatus,
+    type PreviewCheckRow,
+    type PreviewVerificationFailure,
+    type PreviewVerificationResult,
+    type PreviewVerificationState,
+    type PreviewVerificationViewModel,
     type SignatureState,
     type SignatureStatus,
 };

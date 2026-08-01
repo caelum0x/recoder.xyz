@@ -8,8 +8,10 @@ import {
     deriveVerifiedSignature,
     fetchEvidenceExport,
     fetchEvidenceMarkdown,
+    fetchPreviewVerification,
     normalizeStatus,
     parseEvidenceExport,
+    parsePreviewVerification,
     signaturePublicKeyFingerprint,
     type EvidenceExportView,
     type EvidenceSignatureView,
@@ -252,6 +254,100 @@ describe("signaturePublicKeyFingerprint — stable, env-tolerant", () => {
     it("returns empty for a non-PEM input (never a fabricated fingerprint)", async () => {
         expect(await signaturePublicKeyFingerprint("")).toBe("");
         expect(await signaturePublicKeyFingerprint("not a pem")).toBe("");
+    });
+});
+
+const FULL_PREVIEW_VERIFICATION = {
+    workspaceId: "ws1",
+    status: "failed",
+    checkedAt: "2026-07-30T00:00:00Z",
+    summary: "1 of 2 assertions failed",
+    degraded: false,
+    reason: "assertion missing: Welcome",
+    checks: [
+        { tool: "browser_open", status: "passed" },
+        { tool: "assert_text", status: "failed", message: "missing: Welcome" },
+        { tool: "screenshot", status: "skipped", message: "engine unavailable" },
+    ],
+    screenshotRef: null,
+};
+
+describe("parsePreviewVerification — truthful projection of the persisted record", () => {
+    it("preserves status/degraded/reason and maps every check; screenshotRef:null → the not-retained note", () => {
+        const view = parsePreviewVerification(FULL_PREVIEW_VERIFICATION);
+        expect(view.status).toBe("failed");
+        expect(view.checkedAt).toBe("2026-07-30T00:00:00Z");
+        expect(view.summary).toBe("1 of 2 assertions failed");
+        expect(view.degraded).toBe(false);
+        expect(view.reason).toBe("assertion missing: Welcome");
+        expect(view.checks).toEqual([
+            { name: "browser_open", status: "passed" },
+            { name: "assert_text", status: "failed", detail: "missing: Welcome" },
+            { name: "screenshot", status: "skipped", detail: "engine unavailable" },
+        ]);
+        expect(view.screenshotNote).toBe("screenshot not retained");
+    });
+
+    it("keeps a degraded skip truthful — degraded only on a real true", () => {
+        const view = parsePreviewVerification({
+            status: "skipped",
+            degraded: true,
+            reason: "browser engine unavailable",
+            checks: [],
+        });
+        expect(view.status).toBe("skipped");
+        expect(view.degraded).toBe(true);
+        expect(view.reason).toBe("browser engine unavailable");
+        expect(parsePreviewVerification({ ...FULL_PREVIEW_VERIFICATION, degraded: "yes" }).degraded).toBe(false);
+    });
+
+    it("degrades partial/garbage payloads to neutral empties — never throws, never a pass", () => {
+        for (const raw of [{}, null, "garbage", 42, { checks: "nope", status: 7, degraded: 1, reason: null }]) {
+            const view = parsePreviewVerification(raw);
+            expect(view.status).toBe("");
+            expect(view.checks).toEqual([]);
+            expect(view.degraded).toBe(false);
+            expect(view.reason).toBeUndefined();
+            expect(view.screenshotNote).toBe("screenshot not retained");
+        }
+    });
+
+    it("drops malformed check rows but keeps the well-formed ones", () => {
+        const view = parsePreviewVerification({
+            checks: [null, "junk", { status: "passed" }, { tool: "" }, { tool: "browser_open", status: "passed" }],
+        });
+        expect(view.checks).toEqual([{ name: "browser_open", status: "passed" }]);
+    });
+});
+
+describe("fetchPreviewVerification — envelope unwrap + the two truthful 404s", () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it("unwraps { data: { verification } } on 200", async () => {
+        mockFetchOnce({ success: true, data: { verification: FULL_PREVIEW_VERIFICATION } });
+        const result = await fetchPreviewVerification("ws1");
+        expect(result.ok).toBe(true);
+        expect(result.ok && result.view.status).toBe("failed");
+        expect(result.ok && result.view.checks.length).toBe(3);
+        expect(result.ok && result.view.screenshotNote).toBe("screenshot not retained");
+    });
+
+    it("maps a 404 'preview not verified' to not-verified — a truthful gap, not an error", async () => {
+        mockFetchOnce({ success: false, error: { message: "preview not verified" } }, 404);
+        const result = await fetchPreviewVerification("ws_plain");
+        expect(result).toEqual({ ok: false, reason: "not-verified" });
+    });
+
+    it("maps a 404 'workspace not found' to workspace-missing", async () => {
+        mockFetchOnce({ success: false, error: { message: "workspace not found" } }, 404);
+        const result = await fetchPreviewVerification("ws_gone");
+        expect(result).toEqual({ ok: false, reason: "workspace-missing" });
+    });
+
+    it("maps a rejected fetch to unreachable — never a fabricated verdict", async () => {
+        vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
+        const result = await fetchPreviewVerification("ws1");
+        expect(result).toEqual({ ok: false, reason: "unreachable" });
     });
 });
 

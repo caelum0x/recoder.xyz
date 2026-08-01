@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { cn } from "@/util/util";
+import { useAtomValue } from "jotai";
 import { useEffect, useState } from "react";
 import {
     cryptoVerifyEd25519,
@@ -10,11 +11,14 @@ import {
     evidenceFilename,
     fetchEvidenceExport,
     fetchEvidenceMarkdown,
+    previewVerificationStateAtom,
     signaturePublicKeyFingerprint,
     triggerTextDownload,
     type EvidenceControlView,
     type EvidenceExportView,
     type EvidenceStatus,
+    type PreviewCheckRow,
+    type PreviewVerificationViewModel,
     type SignatureState,
 } from "./recoder-evidence-logic";
 
@@ -125,7 +129,7 @@ SignatureLine.displayName = "SignatureLine";
 // The compliance evidence pack for a merged workspace, hung on the Review surface.
 // Local ephemeral state (fetched per-workspace) — mirrors the converge panel; it
 // never survives a workspace switch, so it stays out of the diff model.
-function EvidencePanel({ workspaceId }: { workspaceId: string }) {
+function CompliancePackSection({ workspaceId }: { workspaceId: string }) {
     const [view, setView] = useState<EvidenceExportView>(null);
     const [loading, setLoading] = useState(false);
     const [noEvidence, setNoEvidence] = useState(false);
@@ -258,6 +262,126 @@ function EvidencePanel({ workspaceId }: { workspaceId: string }) {
             )}
             {downloadStatus != "" && <div className="text-xs text-secondary">{downloadStatus}</div>}
         </div>
+    );
+}
+
+CompliancePackSection.displayName = "CompliancePackSection";
+
+const PREVIEW_CHECK_GLYPH: Record<string, string> = {
+    passed: "✓",
+    failed: "✗",
+    skipped: "◐",
+};
+
+// Truthful check chrome: only a real `passed` earns the accent ✓; `failed` reads
+// error; `skipped` and anything unknown stay neutral — never green by default.
+function previewCheckTone(status: string): string {
+    if (status == "passed") {
+        return "text-accent";
+    }
+    if (status == "failed") {
+        return "text-error";
+    }
+    return "text-secondary";
+}
+
+function PreviewCheckLine({ check }: { check: PreviewCheckRow }) {
+    const glyph = PREVIEW_CHECK_GLYPH[check.status] ?? "◐";
+    return (
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+            <span className={cn("font-mono", previewCheckTone(check.status))} title={check.status}>
+                {glyph}
+            </span>
+            <span className="text-secondary">{check.name}</span>
+            {check.detail != null && check.detail != "" && <span className="text-secondary/70">— {check.detail}</span>}
+        </div>
+    );
+}
+
+PreviewCheckLine.displayName = "PreviewCheckLine";
+
+// Overall verdict chrome: a degraded run proved NOTHING, so it can never earn the
+// accent regardless of its status; only a real non-degraded `passed` is green.
+function previewStatusTone(view: PreviewVerificationViewModel): string {
+    if (view.degraded) {
+        return "text-secondary";
+    }
+    return previewCheckTone(view.status);
+}
+
+// The last persisted preview verification for the selected workspace, read from
+// the diff-model-fetched shared atom (the model owns the fetch; the workspace tag
+// keeps this section from ever rendering another workspace's verdict). Every
+// not-ok state names its missing source explicitly — a truthful 404 split
+// ("preview not verified" vs "workspace not found") or an unreachable backend —
+// never a fabricated pass.
+function PreviewVerificationSection({ workspaceId }: { workspaceId: string }) {
+    const state = useAtomValue(previewVerificationStateAtom);
+    const matches = state != null && state.workspaceId == workspaceId;
+    if (!matches || state.loading || state.result == null) {
+        return (
+            <div className="flex flex-col gap-1 rounded border border-border p-2">
+                <div className="text-xs uppercase tracking-wide text-secondary">Preview verification</div>
+                <div className="text-xs text-secondary">
+                    {matches && state.loading ? "Loading preview verification…" : "Preview verification not loaded."}
+                </div>
+            </div>
+        );
+    }
+    const result = state.result;
+    if (!result.ok) {
+        const unreachable = result.reason == "unreachable";
+        const copy =
+            result.reason == "workspace-missing"
+                ? "Workspace not found — no preview verification to show."
+                : unreachable
+                  ? "Preview verification unavailable — backend unreachable."
+                  : "Preview not verified for this workspace.";
+        return (
+            <div className="flex flex-col gap-1 rounded border border-border p-2">
+                <div className="text-xs uppercase tracking-wide text-secondary">Preview verification</div>
+                <div className={cn("text-xs", unreachable ? "text-error" : "text-secondary")}>{copy}</div>
+            </div>
+        );
+    }
+    const view = result.view;
+    return (
+        <div className="flex flex-col gap-1.5 rounded border border-border p-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="text-xs uppercase tracking-wide text-secondary">Preview verification</span>
+                <span className={cn("text-xs", previewStatusTone(view))}>
+                    {view.status == "" ? "unknown" : view.status}
+                </span>
+                {view.degraded && <span className="text-xs text-secondary">degraded — proved nothing</span>}
+                {view.checkedAt != "" && <span className="text-xs text-secondary/70">checked {view.checkedAt}</span>}
+            </div>
+            {view.summary != "" && <div className="text-xs text-secondary">{view.summary}</div>}
+            {view.reason != null && view.reason != "" && (
+                <div className="text-xs text-secondary">reason: {view.reason}</div>
+            )}
+            {view.checks.length > 0 && (
+                <div className="flex flex-col gap-0.5">
+                    {view.checks.map((check, i) => (
+                        <PreviewCheckLine key={`${check.name}:${i}`} check={check} />
+                    ))}
+                </div>
+            )}
+            <div className="text-xs text-secondary/70">{view.screenshotNote}</div>
+        </div>
+    );
+}
+
+PreviewVerificationSection.displayName = "PreviewVerificationSection";
+
+// Evidence for the selected workspace: the compliance pack (merged convergences)
+// plus the last preview verification. Two independent truthful reads — either can
+// exist without the other, so both sections always render their own honest state.
+function EvidencePanel({ workspaceId }: { workspaceId: string }) {
+    return (
+        <>
+            <CompliancePackSection workspaceId={workspaceId} />
+            <PreviewVerificationSection workspaceId={workspaceId} />
+        </>
     );
 }
 
