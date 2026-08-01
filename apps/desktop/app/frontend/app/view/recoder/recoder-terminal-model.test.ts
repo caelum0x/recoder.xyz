@@ -14,7 +14,7 @@ vi.mock("./recoder-terminal", () => ({
 
 import { globalStore } from "@/app/store/global";
 import { atom } from "jotai";
-import { parseStreamFrame, RecoderTerminalViewModel } from "./recoder-terminal-model";
+import { parseStreamFrame, reconnectDelayMs, RecoderTerminalViewModel } from "./recoder-terminal-model";
 
 const BareLogEvent = {
     eventId: "e1",
@@ -123,6 +123,32 @@ describe("RecoderTerminalViewModel.handleMessage", () => {
         model.handleMessage("not json");
         model.handleMessage(JSON.stringify({ type: "mystery" }));
         expect(globalStore.get(model.linesAtom)).toHaveLength(0);
+    });
+});
+
+describe("reconnectDelayMs (capped backoff + jitter)", () => {
+    it("stays within [ceiling/2, ceiling] where ceiling = min(15000, 500·2^attempt)", () => {
+        const ceilings = [500, 1000, 2000, 4000, 8000, 15000, 15000, 15000];
+        for (let attempt = 0; attempt < ceilings.length; attempt++) {
+            const ceiling = ceilings[attempt];
+            for (let s = 0; s < 50; s++) {
+                const d = reconnectDelayMs(attempt);
+                expect(d).toBeGreaterThanOrEqual(Math.floor(ceiling / 2));
+                expect(d).toBeLessThanOrEqual(ceiling);
+            }
+        }
+    });
+
+    it("caps the ceiling at 15000ms for large attempts (no unbounded growth)", () => {
+        for (let s = 0; s < 50; s++) {
+            expect(reconnectDelayMs(20)).toBeLessThanOrEqual(15000);
+        }
+    });
+
+    it("treats negative attempts as attempt 0 (defensive)", () => {
+        const d = reconnectDelayMs(-3);
+        expect(d).toBeGreaterThanOrEqual(250);
+        expect(d).toBeLessThanOrEqual(500);
     });
 });
 
