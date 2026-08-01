@@ -21,6 +21,26 @@ import { RunEventRing } from './run-event-ring.js';
 const WS_POLICY_VIOLATION = 1008;
 
 /**
+ * WS close code for a subscriber dropped for slow-consumer backpressure
+ * (RFC 6455 `1013` "Try Again Later"): the server is shedding this connection
+ * under load, and the client is expected to reconnect and resume.
+ */
+const WS_TRY_AGAIN_LATER = 1013;
+
+/** Truthful close reason stamped on a slow-consumer drop (kept < 123 bytes). */
+const SLOW_CONSUMER_REASON = 'slow consumer: outbound buffer exceeded';
+
+/**
+ * Backpressure bound: the most bytes we let queue on ONE subscriber's outbound
+ * socket buffer before we treat it as a stuck/slow consumer and drop it. A
+ * renderer that stopped reading otherwise makes the server buffer frames without
+ * limit (unbounded memory growth + head-of-line risk). At 8 MiB a healthy
+ * consumer never approaches the cap, while a truly stuck one is shed long before
+ * it can pin meaningful memory. Exported so the bound is testable.
+ */
+export const SLOW_CONSUMER_BUFFER_LIMIT_BYTES = 8 * 1024 * 1024;
+
+/**
  * Additively stamp the ring's monotonic numeric id onto an outgoing frame as
  * `seq`, so a reconnecting client can read the cursor to resume from (`?since=`).
  * Every original field is kept byte-intact — consumers key off their known fields
@@ -97,8 +117,21 @@ export class SyncHub {
     // History-less hubs assign no id, so the live wire stays byte-for-byte bare.
     const frame = JSON.stringify(seq === undefined ? payload : stampSeq(payload, seq));
     for (const socket of set) {
-      if (socket.readyState === socket.OPEN) socket.send(frame);
+      if (socket.readyState !== socket.OPEN) continue;
+      // Backpressure bound: a consumer that stopped draining its socket makes
+      // `bufferedAmount` grow without limit. Once it crosses the cap, stop
+      // buffering to it — unsubscribe it here and immediately (deleting from the
+      // set we're iterating is safe in JS) and close it truthfully. It reconnects
+      // (DT-7.2) and resumes (DT-7.3 `?since=`) instead of pinning server memory.
+      // A healthy consumer stays under the cap and is unaffected — its wire byte-intact.
+      if (socket.bufferedAmount > SLOW_CONSUMER_BUFFER_LIMIT_BYTES) {
+        set.delete(socket);
+        socket.close(WS_TRY_AGAIN_LATER, SLOW_CONSUMER_REASON);
+        continue;
+      }
+      socket.send(frame);
     }
+    if (set.size === 0) this.subscribers.delete(workspaceId);
   }
 
   /** Whether this hub retains history for the `?since=` replay path. */
