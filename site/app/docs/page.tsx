@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Nav, Footer } from "@/components/site";
-import { DOC_SECTIONS, type DocBlock } from "./content";
+import { DOC_PAGES } from "./content";
+import { DocsShell } from "./docs-shell";
 
 export const metadata: Metadata = {
   title: "Recoder docs — how to use it",
@@ -10,94 +11,49 @@ export const metadata: Metadata = {
   alternates: { canonical: "https://recoder.xyz/docs" },
 };
 
-function Block({ block }: { block: DocBlock }) {
-  if (block.kind === "p") {
-    return <p className="mt-4 text-sm leading-relaxed text-muted">{block.text}</p>;
-  }
-  if (block.kind === "note") {
-    return (
-      <p className="mt-4 rounded-lg border border-border bg-bg-soft px-4 py-3 text-sm leading-relaxed text-faint">
-        {block.text}
-      </p>
-    );
-  }
-  if (block.kind === "code") {
-    return (
-      <pre className="mt-4 overflow-x-auto rounded-lg border border-border bg-bg-soft px-4 py-3 text-xs text-muted">
-        <code>{block.code}</code>
-      </pre>
-    );
-  }
-  return (
-    <ol className="mt-4 space-y-2">
-      {block.items.map((item, i) => (
-        <li key={i} className="flex gap-3 text-sm leading-relaxed text-muted">
-          <span className="font-mono text-xs text-accent">{i + 1}</span>
-          <span>{item}</span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-export default function Docs() {
+export default function DocsIndex() {
   return (
     <>
       <Nav />
-      <main className="mx-auto max-w-3xl px-6 py-20">
-        <h1 className="text-balance text-4xl font-semibold tracking-tight md:text-5xl">
-          Docs
-        </h1>
-        <p className="mt-3 text-muted">
-          How to use Recoder — install, connect your agents, and run them as a
-          coordinated team.{" "}
-          <Link
-            href="/download"
-            className="text-accent underline-offset-4 hover:underline"
-          >
-            Download
-          </Link>
-        </p>
-
-        <nav aria-label="Contents" className="mt-10 rounded-xl border border-border bg-bg-soft p-6">
-          <div className="text-xs font-medium uppercase tracking-wide text-faint">
-            On this page
+      <main>
+        <DocsShell>
+          <h1 className="text-balance text-3xl font-semibold tracking-tight md:text-4xl">
+            Documentation
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
+            How to use Recoder — install the desktop app, connect the coding agents
+            you already run, and coordinate them: run in parallel, review, converge,
+            and land one governed merge. Local-first; your agents, your keys.
+          </p>
+          <div className="mt-4">
+            <Link
+              href="/download"
+              className="inline-block rounded-lg bg-accent/80 px-4 py-2 text-sm text-primary transition-colors hover:bg-accent"
+            >
+              Download Recoder
+            </Link>
           </div>
-          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-            {DOC_SECTIONS.map((s) => (
-              <li key={s.id}>
-                <a href={`#${s.id}`} className="text-sm text-muted hover:text-fg">
-                  {s.title}
-                </a>
-              </li>
+
+          <div className="mt-12 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
+            {DOC_PAGES.map((p, i) => (
+              <Link
+                key={p.slug}
+                href={`/docs/${p.slug}`}
+                className="group bg-bg p-6 transition-colors hover:bg-bg-soft"
+              >
+                <div className="font-mono text-xs text-accent">
+                  {String(i + 1).padStart(2, "0")}
+                </div>
+                <h2 className="mt-2 text-sm font-medium text-fg group-hover:text-fg">
+                  {p.title}
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  {p.description}
+                </p>
+              </Link>
             ))}
-          </ul>
-        </nav>
-
-        <div className="mt-12 space-y-12">
-          {DOC_SECTIONS.map((s) => (
-            <section key={s.id} id={s.id} className="scroll-mt-24 border-t border-border pt-8">
-              <h2 className="text-xl font-medium tracking-tight">{s.title}</h2>
-              {s.blocks.map((block, i) => (
-                <Block key={i} block={block} />
-              ))}
-            </section>
-          ))}
-        </div>
-
-        <p className="mt-16 border-t border-border pt-8 text-sm text-faint">
-          Looking for the full reference — per-runtime setup, review/converge/merge,
-          troubleshooting? See the complete guide in the{" "}
-          <a
-            href="https://github.com/caelum0x/recoder.xyz/tree/main/docs/guide"
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted underline underline-offset-4 hover:text-fg"
-          >
-            Recoder user guide
-          </a>
-          .
-        </p>
+          </div>
+        </DocsShell>
       </main>
       <Footer />
     </>
