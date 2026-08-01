@@ -1,6 +1,7 @@
 /**
  * Create Checkout Session API
- * Handles creation of checkout sessions for Paddle and DODO Payments
+ * Handles creation of hosted checkout sessions. Creem is the Merchant of Record
+ * (tried first); Paddle and DODO remain as configured fallbacks.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -41,23 +42,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Plan configuration
-    const planConfig: Record<string, { paddleProductId: string; dodoProductId: string }> = {
+    // Plan configuration. `creemProductId` is the Creem hosted-product id per plan.
+    const planConfig: Record<string, { paddleProductId: string; dodoProductId: string; creemProductId: string }> = {
       weekly: {
         paddleProductId: process.env.PADDLE_PRODUCT_WEEKLY || 'pro_01jrp8y7mhdrng9hhz2e2ksxs3',
         dodoProductId: process.env.DODO_PRODUCT_WEEKLY || 'prod_weekly',
+        creemProductId: process.env.CREEM_PRODUCT_WEEKLY || '',
       },
       monthly: {
         paddleProductId: process.env.PADDLE_PRODUCT_MONTHLY || 'pro_01jrp8zjr8n2pc8ryt4v16qfef',
         dodoProductId: process.env.DODO_PRODUCT_MONTHLY || 'prod_monthly',
+        creemProductId: process.env.CREEM_PRODUCT_MONTHLY || '',
       },
       pro: {
         paddleProductId: process.env.PADDLE_PRODUCT_PRO || 'pro_01jrp90dg3hc0tn6xhm3me6bjk',
         dodoProductId: process.env.DODO_PRODUCT_PRO || 'prod_pro',
+        creemProductId: process.env.CREEM_PRODUCT_PRO || '',
+      },
+      team: {
+        paddleProductId: process.env.PADDLE_PRODUCT_TEAM || 'pro_team',
+        dodoProductId: process.env.DODO_PRODUCT_TEAM || 'prod_team',
+        creemProductId: process.env.CREEM_PRODUCT_TEAM || '',
       },
       enterprise: {
         paddleProductId: process.env.PADDLE_PRODUCT_ENTERPRISE || 'pro_enterprise',
         dodoProductId: process.env.DODO_PRODUCT_ENTERPRISE || 'prod_enterprise',
+        creemProductId: process.env.CREEM_PRODUCT_ENTERPRISE || '',
       },
     };
 
@@ -71,7 +81,53 @@ export async function POST(request: NextRequest) {
 
     const baseUrl = resolvePublicAppUrl();
 
-    if (paymentMethod === 'paddle') {
+    if (paymentMethod === 'creem') {
+      // Creem — Merchant of Record. Hosted checkout via POST /v1/checkouts.
+      const creemApiKey = process.env.CREEM_API_KEY?.trim();
+      if (!creemApiKey || !selectedPlan.creemProductId) {
+        logger.warn('Creem not configured (missing CREEM_API_KEY or product id)', {
+          route: 'api/billing/create-checkout',
+          plan,
+        });
+        return NextResponse.json(
+          { error: 'Payment provider not configured. Please contact support.' },
+          { status: 503 },
+        );
+      }
+
+      const creemBaseUrl = process.env.CREEM_API_BASE_URL?.trim() || 'https://api.creem.io';
+      const creemResponse = await fetch(`${creemBaseUrl}/v1/checkouts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': creemApiKey,
+        },
+        body: JSON.stringify({
+          product_id: selectedPlan.creemProductId,
+          success_url: `${baseUrl}/checkout/success?plan=${plan}`,
+          customer: { email: user.email },
+          metadata: { userId: user.id, plan },
+        }),
+      });
+
+      const creemData = (await creemResponse.json().catch(() => null)) as {
+        checkout_url?: string;
+      } | null;
+
+      if (creemResponse.ok && creemData?.checkout_url) {
+        return NextResponse.json({
+          success: true,
+          checkoutUrl: creemData.checkout_url,
+          provider: 'creem',
+        });
+      }
+
+      logger.warn('Creem checkout creation failed', {
+        route: 'api/billing/create-checkout',
+        status: creemResponse.status,
+      });
+      throw new Error('Failed to create Creem checkout');
+    } else if (paymentMethod === 'paddle') {
       // Paddle integration
       const paddleVendorId = resolvePaddleVendorId();
       const paddleAuthCode = resolvePaddleAuthCode();
