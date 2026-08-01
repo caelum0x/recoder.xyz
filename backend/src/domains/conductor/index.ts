@@ -32,6 +32,8 @@ import type { CoordinationAdmissionPort } from './ports/coordination-admission.p
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { RunSignalPushPort } from './ports/run-signal-push.port.js';
+import type { PrReviewPort } from './ports/pr-review.port.js';
+export type { PrReviewEvidenceView, PrReviewPort } from './ports/pr-review.port.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
 import type {
   PreviewVerifyPort,
@@ -625,6 +627,15 @@ export interface ConductorModule {
    * truthful no-op (no push); a push fault NEVER blocks or delays the completion.
    */
   setRunSignalPush(port: RunSignalPushPort): void;
+  /**
+   * Inject the OPTIONAL advisory PR auto-review port. Set post-construction by
+   * bootstrap (`conductor.setPrReview(createGithubPrReviewAdapter({...}))`) so
+   * the readiness read model (`GET …/readiness`) carries an AI-annotated review
+   * facet (gh pr view + bounded diff + recodergit blast radius) when a real
+   * open PR exists. ADVISORY ONLY: never a 6th signal, never a verdict input.
+   * Unwired ⇒ facet absent, truthful; a faulting review NEVER 500s the read.
+   */
+  setPrReview(port: PrReviewPort): void;
   /** Truthful per-substrate availability (`GET /substrates`) — awaits each substrate's live `available()` probe. */
   substrates(): Promise<readonly SubstrateAvailabilityView[]>;
   /**

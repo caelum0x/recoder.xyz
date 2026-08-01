@@ -73,6 +73,7 @@ import { createBrowserPreviewVerifier } from '../domains/conductor/adapters/brow
 import { executeBrowserVerification } from '../domains/engines/adapters/sidecar/browser-verification.executor.js';
 import { createConductorPlanAdapter } from '../domains/conductor/adapters/plan.adapter.js';
 import { createGithubStatusAdapter } from '../domains/conductor/adapters/github-status.adapter.js';
+import { createGithubPrReviewAdapter } from '../domains/conductor/adapters/github-review.adapter.js';
 import { createTmuxSteerTransport } from '../domains/conductor/adapters/steer-transport.adapter.js';
 import { createTmuxScanSource } from '../domains/conductor/adapters/tmux-scan-source.adapter.js';
 import { createDmuxGridAdapter } from '../domains/conductor/adapters/dmux-grid.adapter.js';
@@ -1386,6 +1387,22 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   conductor.setRunSignalPush({
     forwardRunSignal: input => observability.forwardRunSignal(input),
   });
+
+  // W10-A auto-review at delivery: bind the conductor-owned advisory
+  // `PrReviewPort` to the engines GithubModule's `reviewPR` (gh pr view +
+  // bounded diff + recodergit blast radius) so the merge-readiness read model
+  // (`GET …/readiness`) carries AI review evidence when a real open PR exists.
+  // Type-only coupling on the conductor side — this closure is the ONLY value
+  // seam (mirrors the structural setRunSignalPush bind above). ADVISORY: never
+  // a 6th readiness signal, never a verdict input; unwired/gh-missing/faulting
+  // ⇒ the facet degrades to a truthful `null`/`available:false`, never a
+  // fabricated review.
+  conductor.setPrReview(
+    createGithubPrReviewAdapter({
+      github: () => engines.github(),
+      logger: childLogger('conductor-pr-review'),
+    })
+  );
 
   // --- MCP tool registration: bridge every domain's flat `mcp()` tools onto the ONE
   //     interop-gated host the engines module owns (`registerModuleTools` builds the

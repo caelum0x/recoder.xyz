@@ -51,6 +51,10 @@ import type {
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { RunSignalPushPort } from './ports/run-signal-push.port.js';
+import type {
+  PrReviewEvidenceView,
+  PrReviewPort,
+} from './ports/pr-review.port.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type { WorkspaceRepositoryPort } from './ports/workspace-repository.port.js';
 import type {
@@ -195,7 +199,10 @@ import { buildCheckpointRoutes } from './routes/checkpoint.routes.js';
 import { buildWorkspaceQueryRoutes } from './routes/workspaces-query.routes.js';
 import { buildRepoConfigRoutes } from './routes/repo-config.routes.js';
 import { RepoSetupService, repoKeyFor } from './services/repo-setup.service.js';
-import { PrStatusService } from './services/pr-status.service.js';
+import {
+  PrStatusService,
+  type PrStatusView,
+} from './services/pr-status.service.js';
 import {
   RepoCloneService,
   type CloneRepoInput,
@@ -416,6 +423,13 @@ export class ConductorComposer implements ConductorModule {
    * terminal event; observability satisfies it structurally at the composition root.
    */
   private runSignalPush?: RunSignalPushPort;
+  /**
+   * OPTIONAL advisory PR auto-review port (set by bootstrap `setPrReview`;
+   * absent ⇒ the readiness `review` facet stays a truthful `null`). Probed by
+   * `workspaceReadiness` ONLY when a real open PR + a worktree exist — NEVER a
+   * 6th readiness signal, never a verdict input.
+   */
+  private prReview?: PrReviewPort;
   /** Checkpoint metadata store (degrade-truthful in-process by default). */
   private readonly checkpointStore: CheckpointStorePort;
   /** Per-repo setup-script config + the worktree-create run hook (governed writes). */
@@ -656,6 +670,16 @@ export class ConductorComposer implements ConductorModule {
    */
   setRunSignalPush(port: RunSignalPushPort): void {
     this.runSignalPush = port;
+  }
+
+  /**
+   * Inject the optional advisory PR auto-review port (the readiness `review`
+   * facet). SINGLE-WRITER: this is the ONLY mutation of `this.prReview`, called
+   * once at bootstrap after the engines module exists — same discipline as
+   * `setRunSignalPush`. Unwired ⇒ the facet is absent, truthful.
+   */
+  setPrReview(port: PrReviewPort): void {
+    this.prReview = port;
   }
 
   /**
@@ -2187,7 +2211,10 @@ export class ConductorComposer implements ConductorModule {
    * an ABSENT input — the corresponding signal reports `'unknown'` and the edge
    * never 500s, never a fabricated pass. `state` is read from the already-fetched
    * workspace record (NOT the view probe), so lifecycle stays truthful even if the
-   * view probe rejects. A missing workspace throws (→ 404 at the edge).
+   * view probe rejects. A missing workspace throws (→ 404 at the edge). When the
+   * PR-status probe fulfilled with a REAL open PR, the ADVISORY auto-review probe
+   * ({@link probePrReview}) additionally attaches bounded review evidence — never
+   * a 6th signal, never a verdict input.
    */
   async workspaceReadiness(workspaceId: string): Promise<ReadinessView> {
     const workspace = await this.engine.getWorkspace(workspaceId);
@@ -2199,6 +2226,7 @@ export class ConductorComposer implements ConductorModule {
       this.getPreviewVerification(workspaceId),
       this.buildWorkspaceView(workspace),
     ]);
+    const review = await this.probePrReview(workspace, prR);
     return foldReadiness({
       state: workspace.state,
       ...(viewR.status === 'fulfilled' && viewR.value.attention
@@ -2210,7 +2238,38 @@ export class ConductorComposer implements ConductorModule {
         ? { worktree: worktreeR.value }
         : {}),
       ...(previewR.status === 'fulfilled' ? { preview: previewR.value } : {}),
+      ...(review ? { review } : {}),
     });
+  }
+
+  /**
+   * ADVISORY auto-review probe backing the readiness `review` facet — NEVER a
+   * 6th signal. Fires ONLY when the port is wired AND the PR-status probe
+   * fulfilled with a real PR (`hasPr` + a numeric number) AND the workspace has
+   * a worktree; settled with the same allSettled discipline as the other
+   * probes, so a rejecting port degrades to `undefined` (facet omitted at the
+   * fold — the readiness read never 500s, never a fabricated review).
+   */
+  private async probePrReview(
+    workspace: Workspace,
+    prR: PromiseSettledResult<PrStatusView>,
+  ): Promise<PrReviewEvidenceView | undefined> {
+    const port = this.prReview;
+    if (!port || prR.status !== 'fulfilled') return undefined;
+    const prStatus = prR.value;
+    if (prStatus.hasPr !== true || typeof prStatus.number !== 'number') {
+      return undefined;
+    }
+    const repoRoot = workspace.worktreePath;
+    if (!repoRoot) return undefined;
+    const [settled] = await Promise.allSettled([
+      port.review({
+        prNumber: prStatus.number,
+        repoRoot,
+        workspaceId: workspace.workspaceId,
+      }),
+    ]);
+    return settled.status === 'fulfilled' ? settled.value : undefined;
   }
 
   async workspaceDevCommand(
