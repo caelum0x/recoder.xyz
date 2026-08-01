@@ -133,6 +133,8 @@ import type { DevCommandView } from './adapters/dev-command.adapter.js';
 import type { ConductorRuntimeView } from './adapters/runtime-listing.adapter.js';
 import type { WorkspaceQueryFilters } from './services/workspace-query.service.js';
 import type { CompareView } from './services/compare.service.js';
+import type { PairwiseDiffView } from './services/pairwise-diff.service.js';
+export type { PairwiseDiffView, PairwiseFileDiff } from './services/pairwise-diff.service.js';
 import type { WorkspaceGridPort, GroupGridArrangement } from './ports/workspace-grid.port.js';
 // Type-only across the boundary (the guard allows types): the read-only
 // `/sessions` attach bridge observes through an INJECTED engines-owned tmux
@@ -421,6 +423,23 @@ export interface ConductorModule {
     workspaceId: string,
     principal?: Principal,
   ): Promise<CompareView | null>;
+  /**
+   * The TRUE line-level A-vs-B pairwise diff of a parallel-run pair — one unified
+   * patch per shared file across the TWO sibling worktrees (`git diff --no-index`),
+   * the Compare view's PairwisePanel edge. Read-only + degrade-truthful (a
+   * one-sided/binary/unreadable file reports itself, never a fabricated patch).
+   * recoder-kybr: the group is narrowed to the caller's OWN siblings and BOTH
+   * `aId`/`bId` must be members — either missing ⇒ `null` (the route's no-oracle
+   * 404). `paths` defaults to the pair's shared changed files; the list is bounded
+   * with a truthful `capped` flag.
+   */
+  pairwiseDiff(
+    taskGroup: string,
+    aId: string,
+    bId: string,
+    paths: readonly string[] | undefined,
+    principal?: Principal,
+  ): Promise<PairwiseDiffView | null>;
   /**
    * Arrange the parallel-run group's operator grid — GATED (`workspace.grid`):
    * ensure the dedicated `recoder-group-<taskGroup>` session then build one pane
