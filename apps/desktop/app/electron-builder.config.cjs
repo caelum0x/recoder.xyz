@@ -6,6 +6,23 @@ const { assertExtraResourcesExist } = require("./build/assert-extra-resources.cj
 
 const windowsShouldSign = !!process.env.SM_CODE_SIGNING_CERT_SHA1_HASH;
 
+// Notarization is automatic when Apple API (or apple-id) creds are present — this
+// obsoletes the old untracked electron-builder.notarize.cjs helper. Absent creds →
+// a plain unsigned dev build, never a half-configured notarize that fails the run.
+const macShouldNotarize = !!(
+    (process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER) ||
+    (process.env.APPLE_ID && process.env.APPLE_APP_SPECIFIC_PASSWORD && process.env.APPLE_TEAM_ID)
+);
+
+// mac target arch: arm64 by default. RECODER_MAC_ARCH=x64|universal switches it
+// ONCE cross-built native artifacts exist (owner runbook). Guarded so a normal
+// build stays arm64 and the arch-aware beforePack gate keeps rejecting a dmg whose
+// bundled .node/bd binaries don't match the target arch.
+const macArch = (() => {
+    const v = (process.env.RECODER_MAC_ARCH || "arm64").trim();
+    return v === "x64" || v === "universal" ? v : "arm64";
+})();
+
 // Deliberate cloud-or-degrade artifacts: absence is LOGGED LOUD by the
 // beforePack gate, never fatal. The Lance embedded vector store degrades to
 // Qdrant/no-op at runtime (backend/src/domains/memory). Its napi crate does not
@@ -158,24 +175,30 @@ const config = {
         "dist/schema/**/*", // schema files for Monaco editor
     ],
     mac: {
-        // arm64 only: every native .node addon and the beads bd binary on disk is
-        // host arm64 (verified). An x64 dmg would copy arm64 binaries → runtime
-        // dlopen failure, and the arch-aware gate would reject it anyway. x64 /
-        // universal returns once cross-built native artifacts exist (owner runbook).
+        // arm64 by default: every native .node addon and the beads bd binary on
+        // disk is host arm64 (verified). An x64 dmg would copy arm64 binaries →
+        // runtime dlopen failure, and the arch-aware gate would reject it. Set
+        // RECODER_MAC_ARCH=x64|universal only once cross-built native artifacts
+        // exist (owner runbook §1b).
         target: [
             {
                 target: "zip",
-                arch: ["arm64"],
+                arch: [macArch],
             },
             {
                 target: "dmg",
-                arch: ["arm64"],
+                arch: [macArch],
             },
         ],
         category: "public.app-category.developer-tools",
         minimumSystemVersion: "10.15.0",
         mergeASARs: true,
         singleArchFiles: "**/dist/bin/recoder-server.*",
+        // Hardened runtime + notarization turn on automatically when Apple creds
+        // are present (macShouldNotarize); a keyless dev build stays unsigned.
+        hardenedRuntime: macShouldNotarize,
+        gatekeeperAssess: false,
+        notarize: macShouldNotarize,
         entitlements: "build/entitlements.mac.plist",
         entitlementsInherit: "build/entitlements.mac.plist",
         icon: "build/icon.icns",
