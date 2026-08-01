@@ -653,3 +653,113 @@ describe('createMemoryLifecycle.reject — cross-tenant is NOT_FOUND (IDOR #3)',
     expect(candidates[0]?.status).toBe('rejected');
   });
 });
+
+// --- Review invariants: exactly-once review + no expired-wisp promotion ---------
+
+describe('createMemoryLifecycle — review invariants (recoder-djx3)', () => {
+  it('refuses to re-accept an already-accepted candidate (upsertItem fires exactly once)', async () => {
+    const { repo, items } = fakeRepo();
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: fakeGate('allow'),
+      beads: beadsDown,
+      logger: silentLogger,
+    });
+    const first = await lifecycle.accept({
+      userId: 'u1',
+      candidateId: 'c1',
+      principal,
+    });
+    expect(first.promoted).toBe(true);
+    await expect(
+      lifecycle.accept({ userId: 'u1', candidateId: 'c1', principal })
+    ).rejects.toThrow(/not reviewable/i);
+    // No duplicate durable item was materialized.
+    expect(items).toHaveLength(1);
+  });
+
+  it('refuses to accept a rejected candidate (no silent resurrection)', async () => {
+    const { repo, items } = fakeRepo();
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: fakeGate('allow'),
+      beads: beadsDown,
+      logger: silentLogger,
+    });
+    await lifecycle.reject({
+      userId: 'u1',
+      candidateId: 'c1',
+      principal,
+      reason: 'stale',
+    });
+    await expect(
+      lifecycle.accept({ userId: 'u1', candidateId: 'c1', principal })
+    ).rejects.toThrow(/not reviewable/i);
+    expect(items).toHaveLength(0);
+  });
+
+  it('refuses to accept an expired candidate BEFORE the gate is consulted', async () => {
+    const { repo, items } = fakeRepo(
+      candidate({ expiresAt: '2026-07-15T06:00:00Z' })
+    );
+    const g = countingGate('allow');
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: g.gate,
+      beads: beadsDown,
+      logger: silentLogger,
+      now: () => '2026-07-15T12:00:00Z',
+    });
+    await expect(
+      lifecycle.accept({ userId: 'u1', candidateId: 'c1', principal })
+    ).rejects.toThrow(/expired/i);
+    // The gate was never asked and nothing was materialized.
+    expect(g.decideCalls).toBe(0);
+    expect(items).toHaveLength(0);
+  });
+
+  it('refuses to re-reject an already-rejected candidate', async () => {
+    const { repo, candidates } = fakeRepo();
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: fakeGate('allow'),
+      beads: beadsDown,
+      logger: silentLogger,
+    });
+    await lifecycle.reject({
+      userId: 'u1',
+      candidateId: 'c1',
+      principal,
+      reason: 'stale',
+    });
+    await expect(
+      lifecycle.reject({
+        userId: 'u1',
+        candidateId: 'c1',
+        principal,
+        reason: 'again',
+      })
+    ).rejects.toThrow(/not reviewable/i);
+    // The original review record is untouched.
+    expect(candidates[0]?.reviewReason).toBe('stale');
+  });
+
+  it('refuses to reject an already-accepted candidate', async () => {
+    const { repo } = fakeRepo();
+    const lifecycle = createMemoryLifecycle({
+      repository: repo,
+      gate: fakeGate('allow'),
+      beads: beadsDown,
+      logger: silentLogger,
+    });
+    await lifecycle.accept({ userId: 'u1', candidateId: 'c1', principal });
+    await expect(
+      lifecycle.reject({
+        userId: 'u1',
+        candidateId: 'c1',
+        principal,
+        reason: 'flip',
+      })
+    ).rejects.toThrow(/not reviewable/i);
+  });
+});
