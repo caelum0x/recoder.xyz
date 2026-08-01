@@ -29,9 +29,19 @@ function MemoryItemRow({ item }: { item: RecoderMemoryItem }) {
 }
 
 function ResultRow({ result }: { result: RecoderMemoryResult }) {
+    const provenance = result.provenance;
     return (
         <div className="flex flex-col gap-0.5 rounded border border-border p-2" title={result.id}>
+            {result.title != null && result.title != "" && (
+                <div className="text-sm font-medium truncate">{result.title}</div>
+            )}
             <div className="text-sm">{result.memory}</div>
+            {provenance != null && (
+                <div className="text-xs text-secondary font-mono truncate">
+                    {provenance.source} · {provenance.score.toFixed(2)}
+                    {provenance.scope != null && provenance.scope != "" ? ` · ${provenance.scope}` : ""}
+                </div>
+            )}
         </div>
     );
 }
@@ -85,6 +95,7 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
     const searching = useAtomValue(model.searchingAtom);
     const error = useAtomValue(model.errorAtom);
     const searchNotice = useAtomValue(model.searchNoticeAtom);
+    const sourcesNotice = useAtomValue(model.sourcesNoticeAtom);
     const connected = useAtomValue(model.connectedAtom);
     const acting = useAtomValue(model.actingAtom);
     const actionError = useAtomValue(model.actionErrorAtom);
@@ -136,6 +147,7 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
             {hasQuery && (
                 <div className="flex flex-col gap-1">
                     <div className="text-xs uppercase tracking-wide text-secondary">Search results</div>
+                    {sourcesNotice != "" && <div className="text-warning text-sm">{sourcesNotice}</div>}
                     {searchNotice != "" && <div className="text-secondary text-sm">{searchNotice}</div>}
                     {results.map((r) => (
                         <ResultRow key={r.id} result={r} />

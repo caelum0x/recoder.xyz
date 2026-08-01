@@ -17,6 +17,7 @@ import { RecoderMemoryViewModel } from "./recoder-memory-model";
 
 const AcceptUrl = "http://127.0.0.1:3100/api/agent-os/memory/candidates/c1/accept";
 const RejectUrl = "http://127.0.0.1:3100/api/agent-os/memory/candidates/c1/reject";
+const RecallUrl = "http://127.0.0.1:3100/api/agent-os/memory/recall";
 
 function makeModel(): RecoderMemoryViewModel {
     return new RecoderMemoryViewModel({ blockId: "b1" } as ViewModelInitType);
@@ -121,6 +122,183 @@ describe("RecoderMemoryViewModel.refresh", () => {
 function okJson(data: unknown) {
     return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true, data }) });
 }
+
+describe("RecoderMemoryViewModel.search", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("retains per-hit provenance (source/ref/score/scope) from the recall response", async () => {
+        const fetchMock = vi.fn().mockImplementation(() =>
+            okJson({
+                memories: [
+                    {
+                        id: "m1",
+                        title: "fact title",
+                        body: "the fact",
+                        provenance: { source: "mem0", ref: "mem0:1", score: 0.82, scope: "repo" },
+                    },
+                    {
+                        id: "m2",
+                        body: "another",
+                        provenance: { source: "beads", ref: "bd-1", score: 1.7 },
+                    },
+                ],
+                sources: [{ source: "mem0", available: true }],
+                reranker: "identity",
+            })
+        );
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        model.setQuery("fact");
+        await model.search();
+
+        expect(fetchMock).toHaveBeenCalledWith(RecallUrl, expect.objectContaining({ method: "POST" }));
+        expect(globalStore.get(model.resultsAtom)).toEqual([
+            {
+                id: "m1",
+                memory: "the fact",
+                title: "fact title",
+                provenance: { source: "mem0", ref: "mem0:1", score: 0.82, scope: "repo" },
+            },
+            {
+                id: "m2",
+                memory: "another",
+                provenance: { source: "beads", ref: "bd-1", score: 1 },
+            },
+        ]);
+        expect(globalStore.get(model.searchNoticeAtom)).toBe("");
+        expect(globalStore.get(model.sourcesNoticeAtom)).toBe("");
+    });
+
+    it("omits malformed provenance instead of crashing", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockImplementation(() =>
+                okJson({
+                    memories: [
+                        { id: "m1", body: "a", provenance: { source: "mem0", ref: "r1", score: Number.NaN } },
+                        { id: "m2", body: "b", provenance: { ref: "r2", score: 0.5 } },
+                        { id: "m3", body: "c", provenance: "junk" },
+                        { id: "m4", body: "d" },
+                    ],
+                    sources: [{ source: "mem0", available: true }],
+                })
+            )
+        );
+
+        const model = makeModel();
+        model.setQuery("q");
+        await model.search();
+
+        expect(globalStore.get(model.resultsAtom)).toEqual([
+            { id: "m1", memory: "a" },
+            { id: "m2", memory: "b" },
+            { id: "m3", memory: "c" },
+            { id: "m4", memory: "d" },
+        ]);
+    });
+
+    it("surfaces a partial-degrade notice naming each down source while keeping results", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockImplementation(() =>
+                okJson({
+                    memories: [
+                        { id: "m1", body: "hit", provenance: { source: "mem0", ref: "r1", score: 0.9 } },
+                    ],
+                    sources: [
+                        { source: "mem0", available: true },
+                        { source: "beads", available: false, reason: "bd daemon unreachable" },
+                        { source: "colbert", available: false },
+                    ],
+                })
+            )
+        );
+
+        const model = makeModel();
+        model.setQuery("hit");
+        await model.search();
+
+        expect(globalStore.get(model.resultsAtom)).toHaveLength(1);
+        expect(globalStore.get(model.sourcesNoticeAtom)).toBe(
+            "partial recall: beads unavailable (bd daemon unreachable), colbert unavailable"
+        );
+        expect(globalStore.get(model.searchNoticeAtom)).toBe("");
+    });
+
+    it("keeps the full-degrade reason notice when every source is down and results are empty", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockImplementation(() =>
+                okJson({
+                    memories: [],
+                    sources: [
+                        { source: "mem0", available: false, reason: "mem0 sidecar down" },
+                        { source: "beads", available: false },
+                    ],
+                })
+            )
+        );
+
+        const model = makeModel();
+        model.setQuery("q");
+        await model.search();
+
+        expect(globalStore.get(model.resultsAtom)).toEqual([]);
+        expect(globalStore.get(model.searchNoticeAtom)).toBe("mem0 sidecar down");
+        expect(globalStore.get(model.sourcesNoticeAtom)).toBe("");
+    });
+
+    it("clears the previous sources notice on a new search", async () => {
+        const partial = {
+            memories: [{ id: "m1", body: "hit" }],
+            sources: [
+                { source: "mem0", available: true },
+                { source: "beads", available: false, reason: "down" },
+            ],
+        };
+        const healthy = {
+            memories: [{ id: "m1", body: "hit" }],
+            sources: [
+                { source: "mem0", available: true },
+                { source: "beads", available: true },
+            ],
+        };
+        const fetchMock = vi
+            .fn()
+            .mockImplementationOnce(() => okJson(partial))
+            .mockImplementation(() => okJson(healthy));
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        model.setQuery("hit");
+        await model.search();
+        expect(globalStore.get(model.sourcesNoticeAtom)).toBe("partial recall: beads unavailable (down)");
+
+        await model.search();
+        expect(globalStore.get(model.sourcesNoticeAtom)).toBe("");
+        expect(globalStore.get(model.resultsAtom)).toHaveLength(1);
+    });
+
+    it("clears results and both notices on an empty query without a request", async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        globalStore.set(model.resultsAtom, [{ id: "m1", memory: "stale" }]);
+        globalStore.set(model.searchNoticeAtom, "No matches.");
+        globalStore.set(model.sourcesNoticeAtom, "partial recall: beads unavailable");
+        model.setQuery("   ");
+        await model.search();
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(globalStore.get(model.resultsAtom)).toEqual([]);
+        expect(globalStore.get(model.searchNoticeAtom)).toBe("");
+        expect(globalStore.get(model.sourcesNoticeAtom)).toBe("");
+    });
+});
 
 describe("RecoderMemoryViewModel.acceptCandidate", () => {
     afterEach(() => {
