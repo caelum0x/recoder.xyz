@@ -4,7 +4,82 @@
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
-import { RecoderTerminalStatus, RecoderTerminalViewModel } from "./recoder-terminal-model";
+import { decideApproval } from "./recoder-approval-action";
+import { type RunEventSeverity } from "./recoder-run-event";
+import { RecoderTerminalStatus, RecoderTerminalViewModel, type RunStreamEntry } from "./recoder-terminal-model";
+
+// Graphite-only palette: positive/actionable → accent, failure → the one reserved
+// crimson, everything else → neutral secondary.
+function severityColor(severity: RunEventSeverity): string {
+    if (severity == "danger") return "text-error";
+    if (severity == "warn" || severity == "success" || severity == "active") return "text-accent";
+    return "text-secondary";
+}
+
+type ApprovalUiState = { phase: "idle" | "acting" | "done"; label?: string };
+
+function RunEntryRow({ entry }: { entry: RunStreamEntry }) {
+    const [approval, setApproval] = useState<ApprovalUiState>({ phase: "idle" });
+
+    if (entry.kind == "system") {
+        return (
+            <div className={cn("whitespace-pre-wrap break-words", entry.tone == "error" ? "text-error" : "text-secondary")}>
+                {entry.text}
+            </div>
+        );
+    }
+
+    const d = entry.descriptor;
+    const approvalId = d.approvalId;
+
+    const act = async (action: "approve" | "reject") => {
+        if (approvalId == null || approval.phase == "acting") return;
+        setApproval({ phase: "acting" });
+        const result = await decideApproval(approvalId, action);
+        if (result.ok) {
+            setApproval({ phase: "done", label: action == "approve" ? "approved" : "rejected" });
+        } else {
+            setApproval({ phase: "idle", label: result.error });
+        }
+    };
+
+    return (
+        <div className="flex flex-col gap-1 py-0.5">
+            <div className="flex items-baseline gap-2 whitespace-pre-wrap break-words">
+                <span className="text-secondary shrink-0">{d.time}</span>
+                <span className={cn("shrink-0 font-semibold", severityColor(d.severity))}>{d.label}</span>
+                {d.detail != "" && <span className="min-w-0 break-words">{d.detail}</span>}
+            </div>
+            {approvalId != null && (
+                <div className="flex items-center gap-2 pl-14">
+                    {approval.phase == "done" ? (
+                        <span className="text-xs text-accent">✓ {approval.label}</span>
+                    ) : (
+                        <>
+                            <button
+                                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-xs hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
+                                onClick={() => void act("approve")}
+                                disabled={approval.phase == "acting"}
+                            >
+                                {approval.phase == "acting" ? "…" : "Approve"}
+                            </button>
+                            <button
+                                className="rounded border border-border px-2 py-0.5 text-xs text-secondary hover:text-primary hover:border-white/20 transition-colors cursor-pointer disabled:opacity-50"
+                                onClick={() => void act("reject")}
+                                disabled={approval.phase == "acting"}
+                            >
+                                Reject
+                            </button>
+                            {approval.label != null && <span className="text-xs text-error">{approval.label}</span>}
+                        </>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+RunEntryRow.displayName = "RunEntryRow";
 
 function statusText(status: RecoderTerminalStatus): string {
     if (status == "no-workspace") return "no workspace";
@@ -25,7 +100,7 @@ function statusColor(status: RecoderTerminalStatus): string {
 }
 
 function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewModel>) {
-    const lines = useAtomValue(model.linesAtom);
+    const entries = useAtomValue(model.entriesAtom);
     const status = useAtomValue(model.statusAtom);
     const error = useAtomValue(model.errorAtom);
     const workspaceId = useAtomValue(model.workspaceIdAtom);
@@ -43,9 +118,9 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
         const el = scrollRef.current;
         if (el == null) return;
         el.scrollTop = el.scrollHeight;
-    }, [lines]);
+    }, [entries]);
 
-    const empty = lines.length == 0;
+    const empty = entries.length == 0;
     const noWorkspace = workspaceId == "";
     const canSend = !noWorkspace && !sending && draft.trim() != "";
 
@@ -96,10 +171,8 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                 {empty && status == "error" && (
                     <div className="text-secondary">Not connected. Check that Recoder is running.</div>
                 )}
-                {lines.map((line, i) => (
-                    <div key={i} className="whitespace-pre-wrap break-words">
-                        {line}
-                    </div>
+                {entries.map((entry, i) => (
+                    <RunEntryRow key={i} entry={entry} />
                 ))}
             </div>
             <div className="flex flex-col gap-1 px-3 py-2 border-t border-border shrink-0">
