@@ -10,6 +10,7 @@
  * the engine package.
  */
 import type { WorkspaceState, WorkspaceSubstrate } from '@recoder/agent-os';
+import type { WorkspacePaneView } from './services/workspace-panes.js';
 
 /**
  * The substrate a workspace runs on. Re-exported from the canonical agent-os
@@ -74,6 +75,13 @@ export interface WorkspaceView {
   readonly attentionReason?: string;
   /** Whether the hosting substrate currently reports a live handle (absent = not probed). */
   readonly live?: boolean;
+  /**
+   * Live panes of the workspace's tmux session (single-workspace read ONLY —
+   * never populated by the list view). Degrade-truthful: ABSENT = not probed /
+   * substrate not observable (NEVER an empty fabricated list); `[]` = the
+   * session was observed and genuinely has no panes.
+   */
+  readonly panes?: readonly WorkspacePaneView[];
 }
 
 /**

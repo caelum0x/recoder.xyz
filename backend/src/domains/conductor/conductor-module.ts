@@ -218,6 +218,7 @@ import {
 } from './services/mergeability.service.js';
 import { WorktreeStatusService } from './services/worktree-status.service.js';
 import { computeWorkspacePort } from './services/workspace-port.js';
+import { readWorkspacePanes } from './services/workspace-panes.js';
 import { readRepoConfigFile } from './services/repo-config-file.js';
 import {
   EnvironmentImportService,
@@ -378,6 +379,8 @@ export class ConductorComposer implements ConductorModule {
   private evidenceSigningKey: KeyObject | null | undefined;
   private readonly gate: ConductorModuleDeps['gate'];
   private readonly middleware: ConductorModuleDeps['middleware'];
+  /** Optional Idempotency-Key replay guard for `POST /workspaces` (BE-10.3). */
+  private readonly idempotency: ConductorModuleDeps['idempotency'];
   private readonly registry: ConductorRegistry;
   private readonly repository: WorkspaceRepositoryPort;
   private readonly tailer: ConductorRunTailer;
@@ -475,6 +478,7 @@ export class ConductorComposer implements ConductorModule {
     this.cfg = sliceConductorConfig(deps.config, deps.overrides ?? {});
     this.gate = deps.gate;
     this.middleware = deps.middleware;
+    this.idempotency = deps.idempotency;
     this.brain = deps.brain;
     this.codeIntel = deps.codeIntel;
     this.previewVerify = deps.previewVerify;
@@ -1835,7 +1839,23 @@ export class ConductorComposer implements ConductorModule {
   async workspaceView(workspaceId: string): Promise<WorkspaceView | null> {
     const workspace = await this.engine.getWorkspace(workspaceId);
     if (!workspace) return null;
-    return this.buildWorkspaceView(workspace);
+    const view = await this.buildWorkspaceView(workspace);
+    // Pane probe — SINGLE-workspace read only (the list view must not shell out
+    // per record), gated on the same live-ish states as the attention probe.
+    // Degrade-truthful: no introspect port / no session / a fault ⇒ the facet
+    // is omitted (undefined), never a fabricated empty list.
+    const probePanes =
+      (workspace.state === 'running' ||
+        workspace.state === 'changes_requested') &&
+      Boolean(workspace.sessionName);
+    const panes = probePanes
+      ? await readWorkspacePanes(
+          this.tmuxIntrospect,
+          workspace.sessionName,
+          this.log
+        )
+      : undefined;
+    return panes ? { ...view, panes } : view;
   }
 
   /** Attention-enriched views of every workspace (the cockpit list's badges). */
@@ -3337,6 +3357,9 @@ export class ConductorComposer implements ConductorModule {
         module: this,
         middleware: this.middleware,
         soloMode: this.cfg.soloMode,
+        // Idempotency-Key replay guard on POST /workspaces (BE-10.3): absent ⇒
+        // identity (no behavior change).
+        ...(this.idempotency ? { idempotency: this.idempotency } : {}),
         // Read-only `/sessions` attach bridge over the INJECTED engines-owned tmux
         // introspect port (never a cross-domain value import). Absent ⇒ the lister
         // degrades to an empty list (truthful "cannot observe the substrate").
