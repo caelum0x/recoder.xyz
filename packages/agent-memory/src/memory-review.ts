@@ -7,11 +7,15 @@ export function reviewMemoryCandidate(
   if (candidate.status !== 'candidate_created') {
     throw new Error(`Memory candidate is not reviewable: ${candidate.candidateId}`);
   }
+  const reviewedAt = input.reviewedAt ?? new Date().toISOString();
+  if (candidate.expiresAt != null && candidate.expiresAt <= reviewedAt) {
+    throw new Error(`Memory candidate is expired: ${candidate.candidateId}`);
+  }
   return {
     ...candidate,
     status: input.accepted ? 'accepted' : 'rejected',
     reviewedBy: input.reviewedBy,
-    reviewedAt: input.reviewedAt ?? new Date().toISOString(),
+    reviewedAt,
     reviewReason: input.reason,
   };
 }
@@ -23,6 +27,10 @@ export function materializeMemoryItem(
   if (candidate.status !== 'accepted') {
     throw new Error(`Cannot materialize unaccepted memory candidate: ${candidate.candidateId}`);
   }
+  const createdAt = input.createdAt ?? candidate.reviewedAt ?? new Date().toISOString();
+  if (candidate.expiresAt != null && candidate.expiresAt <= createdAt) {
+    throw new Error(`Cannot materialize expired memory candidate: ${candidate.candidateId}`);
+  }
   return {
     memoryId: input.memoryId,
     scope: candidate.scope,
@@ -30,7 +38,7 @@ export function materializeMemoryItem(
     body: candidate.body,
     status: 'active',
     evidence: candidate.evidence,
-    createdAt: input.createdAt ?? candidate.reviewedAt ?? new Date().toISOString(),
+    createdAt,
     acceptedBy: input.acceptedBy,
     expiresAt: candidate.expiresAt ?? null,
     supersedesMemoryId: input.supersedesMemoryId,

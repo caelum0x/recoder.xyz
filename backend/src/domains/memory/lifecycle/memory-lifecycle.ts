@@ -159,6 +159,22 @@ export function createMemoryLifecycle(
         );
       }
 
+      // Review invariants, BEFORE the gate and any durable write: a candidate is
+      // reviewable exactly once (no re-accept, no resurrecting a rejection), and
+      // a TTL-lapsed wisp may never become durable memory.
+      if (candidate.status !== 'candidate_created') {
+        throw createError(
+          ErrorCode.INVALID_INPUT,
+          `memory candidate is not reviewable: ${candidate.candidateId} (status ${candidate.status})`
+        );
+      }
+      if (candidate.expiresAt != null && candidate.expiresAt <= now()) {
+        throw createError(
+          ErrorCode.INVALID_INPUT,
+          `memory candidate is expired (wisp TTL lapsed): ${candidate.candidateId}`
+        );
+      }
+
       // THE write seam. A durable memory promotion is a governed mutation; the
       // verdict's `effect` is the sole authority for whether we materialize.
       const verdict = await gate.decide(
@@ -323,6 +339,14 @@ export function createMemoryLifecycle(
         throw createError(
           ErrorCode.NOT_FOUND,
           `memory candidate not found: ${input.candidateId}`
+        );
+      }
+      // Review invariant: an already-reviewed candidate (accepted OR rejected)
+      // cannot be re-rejected — the first review record is final.
+      if (candidate.status !== 'candidate_created') {
+        throw createError(
+          ErrorCode.INVALID_INPUT,
+          `memory candidate is not reviewable: ${candidate.candidateId} (status ${candidate.status})`
         );
       }
       if (!input.reason?.trim()) {
