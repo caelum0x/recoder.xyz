@@ -15,10 +15,22 @@
  * `status: 'not_configured'` — the desktop boots and the tools stay callable with
  * zero external browser present.
  */
+import { lookup } from 'node:dns/promises';
 import { registerBrowserEngineMcpTools } from '@recoder/agent-mcp';
 import { createBrowserEngine, createDefaultBrowserDriver } from '@recoder/agent-browser';
 import type { McpToolRouter } from '@recoder/agent-mcp';
 import type { BrowserDriver, BrowserEnv, BrowserFetch } from '@recoder/agent-browser';
+import type { HostResolver } from '../../shared/egress-guard.js';
+import { guardBrowserDriver, parseAllowedDomains } from './browser-guard.js';
+
+// Resolve every address for a host so the egress guard can block a public-looking
+// hostname that maps into private/metadata space (the DNS-rebind SSRF pivot).
+// Lives ONLY in this composition root — the guard itself takes an injected
+// resolver, so its unit tests stay network-free.
+const dnsResolver: HostResolver = async (host) => {
+  const records = await lookup(host, { all: true });
+  return records.map((r) => r.address);
+};
 
 export type BrowserUseEngineDeps = {
   /** Injectable driver (defaults to the env-selected default driver). */
@@ -42,7 +54,14 @@ export function registerBrowserUseMcpTools(
   const env = deps.env ?? (process.env as BrowserEnv);
   const driver =
     deps.driver ?? createDefaultBrowserDriver({ env, fetch: deps.fetch });
-  const engine = createBrowserEngine({ driver });
+  // UNCONDITIONAL egress guard (SSRF defense) + operator domain allowlist —
+  // injected test drivers are wrapped too. Violations throw truthful reasons the
+  // engine maps to `status: 'error'` (never a fabricated page).
+  const guarded = guardBrowserDriver(driver, {
+    allowedDomains: parseAllowedDomains(env),
+    resolve: dnsResolver,
+  });
+  const engine = createBrowserEngine({ driver: guarded });
   registerBrowserEngineMcpTools(router, engine);
 }
 
