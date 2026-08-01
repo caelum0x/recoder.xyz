@@ -82,6 +82,7 @@ export function Wordmark() {
 const NAV_LINKS = [
   { href: "/features", label: "Features" },
   { href: "/how-it-works", label: "How it works" },
+  { href: "/docs", label: "Docs" },
   { href: "/enterprise", label: "Enterprise" },
   { href: "/self-host", label: "Self-host" },
   { href: "/pricing", label: "Pricing" },
@@ -132,6 +133,7 @@ export function Footer() {
             { href: "/download", label: releasesArePublic() ? "Download" : "Get early access" },
             { href: "/features", label: "Features" },
             { href: "/how-it-works", label: "How it works" },
+            { href: "/docs", label: "Docs" },
             { href: "/self-host", label: "Self-host" },
             { href: "/changelog", label: "Changelog" },
           ]}
