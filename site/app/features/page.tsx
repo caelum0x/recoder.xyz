@@ -87,8 +87,8 @@ export default function Features() {
               into a merge you can actually trust — on your machine.
             </p>
             <div className="mt-8 flex items-center justify-center gap-4">
-              <DownloadButton label="Download" />
-              <SecondaryButton href="/how-it-works">See how it works</SecondaryButton>
+              <DownloadButton />
+              <SecondaryButton href="/how-it-works" label="See how it works" />
             </div>
           </div>
         </section>
@@ -130,8 +130,8 @@ export default function Features() {
               diffs, and merge — all from one desktop console.
             </p>
             <div className="mt-8 flex items-center justify-center gap-4">
-              <DownloadButton label="Download" />
-              <SecondaryButton href="/self-host">Self-host</SecondaryButton>
+              <DownloadButton />
+              <SecondaryButton href="/self-host" label="Self-host" />
             </div>
           </div>
         </section>
