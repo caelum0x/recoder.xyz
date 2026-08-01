@@ -41,11 +41,21 @@ Store Connect API key `~/.appstoreconnect/private_keys/AuthKey_98T8ZPPNGD.p8`
 (key-id `98T8ZPPNGD`, issuer `a57e5464-…`), and `build/entitlements.mac.plist`.
 
 > **Landmine (why not electron-builder's own signer):** the packed `.app` bundles
-> a full `backend/node_modules` (incl. dev deps like `ink@5`+`ink@6`), so
+> the backend's self-contained `node_modules` (~2.1G, **139K files**), so
 > `@electron/osx-sign` opens more files than the kernel per-process cap
 > (`kern.maxfilesperproc`, non-root-raisable) and dies with `EMFILE`. Native
-> `codesign` (few fds) signs it fine **inside-out**. A cleaner long-term fix is to
-> `pnpm prune --prod` the bundled backend before packing.
+> `codesign` (few fds) signs it fine **inside-out** — that's the working path.
+>
+> **DMG size (investigated 2026-08-01 — mostly legitimate):** the 4.8G app is
+> `Contents/Resources/backend` (4.3G) — dominated by real native artifacts, NOT
+> dev deps: the beads `bd` Go binary (176M), `@next/swc` (115M, a genuine
+> *transitive prod* dep — a `pnpm deploy --prod` keeps it, so a devDep prune barely
+> helps), `duckdb` (162M), `tensorzero` napi (52M), Electron Framework (171M). The
+> only real *targeted* slim wins are: **dedup duckdb** (it ships the same 54M binary
+> ×3 — `lib/binding` + `build/Release` + `bin/…`; keep one → save ~108M) and
+> **strip debug symbols** off the native binaries (`strip -x` on `bd`/napi `.node`s).
+> Both are build-time + need a human boot-test of the repacked app; not worth
+> risking the working signed build without that verification.
 
 **Reproduce the signed+notarized dmg (native codesign, no fd-cap issue):**
 ```
