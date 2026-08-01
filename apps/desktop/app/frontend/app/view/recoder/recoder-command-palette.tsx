@@ -8,7 +8,67 @@ import { useEffect, useMemo, useRef, useState } from "react";
 // any of those, turning ⌘K into workspace search, not just command-title search.
 type RecoderCommand = { id: string; title: string; shortcut?: string; keywords?: string; run: () => void };
 
-type RecoderCommandPaletteProps = { commands: RecoderCommand[]; onClose: () => void };
+// `sessionSearch` is the optional transcript-search provider (see
+// recoder-transcript-search.ts): given the palette query it resolves the
+// "Sessions" section commands. Absent prop = the palette behaves exactly as
+// before — no section, no fetches.
+type RecoderCommandPaletteProps = {
+    commands: RecoderCommand[];
+    onClose: () => void;
+    sessionSearch?: (query: string) => Promise<RecoderCommand[]>;
+};
+
+const SessionSearchDebounceMs = 200;
+
+// Debounced, stale-guarded driver for the optional session search. Plain
+// closures (no React) so the debounce and the discard-stale-response rule are
+// unit-testable like the other pure helpers. A response is only delivered while
+// its query is STILL the latest one searched; anything older is discarded. A
+// missing provider or blank query resolves to empty immediately — the provider
+// is never invoked, keeping the no-prop palette byte-for-byte unchanged.
+function createSessionSearcher(
+    provider: ((query: string) => Promise<RecoderCommand[]>) | undefined,
+    onResults: (results: RecoderCommand[]) => void,
+    debounceMs = SessionSearchDebounceMs
+): { search: (query: string) => void; dispose: () => void } {
+    let latest = "";
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const clear = () => {
+        if (timer != null) {
+            clearTimeout(timer);
+            timer = null;
+        }
+    };
+    const search = (query: string) => {
+        latest = query;
+        clear();
+        if (provider == null || query.trim() == "") {
+            onResults([]);
+            return;
+        }
+        timer = setTimeout(() => {
+            provider(query).then(
+                (results) => {
+                    if (latest == query) {
+                        onResults(results);
+                    }
+                },
+                () => {
+                    // provider failures degrade to an empty section, never a crash
+                    if (latest == query) {
+                        onResults([]);
+                    }
+                }
+            );
+        }, debounceMs);
+    };
+    const dispose = () => {
+        // "\0" can never equal a typed query, so in-flight responses are discarded
+        latest = "\0";
+        clear();
+    };
+    return { search, dispose };
+}
 
 // Case-insensitive subsequence match: walk the target once, advancing a query
 // pointer on each char hit; a match is when the pointer consumes the whole query.
@@ -62,27 +122,37 @@ function PaletteRow({ command, selected, onHover, onRun }: PaletteRowProps) {
 
 PaletteRow.displayName = "PaletteRow";
 
-function RecoderCommandPalette({ commands, onClose }: RecoderCommandPaletteProps) {
+function RecoderCommandPalette({ commands, onClose, sessionSearch }: RecoderCommandPaletteProps) {
     const [query, setQuery] = useState("");
     const [selected, setSelected] = useState(0);
+    const [sessionResults, setSessionResults] = useState<RecoderCommand[]>([]);
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         inputRef.current?.focus();
     }, []);
 
+    const searcher = useMemo(() => createSessionSearcher(sessionSearch, setSessionResults), [sessionSearch]);
+    useEffect(() => () => searcher.dispose(), [searcher]);
+    useEffect(() => {
+        searcher.search(query);
+    }, [searcher, query]);
+
     const filtered = useMemo(() => commands.filter((c) => commandMatches(query, c)), [commands, query]);
+    // One flat selection list across both sections so ↑/↓/Enter walk the palette
+    // exactly as it reads: static commands first, then the Sessions rows.
+    const rows = useMemo(() => [...filtered, ...sessionResults], [filtered, sessionResults]);
 
     useEffect(() => {
-        if (filtered.length == 0) {
+        if (rows.length == 0) {
             setSelected(0);
             return;
         }
-        setSelected((prev) => Math.max(0, Math.min(prev, filtered.length - 1)));
-    }, [filtered.length]);
+        setSelected((prev) => Math.max(0, Math.min(prev, rows.length - 1)));
+    }, [rows.length]);
 
     const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        const len = filtered.length;
+        const len = rows.length;
         if (e.key == "ArrowDown") {
             e.preventDefault();
             e.stopPropagation();
@@ -102,7 +172,7 @@ function RecoderCommandPalette({ commands, onClose }: RecoderCommandPaletteProps
         if (e.key == "Enter") {
             e.preventDefault();
             e.stopPropagation();
-            const cmd = filtered[selected];
+            const cmd = rows[selected];
             if (cmd != null) {
                 cmd.run();
                 onClose();
@@ -135,18 +205,36 @@ function RecoderCommandPalette({ commands, onClose }: RecoderCommandPaletteProps
                     className="w-full bg-transparent px-3 py-2 text-sm border-b border-white/8 focus:outline-none"
                 />
                 <div className="max-h-80 overflow-y-auto py-1">
-                    {filtered.length == 0 ? (
+                    {rows.length == 0 ? (
                         <div className="text-meta px-3 py-2 text-sm">No matching commands</div>
                     ) : (
-                        filtered.map((cmd, index) => (
-                            <PaletteRow
-                                key={cmd.id}
-                                command={cmd}
-                                selected={index == selected}
-                                onHover={() => setSelected(index)}
-                                onRun={() => runCommand(cmd)}
-                            />
-                        ))
+                        <>
+                            {filtered.map((cmd, index) => (
+                                <PaletteRow
+                                    key={cmd.id}
+                                    command={cmd}
+                                    selected={index == selected}
+                                    onHover={() => setSelected(index)}
+                                    onRun={() => runCommand(cmd)}
+                                />
+                            ))}
+                            {sessionResults.length > 0 && (
+                                <>
+                                    <div className="px-3 pt-2 pb-1 text-xs text-meta uppercase tracking-wide">
+                                        Sessions
+                                    </div>
+                                    {sessionResults.map((cmd, index) => (
+                                        <PaletteRow
+                                            key={cmd.id}
+                                            command={cmd}
+                                            selected={filtered.length + index == selected}
+                                            onHover={() => setSelected(filtered.length + index)}
+                                            onRun={() => runCommand(cmd)}
+                                        />
+                                    ))}
+                                </>
+                            )}
+                        </>
                     )}
                 </div>
             </div>
@@ -156,4 +244,4 @@ function RecoderCommandPalette({ commands, onClose }: RecoderCommandPaletteProps
 
 RecoderCommandPalette.displayName = "RecoderCommandPalette";
 
-export { RecoderCommandPalette, commandMatches, fuzzyMatch, type RecoderCommand };
+export { RecoderCommandPalette, commandMatches, createSessionSearcher, fuzzyMatch, type RecoderCommand };

@@ -1,8 +1,8 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, expect, it } from "vitest";
-import { commandMatches, fuzzyMatch, type RecoderCommand } from "./recoder-command-palette";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { commandMatches, createSessionSearcher, fuzzyMatch, type RecoderCommand } from "./recoder-command-palette";
 import { navigationCommands, RecoderNavTargets } from "./recoder-nav-commands";
 
 describe("fuzzyMatch", () => {
@@ -83,5 +83,100 @@ describe("navigationCommands", () => {
         expect(commandMatches("runs", runs)).toBe(true);
         expect(commandMatches("open", runs)).toBe(true);
         expect(commandMatches("billing", runs)).toBe(false);
+    });
+});
+
+// The palette drives this searcher from its query input; testing it directly
+// pins the no-prop regression (absent provider = immediate empty, provider
+// never invoked), the debounce, and the discard-stale-response rule.
+describe("createSessionSearcher", () => {
+    const results = () => {
+        const seen: RecoderCommand[][] = [];
+        return { seen, on: (r: RecoderCommand[]) => seen.push(r) };
+    };
+    const cmd = (id: string): RecoderCommand => ({ id, title: id, run: () => {} });
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it("without a provider emits empty immediately and never searches (no-prop regression)", async () => {
+        const out = results();
+        const searcher = createSessionSearcher(undefined, out.on);
+        searcher.search("auth");
+        await vi.runAllTimersAsync();
+        expect(out.seen).toEqual([[]]);
+    });
+
+    it("emits empty immediately for a blank query and cancels any pending search", async () => {
+        const calls: string[] = [];
+        const out = results();
+        const searcher = createSessionSearcher(async (q) => (calls.push(q), []), out.on);
+        searcher.search("auth");
+        searcher.search("   ");
+        await vi.runAllTimersAsync();
+        expect(calls).toEqual([]);
+        expect(out.seen).toEqual([[]]);
+    });
+
+    it("debounces: rapid typing invokes the provider once, with the final query", async () => {
+        const calls: string[] = [];
+        const out = results();
+        const searcher = createSessionSearcher(async (q) => (calls.push(q), [cmd(`hit-${q}`)]), out.on);
+        searcher.search("a");
+        searcher.search("au");
+        searcher.search("auth");
+        await vi.runAllTimersAsync();
+        expect(calls).toEqual(["auth"]);
+        expect(out.seen).toEqual([[cmd("hit-auth")].map((c) => expect.objectContaining({ id: c.id }))]);
+    });
+
+    it("discards a stale response whose query no longer matches the input", async () => {
+        const resolvers = new Map<string, (r: RecoderCommand[]) => void>();
+        const out = results();
+        const searcher = createSessionSearcher(
+            (q) => new Promise<RecoderCommand[]>((resolve) => resolvers.set(q, resolve)),
+            out.on
+        );
+        searcher.search("a");
+        await vi.advanceTimersByTimeAsync(250);
+        searcher.search("ab");
+        await vi.advanceTimersByTimeAsync(250);
+        // The older in-flight response lands AFTER the newer query — must be dropped.
+        resolvers.get("a")!([cmd("stale")]);
+        await Promise.resolve();
+        expect(out.seen).toEqual([]);
+        resolvers.get("ab")!([cmd("fresh")]);
+        await Promise.resolve();
+        expect(out.seen).toHaveLength(1);
+        expect(out.seen[0].map((c) => c.id)).toEqual(["fresh"]);
+    });
+
+    it("swallows a rejecting provider into an empty result", async () => {
+        const out = results();
+        const searcher = createSessionSearcher(async () => {
+            throw new Error("boom");
+        }, out.on);
+        searcher.search("auth");
+        await vi.runAllTimersAsync();
+        expect(out.seen).toEqual([[]]);
+    });
+
+    it("dispose cancels the pending search and discards in-flight responses", async () => {
+        let resolve!: (r: RecoderCommand[]) => void;
+        const out = results();
+        const searcher = createSessionSearcher(
+            () => new Promise<RecoderCommand[]>((r) => (resolve = r)),
+            out.on
+        );
+        searcher.search("auth");
+        await vi.advanceTimersByTimeAsync(250);
+        searcher.dispose();
+        resolve([cmd("late")]);
+        await Promise.resolve();
+        expect(out.seen).toEqual([]);
     });
 });
