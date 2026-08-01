@@ -54,6 +54,15 @@ export const governanceConfigSchema = z.object({
   vaultKeys: z.array(vaultKeyringKeySchema).nullable(),
   /** Whether audit sealing into the durable Merkle chain is enabled. */
   auditEnabled: z.boolean(),
+  /**
+   * OPTIONAL server-held ed25519 signing key (base64 raw 32-byte seed, or a PEM
+   * private key) used to sign the durable audit-chain TIP hash. ADDITIVE +
+   * SEPARATE from the Merkle link: it proves the tip was produced by THIS server,
+   * not merely that it hashes together. `null` (default) ⇒ the tip is UNSIGNED
+   * (degrade-truthful) — the chain still verifies internally; there is NEVER a
+   * forged signature.
+   */
+  auditSigningKey: z.string().nullable(),
   /** Solo/desktop mode — click-is-approval clearance + audit fail-open (see `RuntimeConfig.soloMode`). */
   soloMode: z.boolean(),
   isProduction: z.boolean(),
@@ -70,6 +79,8 @@ export interface GovernanceConfigOverrides {
   /** Optional versioned key ring (additive); absent ⇒ single-key mode. */
   readonly vaultKeys?: readonly VaultKeyringKeyConfig[] | null;
   readonly auditEnabled?: boolean;
+  /** Optional ed25519 audit-tip signing key (base64 seed or PEM); absent ⇒ unsigned tip. */
+  readonly auditSigningKey?: string | null;
 }
 
 /**
@@ -90,6 +101,7 @@ export function sliceGovernanceConfig(
     vaultMasterKey: overrides.vaultMasterKey ?? null,
     vaultKeys: overrides.vaultKeys ? [...overrides.vaultKeys] : null,
     auditEnabled: overrides.auditEnabled ?? true,
+    auditSigningKey: overrides.auditSigningKey ?? null,
     soloMode: app.runtime.soloMode === true,
     isProduction: app.runtime.isProduction,
   });
