@@ -85,17 +85,22 @@ function statusOf(record: ConvergenceEvidenceRecord, id: string): { status: Cont
 }
 
 describe('renderEvidenceExport', () => {
-  it('maps every control to `met` for a full, sealed, verified record', () => {
-    const pack = renderEvidenceExport(makeRecord(), { now: () => FIXED });
+  it('maps every control to `met` for a full, sealed, verified, human-approved record', () => {
+    // A maximally-compliant merge carries a human approval (Art. 14 human oversight
+    // is `met` only with a recorded approvalId — an auto-merge legitimately lacks it).
+    const record = makeRecord({
+      evidence: { governance: { action: 'workspace.merge', effect: 'allow', riskTier: 'medium', degraded: false, approvalId: 'appr-1' } },
+    });
+    const pack = renderEvidenceExport(record, { now: () => FIXED });
 
     expect(pack.schema).toBe(EVIDENCE_EXPORT_SCHEMA);
     expect(pack.evidenceIntegrity.verified).toBe(true);
-    expect(pack.coverage).toEqual({ met: 4, partial: 0, notEvidenced: 0, total: 4 });
-    expect(pack.controls.map((c) => c.status)).toEqual(['met', 'met', 'met', 'met']);
+    expect(pack.coverage).toEqual({ met: 6, partial: 0, notEvidenced: 0, total: 6 });
+    expect(pack.controls.map((c) => c.status)).toEqual(['met', 'met', 'met', 'met', 'met', 'met']);
     expect(pack.controls.every((c) => c.reason === undefined)).toBe(true);
 
     // Provenance + subject lifted truthfully.
-    expect(pack.generatedFrom).toBe(makeRecord().evidence.contentHash);
+    expect(pack.generatedFrom).toBe(record.evidence.contentHash);
     expect(pack.subject).toMatchObject({
       taskId: 'task-1',
       chosenWorkspaceId: 'ws-a',
@@ -133,6 +138,51 @@ describe('renderEvidenceExport', () => {
         evidence: { governance: { action: 'workspace.merge', effect: 'allow', riskTier: 'high', degraded: false, approvalId: 'appr-9' } },
       });
       expect(statusOf(r, 'SOC2-CC8.1').status).toBe('met');
+    });
+  });
+
+  describe('SOC2-CC7.2 (change verification)', () => {
+    it('is met when verification ran delivery-clean before promotion', () => {
+      expect(statusOf(makeRecord(), 'SOC2-CC7.2').status).toBe('met');
+    });
+
+    it('is partial when pre-merge verification was unavailable', () => {
+      const r = makeRecord({ evidence: { verification: { reason: 'readiness probe unavailable' } } });
+      const s = statusOf(r, 'SOC2-CC7.2');
+      expect(s.status).toBe('partial');
+      expect(s.reason).toContain('unavailable');
+    });
+
+    it('is partial when verification RAN but the verdict is not delivery-clean', () => {
+      const r = makeRecord({ evidence: { verification: { view: { ...READY, verdict: 'blocked' } } } });
+      const s = statusOf(r, 'SOC2-CC7.2');
+      expect(s.status).toBe('partial');
+      expect(s.reason).toContain("verdict='blocked'");
+    });
+  });
+
+  describe('EU-AI-ACT-ART14 (human oversight)', () => {
+    it('is met when a human approval cleared the change', () => {
+      const r = makeRecord({
+        evidence: { governance: { action: 'workspace.merge', effect: 'allow', riskTier: 'high', degraded: false, approvalId: 'appr-1' } },
+      });
+      expect(statusOf(r, 'EU-AI-ACT-ART14').status).toBe('met');
+    });
+
+    it('is partial for a high-risk change auto-allowed with no human approval', () => {
+      const r = makeRecord({ evidence: { governance: { action: 'workspace.merge', effect: 'allow', riskTier: 'high', degraded: false } } });
+      const s = statusOf(r, 'EU-AI-ACT-ART14');
+      expect(s.status).toBe('partial');
+      expect(s.reason).toContain('high-risk');
+    });
+
+    it('is not-evidenced for a low/medium auto-merge with no human approval', () => {
+      expect(statusOf(makeRecord(), 'EU-AI-ACT-ART14').status).toBe('not-evidenced');
+    });
+
+    it('is not-evidenced when the merge was not governance-allowed', () => {
+      const r = makeRecord({ evidence: { governance: { action: 'workspace.merge', effect: 'deny', riskTier: 'high', degraded: false } } });
+      expect(statusOf(r, 'EU-AI-ACT-ART14').status).toBe('not-evidenced');
     });
   });
 
@@ -216,7 +266,7 @@ describe('renderEvidenceExport', () => {
     it('renders the header, coverage line, and control labels', () => {
       const pack = renderEvidenceExport(makeRecord(), { now: () => FIXED });
       expect(pack.summary).toContain('# Convergence Evidence Export');
-      expect(pack.summary).toContain('4 met · 0 partial · 0 not evidenced');
+      expect(pack.summary).toContain('5 met · 0 partial · 1 not evidenced');
       expect(pack.summary).toContain('[MET] SOC 2 SOC2-CC8.1 — Change management');
       expect(pack.summary).toContain('Merged workspace: ws-a');
     });
