@@ -101,6 +101,47 @@ CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder -c electron-builder
 - The `beforePack` gate aborts if a REQUIRED engine artifact is missing or wrong-arch — that is intended. lance is optional (ships degraded → Qdrant).
 - Then boot the `.app`, sign in, create a workspace on a real repo, confirm an agent runs in a tmux worktree, review the diff, merge. This completes task #17's "dmg boots and runs a real workspace".
 
+### 1a. Publish it so the WEBSITE installs it  (no CI — local, one command)
+
+We have no GitHub Actions release pipeline (the `desktop-release.yml` scripts need
+CI + repo secrets we don't run). Use the local publisher instead — it makes the
+site's Download page serve the real signed DMG and wires the app auto-updater.
+
+```bash
+# SAFE dry-run — verifies the on-disk DMG is genuinely installable (no writes):
+scripts/publish-desktop-release-local.sh verify
+#   → codesign --verify --deep --strict, xcrun stapler validate, spctl accept,
+#     computes the real sha512(b64)+size, and flags the stale checked-in
+#     latest-mac.yml. (Confirmed 2026-08-01 against Recoder-arm64.dmg v0.14.5:
+#     signed "Developer ID Application: Umut Arhan Suba", stapled, spctl-accepted.)
+
+# FULL publish — builds the updater .zip from the signed .app, copies the DMG under
+# its versioned name, REGENERATES latest-mac.yml to match reality, writes SHA256SUMS:
+scripts/publish-desktop-release-local.sh publish
+#   → assembles dist/desktop-release/{Recoder-<v>-arm64.dmg,.zip,latest-mac.yml,SHA256SUMS}
+```
+
+Then (owner):
+1. **Upload** the release dir to whatever serves `https://dl.recoder.xyz/releases`:
+   ```bash
+   rsync -avz --progress dist/desktop-release/ <user>@<host>:/srv/dl.recoder.xyz/releases/
+   ```
+2. **Wire the site env** (site deploy env) and rebuild the site:
+   ```
+   NEXT_PUBLIC_DOWNLOAD_MACOS_URL=https://dl.recoder.xyz/releases/Recoder-0.14.5-arm64.dmg
+   NEXT_PUBLIC_DOWNLOAD_MACOS_SHA256=<sha256 from SHA256SUMS>   # shows the Verify-checksum affordance
+   NEXT_PUBLIC_RELEASE_VERSION=v0.14.5
+   ```
+   The Download page flips from "Get early access" to a real download automatically
+   (`releasesArePublic()` in `site/lib/releases.ts`) — no code change needed.
+3. **Verify live:** `curl -fsI https://dl.recoder.xyz/releases/Recoder-0.14.5-arm64.dmg`
+   (expect 200 + the exact byte size) and `curl -fs …/latest-mac.yml` (expect the version).
+
+> **Why the manifest matters:** electron-updater rejects an update whose sha512/size
+> don't match `latest-mac.yml`. The checked-in `apps/desktop/app/make/latest-mac.yml`
+> is stale (v0.14.5, 772 MB, wrong filename) vs the real 1.37 GB DMG — the publish
+> script regenerates a correct one. Never hand-host the DMG without regenerating it.
+
 ## 2. Build the Lance native addon  (optional — embedded vector store)
 `crates/lance/npm-bindings` **does not exist at the repo root** (only in stale worktrees). To make Lance real: vendor/create `crates/lance/npm-bindings` with its own Cargo.toml (napi + cdylib), add `build_lance()` to `scripts/build-native-addons.sh`, build release. Until then Lance degrades truthfully to Qdrant (already handled).
 

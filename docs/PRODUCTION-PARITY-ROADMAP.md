@@ -86,6 +86,41 @@ Recoder is the **self-hosted convergence layer**: N agents run in parallel workt
 
 - Full in-app code editor (Monaco) + inline tab-completion. Recoder is an agent cockpit; the editor stays the user's own. Revisit only if the thesis changes.
 
+## Competitive delta (vs conductor.build & cursor.sh)
+
+From a 2026-08-01 gap analysis. The sharp read: **the top parity wins are pure UX
+wiring on already-shipped backends** — the backend capability exists; it's just
+invisible in the desktop UX.
+
+**Top gaps by user-visible impact:**
+1. **Rich structured run stream** (not a `[time] type msg` log). Backend already
+   emits the `started/log/tool/verified/handoff/completed` RunEvent taxonomy →
+   **wiring/UX** (P1), not a build.
+2. **Inline approvals in the stream** (vs a disconnected side-list). Route
+   `/approvals/:id/decide` exists → **wiring/UX** (P1).
+3. **Live cost/token/latency metering.** Backend metering exists → **wiring** a
+   per-workspace strip (P1).
+4. **Codebase semantic search / "ask the repo."** Engines exist (recodergit
+   code-graph + RAG) but **degrade on a shipped Mac** (Python sidecars + Lance not
+   bundled) → **genuine build**: bundle (P0) then UX (P2). The real engineering debt.
+5. **PR-review bot + background agents.** Substrate exists (recodergit reviewer
+   swarm, squad-autopilot, signals-poller) but no desktop surface + no unattended
+   hardening → **wiring + safety build** (P3).
+
+**Differentiators rivals can't easily copy — lean in:**
+- **Governed, evidence-producing merge.** Neither turns N runs into ONE trusted
+  merge with sealed proof (ConvergenceEvidence v3 + Merkle audit + compliance
+  export). The unclaimed convergence moat.
+- **Self-hosted, offline-capable control plane.** Conductor is Claude-Code-tied;
+  Cursor is cloud-coupled. Recoder runs the whole loop with in-process Rust engines,
+  no vendor cloud — the regulated/enterprise wedge.
+- **Runtime-agnostic governance below the model.** Recoder governs *any* agent via
+  A2A/MCP; Cursor governs only Cursor, conductor only Claude Code.
+
+**Honest read:** the moat is genuinely differentiated but currently *invisible* in
+the desktop UX. Surfacing it (P1 converge-as-headline-review) matters as much as
+building it.
+
 ## bd tracking
 
 | Item | Phase | bd |
