@@ -36,17 +36,42 @@ function ResultRow({ result }: { result: RecoderMemoryResult }) {
     );
 }
 
-function CandidateRow({ candidate }: { candidate: RecoderMemoryCandidate }) {
+interface CandidateRowProps {
+    candidate: RecoderMemoryCandidate;
+    busy: boolean;
+    onAccept: () => void;
+    onReject: () => void;
+}
+
+function CandidateRow({ candidate, busy, onAccept, onReject }: CandidateRowProps) {
     return (
-        <div className="flex flex-col gap-0.5 rounded border border-border p-2" title={candidate.candidateId}>
+        <div className="flex flex-col gap-1 rounded border border-border p-2" title={candidate.candidateId}>
             <div className="flex items-center gap-2">
                 <span className="text-sm font-medium truncate">{candidate.title || "Untitled candidate"}</span>
                 <span className="text-xs text-secondary rounded bg-border/60 px-1.5 py-0.5 ml-auto">
                     {candidate.status}
                 </span>
             </div>
-            {candidate.body != "" && <div className="text-xs text-secondary line-clamp-3">{candidate.body}</div>}
+            {candidate.body != "" && (
+                <div className="text-xs text-secondary whitespace-pre-wrap break-words">{candidate.body}</div>
+            )}
             <div className="text-xs text-secondary">by {candidate.proposedBy || "unknown"}</div>
+            <div className="flex items-center gap-2">
+                <button
+                    disabled={busy}
+                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
+                    onClick={onAccept}
+                >
+                    {busy ? "…" : "Accept"}
+                </button>
+                <button
+                    disabled={busy}
+                    className="border border-border text-primary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer disabled:opacity-50"
+                    onClick={onReject}
+                >
+                    {busy ? "…" : "Reject"}
+                </button>
+            </div>
         </div>
     );
 }
@@ -61,6 +86,9 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
     const error = useAtomValue(model.errorAtom);
     const searchNotice = useAtomValue(model.searchNoticeAtom);
     const connected = useAtomValue(model.connectedAtom);
+    const acting = useAtomValue(model.actingAtom);
+    const actionError = useAtomValue(model.actionErrorAtom);
+    const actionNotice = useAtomValue(model.actionNoticeAtom);
 
     useEffect(() => {
         model.refresh();
@@ -98,6 +126,8 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
                 </button>
             </div>
             <RecoderErrorRow message={error} />
+            <RecoderErrorRow message={actionError} />
+            {actionNotice != "" && <div className="text-secondary text-sm">{actionNotice}</div>}
             {loading && items.length == 0 && <RecoderSkeleton rows={4} />}
             {showDisconnected && (
                 <RecoderEmpty title="Recoder is still starting…" hint="Memory loads once it is ready." />
@@ -135,7 +165,13 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
                                 Pending candidates ({candidates.length})
                             </div>
                             {candidates.map((c) => (
-                                <CandidateRow key={c.candidateId} candidate={c} />
+                                <CandidateRow
+                                    key={c.candidateId}
+                                    candidate={c}
+                                    busy={acting == c.candidateId}
+                                    onAccept={() => model.acceptCandidate(c.candidateId)}
+                                    onReject={() => model.rejectCandidate(c.candidateId)}
+                                />
                             ))}
                         </div>
                     )}
