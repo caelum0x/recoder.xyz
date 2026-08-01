@@ -6,6 +6,7 @@ import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readErrorReason, readFetchError } from "../recoder/recoder-errors";
 import type { ReviewCommentDraft } from "./recoder-diff-comments";
+import { fetchPreviewVerification, previewVerificationStateAtom } from "./recoder-evidence-logic";
 import { RecoderDiffView } from "./recoder-diff";
 
 type RecoderWorkspace = {
@@ -205,6 +206,10 @@ class RecoderDiffViewModel implements ViewModel {
     // Wall-clock of the last checks probe, so the pending re-poll fires at most
     // once per CHECKS_REPOLL_MS instead of on every 6s tick.
     checksProbedAtMs: number;
+    // Which workspace the preview-verification read describes (checksWorkspaceId
+    // pattern): the 6s refresh poll skips re-fetching unless the selection
+    // changed, and a newer fetch supersedes an in-flight one.
+    previewWorkspaceId: string;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -230,6 +235,7 @@ class RecoderDiffViewModel implements ViewModel {
         this.commentStatusAtom = atom("") as PrimitiveAtom<string>;
         this.checksWorkspaceId = "";
         this.checksProbedAtMs = 0;
+        this.previewWorkspaceId = "";
     }
 
     get viewComponent(): ViewComponent {
@@ -274,6 +280,8 @@ class RecoderDiffViewModel implements ViewModel {
             globalStore.set(this.diffStatusAtom, "");
             globalStore.set(this.checksAtom, null);
             this.checksWorkspaceId = "";
+            globalStore.set(previewVerificationStateAtom, null);
+            this.previewWorkspaceId = "";
             return;
         }
         const checksStale = this.checksWorkspaceId != selected;
@@ -284,9 +292,11 @@ class RecoderDiffViewModel implements ViewModel {
             !checksStale &&
             checksArePending(globalStore.get(this.checksAtom)) &&
             Date.now() - this.checksProbedAtMs >= CHECKS_REPOLL_MS;
+        const previewStale = this.previewWorkspaceId != selected;
         await Promise.all([
             this.loadDiff(selected),
             checksStale || repollDue ? this.fetchChecks(selected) : Promise.resolve(),
+            previewStale ? this.loadPreviewVerification(selected) : Promise.resolve(),
         ]);
     }
 
@@ -308,9 +318,15 @@ class RecoderDiffViewModel implements ViewModel {
             globalStore.set(this.diffStatusAtom, "");
             globalStore.set(this.checksAtom, null);
             this.checksWorkspaceId = "";
+            globalStore.set(previewVerificationStateAtom, null);
+            this.previewWorkspaceId = "";
             return;
         }
-        await Promise.all([this.loadDiff(workspaceId), this.fetchChecks(workspaceId)]);
+        await Promise.all([
+            this.loadDiff(workspaceId),
+            this.fetchChecks(workspaceId),
+            this.loadPreviewVerification(workspaceId),
+        ]);
     }
 
     // Degrade-safe: 404 → "no diff", other non-2xx → "diff unavailable", thrown
@@ -400,6 +416,27 @@ class RecoderDiffViewModel implements ViewModel {
                 globalStore.set(this.checksLoadingAtom, false);
             }
         }
+    }
+
+    // Read the last persisted preview verification for the selected workspace
+    // (the read-only GET …/preview-verification edge — never triggers a browser
+    // run). Selection-driven only: the previewWorkspaceId latch keeps the 6s
+    // refresh poll from re-fetching, and a newer fetch supersedes an in-flight
+    // one exactly like checksWorkspaceId. An unreachable read drops the latch so
+    // the next refresh retries instead of sticking on the failure. The result —
+    // including the truthful not-verified / workspace-missing 404 split — lands
+    // in the workspace-tagged shared atom the evidence panel renders.
+    async loadPreviewVerification(workspaceId: string) {
+        this.previewWorkspaceId = workspaceId;
+        globalStore.set(previewVerificationStateAtom, { workspaceId, loading: true });
+        const result = await fetchPreviewVerification(workspaceId);
+        if (this.previewWorkspaceId != workspaceId) {
+            return;
+        }
+        if (!result.ok && result.reason == "unreachable") {
+            this.previewWorkspaceId = "";
+        }
+        globalStore.set(previewVerificationStateAtom, { workspaceId, loading: false, result });
     }
 
     // Merge the selected workspace — the "review → merge" close. Degrade-safe:
