@@ -1,9 +1,9 @@
 /**
  * `a2a-jsonrpc-server` — the A2A standard JSON-RPC 2.0 method surface
- * (`message/send`, `tasks/get`, `tasks/cancel`, `tasks/resubscribe`). The wire
- * group registers each method's handler (routing into task-lifecycle + dispatch,
- * built by later Phase-7a groups); this server owns the dispatch, validation, and
- * spec-correct error mapping.
+ * (`message/send`, `message/stream`, `tasks/get`, `tasks/cancel`,
+ * `tasks/resubscribe`). The wire group registers each method's handler (routing
+ * into task-lifecycle + dispatch, built by later Phase-7a groups); this server
+ * owns the dispatch, validation, and spec-correct error mapping.
  *
  * Fail-closed: an invalid request shape ⇒ `-32600`; an unknown / not-yet-wired
  * method ⇒ `-32601`; a registered handler that throws ⇒ `-32000` (or a mapped
@@ -13,6 +13,7 @@
 /** The canonical A2A JSON-RPC methods this instance advertises. */
 export const A2A_METHODS = {
   MESSAGE_SEND: 'message/send',
+  MESSAGE_STREAM: 'message/stream',
   TASKS_GET: 'tasks/get',
   TASKS_CANCEL: 'tasks/cancel',
   TASKS_RESUBSCRIBE: 'tasks/resubscribe',

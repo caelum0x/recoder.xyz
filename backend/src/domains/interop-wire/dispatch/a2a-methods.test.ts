@@ -109,3 +109,90 @@ describe('A2A method owner-binding (signed wire)', () => {
     expect(getCalls.some((c) => c.userId === 'peer-b')).toBe(true);
   });
 });
+
+describe('A2A message/stream — dispatch + resubscribe projection', () => {
+  it('is registered as a wired method (advertised in the agent-card capabilities)', () => {
+    const { jsonRpc } = buildServer();
+    expect(jsonRpc.methods()).toContain(A2A_METHODS.MESSAGE_STREAM);
+  });
+
+  it('dispatches under the verified signer keyId, then streams the task + RunEvents back', async () => {
+    // A richer task mock: the just-dispatched task (t1) is visible to peer-b and
+    // carries a two-event message log — the RunEvent stream we expect projected.
+    const events = [
+      { id: 'm1', taskId: 't1', role: 'user', parts: [{ kind: 'text', text: 'hi' }] },
+      { id: 'm2', taskId: 't1', role: 'agent', parts: [{ kind: 'text', text: 'working' }] },
+    ];
+    const dispatchCalls: Array<{ userId: string }> = [];
+    const messagesCalls: string[] = [];
+    const tasks = {
+      get: vi.fn(async (id: string, userId: string) =>
+        userId === 'peer-b' ? ({ id, userId, state: 'working' } as unknown) : null,
+      ),
+      messages: vi.fn(async (taskId: string) => {
+        messagesCalls.push(taskId);
+        return events;
+      }),
+    } as unknown as TaskLifecycleService;
+    const dispatch = {
+      dispatch: vi.fn(async (input: { userId: string }) => {
+        dispatchCalls.push({ userId: input.userId });
+        return { taskId: 't1', legs: [], ok: true, strategy: 'all', satisfied: { succeeded: 1, required: 1 } };
+      }),
+    } as unknown as MultiDispatchService;
+    const envelope = { buildEnvelope: vi.fn((e: unknown) => e) } as unknown as EnvelopeService;
+    const jsonRpc = createA2AJsonRpcServer();
+    registerA2AMethods({ jsonRpc, tasks, dispatch, envelope });
+
+    const res = await jsonRpc.handleA2ARpc(
+      rpc(A2A_METHODS.MESSAGE_STREAM, { message: { text: 'hi' }, targets: ['peer-c'] }),
+      { signer: { keyId: 'peer-b' } },
+    );
+
+    // Dispatched under the SIGNER, never a caller-supplied id.
+    expect(dispatchCalls.every((c) => c.userId === 'peer-b')).toBe(true);
+    const result = (res as { result?: Record<string, unknown> }).result;
+    expect((res as { error?: unknown }).error).toBeUndefined();
+    expect(result?.streaming).toBe(true);
+    // The RunEvents were re-projected via the resubscribe plumbing (owner-scoped
+    // messages of the just-dispatched task).
+    expect(messagesCalls).toContain('t1');
+    expect(result?.events).toEqual(events);
+    expect((result?.result as { taskId: string }).taskId).toBe('t1');
+  });
+
+  it('REJECTS a params.userId that mismatches the signer (spoof) without dispatching', async () => {
+    const { jsonRpc, dispatchCalls } = buildServer();
+    const res = await jsonRpc.handleA2ARpc(
+      rpc(A2A_METHODS.MESSAGE_STREAM, { userId: 'peer-a', message: { text: 'hi' }, targets: ['peer-c'] }),
+      { signer: { keyId: 'peer-b' } },
+    );
+    expect((res as { error?: { code: number } }).error?.code).toBe(-32602);
+    expect(dispatchCalls.length).toBe(0);
+  });
+
+  it('fail-closed: a non-owner-visible task yields empty events (never a fabricated stream)', async () => {
+    // The dispatched task id is NOT visible to the signer (get ⇒ null) ⇒ events [].
+    const tasks = {
+      get: vi.fn(async () => null),
+      messages: vi.fn(async () => [{ id: 'leak', taskId: 't1', role: 'agent', parts: [] }]),
+    } as unknown as TaskLifecycleService;
+    const dispatch = {
+      dispatch: vi.fn(async () => ({ taskId: 't1', legs: [], ok: true, strategy: 'all', satisfied: { succeeded: 1, required: 1 } })),
+    } as unknown as MultiDispatchService;
+    const envelope = { buildEnvelope: vi.fn((e: unknown) => e) } as unknown as EnvelopeService;
+    const jsonRpc = createA2AJsonRpcServer();
+    registerA2AMethods({ jsonRpc, tasks, dispatch, envelope });
+
+    const res = await jsonRpc.handleA2ARpc(
+      rpc(A2A_METHODS.MESSAGE_STREAM, { message: { text: 'hi' }, targets: ['peer-c'] }),
+      { signer: { keyId: 'peer-b' } },
+    );
+    const result = (res as { result?: Record<string, unknown> }).result;
+    expect(result?.streaming).toBe(true);
+    expect(result?.task).toBeNull();
+    expect(result?.events).toEqual([]);
+    // The message log of an unowned task is NEVER read (no cross-tenant leak).
+    expect(tasks.messages).not.toHaveBeenCalled();
+  });
+});
