@@ -152,9 +152,14 @@ describe('a2a wire routes — /api/a2a edge', () => {
   it('GET /agent-card → 200 with the local capability card + advertised methods', async () => {
     const res = await request(srv.base, '/api/a2a/agent-card');
     expect(res.status).toBe(200);
-    const json = res.json() as { success: boolean; data: { card: { id: string }; methods: unknown[] } };
+    const json = res.json() as {
+      success: boolean;
+      data: { card: { id: string; wireCapabilities?: { streaming: boolean } }; methods: unknown[] };
+    };
     expect(json.success).toBe(true);
     expect(json.data.card.id).toBe('test-instance');
+    // The card now carries the spec-shaped capabilities object advertising streaming.
+    expect(json.data.card.wireCapabilities?.streaming).toBe(true);
     expect(Array.isArray(json.data.methods)).toBe(true);
   });
 

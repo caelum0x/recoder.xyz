@@ -10,7 +10,20 @@
  * never a fabricated card. A `null` fetcher (no network dep on disk) ⇒ every
  * remote resolve is truthfully `null`.
  */
-import type { AgentCard } from '../types.js';
+import type { A2ACapabilities, AgentCard } from '../types.js';
+
+/**
+ * The default spec-shaped capabilities this instance advertises. `streaming` is
+ * `true` because the wire registers `message/stream` (RunEvents are streamed back
+ * via the task-lifecycle projection); `stateTransitionHistory` is `true` because
+ * the task projection keeps a message/transition log; `pushNotifications` stays
+ * `false` — not implemented, advertised truthfully rather than fabricated.
+ */
+export const DEFAULT_WIRE_CAPABILITIES: A2ACapabilities = {
+  streaming: true,
+  pushNotifications: false,
+  stateTransitionHistory: true,
+};
 
 /** Static inputs for the local agent-card (bootstrap-provided). */
 export interface LocalCardInput {
@@ -19,6 +32,8 @@ export interface LocalCardInput {
   readonly description?: string;
   readonly url?: string;
   readonly capabilities: readonly string[];
+  /** Spec-shaped capabilities object; defaults to {@link DEFAULT_WIRE_CAPABILITIES}. */
+  readonly wireCapabilities?: A2ACapabilities;
   readonly publicKey?: string;
   readonly version?: string;
 }
@@ -45,6 +60,21 @@ export interface AgentCardService {
 
 const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
 
+/**
+ * Structural guard for the optional spec-shaped capabilities object. Absent /
+ * malformed ⇒ `undefined` (truthfully unknown, never a fabricated `true`); each
+ * flag is admitted only on a strict `=== true` (a missing/garbage flag is `false`).
+ */
+function coerceCapabilities(raw: unknown): A2ACapabilities | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const r = raw as Record<string, unknown>;
+  return {
+    streaming: r.streaming === true,
+    pushNotifications: r.pushNotifications === true,
+    stateTransitionHistory: r.stateTransitionHistory === true,
+  };
+}
+
 /** Structural guard for a remote agent-card shape (no trust beyond structure). */
 function coerceCard(raw: unknown): AgentCard | null {
   if (typeof raw !== 'object' || raw === null) return null;
@@ -53,12 +83,14 @@ function coerceCard(raw: unknown): AgentCard | null {
   const capabilities = Array.isArray(r.capabilities)
     ? r.capabilities.filter((c): c is string => typeof c === 'string')
     : [];
+  const wireCapabilities = coerceCapabilities(r.wireCapabilities);
   return {
     id: r.id,
     name: r.name,
     description: typeof r.description === 'string' ? r.description : undefined,
     url: typeof r.url === 'string' ? r.url : undefined,
     capabilities,
+    ...(wireCapabilities ? { wireCapabilities } : {}),
     publicKey: typeof r.publicKey === 'string' ? r.publicKey : undefined,
     version: typeof r.version === 'string' ? r.version : undefined,
   };
@@ -75,6 +107,9 @@ export function createAgentCardService(
     description: local.description,
     url: local.url,
     capabilities: [...local.capabilities],
+    // Spec-shaped capability advertisement (`{ streaming: true, … }`). Reflects
+    // the wired `message/stream` support; bootstrap MAY override the defaults.
+    wireCapabilities: local.wireCapabilities ?? DEFAULT_WIRE_CAPABILITIES,
     publicKey: local.publicKey,
     version: local.version,
   };

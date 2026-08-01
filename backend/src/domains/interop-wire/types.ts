@@ -54,6 +54,22 @@ export interface EgressEnvelope<TPayload = unknown> {
   readonly keyId?: string;
 }
 
+/**
+ * The A2A spec-shaped agent-card capabilities object (mirrors the A2A
+ * `AgentCapabilities`). Distinct from the legacy `AgentCard.capabilities` string
+ * list (capability/skill tags): this is the boolean feature advertisement peers
+ * negotiate against — notably `streaming` (does `message/stream` work here). Kept
+ * additive so the string list stays a stable contract.
+ */
+export interface A2ACapabilities {
+  /** `message/stream` is wired — RunEvents can be streamed back to the caller. */
+  readonly streaming: boolean;
+  /** Server-initiated push notifications (not implemented ⇒ truthfully `false`). */
+  readonly pushNotifications: boolean;
+  /** The task projection keeps a transition/message history (`tasks/get` view). */
+  readonly stateTransitionHistory: boolean;
+}
+
 /** This instance's (or a remote's) A2A agent-card — capability advertisement. */
 export interface AgentCard {
   readonly id: string;
@@ -61,6 +77,13 @@ export interface AgentCard {
   readonly description?: string;
   readonly url?: string;
   readonly capabilities: readonly string[];
+  /**
+   * The A2A spec-shaped capabilities object (`{ streaming, … }`). Additive: peers
+   * that understand the object negotiate features (e.g. streaming) against it,
+   * while the legacy `capabilities` string list stays unchanged. Absent on a
+   * remote card that never advertised one (truthfully unknown, never fabricated).
+   */
+  readonly wireCapabilities?: A2ACapabilities;
   /** ed25519 public key advertised for envelope verification. */
   readonly publicKey?: string;
   readonly version?: string;
