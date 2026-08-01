@@ -48,6 +48,7 @@ import {
   PgAuditReader,
 } from './repositories/observability.repository.js';
 import { HealthAggregator } from './services/health-aggregator.service.js';
+import { SloEvaluator } from './services/slo-evaluator.service.js';
 import { AlertingService } from './services/alerting.service.js';
 import { WorkSignalsService } from './services/work-signals.service.js';
 import { RunSignalPushService, type RunOutcomeSignal } from './services/run-signal-push.service.js';
@@ -176,11 +177,15 @@ export class ObservabilityComposer implements ObservabilityModule {
     const dispositionRepo = createSignalDispositionRepository(deps.executor);
     const auditReader = new PgAuditReader(deps.executor);
 
-    // 5b. Health aggregator over the bootstrap registry (conflict #7).
+    // 5b. Health aggregator over the bootstrap registry (conflict #7). The SLO
+    //     recording-rule evaluator reads the SAME in-process RED counter the
+    //     telemetry middleware records into, so `/health/full` surfaces REAL
+    //     per-SLO attainment and a breached objective degrades the rollup.
     this.healthAggregator = new HealthAggregator({
       registry: deps.registry,
       slo: this.sloRepo,
       metrics: this.promMetrics,
+      sloEvaluator: new SloEvaluator(this.promMetrics),
       service: deps.config.runtime.serviceName,
       instanceId: deps.config.runtime.instanceId,
       defaultSpaceId: this.cfg.defaultSpaceId,
