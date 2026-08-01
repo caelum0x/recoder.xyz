@@ -23,9 +23,9 @@ import type {
 } from '../types.js';
 import {
   buildProviderHealth,
+  createProviderTransport,
   isoOrUndefined,
   normalizeStatus,
-  providerFetch,
   resolveBaseUrl,
   str,
   subjectIdFromMetadata,
@@ -97,9 +97,12 @@ export function createPaddleAdapter(deps: ProviderAdapterDeps): BillingProviderP
   const baseUrl = resolveBaseUrl(credential, DEFAULT_BASE_URL);
   const planFor = (productId: string) => catalog.planForProduct(productId, 'paddle');
 
-  async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-    return providerFetch<T>({ baseUrl, apiKey: credential.apiKey ?? '', method, path, body });
-  }
+  const { call } = createProviderTransport({
+    provider: 'paddle',
+    baseUrl,
+    apiKey: credential.apiKey ?? '',
+    resilience: deps.resilience,
+  });
 
   return {
     name: 'paddle',
