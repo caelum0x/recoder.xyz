@@ -89,7 +89,7 @@ const WORKSPACES: Workspace[] = [
   },
   {
     repo: "billing-svc",
-    branch: "agent/stripe-webhooks",
+    branch: "agent/webhook-retries",
     agent: "Cursor",
     status: "conflict",
     add: 47,
@@ -522,8 +522,8 @@ interface PlanPeek {
 
 const PLAN_PEEK: PlanPeek[] = [
   { name: "Free", price: "$0", note: "the local desktop console" },
-  { name: "Pro", price: "Coming soon", note: "higher limits + retention" },
-  { name: "Team", price: "Coming soon", note: "seats + shared approvals" },
+  { name: "Pro", price: "$29/mo", note: "higher limits + retention" },
+  { name: "Team", price: "$99/mo", note: "seats + shared approvals" },
   { name: "Enterprise", price: "Custom", note: "SSO, audit, self-host" },
 ];
 
