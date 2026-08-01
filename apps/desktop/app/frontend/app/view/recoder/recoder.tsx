@@ -27,6 +27,7 @@ import {
     type RecoderRowSuggestion,
     type RecoderWorkspace,
 } from "./recoder-model";
+import { navigationCommands } from "./recoder-nav-commands";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
 import { RecoderShortcutsOverlay } from "./recoder-shortcuts";
 import { RecoderWhatsNew } from "./recoder-whats-new-panel";
@@ -62,6 +63,13 @@ function openSession(workspaceId: string) {
 
 function openReview(workspaceId?: string) {
     openBlock({ meta: { view: "recoder-diff", ...(workspaceId ? { "recoder:workspaceid": workspaceId } : {}) } });
+}
+
+// Open any Recoder surface (runs/approvals/memory/board/settings) as its own
+// block — the same view meta a rail widget uses, routed through openBlock so a
+// failed open degrades quietly instead of taking down the hub.
+function openView(view: string) {
+    openBlock({ meta: { view } });
 }
 
 // Attach the workspace's live tmux session as a real wave term block, using the
@@ -560,6 +568,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     : "Turn on attention notifications",
                 run: () => model.setNotifyOnAttention(!notifyOnAttention),
             },
+            ...navigationCommands(openView),
         ];
         for (const ws of workspaces) {
             const wsLabel = `${agentLabel(ws.runtimeId)} · ${ws.branch}`;
