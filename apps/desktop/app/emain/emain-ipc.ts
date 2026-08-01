@@ -268,6 +268,9 @@ export function initIpcHandlers() {
     electron.ipcMain.handle("recoder:sign-out", () => {
         return getDeviceAuthManager().signOut();
     });
+    electron.ipcMain.handle("recoder:ensure-session", () => {
+        return getDeviceAuthManager().ensureFreshSession();
+    });
     // DT-7.1: hand the renderer the embedded backend's REAL loopback URL. The
     // supervisor prefers 3100 but falls back to a free port, so the renderer's
     // hardcoded default would target the wrong one. Sync so the renderer can read
