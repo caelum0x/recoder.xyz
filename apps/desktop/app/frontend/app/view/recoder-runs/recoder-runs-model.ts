@@ -12,6 +12,7 @@ import {
     parseWorkspaceList,
     type WorkspaceCorrelation,
 } from "./recoder-runs-correlation";
+import { parseReconcileFindings, type RunsDriftFinding } from "./recoder-runs-findings";
 import { RecoderRunsView } from "./recoder-runs";
 
 // Mirrors the Agent OS TaskRun domain type (packages/agent-os/src/domain/task-spec.ts).
@@ -72,6 +73,10 @@ class RecoderRunsViewModel implements ViewModel {
     // each row knows whether it can open a Session/Review and drill into events.
     workspacesAtom: PrimitiveAtom<WorkspaceCorrelation[]>;
     correlationAtom: PrimitiveAtom<Map<string, string>>;
+    // Reconciler drift findings + a truthful missing-source flag: "unavailable"
+    // means the findings read failed, which is NOT the same as a clean [].
+    findingsAtom: PrimitiveAtom<RunsDriftFinding[]>;
+    findingsStatusAtom: PrimitiveAtom<"ok" | "unavailable">;
     // The run the user drilled into ("" = none) and its per-run events panel.
     selectedRunIdAtom: PrimitiveAtom<string>;
     selectedEventsAtom: PrimitiveAtom<RecoderRunEvent[]>;
@@ -89,6 +94,8 @@ class RecoderRunsViewModel implements ViewModel {
         this.connectedAtom = atom(false) as PrimitiveAtom<boolean>;
         this.workspacesAtom = atom([]) as PrimitiveAtom<WorkspaceCorrelation[]>;
         this.correlationAtom = atom(new Map()) as PrimitiveAtom<Map<string, string>>;
+        this.findingsAtom = atom([]) as PrimitiveAtom<RunsDriftFinding[]>;
+        this.findingsStatusAtom = atom("ok") as PrimitiveAtom<"ok" | "unavailable">;
         this.selectedRunIdAtom = atom("") as PrimitiveAtom<string>;
         this.selectedEventsAtom = atom([]) as PrimitiveAtom<RecoderRunEvent[]>;
         this.selectedStatusAtom = atom("idle") as PrimitiveAtom<SelectedRunStatus>;
@@ -107,15 +114,18 @@ class RecoderRunsViewModel implements ViewModel {
             // Workspaces power correlation only; a workspaces-read failure must NOT
             // fail the runs list, so it degrades to an empty list (rows still render,
             // just without Session/Review affordances) rather than throwing.
-            const [runs, events, workspaces] = await Promise.all([
+            const [runs, events, workspaces, findings] = await Promise.all([
                 this.fetchRuns(),
                 this.fetchEvents(),
                 this.fetchWorkspaces(),
+                this.fetchFindings(),
             ]);
             globalStore.set(this.runsAtom, runs);
             globalStore.set(this.eventsAtom, events);
             globalStore.set(this.workspacesAtom, workspaces);
             globalStore.set(this.correlationAtom, correlateRuns(runs, workspaces));
+            globalStore.set(this.findingsAtom, findings ?? []);
+            globalStore.set(this.findingsStatusAtom, findings == null ? "unavailable" : "ok");
             globalStore.set(this.connectedAtom, true);
             await this.refreshSelectedEvents();
         } catch (e) {
@@ -124,6 +134,8 @@ class RecoderRunsViewModel implements ViewModel {
             globalStore.set(this.eventsAtom, []);
             globalStore.set(this.workspacesAtom, []);
             globalStore.set(this.correlationAtom, new Map());
+            globalStore.set(this.findingsAtom, []);
+            globalStore.set(this.findingsStatusAtom, "unavailable");
             globalStore.set(this.errorAtom, e instanceof Error ? e.message : String(e));
         } finally {
             globalStore.set(this.loadingAtom, false);
@@ -142,6 +154,22 @@ class RecoderRunsViewModel implements ViewModel {
             return parseWorkspaceList(body);
         } catch {
             return [];
+        }
+    }
+
+    // Degrade-safe like fetchWorkspaces, but null (not []) on failure so the view
+    // can show "drift findings unavailable" instead of faking a clean drift state.
+    // A findings failure must NEVER fail the runs refresh.
+    async fetchFindings(): Promise<RunsDriftFinding[] | null> {
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/reconcile/findings`);
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                return null;
+            }
+            return parseReconcileFindings(body);
+        } catch {
+            return null;
         }
     }
 

@@ -5,6 +5,7 @@ import { RecoderEmpty, RecoderErrorRow, RecoderSkeleton } from "@/app/view/recod
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
+import { activeDriftFindings, driftForRun, driftLabel, type RunsDriftFinding } from "./recoder-runs-findings";
 import { RecoderRun, RecoderRunEvent, RecoderRunsViewModel, SelectedRunStatus } from "./recoder-runs-model";
 
 const REFRESH_MS = 6000;
@@ -43,12 +44,13 @@ interface RunRowProps {
     run: RecoderRun;
     correlated: boolean;
     selected: boolean;
+    drift: RunsDriftFinding[];
     onSelect: () => void;
     onSession: () => void;
     onReview: () => void;
 }
 
-function RunRow({ run, correlated, selected, onSelect, onSession, onReview }: RunRowProps) {
+function RunRow({ run, correlated, selected, drift, onSelect, onSession, onReview }: RunRowProps) {
     // Session/Review live inside the row; stop propagation so opening a block
     // doesn't also toggle the drilldown selection.
     const openSession = (e: React.MouseEvent) => {
@@ -85,6 +87,15 @@ function RunRow({ run, correlated, selected, onSelect, onSession, onReview }: Ru
                 {run.state}
             </span>
             <span className="text-sm truncate">{runLabel(run)}</span>
+            {drift.length > 0 && (
+                <span
+                    className="flex items-center gap-1 text-xs text-warning whitespace-nowrap"
+                    title={drift.map((f) => driftLabel(f.kind)).join(" · ")}
+                >
+                    <i className="fa-solid fa-triangle-exclamation" />
+                    {driftLabel(drift[0].kind)}
+                </span>
+            )}
             {run.assigneeAgentId && (
                 <span className="text-xs text-secondary truncate">{run.assigneeAgentId}</span>
             )}
@@ -109,6 +120,20 @@ function RunRow({ run, correlated, selected, onSelect, onSession, onReview }: Ru
             ) : (
                 <span className="text-xs text-meta whitespace-nowrap">no workspace</span>
             )}
+        </div>
+    );
+}
+
+function DriftLine({ finding }: { finding: RunsDriftFinding }) {
+    return (
+        <div className="flex items-baseline gap-2 text-xs" title={finding.findingId}>
+            <span className="text-secondary font-mono whitespace-nowrap">{shortTime(finding.observedAt)}</span>
+            <span className="rounded border border-warning/40 text-warning px-1.5 py-0.5 whitespace-nowrap">
+                {driftLabel(finding.kind)}
+            </span>
+            <span className="text-primary truncate">
+                {finding.workspaceId || finding.sessionName || finding.worktreePath}
+            </span>
         </div>
     );
 }
@@ -173,6 +198,8 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
     const selectedRunId = useAtomValue(model.selectedRunIdAtom);
     const selectedEvents = useAtomValue(model.selectedEventsAtom);
     const selectedStatus = useAtomValue(model.selectedStatusAtom);
+    const findings = useAtomValue(model.findingsAtom);
+    const findingsStatus = useAtomValue(model.findingsStatusAtom);
 
     useEffect(() => {
         model.refresh();
@@ -183,6 +210,7 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
     const showDisconnected = !connected && !loading;
     const showEmptyRuns = connected && !loading && runs.length == 0;
     const selectedRun = runs.find((r) => r.runId == selectedRunId);
+    const drift = activeDriftFindings(findings);
 
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-3">
@@ -193,6 +221,19 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
             {loading && runs.length == 0 && events.length == 0 && <RecoderSkeleton rows={4} />}
             {showDisconnected && (
                 <RecoderEmpty title="Recoder is still starting…" hint="Runs will appear here once it is ready." />
+            )}
+            {connected && findingsStatus == "unavailable" && (
+                <div className="text-xs text-meta">drift findings unavailable</div>
+            )}
+            {connected && drift.length > 0 && (
+                <div className="flex flex-col gap-1">
+                    <div className="text-xs uppercase tracking-wide text-secondary">Drift</div>
+                    <div className="flex flex-col gap-0.5">
+                        {drift.map((finding) => (
+                            <DriftLine key={finding.findingId} finding={finding} />
+                        ))}
+                    </div>
+                </div>
             )}
             {connected && (
                 <div className="flex flex-col gap-1">
@@ -209,6 +250,7 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
                             run={run}
                             correlated={correlation.has(run.runId)}
                             selected={run.runId == selectedRunId}
+                            drift={driftForRun(run.runId, correlation, drift)}
                             onSelect={() => model.selectRun(run.runId)}
                             onSession={() => model.openRunSession(run.runId)}
                             onReview={() => model.openRunReview(run.runId)}
