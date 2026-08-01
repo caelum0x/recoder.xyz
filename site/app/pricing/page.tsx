@@ -9,11 +9,10 @@ export const metadata: Metadata = {
 };
 
 /**
- * Subscribe CTA target. Paid checkout is fulfilled by Polar acting as the
- * Merchant of Record (Polar is the legal seller). The exact checkout URL is
- * environment-driven so we never hardcode a product/price that isn't live yet.
- * If the link is not configured, we fall back to contacting the founders so we
- * never present a dead or fake "Subscribe" button.
+ * Subscribe CTA targets. Paid checkout is fulfilled by Creem, the Merchant of
+ * Record (legal seller, tax + invoicing). The exact hosted-checkout URLs are
+ * environment-driven; when unset the CTA routes through the account signup +
+ * subscribe flow on recoder.xyz/auth — never a dead or fake button.
  */
 // Paid checkout is fulfilled by Creem, the Merchant of Record. When a Creem
 // hosted-checkout URL is configured we link straight to it; otherwise the CTA is
@@ -205,18 +204,16 @@ export default function Pricing() {
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-muted">
             Paid plans are sold through{" "}
             <a
-              href="https://polar.sh"
+              href="https://creem.io"
               target="_blank"
               rel="noreferrer"
               className="text-fg underline hover:opacity-80"
             >
-              Polar
+              Creem
             </a>{" "}
-            as the Merchant of Record — Polar is the legal seller and handles tax
-            and invoicing. We show plan framing rather than firm prices until the
-            exact Pro and Team products are live in Polar, so nothing here is a
-            placeholder dressed up as a real price. Plans marked &ldquo;Coming
-            soon&rdquo; are not purchasable yet.
+            as the Merchant of Record — Creem is the legal seller and handles tax
+            and invoicing. You always bring your own agents and model keys;
+            Recoder never resells tokens.
           </p>
         </section>
       </main>
