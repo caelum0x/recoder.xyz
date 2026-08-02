@@ -39,6 +39,13 @@ import { isGitHubRepoUrl, parseCloneResponse } from "./recoder-clone-logic";
 import { buildUsagePath, summarizeUsage, type MeteringDisplay, type UsagePayloadLike } from "./recoder-metering";
 import { RecoderConnectionModel } from "./recoder-connection-model";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
+import {
+    fetchWorkspacePrStatus,
+    prStatusFetchKey,
+    shouldRefetchPrStatus,
+    type PrFetchMeta,
+    type RecoderPrChip,
+} from "./recoder-pr-status";
 import { readErrorReason } from "./recoder-errors";
 import { RecoderConductorView } from "./recoder";
 
@@ -236,6 +243,10 @@ class RecoderViewModel implements ViewModel {
     // First-run environment import (git identity, agent configs, gh, shell); null until probed.
     environmentAtom: PrimitiveAtom<RecoderEnvironment>;
     diffSummariesAtom: PrimitiveAtom<Record<string, RecoderDiffSummary>>;
+    // Per-workspace PR chip from GET /workspaces/:id/pr-status (gh-backed). A
+    // missing entry means gh couldn't be consulted, the branch has no PR, or the
+    // probe degraded — the row simply shows no chip, never a fabricated PR.
+    prStatusAtom: PrimitiveAtom<Record<string, RecoderPrChip>>;
     launchOpenAtom: PrimitiveAtom<boolean>;
     commandPaletteOpenAtom: PrimitiveAtom<boolean>;
     shortcutsOpenAtom: PrimitiveAtom<boolean>;
@@ -325,6 +336,10 @@ class RecoderViewModel implements ViewModel {
     // shells host git on the backend, so idle rows whose key hasn't advanced are
     // not re-asked (see shouldRefetchDiffSummary).
     diffFetchKeys: Map<string, string>;
+    // Per-workspace pr-status probe gate (revision key + last-probe time). Each
+    // probe shells `gh` (a GitHub API call) on the backend, so rows re-ask only
+    // on a revision advance or after the refresh interval (see shouldRefetchPrStatus).
+    prFetchMeta: Map<string, PrFetchMeta>;
     // True while a manual "Re-scan agents" probe is in flight (first-run setup).
     setupProbingAtom: PrimitiveAtom<boolean>;
 
@@ -340,6 +355,7 @@ class RecoderViewModel implements ViewModel {
         this.agentAuthAtom = atom({}) as PrimitiveAtom<Record<string, AgentAuthState>>;
         this.environmentAtom = atom(null) as PrimitiveAtom<RecoderEnvironment>;
         this.diffSummariesAtom = atom({}) as PrimitiveAtom<Record<string, RecoderDiffSummary>>;
+        this.prStatusAtom = atom({}) as PrimitiveAtom<Record<string, RecoderPrChip>>;
         this.launchOpenAtom = atom(false) as PrimitiveAtom<boolean>;
         this.commandPaletteOpenAtom = atom(false) as PrimitiveAtom<boolean>;
         this.shortcutsOpenAtom = atom(false) as PrimitiveAtom<boolean>;
@@ -374,6 +390,7 @@ class RecoderViewModel implements ViewModel {
         this.prevWorkspaceStates = null;
         this.notifiedAttentionKeys = new Set();
         this.diffFetchKeys = new Map();
+        this.prFetchMeta = new Map();
         this.prevWorkspaceAttention = null;
         this.notifiedNeedsInputKeys = new Set();
         this.setupProbingAtom = atom(false) as PrimitiveAtom<boolean>;
@@ -545,6 +562,7 @@ class RecoderViewModel implements ViewModel {
         // independently degrade-safe.
         this.refreshSetup();
         this.loadDiffSummaries(workspaces);
+        this.loadPrStatuses(workspaces);
     }
 
     // Compare this poll against the last SUCCESSFUL poll and fire an OS
@@ -718,6 +736,46 @@ class RecoderViewModel implements ViewModel {
         // probed once per revision, not retried every tick; a departed id drops out
         // here, so the gate map can never grow past the current list.
         this.diffFetchKeys = new Map(workspaces.map((ws) => [ws.workspaceId, diffSummaryFetchKey(ws)]));
+    }
+
+    // Best-effort per-workspace PR chip (gh-backed pr-status edge). Mirrors the
+    // diff-summary fan-out: gated per row (revision advance OR the 60s interval,
+    // since GitHub moves without the local row), skipped rows carry their cached
+    // chip forward, departed ids are pruned, and a failed/no-PR probe simply drops
+    // the entry. Never throws, never fabricates a PR.
+    async loadPrStatuses(workspaces: RecoderWorkspace[]) {
+        const base = getRecoderBackendUrl();
+        const now = Date.now();
+        const toFetch = workspaces.filter((ws) =>
+            shouldRefetchPrStatus(ws, this.prFetchMeta.get(ws.workspaceId), now)
+        );
+        const entries = await Promise.all(
+            toFetch.map(async (ws): Promise<[string, RecoderPrChip] | null> => {
+                const chip = await fetchWorkspacePrStatus(base, ws.workspaceId);
+                return chip != null ? [ws.workspaceId, chip] : null;
+            })
+        );
+        const fetched = new Map(entries.filter((e) => e != null));
+        const fetchedIds = new Set(toFetch.map((ws) => ws.workspaceId));
+        const prev = globalStore.get(this.prStatusAtom);
+        const next: Record<string, RecoderPrChip> = {};
+        for (const ws of workspaces) {
+            const entry = fetchedIds.has(ws.workspaceId) ? fetched.get(ws.workspaceId) : prev[ws.workspaceId];
+            if (entry) next[ws.workspaceId] = entry;
+        }
+        globalStore.set(this.prStatusAtom, next);
+        // Probed rows restart their interval clock; skipped rows keep their prior
+        // meta so the 60s window isn't reset by every 6s tick.
+        const meta = new Map<string, PrFetchMeta>();
+        for (const ws of workspaces) {
+            meta.set(
+                ws.workspaceId,
+                fetchedIds.has(ws.workspaceId)
+                    ? { key: prStatusFetchKey(ws), at: now }
+                    : this.prFetchMeta.get(ws.workspaceId)
+            );
+        }
+        this.prFetchMeta = meta;
     }
 
     // Load the side-by-side compare aggregate for one parallel-run group, keyed by

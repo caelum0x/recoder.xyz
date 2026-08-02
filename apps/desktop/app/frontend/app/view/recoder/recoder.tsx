@@ -30,6 +30,7 @@ import {
 } from "./recoder-model";
 import { navigationCommands } from "./recoder-nav-commands";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
+import { prChipLabel, prChipTone, type RecoderPrChip } from "./recoder-pr-status";
 import { RecoderShortcutsOverlay } from "./recoder-shortcuts";
 import { RecoderWhatsNew } from "./recoder-whats-new-panel";
 import { RecoderErrorRow, RecoderSkeleton } from "./recoder-states";
@@ -140,10 +141,42 @@ function shortTaskGroup(taskGroup: string): string {
     return trimmed.length > 8 ? trimmed.slice(0, 8) : trimmed;
 }
 
+// The live PR chip — the workspace's pull-request state straight from the
+// gh-backed pr-status edge. Not rendered at all when there is no chip (gh
+// absent / no PR / degraded probe); clicking opens the PR when a URL exists.
+function WorkspacePrChip({ pr }: { pr: RecoderPrChip }) {
+    if (pr == null) {
+        return null;
+    }
+    const clickable = pr.url != "";
+    return (
+        <span
+            className={`rounded border px-1.5 py-0.5 text-xs whitespace-nowrap ${prChipTone(pr)} ${clickable ? "cursor-pointer hover:opacity-80" : ""}`}
+            title={clickable ? pr.url : "Pull-request state via gh"}
+            onClick={(e) => {
+                e.stopPropagation();
+                if (!clickable) {
+                    return;
+                }
+                try {
+                    getApi().openExternal(pr.url);
+                } catch {
+                    // no external opener wired — the chip stays a passive badge
+                }
+            }}
+        >
+            {prChipLabel(pr)}
+        </span>
+    );
+}
+
+WorkspacePrChip.displayName = "WorkspacePrChip";
+
 type WorkspaceRowProps = {
     model: RecoderViewModel;
     ws: RecoderWorkspace;
     summary: RecoderDiffSummary;
+    pr: RecoderPrChip;
     status: string;
     busy: boolean;
     tmuxBin: string;
@@ -151,7 +184,7 @@ type WorkspaceRowProps = {
     onSelect: () => void;
 };
 
-function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onSelect }: WorkspaceRowProps) {
+function WorkspaceRow({ model, ws, summary, pr, status, busy, tmuxBin, selected, onSelect }: WorkspaceRowProps) {
     const ref = useRef<HTMLDivElement>(null);
     const usage = useAtomValue(model.usageAtom);
     const usageWorkspaceId = useAtomValue(model.usageWorkspaceIdAtom);
@@ -195,6 +228,7 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
                         {attnLabel}
                     </span>
                 )}
+                <WorkspacePrChip pr={pr} />
                 {summary != null && summary.files > 0 && (
                     <span className={`${META} font-mono`}>
                         +{summary.additions} -{summary.deletions}
@@ -330,6 +364,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const error = useAtomValue(model.errorAtom);
     const setup = useAtomValue(model.setupAtom);
     const diffSummaries = useAtomValue(model.diffSummariesAtom);
+    const prStatuses = useAtomValue(model.prStatusAtom);
     const rowStatus = useAtomValue(model.rowStatusAtom);
     const busyRow = useAtomValue(model.busyRowAtom);
     const [launchOpen, setLaunchOpen] = useAtom(model.launchOpenAtom);
@@ -1106,6 +1141,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                         model={model}
                                         ws={ws}
                                         summary={diffSummaries[ws.workspaceId]}
+                                        pr={prStatuses[ws.workspaceId]}
                                         status={rowStatus[ws.workspaceId]}
                                         busy={busyRow == ws.workspaceId}
                                         tmuxBin={setup.tmuxBin}
@@ -1161,6 +1197,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                             model={model}
                                             ws={ws}
                                             summary={diffSummaries[ws.workspaceId]}
+                                            pr={prStatuses[ws.workspaceId]}
                                             status={rowStatus[ws.workspaceId]}
                                             busy={busyRow == ws.workspaceId}
                                             tmuxBin={setup.tmuxBin}
