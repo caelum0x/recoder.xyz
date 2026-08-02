@@ -374,6 +374,8 @@ export interface ComposeOptions {
   repoSetupStore?: ConductorModuleDeps['repoSetupStore'];
   /** OPTIONAL repo-setup run-hook exec seam (absent ⇒ the real `execFileSafe`). */
   repoSetupExec?: ConductorModuleDeps['repoSetupExec'];
+  /** OPTIONAL committed-config reader seam (absent ⇒ the real settings.json reader). */
+  repoSetupReadConfigFile?: ConductorModuleDeps['repoSetupReadConfigFile'];
   /** OPTIONAL live-substrate scan source for reconcile GC (absent ⇒ empty box). */
   substrateScan?: ConductorModuleDeps['substrateScan'];
   /** OPTIONAL dmux LAYOUT-brain grid seam (absent ⇒ no grid hint, arrange ⇒ null). */
@@ -413,6 +415,9 @@ export function composeConductor(options: ComposeOptions = {}): {
       ? { repoSetupStore: options.repoSetupStore }
       : {}),
     ...(options.repoSetupExec ? { repoSetupExec: options.repoSetupExec } : {}),
+    ...(options.repoSetupReadConfigFile
+      ? { repoSetupReadConfigFile: options.repoSetupReadConfigFile }
+      : {}),
     ...(options.substrateScan ? { substrateScan: options.substrateScan } : {}),
     ...(options.workspaceGrid ? { workspaceGrid: options.workspaceGrid } : {}),
   });
