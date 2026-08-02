@@ -667,10 +667,14 @@ class RecoderViewModel implements ViewModel {
     // GET /workspaces/archived → the archived history (most-recent-first). Degrade-
     // safe: any failure / non-2xx / missing shape keeps the prior list (the poll
     // will retry when a history view is open), never throws, never fabricates.
+    // limit=200 is the edge's hard cap (recoder-qhlo): the board renders history
+    // as one flat newest-first list, so the 200 most recent rows are everything
+    // it can usefully show — and the archive-only-grows payload stays bounded on
+    // the 6s poll while a history Show view is open.
     async loadArchived() {
         this.archivedLoaded = true;
         try {
-            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/workspaces/archived`);
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/workspaces/archived?limit=200`);
             if (!res.ok) {
                 return;
             }
