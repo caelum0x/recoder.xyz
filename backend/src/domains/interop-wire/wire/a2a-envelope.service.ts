@@ -20,6 +20,7 @@ import {
   type SignedEnvelope,
 } from '@recoder/a2a-sdk';
 import type { A2AEnvelope } from '../types.js';
+import { checkPayloadTaskHistory, TASK_HISTORY_INVALID_CODE } from './task-history.guard.js';
 
 /** The canonical `payload_type` this domain seals its A2A message envelopes as. */
 export const A2A_MESSAGE_PAYLOAD_TYPE = 'recoder.a2a.message';
@@ -168,6 +169,13 @@ export function createEnvelopeService(defaults: EnvelopeSigningOptions = {}): En
           code: 'envelope_payload_malformed',
           reason: 'Signed envelope payload is not a well-formed A2A domain envelope.',
         };
+      }
+      // A payload carrying a task-history projection (`payload.history` /
+      // `payload.task.history`) is untrusted remote state: a malformed /
+      // discontinuous / illegal chain is REJECTED here, never admitted upstream.
+      const history = checkPayloadTaskHistory(domain.payload);
+      if (!history.ok) {
+        return { valid: false, status: 400, code: TASK_HISTORY_INVALID_CODE, reason: history.reason };
       }
       return { valid: true, status: 200, code: 'envelope_ok', reason: 'Verified A2A envelope.', envelope: domain };
     },

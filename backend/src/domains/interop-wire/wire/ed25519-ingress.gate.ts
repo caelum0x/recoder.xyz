@@ -33,6 +33,7 @@ import type { IngressResult } from '../types.js';
 import type { EnvelopeService } from './a2a-envelope.service.js';
 import { createReplayGuard, type ReplayGuard } from './replay-guard.js';
 import type { IngressAdmissionContext, SignedIngressGate } from './signed-ingress.gate.js';
+import { checkPayloadTaskHistory, TASK_HISTORY_INVALID_CODE } from './task-history.guard.js';
 
 /** Resolve the ed25519 public key trusted for a signature `key_id`; `null` ⇒ unknown. */
 export type PeerKeyResolver = (keyId: string) => Promise<string | null>;
@@ -212,6 +213,13 @@ export function createEd25519IngressGate(deps: Ed25519IngressGateDeps): SignedIn
     const domain = envelope.parseEnvelope<TPayload>(raw);
     if (!domain) {
       return denied(400, 'envelope_payload_malformed', 'Signed envelope payload is not a well-formed A2A domain envelope.');
+    }
+    // A task-history projection in the payload is untrusted remote state — a
+    // malformed/illegal chain is rejected in BOTH modes (like a malformed
+    // payload), even when a permissive posture would allow an unverified sender.
+    const history = checkPayloadTaskHistory(domain.payload);
+    if (!history.ok) {
+      return denied(400, TASK_HISTORY_INVALID_CODE, history.reason);
     }
     const signer = verifiedKeyId ? { keyId: verifiedKeyId, from: domain.from } : undefined;
     return { admitted: true, status: 200, code, reason, payload: domain.payload, ...(signer ? { signer } : {}) };
