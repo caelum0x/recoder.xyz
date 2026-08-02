@@ -11,6 +11,17 @@
 # assembles the exact directory to rsync to `dl.recoder.xyz/releases` — the URL
 # the site (`site/lib/releases.ts`) and the app auto-updater both read.
 #
+# Producing the signed+notarized DMG this script verifies (no side-configs):
+# signing/notarization is env-gated in the committed
+# apps/desktop/app/electron-builder.config.cjs — hardenedRuntime + notarize turn
+# on automatically when Apple creds are present in the env
+# (APPLE_API_KEY + APPLE_API_KEY_ID + APPLE_API_ISSUER, or
+# APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID); keyless builds stay
+# unsigned. Point RECODER_BACKEND_NODE_MODULES at a self-contained backend
+# deploy before a signed build. Full recipe (incl. the native-codesign path that
+# avoids the EMFILE fd-cap landmine): docs/OWNER-RUNBOOK.md §1. No secrets in
+# the config — creds are env/keychain only.
+#
 # Usage:
 #   scripts/publish-desktop-release-local.sh verify    # SAFE: checks only, no writes
 #   scripts/publish-desktop-release-local.sh publish    # full: zip + manifest + release dir

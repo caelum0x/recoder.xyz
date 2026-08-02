@@ -44,7 +44,8 @@ Store Connect API key `~/.appstoreconnect/private_keys/AuthKey_98T8ZPPNGD.p8`
 > auto-enables `hardenedRuntime + notarize` whenever the Apple creds are present
 > (`APPLE_API_KEY`/`_KEY_ID`/`_ISSUER`, or `APPLE_ID`/`APPLE_APP_SPECIFIC_PASSWORD`/
 > `APPLE_TEAM_ID`); keyless dev builds stay unsigned. The old untracked
-> `electron-builder.notarize.cjs` helper is **obsolete — delete it.**
+> `electron-builder.notarize.cjs` / `electron-builder.signonly.cjs` helpers were
+> obsolete and are **deleted** (2026-08-03).
 
 ### 1b. x64 / universal build  (needs cross-built natives + an Intel boot-test)
 The mac target arch is env-switchable: `RECODER_MAC_ARCH=x64` (or `universal`) flips
@@ -94,8 +95,9 @@ xcrun stapler staple Recoder-arm64.dmg
 **Remaining (yours):** host `Recoder-arm64.dmg` at a public URL (server / a public
 releases repo — the source repo is private), set the site's `platformDownloadUrl`
 env so `releasesArePublic()` flips the /download CTA to a real "Download", and do
-the human e2e boot. The old electron-builder path (for reference / future
-notarize.cjs use):
+the human e2e boot. The old electron-builder path (for reference — signing/notarize is now env-gated
+in the committed `electron-builder.config.cjs`; the untracked helper configs are
+deleted):
 ```
 # from apps/desktop — prerequisites already on disk are reused
 task build:tsunamiscaffold                       # the one required artifact that was missing
