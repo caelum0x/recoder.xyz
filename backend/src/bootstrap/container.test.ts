@@ -140,8 +140,8 @@ describe('start()', () => {
     expect(port).toBeGreaterThan(0);
 
     const res = await httpGet(port, '/health');
-    // Registered health sources now: engine-supervisor (Phase 0) + persistence
-    // (Phase 1) + identity (Phase 2). In the test env there is no DATABASE_URL /
+    // Registered health sources include persistence (Phase 1), identity
+    // (Phase 2), and the engines module. In the test env there is no DATABASE_URL /
     // BETTER_AUTH_SECRET, so persistence + identity degrade SAFELY — a truthful
     // `degraded` (still HTTP 200), never a faked `up` and never `down`.
     expect(res.status).toBe(200);

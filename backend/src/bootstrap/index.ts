@@ -265,9 +265,9 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   container.registerValue(BOOT_TOKENS.HealthRegistry, healthRegistry);
   container.registerValue(BOOT_TOKENS.Lifecycle, lifecycle);
 
-  // NOTE: the Phase-0 `engine-supervisor` skeleton is RETIRED — the engines module
-  // (built after governance below) now owns truthful per-engine health, so no faked
-  // `engine-supervisor:up` source is registered.
+  // NOTE: per-engine supervision + truthful health are owned by the engines
+  // module (`domains/engines`, built after governance below) — no separate
+  // boot-time engine health source is registered here.
 
   // --- Phase 1: Persistence — the data authority beneath every stateful
   //     domain. Registered into the container + health registry; its routes
@@ -396,8 +396,8 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // --- Phase 6a: Engines — the multi-language engine seam + the ONE interop-gated
   //     MCP host. Built AFTER governance so the napi `governance` engine re-exposes
   //     the assembled kernel ladder (no second kernel). `host()` is the SINGLE
-  //     InteropHostBundle agent-os/conductor/capability domains register tools into
-  //     (retires the Phase-0 engine-supervisor skeleton). Degrade-safe: without a
+  //     InteropHostBundle agent-os/conductor/capability domains register tools
+  //     into. Degrade-safe: without a
   //     built `.node`/daemon/venv each engine reports truthful `down`, never a faked
   //     `up`. Config folded from the `engines` AppConfig override slice — no env read. ---
   // The human-notification delivery seam (webhook-backed, degrade-safe): a missing
