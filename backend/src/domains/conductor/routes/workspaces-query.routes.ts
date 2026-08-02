@@ -17,7 +17,9 @@
  * See the reported mountLine.
  */
 import { Router } from 'express';
+import { z } from 'zod';
 import { asyncHandler, sendSuccess } from '../../../shared/errors.js';
+import { validateQuery } from '../../../http/middleware/validate.js';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { WorkspaceState } from '@recoder/agent-os';
 import type { ConductorModule } from '../index.js';
@@ -61,6 +63,23 @@ function isWorkspaceState(value: unknown): value is WorkspaceState {
   return typeof value === 'string' && (WORKSPACE_STATES as readonly string[]).includes(value);
 }
 
+/** Default archived-history page size when `?limit=` is absent. */
+export const DEFAULT_ARCHIVED_PAGE_LIMIT = 50;
+/** Hard cap: a `?limit=` above this fails fast (never an unbounded transfer). */
+export const MAX_ARCHIVED_PAGE_LIMIT = 200;
+
+/**
+ * `?limit=`/`?offset=` bound for the archived-history edge, mirroring the
+ * agent-os `paginationQuerySchema` precedent (validated at the boundary,
+ * default 50, cap 200, `VALIDATION_ERROR` on anything else). The archive only
+ * GROWS (every done/failed run forever), and pages are newest-first, so absent
+ * params truthfully return the most recent page instead of the whole history.
+ */
+export const archivedPageQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(MAX_ARCHIVED_PAGE_LIMIT).default(DEFAULT_ARCHIVED_PAGE_LIMIT),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 /** First value of a possibly-repeated query param, trimmed to a non-empty string or undefined. */
 function firstString(raw: unknown): string | undefined {
   const value = Array.isArray(raw) ? raw[0] : raw;
@@ -93,14 +112,22 @@ export function buildWorkspaceQueryRoutes(deps: WorkspaceQueryRouterDeps): Route
 
   // Archived history — literal path, registered before the query-aware list so a
   // request for `/workspaces/archived` never falls through to `/workspaces/:id`.
+  // Bounded (recoder-qhlo): the module list is newest-first, so the page is
+  // sliced AFTER ownership filtering (per-caller pages stay truthful) and `data`
+  // keeps the `{ workspaces }` shape — pagination totals ride in `meta`.
   router.get(
     '/workspaces/archived',
     middleware.authenticate,
+    validateQuery(archivedPageQuerySchema),
     asyncHandler(async (req, res) => {
+      const { limit, offset } = req.query as unknown as z.infer<typeof archivedPageQuerySchema>;
       const workspaces = await module.listArchivedWorkspaces();
-      sendSuccess(res, {
-        workspaces: filterAccessibleWorkspaces(workspaces, req.principal!, accessOpts),
-      });
+      const accessible = filterAccessibleWorkspaces(workspaces, req.principal!, accessOpts);
+      sendSuccess(
+        res,
+        { workspaces: accessible.slice(offset, offset + limit) },
+        { meta: { total: accessible.length, limit, offset } },
+      );
     }),
   );
 
