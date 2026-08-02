@@ -12,6 +12,7 @@ import type { QueryRow } from '../../persistence/types.js';
 import type {
   DeliveryOutcomeRepository,
   UsageLedgerRepository,
+  UsageLedgerScope,
 } from '../ports/usage-ledger.port.js';
 import type {
   DeliveryOutcomeInput,
@@ -23,7 +24,21 @@ import type {
 } from '../types.js';
 
 const LEDGER_COLUMNS = `id, user_id, model, provider, input_tokens, output_tokens,
-  total_tokens, cost_micro_usd, tier, inference_id, created_at`;
+  total_tokens, cost_micro_usd, tier, inference_id, workspace_id, task_id, created_at`;
+
+// Attribution predicates a scoped strip read appends after `user_id = :user_id`.
+function scopeFilter(scope: UsageLedgerScope | undefined, params: Record<string, unknown>): string {
+  let where = '';
+  if (scope?.workspaceId) {
+    where += ' and workspace_id = :workspace_id';
+    params.workspace_id = scope.workspaceId;
+  }
+  if (scope?.taskId) {
+    where += ' and task_id = :task_id';
+    params.task_id = scope.taskId;
+  }
+  return where;
+}
 
 export class PgUsageLedgerRepository implements UsageLedgerRepository {
   constructor(
@@ -41,10 +56,10 @@ export class PgUsageLedgerRepository implements UsageLedgerRepository {
       const row = await this.qe.one<QueryRow>(
         `insert into inference_usage_ledger
            (user_id, model, provider, input_tokens, output_tokens, total_tokens,
-            cost_micro_usd, tier, inference_id, created_at)
+            cost_micro_usd, tier, inference_id, workspace_id, task_id, created_at)
          values
            (:user_id, :model, :provider, :input_tokens, :output_tokens, :total_tokens,
-            :cost_micro_usd, :tier, :inference_id, now())
+            :cost_micro_usd, :tier, :inference_id, :workspace_id, :task_id, now())
          returning ${LEDGER_COLUMNS}`,
         {
           user_id: input.userId ?? null,
@@ -56,6 +71,8 @@ export class PgUsageLedgerRepository implements UsageLedgerRepository {
           cost_micro_usd: input.costMicroUsd,
           tier: input.tier,
           inference_id: input.inferenceId ?? null,
+          workspace_id: input.workspaceId ?? null,
+          task_id: input.taskId ?? null,
         },
       );
       return row ? mapLedgerRow(row) : null;
@@ -65,13 +82,15 @@ export class PgUsageLedgerRepository implements UsageLedgerRepository {
     }
   }
 
-  async recentForUser(userId: string, limit = 50): Promise<readonly UsageLedgerRecord[]> {
+  async recentForUser(userId: string, limit = 50, scope?: UsageLedgerScope): Promise<readonly UsageLedgerRecord[]> {
     if (!this.qe.isAvailable()) return [];
     try {
+      const params: Record<string, unknown> = { user_id: userId, limit: Math.max(1, Math.min(limit, 500)) };
+      const where = `where user_id = :user_id${scopeFilter(scope, params)}`;
       const rows = await this.qe.read<QueryRow>(
         `select ${LEDGER_COLUMNS} from inference_usage_ledger
-          where user_id = :user_id order by created_at desc limit :limit`,
-        { user_id: userId, limit: Math.max(1, Math.min(limit, 500)) },
+          ${where} order by created_at desc limit :limit`,
+        params,
       );
       return rows.map(mapLedgerRow);
     } catch (err) {
@@ -100,6 +119,7 @@ export class PgUsageLedgerRepository implements UsageLedgerRepository {
   async totalsForUser(
     userId: string,
     sinceIso?: string,
+    scope?: UsageLedgerScope,
   ): Promise<{
     readonly inputTokens: number;
     readonly outputTokens: number;
@@ -111,7 +131,7 @@ export class PgUsageLedgerRepository implements UsageLedgerRepository {
     if (!this.qe.isAvailable()) return zero;
     try {
       const params: Record<string, unknown> = { user_id: userId };
-      let where = 'where user_id = :user_id';
+      let where = `where user_id = :user_id${scopeFilter(scope, params)}`;
       if (sinceIso) {
         where += ' and created_at >= :since';
         params.since = sinceIso;
@@ -210,6 +230,8 @@ function mapLedgerRow(row: QueryRow): UsageLedgerRecord {
     costMicroUsd: Number(row.cost_micro_usd ?? 0),
     tier: row.tier as DeliveryTier,
     inferenceId: row.inference_id === null || row.inference_id === undefined ? null : String(row.inference_id),
+    workspaceId: row.workspace_id === null || row.workspace_id === undefined ? null : String(row.workspace_id),
+    taskId: row.task_id === null || row.task_id === undefined ? null : String(row.task_id),
     createdAt: toIso(row.created_at),
   };
 }

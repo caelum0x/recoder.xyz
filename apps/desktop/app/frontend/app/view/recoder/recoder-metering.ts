@@ -6,10 +6,12 @@
 // {totals, recent} view where each row carries token counts + a micro-USD cost;
 // this turns those raw integers into presentation strings without a view.
 //
-// The ledger is per-user, not per-workspace/run, and its rows carry no latency
-// (latency lives on the delivery-outcome trail, which has no read route). So the
-// per-row latency here is formatted only when a payload happens to carry it, and
-// is otherwise omitted — never fabricated.
+// The ledger is per-user, narrowable per-workspace/task via
+// GET /inference/usage?workspaceId=…&taskId=… (the backend filters + echoes the
+// scope; rows carry workspaceId/taskId when the call was attributed). Rows carry
+// no latency (latency lives on the delivery-outcome trail, which has no read
+// route), so the per-row latency here is formatted only when a payload happens
+// to carry it, and is otherwise omitted — never fabricated.
 
 // Structural mirror — the response is untrusted external data, so every field is
 // optional and this never couples to a backend package.

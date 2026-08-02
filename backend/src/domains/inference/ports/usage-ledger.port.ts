@@ -13,11 +13,21 @@ import type {
   UsageLedgerRecord,
 } from '../types.js';
 
+/**
+ * Optional attribution scope for ledger reads. Rows are ALWAYS scoped to the
+ * authenticated user first; a scope narrows further to one conductor workspace
+ * and/or one task so a per-workspace cost strip never mixes in foreign rows.
+ */
+export interface UsageLedgerScope {
+  readonly workspaceId?: string;
+  readonly taskId?: string;
+}
+
 export interface UsageLedgerRepository {
   /** Append one usage row (token counts + computed micro-USD cost). */
   append(input: UsageLedgerInput): Promise<UsageLedgerRecord | null>;
-  /** Recent usage rows for a user (most-recent-first, bounded). */
-  recentForUser(userId: string, limit?: number): Promise<readonly UsageLedgerRecord[]>;
+  /** Recent usage rows for a user (most-recent-first, bounded, optionally scoped). */
+  recentForUser(userId: string, limit?: number, scope?: UsageLedgerScope): Promise<readonly UsageLedgerRecord[]>;
   /**
    * True IFF a ledger row exists for `inferenceId` attributed to `userId` — i.e.
    * this caller produced this inference. The cross-tenant feedback ownership guard
@@ -27,12 +37,13 @@ export interface UsageLedgerRepository {
    */
   ownsInference(userId: string, inferenceId: string): Promise<boolean>;
   /**
-   * Aggregate token + cost totals for a user over an optional lookback window.
-   * Returns zeros when no rows / no pool.
+   * Aggregate token + cost totals for a user over an optional lookback window,
+   * optionally narrowed to one workspace/task. Returns zeros when no rows / no pool.
    */
   totalsForUser(
     userId: string,
     sinceIso?: string,
+    scope?: UsageLedgerScope,
   ): Promise<{
     readonly inputTokens: number;
     readonly outputTokens: number;

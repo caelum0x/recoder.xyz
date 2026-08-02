@@ -8,6 +8,8 @@
  *   POST   /inference/complete            — buffered completion (auth; accounted)
  *   POST   /inference/feedback            — attach a feedback signal to an inference_id
  *   GET    /inference/usage               — the caller's recent usage + totals
+ *                                           (optionally narrowed by ?workspaceId=
+ *                                           and/or ?taskId= — never widened)
  *   GET    /inference/keys                — the caller's BYOK provider-key metadata
  *   PUT    /inference/keys/:provider      — GOVERNED key write: encrypt + store the
  *                                           caller's BYOK key (governance `decide`
@@ -86,6 +88,14 @@ const feedbackBodySchema = z.object({
   inferenceId: z.string().trim().min(1),
   metricName: z.string().trim().min(1).max(128),
   value: z.union([z.boolean(), z.number(), z.string().max(10_000)]),
+});
+
+// Optional attribution scope for the usage read — bounds mirror `routingHint`.
+// The scope only ever NARROWS the caller's own rows (userId comes from the
+// principal, never the query), so it cannot widen access.
+const usageQuerySchema = z.object({
+  workspaceId: z.string().trim().min(1).max(256).optional(),
+  taskId: z.string().trim().min(1).max(256).optional(),
 });
 
 const providerSchema = z
@@ -216,12 +226,28 @@ export function buildInferenceRouter(deps: InferenceRoutesDeps): Router {
     '/inference/usage',
     mw.authenticateMutating,
     asyncHandler(async (req, res) => {
+      const parsed = usageQuerySchema.safeParse({
+        ...(req.query.workspaceId !== undefined ? { workspaceId: req.query.workspaceId } : {}),
+        ...(req.query.taskId !== undefined ? { taskId: req.query.taskId } : {}),
+      });
+      if (!parsed.success) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, parsed.error.issues[0]?.message ?? 'invalid usage scope'));
+        return;
+      }
+      const scope =
+        parsed.data.workspaceId || parsed.data.taskId
+          ? {
+              ...(parsed.data.workspaceId ? { workspaceId: parsed.data.workspaceId } : {}),
+              ...(parsed.data.taskId ? { taskId: parsed.data.taskId } : {}),
+            }
+          : undefined;
       const userId = req.principal?.userId ?? '';
       const [recent, totals] = await Promise.all([
-        ledger.recentForUser(userId, 50),
-        ledger.totalsForUser(userId),
+        ledger.recentForUser(userId, 50, scope),
+        ledger.totalsForUser(userId, undefined, scope),
       ]);
-      sendSuccess(res, { totals, recent });
+      // The scope is echoed so the strip can label what its numbers describe.
+      sendSuccess(res, { totals, recent, ...(scope ? { scope } : {}) });
     }),
   );
 
