@@ -4,8 +4,6 @@ const fs = require("fs");
 const path = require("path");
 const { assertExtraResourcesExist } = require("./build/assert-extra-resources.cjs");
 
-const windowsShouldSign = !!process.env.SM_CODE_SIGNING_CERT_SHA1_HASH;
-
 // Notarization is automatic when Apple API (or apple-id) creds are present — this
 // obsoletes the old untracked electron-builder.notarize.cjs helper. Absent creds →
 // a plain unsigned dev build, never a half-configured notarize that fails the run.
@@ -216,50 +214,15 @@ const config = {
             NSAppleEventsUsageDescription: "A CLI application running in Recoder wants to use AppleScript.",
         },
     },
-    linux: {
-        artifactName: "${name}-${platform}-${arch}-${version}.${ext}",
-        category: "TerminalEmulator",
-        icon: "build/icon.png",
-        executableName: pkg.name,
-        target: ["zip", "deb", "rpm", "snap", "AppImage", "pacman"],
-        synopsis: pkg.description,
-        description: null,
-        desktop: {
-            entry: {
-                Name: pkg.productName,
-                Comment: pkg.description,
-                Keywords: "developer;terminal;emulator;",
-                Categories: "Development;Utility;",
-            },
-        },
-        executableArgs: ["--enable-features", "UseOzonePlatform", "--ozone-platform-hint", "auto"], // Hint Electron to use Ozone abstraction layer for native Wayland support
-    },
-    deb: {
-        afterInstall: "build/deb-postinstall.tpl",
-    },
-    win: {
-        target: ["nsis", "msi", "zip"],
-        icon: "build/icon.ico",
-        signtoolOptions: windowsShouldSign && {
-            signingHashAlgorithms: ["sha256"],
-            publisherName: "Command Line Inc",
-            certificateSubjectName: "Command Line Inc",
-            certificateSha1: process.env.SM_CODE_SIGNING_CERT_SHA1_HASH,
-        },
-    },
-    appImage: {
-        license: "../LICENSE",
-    },
-    snap: {
-        base: "core22",
-        confinement: "classic",
-        allowNativeWayland: true,
-        artifactName: "${name}_${version}_${arch}.${ext}",
-    },
-    rpm: {
-        // this should remove /usr/lib/.build-id/ links which can conflict with other electron apps like slack
-        fpm: ["--rpm-rpmbuild-define", "_build_id_links none"],
-    },
+    // Windows/Linux targets (inherited from the Wave fork) are DELIBERATELY
+    // ABSENT: every bundled engine artifact — the Rust NAPI addons listed in
+    // ARCH_SENSITIVE_EXTRA_RESOURCES, the beads `bd`, tmux, recoder-xds, and
+    // ziti binaries, and the recoder-server bin — exists only as arm64-darwin
+    // on disk, and the beforePack gate only understands Mach-O headers. A win
+    // or linux build would therefore either fail packaging or ship an app
+    // whose engines cannot start. Restore the removed `win`/`linux` (+ deb/
+    // appImage/snap/rpm) blocks from git history only once per-platform engine
+    // binaries and packaging exist — tracked in bd recoder-di8l.
     publish: {
         provider: "generic",
         url: "https://dl.recoder.xyz/releases",

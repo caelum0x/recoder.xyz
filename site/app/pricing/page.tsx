@@ -48,7 +48,7 @@ const TIERS: Tier[] = [
     blurb:
       "The local desktop console. Run your own agents in parallel on one machine.",
     features: [
-      "Desktop app for macOS, Windows, Linux",
+      "Desktop app for macOS (Apple Silicon) — Windows & Linux planned",
       "Run Claude Code, Codex, pi, open-agents, and opencode in parallel",
       "Isolated git worktree per agent (tmux)",
       "Review diffs, run a terminal, merge or open a PR",

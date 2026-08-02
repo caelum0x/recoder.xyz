@@ -13,9 +13,12 @@
  *   - NEXT_PUBLIC_DOWNLOAD_LINUX_URL   — direct Linux artifact (.AppImage / .deb)
  *   - NEXT_PUBLIC_RELEASE_VERSION      — optional human label (e.g. "v0.4.0")
  *
- * Per-platform direct URLs are optional: if only the releases page is set, the
- * download page links every platform card at that page. If a platform's direct
- * URL is set, that card downloads the artifact directly.
+ * Per-platform direct URLs are optional. Only macOS may fall back to the bare
+ * releases page: shipped builds are macOS-arm64-only today (the desktop app's
+ * embedded engine binaries exist only for arm64-darwin — see
+ * apps/desktop/app/electron-builder.config.cjs and bd recoder-di8l), so a
+ * Windows/Linux card must never light up unless its OWN direct artifact URL is
+ * configured. The WINDOWS/LINUX env slots are kept as the seam for that day.
  *
  * This is pure static-edge config — no backend coupling beyond the release URL
  * (INTEGRATION-PLAN §b.4, M4.3). It does NOT touch SITE_ASSET_PREFIX: these are
@@ -74,11 +77,18 @@ export function platformChecksum(platform: PlatformId): string | undefined {
 
 /**
  * The best download href for a platform: its direct artifact if set, otherwise
- * the releases page. Returns undefined when nothing is configured (no public
- * build yet) so callers fall back to the notify flow.
+ * (macOS only) the releases page. Returns undefined when nothing is configured
+ * for the platform so callers fall back to the notify flow.
+ *
+ * Windows/Linux deliberately do NOT inherit the releases-page fallback: no
+ * such build exists (engine binaries are arm64-darwin-only, bd recoder-di8l),
+ * so rendering a "Download" card for them off the generic releases URL would
+ * be a dead end. They light up only via their own NEXT_PUBLIC_DOWNLOAD_*_URL.
  */
 export function downloadHref(platform: PlatformId): string | undefined {
-  return platformDownloadUrl(platform) ?? releasesPageUrl();
+  const direct = platformDownloadUrl(platform);
+  if (direct) return direct;
+  return platform === "macos" ? releasesPageUrl() : undefined;
 }
 
 /** Optional human-readable version label (e.g. "v0.4.0") for display only. */
