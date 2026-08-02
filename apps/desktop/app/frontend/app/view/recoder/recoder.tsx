@@ -53,6 +53,10 @@ import {
     SECTION_TITLE,
 } from "./recoder-styles";
 
+// Same cadence as the terminal view's UsageStrip so the board's cost line stays
+// live during an active run instead of freezing at selection time.
+const UsageRefreshMs = 15_000;
+
 // createBlock is fire-and-forget from event handlers; a failed cross-block open
 // must never crash the view, so every call is wrapped and errors are swallowed.
 async function openBlock(blockDef: { meta: Record<string, unknown> }) {
@@ -157,6 +161,8 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
         }
         ref.current?.scrollIntoView({ block: "nearest" });
         model.loadUsage(ws.workspaceId);
+        const id = setInterval(() => model.loadUsage(ws.workspaceId), UsageRefreshMs);
+        return () => clearInterval(id);
     }, [selected]);
     // The strip renders ONLY when the loaded display was fetched for THIS row's
     // workspace — a stale fetch for a previously-selected row shows nothing.
