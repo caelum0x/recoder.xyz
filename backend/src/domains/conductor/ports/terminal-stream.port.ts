@@ -43,4 +43,11 @@ export interface TerminalStreamPort {
   terminalBackends(): readonly WsBackend[];
   /** Publish a live event to every client attached to that workspace's `/sync`. */
   publishSync(event: WorkspaceSyncEvent): void;
+  /**
+   * Publish a FULL RunEvent to every client attached to that workspace's
+   * `/workspaces/:id/stream`. The conductor's local run-event sink calls this for
+   * conductor-tailed events; the composition root calls it to fan NON-conductor
+   * (engine/cloud/internal-api) bus envelopes onto the same live stream.
+   */
+  publishRunEvent(workspaceId: string, event: unknown): void;
 }
