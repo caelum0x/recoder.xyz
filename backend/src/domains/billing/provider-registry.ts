@@ -55,6 +55,12 @@ export interface ProviderRegistryDeps {
   readonly config: BillingConfig;
   readonly catalog: PlanCatalog;
   readonly logger?: Logger;
+  /**
+   * BE-7.3b: late-bound tracer GETTER threaded into every adapter's shared HTTP
+   * transport (child span + `traceparent` per provider call). Absent/`null` ⇒
+   * the untraced call path (see `adapters/shared.ts`).
+   */
+  readonly tracer?: ProviderAdapterDeps['tracer'];
 }
 
 function credentialFor(config: BillingConfig, name: BillingProviderName): ProviderCredential {
@@ -73,6 +79,7 @@ export function createProviderRegistry(deps: ProviderRegistryDeps): ProviderRegi
         credential: credentialFor(config, name),
         catalog,
         ...(logger ? { logger } : {}),
+        ...(deps.tracer ? { tracer: deps.tracer } : {}),
       }),
     );
   }

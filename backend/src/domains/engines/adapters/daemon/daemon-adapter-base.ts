@@ -30,6 +30,11 @@ import {
   type Random,
   type Sleep,
 } from '../../../../shared/outbound-resilience.js';
+import { startOutboundSpan } from '../../../../shared/outbound-trace.js';
+// TYPE-ONLY: the frozen Phase-11 tracing seam (erased at build). The concrete
+// value is late-bound by `EnginesComposer.setMcpTelemetry` (bootstrap, after
+// observability composes) via {@link setDaemonFetchTracer}.
+import type { TracerPort } from '../../../observability/ports/tracer.port.js';
 import { DEFAULT_LOOPBACK } from '../../constants.js';
 import type {
   DaemonSpec,
@@ -215,6 +220,25 @@ export interface DaemonFetchResilience {
   readonly random?: Random;
   /** Injected abortable delay (default a real setTimeout). */
   readonly sleep?: Sleep;
+  /**
+   * BE-7.3b tracer override (tests): defaults to the module-wide late-bound
+   * tracer set by {@link setDaemonFetchTracer}; an explicit `null` disables
+   * tracing for this call. A tracer fault never alters a sidecar call.
+   */
+  readonly tracer?: TracerPort | null;
+}
+
+/**
+ * The module-wide late-bound tracer shared by every daemon adapter's
+ * `daemonFetch` (same shared-module-state precedent as {@link sidecarBreaker}).
+ * Bound once by `EnginesComposer.setMcpTelemetry` after observability composes;
+ * until then every sidecar call runs untraced — never a fabricated span.
+ */
+let daemonTracer: TracerPort | null = null;
+
+/** BE-7.3b: late-bind (or clear, in tests) the shared sidecar-call tracer. */
+export function setDaemonFetchTracer(tracer: TracerPort | null): void {
+  daemonTracer = tracer;
 }
 
 /**
@@ -341,16 +365,30 @@ export async function daemonFetch<T = unknown>(
   const fetchImpl = resilience.fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
   const idempotent = isIdempotentMethod(init.method ?? 'GET');
 
+  // 0. BE-7.3b: child span + W3C traceparent on the outbound sidecar call.
+  //    Unwired ⇒ `trace` is null and the call is byte-identical to the untraced
+  //    path; a tracer fault can never alter, fail, or reorder the sidecar call.
+  const trace = startOutboundSpan(
+    resilience.tracer !== undefined ? resilience.tracer : daemonTracer,
+    'engines.daemon_call',
+    { 'daemon.target': key, 'http.method': (init.method ?? 'GET').toUpperCase() },
+  );
+  const tracedInit: DaemonFetchInit = trace
+    ? { ...init, headers: { ...trace.headers, ...(init.headers ?? {}) } }
+    : init;
+
   // 1. Circuit gate — fast-fail truthfully while OPEN (or half-open probe in flight).
   try {
     breaker.guard(key);
   } catch (err) {
     if (err instanceof CircuitOpenError) {
+      trace?.fail(`${key} sidecar circuit open (retry after ${err.retryAfterMs}ms)`);
       return fail(
         `${key} sidecar circuit open (retry after ${err.retryAfterMs}ms) — recently unreachable`,
         'circuit_open',
       );
     }
+    trace?.fail(message(err));
     throw err; // unexpected: never swallow a non-breaker programming error
   }
 
@@ -361,7 +399,7 @@ export async function daemonFetch<T = unknown>(
     try {
       outcome = await withRetry<FetchOutcome<T>>(
         async () => {
-          const o = await attemptDaemonFetch<T>(url, init, fetchImpl);
+          const o = await attemptDaemonFetch<T>(url, tracedInit, fetchImpl);
           if (o.transportFailure || o.serverError) throw new RetryableFetchError(o);
           return o;
         },
@@ -378,15 +416,23 @@ export async function daemonFetch<T = unknown>(
     } catch (err) {
       // The final attempt's classified outcome is carried on the sentinel.
       if (err instanceof RetryableFetchError) outcome = err.outcome as FetchOutcome<T>;
-      else throw err;
+      else {
+        trace?.fail(message(err));
+        throw err;
+      }
     }
   } else {
-    outcome = await attemptDaemonFetch<T>(url, init, fetchImpl);
+    outcome = await attemptDaemonFetch<T>(url, tracedInit, fetchImpl);
   }
 
   // 3. Record reachability with the breaker (pairs the earlier guard exactly once).
   if (outcome.transportFailure) breaker.recordFailure(key);
   else breaker.recordSuccess(key);
+
+  // BE-7.3b: one span covers the whole call (all retry attempts). `daemonFetch`
+  // never throws on a sidecar error — the typed failure carries the reason.
+  if (outcome.result.ok) trace?.succeed();
+  else trace?.fail(outcome.result.reason);
 
   return outcome.result;
 }

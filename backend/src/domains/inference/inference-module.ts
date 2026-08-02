@@ -62,6 +62,9 @@ import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { PalRoutePlannerPort } from './ports/pal-route.port.js';
 import type { RunInferenceSinkPort } from './ports/run-inference-sink.port.js';
+// TYPE-ONLY: the frozen Phase-11 tracing seam (erased at build); the concrete
+// value is late-bound by bootstrap via `setTracer` AFTER observability composes.
+import type { TracerPort } from '../observability/ports/tracer.port.js';
 
 /** A permanently-unavailable vault → the BYOK cache disables (no plaintext cache). */
 function unavailableVault(): KeyVaultPort {
@@ -93,6 +96,8 @@ export class InferenceComposer implements InferenceModule {
   private readonly byokResolverImpl: ByokKeyResolver;
   private readonly routingService: InferenceRoutingService;
   private keyWriteGate?: InferenceKeyWriteGate;
+  /** BE-7.3b: the late-bound tracer for outbound provider HTTP (via `setTracer`). */
+  private tracer: TracerPort | null = null;
   private started = false;
   // Memoized OpenAI-compatible sub-routers, so the canonical `routes()` mount and
   // the `/api/gateway` bootstrap alias (`gatewayRoutes()`) share the SAME handler
@@ -149,6 +154,9 @@ export class InferenceComposer implements InferenceModule {
           platformKeys: deps.platformProviderKeys ?? {},
           ...(deps.providerFetch ? { fetch: deps.providerFetch } : {}),
           timeoutMs: this.cfg.requestTimeoutMs,
+          // Late-bind seam: resolved per call, so `setTracer` (bootstrap, after
+          // observability composes) takes effect without rebuilding the ladder.
+          tracer: () => this.tracer,
         });
       this.gatewayPort = new TensorzeroTransportAdapter({
         logger: this.log,
@@ -191,6 +199,17 @@ export class InferenceComposer implements InferenceModule {
   /** Inject the optional billing usage meter (per-completion token metering). */
   setUsageMeter(meter: UsageMeterPort): void {
     this.routingService.setUsageMeter(meter);
+  }
+
+  /**
+   * BE-7.3b: late-bind the observability tracer (bootstrap calls this AFTER
+   * observability is composed — same single-writer discipline as
+   * `conductor.setMetrics`). Once set, every rung-3 direct provider completion
+   * opens an `inference.provider_call` child span and carries W3C `traceparent`.
+   * Unwired ⇒ the call path is untouched (degrade-truthful).
+   */
+  setTracer(tracer: TracerPort): void {
+    this.tracer = tracer;
   }
 
   /**

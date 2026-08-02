@@ -35,6 +35,8 @@ import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { PalRoutePlannerPort } from './ports/pal-route.port.js';
 import type { RunInferenceSinkPort } from './ports/run-inference-sink.port.js';
+// TYPE-ONLY: the frozen Phase-11 tracing seam (erased at build; late-bound value).
+import type { TracerPort } from '../observability/ports/tracer.port.js';
 import type {
   ByokKeyResolver,
   ByokSecretsPort,
@@ -118,6 +120,15 @@ export interface InferenceModule {
    * ⇒ a truthful no-op (no token metering). A metering hiccup never fails delivery.
    */
   setUsageMeter(meter: UsageMeterPort): void;
+  /**
+   * BE-7.3b: late-bind the observability tracer (bootstrap, AFTER observability
+   * composes — `inference.setTracer(observability.tracer())`). Once set, every
+   * rung-3 direct provider completion opens an `inference.provider_call` child
+   * span (provider/model/key-source/status attrs, `recordError` on failure) and
+   * carries W3C `traceparent` on the outbound request. Unwired ⇒ the untraced
+   * call path (degrade-truthful, never a fabricated span).
+   */
+  setTracer(tracer: TracerPort): void;
   /**
    * Inject the governance gate governing BYOK key writes (bootstrap:
    * `inference.setGovernanceGate(governance.gate())`). Until wired, the

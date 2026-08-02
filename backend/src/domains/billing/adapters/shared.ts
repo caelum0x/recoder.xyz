@@ -27,6 +27,10 @@ import {
   unhealthy,
   type ComponentHealth,
 } from '../../../shared/health-types.js';
+import { startOutboundSpan } from '../../../shared/outbound-trace.js';
+// TYPE-ONLY: the frozen Phase-11 tracing seam (erased at build). The concrete
+// value is late-bound by bootstrap AFTER observability is composed.
+import type { TracerPort } from '../../observability/ports/tracer.port.js';
 import type { PlanCatalog } from '../services/plan-catalog.service.js';
 import type {
   BillingProviderName,
@@ -47,6 +51,14 @@ export interface ProviderAdapterDeps {
    * thresholds and the real clock/RNG/timer. Injected in tests for determinism.
    */
   readonly resilience?: ProviderResilienceOptions;
+  /**
+   * BE-7.3b tracing seam: a GETTER for the late-bound {@link TracerPort}
+   * (bootstrap wires it after observability composes — `billing.setTracer`).
+   * When it yields a tracer, every provider call opens a `billing.provider_call`
+   * child span and propagates W3C `traceparent`. Absent/`null` ⇒ the call path
+   * is untouched; a tracer fault never alters a billing call.
+   */
+  readonly tracer?: () => TracerPort | null;
 }
 
 /** Resolve the API base URL: injected override wins, else the provider default. */
@@ -178,6 +190,8 @@ export interface ProviderTransportOptions {
   readonly authScheme?: AuthScheme;
   /** Optional resilience overrides (breaker reuse + deterministic seams). */
   readonly resilience?: ProviderResilienceOptions;
+  /** BE-7.3b: late-bound tracer getter (see {@link ProviderAdapterDeps.tracer}). */
+  readonly tracer?: () => TracerPort | null;
 }
 
 /** A method is retry-safe only when it cannot duplicate a side effect. */
@@ -212,6 +226,18 @@ export function createProviderTransport(options: ProviderTransportOptions): Prov
     body?: unknown,
     opts?: { readonly extraHeaders?: Readonly<Record<string, string>>; readonly timeoutMs?: number },
   ): Promise<T> {
+    // BE-7.3b: child span + W3C traceparent propagation. Unwired ⇒ `trace` is
+    // null and the call is byte-identical to the untraced path; a tracer fault
+    // can never alter, fail, or reorder the provider call.
+    const trace = startOutboundSpan(options.tracer?.() ?? null, 'billing.provider_call', {
+      'billing.provider': key,
+      'http.method': method.toUpperCase(),
+      'http.path': path,
+    });
+    const extraHeaders = trace
+      ? { ...trace.headers, ...(opts?.extraHeaders ?? {}) }
+      : opts?.extraHeaders;
+
     const run = (): Promise<T> =>
       providerFetch<T>({
         baseUrl: options.baseUrl,
@@ -220,24 +246,32 @@ export function createProviderTransport(options: ProviderTransportOptions): Prov
         path,
         body,
         authScheme: options.authScheme,
-        extraHeaders: opts?.extraHeaders,
+        extraHeaders,
         timeoutMs: opts?.timeoutMs,
       });
 
-    // Non-idempotent writes: breaker-gated, but executed exactly once (no retry).
-    if (!isIdempotentMethod(method)) {
-      return breaker.execute(key, run);
+    try {
+      // Non-idempotent writes: breaker-gated, but executed exactly once (no
+      // retry). Idempotent reads/health: breaker-gated AND bounded jittered
+      // retry (ONE span covers all attempts — the call, not each attempt).
+      const result = isIdempotentMethod(method)
+        ? await breaker.execute(key, run, {
+            idempotent: true,
+            maxAttempts: r?.maxAttempts,
+            baseDelayMs: r?.baseDelayMs,
+            maxDelayMs: r?.maxDelayMs,
+            random: r?.random,
+            sleep: r?.sleep,
+          })
+        : await breaker.execute(key, run);
+      trace?.succeed();
+      return result;
+    } catch (err) {
+      // The AppError reason is already secret-free (providerFetch never logs
+      // the Authorization header and drops provider bodies into `detail` only).
+      trace?.fail(err instanceof Error ? err.message : String(err));
+      throw err;
     }
-
-    // Idempotent reads/health: breaker-gated AND bounded jittered retry.
-    return breaker.execute(key, run, {
-      idempotent: true,
-      maxAttempts: r?.maxAttempts,
-      baseDelayMs: r?.baseDelayMs,
-      maxDelayMs: r?.maxDelayMs,
-      random: r?.random,
-      sleep: r?.sleep,
-    });
   }
 
   return { call, breaker };

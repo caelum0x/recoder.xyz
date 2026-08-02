@@ -101,6 +101,7 @@ export function createCreemAdapter(deps: ProviderAdapterDeps): BillingProviderPo
     apiKey: credential.apiKey ?? '',
     authScheme: 'x-api-key',
     resilience: deps.resilience,
+    tracer: deps.tracer,
   });
 
   return {

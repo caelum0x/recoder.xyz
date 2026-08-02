@@ -101,6 +101,7 @@ export function createDodoAdapter(deps: ProviderAdapterDeps): BillingProviderPor
     baseUrl,
     apiKey: credential.apiKey ?? '',
     resilience: deps.resilience,
+    tracer: deps.tracer,
   });
 
   return {

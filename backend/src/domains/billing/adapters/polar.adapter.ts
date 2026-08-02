@@ -98,6 +98,7 @@ export function createPolarAdapter(deps: ProviderAdapterDeps): BillingProviderPo
     baseUrl,
     apiKey: credential.apiKey ?? '',
     resilience: deps.resilience,
+    tracer: deps.tracer,
   });
 
   return {

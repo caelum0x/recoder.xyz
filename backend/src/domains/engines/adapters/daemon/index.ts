@@ -9,6 +9,7 @@
 export {
   DaemonEngineAdapter,
   daemonFetch,
+  setDaemonFetchTracer,
   sidecarBreaker,
   sidecarKeyForUrl,
   message,
