@@ -78,6 +78,7 @@ import {
   opsRecorderMcpServer,
   buildOpsRecorderMcpTools,
   OPS_RECORDER_WRITE_TOOL_NAMES,
+  setDaemonFetchTracer,
   type DaemonAdapterConfig,
 } from './adapters/daemon/index.js';
 import {
@@ -622,9 +623,15 @@ export class EnginesComposer implements EnginesModule {
    * SINGLE-WRITER: called once by bootstrap after observability is composed —
    * same discipline as the conductor's `setMetrics`. Every subsequent gated
    * `host.call()` records RED metrics + a child span; unwired ⇒ untouched.
+   *
+   * BE-7.3b: the same tracer (when supplied) is also bound onto the shared
+   * sidecar transport (`daemonFetch`), so every outbound engine daemon HTTP
+   * call (colbert / ops-recorder / multica / …) opens an `engines.daemon_call`
+   * child span and carries W3C `traceparent`. Unwired ⇒ untraced, untouched.
    */
   setMcpTelemetry(telemetry: McpHostTelemetry): void {
     this.hostBundle.setTelemetry(telemetry);
+    if (telemetry.tracer) setDaemonFetchTracer(telemetry.tracer);
   }
 
   /**

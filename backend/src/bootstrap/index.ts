@@ -1472,6 +1472,17 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     metrics: observability.metrics(),
     tracer: observability.tracer(),
   });
+  // (BE-7.3b) Traceparent propagation into the outbound HTTP seams: the same
+  // late-bound tracer now covers the three outbound client chokepoints —
+  //  - billing: every Merchant-of-Record call (`billing.provider_call` span),
+  //  - inference: every rung-3 direct provider completion
+  //    (`inference.provider_call` span),
+  //  - engines: every sidecar `daemonFetch` (`engines.daemon_call` span, bound
+  //    inside `setMcpTelemetry` above).
+  // Each opens a child span (provider/status attrs + recordError) and injects
+  // W3C `traceparent` via `tracer.inject`; unwired ⇒ untraced, untouched calls.
+  billing.setTracer(observability.tracer());
+  inference.setTracer(observability.tracer());
 
   // W10-A auto-review at delivery: bind the conductor-owned advisory
   // `PrReviewPort` to the engines GithubModule's `reviewPR` (gh pr view +

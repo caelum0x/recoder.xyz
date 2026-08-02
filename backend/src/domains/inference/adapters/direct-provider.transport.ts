@@ -17,6 +17,10 @@
  */
 import type { Logger } from '../../../shared/logger.js';
 import { CircuitBreaker, CircuitOpenError } from '../../../shared/outbound-resilience.js';
+import { startOutboundSpan } from '../../../shared/outbound-trace.js';
+// TYPE-ONLY: the frozen Phase-11 tracing seam (erased at build). The concrete
+// value is late-bound by bootstrap (`inference.setTracer`) after observability.
+import type { TracerPort } from '../../observability/ports/tracer.port.js';
 import type { ByokKeyResolver } from '../ports/byok-resolver.port.js';
 import type { InferenceRequest, InferenceResult, TokenUsage } from '../types.js';
 import { notRouted, tokenUsage } from '../types.js';
@@ -78,6 +82,16 @@ export interface DirectProviderTransportDeps {
    * with the library defaults (5 consecutive failures, 30s cooldown).
    */
   readonly breaker?: CircuitBreaker;
+  /**
+   * BE-7.3b tracing seam: a GETTER for the late-bound {@link TracerPort}
+   * (bootstrap wires it via `inference.setTracer` after observability
+   * composes). When it yields a tracer, every direct provider completion opens
+   * an `inference.provider_call` child span (provider/model/key-source/status
+   * attrs, `recordError` on failure) and carries W3C `traceparent` on the
+   * outbound request. Absent/`null` ⇒ the call path is untouched; a tracer
+   * fault never alters a completion.
+   */
+  readonly tracer?: () => TracerPort | null;
 }
 
 /** Build the rung-3 direct multi-provider transport. */
@@ -143,12 +157,23 @@ export function createDirectProviderTransport(deps: DirectProviderTransportDeps)
       const base = (deps.endpoints?.[parsed.provider] ?? spec.baseUrl).replace(/\/+$/, '');
       const wire = buildWireCall(spec.wire, base, parsed.model, req, key);
 
+      // BE-7.3b: child span + W3C traceparent on the outbound provider call.
+      // Unwired ⇒ `trace` is null and the request is byte-identical to the
+      // untraced path; a tracer fault can never alter the completion. The span
+      // attrs carry provider/model/key-SOURCE only — NEVER key material.
+      const trace = startOutboundSpan(deps.tracer?.() ?? null, 'inference.provider_call', {
+        'inference.provider': parsed.provider,
+        'inference.model': req.model,
+        'inference.key_source': source,
+      });
+      const headers = trace ? { ...wire.headers, ...trace.headers } : wire.headers;
+
       let status = 0;
       let bodyText = '';
       try {
         const res = await doFetch(wire.url, {
           method: 'POST',
-          headers: wire.headers,
+          headers,
           body: wire.body,
           ...(supportsTimeout() ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
         });
@@ -157,12 +182,16 @@ export function createDirectProviderTransport(deps: DirectProviderTransportDeps)
         if (!res.ok) {
           // NEVER include the provider error body (it may echo credentials).
           breaker.recordFailure(parsed.provider);
+          trace?.fail(`direct ${parsed.provider} call failed (status ${status})`, {
+            'http.status': status,
+          });
           log.debug({ provider: parsed.provider, status }, 'direct provider call failed');
           return notRouted(req.model, `direct ${parsed.provider} call failed (status ${status})`);
         }
       } catch (err) {
         breaker.recordFailure(parsed.provider);
         const reason = redactSecret(message(err), key);
+        trace?.fail(`direct ${parsed.provider} call errored: ${reason}`);
         log.debug({ provider: parsed.provider, err: reason }, 'direct provider call errored');
         return notRouted(req.model, `direct ${parsed.provider} call errored: ${reason}`);
       }
@@ -171,10 +200,14 @@ export function createDirectProviderTransport(deps: DirectProviderTransportDeps)
       if (!parsedResult) {
         // A 2xx with an unparseable body is still a failed delivery.
         breaker.recordFailure(parsed.provider);
+        trace?.fail(`direct ${parsed.provider} returned a malformed response`, {
+          'http.status': status,
+        });
         return notRouted(req.model, `direct ${parsed.provider} returned a malformed response`);
       }
 
       breaker.recordSuccess(parsed.provider);
+      trace?.succeed({ 'http.status': status });
       if (source === 'byok' && req.userId) resolver.markUsed(req.userId, parsed.provider);
       log.debug(
         { provider: parsed.provider, model: req.model, source, status },

@@ -30,6 +30,9 @@ import type { BillingProviderPort } from './ports/billing-provider.port.js';
 import type { EntitlementGate } from './ports/entitlement.port.js';
 import type { MeteringRepository } from './ports/metering-repo.port.js';
 import type { BillingWriteGate } from './ports/governance-gate.port.js';
+// TYPE-ONLY: the frozen Phase-11 tracing seam (erased at build); the concrete
+// value is late-bound by bootstrap via `setTracer` AFTER observability composes.
+import type { TracerPort } from '../observability/ports/tracer.port.js';
 import type { BillingConfig } from './config.js';
 import { createBillingRepository } from './persistence/billing.repository.js';
 import { createPlanCatalog, type PlanCatalog } from './services/plan-catalog.service.js';
@@ -65,6 +68,8 @@ export class BillingComposer implements BillingModule {
   private readonly invoiceService: InvoiceService;
   /** The governance write gate for billing mutations. Injected at bootstrap. */
   private writeGate?: BillingWriteGate;
+  /** BE-7.3b: the late-bound tracer for outbound provider HTTP (via `setTracer`). */
+  private tracer: TracerPort | null = null;
   private started = false;
 
   constructor(deps: BillingModuleDeps, cfg: BillingConfig) {
@@ -82,6 +87,9 @@ export class BillingComposer implements BillingModule {
       config: cfg,
       catalog: this.catalog,
       logger: this.log,
+      // Late-bind seam: resolved per call, so `setTracer` (bootstrap, after
+      // observability composes) takes effect without rebuilding the adapters.
+      tracer: () => this.tracer,
     });
 
     // Distribution grant algebra (reused — the core). Absent port ⇒ deny-on-miss.
@@ -148,6 +156,17 @@ export class BillingComposer implements BillingModule {
    */
   setGovernanceGate(gate: BillingWriteGate): void {
     this.writeGate = gate;
+  }
+
+  /**
+   * BE-7.3b: late-bind the observability tracer (bootstrap calls this AFTER
+   * observability is composed — same single-writer discipline as
+   * `conductor.setMetrics`). Once set, every outbound Merchant-of-Record HTTP
+   * call opens a `billing.provider_call` child span and carries W3C
+   * `traceparent`. Unwired ⇒ the call path is untouched (degrade-truthful).
+   */
+  setTracer(tracer: TracerPort): void {
+    this.tracer = tracer;
   }
 
   metering(): MeteringService {

@@ -102,6 +102,7 @@ export function createPaddleAdapter(deps: ProviderAdapterDeps): BillingProviderP
     baseUrl,
     apiKey: credential.apiKey ?? '',
     resilience: deps.resilience,
+    tracer: deps.tracer,
   });
 
   return {

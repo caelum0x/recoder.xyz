@@ -121,6 +121,8 @@ import type { EntitlementGate as EntitlementGateType } from './ports/entitlement
 import type { MeteringService as MeteringServiceType } from './services/metering.service.js';
 import type { QuotaService as QuotaServiceType } from './services/quota.service.js';
 import type { BillingWriteGate as BillingWriteGateType } from './ports/governance-gate.port.js';
+// TYPE-ONLY: the frozen Phase-11 tracing seam (erased at build; late-bound value).
+import type { TracerPort as TracerPortType } from '../observability/ports/tracer.port.js';
 import type { BillingConfigOverrides } from './config.js';
 import type { BillingSubject, PlanTier } from './types.js';
 
@@ -163,6 +165,13 @@ export interface BillingModule {
    * pass through for policy + durable audit. Idempotent; degrade-safe until set.
    */
   setGovernanceGate(gate: BillingWriteGateType): void;
+  /**
+   * BE-7.3b: late-bind the observability tracer (bootstrap, AFTER observability
+   * composes). Once set, every outbound provider HTTP call opens a
+   * `billing.provider_call` child span + carries W3C `traceparent`. Unwired ⇒
+   * the untraced call path (degrade-truthful, never a fabricated span).
+   */
+  setTracer(tracer: TracerPortType): void;
   /** The durable usage ledger + provider flush loop. */
   metering(): MeteringServiceType;
   /** The focused headroom engine (check + enforce-consume). */
