@@ -149,12 +149,18 @@ type WorkspaceRowProps = {
 
 function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onSelect }: WorkspaceRowProps) {
     const ref = useRef<HTMLDivElement>(null);
+    const usage = useAtomValue(model.usageAtom);
+    const usageWorkspaceId = useAtomValue(model.usageWorkspaceIdAtom);
     useEffect(() => {
         if (!selected) {
             return;
         }
         ref.current?.scrollIntoView({ block: "nearest" });
+        model.loadUsage(ws.workspaceId);
     }, [selected]);
+    // The strip renders ONLY when the loaded display was fetched for THIS row's
+    // workspace — a stale fetch for a previously-selected row shows nothing.
+    const showUsage = selected && usage != null && usageWorkspaceId == ws.workspaceId;
     const terminal = isTerminalWorkspaceState(ws.state);
     const age = formatRelativeAge(ws.createdAt);
     // "" for any attention the board must NOT badge (absent/unknown/working/…),
@@ -236,6 +242,13 @@ function WorkspaceRow({ model, ws, summary, status, busy, tmuxBin, selected, onS
                 </div>
             )}
             {status && <div className={META}>{status}</div>}
+            {showUsage && (
+                <div className={`${META} font-mono`} title={`Metered inference spend for ${usage.scopeLabel}`}>
+                    {usage.totals.calls == "0"
+                        ? "No metered usage attributed to this workspace"
+                        : `${usage.totals.cost} · ${usage.totals.totalTokens} tok · ${usage.totals.calls} calls`}
+                </div>
+            )}
         </div>
     );
 }

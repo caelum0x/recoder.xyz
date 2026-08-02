@@ -5,8 +5,16 @@ import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { decideApproval } from "./recoder-approval-action";
+import { type MeteringDisplay } from "./recoder-metering";
 import { type RunEventSeverity } from "./recoder-run-event";
-import { RecoderTerminalStatus, RecoderTerminalViewModel, type RunStreamEntry } from "./recoder-terminal-model";
+import {
+    RecoderTerminalStatus,
+    RecoderTerminalViewModel,
+    type RunStreamEntry,
+    type UsageStripStatus,
+} from "./recoder-terminal-model";
+
+const UsageRefreshMs = 15_000;
 
 // Graphite-only palette: positive/actionable → accent, failure → the one reserved
 // crimson, everything else → neutral secondary.
@@ -81,6 +89,37 @@ function RunEntryRow({ entry }: { entry: RunStreamEntry }) {
 
 RunEntryRow.displayName = "RunEntryRow";
 
+// The per-workspace cost/token strip. Numbers come from the scoped
+// GET /inference/usage?workspaceId read folded through summarizeUsage; a failed
+// read renders "usage unavailable" — the missing source, never a faked $0.00.
+function UsageStrip({ display, status }: { display: MeteringDisplay; status: UsageStripStatus }) {
+    if (status == "idle") return null;
+    // The tooltip carries the scope the backend ECHOED (e.g. "workspace ws-1"),
+    // so the strip states exactly what its numbers describe.
+    const scopeTitle = status == "ready" ? display.scopeLabel : undefined;
+    return (
+        <div className="flex items-center gap-3 px-3 py-1 border-b border-border text-xs shrink-0">
+            <span className="uppercase tracking-wide text-secondary shrink-0" title={scopeTitle}>
+                Workspace usage
+            </span>
+            {status == "unavailable" ? (
+                <span className="text-secondary">usage unavailable</span>
+            ) : (
+                <>
+                    <span className="text-secondary whitespace-nowrap" title="input · output tokens">
+                        {display.totals.inputTokens} in · {display.totals.outputTokens} out
+                    </span>
+                    <span className="text-secondary whitespace-nowrap">{display.totals.totalTokens} tokens</span>
+                    <span className="text-secondary whitespace-nowrap">{display.totals.calls} calls</span>
+                    <span className="ml-auto font-semibold text-primary whitespace-nowrap">{display.totals.cost}</span>
+                </>
+            )}
+        </div>
+    );
+}
+
+UsageStrip.displayName = "UsageStrip";
+
 function statusText(status: RecoderTerminalStatus): string {
     if (status == "no-workspace") return "no workspace";
     if (status == "connecting") return "connecting…";
@@ -106,6 +145,8 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
     const workspaceId = useAtomValue(model.workspaceIdAtom);
     const sending = useAtomValue(model.sendingAtom);
     const sendStatus = useAtomValue(model.sendStatusAtom);
+    const usage = useAtomValue(model.usageAtom);
+    const usageStatus = useAtomValue(model.usageStatusAtom);
     const scrollRef = useRef<HTMLDivElement>(null);
     const [draft, setDraft] = useState("");
 
@@ -113,6 +154,14 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
         model.connect();
         return () => model.dispose();
     }, [model]);
+
+    // Keyed on workspaceId so a rebind refetches the strip immediately; the
+    // interval keeps cost/tokens current while runs stream through the socket.
+    useEffect(() => {
+        void model.refreshUsage();
+        const id = setInterval(() => void model.refreshUsage(), UsageRefreshMs);
+        return () => clearInterval(id);
+    }, [model, workspaceId]);
 
     useEffect(() => {
         const el = scrollRef.current;
@@ -155,6 +204,7 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                     Reconnect
                 </button>
             </div>
+            <UsageStrip display={usage} status={usageStatus} />
             {error != "" && <div className="text-error text-xs px-3 py-1 border-b border-border shrink-0">{error}</div>}
             <div ref={scrollRef} className="flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed">
                 {empty && status == "no-workspace" && (

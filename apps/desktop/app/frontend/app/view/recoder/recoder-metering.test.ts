@@ -3,7 +3,9 @@
 
 import { describe, expect, it } from "vitest";
 import {
+    buildUsagePath,
     describeUsageRow,
+    describeUsageScope,
     formatCount,
     formatLatencyMs,
     formatMicroUsd,
@@ -151,6 +153,68 @@ describe("summarizeUsage", () => {
             expect(display.recent).toEqual([]);
             expect(display.totals.cost).toBe("$0.00");
             expect(display.totals.totalTokens).toBe("0");
+            expect(display.scopeLabel).toBe("all usage");
         }
+    });
+
+    it("labels the display from the ECHOED scope, not any requested one", () => {
+        const scoped = summarizeUsage({
+            totals: { inputTokens: 10, outputTokens: 5, costMicroUsd: 100, calls: 1 },
+            recent: [],
+            scope: { workspaceId: "ws-1" },
+        });
+        expect(scoped.scopeLabel).toBe("workspace ws-1");
+        expect(summarizeUsage({ totals: {}, recent: [] }).scopeLabel).toBe("all usage");
+    });
+});
+
+describe("describeUsageScope", () => {
+    it("labels workspace, task, both, and the unscoped read", () => {
+        expect(describeUsageScope(undefined)).toBe("all usage");
+        expect(describeUsageScope({})).toBe("all usage");
+        expect(describeUsageScope({ workspaceId: "ws-1" })).toBe("workspace ws-1");
+        expect(describeUsageScope({ taskId: "t-9" })).toBe("task t-9");
+        expect(describeUsageScope({ workspaceId: "ws-1", taskId: "t-9" })).toBe("workspace ws-1 · task t-9");
+    });
+
+    it("treats blank ids as absent", () => {
+        expect(describeUsageScope({ workspaceId: "  " })).toBe("all usage");
+        expect(describeUsageScope({ workspaceId: " ", taskId: "t-1" })).toBe("task t-1");
+    });
+});
+
+describe("row attribution", () => {
+    it("carries the ledger-recorded workspace/task ids", () => {
+        expect(describeUsageRow({ workspaceId: "ws-1" }).attribution).toBe("ws-1");
+        expect(describeUsageRow({ taskId: "t-2" }).attribution).toBe("t-2");
+        expect(describeUsageRow({ workspaceId: "ws-1", taskId: "t-2" }).attribution).toBe("ws-1 · t-2");
+    });
+
+    it("stays the honest 'unattributed' for a null-scoped row", () => {
+        expect(describeUsageRow({}).attribution).toBe("unattributed");
+        expect(describeUsageRow({ workspaceId: null, taskId: null }).attribution).toBe("unattributed");
+        expect(describeUsageRow({ workspaceId: "" }).attribution).toBe("unattributed");
+    });
+});
+
+describe("buildUsagePath", () => {
+    it("builds the plain per-user read when unscoped", () => {
+        expect(buildUsagePath(undefined)).toBe("/api/gateway/inference/usage");
+        expect(buildUsagePath({})).toBe("/api/gateway/inference/usage");
+        expect(buildUsagePath({ workspaceId: "  " })).toBe("/api/gateway/inference/usage");
+    });
+
+    it("appends the scope as query params", () => {
+        expect(buildUsagePath({ workspaceId: "ws-1" })).toBe("/api/gateway/inference/usage?workspaceId=ws-1");
+        expect(buildUsagePath({ taskId: "t-9" })).toBe("/api/gateway/inference/usage?taskId=t-9");
+        expect(buildUsagePath({ workspaceId: "ws-1", taskId: "t-9" })).toBe(
+            "/api/gateway/inference/usage?workspaceId=ws-1&taskId=t-9"
+        );
+    });
+
+    it("URL-encodes hostile ids so they cannot break the query", () => {
+        expect(buildUsagePath({ workspaceId: "ws 1&x=y" })).toBe(
+            "/api/gateway/inference/usage?workspaceId=ws+1%26x%3Dy"
+        );
     });
 });
