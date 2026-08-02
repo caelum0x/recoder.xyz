@@ -281,7 +281,13 @@ export class EnginesComposer implements EnginesModule {
       loader: napiLoader,
       logger: this.log,
       kernel: deps.kernel,
-      openfang: { governance: this.openfangGate },
+      openfang: {
+        governance: this.openfangGate,
+        // The bootstrap-injected DEFAULT `launch_run` RunEvent sink (agent-os bus,
+        // `source:'engine'`, late-bound — recoder-a094). Absent (tests/standalone)
+        // ⇒ the driver's warn-and-drop default applies truthfully.
+        ...(deps.openfangRunSink ? { runSink: deps.openfangRunSink } : {}),
+      },
     });
 
     // ONE shared recodergit service backs both the CLI adapter and the unified

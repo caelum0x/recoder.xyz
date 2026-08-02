@@ -117,6 +117,7 @@ import { createCliInferenceEnvResolver } from './conductor-inference-seam.js';
 import {
   createCloudSandboxGateway,
   createConductorRunSink,
+  createEngineRunSink,
   createCliMintClosure,
 } from './conductor-seams.js';
 import {
@@ -417,12 +418,22 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
         : {}),
     },
   });
+  // The DEFAULT openfang `launch_run` RunEvent sink (recoder-a094): agent-os (the
+  // state-of-record bus) is built AFTER engines, so the sink is LATE-BOUND —
+  // created here, handed to the napi adapter now, attached to the agent-os
+  // RunEvent bus (`source:'engine'`) right after Phase 5a builds it. Until
+  // attach (boot-order gap only) an emitted event is warn-logged + dropped
+  // truthfully — never a silent audit-trail loss.
+  const openfangEngineRunSink = createEngineRunSink(
+    childLogger('engines-openfang-sink'),
+  );
   const engines = await createEnginesModule({
     config,
     logger: childLogger('engines'),
     executor: persistence.executor(),
     middleware: identity.middleware(),
     kernel: governance.kernel(),
+    openfangRunSink: openfangEngineRunSink.sink,
     // The per-tool teeth → `InteropHostBundle.toolEnforcer` → the executor
     // chokepoint. Every authorized recoder-MCP tool call is kernel-enforced +
     // Merkle-sealed before dispatch; an infra fault deny-biases (fail-closed).
@@ -574,6 +585,11 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   });
   container.registerValue(DOMAIN_TOKENS['agent-os'], agentOs);
   healthRegistry.register(agentOs);
+
+  // Close the recoder-a094 late-bind: the openfang `launch_run` default sink now
+  // persists in-process engine RunEvents onto THE state-of-record bus
+  // (`source:'engine'`) — no more silent drop for non-conductor callers.
+  openfangEngineRunSink.attach(agentOs.runEventBus());
 
   // --- Phase 5a: policy-update hook → (c) reloadPolicies. When a forbidden/secret-
   //     path or approval policy artifact changes on the control plane (a space
