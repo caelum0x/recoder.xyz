@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
 import { McpRegistry } from '../registry';
 import { McpToolRouter } from '../host/tool-router';
 import type { McpToolCallInput } from '../permissions';
@@ -29,8 +30,8 @@ describe('registerPalPlanMcpTools', () => {
     registerPalPlanMcpTools(router, { plan: () => ({ status: 'planned' }) });
 
     const server = registry.get('recoder.pal-plan');
-    expect(server?.toolNames).toEqual(['pal.plan']);
-    expect(server?.kind).toBe('custom');
+    assert.deepEqual(server?.toolNames, ['pal.plan']);
+    assert.equal(server?.kind, 'custom');
   });
 
   it('forwards args.taskSpec to the port and tags the engine', async () => {
@@ -45,9 +46,9 @@ describe('registerPalPlanMcpTools', () => {
     const spec = { taskId: 'task-1' };
     const result = await router.call(callInput({ taskSpec: spec }));
 
-    expect(received).toEqual(spec);
-    expect(result.metadata).toEqual({ engine: 'pal-plan' });
-    expect(result.content).toEqual({ status: 'planned', decision: {} });
+    assert.deepEqual(received, spec);
+    assert.deepEqual(result.metadata, { engine: 'pal-plan' });
+    assert.deepEqual(result.content, { status: 'planned', decision: {} });
   });
 
   it('falls back to the raw args object when no taskSpec wrapper is present', async () => {
@@ -62,7 +63,7 @@ describe('registerPalPlanMcpTools', () => {
     const args = { taskId: 'task-2', intent: 'bugfix' };
     await router.call(callInput(args));
 
-    expect(received).toEqual(args);
+    assert.deepEqual(received, args);
   });
 
   it('does not throw when args are empty; the port decides the degrade path', async () => {
@@ -71,6 +72,6 @@ describe('registerPalPlanMcpTools', () => {
     });
 
     const result = await router.call(callInput({}));
-    expect(result.content).toEqual({ status: 'degraded_default' });
+    assert.deepEqual(result.content, { status: 'degraded_default' });
   });
 });

@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PiPrintDriver } from '../../../../src/drivers/pi/pi-print-driver';
@@ -23,7 +24,7 @@ function makePolicy(overrides: Partial<RuntimePolicy> = {}): RuntimePolicy {
   };
 }
 
-function makeContext(policy: RuntimePolicy, env: Record<string, string>, signal: AbortSignal): DriverContext {
+function makeContext(policy: RuntimePolicy, env: Record<string, string>, signal: AbortSignal, cwd: string = process.cwd()): DriverContext {
   return {
     runId: asRunId('run_pi_print_1'),
     adapterId: 'pi-print',
@@ -53,7 +54,7 @@ function makeContext(policy: RuntimePolicy, env: Record<string, string>, signal:
       } as unknown as RuntimeTaskInput['bundle'],
     },
     policy,
-    cwd: process.cwd(),
+    cwd,
     env,
     signal,
     now: () => Date.now(),
@@ -95,7 +96,9 @@ test('replays a fixture pi run into frames + exactly one terminal done(ok)', asy
 
 test('fail-safe: missing pi CLI yields done(ok:false, runtime_unavailable) — never fakes completion', async () => {
   const driver = new PiPrintDriver({ cliPathOverride: path.resolve(__dirname, 'no-such-pi') });
-  const ctx = makeContext(makePolicy(), { PATH: '' }, new AbortController().signal);
+  // cwd must be outside the repo: the workspace installs a real `pi` at
+  // <cwd>/node_modules/.bin/pi, which the locator would truthfully find.
+  const ctx = makeContext(makePolicy(), { PATH: '' }, new AbortController().signal, os.tmpdir());
 
   const frames = await collect(driver.run(ctx));
   assert.equal(frames.length, 1);

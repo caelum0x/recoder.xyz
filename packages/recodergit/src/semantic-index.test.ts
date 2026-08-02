@@ -3,7 +3,8 @@
  * embeddings provider. The emphasis is the degrade contract: no embedder ⇒ index
  * is a truthful no-op and search returns []; a wired fake round-trips real hits.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
 import {
   chunkFile,
   createSemanticIndex,
@@ -93,7 +94,7 @@ describe('chunkFile', () => {
   it('splits content into 1-based line windows and drops whitespace-only windows', () => {
     const content = ['a', 'b', 'c', 'd', 'e'].join('\n');
     const chunks = chunkFile('src/x.ts', content, 2);
-    expect(chunks).toEqual([
+    assert.deepEqual(chunks, [
       { path: 'src/x.ts', startLine: 1, endLine: 2, text: 'a\nb' },
       { path: 'src/x.ts', startLine: 3, endLine: 4, text: 'c\nd' },
       { path: 'src/x.ts', startLine: 5, endLine: 5, text: 'e' },
@@ -101,8 +102,8 @@ describe('chunkFile', () => {
   });
 
   it('returns no chunks for empty or whitespace-only content', () => {
-    expect(chunkFile('src/x.ts', '')).toEqual([]);
-    expect(chunkFile('src/x.ts', '   \n\n  \n', 2)).toEqual([]);
+    assert.deepEqual(chunkFile('src/x.ts', ''), []);
+    assert.deepEqual(chunkFile('src/x.ts', '   \n\n  \n', 2), []);
   });
 });
 
@@ -118,18 +119,18 @@ describe('createSemanticIndex round-trip (fake ports)', () => {
     const index = createSemanticIndex({ embedder: fakeEmbedder(), store, collection: 'repo-x', chunkLines: 40 });
 
     const result = await index.indexFiles(files);
-    expect(result.configured).toBe(true);
-    expect(result.upserted).toBe(true);
-    expect(result.chunks).toBe(3);
-    expect(result.dim).toBe(VOCAB.length);
-    expect(store.points.size).toBe(3);
+    assert.equal(result.configured, true);
+    assert.equal(result.upserted, true);
+    assert.equal(result.chunks, 3);
+    assert.equal(result.dim, VOCAB.length);
+    assert.equal(store.points.size, 3);
 
     const hits = await index.semanticSearch('login with an auth token', 2);
-    expect(hits.length).toBeGreaterThan(0);
-    expect(hits[0].path).toBe('src/auth.ts');
-    expect(hits[0].startLine).toBe(1);
-    expect(hits[0].score).toBeGreaterThan(0);
-    expect(hits[0].preview).toContain('login');
+    assert.ok(hits.length > 0);
+    assert.equal(hits[0].path, 'src/auth.ts');
+    assert.equal(hits[0].startLine, 1);
+    assert.ok(hits[0].score > 0);
+    assert.ok(hits[0].preview.includes('login'));
   });
 
   it('ranks a billing query onto the billing file', async () => {
@@ -137,7 +138,7 @@ describe('createSemanticIndex round-trip (fake ports)', () => {
     const index = createSemanticIndex({ embedder: fakeEmbedder(), store, collection: 'repo-x' });
     await index.indexFiles(files);
     const hits = await index.semanticSearch('invoice payment billing', 1);
-    expect(hits[0].path).toBe('src/billing.ts');
+    assert.equal(hits[0].path, 'src/billing.ts');
   });
 });
 
@@ -149,22 +150,22 @@ describe('degrade-safe contract', () => {
     const result = await index.indexFiles([
       { path: 'src/auth.ts', content: 'login token auth' },
     ]);
-    expect(result.configured).toBe(false);
-    expect(result.upserted).toBe(false);
-    expect(store.points.size).toBe(0);
+    assert.equal(result.configured, false);
+    assert.equal(result.upserted, false);
+    assert.equal(store.points.size, 0);
 
-    expect(await index.semanticSearch('login')).toEqual([]);
+    assert.deepEqual(await index.semanticSearch('login'), []);
   });
 
   it('unconfigured store ⇒ search returns [] even with a working embedder', async () => {
     const index = createSemanticIndex({ embedder: fakeEmbedder(), store: unconfiguredStore(), collection: 'repo-x' });
     await index.indexFiles([{ path: 'src/auth.ts', content: 'login token auth' }]);
-    expect(await index.semanticSearch('login')).toEqual([]);
+    assert.deepEqual(await index.semanticSearch('login'), []);
   });
 
   it('empty query ⇒ []', async () => {
     const index = createSemanticIndex({ embedder: fakeEmbedder(), store: fakeStore(), collection: 'repo-x' });
-    expect(await index.semanticSearch('   ')).toEqual([]);
+    assert.deepEqual(await index.semanticSearch('   '), []);
   });
 
   it('a throwing embedder never propagates — search returns []', async () => {
@@ -174,14 +175,18 @@ describe('degrade-safe contract', () => {
       },
     };
     const index = createSemanticIndex({ embedder: throwing, store: fakeStore(), collection: 'repo-x' });
-    expect(await index.semanticSearch('login')).toEqual([]);
+    assert.deepEqual(await index.semanticSearch('login'), []);
     const result = await index.indexFiles([{ path: 'a.ts', content: 'login' }]);
-    expect(result.configured).toBe(false);
+    assert.equal(result.configured, false);
   });
 
   it('no source files ⇒ truthful empty build', async () => {
     const index = createSemanticIndex({ embedder: fakeEmbedder(), store: fakeStore(), collection: 'repo-x' });
     const result = await index.indexFiles([]);
-    expect(result).toMatchObject({ configured: false, files: 0, chunks: 0, upserted: false, dim: 0 });
+    assert.equal(result.configured, false);
+    assert.equal(result.files, 0);
+    assert.equal(result.chunks, 0);
+    assert.equal(result.upserted, false);
+    assert.equal(result.dim, 0);
   });
 });

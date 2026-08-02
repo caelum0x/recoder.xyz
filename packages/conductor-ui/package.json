@@ -30,7 +30,7 @@
     "build": "tsup",
     "check-types": "tsc --noEmit",
     "clean": "rm -rf .turbo dist node_modules",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
   },
   "peerDependencies": {

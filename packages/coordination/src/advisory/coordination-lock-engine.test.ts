@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 import {
 	createCoordinationLockEngine,
 	DEFAULT_LOCK_TTL_MS,
@@ -41,30 +42,30 @@ describe("createCoordinationLockEngine — acquire / conflict / release / reacqu
 
 		// holder A acquires resource R
 		const first = await engine.acquireLock("src/app.ts", "agent-a");
-		expect(first.status).toBe("acquired");
-		expect(first.lock?.lockId).toBe("lock_1");
-		expect(first.lock?.holder).toBe("agent-a");
-		expect(store.snapshot()).toHaveLength(1);
+		assert.equal(first.status, "acquired");
+		assert.equal(first.lock?.lockId, "lock_1");
+		assert.equal(first.lock?.holder, "agent-a");
+		assert.equal(store.snapshot().length, 1);
 
 		// holder B is blocked ⇒ truthful conflict (never throws)
 		const blocked = await engine.acquireLock("src/app.ts", "agent-b");
-		expect(blocked.status).toBe("conflict");
-		expect(blocked.lock).toBeUndefined();
-		expect(blocked.conflict?.holder).toBe("agent-a");
-		expect(blocked.reason).toMatch(/held by 'agent-a'/);
+		assert.equal(blocked.status, "conflict");
+		assert.equal(blocked.lock, undefined);
+		assert.equal(blocked.conflict?.holder, "agent-a");
+		assert.match(blocked.reason ?? "", /held by 'agent-a'/);
 		// No lock was created for B.
-		expect(store.snapshot()).toHaveLength(1);
+		assert.equal(store.snapshot().length, 1);
 
 		// A releases R
 		const released = await engine.releaseLock("src/app.ts", "agent-a");
-		expect(released.status).toBe("released");
-		expect(released.released).toHaveLength(1);
-		expect(store.snapshot()).toHaveLength(0);
+		assert.equal(released.status, "released");
+		assert.equal(released.released.length, 1);
+		assert.equal(store.snapshot().length, 0);
 
 		// B can now reacquire the freed resource
 		const reacquire = await engine.acquireLock("src/app.ts", "agent-b");
-		expect(reacquire.status).toBe("acquired");
-		expect(reacquire.lock?.holder).toBe("agent-b");
+		assert.equal(reacquire.status, "acquired");
+		assert.equal(reacquire.lock?.holder, "agent-b");
 	});
 
 	it("is reentrant: the same holder re-acquiring renews in place (keeps lockId)", async () => {
@@ -72,15 +73,15 @@ describe("createCoordinationLockEngine — acquire / conflict / release / reacqu
 		const engine = createCoordinationLockEngine({ now: clock.now, generateId: seqIds() });
 
 		const a1 = await engine.acquireLock("r", "agent-a", { ttlMs: 1000 });
-		expect(a1.lock?.lockId).toBe("lock_1");
+		assert.equal(a1.lock?.lockId, "lock_1");
 		const firstExpiry = a1.lock?.expiresAt;
 
 		clock.advance(500);
 		const a2 = await engine.acquireLock("r", "agent-a", { ttlMs: 1000 });
-		expect(a2.status).toBe("acquired");
-		expect(a2.lock?.lockId).toBe("lock_1"); // same lock, renewed
-		expect(a2.lock?.acquiredAt).toBe(a1.lock?.acquiredAt); // acquisition preserved
-		expect(a2.lock?.expiresAt).not.toBe(firstExpiry); // expiry pushed out
+		assert.equal(a2.status, "acquired");
+		assert.equal(a2.lock?.lockId, "lock_1"); // same lock, renewed
+		assert.equal(a2.lock?.acquiredAt, a1.lock?.acquiredAt); // acquisition preserved
+		assert.notEqual(a2.lock?.expiresAt, firstExpiry); // expiry pushed out
 	});
 });
 
@@ -90,17 +91,17 @@ describe("createCoordinationLockEngine — detectConflict", () => {
 		await engine.acquireLock("res", "agent-a");
 
 		const other = await engine.detectConflict("res", "agent-b");
-		expect(other.status).toBe("ok");
-		expect(other.conflict).toBe(true);
-		expect(other.holder).toBe("agent-a");
-		expect(other.lock?.resource).toBe("res");
+		assert.equal(other.status, "ok");
+		assert.equal(other.conflict, true);
+		assert.equal(other.holder, "agent-a");
+		assert.equal(other.lock?.resource, "res");
 
 		const self = await engine.detectConflict("res", "agent-a");
-		expect(self.conflict).toBe(false);
-		expect(self.holder).toBeUndefined();
+		assert.equal(self.conflict, false);
+		assert.equal(self.holder, undefined);
 
 		const free = await engine.detectConflict("unheld", "agent-b");
-		expect(free.conflict).toBe(false);
+		assert.equal(free.conflict, false);
 	});
 });
 
@@ -112,18 +113,18 @@ describe("createCoordinationLockEngine — listLocks filter", () => {
 		await engine.acquireLock("c.ts", "agent-b");
 
 		const all = await engine.listLocks();
-		expect(all.status).toBe("ok");
-		expect(all.locks).toHaveLength(3);
+		assert.equal(all.status, "ok");
+		assert.equal(all.locks.length, 3);
 
 		const byHolder = await engine.listLocks({ holder: "agent-a" });
-		expect(byHolder.locks.map((l) => l.resource).sort()).toEqual(["a.ts", "b.ts"]);
+		assert.deepEqual(byHolder.locks.map((l) => l.resource).sort(), ["a.ts", "b.ts"]);
 
 		const byResource = await engine.listLocks({ resource: "c.ts" });
-		expect(byResource.locks).toHaveLength(1);
-		expect(byResource.locks[0].holder).toBe("agent-b");
+		assert.equal(byResource.locks.length, 1);
+		assert.equal(byResource.locks[0].holder, "agent-b");
 
 		const byBoth = await engine.listLocks({ resource: "a.ts", holder: "agent-b" });
-		expect(byBoth.locks).toHaveLength(0);
+		assert.equal(byBoth.locks.length, 0);
 	});
 
 	it("excludes expired locks from listing and from conflict detection", async () => {
@@ -131,17 +132,17 @@ describe("createCoordinationLockEngine — listLocks filter", () => {
 		const engine = createCoordinationLockEngine({ now: clock.now, generateId: seqIds() });
 		await engine.acquireLock("r", "agent-a", { ttlMs: 1000 });
 
-		expect((await engine.listLocks()).locks).toHaveLength(1);
-		expect((await engine.detectConflict("r", "agent-b")).conflict).toBe(true);
+		assert.equal((await engine.listLocks()).locks.length, 1);
+		assert.equal((await engine.detectConflict("r", "agent-b")).conflict, true);
 
 		// Advance the clock past the TTL — the advisory lock is now inactive.
 		clock.advance(1001);
-		expect((await engine.listLocks()).locks).toHaveLength(0);
-		expect((await engine.detectConflict("r", "agent-b")).conflict).toBe(false);
+		assert.equal((await engine.listLocks()).locks.length, 0);
+		assert.equal((await engine.detectConflict("r", "agent-b")).conflict, false);
 
 		// A different holder can acquire the expired resource without conflict.
 		const reacquire = await engine.acquireLock("r", "agent-b", { ttlMs: 1000 });
-		expect(reacquire.status).toBe("acquired");
+		assert.equal(reacquire.status, "acquired");
 	});
 });
 
@@ -151,18 +152,18 @@ describe("createCoordinationLockEngine — release semantics", () => {
 		await engine.acquireLock("r", "agent-a");
 
 		const wrong = await engine.releaseLock("r", "agent-b");
-		expect(wrong.status).toBe("not_found");
-		expect(wrong.released).toHaveLength(0);
+		assert.equal(wrong.status, "not_found");
+		assert.equal(wrong.released.length, 0);
 		// A's lock is untouched.
-		expect((await engine.listLocks()).locks).toHaveLength(1);
+		assert.equal((await engine.listLocks()).locks.length, 1);
 	});
 
 	it("releases by lock id as well as by resource key", async () => {
 		const engine = createCoordinationLockEngine({ now: fakeClock().now, generateId: seqIds() });
 		const acq = await engine.acquireLock("r", "agent-a");
 		const byId = await engine.releaseLock(acq.lock?.lockId ?? "", "agent-a");
-		expect(byId.status).toBe("released");
-		expect((await engine.listLocks()).locks).toHaveLength(0);
+		assert.equal(byId.status, "released");
+		assert.equal((await engine.listLocks()).locks.length, 0);
 	});
 });
 
@@ -172,21 +173,21 @@ describe("createCoordinationLockEngine — degrade-safe (no store wired)", () =>
 		const engine = createCoordinationLockEngine({ store, now: fakeClock().now });
 
 		const acquire = await engine.acquireLock("r", "agent-a");
-		expect(acquire.status).toBe("not_configured");
-		expect(acquire.lock).toBeUndefined();
-		expect(acquire.reason).toMatch(/not configured/);
+		assert.equal(acquire.status, "not_configured");
+		assert.equal(acquire.lock, undefined);
+		assert.match(acquire.reason ?? "", /not configured/);
 
 		const release = await engine.releaseLock("r", "agent-a");
-		expect(release.status).toBe("not_configured");
-		expect(release.released).toEqual([]);
+		assert.equal(release.status, "not_configured");
+		assert.deepEqual(release.released, []);
 
 		const list = await engine.listLocks();
-		expect(list.status).toBe("not_configured");
-		expect(list.locks).toEqual([]);
+		assert.equal(list.status, "not_configured");
+		assert.deepEqual(list.locks, []);
 
 		const detect = await engine.detectConflict("r", "agent-a");
-		expect(detect.status).toBe("not_configured");
-		expect(detect.conflict).toBe(false);
+		assert.equal(detect.status, "not_configured");
+		assert.equal(detect.conflict, false);
 	});
 });
 
@@ -196,7 +197,7 @@ describe("defaults", () => {
 		const engine = createCoordinationLockEngine({ now: clock.now, generateId: seqIds() });
 		const acq = await engine.acquireLock("r", "agent-a");
 		const expiry = Date.parse(acq.lock?.expiresAt ?? "");
-		expect(expiry).toBe(clock.now() + DEFAULT_LOCK_TTL_MS);
+		assert.equal(expiry, clock.now() + DEFAULT_LOCK_TTL_MS);
 	});
 
 	it("seeds an in-memory store and honors the injected clock", async () => {
@@ -214,7 +215,7 @@ describe("defaults", () => {
 			store: createInMemoryLockStore(seed),
 			now: clock.now,
 		});
-		expect((await engine.listLocks()).locks).toHaveLength(1);
-		expect((await engine.detectConflict("pre", "agent-a")).conflict).toBe(true);
+		assert.equal((await engine.listLocks()).locks.length, 1);
+		assert.equal((await engine.detectConflict("pre", "agent-a")).conflict, true);
 	});
 });

@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PiRpcDriver } from '../../../../src/drivers/pi/pi-rpc-driver';
@@ -21,7 +22,7 @@ function makePolicy(): RuntimePolicy {
   };
 }
 
-function makeContext(env: Record<string, string>, signal: AbortSignal): DriverContext {
+function makeContext(env: Record<string, string>, signal: AbortSignal, cwd: string = process.cwd()): DriverContext {
   const policy = makePolicy();
   return {
     runId: asRunId('run_pi_rpc_1'),
@@ -52,7 +53,7 @@ function makeContext(env: Record<string, string>, signal: AbortSignal): DriverCo
       } as unknown as RuntimeTaskInput['bundle'],
     },
     policy,
-    cwd: process.cwd(),
+    cwd,
     env,
     signal,
     now: () => Date.now(),
@@ -85,7 +86,9 @@ test('rpc driver drives a fixture run via the RPC prompt command into frames + t
 
 test('rpc fail-safe: missing pi CLI yields runtime_unavailable', async () => {
   const driver = new PiRpcDriver({ cliPathOverride: path.resolve(__dirname, 'no-such-pi') });
-  const ctx = makeContext({ PATH: '' }, new AbortController().signal);
+  // cwd must be outside the repo: the workspace installs a real `pi` at
+  // <cwd>/node_modules/.bin/pi, which the locator would truthfully find.
+  const ctx = makeContext({ PATH: '' }, new AbortController().signal, os.tmpdir());
 
   const frames = await collect(driver.run(ctx));
   assert.equal(frames.length, 1);
