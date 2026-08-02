@@ -3,6 +3,7 @@
 
 import { globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
+import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readErrorReason, readFetchError } from "../recoder/recoder-errors";
 import { RecoderMemoryView } from "./recoder-memory";
@@ -108,6 +109,7 @@ class RecoderMemoryViewModel implements ViewModel {
             ]);
             if (!itemsRes.ok || !candidatesRes.ok) {
                 globalStore.set(this.connectedAtom, false);
+                RecoderConnectionModel.getInstance().noteRefresh(false);
                 const failed = !itemsRes.ok ? itemsRes : candidatesRes;
                 const detail = await readFetchError(failed);
                 globalStore.set(this.errorAtom, detail || `Memory unavailable (${failed.status})`);
@@ -123,8 +125,10 @@ class RecoderMemoryViewModel implements ViewModel {
             globalStore.set(this.itemsAtom, items);
             globalStore.set(this.candidatesAtom, pending);
             globalStore.set(this.connectedAtom, true);
+            RecoderConnectionModel.getInstance().noteRefresh(true);
         } catch {
             globalStore.set(this.connectedAtom, false);
+            RecoderConnectionModel.getInstance().noteRefresh(false);
             globalStore.set(this.itemsAtom, []);
             globalStore.set(this.candidatesAtom, []);
         } finally {

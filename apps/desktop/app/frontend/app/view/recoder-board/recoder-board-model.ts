@@ -3,6 +3,7 @@
 
 import { globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
+import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { RecoderBoardView } from "./recoder-board";
 
@@ -107,20 +108,26 @@ class RecoderBoardViewModel implements ViewModel {
             if (res.status == 404) {
                 globalStore.set(this.issuesAtom, []);
                 globalStore.set(this.statusAtom, "not-available");
+                // A 404 means the backend answered (route not mounted) — the
+                // connection itself is live, only this feature is absent.
+                RecoderConnectionModel.getInstance().noteRefresh(true);
                 return;
             }
             if (!res.ok) {
                 globalStore.set(this.issuesAtom, []);
                 globalStore.set(this.statusAtom, "not-connected");
+                RecoderConnectionModel.getInstance().noteRefresh(false);
                 return;
             }
             const body = await res.json();
             const issues = normalizeIssues(body?.data?.ready);
             globalStore.set(this.issuesAtom, issues);
             globalStore.set(this.statusAtom, issues.length == 0 ? "empty" : "ok");
+            RecoderConnectionModel.getInstance().noteRefresh(true);
         } catch {
             globalStore.set(this.issuesAtom, []);
             globalStore.set(this.statusAtom, "not-connected");
+            RecoderConnectionModel.getInstance().noteRefresh(false);
         } finally {
             globalStore.set(this.loadingAtom, false);
         }

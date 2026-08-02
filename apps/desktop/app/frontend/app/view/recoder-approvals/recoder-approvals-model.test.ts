@@ -1,7 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/store/global", async () => {
     const { createStore } = await import("jotai");
@@ -13,6 +13,7 @@ vi.mock("./recoder-approvals", () => ({
 }));
 
 import { globalStore } from "@/app/store/global";
+import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
 import { RecoderApprovalsViewModel, type RecoderApproval } from "./recoder-approvals-model";
 
 const ListUrl = "http://127.0.0.1:3100/api/agent-os/approvals";
@@ -139,6 +140,52 @@ describe("RecoderApprovalsViewModel.refresh", () => {
         expect(globalStore.get(model.connectedAtom)).toBe(false);
         expect(globalStore.get(model.approvalsAtom)).toEqual([]);
         expect(globalStore.get(model.loadingAtom)).toBe(false);
+    });
+});
+
+describe("stale-gate wiring (shared RecoderConnectionModel)", () => {
+    beforeEach(() => {
+        RecoderConnectionModel.resetInstance();
+    });
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        RecoderConnectionModel.resetInstance();
+    });
+
+    it("a successful refresh notes the shared connection live", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockImplementation(() => okJson({ approvals: [] }))
+        );
+
+        await makeModel().refresh();
+
+        const shared = RecoderConnectionModel.getInstance();
+        expect(globalStore.get(shared.connectionStateAtom)).toBe("live");
+    });
+
+    it("a non-2xx refresh after a success flips the shared state to stale", async () => {
+        const model = makeModel();
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockImplementation(() => okJson({ approvals: [] }))
+        );
+        await model.refresh();
+
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503, json: async () => ({}) }));
+        await model.refresh();
+
+        const shared = RecoderConnectionModel.getInstance();
+        expect(globalStore.get(shared.connectionStateAtom)).toBe("stale");
+    });
+
+    it("a transport failure with no prior success reads offline", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
+
+        await makeModel().refresh();
+
+        const shared = RecoderConnectionModel.getInstance();
+        expect(globalStore.get(shared.connectionStateAtom)).toBe("offline");
     });
 });
 

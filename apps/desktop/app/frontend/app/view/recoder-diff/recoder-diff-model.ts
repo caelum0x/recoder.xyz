@@ -3,6 +3,7 @@
 
 import { globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
+import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readErrorReason, readFetchError } from "../recoder/recoder-errors";
 import type { ReviewCommentDraft } from "./recoder-diff-comments";
@@ -258,6 +259,7 @@ class RecoderDiffViewModel implements ViewModel {
             const workspaces = (list as RecoderWorkspace[]).filter((w) => w.state != "archived");
             globalStore.set(this.workspacesAtom, workspaces);
             globalStore.set(this.connectedAtom, true);
+            RecoderConnectionModel.getInstance().noteRefresh(true);
             const current = globalStore.get(this.selectedIdAtom);
             const stillValid = workspaces.some((w) => w.workspaceId === current);
             if (!stillValid) {
@@ -269,6 +271,7 @@ class RecoderDiffViewModel implements ViewModel {
             }
         } catch {
             globalStore.set(this.connectedAtom, false);
+            RecoderConnectionModel.getInstance().noteRefresh(false);
             globalStore.set(this.workspacesAtom, []);
             globalStore.set(this.selectedIdAtom, "");
         } finally {
