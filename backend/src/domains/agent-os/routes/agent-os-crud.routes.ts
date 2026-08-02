@@ -27,14 +27,17 @@ import {
   type AgentProfile,
   type Artifact,
   type MemoryCandidate,
-  type RunEvent,
   type Space,
   type TaskSpec,
 } from '@recoder/agent-os';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import { validateBody, validateParams, validateQuery } from '../../../http/middleware/validate.js';
 import { sendSuccess, sendError, createError, ErrorCode } from '../../../shared/errors.js';
-import type { AgentOsRepositoryPort } from '../ports/agent-os-repository.port.js';
+import type {
+  AgentOsRepositoryPort,
+  ListPage,
+  PageQuery,
+} from '../ports/agent-os-repository.port.js';
 import {
   spacePolicyToKernelConfigJson,
   type PolicyUpdatedEvent,
@@ -50,6 +53,7 @@ import {
   eventsQuerySchema,
   idParamSchema,
   memoryCandidateCreateSchema,
+  paginationQuerySchema,
   runCreateSchema,
   runTransitionSchema,
   spacePolicyPutSchema,
@@ -107,6 +111,19 @@ function handle(fn: (req: Request, res: Response) => Promise<void>): RequestHand
   };
 }
 
+/** The validated `{ limit, offset }` bound (`validateQuery` has already coerced + defaulted). */
+function pageQueryOf(req: Request): PageQuery {
+  const { limit, offset } = req.query as unknown as z.infer<typeof paginationQuerySchema>;
+  return { limit, offset };
+}
+
+/** The bounded array envelope: `data` stays the list, pagination totals ride in `meta`. */
+function sendPage<T>(res: Response, page: ListPage<T>): void {
+  sendSuccess(res, page.items, {
+    meta: { total: page.total, limit: page.limit, offset: page.offset },
+  });
+}
+
 /** Build the CRUD edge table (mounted inside the `/api/agent-os` router). */
 export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
   const { repository, middleware, onPolicyChange } = deps;
@@ -120,10 +137,19 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
   const idempotency: RequestHandler = deps.idempotency ?? ((_req, _res, next) => next());
 
   // — Spaces (tenant-isolated: owner-scoped, with operator + solo bypass) —
-  router.get('/spaces', read, handle(async (req, res) => {
+  router.get('/spaces', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
     // Tenant-scope the list: a caller sees only their own spaces (operator/solo
-    // see all). Never leak another tenant's spaces.
-    sendSuccess(res, visibleSpaces(await repository.listSpaces(), req.principal, soloMode));
+    // see all). Never leak another tenant's spaces. Pagination is applied AFTER
+    // the tenant filter (a repo-side page would leak filtered-out holes), with
+    // the truthful visible total in `meta`.
+    const visible = visibleSpaces(await repository.listSpaces(), req.principal, soloMode);
+    const page = pageQueryOf(req);
+    sendPage(res, {
+      items: visible.slice(page.offset, page.offset + page.limit),
+      total: visible.length,
+      limit: page.limit,
+      offset: page.offset,
+    });
   }));
 
   router.get(
@@ -203,8 +229,8 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
   );
 
   // — Agents —
-  router.get('/agents', read, handle(async (_req, res) => {
-    sendSuccess(res, await repository.listAgents());
+  router.get('/agents', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
+    sendPage(res, await repository.listAgentsPage(pageQueryOf(req)));
   }));
 
   router.get(
@@ -319,8 +345,8 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
   );
 
   // — Approvals (READ-ONLY mirror; authoritative lifecycle = governance domain) —
-  router.get('/approvals', read, handle(async (_req, res) => {
-    sendSuccess(res, await repository.listApprovals());
+  router.get('/approvals', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
+    sendPage(res, await repository.listApprovalsPage(pageQueryOf(req)));
   }));
 
   router.get(
@@ -328,16 +354,16 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     read,
     validateParams(idParamSchema('approvalId')),
     handle(async (req, res) => {
-      const approvals = await repository.listApprovals();
-      const approval = approvals.find((a) => a.approvalId === req.params.approvalId);
+      // Repo point read (keyed lookup) — never a list-then-find scan.
+      const approval = await repository.getApproval(req.params.approvalId);
       if (!approval) return notFound(res, 'approval', req.params.approvalId);
       sendSuccess(res, approval);
     }),
   );
 
   // — Artifacts —
-  router.get('/artifacts', read, handle(async (_req, res) => {
-    sendSuccess(res, await repository.listArtifacts());
+  router.get('/artifacts', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
+    sendPage(res, await repository.listArtifactsPage(pageQueryOf(req)));
   }));
 
   router.get(
@@ -345,8 +371,8 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     read,
     validateParams(idParamSchema('artifactId')),
     handle(async (req, res) => {
-      const artifacts = await repository.listArtifacts();
-      const artifact = artifacts.find((a) => a.artifactId === req.params.artifactId);
+      // Repo point read (keyed lookup) — never a list-then-find scan.
+      const artifact = await repository.getArtifact(req.params.artifactId);
       if (!artifact) return notFound(res, 'artifact', req.params.artifactId);
       sendSuccess(res, artifact);
     }),
@@ -375,12 +401,12 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
 
   // — Memory (items read-only here; candidates are evidence-backed proposals —
   //   promotion to durable stays a reviewed action, never this edge) —
-  router.get('/memory/items', read, handle(async (_req, res) => {
-    sendSuccess(res, await repository.listMemoryItems());
+  router.get('/memory/items', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
+    sendPage(res, await repository.listMemoryItemsPage(pageQueryOf(req)));
   }));
 
-  router.get('/memory/candidates', read, handle(async (_req, res) => {
-    sendSuccess(res, await repository.listMemoryCandidates());
+  router.get('/memory/candidates', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
+    sendPage(res, await repository.listMemoryCandidatesPage(pageQueryOf(req)));
   }));
 
   router.post(
@@ -401,8 +427,8 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
   );
 
   // — Instructions (READ-ONLY: bundles are compiler-produced artifacts) —
-  router.get('/instructions', read, handle(async (_req, res) => {
-    sendSuccess(res, await repository.listInstructionBundles());
+  router.get('/instructions', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
+    sendPage(res, await repository.listInstructionBundlesPage(pageQueryOf(req)));
   }));
 
   router.get(
@@ -418,8 +444,8 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
   );
 
   // — Policies (READ-ONLY: decisions are governance-gate-produced) —
-  router.get('/policies', read, handle(async (_req, res) => {
-    sendSuccess(res, await repository.listPolicyDecisions());
+  router.get('/policies', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
+    sendPage(res, await repository.listPolicyDecisionsPage(pageQueryOf(req)));
   }));
 
   router.get(
@@ -440,11 +466,18 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     read,
     validateQuery(eventsQuerySchema),
     handle(async (req, res) => {
-      const query = req.query as z.infer<typeof eventsQuerySchema>;
-      let events: RunEvent[] = await repository.listEvents();
-      if (query.taskId) events = events.filter((e) => e.taskId === query.taskId);
-      if (query.runId) events = events.filter((e) => e.runId === query.runId);
-      sendSuccess(res, events);
+      // Bounded NEWEST-FIRST page; the taskId/runId filters run IN the driver
+      // (WHERE + LIMIT/OFFSET) — never the whole log filtered in JS.
+      const query = req.query as unknown as z.infer<typeof eventsQuerySchema>;
+      sendPage(
+        res,
+        await repository.listEventsPage({
+          limit: query.limit,
+          offset: query.offset,
+          ...(query.taskId ? { taskId: query.taskId } : {}),
+          ...(query.runId ? { runId: query.runId } : {}),
+        }),
+      );
     }),
   );
 

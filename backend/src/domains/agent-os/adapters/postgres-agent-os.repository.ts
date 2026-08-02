@@ -36,13 +36,15 @@ import type {
 } from '@recoder/agent-os';
 import type { OutboxRecord } from '@recoder/agent-events';
 import type { RecoderComponentDescriptor } from '@recoder/oss-registry';
-import type { QueryExecutor } from '../../persistence/ports/query-executor.port.js';
+import type { QueryExecutor, QueryParams } from '../../persistence/ports/query-executor.port.js';
 import type { QueryRow } from '../../persistence/types.js';
-import type {
-  AgentOsRepositoryPort,
-  AgentOsRepositorySnapshot,
-  ListPage,
-  PageQuery,
+import {
+  SNAPSHOT_EVENTS_TAIL,
+  type AgentOsRepositoryPort,
+  type AgentOsRepositorySnapshot,
+  type EventsPageQuery,
+  type ListPage,
+  type PageQuery,
 } from '../ports/agent-os-repository.port.js';
 
 /** The aggregate discriminators stored in `agentos_records.aggregate`. */
@@ -92,7 +94,7 @@ export class PostgresAgentOsRepository implements AgentOsRepositoryPort {
       this.listAgents(), this.listTasks(), this.listRuns(), this.listApprovals(),
       this.listArtifacts(), this.listRuntimeEvidence(), this.listGitHubDeliveryLinks(),
       this.listMemoryItems(), this.listMemoryCandidates(), this.listInstructionBundles(),
-      this.listPolicyDecisions(), this.listEvents(), this.listOutbox(),
+      this.listPolicyDecisions(), this.listEventsTail(), this.listOutbox(),
       this.listSpaces(), this.listOssComponents(),
     ]);
     return {
@@ -138,6 +140,9 @@ export class PostgresAgentOsRepository implements AgentOsRepositoryPort {
   listAgents(): Promise<AgentProfile[]> {
     return this.list<AgentProfile>(AGG.agent);
   }
+  listAgentsPage(page: PageQuery): Promise<ListPage<AgentProfile>> {
+    return this.listPage<AgentProfile>(AGG.agent, page);
+  }
   upsertAgent(agent: AgentProfile): Promise<AgentProfile> {
     return this.upsert(AGG.agent, agent.agentId, agent);
   }
@@ -166,6 +171,12 @@ export class PostgresAgentOsRepository implements AgentOsRepositoryPort {
   listApprovals(): Promise<Approval[]> {
     return this.list<Approval>(AGG.approval);
   }
+  listApprovalsPage(page: PageQuery): Promise<ListPage<Approval>> {
+    return this.listPage<Approval>(AGG.approval, page);
+  }
+  getApproval(approvalId: string): Promise<Approval | null> {
+    return this.get<Approval>(AGG.approval, approvalId);
+  }
   upsertApproval(approval: Approval): Promise<Approval> {
     return this.upsert(AGG.approval, approval.approvalId, approval);
   }
@@ -173,6 +184,12 @@ export class PostgresAgentOsRepository implements AgentOsRepositoryPort {
   // — Artifacts —
   listArtifacts(): Promise<Artifact[]> {
     return this.list<Artifact>(AGG.artifact);
+  }
+  listArtifactsPage(page: PageQuery): Promise<ListPage<Artifact>> {
+    return this.listPage<Artifact>(AGG.artifact, page);
+  }
+  getArtifact(artifactId: string): Promise<Artifact | null> {
+    return this.get<Artifact>(AGG.artifact, artifactId);
   }
   upsertArtifact(artifact: Artifact): Promise<Artifact> {
     return this.upsert(AGG.artifact, artifact.artifactId, artifact);
@@ -201,11 +218,17 @@ export class PostgresAgentOsRepository implements AgentOsRepositoryPort {
   listMemoryItems(): Promise<MemoryItem[]> {
     return this.list<MemoryItem>(AGG.memoryItem);
   }
+  listMemoryItemsPage(page: PageQuery): Promise<ListPage<MemoryItem>> {
+    return this.listPage<MemoryItem>(AGG.memoryItem, page);
+  }
   upsertMemoryItem(memory: MemoryItem): Promise<MemoryItem> {
     return this.upsert(AGG.memoryItem, memory.memoryId, memory);
   }
   listMemoryCandidates(): Promise<MemoryCandidate[]> {
     return this.list<MemoryCandidate>(AGG.memoryCandidate);
+  }
+  listMemoryCandidatesPage(page: PageQuery): Promise<ListPage<MemoryCandidate>> {
+    return this.listPage<MemoryCandidate>(AGG.memoryCandidate, page);
   }
   upsertMemoryCandidate(candidate: MemoryCandidate): Promise<MemoryCandidate> {
     return this.upsert(AGG.memoryCandidate, candidate.candidateId, candidate);
@@ -215,6 +238,9 @@ export class PostgresAgentOsRepository implements AgentOsRepositoryPort {
   listInstructionBundles(): Promise<InstructionBundle[]> {
     return this.list<InstructionBundle>(AGG.instructionBundle);
   }
+  listInstructionBundlesPage(page: PageQuery): Promise<ListPage<InstructionBundle>> {
+    return this.listPage<InstructionBundle>(AGG.instructionBundle, page);
+  }
   upsertInstructionBundle(bundle: InstructionBundle): Promise<InstructionBundle> {
     return this.upsert(AGG.instructionBundle, bundle.bundleId, bundle);
   }
@@ -222,6 +248,9 @@ export class PostgresAgentOsRepository implements AgentOsRepositoryPort {
   // — Policy decisions —
   listPolicyDecisions(): Promise<PolicyDecision[]> {
     return this.list<PolicyDecision>(AGG.policyDecision);
+  }
+  listPolicyDecisionsPage(page: PageQuery): Promise<ListPage<PolicyDecision>> {
+    return this.listPage<PolicyDecision>(AGG.policyDecision, page);
   }
   upsertPolicyDecision(decision: PolicyDecision): Promise<PolicyDecision> {
     return this.upsert(AGG.policyDecision, decision.decisionId, decision);
@@ -246,6 +275,49 @@ export class PostgresAgentOsRepository implements AgentOsRepositoryPort {
       `select payload from agentos_event_log order by seq asc`,
     );
     return rows.map((row) => row.payload as RunEvent);
+  }
+  /**
+   * Bounded, NEWEST-FIRST page over the append-only log. The `taskId`/`runId`
+   * filters and the `LIMIT/OFFSET` run IN the database (jsonb `->>` on the
+   * payload) — the edge never pulls the whole log to filter in JS. A companion
+   * filtered `count(*)` yields the truthful pagination total.
+   */
+  async listEventsPage(query: EventsPageQuery): Promise<ListPage<RunEvent>> {
+    const clauses: string[] = [];
+    const filterParams: Record<string, unknown> = {};
+    if (query.taskId) {
+      clauses.push(`payload->>'taskId' = :task_id`);
+      filterParams.task_id = query.taskId;
+    }
+    if (query.runId) {
+      clauses.push(`payload->>'runId' = :run_id`);
+      filterParams.run_id = query.runId;
+    }
+    const where = clauses.length > 0 ? ` where ${clauses.join(' and ')}` : '';
+    const [rows, countRow] = await Promise.all([
+      this.executor.read<QueryRow>(
+        `select payload from agentos_event_log${where} order by seq desc limit :limit offset :offset`,
+        { ...filterParams, limit: query.limit, offset: query.offset } as QueryParams,
+      ),
+      this.executor.one<QueryRow>(
+        `select count(*)::int as count from agentos_event_log${where}`,
+        filterParams as QueryParams,
+      ),
+    ]);
+    return {
+      items: rows.map((row) => row.payload as RunEvent),
+      total: Number(countRow?.count ?? 0),
+      limit: query.limit,
+      offset: query.offset,
+    };
+  }
+  /** The bounded most-recent event tail for `snapshot()` (ascending order kept). */
+  private async listEventsTail(): Promise<RunEvent[]> {
+    const rows = await this.executor.read<QueryRow>(
+      `select payload from agentos_event_log order by seq desc limit :limit`,
+      { limit: SNAPSHOT_EVENTS_TAIL },
+    );
+    return rows.map((row) => row.payload as RunEvent).reverse();
   }
 
   // — CloudEvents outbox —

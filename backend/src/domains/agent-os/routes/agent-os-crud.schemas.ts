@@ -255,11 +255,6 @@ export const memoryCandidateCreateSchema = z.object({
 export const idParamSchema = (name: string): z.ZodObject<Record<string, z.ZodString>> =>
   z.object({ [name]: z.string().min(1) });
 
-export const eventsQuerySchema = z.object({
-  taskId: z.string().min(1).optional(),
-  runId: z.string().min(1).optional(),
-});
-
 // — Bounded LIST pagination (formerly-unbounded state-of-record read edges) —
 
 /** Default page size when `?limit=` is absent. */
@@ -268,11 +263,23 @@ export const DEFAULT_PAGE_LIMIT = 50;
 export const MAX_PAGE_LIMIT = 200;
 
 /**
- * `?limit=`/`?offset=` for the `GET /runs` + `GET /tasks` list edges. Fail-fast:
- * a non-integer, `limit < 1`, `limit > MAX_PAGE_LIMIT`, or negative `offset`
- * yields a `VALIDATION_ERROR` at the boundary. Absent ⇒ first page (default cap).
+ * `?limit=`/`?offset=` for the state-of-record list edges (`GET /runs`, `/tasks`,
+ * `/agents`, `/approvals`, `/artifacts`, `/memory/*`, `/instructions`,
+ * `/policies`, `/spaces`). Fail-fast: a non-integer, `limit < 1`,
+ * `limit > MAX_PAGE_LIMIT`, or negative `offset` yields a `VALIDATION_ERROR` at
+ * the boundary. Absent ⇒ first page (default cap).
  */
 export const paginationQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_PAGE_LIMIT).default(DEFAULT_PAGE_LIMIT),
   offset: z.coerce.number().int().min(0).default(0),
+});
+
+/**
+ * `GET /events` query: the pagination bound PLUS the driver-side `taskId`/`runId`
+ * filters. Pages are NEWEST-FIRST (the append-only log only grows; consumers
+ * poll for the recent tail).
+ */
+export const eventsQuerySchema = paginationQuerySchema.extend({
+  taskId: z.string().min(1).optional(),
+  runId: z.string().min(1).optional(),
 });

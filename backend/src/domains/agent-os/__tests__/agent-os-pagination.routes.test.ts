@@ -11,7 +11,7 @@ import { describe, it, expect, vi } from 'vitest';
 import express from 'express';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import type { TaskRun, TaskSpec } from '@recoder/agent-os';
+import type { Approval, Artifact, TaskRun, TaskSpec } from '@recoder/agent-os';
 import { buildAgentOsRouter } from '../routes/agent-os.routes.js';
 import { InMemoryAgentOsRepository } from '../adapters/in-memory-agent-os.repository.js';
 import { PostgresAgentOsRepository } from '../adapters/postgres-agent-os.repository.js';
@@ -267,5 +267,180 @@ describe('postgres driver — real SQL LIMIT/OFFSET', () => {
     expect(counted, 'count SQL').toBeDefined();
 
     expect(page).toEqual({ items: [], total: 7, limit: 10, offset: 20 });
+  });
+
+  it('listEventsPage pushes WHERE taskId/runId + LIMIT/OFFSET into the log query', async () => {
+    const executor = new RecordingExecutor();
+    const repo = new PostgresAgentOsRepository(executor);
+
+    await repo.listEventsPage({ limit: 5, offset: 10, taskId: 'task-1', runId: 'run-1' });
+
+    const paged = executor.reads.find((r) => r.sql.includes('agentos_event_log'));
+    expect(paged, 'events page SQL').toBeDefined();
+    expect(paged?.sql).toMatch(/where\s+payload->>'taskId' = :task_id\s+and\s+payload->>'runId' = :run_id/i);
+    expect(paged?.sql).toMatch(/order by seq desc limit :limit offset :offset/i);
+    expect(paged?.params).toMatchObject({ task_id: 'task-1', run_id: 'run-1', limit: 5, offset: 10 });
+
+    const counted = executor.ones.find(
+      (r) => r.sql.includes('agentos_event_log') && /count\(\*\)/i.test(r.sql),
+    );
+    expect(counted, 'filtered count SQL').toBeDefined();
+    expect(counted?.params).toMatchObject({ task_id: 'task-1', run_id: 'run-1' });
+  });
+
+  it('snapshot() reads a bounded event tail, never the whole log', async () => {
+    const executor = new RecordingExecutor();
+    const repo = new PostgresAgentOsRepository(executor);
+
+    await repo.snapshot();
+
+    const eventReads = executor.reads.filter((r) => r.sql.includes('agentos_event_log'));
+    expect(eventReads.length).toBeGreaterThan(0);
+    for (const read of eventReads) {
+      expect(read.sql, 'snapshot event read must be LIMIT-bounded').toMatch(/limit :limit/i);
+      expect(read.params).toMatchObject({ limit: 200 });
+    }
+  });
+});
+
+function seedEvent(repo: InMemoryAgentOsRepository, eventId: string, taskId: string, runId: string): void {
+  repo.appendEvent({
+    eventId,
+    type: 'log',
+    taskId,
+    runId,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  });
+}
+
+describe('agent-os events — bounded newest-first page (GET /events)', () => {
+  it('returns the newest page for a taskId filter and threads the bound into the repo', async () => {
+    const h = await buildHarness();
+    for (const id of ['e1', 'e2', 'e3', 'e4', 'e5']) seedEvent(h.repo, id, 'task-1', 'run-1');
+    seedEvent(h.repo, 'e6', 'task-2', 'run-2');
+    const pageSpy = vi.spyOn(h.repo, 'listEventsPage');
+    const fullSpy = vi.spyOn(h.repo, 'listEvents');
+
+    const res = await get(h.base, '/events?taskId=task-1&limit=2');
+    expect(res.status).toBe(200);
+    const body = bodyOf(res);
+    // Newest first: the poll wants the recent tail of the append-only log.
+    expect((body.data as Array<{ eventId: string }>).map((e) => e.eventId)).toEqual(['e5', 'e4']);
+    expect(body.meta).toMatchObject({ total: 5, limit: 2, offset: 0 });
+    expect(pageSpy).toHaveBeenCalledWith({ limit: 2, offset: 0, taskId: 'task-1' });
+    expect(fullSpy).not.toHaveBeenCalled();
+    await h.close();
+  });
+
+  it('applies the default cap when params are absent (backward compatible)', async () => {
+    const h = await buildHarness();
+    for (let i = 0; i < 60; i += 1) seedEvent(h.repo, `e-${i}`, 'task-1', 'run-1');
+
+    const res = await get(h.base, '/events');
+    expect(res.status).toBe(200);
+    const body = bodyOf(res);
+    expect(body.data).toHaveLength(50);
+    // Newest first: the latest append leads the page.
+    expect((body.data as Array<{ eventId: string }>)[0]?.eventId).toBe('e-59');
+    expect(body.meta).toMatchObject({ total: 60, limit: 50, offset: 0 });
+    await h.close();
+  });
+
+  it('400s VALIDATION_ERROR on an invalid events bound', async () => {
+    const h = await buildHarness();
+    const res = await get(h.base, '/events?limit=1000');
+    expect(res.status).toBe(400);
+    await h.close();
+  });
+});
+
+function seedApproval(repo: InMemoryAgentOsRepository, approvalId: string): Approval {
+  const approval: Approval = {
+    approvalId,
+    taskId: 'task-1',
+    status: 'pending',
+    reason: 'push gate',
+    requestedBy: 'agent-1',
+    requestedAt: '2026-01-01T00:00:00.000Z',
+    requiredAt: 'before_push',
+  };
+  repo.upsertApproval(approval);
+  return approval;
+}
+
+function seedArtifact(repo: InMemoryAgentOsRepository, artifactId: string): Artifact {
+  const artifact: Artifact = {
+    artifactId,
+    taskId: 'task-1',
+    kind: 'log',
+    mimeType: 'text/plain',
+    public: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    createdBy: 'agent-1',
+  };
+  repo.upsertArtifact(artifact);
+  return artifact;
+}
+
+describe('agent-os point reads — keyed repo lookups (never list-then-find)', () => {
+  it('GET /approvals/:approvalId uses getApproval and 404s an unknown id', async () => {
+    const h = await buildHarness();
+    seedApproval(h.repo, 'appr-1');
+    const getSpy = vi.spyOn(h.repo, 'getApproval');
+    const listSpy = vi.spyOn(h.repo, 'listApprovals');
+
+    const found = await get(h.base, '/approvals/appr-1');
+    expect(found.status).toBe(200);
+    expect((found.json() as { data: { approvalId: string } }).data.approvalId).toBe('appr-1');
+    expect(getSpy).toHaveBeenCalledWith('appr-1');
+    expect(listSpy).not.toHaveBeenCalled();
+
+    expect((await get(h.base, '/approvals/nope')).status).toBe(404);
+    await h.close();
+  });
+
+  it('GET /artifacts/:artifactId uses getArtifact and 404s an unknown id', async () => {
+    const h = await buildHarness();
+    seedArtifact(h.repo, 'art-1');
+    const getSpy = vi.spyOn(h.repo, 'getArtifact');
+    const listSpy = vi.spyOn(h.repo, 'listArtifacts');
+
+    const found = await get(h.base, '/artifacts/art-1');
+    expect(found.status).toBe(200);
+    expect((found.json() as { data: { artifactId: string } }).data.artifactId).toBe('art-1');
+    expect(getSpy).toHaveBeenCalledWith('art-1');
+    expect(listSpy).not.toHaveBeenCalled();
+
+    expect((await get(h.base, '/artifacts/nope')).status).toBe(404);
+    await h.close();
+  });
+});
+
+describe('agent-os list edges — bounded pages with meta', () => {
+  it('caps GET /approvals and GET /artifacts and reports pagination meta', async () => {
+    const h = await buildHarness();
+    for (const id of ['a-1', 'a-2', 'a-3']) seedApproval(h.repo, id);
+    for (const id of ['f-1', 'f-2', 'f-3']) seedArtifact(h.repo, id);
+
+    const approvals = bodyOf(await get(h.base, '/approvals?limit=2'));
+    expect(approvals.data).toHaveLength(2);
+    expect(approvals.meta).toMatchObject({ total: 3, limit: 2, offset: 0 });
+
+    const artifacts = bodyOf(await get(h.base, '/artifacts?limit=1&offset=2'));
+    expect(artifacts.data).toHaveLength(1);
+    expect(artifacts.meta).toMatchObject({ total: 3, limit: 1, offset: 2 });
+    await h.close();
+  });
+
+  it('rejects an over-cap bound on the formerly unbounded list edges', async () => {
+    const h = await buildHarness();
+    for (const path of [
+      '/agents', '/approvals', '/artifacts', '/memory/items', '/memory/candidates',
+      '/instructions', '/policies', '/spaces',
+    ]) {
+      const res = await get(h.base, `${path}?limit=201`);
+      expect(res.status, path).toBe(400);
+    }
+    await h.close();
   });
 });
