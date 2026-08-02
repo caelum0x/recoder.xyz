@@ -4,8 +4,25 @@ import { ConfigurationError, EmbeddingError } from "../errors";
 import type {
 	EmbedderFunction,
 	EmbeddingCompleteCallback,
+	EmbeddingMetrics,
 	EmbeddingOptions,
 } from "./types";
+
+type ResultProviderMetadata = Pick<EmbeddingMetrics, "providerMetadata">;
+
+/**
+ * The @ai-sdk/* providers in the workspace catalog implement the v2
+ * embedding-model spec while `ai` is still v3 (v1 spec). The doEmbed surface
+ * used by embed/embedMany is call-compatible, so accept either shape here and
+ * cast once at the seam. Tracked in bd for a real ai v3 -> v5 alignment.
+ */
+export type EmbeddingModelLike =
+	| EmbeddingModel<string>
+	| { readonly specificationVersion: "v2"; readonly modelId: string };
+
+const asV1EmbeddingModel = (
+	model: EmbeddingModelLike,
+): EmbeddingModel<string> => model as EmbeddingModel<string>;
 
 export interface EmbedderConfig {
 	apiKey: string;
@@ -18,7 +35,7 @@ export interface EmbedderConfig {
 
 export function createAiSdkEmbedder(
 	config: EmbedderConfig,
-	getModel: (modelName: string) => EmbeddingModel<string>,
+	getModel: (modelName: string) => EmbeddingModelLike,
 ): EmbedderFunction {
 	if (!config.apiKey || config.apiKey.length === 0) {
 		throw ConfigurationError.missingField("apiKey");
@@ -55,7 +72,7 @@ export function createAiSdkEmbedder(
 			try {
 				const startTime = new Date();
 				const result = await embed({
-					model: getModel(model),
+					model: asV1EmbeddingModel(getModel(model)),
 					maxRetries,
 					value: text,
 					headers: options?.headers,
@@ -75,7 +92,10 @@ export function createAiSdkEmbedder(
 							startTime,
 							endTime: new Date(),
 							transport,
-							providerMetadata: result.providerMetadata,
+							// ai v3 EmbedResult does not declare providerMetadata; newer
+							// providers may still attach it at runtime.
+							providerMetadata: (result as ResultProviderMetadata)
+								.providerMetadata,
 						});
 					} catch (error) {
 						console.error("Embedding callback error:", error);
@@ -98,7 +118,7 @@ export function createAiSdkEmbedder(
 			try {
 				const startTime = new Date();
 				const result = await embedMany({
-					model: getModel(model),
+					model: asV1EmbeddingModel(getModel(model)),
 					maxRetries,
 					values: texts,
 					headers: options?.headers,
@@ -118,7 +138,10 @@ export function createAiSdkEmbedder(
 							startTime,
 							endTime: new Date(),
 							transport,
-							providerMetadata: result.providerMetadata,
+							// ai v3 EmbedManyResult does not declare providerMetadata;
+							// newer providers may still attach it at runtime.
+							providerMetadata: (result as ResultProviderMetadata)
+								.providerMetadata,
 						});
 					} catch (error) {
 						console.error("Embedding callback error:", error);
