@@ -229,6 +229,15 @@ export {
 } from './state-mapping';
 
 // ---------------------------------------------------------------------------
+// SDK helpers: Task history-chain validation
+// ---------------------------------------------------------------------------
+
+export {
+  type TaskHistoryValidationResult,
+  validateTaskHistory,
+} from './history-validation';
+
+// ---------------------------------------------------------------------------
 // SDK helpers: Error mapping
 // ---------------------------------------------------------------------------
 
