@@ -36,6 +36,7 @@ import type { EngineRegistryPort, McpHostPort, McpHostTelemetry } from './ports/
 import type { ModuleToolsRegistration } from './mcp/host-registrar.js';
 import type { DomainToolsRegistration } from './adapters/domain-tools-bridge.adapter.js';
 import type { EngineId, EngineHealth } from './types.js';
+import type { OpenfangRunEventSink } from './openfang-runtime.js';
 import type { AgentEngineService } from './ports/agent-engine.port.js';
 import type { PalBrainService } from './ports/pal-brain.port.js';
 import type { GithubModule } from './github/index.js';
@@ -76,6 +77,16 @@ export interface EnginesModuleDeps {
    * until a webhook is configured).
    */
   readonly notifyEngine?: NotifyEngine;
+  /**
+   * The DEFAULT RunEvent sink for the openfang napi adapter's `launch_run`
+   * driver (threaded to `OpenfangNapiOptions.runSink`). Bootstrap backs it with
+   * the agent-os RunEvent bus (`source:'engine'`, LATE-BOUND — agent-os builds
+   * AFTER engines; see `bootstrap/conductor-seams.ts` `createEngineRunSink`,
+   * recoder-a094) so in-process openfang turns persist to the canonical event
+   * log even when the caller threads no per-call sink. Absent (tests /
+   * standalone) ⇒ the driver's warn-and-drop default applies (visible, truthful).
+   */
+  readonly openfangRunSink?: OpenfangRunEventSink;
   /** Not-yet-in-AppConfig engine values (paths / URLs / venvs / flags). */
   readonly overrides?: EnginesConfigOverrides;
 }

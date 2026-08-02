@@ -15,6 +15,13 @@
  *     conductor run-tailer emission onto the agent-os `RunEventBusPort.ingest`
  *     (`source:'conductor'`); the two ports are structurally different, so this thin
  *     adapter bridges them at the composition root without changing either port.
+ *   - {@link createEngineRunSink} — the LATE-BOUND default `OpenfangRunEventSink`
+ *     for the engines napi adapter's `launch_run` driver (recoder-a094). Engines
+ *     is built BEFORE agent-os, so the sink is created first and the agent-os bus
+ *     is attached right after Phase 5a (`source:'engine'`) — in-process openfang
+ *     turns then persist to the canonical event log even when the caller threads
+ *     no per-call sink. Pre-attach or bus-rejected events are warn-logged
+ *     truthfully (visible, never a silent drop).
  *   - {@link createCliMintClosure} — the memoizable `sk_` mint closure the CLI
  *     inference seam ({@link ./conductor-inference-seam.ts}) uses to attribute
  *     substrate-level metering to a stable conductor service subject. Key store /
@@ -23,9 +30,11 @@
  * None reads `process.env` or owns cross-domain state; each degrades truthfully.
  */
 import type { RunEvent } from '@recoder/agent-os';
+import type { Logger } from '../shared/logger.js';
 import type { CloudModule, Tenant } from '../domains/cloud/index.js';
 import type { CloudSandboxGatewayPort } from '../domains/conductor/ports/cloud-sandbox.port.js';
 import type { RunEventSinkPort } from '../domains/conductor/ports/run-event-sink.port.js';
+import type { OpenfangRunEventSink } from '../domains/engines/index.js';
 
 /** Deps for the off-box sandbox gateway. */
 export interface CloudSandboxGatewayDeps {
@@ -131,6 +140,68 @@ export function createConductorRunSink(bus: ConductorRunEventBus): RunEventSinkP
   return {
     async append(event) {
       await bus.ingest(event, 'conductor');
+    },
+  };
+}
+
+/** The narrow agent-os RunEvent bus surface the engines default-sink bridge ingests onto. */
+export interface EngineRunEventBus {
+  ingest(
+    event: RunEvent,
+    source: 'engine',
+  ): Promise<{
+    readonly accepted: boolean;
+    readonly rejection?: { readonly reason: string; readonly message: string };
+  }>;
+}
+
+/** The late-bound default openfang RunEvent sink handed to the engines napi adapter. */
+export interface LateBoundEngineRunSink {
+  /** The stable sink instance — safe to hand to `createEnginesModule` before `attach`. */
+  readonly sink: OpenfangRunEventSink;
+  /** Late-bind the agent-os bus (built AFTER engines) as the persistence target. */
+  attach(bus: EngineRunEventBus): void;
+}
+
+/**
+ * Build the LATE-BOUND default RunEvent sink for the engines openfang `launch_run`
+ * driver (recoder-a094). Boot order forces the late-bind: engines is Phase 4,
+ * agent-os (the state-of-record bus) is Phase 5a — so the sink is created first
+ * and `attach(agentOs.runEventBus())` closes the loop right after 5a. Truthful
+ * end to end: an event emitted BEFORE attach (boot-order gap only) and a returned
+ * bus rejection are each warn-logged — visible, never a silent audit-trail drop —
+ * and a bridge fault never propagates into the agent turn (the driver's `emit`
+ * already catches thrown sink faults).
+ */
+export function createEngineRunSink(logger: Logger): LateBoundEngineRunSink {
+  let bus: EngineRunEventBus | null = null;
+  return {
+    sink: {
+      async append(event: RunEvent): Promise<void> {
+        if (!bus) {
+          logger.warn(
+            { eventId: event.eventId, type: event.type, runId: event.runId },
+            'openfang RunEvent emitted before the agent-os bus attached — dropped (boot-order gap)',
+          );
+          return;
+        }
+        const result = await bus.ingest(event, 'engine');
+        if (!result.accepted) {
+          logger.warn(
+            {
+              eventId: event.eventId,
+              type: event.type,
+              runId: event.runId,
+              reason: result.rejection?.reason,
+              message: result.rejection?.message,
+            },
+            'openfang RunEvent ingest rejected by the agent-os bus — not persisted',
+          );
+        }
+      },
+    },
+    attach(b: EngineRunEventBus): void {
+      bus = b;
     },
   };
 }

@@ -152,7 +152,11 @@ export interface OpenfangLaunchInput {
 export interface OpenfangLaunchDeps {
   /** Engine resolver — defaults to the degrade-safe getOpenfangEngine(). */
   engine?: () => OpenfangEngineInstance | undefined;
-  /** RunEvent sink — defaults to the run-tailer's repository sink (lazy). */
+  /**
+   * RunEvent sink. In the composed app the napi adapter threads the bootstrap-
+   * injected agent-os bus sink here (recoder-a094); absent any sink the driver
+   * warn-logs and DROPS each event (truthful — never a fake persist).
+   */
   sink?: OpenfangRunEventSink;
   /** Clock — defaults to `() => new Date()`. */
   now?: () => Date;
@@ -287,20 +291,22 @@ function findExistingAgentId(engine: OpenfangEngineInstance, name: string): stri
 /**
  * Default sink when the caller injects none. The RunEvent audit-trail sink of
  * record is owned by the agent-os domain repository; this engines-domain driver
- * must NOT reach back into that state directly (domain boundary). The bootstrap
- * wiring is expected to inject a repository-backed sink via the napi adapter's
- * `runSink` option; absent that, we degrade-safely log the friendly event and
- * drop it rather than couple to the control-plane repository.
- *
- * TODO(bd): wire the agent-os domain repository as the default `runSink` through
- * bootstrap DI (napi-engines deps.openfang.runSink) so in-process openfang turns
- * persist to the canonical event log.
+ * must NOT reach back into that state directly (domain boundary). Bootstrap
+ * closes that gap (recoder-a094): `createEngineRunSink` in
+ * `bootstrap/conductor-seams.ts` injects the agent-os RunEvent bus
+ * (`source:'engine'`, late-bound after Phase 5a) as the napi adapter's default
+ * `runSink` (`EnginesModuleDeps.openfangRunSink` →
+ * `OpenfangNapiOptions.runSink`), so composed callers never land here. Reaching
+ * THIS fallback therefore means `launchOpenfangRun` was called with NO sink
+ * outside the composed app (tests / standalone) — warn loudly that the event is
+ * dropped rather than couple to the control-plane repository from inside the
+ * engines domain.
  */
 function appendToRepositorySink(event: RunEvent): void {
   const friendly = withFriendlyMessage(event);
-  logger.debug(
+  logger.warn(
     { type: friendly.type, runId: friendly.runId, taskId: friendly.taskId },
-    'openfang RunEvent produced with no injected sink — not persisted (inject runSink to record)',
+    'openfang RunEvent produced with no injected sink — DROPPED, not persisted (inject runSink to record)',
   );
 }
 

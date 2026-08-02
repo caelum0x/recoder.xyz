@@ -7,10 +7,12 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import type { RunEvent } from '@recoder/agent-os';
+import type { Logger } from '../shared/logger.js';
 import type { CloudModule } from '../domains/cloud/index.js';
 import {
   createCloudSandboxGateway,
   createConductorRunSink,
+  createEngineRunSink,
   createCliMintClosure,
 } from './conductor-seams.js';
 
@@ -115,6 +117,54 @@ describe('createConductorRunSink (RunEvent bus bridge)', () => {
 
     expect(ingest).toHaveBeenCalledTimes(1);
     expect(ingest).toHaveBeenCalledWith(event, 'conductor');
+  });
+});
+
+describe('createEngineRunSink (late-bound openfang default sink — recoder-a094)', () => {
+  const event = {
+    eventId: 'e1',
+    type: 'completed',
+    runId: 'r1',
+    taskId: 't1',
+  } as unknown as RunEvent;
+
+  it('forwards appended RunEvents onto the agent-os bus with source=engine once attached', async () => {
+    const warn = vi.fn();
+    const ingest = vi.fn(async () => ({ accepted: true }));
+    const late = createEngineRunSink({ warn } as unknown as Logger);
+
+    late.attach({ ingest });
+    await late.sink.append(event);
+
+    expect(ingest).toHaveBeenCalledTimes(1);
+    expect(ingest).toHaveBeenCalledWith(event, 'engine');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('warn-logs and drops (never throws) when appended BEFORE the bus attaches', async () => {
+    const warn = vi.fn();
+    const late = createEngineRunSink({ warn } as unknown as Logger);
+
+    await expect(Promise.resolve(late.sink.append(event))).resolves.toBeUndefined();
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[1]).toContain('before the agent-os bus attached');
+  });
+
+  it('surfaces a returned bus rejection as a truthful warn (never a masked drop)', async () => {
+    const warn = vi.fn();
+    const ingest = vi.fn(async () => ({
+      accepted: false,
+      rejection: { reason: 'unknown_run', message: 'run r1 not found' },
+    }));
+    const late = createEngineRunSink({ warn } as unknown as Logger);
+
+    late.attach({ ingest });
+    await late.sink.append(event);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toMatchObject({ eventId: 'e1', reason: 'unknown_run' });
+    expect(warn.mock.calls[0]?.[1]).toContain('rejected by the agent-os bus');
   });
 });
 
