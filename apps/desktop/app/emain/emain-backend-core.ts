@@ -871,7 +871,8 @@ export function writeWaveAIGatewayConfig(opts: {
 
 /**
  * Rail widgets retired from the default launcher (2026-07-25 Conductor-grade
- * trim; decisions recorded in docs/DESKTOP-UX-STATE-AND-PLAN.md §5):
+ * trim; the planning doc that recorded these decisions was pruned after the
+ * work landed — git history of docs/DESKTOP-UX-STATE-AND-PLAN.md has them):
  * cockpit (dropped UI), session/launch/review (hub owns those entry paths),
  * sysinfo/processes (infra dashboards), plus the earlier-hidden infra views
  * whose keys may still be pinned in old user configs. Approvals/Memory were
