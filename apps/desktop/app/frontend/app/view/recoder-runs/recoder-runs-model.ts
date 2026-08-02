@@ -3,6 +3,7 @@
 
 import { createBlock, globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
+import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readErrorReason } from "../recoder/recoder-errors";
 import {
@@ -127,9 +128,11 @@ class RecoderRunsViewModel implements ViewModel {
             globalStore.set(this.findingsAtom, findings ?? []);
             globalStore.set(this.findingsStatusAtom, findings == null ? "unavailable" : "ok");
             globalStore.set(this.connectedAtom, true);
+            RecoderConnectionModel.getInstance().noteRefresh(true);
             await this.refreshSelectedEvents();
         } catch (e) {
             globalStore.set(this.connectedAtom, false);
+            RecoderConnectionModel.getInstance().noteRefresh(false);
             globalStore.set(this.runsAtom, []);
             globalStore.set(this.eventsAtom, []);
             globalStore.set(this.workspacesAtom, []);

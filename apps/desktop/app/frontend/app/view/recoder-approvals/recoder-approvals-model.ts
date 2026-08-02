@@ -4,6 +4,7 @@
 import { globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { decideApproval } from "../recoder/recoder-approval-action";
+import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readFetchError } from "../recoder/recoder-errors";
 import { RecoderApprovalsView } from "./recoder-approvals";
@@ -62,6 +63,7 @@ class RecoderApprovalsViewModel implements ViewModel {
             const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/approvals`);
             if (!res.ok) {
                 globalStore.set(this.connectedAtom, false);
+                RecoderConnectionModel.getInstance().noteRefresh(false);
                 const detail = await readFetchError(res);
                 globalStore.set(this.errorAtom, detail || `Approvals unavailable (${res.status})`);
                 return;
@@ -76,8 +78,10 @@ class RecoderApprovalsViewModel implements ViewModel {
             const pending = list.filter((a) => a?.status == "pending");
             globalStore.set(this.approvalsAtom, pending);
             globalStore.set(this.connectedAtom, true);
+            RecoderConnectionModel.getInstance().noteRefresh(true);
         } catch {
             globalStore.set(this.connectedAtom, false);
+            RecoderConnectionModel.getInstance().noteRefresh(false);
             globalStore.set(this.approvalsAtom, []);
         } finally {
             globalStore.set(this.loadingAtom, false);
