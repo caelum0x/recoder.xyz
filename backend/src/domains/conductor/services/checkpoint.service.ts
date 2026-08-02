@@ -152,9 +152,6 @@ export async function createCheckpoint(
   }
 
   const ref = `${CHECKPOINT_TAG_PREFIX}/${checkpointId}`;
-  // Anchor the snapshot under a stable tag so it survives GC and is listable.
-  await git(cwd, ['tag', ref, snapshotSha]);
-
   const record: CheckpointRecord = {
     checkpointId,
     workspaceId,
@@ -181,6 +178,12 @@ export async function createCheckpoint(
     createdBy: input.createdBy,
     createdAt,
   };
+  // Anchor the snapshot under a stable ANNOTATED tag whose message is the record
+  // JSON: the tag survives GC + is listable, and git itself becomes the durable
+  // metadata store — a restarted backend rebuilds the list/restore surface from
+  // `git tag` (see `createGitCheckpointStore`) even when the in-process cache is
+  // gone. The record is secret-free by contract (see `CheckpointRecord.metadata`).
+  await git(cwd, ['tag', '-a', '-m', JSON.stringify(record), ref, snapshotSha]);
   await deps.store.save(record);
   deps.logger.info(
     { workspaceId, checkpointId, ref, kind, dirty },
@@ -202,7 +205,13 @@ async function loadCheckpointForWorkspace(
   workspaceId: string,
   checkpointId: string,
 ): Promise<CheckpointRecord> {
-  const record = await deps.store.get(checkpointId);
+  // A durable store may only rehydrate per-WORKSPACE (the git-tag rebuild needs a
+  // repo to scan), so a get() miss falls back to the workspace-scoped list before
+  // refusing — a restore right after a backend restart still finds its record.
+  const record =
+    (await deps.store.get(checkpointId)) ??
+    (await deps.store.listForWorkspace(workspaceId)).find((r) => r.checkpointId === checkpointId) ??
+    null;
   if (!record) throw new Error(`checkpoint not found: ${checkpointId}`);
   if (record.workspaceId !== workspaceId) {
     throw new Error(`checkpoint ${checkpointId} does not belong to workspace ${workspaceId}`);

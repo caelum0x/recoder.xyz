@@ -17,6 +17,7 @@ import {
     groupByTaskGroup,
     isNeedsInputAttention,
     isTerminalWorkspaceState,
+    mergeArchivedHistory,
     shouldRefetchDiffSummary,
     suggestNextAction,
     workspaceAttentionMap,
@@ -107,6 +108,36 @@ describe("shouldRefetchDiffSummary — 6s poll diff fan-out gate", () => {
     it("treats a missing updatedAt (older backend) as a stable key, not a per-tick refetch", () => {
         const ws = makeWs({ state: "awaiting_review", updatedAt: undefined });
         expect(shouldRefetchDiffSummary(ws, diffSummaryFetchKey(ws))).toBe(false);
+    });
+});
+
+describe("mergeArchivedHistory — live poll + on-demand archived history", () => {
+    it("appends archived history after the live list", () => {
+        const live = [makeWs({ state: "running" }), makeWs({ state: "failed" })];
+        const archived = [makeWs({ state: "archived" })];
+        const merged = mergeArchivedHistory(live, archived);
+        expect(merged.map((ws) => ws.workspaceId)).toEqual([...live, ...archived].map((ws) => ws.workspaceId));
+    });
+
+    it("the live copy wins on an id collision (the poll is the fresher read)", () => {
+        const shared = makeWs({ state: "running" });
+        const staleArchivedCopy = { ...shared, state: "archived" };
+        const merged = mergeArchivedHistory([shared], [staleArchivedCopy, makeWs({ state: "archived" })]);
+        expect(merged).toHaveLength(2);
+        expect(merged[0].state).toBe("running");
+    });
+
+    it("returns the live list untouched for an empty or null history", () => {
+        const live = [makeWs()];
+        expect(mergeArchivedHistory(live, [])).toBe(live);
+        expect(mergeArchivedHistory(live, null)).toBe(live);
+    });
+
+    it("an all-archived board still surfaces its history (empty live list)", () => {
+        const archived = [makeWs({ state: "archived" }), makeWs({ state: "archived" })];
+        const merged = mergeArchivedHistory([], archived);
+        expect(merged).toHaveLength(2);
+        expect(filterWorkspaces(merged, "archived", "")).toHaveLength(2);
     });
 });
 

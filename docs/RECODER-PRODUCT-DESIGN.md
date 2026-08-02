@@ -73,9 +73,13 @@ Small on purpose. Roughly three screens.
 - Each card: codename, repo/branch, the agent, a glanceable state — no engine chatter.
 - **New workspace** = one action: pick repo (auto-listed from your GitHub) + agent (preselected) +
   a task prompt. That's it — the backend does recall/index/gate/track invisibly.
-- **Board search / history** ✅ — a terse filter bar over the board: free-text `q` plus repo / agent /
-  state filters and an archived toggle, so a busy board stays findable and old runs stay reachable.
-  Live from `GET /workspaces?q=&repo=&agent=&state=&archived=` + `GET /workspaces/archived`.
+- **Board search / history** ✅ — a terse filter bar over the board: free-text query plus project /
+  Show (Active / All / Archived) filters, so a busy board stays findable and old runs stay reachable.
+  The text/project/Show narrowing runs CLIENT-SIDE over the already-fetched list (instant, no
+  refetch per keystroke, offline-friendly); the poll itself ships only live records
+  (`GET /workspaces?archived=false`) and the archived history loads on demand from
+  `GET /workspaces/archived`. The full query edge (`GET /workspaces?q=&repo=&agent=&state=&archived=`)
+  stays as the API-consumer surface for the same narrowing server-side.
 - **Multi-agent compare** ✅ — when you fan a task out across agents, the board shows them
   side-by-side: pick a run's parallel siblings and diff their results at a glance before you review
   each one. Live from `GET /workspaces/compare?taskGroup=` + `GET /workspaces/:id/siblings`.

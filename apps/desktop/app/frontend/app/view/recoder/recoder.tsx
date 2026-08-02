@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { agentAuthOptionSuffix, agentAuthPresentation } from "./recoder-agent-auth";
 import { agentLabel } from "./recoder-agent-labels";
 import { AgentAuthAffordance, RecoderAgentSetup } from "./recoder-agent-setup";
+import { WorkspaceCheckpoints } from "./recoder-checkpoints";
 import { RecoderCloneModal } from "./recoder-clone";
 import { RecoderCommandPalette, type RecoderCommand } from "./recoder-command-palette";
 import { RecoderComparePanel } from "./recoder-compare";
@@ -289,6 +290,7 @@ function WorkspaceRow({ model, ws, summary, pr, status, busy, tmuxBin, selected,
                         : `${usage.totals.cost} · ${usage.totals.totalTokens} tok · ${usage.totals.calls} calls`}
                 </div>
             )}
+            {selected && !terminal && <WorkspaceCheckpoints model={model} workspaceId={ws.workspaceId} busy={busy} />}
         </div>
     );
 }
@@ -351,11 +353,11 @@ RecoderConnectionBadge.displayName = "RecoderConnectionBadge";
 
 function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const workspaces = useAtomValue(model.workspacesAtom);
-    const allWorkspaces = useAtomValue(model.allWorkspacesAtom);
+    const allWorkspaces = useAtomValue(model.combinedWorkspacesAtom);
     const groups = useAtomValue(model.groupsAtom);
     const buckets = useAtomValue(model.boardBucketsAtom);
     const [boardFilter, setBoardFilter] = useAtom(model.boardFilterAtom);
-    const [boardShow, setBoardShow] = useAtom(model.boardShowAtom);
+    const boardShow = useAtomValue(model.boardShowAtom);
     const [boardProject, setBoardProject] = useAtom(model.boardProjectAtom);
     const projects = useAtomValue(model.projectsAtom);
     const compare = useAtomValue(model.compareAtom);
@@ -1091,7 +1093,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         <select
                             className={`${INPUT} cursor-pointer`}
                             value={boardShow}
-                            onChange={(e) => setBoardShow(e.target.value as RecoderBoardShow)}
+                            onChange={(e) => model.setBoardShow(e.target.value as RecoderBoardShow)}
                         >
                             <option value="active">Active</option>
                             <option value="all">All</option>

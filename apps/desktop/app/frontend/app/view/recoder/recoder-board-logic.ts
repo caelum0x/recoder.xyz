@@ -715,6 +715,19 @@ function detectAttentionTransitions(
 
 type RecoderBoardShow = "active" | "all" | "archived";
 
+// Pure: fold the on-demand archived history (GET /workspaces/archived) under the
+// live poll list (GET /workspaces?archived=false). On an id collision the LIVE
+// copy wins: the poll refreshes every 6s so it is the fresher read — a row the
+// history still claims while the poll says it's live resolves within one poll
+// tick, never a duplicated row.
+function mergeArchivedHistory(live: RecoderWorkspace[], archived: RecoderWorkspace[]): RecoderWorkspace[] {
+    if (archived == null || archived.length == 0) {
+        return live;
+    }
+    const liveIds = new Set(live.map((ws) => ws.workspaceId));
+    return [...live, ...archived.filter((ws) => !liveIds.has(ws.workspaceId))];
+}
+
 function workspaceMatchesQuery(ws: RecoderWorkspace, q: string): boolean {
     if ((ws.branch ?? "").toLowerCase().includes(q)) {
         return true;
@@ -865,6 +878,7 @@ export {
     NEEDS_INPUT_ATTENTIONS,
     groupByTaskGroup,
     filterWorkspaces,
+    mergeArchivedHistory,
     diffSummaryFetchKey,
     shouldRefetchDiffSummary,
     bucketWorkspaceGroups,
