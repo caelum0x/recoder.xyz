@@ -57,7 +57,11 @@ docs/superpowers
 # the bin/** re-inclusion above). Root .gitignore also lists these but the nested
 # bin/** negation would otherwise swallow the exclusion.
 server/engines/ziti/bin/ziti
+server/engines/ziti/bin/ziti.*
 server/engines/beads/bin/bd
+server/engines/beads/bin/bd.*
+# Any backup copy of an engine binary is oversized by definition.
+server/engines/**/bin/*.bak
 
 # Vendored TS/C engines (engines/*) keep their own tracked/ignored status too:
 # the app-level rules above (bindings/, .claude, bin/, ...) must not swallow

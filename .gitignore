@@ -723,3 +723,10 @@ apps/desktop/engines/**/.env.*
 # never commit (they were filter-repo-stripped from history on 2026-07-16).
 /apps/desktop/server/engines/ziti/bin/ziti
 /apps/desktop/server/engines/beads/bin/bd
+
+# Agent-session artifacts at repo root (screenshots, browser dumps, bug evidence) —
+# working evidence, never product source. Keep git status clean for every agent.
+/recoder-gui-*.png
+/recoder-*.jpeg
+/.playwright-mcp/
+/.artifacts/
