@@ -1,4 +1,9 @@
-import type { ProviderMetadata } from "ai";
+/**
+ * Provider-specific metadata attached to embedding results.
+ * Matches the AI SDK v5 `ProviderMetadata` shape; the workspace catalog still
+ * pins `ai` v3 which does not export the type, so it is declared locally.
+ */
+export type ProviderMetadata = Record<string, Record<string, unknown>>;
 
 /**
  * Metrics collected after embedding completion
