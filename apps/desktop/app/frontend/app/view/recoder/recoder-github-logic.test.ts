@@ -5,9 +5,13 @@ import { describe, expect, it } from "vitest";
 
 import {
     filterClonableRepos,
+    filterReposByQuery,
+    GithubRepoListCap,
     githubIdentityLabel,
     parseGithubRepos,
     parseGithubStatus,
+    RepoChipDisplayLimit,
+    repoPickerHint,
 } from "./recoder-github-logic";
 
 describe("parseGithubStatus — token-free /github/status payload", () => {
@@ -91,5 +95,51 @@ describe("filterClonableRepos — hide repos already cloned locally", () => {
         expect(filterClonableRepos(repos, [])).toEqual(repos);
         expect(filterClonableRepos(repos, ["/Users/dev/unrelated/"])).toEqual(repos);
         expect(filterClonableRepos(repos, ["/Users/dev/other/"]).map((r) => r.name)).toEqual(["recoder.xyz"]);
+    });
+});
+
+describe("filterReposByQuery — typeahead over nameWithOwner", () => {
+    const repos = [
+        { name: "recoder.xyz", nameWithOwner: "caelum0x/recoder.xyz", url: "https://github.com/caelum0x/recoder.xyz" },
+        { name: "beads", nameWithOwner: "caelum0x/beads", url: "https://github.com/caelum0x/beads" },
+        { name: "wave", nameWithOwner: "wavetermdev/wave", url: "https://github.com/wavetermdev/wave" },
+    ];
+
+    it("matches case-insensitively over the full owner/name", () => {
+        expect(filterReposByQuery(repos, "BEADS").map((r) => r.name)).toEqual(["beads"]);
+        expect(filterReposByQuery(repos, "caelum").map((r) => r.name)).toEqual(["recoder.xyz", "beads"]);
+    });
+
+    it("an empty or whitespace query means no filter", () => {
+        expect(filterReposByQuery(repos, "")).toEqual(repos);
+        expect(filterReposByQuery(repos, "   ")).toEqual(repos);
+    });
+
+    it("a non-matching query yields the empty list, never a fabricated match", () => {
+        expect(filterReposByQuery(repos, "zzz-nope")).toEqual([]);
+        expect(filterReposByQuery([], "beads")).toEqual([]);
+    });
+});
+
+describe("repoPickerHint — truthful truncation labelling", () => {
+    it("is empty when the chips already show everything", () => {
+        expect(repoPickerHint(3, 3)).toBe("");
+        expect(repoPickerHint(RepoChipDisplayLimit, RepoChipDisplayLimit)).toBe("");
+    });
+
+    it("labels chip overflow with a type-to-filter nudge", () => {
+        expect(repoPickerHint(30, 40)).toBe(`Showing ${RepoChipDisplayLimit} of 30 — type to filter`);
+    });
+
+    it("labels the backend cap when the full list hits it", () => {
+        expect(repoPickerHint(5, GithubRepoListCap)).toBe(
+            `List capped at your ${GithubRepoListCap} most recently pushed repos`
+        );
+    });
+
+    it("joins both labels when overflowing a capped list", () => {
+        const hint = repoPickerHint(GithubRepoListCap, GithubRepoListCap);
+        expect(hint).toContain(`Showing ${RepoChipDisplayLimit} of ${GithubRepoListCap}`);
+        expect(hint).toContain(`capped at your ${GithubRepoListCap}`);
     });
 });

@@ -26,7 +26,13 @@ import type {
 const PROBE_TIMEOUT_MS = 3_000;
 /** `gh repo list` talks to the GitHub API — allow it longer than local probes. */
 const REPO_LIST_TIMEOUT_MS = 5_000;
-const REPO_LIST_LIMIT = 50;
+/**
+ * `gh repo list` orders by pushed recency, so this cap keeps the N most
+ * recently active repos. The desktop pickers filter client-side over this
+ * full list and show a truncation hint when the cap is hit — keep in sync
+ * with `GithubRepoListCap` in the desktop `recoder-github-logic.ts`.
+ */
+const REPO_LIST_LIMIT = 100;
 
 /** The exec surface the adapter probes with — injectable for tests. */
 export interface GithubProbeExec {
