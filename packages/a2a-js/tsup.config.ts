@@ -7,7 +7,9 @@ export default defineConfig({
     'src/client/index.ts',
   ],
   format: ['esm', 'cjs'],
-  dts: false,
+  // package.json declares dist/*.d.ts types entries — dts must stay on or TS
+  // consumers hit TS7016 (caught by scripts/verify-dist-freshness.sh).
+  dts: true,
   clean: true,
   external: ['express', 'uuid'],
 });
