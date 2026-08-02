@@ -19,6 +19,7 @@ export type {
 export type { ModelCatalogRepository, ModelCatalogUpsert } from './model-catalog.port.js';
 export type {
   UsageLedgerRepository,
+  UsageLedgerScope,
   DeliveryOutcomeRepository,
 } from './usage-ledger.port.js';
 export type { RunInferenceSinkPort, RoutedRunInference } from './run-inference-sink.port.js';

@@ -63,9 +63,10 @@ export interface InferenceRequest {
   readonly routingHint?: RoutingHint;
   /**
    * OPTIONAL conductor workspace correlation, stamped by the OpenAI-compat edge
-   * from the workspace-scoped base URL. Drives the run-inference sink ONLY;
-   * never affects routing/model/cost. Absent for backend-internal + plain
-   * HTTP-route callers ⇒ no sink emission.
+   * from the workspace-scoped base URL. Drives the run-inference sink and the
+   * usage ledger's `workspace_id` attribution; never affects routing/model/cost.
+   * Absent for backend-internal + plain HTTP-route callers ⇒ no sink emission
+   * and an honestly-unattributed ledger row.
    */
   readonly correlationWorkspaceId?: string;
 }
@@ -281,6 +282,10 @@ export interface UsageLedgerRecord {
   readonly costMicroUsd: number;
   readonly tier: DeliveryTier;
   readonly inferenceId: string | null;
+  /** The conductor workspace the call was billed against (null = unattributed). */
+  readonly workspaceId: string | null;
+  /** The task identity from the caller's routing hint (null = unattributed). */
+  readonly taskId: string | null;
   readonly createdAt: string;
 }
 
@@ -293,6 +298,8 @@ export interface UsageLedgerInput {
   readonly costMicroUsd: number;
   readonly tier: DeliveryTier;
   readonly inferenceId?: string | null;
+  readonly workspaceId?: string | null;
+  readonly taskId?: string | null;
 }
 
 /** Build a `TokenUsage` from optional parts (missing counts default to 0). */

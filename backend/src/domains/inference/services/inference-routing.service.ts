@@ -352,6 +352,10 @@ export class InferenceRoutingService {
         costMicroUsd,
         tier: params.tier,
         inferenceId: params.inferenceId ?? null,
+        // Truthful attribution: the workspace rides the workspace-scoped gateway
+        // edge, the task rides the caller's routing hint — absent ⇒ honest null.
+        workspaceId: params.req.correlationWorkspaceId ?? null,
+        taskId: params.req.routingHint?.taskId ?? null,
       });
     } catch (err) {
       this.log.warn({ err: message(err), model }, 'usage ledger accounting failed (ignored)');
