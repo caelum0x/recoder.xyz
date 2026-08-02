@@ -20,6 +20,14 @@ type RunEventLike = {
 
 type RunEventSeverity = "info" | "active" | "success" | "warn" | "danger";
 
+// Who the event is really about: "run" = the conductor/agent run itself;
+// "sandbox" = a cloud sandbox lifecycle transition the backend bridge
+// (backend/src/bootstrap/cloud-seams.ts toAgentOsRunEvent) folds onto the same
+// RunEvent board as a type:"log" frame stamped data.source:"cloud". Surfacing
+// the origin keeps the label truthful instead of mixing sandbox frames into the
+// run stream as generic logs.
+type RunEventOrigin = "run" | "sandbox";
+
 interface RunEventDescriptor {
     time: string;
     kind: string;
@@ -27,6 +35,7 @@ interface RunEventDescriptor {
     icon: string;
     severity: RunEventSeverity;
     detail: string;
+    origin: RunEventOrigin;
     // Present on an approval_requested event that carries a decidable approval —
     // lets the rich run view render inline approve/deny in place of the side-list.
     approvalId?: string;
@@ -54,6 +63,28 @@ const RunEventStyles: Record<string, RunEventStyle> = {
 };
 
 const UnknownStyle: RunEventStyle = { label: "Event", icon: "circle", severity: "info" };
+
+// Keyed by the CloudRunEvent lifecycle types the bridge stamps on data.cloudEventType.
+const SandboxEventStyles: Record<string, RunEventStyle> = {
+    "sandbox.provisioning": { label: "Sandbox provisioning", icon: "cloud", severity: "active" },
+    "sandbox.running": { label: "Sandbox running", icon: "cloud", severity: "success" },
+    "sandbox.error": { label: "Sandbox error", icon: "cloud", severity: "danger" },
+    "sandbox.destroyed": { label: "Sandbox destroyed", icon: "cloud", severity: "info" },
+    "sandbox.reaped": { label: "Sandbox reaped", icon: "cloud", severity: "info" },
+};
+
+const SandboxUnknownStyle: RunEventStyle = { label: "Sandbox", icon: "cloud", severity: "info" };
+
+// The bridge's sandbox lifecycle type (data.cloudEventType) when the event is a
+// cloud-sandbox frame (data.source == "cloud"), else null. A cloud frame with a
+// missing/blank lifecycle type returns "" so it still lands in the sandbox lane
+// (with the unknown style) instead of masquerading as a run log.
+function sandboxEventType(event: RunEventLike): string | null {
+    const data = event?.data;
+    if (data == null || data.source != "cloud") return null;
+    const cloudType = data.cloudEventType;
+    return typeof cloudType == "string" ? cloudType : "";
+}
 
 function formatEventTime(iso?: string): string {
     if (iso == null || iso == "") return "--:--:--";
@@ -88,7 +119,9 @@ function extractApprovalId(event: RunEventLike): string | null {
 
 function describeRunEvent(event: RunEventLike): RunEventDescriptor {
     const kind = typeof event.type == "string" && event.type != "" ? event.type : "event";
-    const style = RunEventStyles[kind] ?? UnknownStyle;
+    const sandboxType = sandboxEventType(event);
+    const style =
+        sandboxType != null ? (SandboxEventStyles[sandboxType] ?? SandboxUnknownStyle) : (RunEventStyles[kind] ?? UnknownStyle);
     const descriptor: RunEventDescriptor = {
         time: formatEventTime(event.createdAt),
         kind,
@@ -96,6 +129,7 @@ function describeRunEvent(event: RunEventLike): RunEventDescriptor {
         icon: style.icon,
         severity: style.severity,
         detail: eventDetail(event),
+        origin: sandboxType != null ? "sandbox" : "run",
     };
     if (kind == "approval_requested") {
         const approvalId = extractApprovalId(event);
@@ -105,9 +139,10 @@ function describeRunEvent(event: RunEventLike): RunEventDescriptor {
 }
 
 // Reproduce the legacy single-line text form from the structured descriptor so the
-// plain scrollback renderer and the rich renderer stay in lockstep.
+// plain scrollback renderer and the rich renderer stay in lockstep. A sandbox
+// frame heads with "sandbox" (its wire type is always "log", which would hide it).
 function formatRunEventLine(descriptor: RunEventDescriptor): string {
-    const head = `[${descriptor.time}] ${descriptor.kind}`;
+    const head = `[${descriptor.time}] ${descriptor.origin == "sandbox" ? "sandbox" : descriptor.kind}`;
     return descriptor.detail != "" ? `${head}  ${descriptor.detail}` : head;
 }
 
@@ -118,5 +153,6 @@ export {
     isTerminalRunEvent,
     type RunEventDescriptor,
     type RunEventLike,
+    type RunEventOrigin,
     type RunEventSeverity,
 };

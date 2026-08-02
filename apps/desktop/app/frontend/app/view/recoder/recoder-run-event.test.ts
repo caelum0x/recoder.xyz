@@ -43,6 +43,58 @@ describe("describeRunEvent", () => {
     });
 });
 
+describe("sandbox lifecycle frames (cloud bridge, bus source 'engine')", () => {
+    // The backend bridge (bootstrap/cloud-seams.ts toAgentOsRunEvent) folds every
+    // sandbox lifecycle transition onto the run-event board as type:"log" with
+    // data.source:"cloud" + data.cloudEventType:"sandbox.*" — the classifier must
+    // surface them in an explicit sandbox lane, never as a generic run log.
+    const sandboxFrame = (cloudEventType: string) => ({
+        type: "log",
+        message: `${cloudEventType}: sandbox sb-1 (daytona) → running`,
+        data: { source: "cloud", cloudEventType, sandboxId: "sb-1", provider: "daytona", status: "running" },
+    });
+
+    it("labels each sandbox lifecycle type with a sandbox lane + truthful severity", () => {
+        const cases: [string, string, string][] = [
+            ["sandbox.provisioning", "Sandbox provisioning", "active"],
+            ["sandbox.running", "Sandbox running", "success"],
+            ["sandbox.error", "Sandbox error", "danger"],
+            ["sandbox.destroyed", "Sandbox destroyed", "info"],
+            ["sandbox.reaped", "Sandbox reaped", "info"],
+        ];
+        for (const [cloudType, label, severity] of cases) {
+            const d = describeRunEvent(sandboxFrame(cloudType));
+            expect(d.origin).toBe("sandbox");
+            expect(d.label).toBe(label);
+            expect(d.severity).toBe(severity);
+            expect(d.icon).toBe("cloud");
+            expect(d.kind).toBe("log");
+        }
+    });
+
+    it("keeps a cloud frame with an unknown/missing lifecycle type in the sandbox lane", () => {
+        const unknown = describeRunEvent({ type: "log", data: { source: "cloud", cloudEventType: "sandbox.future" } });
+        expect(unknown).toMatchObject({ origin: "sandbox", label: "Sandbox", icon: "cloud", severity: "info" });
+        const missing = describeRunEvent({ type: "log", data: { source: "cloud" } });
+        expect(missing).toMatchObject({ origin: "sandbox", label: "Sandbox" });
+    });
+
+    it("leaves conductor/agent frames in the run lane", () => {
+        expect(describeRunEvent({ type: "log", data: { source: "agent" } })).toMatchObject({ origin: "run", label: "Log" });
+        expect(describeRunEvent({ type: "log" })).toMatchObject({ origin: "run", label: "Log" });
+        expect(describeRunEvent({ type: "completed" }).origin).toBe("run");
+    });
+
+    it("heads the plain scrollback line with 'sandbox' so the lane survives the text form", () => {
+        const d = describeRunEvent(sandboxFrame("sandbox.provisioning"));
+        expect(formatRunEventLine(d)).toBe(`[${d.time}] sandbox  sandbox.provisioning: sandbox sb-1 (daytona) → running`);
+    });
+
+    it("never treats a sandbox log frame as a terminal run event", () => {
+        expect(isTerminalRunEvent(sandboxFrame("sandbox.error"))).toBe(false);
+    });
+});
+
 describe("formatRunEventLine", () => {
     // Time is rendered in local time (legacy behavior), so assert structure from
     // the descriptor's own time rather than hardcoding a tz-dependent clock.
