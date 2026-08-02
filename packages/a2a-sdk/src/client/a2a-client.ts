@@ -1,9 +1,18 @@
+import { validateTaskHistory } from '../history-validation';
 import type { TaskEnvelope } from '../schemas/task-envelope';
 
 export type A2AClientOptions = {
   baseUrl: string;
   token?: string;
   fetchImpl?: typeof fetch;
+  /**
+   * Called for every remote task envelope REJECTED because its `history` chain
+   * is malformed (shape/continuity/ordering/legal-transition violation). The
+   * envelope is excluded from `listTasks` results — remote history is untrusted
+   * and a broken chain is never surfaced as truth. Absent ⇒ rejection is silent
+   * but still enforced.
+   */
+  onInvalidHistory?: (taskId: string | undefined, reason: string) => void;
 };
 
 export class A2AClient {
@@ -26,10 +35,19 @@ export class A2AClient {
     });
     if (!response.ok) throw new Error(`A2A listTasks failed: ${response.status}`);
     const body = await response.json() as unknown;
-    if (isTaskEnvelopeListResponse(body)) {
-      return body.data;
-    }
-    return Array.isArray(body) ? body as TaskEnvelope[] : [];
+    const envelopes = isTaskEnvelopeListResponse(body)
+      ? body.data
+      : Array.isArray(body) ? body as TaskEnvelope[] : [];
+    // Remote history is UNTRUSTED: drop any envelope whose history chain is
+    // malformed (validateTaskHistory) instead of handing it to the caller.
+    return envelopes.filter((envelope) => {
+      const result = validateTaskHistory(envelope?.history);
+      if (!result.ok) {
+        this.options.onInvalidHistory?.(envelope?.id, result.reason);
+        return false;
+      }
+      return true;
+    });
   }
 
   async sendMessage(envelope: TaskEnvelope): Promise<unknown> {
