@@ -11,10 +11,13 @@
  * `agent-os-crud.routes.ts` and is mounted here after the summary surfaces.
  */
 import { Router, type Request, type RequestHandler, type Response } from 'express';
+import type { z } from 'zod';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
-import type { AgentOsRepositoryPort } from '../ports/agent-os-repository.port.js';
+import type { AgentOsRepositoryPort, PageQuery } from '../ports/agent-os-repository.port.js';
 import { sendSuccess, sendError, createError, ErrorCode } from '../../../shared/errors.js';
+import { validateQuery } from '../../../http/middleware/validate.js';
 import { buildAgentOsCrudRouter } from './agent-os-crud.routes.js';
+import { paginationQuerySchema } from './agent-os-crud.schemas.js';
 import type { PolicyUpdatedEvent } from '../services/policy-update.emitter.js';
 
 export interface AgentOsRoutesDeps {
@@ -49,21 +52,37 @@ export function buildAgentOsRouter(deps: AgentOsRoutesDeps): Router {
     }
   });
 
-  router.get('/tasks', middleware.authenticate, async (_req: Request, res: Response) => {
-    try {
-      sendSuccess(res, await repository.listTasks());
-    } catch (error) {
-      sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, message(error)));
-    }
-  });
+  // Bounded list edges: `?limit=`/`?offset=` validated at the boundary, threaded
+  // as a REAL `LIMIT/OFFSET` into the repository (never a fetch-all-then-slice).
+  // Backward compatible — absent params ⇒ first page at the default cap, and
+  // `data` stays the array (pagination totals ride in `meta`).
+  router.get(
+    '/tasks',
+    middleware.authenticate,
+    validateQuery(paginationQuerySchema),
+    async (req: Request, res: Response) => {
+      try {
+        const page = await repository.listTasksPage(pageQueryOf(req));
+        sendSuccess(res, page.items, { meta: metaOf(page) });
+      } catch (error) {
+        sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, message(error)));
+      }
+    },
+  );
 
-  router.get('/runs', middleware.authenticate, async (_req: Request, res: Response) => {
-    try {
-      sendSuccess(res, await repository.listRuns());
-    } catch (error) {
-      sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, message(error)));
-    }
-  });
+  router.get(
+    '/runs',
+    middleware.authenticate,
+    validateQuery(paginationQuerySchema),
+    async (req: Request, res: Response) => {
+      try {
+        const page = await repository.listRunsPage(pageQueryOf(req));
+        sendSuccess(res, page.items, { meta: metaOf(page) });
+      } catch (error) {
+        sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, message(error)));
+      }
+    },
+  );
 
   // — Full per-aggregate CRUD edge table (self-gated per route) —
   router.use(
@@ -81,4 +100,19 @@ export function buildAgentOsRouter(deps: AgentOsRoutesDeps): Router {
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : 'agent-os request failed';
+}
+
+/** The validated `{ limit, offset }` bound (validateQuery has already coerced + defaulted). */
+function pageQueryOf(req: Request): PageQuery {
+  const { limit, offset } = req.query as unknown as z.infer<typeof paginationQuerySchema>;
+  return { limit, offset };
+}
+
+/** Pagination `meta` for the success envelope. */
+function metaOf(page: { total: number; limit: number; offset: number }): {
+  total: number;
+  limit: number;
+  offset: number;
+} {
+  return { total: page.total, limit: page.limit, offset: page.offset };
 }

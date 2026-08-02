@@ -49,6 +49,24 @@ import type { RecoderComponentDescriptor } from '@recoder/oss-registry';
 export type RepositoryResult<T> = T | Promise<T>;
 
 /**
+ * A validated, bounded page request for the (formerly unbounded) `list*` edges.
+ * The route boundary fail-fast-validates `limit`/`offset` BEFORE constructing
+ * this — the adapter trusts them and pushes a real `LIMIT/OFFSET` to the driver.
+ */
+export interface PageQuery {
+  readonly limit: number;
+  readonly offset: number;
+}
+
+/** One bounded page of a `list*` aggregate plus the total for pagination meta. */
+export interface ListPage<T> {
+  readonly items: T[];
+  readonly total: number;
+  readonly limit: number;
+  readonly offset: number;
+}
+
+/**
  * A full read of every state-of-record aggregate this domain owns. Used by the
  * composer to hydrate read models and by `/summary`. Approvals + work-locks are
  * intentionally ABSENT — they live in the governance domain.
@@ -100,8 +118,12 @@ export interface AgentOsRepositoryPort {
 
   // — Tasks + runs —
   listTasks(): RepositoryResult<TaskSpec[]>;
+  /** Bounded page of tasks (real `LIMIT/OFFSET`) — the scalable list edge. */
+  listTasksPage(page: PageQuery): RepositoryResult<ListPage<TaskSpec>>;
   upsertTask(task: TaskSpec): RepositoryResult<TaskSpec>;
   listRuns(): RepositoryResult<TaskRun[]>;
+  /** Bounded page of runs (real `LIMIT/OFFSET`) — the scalable list edge. */
+  listRunsPage(page: PageQuery): RepositoryResult<ListPage<TaskRun>>;
   upsertRun(run: TaskRun): RepositoryResult<TaskRun>;
 
   // — Approvals (read-only mirror; authoritative writes route via governance) —

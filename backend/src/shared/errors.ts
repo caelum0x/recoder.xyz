@@ -118,6 +118,8 @@ export interface SuccessEnvelope<T> {
   readonly success: true;
   readonly data: T;
   readonly message?: string;
+  /** OPTIONAL response metadata (e.g. pagination `{ total, limit, offset }`). */
+  readonly meta?: Record<string, unknown>;
 }
 
 /** Map an error code to its HTTP status. */
@@ -173,11 +175,16 @@ export function createError(code: ErrorCode, message?: string, options?: AppErro
 }
 
 /** Send the uniform success envelope. */
-export function sendSuccess<T>(res: Response, data: T, options?: { statusCode?: number; message?: string }): void {
+export function sendSuccess<T>(
+  res: Response,
+  data: T,
+  options?: { statusCode?: number; message?: string; meta?: Record<string, unknown> },
+): void {
   const body: SuccessEnvelope<T> = {
     success: true,
     data,
     ...(options?.message ? { message: options.message } : {}),
+    ...(options?.meta ? { meta: options.meta } : {}),
   };
   res.status(options?.statusCode ?? 200).json(body);
 }
