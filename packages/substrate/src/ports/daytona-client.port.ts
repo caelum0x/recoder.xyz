@@ -40,6 +40,19 @@ export interface DaytonaSandboxRef {
   id: string;
 }
 
+/**
+ * Launch context threaded into sandbox provisioning so the provider can bind
+ * the sandbox to the conductor run that launched it. Without this linkage the
+ * provider's sandbox lifecycle events carry no `runId` and can never be mapped
+ * back to the workspace's live run stream (recoder-qyvu).
+ */
+export interface DaytonaCreateSandboxContext {
+  /** The conductor workspace the sandbox is provisioned for. */
+  workspaceId?: string;
+  /** The launching run's id (`run_${workspaceId}` — the engine's convention). */
+  runId?: string;
+}
+
 export interface DaytonaClientPort {
   /**
    * Truthful config gate: is the Daytona path enabled at all (creds present /
@@ -50,8 +63,12 @@ export interface DaytonaClientPort {
   isEnabled(): boolean;
   /** Whether the Daytona API server is reachable and responsive right now. */
   isAvailable(): Promise<boolean>;
-  /** Provision a new remote sandbox. */
-  createSandbox(): Promise<DaytonaSandboxRef>;
+  /**
+   * Provision a new remote sandbox. `context` (when the launch is run-linked)
+   * lets the adapter attribute the sandbox — and its lifecycle events — to the
+   * launching run; adapters without run attribution may ignore it.
+   */
+  createSandbox(context?: DaytonaCreateSandboxContext): Promise<DaytonaSandboxRef>;
   /** Resolve the sandbox's working directory root. */
   getWorkDir(sandboxId: string): Promise<string>;
   /** Run a command inside the sandbox and capture its output. */

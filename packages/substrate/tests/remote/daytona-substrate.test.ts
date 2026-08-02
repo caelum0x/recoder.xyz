@@ -11,9 +11,14 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createDaytonaSubstrate } from '../../src/remote/index.js';
 import type {
   DaytonaClientPort,
+  DaytonaCreateSandboxContext,
   DaytonaExecOptions,
   DaytonaExecResult,
   DaytonaSandboxRef,
@@ -31,7 +36,7 @@ interface FakeClientOptions {
   enabled?: boolean;
   available?: boolean | (() => Promise<boolean>);
   exec?: (sandboxId: string, command: string, options?: DaytonaExecOptions) => Promise<DaytonaExecResult>;
-  createSandbox?: () => Promise<DaytonaSandboxRef>;
+  createSandbox?: (context?: DaytonaCreateSandboxContext) => Promise<DaytonaSandboxRef>;
   getWorkDir?: () => Promise<string>;
 }
 
@@ -43,7 +48,8 @@ function fakeClient(options: FakeClientOptions = {}): DaytonaClientPort & { dele
     isEnabled: () => options.enabled ?? true,
     isAvailable: async () =>
       typeof options.available === 'function' ? options.available() : (options.available ?? true),
-    createSandbox: async () => (options.createSandbox ? options.createSandbox() : { id: 'sandbox_new' }),
+    createSandbox: async (context) =>
+      options.createSandbox ? options.createSandbox(context) : { id: 'sandbox_new' },
     getWorkDir: async () => (options.getWorkDir ? options.getWorkDir() : '/work'),
     execCommand: async (sandboxId, command, opts) =>
       options.exec ? options.exec(sandboxId, command, opts) : { output: '' },
@@ -140,6 +146,44 @@ test('exitCode() returns undefined (unknown, not fabricated 0) on a transient er
 test('exitCode() returns undefined on garbled output (no marker)', async () => {
   const substrate = createDaytonaSubstrate({ client: fakeClient({ exec: async () => ({ output: 'something unexpected' }) }) });
   assert.equal(await substrate.exitCode?.(HANDLE), undefined);
+});
+
+// --- launch() run linkage --------------------------------------------------
+
+test('launch() threads the run linkage (workspaceId + run_<workspaceId>) into createSandbox (recoder-qyvu)', async () => {
+  // A real repo with an `origin` remote — launch() resolves it host-side.
+  const repoPath = mkdtempSync(join(tmpdir(), 'daytona-launch-'));
+  try {
+    execFileSync('git', ['init', '-q'], { cwd: repoPath });
+    execFileSync('git', ['remote', 'add', 'origin', 'https://example.com/repo.git'], {
+      cwd: repoPath,
+    });
+
+    const contexts: Array<DaytonaCreateSandboxContext | undefined> = [];
+    const substrate = createDaytonaSubstrate({
+      client: fakeClient({
+        createSandbox: async (context) => {
+          contexts.push(context);
+          return { id: 'sandbox_new' };
+        },
+      }),
+    });
+
+    const handle = await substrate.launch({
+      workspaceId: 'ws_test',
+      command: 'echo hi',
+      repoPath,
+      branch: 'feature/x',
+      baseRef: 'HEAD',
+    });
+
+    assert.equal(handle.ref, 'sandbox_new');
+    // The sandbox provision carries the launching run's identity, so provider-side
+    // lifecycle events map to a resolvable runId (the engine's `run_${workspaceId}`).
+    assert.deepEqual(contexts, [{ workspaceId: 'ws_test', runId: 'run_ws_test' }]);
+  } finally {
+    rmSync(repoPath, { recursive: true, force: true });
+  }
 });
 
 // --- capture() -----------------------------------------------------------

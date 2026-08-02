@@ -92,13 +92,17 @@ export function createCloudSandboxGateway(
       const h = await cloud.provisioner().health();
       return h.status !== 'down';
     },
-    provision: async () => {
+    provision: async (options) => {
       const cloud = cloudRef();
       if (!cloud) throw new Error('cloud module not wired');
       const tenant = await ensureConductorTenant();
+      // Thread the launching run's id through (recoder-qyvu): the provisioner
+      // stores it on the sandbox row and stamps it on every lifecycle RunEvent,
+      // so conductor-launched daytona frames resolve to their workspace and
+      // reach the live `/stream` fan-out instead of staying board-only.
       const provisioned = await cloud
         .provisioner()
-        .provision({ tenant, userId: tenantOwner });
+        .provision({ tenant, userId: tenantOwner, runId: options?.runId ?? null });
       if (!provisioned.ok) throw new Error(provisioned.error.message);
       return { id: provisioned.value.id };
     },

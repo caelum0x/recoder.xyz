@@ -52,6 +52,7 @@ export type {
   DaytonaExecResult,
   DaytonaExecOptions,
   DaytonaSandboxRef,
+  DaytonaCreateSandboxContext,
 } from './daytona-client.port.js';
 export type {
   SshExecPort,

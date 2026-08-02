@@ -28,6 +28,7 @@ import {
   createDaytonaSubstrate,
   type ConductorSubstrate,
   type DaytonaClientPort,
+  type DaytonaCreateSandboxContext,
   type DaytonaExecOptions,
   type DaytonaExecResult,
   type DaytonaSandboxRef,
@@ -58,8 +59,12 @@ function toDaytonaClient(gateway: CloudSandboxGatewayPort): DaytonaClientPort {
   return {
     isEnabled: (): boolean => gateway.isEnabled(),
     isAvailable: (): Promise<boolean> => gateway.isAvailable(),
-    async createSandbox(): Promise<DaytonaSandboxRef> {
-      const provisioned = await gateway.provision();
+    async createSandbox(context?: DaytonaCreateSandboxContext): Promise<DaytonaSandboxRef> {
+      // Thread the launching run's id into the provisioner so the sandbox's
+      // lifecycle RunEvents carry a resolvable runId (recoder-qyvu).
+      const provisioned = await gateway.provision(
+        context?.runId !== undefined ? { runId: context.runId } : undefined,
+      );
       return { id: provisioned.id };
     },
     getWorkDir: (sandboxId: string): Promise<string> => gateway.getWorkDir(sandboxId),

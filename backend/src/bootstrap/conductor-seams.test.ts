@@ -21,6 +21,7 @@ import {
 function fakeCloud(overrides: {
   ensureCalls?: () => void;
   health?: () => Promise<{ status: string }>;
+  provisionCalls?: Array<Record<string, unknown>>;
 } = {}): CloudModule {
   return {
     tenancy: () => ({
@@ -31,7 +32,10 @@ function fakeCloud(overrides: {
     }),
     provisioner: () => ({
       health: overrides.health ?? (async () => ({ status: 'up' })),
-      provision: async () => ({ ok: true as const, value: { id: 'sandbox-9' } }),
+      provision: async (req: Record<string, unknown>) => {
+        overrides.provisionCalls?.push(req);
+        return { ok: true as const, value: { id: 'sandbox-9' } };
+      },
       execInSandbox: async (_id: string, _tenantId: string, req: { command: string }) => ({
         ok: true as const,
         value: {
@@ -96,6 +100,23 @@ describe('createCloudSandboxGateway (off-box daytona substrate)', () => {
     cloud = fakeCloud(); // the late-bind (`cloudRef = cloud`)
     expect(gw.isEnabled()).toBe(true);
     expect(await gw.provision()).toEqual({ id: 'sandbox-9' });
+  });
+
+  it('threads the launching run\'s runId into the provisioner request (recoder-qyvu)', async () => {
+    const provisionCalls: Array<Record<string, unknown>> = [];
+    const gw = createCloudSandboxGateway({
+      cloudRef: () => fakeCloud({ provisionCalls }),
+      tenantOwner: 'conductor',
+      substrateId: 'daytona',
+    });
+
+    await gw.provision({ runId: 'run_ws_1' });
+    // No runId (unattributed provision) stays a truthful null, never a fabricated id.
+    await gw.provision();
+
+    expect(provisionCalls).toHaveLength(2);
+    expect(provisionCalls[0]).toMatchObject({ userId: 'conductor', runId: 'run_ws_1' });
+    expect(provisionCalls[1]).toMatchObject({ runId: null });
   });
 
   it('reports unavailable (never throws) when the provisioner health is down', async () => {

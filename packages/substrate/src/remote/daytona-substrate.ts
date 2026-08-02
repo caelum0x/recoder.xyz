@@ -119,7 +119,14 @@ export function createDaytonaSubstrate(deps: CreateDaytonaSubstrateDeps): Conduc
 
     async launch(input: SubstrateLaunchInput): Promise<SubstrateHandle> {
       const url = await remoteUrl(input.repoPath);
-      const sandbox = await client.createSandbox();
+      // Thread the launch's run linkage into provisioning so provider-side
+      // sandbox lifecycle events carry a resolvable runId (recoder-qyvu). The
+      // runId is the engine's deterministic convention (`run_${workspaceId}`,
+      // see workspace-engine.ts) — the run record is created right after launch.
+      const sandbox = await client.createSandbox({
+        workspaceId: input.workspaceId,
+        runId: `run_${input.workspaceId}`,
+      });
       const sandboxId = sandbox.id;
 
       try {
