@@ -34,6 +34,7 @@ import {
 } from "./recoder-board-logic";
 import { parseAgentAuthState, type AgentAuthState } from "./recoder-agent-auth";
 import { isGitHubRepoUrl, parseCloneResponse } from "./recoder-clone-logic";
+import { buildUsagePath, summarizeUsage, type MeteringDisplay, type UsagePayloadLike } from "./recoder-metering";
 import { RecoderConnectionModel } from "./recoder-connection-model";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { readErrorReason } from "./recoder-errors";
@@ -288,6 +289,12 @@ class RecoderViewModel implements ViewModel {
     // The workspaceId of the keyboard-focused board row; "" means none selected.
     // Drives j/k navigation and Enter-to-open; the view syncs it with the list.
     selectedWorkspaceIdAtom: PrimitiveAtom<string>;
+    // Workspace-scoped cost/token display from GET /inference/usage?workspaceId=…
+    // tagged with the workspaceId it describes, so the strip never shows one
+    // workspace's spend under another. null ⇒ not loaded / degraded (honest
+    // missing state, never a fabricated $0 strip).
+    usageAtom: PrimitiveAtom<MeteringDisplay>;
+    usageWorkspaceIdAtom: PrimitiveAtom<string>;
     // "Open GitHub project" clone modal state. destDir "" means "use the
     // backend's default repos folder" (the POST omits it) — the client never
     // fabricates the conductor's configured base dir.
@@ -349,6 +356,8 @@ class RecoderViewModel implements ViewModel {
         this.readinessAtom = atom({}) as PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
         this.lastMergeAtom = atom({}) as PrimitiveAtom<Record<string, RecoderMergeRecord>>;
         this.selectedWorkspaceIdAtom = atom("") as PrimitiveAtom<string>;
+        this.usageAtom = atom(null) as PrimitiveAtom<MeteringDisplay>;
+        this.usageWorkspaceIdAtom = atom("") as PrimitiveAtom<string>;
         this.cloneOpenAtom = atom(false) as PrimitiveAtom<boolean>;
         this.cloneUrlAtom = atom("") as PrimitiveAtom<string>;
         this.cloneDestDirAtom = atom("") as PrimitiveAtom<string>;
@@ -849,6 +858,27 @@ class RecoderViewModel implements ViewModel {
         } catch {
             return [];
         }
+    }
+
+    // GET /inference/usage?workspaceId=… (via buildUsagePath) — the workspace-
+    // scoped ledger read for the cost strip. The result is tagged with the
+    // workspaceId it was fetched FOR; any failure/non-2xx clears the display to
+    // null so the strip vanishes rather than showing stale or fabricated spend.
+    async loadUsage(workspaceId: string) {
+        if (!workspaceId) {
+            return;
+        }
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}${buildUsagePath({ workspaceId })}`);
+            const data = res.ok ? (await res.json())?.data : null;
+            globalStore.set(
+                this.usageAtom,
+                data != null && typeof data == "object" ? summarizeUsage(data as UsagePayloadLike) : null
+            );
+        } catch {
+            globalStore.set(this.usageAtom, null);
+        }
+        globalStore.set(this.usageWorkspaceIdAtom, workspaceId);
     }
 
     // Inline launch — the product loop's entry point. Launches the primary agent

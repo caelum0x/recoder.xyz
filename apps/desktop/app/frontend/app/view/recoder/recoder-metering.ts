@@ -25,6 +25,15 @@ type UsageRowLike = {
     costMicroUsd?: number;
     createdAt?: string;
     latencyMs?: number | null;
+    workspaceId?: string | null;
+    taskId?: string | null;
+};
+
+// The attribution scope the backend echoed (only present when the caller
+// narrowed the read); also the shape buildUsagePath accepts for the request.
+type UsageScopeLike = {
+    workspaceId?: string;
+    taskId?: string;
 };
 
 type UsageTotalsLike = {
@@ -38,6 +47,7 @@ type UsageTotalsLike = {
 type UsagePayloadLike = {
     totals?: UsageTotalsLike;
     recent?: readonly UsageRowLike[];
+    scope?: UsageScopeLike;
 };
 
 interface MeteringTotalsDisplay {
@@ -57,6 +67,10 @@ interface MeteringRowDisplay {
     outputTokens: string;
     totalTokens: string;
     cost: string;
+    // What the ledger attributed this row to — workspace/task ids when the call
+    // carried them, or the honest "unattributed" for a null-scoped row. Never
+    // fabricated from the requested scope.
+    attribution: string;
     // Present only when the row carried a real latency — otherwise omitted, never
     // a fabricated zero (the usage ledger does not report latency).
     latency?: string;
@@ -65,6 +79,9 @@ interface MeteringRowDisplay {
 interface MeteringDisplay {
     totals: MeteringTotalsDisplay;
     recent: MeteringRowDisplay[];
+    // Labels what the numbers describe, from the scope the backend ECHOED (not
+    // the one the caller asked for) — "all usage" when the read was unscoped.
+    scopeLabel: string;
 }
 
 const MicroUsdPerUsd = 1_000_000;
@@ -110,6 +127,44 @@ function rowTotalTokens(row: UsageRowLike): number {
     return safeCount(row.inputTokens) + safeCount(row.outputTokens);
 }
 
+function cleanScopeId(value?: string | null): string {
+    return typeof value == "string" ? value.trim() : "";
+}
+
+// Row-level attribution comes ONLY from what the ledger recorded on the row —
+// a null-scoped row stays the honest "unattributed" even inside a scoped read.
+function describeRowAttribution(row: UsageRowLike): string {
+    const ws = cleanScopeId(row.workspaceId);
+    const task = cleanScopeId(row.taskId);
+    if (ws == "" && task == "") return "unattributed";
+    if (ws != "" && task != "") return `${ws} · ${task}`;
+    return ws != "" ? ws : task;
+}
+
+// Label for the ECHOED scope of a usage payload — what the totals/rows describe.
+function describeUsageScope(scope?: UsageScopeLike): string {
+    const ws = cleanScopeId(scope?.workspaceId);
+    const task = cleanScopeId(scope?.taskId);
+    if (ws == "" && task == "") return "all usage";
+    if (ws != "" && task != "") return `workspace ${ws} · task ${task}`;
+    return ws != "" ? `workspace ${ws}` : `task ${task}`;
+}
+
+const UsageEndpointPath = "/api/gateway/inference/usage";
+
+// The scoped read path for GET /inference/usage (inference mounts at
+// /api/gateway). Empty/blank scope parts are omitted, so an unscoped call stays
+// the plain per-user read the backend has always served.
+function buildUsagePath(scope?: UsageScopeLike): string {
+    const params = new URLSearchParams();
+    const ws = cleanScopeId(scope?.workspaceId);
+    const task = cleanScopeId(scope?.taskId);
+    if (ws != "") params.set("workspaceId", ws);
+    if (task != "") params.set("taskId", task);
+    const query = params.toString();
+    return query == "" ? UsageEndpointPath : `${UsageEndpointPath}?${query}`;
+}
+
 function describeUsageRow(row: UsageRowLike): MeteringRowDisplay {
     const display: MeteringRowDisplay = {
         time: formatUsageTime(row.createdAt),
@@ -120,6 +175,7 @@ function describeUsageRow(row: UsageRowLike): MeteringRowDisplay {
         outputTokens: formatCount(row.outputTokens),
         totalTokens: formatCount(rowTotalTokens(row)),
         cost: formatMicroUsd(row.costMicroUsd),
+        attribution: describeRowAttribution(row),
     };
     const latency = formatLatencyMs(row.latencyMs);
     if (latency != null) display.latency = latency;
@@ -148,11 +204,14 @@ function summarizeUsage(payload?: UsagePayloadLike): MeteringDisplay {
     return {
         totals: summarizeUsageTotals(payload?.totals),
         recent: rows.map(describeUsageRow),
+        scopeLabel: describeUsageScope(payload?.scope),
     };
 }
 
 export {
+    buildUsagePath,
     describeUsageRow,
+    describeUsageScope,
     formatCount,
     formatLatencyMs,
     formatMicroUsd,
@@ -163,5 +222,6 @@ export {
     type MeteringTotalsDisplay,
     type UsagePayloadLike,
     type UsageRowLike,
+    type UsageScopeLike,
     type UsageTotalsLike,
 };

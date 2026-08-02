@@ -4,8 +4,10 @@
 import { globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
+import { type MeteringDisplay } from "./recoder-metering";
 import { describeRunEvent, formatRunEventLine, type RunEventDescriptor } from "./recoder-run-event";
 import { RecoderTerminalView } from "./recoder-terminal";
+import { fetchWorkspaceUsage } from "./recoder-usage-strip";
 
 // A structured entry the rich run view renders: either a classified RunEvent
 // (rendered as an icon/severity block, with inline approve/deny when it carries a
@@ -15,6 +17,11 @@ type RunStreamEntry =
     | { kind: "system"; text: string; tone: "error" | "muted" };
 
 type RecoderTerminalStatus = "idle" | "no-workspace" | "connecting" | "connected" | "closed" | "error";
+
+// The cost/token strip's truthful state: idle (no workspace / not asked yet),
+// ready (a real scoped payload rendered), unavailable (the usage read failed —
+// shown as "usage unavailable", NEVER as a fake all-zero strip).
+type UsageStripStatus = "idle" | "ready" | "unavailable";
 
 // Mirror of the backend RunEvent shape (packages/agent-os domain/event.ts). Kept
 // as a local structural type so the Wave frontend does not couple to a backend
@@ -148,6 +155,8 @@ class RecoderTerminalViewModel implements ViewModel {
     workspaceIdAtom: PrimitiveAtom<string>;
     sendingAtom: PrimitiveAtom<boolean>;
     sendStatusAtom: PrimitiveAtom<string>;
+    usageAtom: PrimitiveAtom<MeteringDisplay>;
+    usageStatusAtom: PrimitiveAtom<UsageStripStatus>;
     socket: WebSocket;
     disposed: boolean;
     reconnectAttempt: number;
@@ -167,6 +176,8 @@ class RecoderTerminalViewModel implements ViewModel {
         this.workspaceIdAtom = atom("") as PrimitiveAtom<string>;
         this.sendingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.sendStatusAtom = atom("") as PrimitiveAtom<string>;
+        this.usageAtom = atom(null) as PrimitiveAtom<MeteringDisplay>;
+        this.usageStatusAtom = atom("idle") as PrimitiveAtom<UsageStripStatus>;
         this.socket = null;
         this.disposed = false;
         this.reconnectAttempt = 0;
@@ -315,6 +326,23 @@ class RecoderTerminalViewModel implements ViewModel {
         globalStore.set(this.entriesAtom, next);
     }
 
+    // (Re)load this workspace's scoped cost/token usage for the strip. Guards
+    // against a stale in-flight read by re-checking the bound workspace after the
+    // await, so a rebind never lets an older workspace's numbers render. null from
+    // the fetch means the read failed → "unavailable", never a faked zero strip.
+    async refreshUsage(): Promise<void> {
+        const workspaceId = globalStore.get(this.workspaceIdAtom);
+        if (workspaceId == "") {
+            globalStore.set(this.usageAtom, null);
+            globalStore.set(this.usageStatusAtom, "idle");
+            return;
+        }
+        const display = await fetchWorkspaceUsage(getRecoderBackendUrl(), workspaceId);
+        if (this.disposed || globalStore.get(this.workspaceIdAtom) != workspaceId) return;
+        globalStore.set(this.usageAtom, display);
+        globalStore.set(this.usageStatusAtom, display == null ? "unavailable" : "ready");
+    }
+
     // Send a follow-up instruction: POST it as a NEW agent run in the same
     // workspace. The agent's response streams back through the existing socket,
     // so we never re-render the scrollback here. Returns true on success so the
@@ -399,4 +427,5 @@ export {
     type RecoderRunEvent,
     type RecoderTerminalStatus,
     type RunStreamEntry,
+    type UsageStripStatus,
 };
