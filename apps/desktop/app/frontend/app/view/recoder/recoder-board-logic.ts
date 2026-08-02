@@ -14,7 +14,7 @@ import { agentLabel } from "./recoder-agent-labels";
 // shell renders a lenient subset — the backend may be older/newer, so state stays
 // a plain string here and everything beyond the picked fields remains optional.
 type RecoderWorkspace = Pick<Workspace, "workspaceId" | "branch" | "runtimeId" | "worktreePath"> &
-    Partial<Pick<Workspace, "createdAt">> & {
+    Partial<Pick<Workspace, "createdAt" | "updatedAt">> & {
         state: string;
         substrate?: string;
         sessionName?: string;
@@ -36,6 +36,20 @@ type RecoderWorkspace = Pick<Workspace, "workspaceId" | "branch" | "runtimeId" |
 // Binary files (numstat "-") contribute nothing; absent/unavailable diffs yield no
 // entry at all so the board never shows a fabricated count.
 type RecoderDiffSummary = { additions: number; deletions: number; files: number };
+
+// Change-detection key gating a workspace's diff-summary refetch. Every summary
+// fetch shells host git on the backend, so the 6s board poll must not fan one out
+// per workspace unconditionally: a row is re-asked only when this key advances.
+function diffSummaryFetchKey(ws: RecoderWorkspace): string {
+    return `${ws.state}|${ws.updatedAt ?? ""}`;
+}
+
+// "running" rows always refetch — a live agent mutates the worktree without the
+// control-plane row (state/updatedAt) moving, so the key alone can't see it. An
+// absent prevKey (first sight of this id) never matches, so new rows fetch once.
+function shouldRefetchDiffSummary(ws: RecoderWorkspace, prevKey: string): boolean {
+    return ws.state == "running" || prevKey != diffSummaryFetchKey(ws);
+}
 
 // One agent's row in the side-by-side compare of a parallel-run group. A lenient
 // mirror of the backend SiblingCompareEntry — `diffStat`/`changedFiles` are ABSENT
@@ -851,6 +865,8 @@ export {
     NEEDS_INPUT_ATTENTIONS,
     groupByTaskGroup,
     filterWorkspaces,
+    diffSummaryFetchKey,
+    shouldRefetchDiffSummary,
     bucketWorkspaceGroups,
     formatRelativeAge,
     isTerminalWorkspaceState,
