@@ -98,7 +98,7 @@ const critic = await agent(`Completeness critic for the Recoder improvement loop
 This round's results: ${JSON.stringify(results.filter(Boolean).map((r) => ({ id: r.id, title: r.title, verdict: r.verdict && r.verdict.verdict })))}
 Your job keeps the loop alive: find the NEXT round of work across dimensions (ux, backend, architecture, positioning, website). Method:
 1. For each failed verdict above, the issue stays open — do not refile it.
-2. Read ${ROOT}/docs/DESKTOP-UX-STATE-AND-PLAN.md pending/deferred sections and git log -10 for fresh context.
+2. Read ${ROOT}/docs/RECODER-PRODUCT-DESIGN.md (target product surfaces) and git log -10 for fresh context.
 3. Probe ONE under-examined area this round (rotate: run a typecheck or test suite that hasn't run recently, grep for TODO/FIXME in a recently-touched module, or check a doc-vs-code drift).
 4. File 2-4 NEW concrete bd issues for real findings: bd create "<title>" -d "<evidence + file pointers>" --json  (skip anything already in bd — check with: bd search "<keywords>" --status all --json -n 5).
 Return the ids you filed and your observations.`, { label: 'critic', phase: 'Critique', schema: CRITIC_SCHEMA, effort: 'high' })
