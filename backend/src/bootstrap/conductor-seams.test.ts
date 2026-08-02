@@ -13,6 +13,7 @@ import {
   createCloudSandboxGateway,
   createConductorRunSink,
   createEngineRunSink,
+  createEngineRunEventStreamFanout,
   createCliMintClosure,
 } from './conductor-seams.js';
 
@@ -165,6 +166,101 @@ describe('createEngineRunSink (late-bound openfang default sink — recoder-a094
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0]?.[0]).toMatchObject({ eventId: 'e1', reason: 'unknown_run' });
     expect(warn.mock.calls[0]?.[1]).toContain('rejected by the agent-os bus');
+  });
+});
+
+describe('createEngineRunEventStreamFanout (bus → live /stream — recoder-uivh)', () => {
+  const logger = { warn: vi.fn() } as unknown as Logger;
+  const cloudEvent = (overrides: Partial<RunEvent> = {}): RunEvent =>
+    ({
+      eventId: 'evt_cloud_1',
+      type: 'log',
+      taskId: 't1',
+      runId: 'run_1',
+      message: 'sandbox.provisioning: sandbox sb-1 (daytona) → provisioning',
+      createdAt: '2026-08-02T00:00:00.000Z',
+      data: { source: 'cloud', cloudEventType: 'sandbox.provisioning' },
+      ...overrides,
+    }) as unknown as RunEvent;
+
+  it('republishes an engine-source envelope onto the resolved workspace stream', async () => {
+    const publishRun = vi.fn();
+    const resolveWorkspaceId = vi.fn(async () => 'ws_1');
+    const fanout = createEngineRunEventStreamFanout({ resolveWorkspaceId, publishRun, logger });
+
+    const event = cloudEvent();
+    await fanout({ event, source: 'engine' });
+
+    expect(resolveWorkspaceId).toHaveBeenCalledWith('run_1');
+    expect(publishRun).toHaveBeenCalledTimes(1);
+    expect(publishRun).toHaveBeenCalledWith('ws_1', event);
+  });
+
+  it('skips conductor-sourced envelopes (the local sink already fans them out)', async () => {
+    const publishRun = vi.fn();
+    const resolveWorkspaceId = vi.fn(async () => 'ws_1');
+    const fanout = createEngineRunEventStreamFanout({ resolveWorkspaceId, publishRun, logger });
+
+    await fanout({ event: cloudEvent(), source: 'conductor' });
+
+    expect(resolveWorkspaceId).not.toHaveBeenCalled();
+    expect(publishRun).not.toHaveBeenCalled();
+  });
+
+  it('skips truthfully when the event carries no runId or the run binds no workspace', async () => {
+    const publishRun = vi.fn();
+    const fanout = createEngineRunEventStreamFanout({
+      resolveWorkspaceId: async () => null,
+      publishRun,
+      logger,
+    });
+
+    await fanout({ event: cloudEvent({ runId: undefined }), source: 'engine' });
+    await fanout({ event: cloudEvent(), source: 'engine' }); // resolver → null
+
+    expect(publishRun).not.toHaveBeenCalled();
+  });
+
+  it('prefers a tailer-stamped data.workspaceId over the resolver', async () => {
+    const publishRun = vi.fn();
+    const resolveWorkspaceId = vi.fn(async () => 'ws_other');
+    const fanout = createEngineRunEventStreamFanout({ resolveWorkspaceId, publishRun, logger });
+
+    const event = cloudEvent({
+      data: { source: 'cloud', workspaceId: 'ws_stamped' },
+    } as unknown as Partial<RunEvent>);
+    await fanout({ event, source: 'engine' });
+
+    expect(resolveWorkspaceId).not.toHaveBeenCalled();
+    expect(publishRun).toHaveBeenCalledWith('ws_stamped', event);
+  });
+
+  it('memoizes the runId → workspaceId binding (one state-of-record lookup per run)', async () => {
+    const publishRun = vi.fn();
+    const resolveWorkspaceId = vi.fn(async () => 'ws_1');
+    const fanout = createEngineRunEventStreamFanout({ resolveWorkspaceId, publishRun, logger });
+
+    await fanout({ event: cloudEvent({ eventId: 'e1' } as Partial<RunEvent>), source: 'engine' });
+    await fanout({ event: cloudEvent({ eventId: 'e2' } as Partial<RunEvent>), source: 'engine' });
+
+    expect(resolveWorkspaceId).toHaveBeenCalledTimes(1);
+    expect(publishRun).toHaveBeenCalledTimes(2);
+  });
+
+  it('warn-logs (never throws) when the resolver or publisher faults', async () => {
+    const warn = vi.fn();
+    const fanout = createEngineRunEventStreamFanout({
+      resolveWorkspaceId: async () => {
+        throw new Error('repo down');
+      },
+      publishRun: vi.fn(),
+      logger: { warn } as unknown as Logger,
+    });
+
+    await expect(fanout({ event: cloudEvent(), source: 'engine' })).resolves.toBeUndefined();
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[1]).toContain('fan-out failed');
   });
 });
 

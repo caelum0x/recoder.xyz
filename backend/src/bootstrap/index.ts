@@ -118,6 +118,7 @@ import {
   createCloudSandboxGateway,
   createConductorRunSink,
   createEngineRunSink,
+  createEngineRunEventStreamFanout,
   createCliMintClosure,
 } from './conductor-seams.js';
 import {
@@ -978,6 +979,29 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   });
   container.registerValue(DOMAIN_TOKENS.conductor, conductor);
   healthRegistry.register(conductor);
+
+  // Engine-source RunEvents → the live workspace `/stream` (recoder-uivh): the
+  // agent-os bus is where every NON-conductor emitter lands (cloud sandbox
+  // lifecycle via `createCloudRunEventBridge`, openfang engine turns,
+  // internal-api ingest) — but the `/api/conductor/workspaces/:id/stream` WS was
+  // fed ONLY by the conductor's local sink, so those envelopes persisted to the
+  // agent-os board yet never reached a live client. This subscription closes the
+  // gap: accepted, non-duplicate bus envelopes carrying a `runId` are resolved
+  // to their workspace through the conductor state-of-record and republished
+  // onto the SAME stream hub. Conductor-sourced envelopes are skipped (the local
+  // sink already fans them out — no duplicate frames); a fan-out fault is
+  // warn-logged, never propagated into the ingest path.
+  agentOs.runEventBus().subscribe(
+    createEngineRunEventStreamFanout({
+      resolveWorkspaceId: async runId => {
+        const workspaces = await conductor.listWorkspaces();
+        return workspaces.find(w => w.runId === runId)?.workspaceId ?? null;
+      },
+      publishRun: (workspaceId, event) =>
+        conductor.terminal().publishRunEvent(workspaceId, event),
+      logger: childLogger('conductor-stream-fanout'),
+    })
+  );
 
   // Late-bind the ACP permission gate (the substrate is built BEFORE the conductor
   // module, so the workspace-lookup seam attaches here). A gated ACP tool call —
