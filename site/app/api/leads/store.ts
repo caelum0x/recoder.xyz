@@ -17,6 +17,14 @@ export interface Lead {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * Hard cap on the leads log (≈2k+ leads at ~2.3KB each). The prod box runs
+ * chronically near-full, so an unauthenticated append must be disk-bounded:
+ * past the cap the write refuses (503 to the client) instead of filling the
+ * volume. Raise deliberately if real volume ever approaches it.
+ */
+export const MAX_LEADS_FILE_BYTES = 5 * 1024 * 1024;
+
 export function isValidEmail(email: unknown): email is string {
   return typeof email === "string" && email.length <= 254 && EMAIL_RE.test(email);
 }
@@ -54,17 +62,39 @@ export async function saveLead(
   let dir = resolveDataDir();
   try {
     await fs.mkdir(dir, { recursive: true });
+    await assertUnderSizeCap(leadsFile(dir));
     await fs.appendFile(leadsFile(dir), JSON.stringify(lead) + "\n", "utf8");
-  } catch {
+  } catch (error) {
+    if (error instanceof LeadsLogFullError) throw error;
     // Fall back to the OS temp dir if the preferred dir is not writable
     // (read-only deployment FS). If this also fails, the error propagates.
     dir = path.join(os.tmpdir(), "recoder-leads");
     await fs.mkdir(dir, { recursive: true });
+    await assertUnderSizeCap(leadsFile(dir));
     await fs.appendFile(leadsFile(dir), JSON.stringify(lead) + "\n", "utf8");
   }
 
   await forwardToWebhook(lead);
   return lead;
+}
+
+/** The leads log hit its disk-bound cap — the one write failure that must NOT
+ * fall through to the temp-dir retry (the cap is the point, not the path). */
+export class LeadsLogFullError extends Error {
+  constructor() {
+    super("leads log is at its size cap");
+    this.name = "LeadsLogFullError";
+  }
+}
+
+async function assertUnderSizeCap(file: string): Promise<void> {
+  try {
+    const stat = await fs.stat(file);
+    if (stat.size >= MAX_LEADS_FILE_BYTES) throw new LeadsLogFullError();
+  } catch (error) {
+    if (error instanceof LeadsLogFullError) throw error;
+    // Missing file = empty log = under cap.
+  }
 }
 
 async function forwardToWebhook(lead: Lead): Promise<void> {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isValidEmail, saveLead } from "./store";
+import { clientIpFrom, isHoneypotTripped, takeRateLimitToken } from "./guards";
 
 // Run on the Node.js runtime — we write the lead to disk.
 export const runtime = "nodejs";
@@ -15,9 +16,18 @@ interface LeadBody {
   plan?: unknown;
   message?: unknown;
   source?: unknown;
+  /** Honeypot — never rendered in the real form; bots autofill it. */
+  website?: unknown;
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
+  if (!takeRateLimitToken(clientIpFrom(request.headers), Date.now())) {
+    return NextResponse.json(
+      { success: false, error: "Too many requests — try again in a minute." },
+      { status: 429 },
+    );
+  }
+
   let body: LeadBody;
   try {
     body = (await request.json()) as LeadBody;
@@ -26,6 +36,12 @@ export async function POST(request: Request): Promise<NextResponse> {
       { success: false, error: "Invalid JSON body." },
       { status: 400 },
     );
+  }
+
+  if (isHoneypotTripped(body)) {
+    // Tripped honeypot: drop without storing, answer as if stored so the bot
+    // doesn't learn to skip the field (see guards.ts for the rationale).
+    return NextResponse.json({ success: true, id: "ok" }, { status: 201 });
   }
 
   const kind = typeof body.kind === "string" ? body.kind : "";
