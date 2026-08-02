@@ -38,6 +38,12 @@ import {
 import { parseAgentAuthState, type AgentAuthState } from "./recoder-agent-auth";
 import { parseCheckpointList, type RecoderCheckpoint } from "./recoder-checkpoint-logic";
 import { isGitHubRepoUrl, parseCloneResponse } from "./recoder-clone-logic";
+import {
+    parseGithubRepos,
+    parseGithubStatus,
+    type RecoderGithubRepo,
+    type RecoderGithubStatus,
+} from "./recoder-github-logic";
 import { buildUsagePath, summarizeUsage, type MeteringDisplay, type UsagePayloadLike } from "./recoder-metering";
 import { RecoderConnectionModel } from "./recoder-connection-model";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
@@ -255,6 +261,17 @@ class RecoderViewModel implements ViewModel {
     agentAuthAtom: PrimitiveAtom<Record<string, AgentAuthState>>;
     // First-run environment import (git identity, agent configs, gh, shell); null until probed.
     environmentAtom: PrimitiveAtom<RecoderEnvironment>;
+    // Detected GitHub identity (token-free GET /github/status); null until a
+    // successful probe — "unknown", never a fabricated not-connected.
+    githubStatusAtom: PrimitiveAtom<RecoderGithubStatus>;
+    // The detected account's clonable repos (GET /github/repos); [] until loaded
+    // or when gh is absent/signed out — the pickers then fall back to paste.
+    githubReposAtom: PrimitiveAtom<RecoderGithubRepo[]>;
+    // True once the GitHub probe LANDED (status parsed from a 2xx). Gates the
+    // fetch to once per session — /github/repos shells `gh repo list` (a real
+    // GitHub API call) on the backend, so it must not ride the 6s poll. A
+    // failed/unreachable probe leaves this false so the next poll retries.
+    githubLoaded: boolean;
     diffSummariesAtom: PrimitiveAtom<Record<string, RecoderDiffSummary>>;
     // Per-workspace PR chip from GET /workspaces/:id/pr-status (gh-backed). A
     // missing entry means gh couldn't be consulted, the branch has no PR, or the
@@ -380,6 +397,9 @@ class RecoderViewModel implements ViewModel {
         this.setupAtom = atom({ agents: [], git: false, loaded: false, probed: false, tmuxBin: "" }) as PrimitiveAtom<RecoderSetup>;
         this.agentAuthAtom = atom({}) as PrimitiveAtom<Record<string, AgentAuthState>>;
         this.environmentAtom = atom(null) as PrimitiveAtom<RecoderEnvironment>;
+        this.githubStatusAtom = atom(null) as PrimitiveAtom<RecoderGithubStatus>;
+        this.githubReposAtom = atom([]) as PrimitiveAtom<RecoderGithubRepo[]>;
+        this.githubLoaded = false;
         this.diffSummariesAtom = atom({}) as PrimitiveAtom<Record<string, RecoderDiffSummary>>;
         this.prStatusAtom = atom({}) as PrimitiveAtom<Record<string, RecoderPrChip>>;
         this.launchOpenAtom = atom(false) as PrimitiveAtom<boolean>;
@@ -486,6 +506,41 @@ class RecoderViewModel implements ViewModel {
             globalStore.set(this.agentAuthAtom, {});
         }
         this.refreshEnvironment();
+        this.refreshGithub();
+    }
+
+    // GET /github/status + /github/repos → the GitHub half of the zero-config
+    // first-run: detected identity + the account's repos for the pickers.
+    // Loads once per session (see githubLoaded); the manual Re-scan forces a
+    // re-probe. Degrade-safe: any failure is a null status / empty list — the
+    // pickers truthfully fall back to the manual paste flow, never an error.
+    async refreshGithub(force = false) {
+        if (this.githubLoaded && !force) {
+            return;
+        }
+        const base = getRecoderBackendUrl();
+        let status: RecoderGithubStatus = null;
+        try {
+            const res = await fetch(`${base}/api/conductor/github/status`);
+            const body = await res.json();
+            if (res.ok) {
+                status = parseGithubStatus(body?.data);
+            }
+        } catch {
+            // backend unreachable (cold start) — stay unloaded so the next poll retries
+        }
+        globalStore.set(this.githubStatusAtom, status);
+        if (status == null) {
+            return;
+        }
+        this.githubLoaded = true;
+        try {
+            const res = await fetch(`${base}/api/conductor/github/repos`);
+            const body = await res.json();
+            globalStore.set(this.githubReposAtom, res.ok ? parseGithubRepos(body?.data) : []);
+        } catch {
+            globalStore.set(this.githubReposAtom, []);
+        }
     }
 
     // Best-effort, POSITIVE-ONLY per-agent auth probe. `/runtimes` reports PATH
@@ -525,6 +580,9 @@ class RecoderViewModel implements ViewModel {
     // and stays truthful — launch only enables once an agent is actually detected.
     async rescanAgents() {
         globalStore.set(this.setupProbingAtom, true);
+        // The manual re-scan also re-probes gh (a freshly-installed / freshly
+        // logged-in gh should surface without an app restart).
+        this.githubLoaded = false;
         try {
             await this.refreshSetup();
         } finally {

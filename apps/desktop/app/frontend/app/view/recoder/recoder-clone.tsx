@@ -5,6 +5,7 @@ import { getApi } from "@/app/store/global";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useRef } from "react";
 import { deriveGitHubUrl, isGitHubRepoUrl } from "./recoder-clone-logic";
+import { githubIdentityLabel } from "./recoder-github-logic";
 import { type RecoderViewModel } from "./recoder-model";
 import { CHIP, ERROR_ROW, FIELD_LABEL, INPUT, META, PRIMARY_BTN, QUIET_BTN, SECTION_TITLE } from "./recoder-styles";
 
@@ -16,6 +17,8 @@ function RecoderCloneModal({ model, onClose }: RecoderCloneModalProps) {
     const cloning = useAtomValue(model.cloningAtom);
     const cloneError = useAtomValue(model.cloneErrorAtom);
     const recentRepos = useAtomValue(model.recentReposAtom);
+    const githubStatus = useAtomValue(model.githubStatusAtom);
+    const githubRepos = useAtomValue(model.githubReposAtom);
     const paletteOpen = useAtomValue(model.commandPaletteOpenAtom);
     const shortcutsOpen = useAtomValue(model.shortcutsOpenAtom);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -46,6 +49,7 @@ function RecoderCloneModal({ model, onClose }: RecoderCloneModalProps) {
     // when an entry is itself obviously a GitHub URL — we never guess a remote
     // from a folder name, so this list is usually empty and the URL input leads.
     const recentUrls = [...new Set(recentRepos.map(deriveGitHubUrl).filter((u) => u != ""))];
+    const githubIdentity = githubIdentityLabel(githubStatus);
 
     const browseLocation = async () => {
         try {
@@ -73,6 +77,7 @@ function RecoderCloneModal({ model, onClose }: RecoderCloneModalProps) {
                 onKeyDown={onKeyDown}
             >
                 <div className={SECTION_TITLE}>Open GitHub project</div>
+                {githubIdentity != "" && <span className={META}>Detected GitHub account: {githubIdentity}</span>}
 
                 <label className="flex flex-col gap-1">
                     <span className={FIELD_LABEL}>Repository URL</span>
@@ -89,6 +94,24 @@ function RecoderCloneModal({ model, onClose }: RecoderCloneModalProps) {
                         </span>
                     )}
                 </label>
+
+                {githubRepos.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                        <span className={FIELD_LABEL}>Your GitHub repos</span>
+                        <div className="flex flex-wrap gap-1.5">
+                            {githubRepos.slice(0, 12).map((r) => (
+                                <button
+                                    key={r.nameWithOwner}
+                                    className={CHIP}
+                                    title={r.url}
+                                    onClick={() => setUrl(r.url)}
+                                >
+                                    {r.nameWithOwner}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {recentUrls.length > 0 && (
                     <div className="flex flex-col gap-1">

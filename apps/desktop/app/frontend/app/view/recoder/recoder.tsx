@@ -13,6 +13,7 @@ import { RecoderCommandPalette, type RecoderCommand } from "./recoder-command-pa
 import { RecoderComparePanel } from "./recoder-compare";
 import { RecoderConnectionModel } from "./recoder-connection-model";
 import { isConnectivityError } from "./recoder-errors";
+import { filterClonableRepos, githubIdentityLabel } from "./recoder-github-logic";
 import { RecoderIdentityAffordance } from "./recoder-identity";
 import { RecoderIdentityModel } from "./recoder-identity-model";
 import {
@@ -388,6 +389,10 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const launchResult = useAtomValue(model.launchResultAtom);
     const notifyOnAttention = useAtomValue(model.notifyOnAttentionAtom);
     const environment = useAtomValue(model.environmentAtom);
+    const githubStatus = useAtomValue(model.githubStatusAtom);
+    const githubRepos = useAtomValue(model.githubReposAtom);
+    const cloning = useAtomValue(model.cloningAtom);
+    const cloneError = useAtomValue(model.cloneErrorAtom);
     const setupProbing = useAtomValue(model.setupProbingAtom);
     const agentAuth = useAtomValue(model.agentAuthAtom);
     const [gitIniting, setGitIniting] = useState(false);
@@ -582,6 +587,11 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const parallelCount = alsoRun.filter((id) => id != runtimeId && id != "").length;
     const isGitError = /git|worktree|repositor/i.test(launchResult?.error ?? "");
     const quickStartRepo = recentRepos.find((r) => r.trim() != "") ?? "";
+    // GitHub auto-detect (/github/status + /github/repos): the account's repos
+    // become clone-on-pick chips in the Folder picker; repos already cloned into
+    // a recent local folder are hidden (their recents chip opens the local copy).
+    const githubIdentity = githubIdentityLabel(githubStatus);
+    const clonableRepos = filterClonableRepos(githubRepos, recentRepos);
 
     // Auth read for the currently-selected agent: `/runtimes` proves it's installed
     // but never that it's logged in, so the picker offers an "authenticate" path
@@ -836,6 +846,29 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                             {folderName(r)}
                                         </button>
                                     ))}
+                            </div>
+                        )}
+                        {clonableRepos.length > 0 && (
+                            <div className="flex flex-col gap-1">
+                                <span className={META}>
+                                    From your GitHub{githubIdentity != "" ? ` (${githubIdentity})` : ""} — pick to
+                                    clone:
+                                </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {clonableRepos.slice(0, 12).map((r) => (
+                                        <button
+                                            key={r.nameWithOwner}
+                                            className={CHIP}
+                                            title={r.url}
+                                            disabled={cloning}
+                                            onClick={() => model.cloneRepo(r.url)}
+                                        >
+                                            {r.nameWithOwner}
+                                        </button>
+                                    ))}
+                                </div>
+                                {cloning && <span className={META}>Cloning…</span>}
+                                {!cloning && cloneError != "" && <div className={ERROR_ROW}>{cloneError}</div>}
                             </div>
                         )}
                         {repoPath.trim() != "" && !repoIsGit && (
