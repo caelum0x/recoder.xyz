@@ -57,7 +57,7 @@ Start at **[docs/README.md](docs/README.md)**. Highlights:
 
 - [PRODUCT-THESIS.md](docs/PRODUCT-THESIS.md) — the convergence thesis + locked product decisions
 - [RECODER-ARCHITECTURE.md](docs/RECODER-ARCHITECTURE.md) — the layer stack + engine→module map
-- [STATUS.md](docs/STATUS.md) — the single source of truth for current state
+- [RECODER-PRODUCT-DESIGN.md](docs/RECODER-PRODUCT-DESIGN.md) — design principles: clean-first, backend/frontend split
 - [SECURITY-POSTURE.md](docs/SECURITY-POSTURE.md) — honest, code-grounded security posture
 - [RECODER-MODULES.md](docs/RECODER-MODULES.md) — the backend capabilities agents use (behind the governance gate)
 
@@ -67,7 +67,7 @@ Security is enforced **below the model** — hooks, policy gates, signed envelop
 
 ## Status
 
-Recoder is a real, actively-developed product: the full run → converge → governed-merge loop works end-to-end, and the backend, website, and desktop test suites are green. The path from here to a public multi-tenant launch is tracked in [STATUS.md](docs/STATUS.md) and [CONDUCTOR-PARITY-AND-SHIPPABILITY.md](docs/CONDUCTOR-PARITY-AND-SHIPPABILITY.md).
+Recoder is a real, actively-developed product: the full run → converge → governed-merge loop works end-to-end, and the backend, website, and desktop test suites are green. The current, code-grounded state lives in the [docs index](docs/README.md); the before-multi-tenant-launch checklist is in [SECURITY-POSTURE.md](docs/SECURITY-POSTURE.md).
 
 ## License & attribution
 
