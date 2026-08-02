@@ -259,3 +259,20 @@ export const eventsQuerySchema = z.object({
   taskId: z.string().min(1).optional(),
   runId: z.string().min(1).optional(),
 });
+
+// — Bounded LIST pagination (formerly-unbounded state-of-record read edges) —
+
+/** Default page size when `?limit=` is absent. */
+export const DEFAULT_PAGE_LIMIT = 50;
+/** Hard cap: a `?limit=` above this fails fast (never an unbounded scan). */
+export const MAX_PAGE_LIMIT = 200;
+
+/**
+ * `?limit=`/`?offset=` for the `GET /runs` + `GET /tasks` list edges. Fail-fast:
+ * a non-integer, `limit < 1`, `limit > MAX_PAGE_LIMIT`, or negative `offset`
+ * yields a `VALIDATION_ERROR` at the boundary. Absent ⇒ first page (default cap).
+ */
+export const paginationQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE_LIMIT).default(DEFAULT_PAGE_LIMIT),
+  offset: z.coerce.number().int().min(0).default(0),
+});

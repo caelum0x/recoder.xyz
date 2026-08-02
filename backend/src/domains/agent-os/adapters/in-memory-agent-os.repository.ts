@@ -28,7 +28,19 @@ import type { RecoderComponentDescriptor } from '@recoder/oss-registry';
 import type {
   AgentOsRepositoryPort,
   AgentOsRepositorySnapshot,
+  ListPage,
+  PageQuery,
 } from '../ports/agent-os-repository.port.js';
+
+/** Apply a validated `{ limit, offset }` bound over an ordered collection. */
+function pageOf<T>(all: readonly T[], page: PageQuery): ListPage<T> {
+  return {
+    items: all.slice(page.offset, page.offset + page.limit),
+    total: all.length,
+    limit: page.limit,
+    offset: page.offset,
+  };
+}
 
 /** Optional read-only workspace hydration (conductor is the write-owner). */
 export type InMemorySeed = Partial<AgentOsRepositorySnapshot> & {
@@ -117,6 +129,9 @@ export class InMemoryAgentOsRepository implements AgentOsRepositoryPort {
   listTasks(): TaskSpec[] {
     return [...this.tasks.values()];
   }
+  listTasksPage(page: PageQuery): ListPage<TaskSpec> {
+    return pageOf([...this.tasks.values()], page);
+  }
   upsertTask(task: TaskSpec): TaskSpec {
     this.tasks.set(task.taskId, task);
     this.changed();
@@ -124,6 +139,9 @@ export class InMemoryAgentOsRepository implements AgentOsRepositoryPort {
   }
   listRuns(): TaskRun[] {
     return [...this.runs.values()];
+  }
+  listRunsPage(page: PageQuery): ListPage<TaskRun> {
+    return pageOf([...this.runs.values()], page);
   }
   upsertRun(run: TaskRun): TaskRun {
     this.runs.set(run.runId, run);

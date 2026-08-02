@@ -41,6 +41,8 @@ import type { QueryRow } from '../../persistence/types.js';
 import type {
   AgentOsRepositoryPort,
   AgentOsRepositorySnapshot,
+  ListPage,
+  PageQuery,
 } from '../ports/agent-os-repository.port.js';
 
 /** The aggregate discriminators stored in `agentos_records.aggregate`. */
@@ -68,6 +70,12 @@ const UPSERT_RECORD_SQL = `insert into agentos_records (aggregate, record_id, pa
 
 const LIST_RECORDS_SQL = `select payload from agentos_records
    where aggregate = :aggregate order by seq asc`;
+
+const LIST_RECORDS_PAGE_SQL = `select payload from agentos_records
+   where aggregate = :aggregate order by seq asc limit :limit offset :offset`;
+
+const COUNT_RECORDS_SQL = `select count(*)::int as count from agentos_records
+   where aggregate = :aggregate`;
 
 const GET_RECORD_SQL = `select payload from agentos_records
    where aggregate = :aggregate and record_id = :record_id`;
@@ -138,11 +146,17 @@ export class PostgresAgentOsRepository implements AgentOsRepositoryPort {
   listTasks(): Promise<TaskSpec[]> {
     return this.list<TaskSpec>(AGG.task);
   }
+  listTasksPage(page: PageQuery): Promise<ListPage<TaskSpec>> {
+    return this.listPage<TaskSpec>(AGG.task, page);
+  }
   upsertTask(task: TaskSpec): Promise<TaskSpec> {
     return this.upsert(AGG.task, task.taskId, task);
   }
   listRuns(): Promise<TaskRun[]> {
     return this.list<TaskRun>(AGG.run);
+  }
+  listRunsPage(page: PageQuery): Promise<ListPage<TaskRun>> {
+    return this.listPage<TaskRun>(AGG.run, page);
   }
   upsertRun(run: TaskRun): Promise<TaskRun> {
     return this.upsert(AGG.run, run.runId, run);
@@ -289,6 +303,28 @@ export class PostgresAgentOsRepository implements AgentOsRepositoryPort {
   private async list<T>(aggregate: string): Promise<T[]> {
     const rows = await this.executor.read<QueryRow>(LIST_RECORDS_SQL, { aggregate });
     return rows.map((row) => row.payload as T);
+  }
+
+  /**
+   * Bounded page over one aggregate. The DB applies the `LIMIT/OFFSET` (never a
+   * fetch-all-then-slice), and a companion `count(*)` yields the total so the
+   * edge can report truthful pagination `meta`.
+   */
+  private async listPage<T>(aggregate: string, page: PageQuery): Promise<ListPage<T>> {
+    const [rows, countRow] = await Promise.all([
+      this.executor.read<QueryRow>(LIST_RECORDS_PAGE_SQL, {
+        aggregate,
+        limit: page.limit,
+        offset: page.offset,
+      }),
+      this.executor.one<QueryRow>(COUNT_RECORDS_SQL, { aggregate }),
+    ]);
+    return {
+      items: rows.map((row) => row.payload as T),
+      total: Number(countRow?.count ?? 0),
+      limit: page.limit,
+      offset: page.offset,
+    };
   }
 
   private async get<T>(aggregate: string, recordId: string): Promise<T | null> {
