@@ -86,11 +86,48 @@ function filterClonableRepos(repos: RecoderGithubRepo[], recentRepos: string[]):
     return repos.filter((r) => !leafs.has(r.name));
 }
 
+// Backend REPO_LIST_LIMIT (github-status.adapter.ts) — the /github/repos edge
+// never returns more than this many repos, so a full-length list means the
+// account likely has more repos than were listed. Keep the two in sync.
+const GithubRepoListCap = 100;
+
+// Both pickers render at most this many chips; the typeahead filter narrows
+// the FULL fetched list, so every fetched repo stays reachable by typing.
+const RepoChipDisplayLimit = 12;
+
+// Case-insensitive substring match over nameWithOwner (same client-side
+// pattern as the board search) — empty/whitespace query means "no filter".
+function filterReposByQuery(repos: RecoderGithubRepo[], query: string): RecoderGithubRepo[] {
+    const q = query.trim().toLowerCase();
+    if (q == "") {
+        return repos;
+    }
+    return repos.filter((r) => r.nameWithOwner.toLowerCase().includes(q));
+}
+
+// The truthful "you are not seeing everything" line under the chips: overflow
+// beyond the chip limit and/or the backend cap being hit. "" when the chips
+// already show everything the account has.
+function repoPickerHint(matchCount: number, totalCount: number): string {
+    const parts: string[] = [];
+    if (matchCount > RepoChipDisplayLimit) {
+        parts.push(`Showing ${RepoChipDisplayLimit} of ${matchCount} — type to filter`);
+    }
+    if (totalCount >= GithubRepoListCap) {
+        parts.push(`List capped at your ${GithubRepoListCap} most recently pushed repos`);
+    }
+    return parts.join(" · ");
+}
+
 export {
     filterClonableRepos,
+    filterReposByQuery,
+    GithubRepoListCap,
     githubIdentityLabel,
     parseGithubRepos,
     parseGithubStatus,
+    RepoChipDisplayLimit,
+    repoPickerHint,
     type RecoderGithubRepo,
     type RecoderGithubStatus,
 };

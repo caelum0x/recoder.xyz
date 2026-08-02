@@ -13,7 +13,13 @@ import { RecoderCommandPalette, type RecoderCommand } from "./recoder-command-pa
 import { RecoderComparePanel } from "./recoder-compare";
 import { RecoderConnectionModel } from "./recoder-connection-model";
 import { isConnectivityError } from "./recoder-errors";
-import { filterClonableRepos, githubIdentityLabel } from "./recoder-github-logic";
+import {
+    filterClonableRepos,
+    filterReposByQuery,
+    githubIdentityLabel,
+    RepoChipDisplayLimit,
+    repoPickerHint,
+} from "./recoder-github-logic";
 import { RecoderIdentityAffordance } from "./recoder-identity";
 import { RecoderIdentityModel } from "./recoder-identity-model";
 import {
@@ -396,6 +402,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const setupProbing = useAtomValue(model.setupProbingAtom);
     const agentAuth = useAtomValue(model.agentAuthAtom);
     const [gitIniting, setGitIniting] = useState(false);
+    const [repoQuery, setRepoQuery] = useState("");
 
     useEffect(() => {
         model.refresh();
@@ -592,6 +599,8 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     // a recent local folder are hidden (their recents chip opens the local copy).
     const githubIdentity = githubIdentityLabel(githubStatus);
     const clonableRepos = filterClonableRepos(githubRepos, recentRepos);
+    const matchingClonableRepos = filterReposByQuery(clonableRepos, repoQuery);
+    const clonableHint = repoPickerHint(matchingClonableRepos.length, githubRepos.length);
 
     // Auth read for the currently-selected agent: `/runtimes` proves it's installed
     // but never that it's logged in, so the picker offers an "authenticate" path
@@ -854,8 +863,16 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     From your GitHub{githubIdentity != "" ? ` (${githubIdentity})` : ""} — pick to
                                     clone:
                                 </span>
+                                {clonableRepos.length > RepoChipDisplayLimit && (
+                                    <input
+                                        className={`${INPUT} font-mono`}
+                                        placeholder="Type to filter repos…"
+                                        value={repoQuery}
+                                        onChange={(e) => setRepoQuery(e.target.value)}
+                                    />
+                                )}
                                 <div className="flex flex-wrap gap-1.5">
-                                    {clonableRepos.slice(0, 12).map((r) => (
+                                    {matchingClonableRepos.slice(0, RepoChipDisplayLimit).map((r) => (
                                         <button
                                             key={r.nameWithOwner}
                                             className={CHIP}
@@ -867,6 +884,10 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                         </button>
                                     ))}
                                 </div>
+                                {matchingClonableRepos.length == 0 && repoQuery.trim() != "" && (
+                                    <span className={META}>No listed repos match.</span>
+                                )}
+                                {clonableHint != "" && <span className={META}>{clonableHint}</span>}
                                 {cloning && <span className={META}>Cloning…</span>}
                                 {!cloning && cloneError != "" && <div className={ERROR_ROW}>{cloneError}</div>}
                             </div>

@@ -3,9 +3,9 @@
 
 import { getApi } from "@/app/store/global";
 import { useAtom, useAtomValue } from "jotai";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { deriveGitHubUrl, isGitHubRepoUrl } from "./recoder-clone-logic";
-import { githubIdentityLabel } from "./recoder-github-logic";
+import { filterReposByQuery, githubIdentityLabel, RepoChipDisplayLimit, repoPickerHint } from "./recoder-github-logic";
 import { type RecoderViewModel } from "./recoder-model";
 import { CHIP, ERROR_ROW, FIELD_LABEL, INPUT, META, PRIMARY_BTN, QUIET_BTN, SECTION_TITLE } from "./recoder-styles";
 
@@ -21,6 +21,7 @@ function RecoderCloneModal({ model, onClose }: RecoderCloneModalProps) {
     const githubRepos = useAtomValue(model.githubReposAtom);
     const paletteOpen = useAtomValue(model.commandPaletteOpenAtom);
     const shortcutsOpen = useAtomValue(model.shortcutsOpenAtom);
+    const [repoQuery, setRepoQuery] = useState("");
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -50,6 +51,8 @@ function RecoderCloneModal({ model, onClose }: RecoderCloneModalProps) {
     // from a folder name, so this list is usually empty and the URL input leads.
     const recentUrls = [...new Set(recentRepos.map(deriveGitHubUrl).filter((u) => u != ""))];
     const githubIdentity = githubIdentityLabel(githubStatus);
+    const matchingRepos = filterReposByQuery(githubRepos, repoQuery);
+    const repoHint = repoPickerHint(matchingRepos.length, githubRepos.length);
 
     const browseLocation = async () => {
         try {
@@ -98,8 +101,16 @@ function RecoderCloneModal({ model, onClose }: RecoderCloneModalProps) {
                 {githubRepos.length > 0 && (
                     <div className="flex flex-col gap-1">
                         <span className={FIELD_LABEL}>Your GitHub repos</span>
+                        {githubRepos.length > RepoChipDisplayLimit && (
+                            <input
+                                className={`${INPUT} font-mono`}
+                                placeholder="Type to filter repos…"
+                                value={repoQuery}
+                                onChange={(e) => setRepoQuery(e.target.value)}
+                            />
+                        )}
                         <div className="flex flex-wrap gap-1.5">
-                            {githubRepos.slice(0, 12).map((r) => (
+                            {matchingRepos.slice(0, RepoChipDisplayLimit).map((r) => (
                                 <button
                                     key={r.nameWithOwner}
                                     className={CHIP}
@@ -110,6 +121,10 @@ function RecoderCloneModal({ model, onClose }: RecoderCloneModalProps) {
                                 </button>
                             ))}
                         </div>
+                        {matchingRepos.length == 0 && repoQuery.trim() != "" && (
+                            <span className={META}>No listed repos match — paste the URL above.</span>
+                        )}
+                        {repoHint != "" && <span className={META}>{repoHint}</span>}
                     </div>
                 )}
 
