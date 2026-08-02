@@ -51,6 +51,7 @@ import type {
   EngineRegistryPort,
   EngineHealthRepository,
   McpHostPort,
+  McpHostTelemetry,
   McpServerRegistration,
 } from './ports/index.js';
 import { NapiLoader } from './supervisor/napi-loader.js';
@@ -608,6 +609,16 @@ export class EnginesComposer implements EnginesModule {
 
   host(): McpHostPort {
     return this.hostBundle;
+  }
+
+  /**
+   * Late-bind the observability telemetry seam onto the gated MCP host (BE-7.3).
+   * SINGLE-WRITER: called once by bootstrap after observability is composed —
+   * same discipline as the conductor's `setMetrics`. Every subsequent gated
+   * `host.call()` records RED metrics + a child span; unwired ⇒ untouched.
+   */
+  setMcpTelemetry(telemetry: McpHostTelemetry): void {
+    this.hostBundle.setTelemetry(telemetry);
   }
 
   /**

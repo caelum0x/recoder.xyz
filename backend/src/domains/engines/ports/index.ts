@@ -31,6 +31,7 @@ export type {
 
 export type {
   McpHostPort,
+  McpHostTelemetry,
   InProcToolHandler,
   HostCallOutcome,
   McpServerRegistration,

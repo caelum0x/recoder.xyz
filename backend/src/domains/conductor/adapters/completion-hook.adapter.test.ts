@@ -6,8 +6,35 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import type { RunEvent, Workspace } from '@recoder/agent-os';
+import type { MetricLabels, MetricsPort } from '../../observability/ports/metrics.port.js';
 import { createCompletionHookSink } from './completion-hook.adapter.js';
 import { makeLogger } from '../__fixtures__/harness.js';
+
+/** A recorded counter increment (metric name + label set + delta). */
+interface CounterInc {
+  readonly name: string;
+  readonly labels?: MetricLabels;
+  readonly value?: number;
+}
+
+/** A FAKE frozen MetricsPort that records counter increments. */
+function fakeMetrics(): { incs: CounterInc[]; port: MetricsPort } {
+  const incs: CounterInc[] = [];
+  const port: MetricsPort = {
+    counter: spec => ({
+      inc: (labels?: MetricLabels, value?: number) =>
+        void incs.push({
+          name: spec.name,
+          ...(labels ? { labels } : {}),
+          ...(value !== undefined ? { value } : {}),
+        }),
+    }),
+    gauge: () => ({ set: () => {}, inc: () => {}, dec: () => {} }),
+    histogram: () => ({ observe: () => {} }),
+    startTimer: () => ({ stop: () => 0 }),
+  };
+  return { incs, port };
+}
 
 function ws(over: Partial<Workspace> = {}): Workspace {
   return {
@@ -639,6 +666,138 @@ describe('conductor completion hook', () => {
     await expect(sink.append(event('failed'))).resolves.toBeUndefined();
     await flush();
     expect(inner.append).toHaveBeenCalledTimes(1);
+  });
+
+  it('records conductor_runs_total{outcome,engine} on a terminal event (engine from the workspace runtime)', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const { incs, port } = fakeMetrics();
+    const sink = createCompletionHookSink({
+      inner,
+      getMetrics: () => port,
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('completed'));
+    await flush();
+
+    expect(inner.append).toHaveBeenCalledTimes(1);
+    const runs = incs.filter(entry => entry.name === 'conductor_runs_total');
+    expect(runs).toHaveLength(1);
+    // No engine on the event ⇒ the workspace runtimeId labels the series.
+    expect(runs[0]?.labels).toEqual({ outcome: 'completed', engine: 'claude_code' });
+    // No usage on the event ⇒ no token series (never a fabricated 0).
+    expect(incs.some(entry => entry.name === 'conductor_run_tokens_total')).toBe(false);
+  });
+
+  it('records a failed run + REAL token usage by direction when the event carries usage', async () => {
+    const { incs, port } = fakeMetrics();
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      getMetrics: () => port,
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(
+      event('failed', {
+        data: {
+          workspaceId: 'ws_1',
+          engine: 'openfang',
+          inputTokens: 1200,
+          outputTokens: 340,
+        },
+      })
+    );
+    await flush();
+
+    expect(incs).toContainEqual({
+      name: 'conductor_runs_total',
+      labels: { outcome: 'failed', engine: 'openfang' },
+    });
+    expect(incs).toContainEqual({
+      name: 'conductor_run_tokens_total',
+      labels: { engine: 'openfang', direction: 'input' },
+      value: 1200,
+    });
+    expect(incs).toContainEqual({
+      name: 'conductor_run_tokens_total',
+      labels: { engine: 'openfang', direction: 'output' },
+      value: 340,
+    });
+  });
+
+  it('does NOT record run metrics on non-terminal events', async () => {
+    const { incs, port } = fakeMetrics();
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      getMetrics: () => port,
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('log', { eventId: 'evt_log' }));
+    await sink.append(event('started', { eventId: 'evt_started' }));
+    await flush();
+
+    expect(incs).toHaveLength(0);
+  });
+
+  it('labels engine "unknown" when neither the event nor a workspace carries an engine', async () => {
+    const { incs, port } = fakeMetrics();
+    const sink = createCompletionHookSink({
+      inner: { append: vi.fn(async () => {}) },
+      getMetrics: () => port,
+      getWorkspace: async () => null,
+      logger: makeLogger(),
+    });
+
+    await sink.append(event('completed'));
+    await flush();
+
+    expect(incs).toContainEqual({
+      name: 'conductor_runs_total',
+      labels: { outcome: 'completed', engine: 'unknown' },
+    });
+  });
+
+  it('degrade-safe: an unwired metrics thunk (returns undefined) is a truthful no-op', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const sink = createCompletionHookSink({
+      inner,
+      getMetrics: () => undefined, // bootstrap has not injected observability yet
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await expect(sink.append(event('completed'))).resolves.toBeUndefined();
+    await flush();
+    expect(inner.append).toHaveBeenCalledTimes(1);
+  });
+
+  it('degrade-safe: a metrics-registry throw never rejects append and never starves the other hooks', async () => {
+    const inner = { append: vi.fn(async () => {}) };
+    const record = vi.fn(async () => ({ inserted: true as const }));
+    const sink = createCompletionHookSink({
+      inner,
+      getMetrics: () => ({
+        counter: () => {
+          throw new Error('registry exploded');
+        },
+        gauge: () => ({ set: () => {}, inc: () => {}, dec: () => {} }),
+        histogram: () => ({ observe: () => {} }),
+        startTimer: () => ({ stop: () => 0 }),
+      }),
+      getMeter: () => ({ record }),
+      getWorkspace: async () => ws(),
+      logger: makeLogger(),
+    });
+
+    await expect(sink.append(event('completed'))).resolves.toBeUndefined();
+    await flush();
+    expect(inner.append).toHaveBeenCalledTimes(1);
+    // The metering hook after the faulting metrics block still ran.
+    expect(record).toHaveBeenCalledTimes(1);
   });
 
   it('degrade-safe: a harvest throw never rejects append (terminal event unaffected)', async () => {

@@ -51,6 +51,9 @@ import type {
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { RunSignalPushPort } from './ports/run-signal-push.port.js';
+// TYPE-ONLY: the frozen Phase-11 metrics seam (erased at build; the VALUE is
+// late-bound by bootstrap via `setMetrics` — no runtime conductor→observability edge).
+import type { MetricsPort } from '../observability/ports/metrics.port.js';
 import type {
   PrReviewEvidenceView,
   PrReviewPort,
@@ -431,6 +434,12 @@ export class ConductorComposer implements ConductorModule {
    */
   private runSignalPush?: RunSignalPushPort;
   /**
+   * OPTIONAL metrics seam (set by bootstrap `setMetrics` after observability is
+   * composed; absent ⇒ no run RED/USE series). Read by the completion-hook thunk
+   * on each terminal event — the BE-7.3 conductor feed into the frozen MetricsPort.
+   */
+  private metrics?: MetricsPort;
+  /**
    * OPTIONAL advisory PR auto-review port (set by bootstrap `setPrReview`;
    * absent ⇒ the readiness `review` facet stays a truthful `null`). Probed by
    * `workspaceReadiness` ONLY when a real open PR + a worktree exist — NEVER a
@@ -599,6 +608,10 @@ export class ConductorComposer implements ConductorModule {
       // bootstrap can inject the ops-recorder push port AFTER this module is
       // constructed (setRunSignalPush). Unwired ⇒ a truthful no-op (no push).
       getRunSignalPush: () => this.runSignalPush,
+      // Late-bound metrics (BE-7.3): the sink reads the frozen MetricsPort per
+      // terminal event, so bootstrap can inject it AFTER observability is
+      // composed (setMetrics). Unwired ⇒ a truthful no-op (no series recorded).
+      getMetrics: () => this.metrics,
       getWorkspace: id => this.repository.getWorkspace(id),
       logger: this.log,
     });
@@ -678,6 +691,16 @@ export class ConductorComposer implements ConductorModule {
    */
   setRunSignalPush(port: RunSignalPushPort): void {
     this.runSignalPush = port;
+  }
+
+  /**
+   * Inject the frozen metrics seam (BE-7.3 conductor RED/USE feed). SINGLE-WRITER:
+   * this is the ONLY mutation of `this.metrics`, called once at bootstrap after
+   * observability exists — same discipline as `setRunSignalPush`. Read by the
+   * completion-hook thunk on each terminal event; unwired ⇒ no series recorded.
+   */
+  setMetrics(metrics: MetricsPort): void {
+    this.metrics = metrics;
   }
 
   /**

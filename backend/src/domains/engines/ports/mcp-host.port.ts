@@ -17,8 +17,25 @@ import type {
 } from '@recoder/interop';
 import type { McpToolCallInput, McpToolResult } from '@recoder/agent-mcp';
 import type { McpToolCaller } from '../../../shared/module-base.js';
+// TYPE-ONLY: the frozen Phase-11 observability seams (erased at build). The
+// concrete values are late-bound by bootstrap AFTER observability is composed.
+import type { MetricsPort } from '../../observability/ports/metrics.port.js';
+import type { TracerPort } from '../../observability/ports/tracer.port.js';
 
 export type { HostCallOutcome, McpServerRegistration, McpToolCallInput, McpToolResult };
+
+/**
+ * The BE-7.3 telemetry seam for the gated MCP host: every `host.call()` (the ONE
+ * `authorize → risk → execute → audit` chokepoint) records RED metrics
+ * (`mcp_tool_calls_total{server,tool,status}` + `mcp_tool_call_duration_seconds`)
+ * and — when a tracer is supplied — opens a child span with server/tool/status
+ * attributes (`recordError` on any non-completed outcome). Late-bound by
+ * bootstrap after observability exists; unwired ⇒ the call path is untouched.
+ */
+export interface McpHostTelemetry {
+  readonly metrics: MetricsPort;
+  readonly tracer?: TracerPort;
+}
 
 /**
  * A gated call input carrying the EDGE-BOUND authenticated caller.

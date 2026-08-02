@@ -130,6 +130,10 @@ import {
 } from './social-seams.js';
 import { createObservabilityDelivery } from './observability-seams.js';
 import {
+  createCloudBillingQuotaBridge,
+  createCloudRunEventBridge,
+} from './cloud-seams.js';
+import {
   createSquadAutopilotDispatch,
   parseSquadSeedEnv,
 } from './agent-os-seams.js';
@@ -1165,13 +1169,17 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   //     AFTER billing. The Phase-3 governance decide→audit seam guards EVERY cloud
   //     write (sandbox provision/destroy, deployment create, preview-URL mint,
   //     tenant auto-provision); an erroring gate fails CLOSED at the cloud edge.
-  //     The remaining cross-domain seams are OPTIONAL + degrade-safe and are
-  //     intentionally left unwired here (see the integration report): `billingQuota`
-  //     (billing→cloud-quota bridge — shapes differ: EntitlementGate vs
-  //     TenantBillingQuotaPort), `runEvents` (CloudRunEvent→agent-os RunEvent bridge),
-  //     and `localRuntime` (no docker/podman runtime on the box). Absent ⇒ tenant
-  //     quota stands alone, sandbox events drop, local provider `down` — all truthful,
-  //     never faked. Config folded from the `cloud` override slice — no env read. ---
+  //     The `billingQuota` (billing→cloud-quota) + `runEvents` (CloudRunEvent→
+  //     agent-os RunEvent) seams are NOW wired from the composition-root bridges
+  //     (`cloud-seams.ts` — the two port pairs are structurally different, so the
+  //     bridges join them here without changing either domain): a tenant's plan
+  //     TIGHTENS its preview quota through the Phase-9 EntitlementGate (a billing
+  //     fault ⇒ null ⇒ the tenant quota stands alone), and every sandbox lifecycle
+  //     transition streams onto the SAME agent-os RunEvent board conductor runs use
+  //     (`source:'engine'`; a bus rejection is warn-logged, never masked). ONE seam
+  //     stays intentionally unwired: `localRuntime` (no docker/podman runtime on
+  //     the box) — absent ⇒ local provider `down`, truthful, never faked. Config
+  //     folded from the `cloud` override slice — no env read. ---
   const cloud = createCloudModule({
     config,
     logger: childLogger('cloud'),
@@ -1179,6 +1187,13 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     middleware: identity.middleware(),
     overrides: config.cloud,
     governanceGate: governance.gate(),
+    // Billing → cloud quota (tighten-only; billing built Phase-9, above).
+    billingQuota: createCloudBillingQuotaBridge(billing.gate()),
+    // Sandbox lifecycle → shared RunEvent board (agent-os built Phase-5a, above).
+    runEvents: createCloudRunEventBridge({
+      bus: agentOs.runEventBus(),
+      logger: childLogger('cloud-run-events'),
+    }),
     // The REAL DNS TXT + TLS-cert ownership prober, so custom domains can actually
     // be ACTIVATED (node:dns + node:tls). Absent it, `verify` stays truthfully
     // pending; the prober itself degrades truthfully on a resolve/probe fault.
@@ -1400,6 +1415,22 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // truthful no-op (never a fabricated signal).
   conductor.setRunSignalPush({
     forwardRunSignal: input => observability.forwardRunSignal(input),
+  });
+
+  // (BE-7.3) Domain-level RED/USE feeds into the frozen MetricsPort — the two
+  // highest-traffic non-HTTP work streams now land in the SAME in-process
+  // registry the SLO evaluator + `/metrics` scrape read:
+  //  - conductor: every terminal run event increments `conductor_runs_total
+  //    {outcome,engine}` (+ real token usage when the event carries it),
+  //  - engines MCP host: every gated `authorize → risk → execute → audit` tool
+  //    call records `mcp_tool_calls_total`/`…_duration_seconds` and a child span
+  //    (the tracer seam) with server/tool/status attrs + recordError on failure.
+  // Both are late-bound (observability is composed last) and degrade-truthful:
+  // a telemetry fault never alters a run event or a tool-call outcome.
+  conductor.setMetrics(observability.metrics());
+  engines.setMcpTelemetry({
+    metrics: observability.metrics(),
+    tracer: observability.tracer(),
   });
 
   // W10-A auto-review at delivery: bind the conductor-owned advisory
