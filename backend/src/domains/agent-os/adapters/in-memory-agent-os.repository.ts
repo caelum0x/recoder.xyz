@@ -25,11 +25,13 @@ import type {
 } from '@recoder/agent-os';
 import type { OutboxRecord } from '@recoder/agent-events';
 import type { RecoderComponentDescriptor } from '@recoder/oss-registry';
-import type {
-  AgentOsRepositoryPort,
-  AgentOsRepositorySnapshot,
-  ListPage,
-  PageQuery,
+import {
+  SNAPSHOT_EVENTS_TAIL,
+  type AgentOsRepositoryPort,
+  type AgentOsRepositorySnapshot,
+  type EventsPageQuery,
+  type ListPage,
+  type PageQuery,
 } from '../ports/agent-os-repository.port.js';
 
 /** Apply a validated `{ limit, offset }` bound over an ordered collection. */
@@ -88,7 +90,8 @@ export class InMemoryAgentOsRepository implements AgentOsRepositoryPort {
       memoryCandidates: this.listMemoryCandidates(),
       instructionBundles: this.listInstructionBundles(),
       policyDecisions: this.listPolicyDecisions(),
-      events: this.listEvents(),
+      // Bounded most-recent tail (parity with the postgres driver's capped read).
+      events: this.events.slice(-SNAPSHOT_EVENTS_TAIL),
       outbox: this.listOutbox(),
       spaces: this.listSpaces(),
       ossComponents: this.listOssComponents(),
@@ -118,6 +121,9 @@ export class InMemoryAgentOsRepository implements AgentOsRepositoryPort {
   // — Agents —
   listAgents(): AgentProfile[] {
     return [...this.agents.values()];
+  }
+  listAgentsPage(page: PageQuery): ListPage<AgentProfile> {
+    return pageOf([...this.agents.values()], page);
   }
   upsertAgent(agent: AgentProfile): AgentProfile {
     this.agents.set(agent.agentId, agent);
@@ -153,6 +159,12 @@ export class InMemoryAgentOsRepository implements AgentOsRepositoryPort {
   listApprovals(): Approval[] {
     return [...this.approvals.values()];
   }
+  listApprovalsPage(page: PageQuery): ListPage<Approval> {
+    return pageOf([...this.approvals.values()], page);
+  }
+  getApproval(approvalId: string): Approval | null {
+    return this.approvals.get(approvalId) ?? null;
+  }
   upsertApproval(approval: Approval): Approval {
     this.approvals.set(approval.approvalId, approval);
     this.changed();
@@ -162,6 +174,12 @@ export class InMemoryAgentOsRepository implements AgentOsRepositoryPort {
   // — Artifacts —
   listArtifacts(): Artifact[] {
     return [...this.artifacts.values()];
+  }
+  listArtifactsPage(page: PageQuery): ListPage<Artifact> {
+    return pageOf([...this.artifacts.values()], page);
+  }
+  getArtifact(artifactId: string): Artifact | null {
+    return this.artifacts.get(artifactId) ?? null;
   }
   upsertArtifact(artifact: Artifact): Artifact {
     this.artifacts.set(artifact.artifactId, artifact);
@@ -196,6 +214,9 @@ export class InMemoryAgentOsRepository implements AgentOsRepositoryPort {
   listMemoryItems(): MemoryItem[] {
     return [...this.memoryItems.values()];
   }
+  listMemoryItemsPage(page: PageQuery): ListPage<MemoryItem> {
+    return pageOf([...this.memoryItems.values()], page);
+  }
   upsertMemoryItem(memory: MemoryItem): MemoryItem {
     this.memoryItems.set(memory.memoryId, memory);
     this.changed();
@@ -203,6 +224,9 @@ export class InMemoryAgentOsRepository implements AgentOsRepositoryPort {
   }
   listMemoryCandidates(): MemoryCandidate[] {
     return [...this.memoryCandidates.values()];
+  }
+  listMemoryCandidatesPage(page: PageQuery): ListPage<MemoryCandidate> {
+    return pageOf([...this.memoryCandidates.values()], page);
   }
   upsertMemoryCandidate(candidate: MemoryCandidate): MemoryCandidate {
     this.memoryCandidates.set(candidate.candidateId, candidate);
@@ -214,6 +238,9 @@ export class InMemoryAgentOsRepository implements AgentOsRepositoryPort {
   listInstructionBundles(): InstructionBundle[] {
     return [...this.instructionBundles.values()];
   }
+  listInstructionBundlesPage(page: PageQuery): ListPage<InstructionBundle> {
+    return pageOf([...this.instructionBundles.values()], page);
+  }
   upsertInstructionBundle(bundle: InstructionBundle): InstructionBundle {
     this.instructionBundles.set(bundle.bundleId, bundle);
     this.changed();
@@ -223,6 +250,9 @@ export class InMemoryAgentOsRepository implements AgentOsRepositoryPort {
   // — Policy decisions —
   listPolicyDecisions(): PolicyDecision[] {
     return [...this.policyDecisions.values()];
+  }
+  listPolicyDecisionsPage(page: PageQuery): ListPage<PolicyDecision> {
+    return pageOf([...this.policyDecisions.values()], page);
   }
   upsertPolicyDecision(decision: PolicyDecision): PolicyDecision {
     this.policyDecisions.set(decision.decisionId, decision);
@@ -242,6 +272,15 @@ export class InMemoryAgentOsRepository implements AgentOsRepositoryPort {
   }
   listEvents(): RunEvent[] {
     return [...this.events];
+  }
+  /** Bounded, NEWEST-FIRST filtered page (postgres-driver parity). */
+  listEventsPage(query: EventsPageQuery): ListPage<RunEvent> {
+    const filtered = this.events.filter(
+      (e) =>
+        (!query.taskId || e.taskId === query.taskId) &&
+        (!query.runId || e.runId === query.runId),
+    );
+    return pageOf([...filtered].reverse(), { limit: query.limit, offset: query.offset });
   }
 
   // — Outbox —

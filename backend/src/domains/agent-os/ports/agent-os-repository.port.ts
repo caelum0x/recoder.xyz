@@ -67,9 +67,30 @@ export interface ListPage<T> {
 }
 
 /**
+ * A bounded page request over the append-only RunEvent log. The optional
+ * `taskId`/`runId` filters are pushed into the driver (`WHERE` on postgres) —
+ * never a full-log scan followed by an in-JS filter. Pages are NEWEST-FIRST
+ * (descending append order): the log only grows and every known consumer (the
+ * desktop Hub poll) wants the most recent tail.
+ */
+export interface EventsPageQuery extends PageQuery {
+  readonly taskId?: string;
+  readonly runId?: string;
+}
+
+/**
+ * Cap on the RunEvent tail included in {@link AgentOsRepositoryPort.snapshot}.
+ * The append-only log grows without bound, so `/summary` hydration carries the
+ * most-recent tail (ascending order preserved) instead of the whole log.
+ */
+export const SNAPSHOT_EVENTS_TAIL = 200;
+
+/**
  * A full read of every state-of-record aggregate this domain owns. Used by the
  * composer to hydrate read models and by `/summary`. Approvals + work-locks are
- * intentionally ABSENT — they live in the governance domain.
+ * intentionally ABSENT — they live in the governance domain. `events` is the
+ * BOUNDED most-recent tail ({@link SNAPSHOT_EVENTS_TAIL}, ascending) — the full
+ * append-only log is reachable only via `listEvents`/`listEventsPage`.
  */
 export interface AgentOsRepositorySnapshot {
   readonly agents: AgentProfile[];
@@ -114,6 +135,8 @@ export interface AgentOsRepositoryPort {
 
   // — Agents —
   listAgents(): RepositoryResult<AgentProfile[]>;
+  /** Bounded page of agents (real `LIMIT/OFFSET`) — the scalable list edge. */
+  listAgentsPage(page: PageQuery): RepositoryResult<ListPage<AgentProfile>>;
   upsertAgent(agent: AgentProfile): RepositoryResult<AgentProfile>;
 
   // — Tasks + runs —
@@ -128,10 +151,18 @@ export interface AgentOsRepositoryPort {
 
   // — Approvals (read-only mirror; authoritative writes route via governance) —
   listApprovals(): RepositoryResult<Approval[]>;
+  /** Bounded page of approvals (real `LIMIT/OFFSET`) — the scalable list edge. */
+  listApprovalsPage(page: PageQuery): RepositoryResult<ListPage<Approval>>;
+  /** O(1) point read (never a list-then-find). `null` when unknown. */
+  getApproval(approvalId: string): RepositoryResult<Approval | null>;
   upsertApproval(approval: Approval): RepositoryResult<Approval>;
 
   // — Artifacts —
   listArtifacts(): RepositoryResult<Artifact[]>;
+  /** Bounded page of artifacts (real `LIMIT/OFFSET`) — the scalable list edge. */
+  listArtifactsPage(page: PageQuery): RepositoryResult<ListPage<Artifact>>;
+  /** O(1) point read (never a list-then-find). `null` when unknown. */
+  getArtifact(artifactId: string): RepositoryResult<Artifact | null>;
   upsertArtifact(artifact: Artifact): RepositoryResult<Artifact>;
 
   // — Runtime evidence —
@@ -145,21 +176,35 @@ export interface AgentOsRepositoryPort {
 
   // — Memory items + candidates (items/candidates owned here; relations owned by memory domain) —
   listMemoryItems(): RepositoryResult<MemoryItem[]>;
+  /** Bounded page of memory items (real `LIMIT/OFFSET`) — the scalable list edge. */
+  listMemoryItemsPage(page: PageQuery): RepositoryResult<ListPage<MemoryItem>>;
   upsertMemoryItem(memory: MemoryItem): RepositoryResult<MemoryItem>;
   listMemoryCandidates(): RepositoryResult<MemoryCandidate[]>;
+  /** Bounded page of memory candidates (real `LIMIT/OFFSET`) — the scalable list edge. */
+  listMemoryCandidatesPage(page: PageQuery): RepositoryResult<ListPage<MemoryCandidate>>;
   upsertMemoryCandidate(candidate: MemoryCandidate): RepositoryResult<MemoryCandidate>;
 
   // — Instruction bundles —
   listInstructionBundles(): RepositoryResult<InstructionBundle[]>;
+  /** Bounded page of instruction bundles (real `LIMIT/OFFSET`) — the scalable list edge. */
+  listInstructionBundlesPage(page: PageQuery): RepositoryResult<ListPage<InstructionBundle>>;
   upsertInstructionBundle(bundle: InstructionBundle): RepositoryResult<InstructionBundle>;
 
   // — Policy decisions —
   listPolicyDecisions(): RepositoryResult<PolicyDecision[]>;
+  /** Bounded page of policy decisions (real `LIMIT/OFFSET`) — the scalable list edge. */
+  listPolicyDecisionsPage(page: PageQuery): RepositoryResult<ListPage<PolicyDecision>>;
   upsertPolicyDecision(decision: PolicyDecision): RepositoryResult<PolicyDecision>;
 
   // — Immutable event log (append-only) —
   appendEvent(event: RunEvent): RepositoryResult<RunEvent>;
   listEvents(): RepositoryResult<RunEvent[]>;
+  /**
+   * Bounded, NEWEST-FIRST page of the append-only log with driver-side
+   * `taskId`/`runId` filtering (`WHERE` + `LIMIT/OFFSET` on postgres — never a
+   * full-log scan filtered in JS). The scalable read behind `GET /events`.
+   */
+  listEventsPage(query: EventsPageQuery): RepositoryResult<ListPage<RunEvent>>;
 
   // — CloudEvents outbox (at-least-once delivery spine) —
   appendOutbox(record: OutboxRecord): RepositoryResult<OutboxRecord>;
