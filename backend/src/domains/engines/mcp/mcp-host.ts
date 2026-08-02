@@ -39,7 +39,9 @@ import type {
   McpHostPort,
   InProcToolHandler,
   EdgeBoundToolCallInput,
+  McpHostTelemetry,
 } from '../ports/mcp-host.port.js';
+import type { MetricSpec } from '../../observability/ports/metrics.port.js';
 import type { ToolExecEnforcementPort } from '../../governance/ports/tool-exec-gate.port.js';
 import type { GateDecisionContext } from '../../governance/types.js';
 import type { Principal } from '../../identity/types.js';
@@ -49,6 +51,20 @@ import {
   type EngineToolBinder,
 } from './inproc-router.js';
 import { IN_PROC_SERVERS, assertWiringComplete } from './engine-registry.js';
+
+/** RED rate+errors for gated MCP tool calls (BE-7.3): one increment per `.call()`. */
+const TOOL_CALLS_TOTAL: MetricSpec = {
+  name: 'mcp_tool_calls_total',
+  help: 'Gated MCP tool calls by wire outcome (RED rate + errors).',
+  labelNames: ['server', 'tool', 'status'],
+};
+/** RED duration for gated MCP tool calls (authorize → risk → execute → audit). */
+const TOOL_CALL_DURATION: MetricSpec = {
+  name: 'mcp_tool_call_duration_seconds',
+  help: 'Gated MCP tool call duration in seconds (RED duration).',
+  labelNames: ['server', 'tool', 'status'],
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30],
+};
 
 /**
  * Derive the enforcement subject from the EDGE-BOUND authenticated caller, never
@@ -212,6 +228,12 @@ export class InteropHostBundle implements McpHostPort {
   private readonly external: ExternalMcpProcessManager;
   private readonly palRootDir: string;
   private readonly inProcHandlers = new Map<string, InProcToolHandler>();
+  /**
+   * OPTIONAL BE-7.3 telemetry seam (set once by `setTelemetry` at bootstrap,
+   * AFTER observability is composed). Unwired ⇒ `call()` is the untouched
+   * pass-through — never a fabricated series or span.
+   */
+  private telemetry: McpHostTelemetry | null = null;
 
   constructor(options: InteropHostBundleOptions = {}) {
     this.external = new ExternalMcpProcessManager();
@@ -319,8 +341,55 @@ export class InteropHostBundle implements McpHostPort {
     return this.host.authorize(input);
   }
 
-  call(input: McpToolCallInput): Promise<HostCallOutcome> {
-    return this.host.call(input);
+  /**
+   * Late-bind the observability telemetry seam (BE-7.3). SINGLE-WRITER: called
+   * once by the engines composer after bootstrap hands it the frozen
+   * MetricsPort/TracerPort — same discipline as the conductor's `setMetrics`.
+   */
+  setTelemetry(telemetry: McpHostTelemetry): void {
+    this.telemetry = telemetry;
+  }
+
+  async call(input: McpToolCallInput): Promise<HostCallOutcome> {
+    const telemetry = this.telemetry;
+    if (!telemetry) return this.host.call(input);
+
+    // Bounded labels: serverId/tool come from the gated registry catalog; status
+    // is the 4-value wire outcome. The child span carries the same attributes so
+    // an inbound edge trace (telemetry middleware) contains the tool execution.
+    const serverId = input.server?.serverId ?? 'unknown';
+    const tool = input.toolName;
+    const span = telemetry.tracer?.startSpan('mcp.tool_call', {
+      attributes: { 'mcp.server': serverId, 'mcp.tool': tool },
+    });
+    const start = process.hrtime.bigint();
+    const record = (status: string, reason?: string): void => {
+      // Telemetry must never break (or reorder) the gated call path.
+      try {
+        const elapsedSec = Number(process.hrtime.bigint() - start) / 1e9;
+        const labels = { server: serverId, tool, status };
+        telemetry.metrics.counter(TOOL_CALLS_TOTAL).inc(labels);
+        telemetry.metrics.histogram(TOOL_CALL_DURATION).observe(labels, elapsedSec);
+        if (span) {
+          span.setAttribute('mcp.status', status);
+          if (status !== 'completed') span.recordError(reason ?? `mcp call ${status}`);
+          span.end();
+        }
+      } catch {
+        /* a metrics/tracer fault never reaches the caller */
+      }
+    };
+
+    try {
+      const outcome = await this.host.call(input);
+      record(outcome.status, outcome.status === 'completed' ? undefined : outcome.reason);
+      return outcome;
+    } catch (err) {
+      // `host.call` maps executor faults to a 'failed' outcome; a throw here is
+      // an infra fault upstream of the wire mapping — still recorded truthfully.
+      record('failed', err instanceof Error ? err.message : String(err));
+      throw err;
+    }
   }
 
   /** Truthful PAL server status: on-disk availability + live supervisor health. */

@@ -30,7 +30,23 @@ import type { CodeIntelPort } from '../ports/code-intel.port.js';
 import type { UsageMeterPort } from '../ports/usage-meter.port.js';
 import type { AgentEventPort } from '../ports/agent-event.port.js';
 import type { RunSignalPushPort } from '../ports/run-signal-push.port.js';
+// TYPE-ONLY: the frozen Phase-11 metrics seam (the contract every domain injects
+// to record RED/USE without coupling to the concrete registry). Erased at build.
+import type { MetricSpec, MetricsPort } from '../../observability/ports/metrics.port.js';
 import type { ConductorBrainMemory } from './brain-memory.adapter.js';
+
+/** RED rate+errors for conductor runs: one increment per emitted terminal event. */
+const RUNS_TOTAL: MetricSpec = {
+  name: 'conductor_runs_total',
+  help: 'Terminal conductor run events by outcome (RED rate + errors).',
+  labelNames: ['outcome', 'engine'],
+};
+/** Real engine-reported token consumption (USE utilization), by direction. */
+const RUN_TOKENS_TOTAL: MetricSpec = {
+  name: 'conductor_run_tokens_total',
+  help: 'Engine-reported tokens consumed by terminal conductor runs.',
+  labelNames: ['engine', 'direction'],
+};
 
 export interface CompletionHookDeps {
   /** The durable+live sink the tailer writes through (fanned agent-os + local). */
@@ -66,6 +82,17 @@ export interface CompletionHookDeps {
    * degrade-safe — a push fault NEVER stalls or rejects the terminal-event path.
    */
   readonly getRunSignalPush?: () => RunSignalPushPort | undefined;
+  /**
+   * OPTIONAL metrics resolver (BE-7.3: feed the frozen MetricsPort from conductor
+   * runs). A thunk (not a value) because observability is composed AFTER the
+   * conductor — bootstrap injects the seam via `ConductorModule.setMetrics`.
+   * Returns `undefined` until wired ⇒ a truthful no-op (no series recorded — never
+   * a fabricated 0). On a terminal event it increments `conductor_runs_total
+   * {outcome,engine}` and, when the event carries REAL engine-reported usage,
+   * `conductor_run_tokens_total{engine,direction}`. Recording is synchronous and
+   * fault-isolated — a metrics fault NEVER stalls the terminal-event path.
+   */
+  readonly getMetrics?: () => MetricsPort | undefined;
   /** Resolve the owning workspace (for userId/taskId provenance) — may return null. */
   readonly getWorkspace: (workspaceId: string) => Promise<Workspace | null>;
   readonly logger: Logger;
@@ -108,8 +135,8 @@ function repoIdFromRepoRef(ref: string | undefined): string {
 export function createCompletionHookSink(
   deps: CompletionHookDeps
 ): RunEventSinkPort {
-  const { inner, brain, codeIntel, getMeter, agentEvent, getRunSignalPush, getWorkspace, logger } = deps;
-  if (!brain && !codeIntel && !getMeter && !agentEvent && !getRunSignalPush) return inner;
+  const { inner, brain, codeIntel, getMeter, agentEvent, getRunSignalPush, getMetrics, getWorkspace, logger } = deps;
+  if (!brain && !codeIntel && !getMeter && !agentEvent && !getRunSignalPush && !getMetrics) return inner;
 
   return {
     async append(event: RunEvent): Promise<void> {
@@ -126,6 +153,31 @@ export function createCompletionHookSink(
         const workspace = workspaceId ? await getWorkspace(workspaceId) : null;
         const taskId = workspace?.taskId ?? event.taskId;
         const userId = workspace?.createdBy;
+
+        // (BE-7.3) RED/USE feed — one truthful increment per emitted terminal
+        // event through the frozen MetricsPort (late-bound; unwired ⇒ no-op).
+        // Label cardinality is bounded: outcome ∈ {completed,failed}; engine is
+        // the event's engine id, else the workspace runtime id, else 'unknown'.
+        // Fault-isolated: a registry fault never reaches the other hooks.
+        const metrics = getMetrics?.();
+        if (metrics) {
+          try {
+            const engine =
+              typeof event.data?.engine === 'string' && event.data.engine !== ''
+                ? event.data.engine
+                : (workspace?.runtimeId ?? 'unknown');
+            metrics.counter(RUNS_TOTAL).inc({ outcome, engine });
+            const tokens = metrics.counter(RUN_TOKENS_TOTAL);
+            const read = (v: unknown): number =>
+              typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0;
+            const inputTokens = read(event.data?.inputTokens);
+            const outputTokens = read(event.data?.outputTokens);
+            if (inputTokens > 0) tokens.inc({ engine, direction: 'input' }, inputTokens);
+            if (outputTokens > 0) tokens.inc({ engine, direction: 'output' }, outputTokens);
+          } catch (err) {
+            logger.warn({ err, taskId }, 'conductor run-metrics hook faulted');
+          }
+        }
 
         // (h) memory harvest — needs a tenant + evidence anchor; else truthful skip.
         if (brain && userId && taskId) {

@@ -32,7 +32,7 @@ import type { EnginesConfigOverrides } from './config.js';
 import type { EngineClientPort } from './ports/engine-client.port.js';
 import type { TmuxIntrospectPort } from './adapters/cli/tmux-introspect.adapter.js';
 import type { DmuxLayoutPort } from './dmux-adapter.js';
-import type { EngineRegistryPort, McpHostPort } from './ports/index.js';
+import type { EngineRegistryPort, McpHostPort, McpHostTelemetry } from './ports/index.js';
 import type { ModuleToolsRegistration } from './mcp/host-registrar.js';
 import type { DomainToolsRegistration } from './adapters/domain-tools-bridge.adapter.js';
 import type { EngineId, EngineHealth } from './types.js';
@@ -167,6 +167,16 @@ export interface EnginesModule {
   registry(): EngineRegistryPort;
   /** The interop-gated MCP host agent-os + conductor register their tools into. */
   host(): McpHostPort;
+  /**
+   * Late-bind the observability telemetry seam onto the gated MCP host (BE-7.3).
+   * Set post-construction by bootstrap (`engines.setMcpTelemetry({ metrics, tracer })`)
+   * after observability exists. When wired, EVERY gated `host.call()` records
+   * `mcp_tool_calls_total{server,tool,status}` + `mcp_tool_call_duration_seconds`
+   * and opens a child span with server/tool/status attributes (`recordError` on
+   * any non-completed outcome). Absent ⇒ the call path is untouched — never a
+   * fabricated series; a telemetry fault NEVER alters a call outcome.
+   */
+  setMcpTelemetry(telemetry: McpHostTelemetry): void;
   /**
    * Bridge: map a domain's flat `mcp()` tools onto the host's serverId+toolNames
    * model + bind a delegating handler per tool (gated execute). Bootstrap calls

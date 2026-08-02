@@ -32,6 +32,9 @@ import type { CoordinationAdmissionPort } from './ports/coordination-admission.p
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
 import type { UsageMeterPort } from './ports/usage-meter.port.js';
 import type { RunSignalPushPort } from './ports/run-signal-push.port.js';
+// TYPE-ONLY: the frozen Phase-11 metrics seam (erased at build); bootstrap
+// late-binds the concrete value via `setMetrics` after observability is composed.
+import type { MetricsPort } from '../observability/ports/metrics.port.js';
 import type { PrReviewPort } from './ports/pr-review.port.js';
 export type { PrReviewEvidenceView, PrReviewPort } from './ports/pr-review.port.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
@@ -650,6 +653,16 @@ export interface ConductorModule {
    * truthful no-op (no push); a push fault NEVER blocks or delays the completion.
    */
   setRunSignalPush(port: RunSignalPushPort): void;
+  /**
+   * Inject the frozen observability metrics seam (BE-7.3 conductor RED/USE feed).
+   * Set post-construction by bootstrap (`conductor.setMetrics(observability.metrics())`)
+   * after observability exists. When wired, every emitted terminal run event
+   * increments `conductor_runs_total{outcome,engine}` and — when the event carries
+   * REAL engine-reported usage — `conductor_run_tokens_total{engine,direction}`.
+   * Absent ⇒ a truthful no-op (no series, never a fabricated 0); a metrics fault
+   * NEVER blocks or delays the terminal RunEvent.
+   */
+  setMetrics(metrics: MetricsPort): void;
   /**
    * Inject the OPTIONAL advisory PR auto-review port. Set post-construction by
    * bootstrap (`conductor.setPrReview(createGithubPrReviewAdapter({...}))`) so
