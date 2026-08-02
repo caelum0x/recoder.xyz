@@ -63,6 +63,33 @@ def fmt(ts):
     return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts))
 
 
+def declared_dist_entries(manifest):
+    """Every dist/ file the manifest promises consumers (main/module/types +
+    exports leaves). A partial/interrupted build can leave dist mtime-fresh but
+    missing one of these (e.g. tsup killed before the DTS step) — mtime alone
+    calls that 'fresh' while tsc fails with TS7016."""
+    entries = []
+
+    def add(value):
+        if isinstance(value, str) and value.startswith("./dist/"):
+            entries.append(value[2:])
+        elif isinstance(value, str) and value.startswith("dist/"):
+            entries.append(value)
+
+    for key in ("main", "module", "types"):
+        add(manifest.get(key))
+
+    def walk(node):
+        if isinstance(node, dict):
+            for child in node.values():
+                walk(child)
+        else:
+            add(node)
+
+    walk(manifest.get("exports"))
+    return entries
+
+
 stale = []
 checked = 0
 
@@ -111,6 +138,21 @@ for pkg_dir in sorted(packages_dir.iterdir()):
                 ),
             }
         )
+    else:
+        def entry_missing(entry):
+            if "*" in entry:
+                return not any(pkg_dir.glob(entry))
+            return not (pkg_dir / entry).is_file()
+
+        missing = [e for e in dict.fromkeys(declared_dist_entries(manifest)) if entry_missing(e)]
+        if missing:
+            stale.append(
+                {
+                    "name": manifest.get("name", pkg_dir.name),
+                    "dir": pkg_dir.name,
+                    "reason": f"dist mtime-fresh but declared entries missing (partial build?): {', '.join(missing)}",
+                }
+            )
 
 if stale:
     print(f"dist-freshness: FAIL ({len(stale)}/{checked} dist-pointing packages stale)")
