@@ -10,10 +10,12 @@ import {
     deriveProjects,
     detectAttentionTransitions,
     detectNeedsInputTransitions,
+    diffSummaryFetchKey,
     filterByProject,
     filterWorkspaces,
     groupByTaskGroup,
     isTerminalWorkspaceState,
+    shouldRefetchDiffSummary,
     workspaceAttentionMap,
     workspaceStateMap,
     type ProjectSummary,
@@ -318,6 +320,11 @@ class RecoderViewModel implements ViewModel {
     prevWorkspaceAttention: Map<string, string>;
     // workspaceId:attn:<attention> keys already notified this session (de-dupe).
     notifiedNeedsInputKeys: ReadonlySet<string>;
+    // Per-workspace diff-summary fetch key (state + updatedAt) as of the last
+    // loadDiffSummaries attempt. Gates the 6s poll's diff fan-out — each fetch
+    // shells host git on the backend, so idle rows whose key hasn't advanced are
+    // not re-asked (see shouldRefetchDiffSummary).
+    diffFetchKeys: Map<string, string>;
     // True while a manual "Re-scan agents" probe is in flight (first-run setup).
     setupProbingAtom: PrimitiveAtom<boolean>;
 
@@ -366,6 +373,7 @@ class RecoderViewModel implements ViewModel {
         this.notifyOnAttentionAtom = atom(loadNotifyOnAttention()) as PrimitiveAtom<boolean>;
         this.prevWorkspaceStates = null;
         this.notifiedAttentionKeys = new Set();
+        this.diffFetchKeys = new Map();
         this.prevWorkspaceAttention = null;
         this.notifiedNeedsInputKeys = new Set();
         this.setupProbingAtom = atom(false) as PrimitiveAtom<boolean>;
@@ -663,10 +671,17 @@ class RecoderViewModel implements ViewModel {
     // Best-effort per-workspace changed-line summary. Each fetch degrades to "no
     // entry" on any failure or a non-available diff, and the whole map is rebuilt
     // from the current list so stale ids are pruned. Never throws, never fabricates.
+    // The fan-out is GATED (shouldRefetchDiffSummary): each fetch shells host git
+    // on the backend, so only rows that are running or whose state/updatedAt
+    // advanced since the last attempt are re-asked — one probe per row revision,
+    // not one per 6s tick. Skipped rows carry their cached summary forward.
     async loadDiffSummaries(workspaces: RecoderWorkspace[]) {
         const base = getRecoderBackendUrl();
+        const toFetch = workspaces.filter((ws) =>
+            shouldRefetchDiffSummary(ws, this.diffFetchKeys.get(ws.workspaceId))
+        );
         const entries = await Promise.all(
-            workspaces.map(async (ws): Promise<[string, RecoderDiffSummary] | null> => {
+            toFetch.map(async (ws): Promise<[string, RecoderDiffSummary] | null> => {
                 try {
                     const res = await fetch(
                         `${base}/api/conductor/workspaces/${encodeURIComponent(ws.workspaceId)}/diff/files`
@@ -690,11 +705,19 @@ class RecoderViewModel implements ViewModel {
                 }
             })
         );
+        const fetched = new Map(entries.filter((e) => e != null));
+        const fetchedIds = new Set(toFetch.map((ws) => ws.workspaceId));
+        const prev = globalStore.get(this.diffSummariesAtom);
         const next: Record<string, RecoderDiffSummary> = {};
-        for (const e of entries) {
-            if (e) next[e[0]] = e[1];
+        for (const ws of workspaces) {
+            const entry = fetchedIds.has(ws.workspaceId) ? fetched.get(ws.workspaceId) : prev[ws.workspaceId];
+            if (entry) next[ws.workspaceId] = entry;
         }
         globalStore.set(this.diffSummariesAtom, next);
+        // Record every attempt (even a failed/unavailable one) so an idle row is
+        // probed once per revision, not retried every tick; a departed id drops out
+        // here, so the gate map can never grow past the current list.
+        this.diffFetchKeys = new Map(workspaces.map((ws) => [ws.workspaceId, diffSummaryFetchKey(ws)]));
     }
 
     // Load the side-by-side compare aggregate for one parallel-run group, keyed by

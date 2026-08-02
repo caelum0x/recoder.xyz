@@ -11,11 +11,13 @@ import {
     computeSuggestedWinner,
     detectAttentionTransitions,
     detectNeedsInputTransitions,
+    diffSummaryFetchKey,
     filterWorkspaces,
     formatRelativeAge,
     groupByTaskGroup,
     isNeedsInputAttention,
     isTerminalWorkspaceState,
+    shouldRefetchDiffSummary,
     suggestNextAction,
     workspaceAttentionMap,
     workspaceStateMap,
@@ -71,6 +73,40 @@ describe("isTerminalWorkspaceState", () => {
         for (const state of ["created", "running", "setting_up", "ready", "awaiting_review", ""]) {
             expect(isTerminalWorkspaceState(state)).toBe(false);
         }
+    });
+});
+
+describe("shouldRefetchDiffSummary — 6s poll diff fan-out gate", () => {
+    it("always refetches running rows (worktree changes without the row moving)", () => {
+        const ws = makeWs({ state: "running", updatedAt: "2026-07-20T10:00:00.000Z" });
+        expect(shouldRefetchDiffSummary(ws, diffSummaryFetchKey(ws))).toBe(true);
+    });
+
+    it("skips an idle row whose state/updatedAt did not advance", () => {
+        const ws = makeWs({ state: "awaiting_review", updatedAt: "2026-07-20T10:00:00.000Z" });
+        expect(shouldRefetchDiffSummary(ws, diffSummaryFetchKey(ws))).toBe(false);
+    });
+
+    it("refetches an idle row once its updatedAt advances", () => {
+        const before = makeWs({ state: "awaiting_review", updatedAt: "2026-07-20T10:00:00.000Z" });
+        const after = { ...before, updatedAt: "2026-07-20T10:05:00.000Z" };
+        expect(shouldRefetchDiffSummary(after, diffSummaryFetchKey(before))).toBe(true);
+    });
+
+    it("refetches on a state transition even at the same updatedAt", () => {
+        const before = makeWs({ state: "queued", updatedAt: "2026-07-20T10:00:00.000Z" });
+        const after = { ...before, state: "awaiting_review" };
+        expect(shouldRefetchDiffSummary(after, diffSummaryFetchKey(before))).toBe(true);
+    });
+
+    it("fetches a never-seen row (no recorded key)", () => {
+        const ws = makeWs({ state: "queued", updatedAt: "2026-07-20T10:00:00.000Z" });
+        expect(shouldRefetchDiffSummary(ws, undefined)).toBe(true);
+    });
+
+    it("treats a missing updatedAt (older backend) as a stable key, not a per-tick refetch", () => {
+        const ws = makeWs({ state: "awaiting_review", updatedAt: undefined });
+        expect(shouldRefetchDiffSummary(ws, diffSummaryFetchKey(ws))).toBe(false);
     });
 });
 
