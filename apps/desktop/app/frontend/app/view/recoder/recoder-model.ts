@@ -15,6 +15,7 @@ import {
     filterWorkspaces,
     groupByTaskGroup,
     isTerminalWorkspaceState,
+    mergeArchivedHistory,
     shouldRefetchDiffSummary,
     workspaceAttentionMap,
     workspaceStateMap,
@@ -35,6 +36,7 @@ import {
     type RecoderWorkspaceReadiness,
 } from "./recoder-board-logic";
 import { parseAgentAuthState, type AgentAuthState } from "./recoder-agent-auth";
+import { parseCheckpointList, type RecoderCheckpoint } from "./recoder-checkpoint-logic";
 import { isGitHubRepoUrl, parseCloneResponse } from "./recoder-clone-logic";
 import { buildUsagePath, summarizeUsage, type MeteringDisplay, type UsagePayloadLike } from "./recoder-metering";
 import { RecoderConnectionModel } from "./recoder-connection-model";
@@ -227,9 +229,20 @@ class RecoderViewModel implements ViewModel {
     viewIcon: Atom<string>;
     viewName: Atom<string>;
     blockId: string;
-    // Every workspace the backend returned, INCLUDING archived + failed, so the
-    // board's Show views (Active / All / Archived) switch without a refetch.
+    // The live poll list (GET /workspaces?archived=false): every non-archived
+    // record INCLUDING failed, so the Active/All views and the failed-transition
+    // notifications work off one poll. Archived history is a SEPARATE on-demand
+    // read (archivedWorkspacesAtom) so a busy board's poll stops shipping the
+    // whole history every 6s.
     allWorkspacesAtom: PrimitiveAtom<RecoderWorkspace[]>;
+    // Archived history from GET /workspaces/archived (most-recent-first). Loaded
+    // once on the first refresh (so the board knows history exists) and re-read
+    // while a history Show view (All / Archived) is open. [] until loaded /
+    // when there is genuinely no history — never a fabricated row.
+    archivedWorkspacesAtom: PrimitiveAtom<RecoderWorkspace[]>;
+    // The live poll list + archived history folded together (live copy wins on an
+    // id collision) — what the board's Show views and empty-state gates read.
+    combinedWorkspacesAtom!: Atom<RecoderWorkspace[]>;
     // The live (non-terminal) workspaces — what the palette and getting-started
     // logic reason over regardless of the board's current Show filter.
     workspacesAtom!: Atom<RecoderWorkspace[]>;
@@ -308,6 +321,12 @@ class RecoderViewModel implements ViewModel {
     // missing state, never a fabricated $0 strip).
     usageAtom: PrimitiveAtom<MeteringDisplay>;
     usageWorkspaceIdAtom: PrimitiveAtom<string>;
+    // Checkpoints for the SELECTED workspace, tagged with the workspaceId they
+    // were fetched for so a stale fetch never renders under another row. The id
+    // is set only on a successful load — a failed/unreachable probe keeps the
+    // strip silent instead of claiming "no checkpoints".
+    checkpointsAtom: PrimitiveAtom<RecoderCheckpoint[]>;
+    checkpointsWorkspaceIdAtom: PrimitiveAtom<string>;
     // "Open GitHub project" clone modal state. destDir "" means "use the
     // backend's default repos folder" (the POST omits it) — the client never
     // fabricates the conductor's configured base dir.
@@ -342,6 +361,11 @@ class RecoderViewModel implements ViewModel {
     prFetchMeta: Map<string, PrFetchMeta>;
     // True while a manual "Re-scan agents" probe is in flight (first-run setup).
     setupProbingAtom: PrimitiveAtom<boolean>;
+    // Whether GET /workspaces/archived has been attempted this session. The first
+    // refresh always loads it (the board must know history exists even when every
+    // record is archived); later polls re-read it only while a history Show view
+    // is open, so the recurring 6s cost stays one live-list fetch.
+    archivedLoaded: boolean;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -349,6 +373,8 @@ class RecoderViewModel implements ViewModel {
         this.viewIcon = atom("layer-group");
         this.viewName = atom("Recoder");
         this.allWorkspacesAtom = atom([]) as PrimitiveAtom<RecoderWorkspace[]>;
+        this.archivedWorkspacesAtom = atom([]) as PrimitiveAtom<RecoderWorkspace[]>;
+        this.archivedLoaded = false;
         this.loadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
         this.setupAtom = atom({ agents: [], git: false, loaded: false, probed: false, tmuxBin: "" }) as PrimitiveAtom<RecoderSetup>;
@@ -381,6 +407,8 @@ class RecoderViewModel implements ViewModel {
         this.selectedWorkspaceIdAtom = atom("") as PrimitiveAtom<string>;
         this.usageAtom = atom(null) as PrimitiveAtom<MeteringDisplay>;
         this.usageWorkspaceIdAtom = atom("") as PrimitiveAtom<string>;
+        this.checkpointsAtom = atom([]) as PrimitiveAtom<RecoderCheckpoint[]>;
+        this.checkpointsWorkspaceIdAtom = atom("") as PrimitiveAtom<string>;
         this.cloneOpenAtom = atom(false) as PrimitiveAtom<boolean>;
         this.cloneUrlAtom = atom("") as PrimitiveAtom<string>;
         this.cloneDestDirAtom = atom("") as PrimitiveAtom<string>;
@@ -397,14 +425,17 @@ class RecoderViewModel implements ViewModel {
         this.boardFilterAtom = atom("") as PrimitiveAtom<string>;
         this.boardShowAtom = atom("active") as PrimitiveAtom<RecoderBoardShow>;
         this.boardProjectAtom = atom("") as PrimitiveAtom<string>;
-        this.projectsAtom = atom((get) => deriveProjects(get(this.allWorkspacesAtom)));
+        this.combinedWorkspacesAtom = atom((get) =>
+            mergeArchivedHistory(get(this.allWorkspacesAtom), get(this.archivedWorkspacesAtom))
+        );
+        this.projectsAtom = atom((get) => deriveProjects(get(this.combinedWorkspacesAtom)));
         this.workspacesAtom = atom((get) =>
             get(this.allWorkspacesAtom).filter((w) => !isTerminalWorkspaceState(w.state))
         );
         this.groupsAtom = atom((get) => groupByTaskGroup(get(this.workspacesAtom)));
         this.boardWorkspacesAtom = atom((get) =>
             filterByProject(
-                filterWorkspaces(get(this.allWorkspacesAtom), get(this.boardShowAtom), get(this.boardFilterAtom)),
+                filterWorkspaces(get(this.combinedWorkspacesAtom), get(this.boardShowAtom), get(this.boardFilterAtom)),
                 get(this.boardProjectAtom)
             )
         );
@@ -519,16 +550,19 @@ class RecoderViewModel implements ViewModel {
         globalStore.set(this.errorAtom, "");
         let workspaces: RecoderWorkspace[] = [];
         try {
-            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/workspaces`);
+            // `archived=false` is served by the query-aware list edge
+            // (workspaces-query.routes) so a busy board's 6s poll stops shipping
+            // the whole archived history; failed rows are NOT archived and still
+            // arrive, keeping the failed-transition notifications truthful.
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/workspaces?archived=false`);
             const body = await res.json();
             // The conductor wraps the list as { data: { workspaces: [...] } };
             // tolerate a bare { data: [...] } too so an older embedded backend
-            // still renders. Never assume a shape we didn't see.
+            // still renders. Never assume a shape we didn't see. (An older backend
+            // without the query edge ignores `archived=false` and returns the full
+            // list — the board still renders, just without the poll narrowing.)
             const data = body?.data;
             const list = Array.isArray(data?.workspaces) ? data.workspaces : Array.isArray(data) ? data : [];
-            // Keep the UNFILTERED list: archived + failed workspaces are terminal
-            // history, hidden by the board's default Active view, but retained here
-            // so the All / Archived views switch without a refetch.
             const base = getRecoderBackendUrl();
             const all = list as RecoderWorkspace[];
             // Enrich with the backend's attention classification (/views). A null
@@ -558,11 +592,46 @@ class RecoderViewModel implements ViewModel {
         } finally {
             globalStore.set(this.loadingAtom, false);
         }
+        // Archived history rides the FIRST refresh (so the board knows history
+        // exists even when every record is archived) and then only refreshes
+        // while a history Show view is open — never a recurring cost on the
+        // default Active board.
+        if (!this.archivedLoaded || globalStore.get(this.boardShowAtom) != "active") {
+            this.loadArchived();
+        }
         // Setup readiness + per-workspace diff summaries run alongside, each
         // independently degrade-safe.
         this.refreshSetup();
         this.loadDiffSummaries(workspaces);
         this.loadPrStatuses(workspaces);
+    }
+
+    // GET /workspaces/archived → the archived history (most-recent-first). Degrade-
+    // safe: any failure / non-2xx / missing shape keeps the prior list (the poll
+    // will retry when a history view is open), never throws, never fabricates.
+    async loadArchived() {
+        this.archivedLoaded = true;
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/workspaces/archived`);
+            if (!res.ok) {
+                return;
+            }
+            const data = (await res.json())?.data;
+            const list = Array.isArray(data?.workspaces) ? data.workspaces : [];
+            globalStore.set(this.archivedWorkspacesAtom, list as RecoderWorkspace[]);
+        } catch {
+            // degrade-safe: an unreachable history read keeps the prior list
+        }
+    }
+
+    // The Show dropdown's entry point: switching into a history view (All /
+    // Archived) re-reads the archived history immediately instead of waiting up
+    // to 6s for the next poll to notice.
+    setBoardShow(show: RecoderBoardShow) {
+        globalStore.set(this.boardShowAtom, show);
+        if (show != "active") {
+            void this.loadArchived();
+        }
     }
 
     // Compare this poll against the last SUCCESSFUL poll and fire an OS
@@ -1327,6 +1396,125 @@ class RecoderViewModel implements ViewModel {
             this.setRowStatus(workspaceId, reason || `Stop failed (${res.status}).`);
         } catch {
             this.setRowStatus(workspaceId, "Stop unavailable - Recoder isn’t reachable.");
+        } finally {
+            globalStore.set(this.busyRowAtom, "");
+        }
+    }
+
+    // Load the selected workspace's checkpoints. The tag atom is set only on a
+    // successful read, so an unreachable backend keeps the strip silent instead
+    // of claiming "no checkpoints".
+    async loadCheckpoints(workspaceId: string) {
+        if (!workspaceId) {
+            return;
+        }
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/checkpoints`
+            );
+            if (!res.ok) {
+                return;
+            }
+            const body = await res.json().catch(() => null);
+            globalStore.set(this.checkpointsAtom, parseCheckpointList(body));
+            globalStore.set(this.checkpointsWorkspaceIdAtom, workspaceId);
+        } catch {
+            // unreachable — keep whatever was loaded before
+        }
+    }
+
+    // Snapshot the workspace's current git state (non-destructive: the backend
+    // tags HEAD plus any uncommitted edits without touching the worktree).
+    // Governed → a 403 surfaces the gate's reason truthfully, never a faked save.
+    async snapshotWorkspace(workspaceId: string) {
+        if (!workspaceId) {
+            return;
+        }
+        globalStore.set(this.busyRowAtom, workspaceId);
+        this.setRowStatus(workspaceId, "");
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/checkpoints`,
+                { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
+            );
+            if (res.ok) {
+                this.setRowStatus(workspaceId, "Checkpoint saved.");
+                await this.loadCheckpoints(workspaceId);
+                return;
+            }
+            const body = await res.json().catch(() => null);
+            const reason = readErrorReason(body);
+            if (res.status == 403) {
+                this.setRowStatus(workspaceId, reason || "Checkpoint blocked - needs approval.");
+                return;
+            }
+            this.setRowStatus(workspaceId, reason || `Checkpoint failed (${res.status}).`);
+        } catch {
+            this.setRowStatus(workspaceId, "Checkpoint unavailable - Recoder isn’t reachable.");
+        } finally {
+            globalStore.set(this.busyRowAtom, "");
+        }
+    }
+
+    // Restore the worktree to a checkpoint. The backend snapshots the CURRENT
+    // state first (automatic safety tag), so restoring never silently loses work.
+    async restoreCheckpoint(workspaceId: string, checkpointId: string) {
+        if (!workspaceId || !checkpointId) {
+            return;
+        }
+        globalStore.set(this.busyRowAtom, workspaceId);
+        this.setRowStatus(workspaceId, "");
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/checkpoints/${encodeURIComponent(checkpointId)}/restore`,
+                { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
+            );
+            if (res.ok) {
+                this.setRowStatus(workspaceId, "Restored to checkpoint - the previous state was saved as a safety snapshot.");
+                await this.refresh();
+                return;
+            }
+            const body = await res.json().catch(() => null);
+            const reason = readErrorReason(body);
+            if (res.status == 403) {
+                this.setRowStatus(workspaceId, reason || "Restore blocked - needs approval.");
+                return;
+            }
+            this.setRowStatus(workspaceId, reason || `Restore failed (${res.status}).`);
+        } catch {
+            this.setRowStatus(workspaceId, "Restore unavailable - Recoder isn’t reachable.");
+        } finally {
+            globalStore.set(this.busyRowAtom, "");
+        }
+    }
+
+    // Branch a NEW workspace whose fresh worktree starts from the checkpoint's
+    // snapshot tree — safe experimentation without losing the good run.
+    async branchCheckpoint(workspaceId: string, checkpointId: string) {
+        if (!workspaceId || !checkpointId) {
+            return;
+        }
+        globalStore.set(this.busyRowAtom, workspaceId);
+        this.setRowStatus(workspaceId, "");
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/checkpoints/${encodeURIComponent(checkpointId)}/branch`,
+                { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
+            );
+            if (res.ok) {
+                this.setRowStatus(workspaceId, "Branched a new workspace from the checkpoint.");
+                await this.refresh();
+                return;
+            }
+            const body = await res.json().catch(() => null);
+            const reason = readErrorReason(body);
+            if (res.status == 403) {
+                this.setRowStatus(workspaceId, reason || "Branch blocked - needs approval.");
+                return;
+            }
+            this.setRowStatus(workspaceId, reason || `Branch failed (${res.status}).`);
+        } catch {
+            this.setRowStatus(workspaceId, "Branch unavailable - Recoder isn’t reachable.");
         } finally {
             globalStore.set(this.busyRowAtom, "");
         }

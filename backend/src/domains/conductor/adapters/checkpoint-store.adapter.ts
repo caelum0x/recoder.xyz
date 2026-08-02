@@ -1,12 +1,12 @@
 /**
- * `createInMemoryCheckpointStore` — the default {@link CheckpointStorePort} impl.
+ * `createInMemoryCheckpointStore` — the bounded in-process {@link CheckpointStorePort}.
  *
  * A bounded, degrade-truthful in-process store: checkpoint METADATA lives in a
  * `Map` keyed by checkpoint id, indexed per workspace for the list surface. It is
  * NOT durable (`isDurable()` returns `false`) — the git objects a checkpoint
  * points at ARE durable in the repo, but this metadata is lost on restart, and the
- * store never pretends otherwise. Bootstrap may inject a durable executor-backed
- * adapter that overrides this without any call-site change.
+ * store never pretends otherwise. The module DEFAULT is the durable git-tag-backed
+ * store (`git-checkpoint-store.adapter.ts`), which uses this store as its cache.
  *
  * Records are stored as-is (immutable snapshots); `listForWorkspace` returns a
  * fresh newest-first copy so callers cannot mutate the backing store.

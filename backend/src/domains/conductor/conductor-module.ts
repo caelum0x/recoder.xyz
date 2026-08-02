@@ -182,7 +182,7 @@ import type {
   CheckpointRecord,
   CheckpointStorePort,
 } from './ports/checkpoint-store.port.js';
-import { createInMemoryCheckpointStore } from './adapters/checkpoint-store.adapter.js';
+import { createGitCheckpointStore } from './adapters/git-checkpoint-store.adapter.js';
 import {
   branchFromCheckpoint as branchFromCheckpointOp,
   createCheckpoint as createCheckpointOp,
@@ -446,7 +446,7 @@ export class ConductorComposer implements ConductorModule {
    * 6th readiness signal, never a verdict input.
    */
   private prReview?: PrReviewPort;
-  /** Checkpoint metadata store (degrade-truthful in-process by default). */
+  /** Checkpoint metadata store (git-tag-backed durable store by default). */
   private readonly checkpointStore: CheckpointStorePort;
   /** Per-repo setup-script config + the worktree-create run hook (governed writes). */
   private readonly repoSetup: RepoSetupService;
@@ -505,8 +505,17 @@ export class ConductorComposer implements ConductorModule {
     this.workspaceGrid = deps.workspaceGrid;
     this.tmuxIntrospect = deps.tmuxIntrospect;
     this.auditReader = deps.auditReader;
+    // Durable by default WITHOUT a database: metadata rides each workspace repo's
+    // annotated `recoder-checkpoint/<id>` tags, rebuilt on list after a restart
+    // (the desktop relaunches the embedded backend every app start). The
+    // `getWorkspace` closure is lazy — `this.engine` is constructed later in this
+    // ctor and only dereferenced at request time.
     this.checkpointStore =
-      deps.checkpointStore ?? createInMemoryCheckpointStore();
+      deps.checkpointStore ??
+      createGitCheckpointStore({
+        getWorkspace: id => this.engine.getWorkspace(id),
+        logger: this.log,
+      });
 
     // Per-repo setup script: config seam (governed setScript/getScript) + the
     // fire-and-forget run hook shelled into every fresh worktree. Degrade-safe

@@ -274,10 +274,10 @@ export interface ConductorModuleDeps {
    */
   readonly mcpInject?: McpInjectPort;
   /**
-   * Optional durable checkpoint metadata store. Absent ⇒ the module uses a
-   * bounded, degrade-truthful in-process store (`isDurable():false`) — the git
-   * objects a checkpoint points at stay durable in the repo, but the metadata is
-   * lost on restart and the store never pretends otherwise.
+   * Optional checkpoint metadata store override. Absent ⇒ the module uses the
+   * git-tag-backed DURABLE store (`adapters/git-checkpoint-store.adapter.ts`):
+   * metadata rides each workspace repo's annotated `recoder-checkpoint/<id>`
+   * tags and is rebuilt on list after a backend restart — no database needed.
    */
   readonly checkpointStore?: CheckpointStorePort;
   /**

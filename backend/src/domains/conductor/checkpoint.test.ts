@@ -22,6 +22,7 @@ import {
   type CheckpointOpsDeps,
 } from './services/checkpoint.service.js';
 import { createInMemoryCheckpointStore } from './adapters/checkpoint-store.adapter.js';
+import { createGitCheckpointStore } from './adapters/git-checkpoint-store.adapter.js';
 import type { CheckpointRecord } from './ports/checkpoint-store.port.js';
 import {
   composeConductor,
@@ -40,7 +41,7 @@ class FakeGit {
   readonly calls: string[][] = [];
   head: string;
   dirty: boolean;
-  readonly tags = new Map<string, string>();
+  readonly tags = new Map<string, { sha: string; message: string }>();
   #stash = 0;
 
   constructor(opts: { head?: string; dirty?: boolean } = {}) {
@@ -66,8 +67,23 @@ class FakeGit {
         // 'stash create <msg>' → a commit sha capturing the dirty tree, or empty.
         return out(this.dirty ? `STASH_${++this.#stash}` : '');
       case 'tag': {
+        // 'tag -l <glob> --format=%(contents:subject)' — one line per matching
+        // tag: the annotated message's first line ("" for lightweight tags).
+        if (rest[0] === '-l') {
+          const prefix = rest[1].replace(/\*.*$/, '');
+          const lines = [...this.tags.entries()]
+            .filter(([name]) => name.startsWith(prefix))
+            .map(([, tag]) => tag.message.split('\n')[0]);
+          return out(lines.join('\n'));
+        }
+        // 'tag -a -m <msg> <name> <sha>' (annotated) or 'tag <name> <sha>'.
+        if (rest[0] === '-a') {
+          const [, , message, name, sha] = rest;
+          this.tags.set(name, { sha, message });
+          return out('');
+        }
         const [name, sha] = rest;
-        this.tags.set(name, sha);
+        this.tags.set(name, { sha, message: '' });
         return out('');
       }
       case 'reset':
@@ -129,7 +145,7 @@ describe('checkpoint service (git seams)', () => {
     expect(record.snapshotSha).toBe('STASH_1');
     expect(record.dirty).toBe(true);
     expect(record.ref).toBe('recoder-checkpoint/cp_1');
-    expect(git.tags.get('recoder-checkpoint/cp_1')).toBe('STASH_1');
+    expect(git.tags.get('recoder-checkpoint/cp_1')?.sha).toBe('STASH_1');
     // The working tree was NOT reset/checked-out during capture.
     expect(git.calls.some((c) => c[0] === 'reset' || c[0] === 'checkout')).toBe(false);
 
@@ -155,7 +171,7 @@ describe('checkpoint service (git seams)', () => {
     expect(record.kind).toBe('commit');
     expect(record.dirty).toBe(false);
     expect(record.snapshotSha).toBe('HEAD_B');
-    expect(git.tags.get(record.ref)).toBe('HEAD_B');
+    expect(git.tags.get(record.ref)?.sha).toBe('HEAD_B');
 
     await restoreCheckpoint(deps, 'ws_1', record.checkpointId);
     // Clean checkpoint ⇒ reset only, no working-tree checkout re-apply.
@@ -252,6 +268,87 @@ describe('checkpoint service (git seams)', () => {
     await expect(
       branchFromCheckpoint(deps, 'ws_1', 'cp_x', { createdBy: 'user_test' }),
     ).rejects.toThrow(/does not belong/);
+  });
+});
+
+describe('git checkpoint store (durable across a backend restart)', () => {
+  function gitStoreDeps(git: FakeGit, store: ReturnType<typeof createGitCheckpointStore>) {
+    let seq = 0;
+    return {
+      getWorkspace: async () => WORKSPACE,
+      store,
+      logger: makeLogger(),
+      exec: git.exec,
+      newId: () => `cp_${++seq}`,
+      now: () => '2026-07-19T00:00:00.000Z',
+    } satisfies CheckpointOpsDeps;
+  }
+
+  it('rebuilds the checkpoint list from annotated tags after a "restart" and restores through it', async () => {
+    const git = new FakeGit({ head: 'HEAD_A', dirty: true });
+    const storeA = createGitCheckpointStore({
+      getWorkspace: async () => WORKSPACE,
+      logger: makeLogger(),
+      exec: git.exec,
+    });
+    const record = await createCheckpoint(gitStoreDeps(git, storeA), 'ws_1', {
+      label: 'before refactor',
+      createdBy: 'user_test',
+    });
+
+    // "Restart": a FRESH store over the SAME repo — the in-process cache is gone,
+    // but the annotated tag metadata is not.
+    const storeB = createGitCheckpointStore({
+      getWorkspace: async () => WORKSPACE,
+      logger: makeLogger(),
+      exec: git.exec,
+    });
+    expect(storeB.isDurable()).toBe(true);
+    const listed = await storeB.listForWorkspace('ws_1');
+    expect(listed).toHaveLength(1);
+    expect(listed[0].checkpointId).toBe(record.checkpointId);
+    expect(listed[0].label).toBe('before refactor');
+    expect(listed[0].snapshotSha).toBe('STASH_1');
+    expect(listed[0].headSha).toBe('HEAD_A');
+    expect(listed[0].dirty).toBe(true);
+
+    // Restore through the rebuilt store (get() misses; the workspace-scoped list
+    // fallback in the service finds the rehydrated record).
+    const restore = await restoreCheckpoint(gitStoreDeps(git, storeB), 'ws_1', record.checkpointId);
+    expect(restore.restoredTo).toBe('STASH_1');
+    expect(git.calls).toContainEqual(['reset', '--hard', 'HEAD_A']);
+  });
+
+  it('skips lightweight/foreign tags truthfully instead of fabricating records', async () => {
+    const git = new FakeGit({ head: 'HEAD_C', dirty: false });
+    // A legacy LIGHTWEIGHT checkpoint tag (no record message) + a foreign-workspace record.
+    git.tags.set('recoder-checkpoint/legacy', { sha: 'HEAD_C', message: '' });
+    const store = createGitCheckpointStore({
+      getWorkspace: async () => WORKSPACE,
+      logger: makeLogger(),
+      exec: git.exec,
+    });
+    await createCheckpoint(gitStoreDeps(git, store), 'ws_1', { createdBy: 'user_test' });
+
+    const fresh = createGitCheckpointStore({
+      getWorkspace: async () => WORKSPACE,
+      logger: makeLogger(),
+      exec: git.exec,
+    });
+    const listed = await fresh.listForWorkspace('ws_1');
+    expect(listed).toHaveLength(1);
+    expect(listed[0].checkpointId).not.toBe('legacy');
+  });
+
+  it('degrades to the in-process records when the workspace has no worktree', async () => {
+    const git = new FakeGit();
+    const store = createGitCheckpointStore({
+      getWorkspace: async () => null,
+      logger: makeLogger(),
+      exec: git.exec,
+    });
+    expect(await store.listForWorkspace('ws_gone')).toHaveLength(0);
+    expect(git.calls.some((c) => c[0] === 'tag')).toBe(false);
   });
 });
 
