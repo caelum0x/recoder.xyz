@@ -11,11 +11,16 @@
  * exec fault ⇒ alive:true, exitCode:undefined, never a fabricated finish).
  */
 import { describe, it, expect, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createCloudSandboxSubstrate } from './cloud-sandbox-substrate.adapter.js';
 import type {
   CloudSandboxExecOptions,
   CloudSandboxExecResult,
   CloudSandboxGatewayPort,
+  CloudSandboxProvisionOptions,
 } from '../ports/cloud-sandbox.port.js';
 import type { WorkspaceSubstrate } from '@recoder/agent-os';
 
@@ -32,14 +37,22 @@ function makeGateway(
     available?: boolean;
     exec?: (sandboxId: string, command: string) => CloudSandboxExecResult | Promise<CloudSandboxExecResult>;
   } = {},
-): CloudSandboxGatewayPort & { execCalls: ExecCall[]; destroyed: string[] } {
+): CloudSandboxGatewayPort & {
+  execCalls: ExecCall[];
+  destroyed: string[];
+  provisionCalls: Array<CloudSandboxProvisionOptions | undefined>;
+} {
   const execCalls: ExecCall[] = [];
   const destroyed: string[] = [];
+  const provisionCalls: Array<CloudSandboxProvisionOptions | undefined> = [];
   const gateway: CloudSandboxGatewayPort = {
     substrateId: opts.substrateId ?? 'daytona',
     isEnabled: () => opts.enabled ?? true,
     isAvailable: async () => opts.available ?? true,
-    provision: async () => ({ id: 'sbx_1' }),
+    provision: async (options) => {
+      provisionCalls.push(options);
+      return { id: 'sbx_1' };
+    },
     getWorkDir: async () => '/home/daytona',
     async exec(sandboxId, command, options) {
       execCalls.push({ sandboxId, command, ...(options ? { options } : {}) });
@@ -49,7 +62,7 @@ function makeGateway(
       destroyed.push(sandboxId);
     },
   };
-  return Object.assign(gateway, { execCalls, destroyed });
+  return Object.assign(gateway, { execCalls, destroyed, provisionCalls });
 }
 
 const handle = { ref: 'sbx_1', worktreePath: '/home/daytona/repo', sandboxId: 'sbx_1' };
@@ -116,6 +129,34 @@ describe('createCloudSandboxSubstrate', () => {
     const sub = createCloudSandboxSubstrate({ gateway: flaky });
     await expect(sub.alive(handle)).resolves.toBe(true);
     await expect(sub.exitCode!(handle)).resolves.toBeUndefined();
+  });
+
+  it('threads the launching run\'s runId into gateway.provision (recoder-qyvu)', async () => {
+    // A real repo with an `origin` remote — the substrate resolves it host-side.
+    const repoPath = mkdtempSync(join(tmpdir(), 'cloud-substrate-launch-'));
+    try {
+      execFileSync('git', ['init', '-q'], { cwd: repoPath });
+      execFileSync('git', ['remote', 'add', 'origin', 'https://example.com/repo.git'], {
+        cwd: repoPath,
+      });
+
+      const gateway = makeGateway();
+      const sub = createCloudSandboxSubstrate({ gateway });
+      const launched = await sub.launch({
+        workspaceId: 'ws_42',
+        command: 'echo hi',
+        repoPath,
+        branch: 'feature/x',
+        baseRef: 'HEAD',
+      });
+
+      expect(launched.ref).toBe('sbx_1');
+      // The provision carries the deterministic run id, so the sandbox's cloud
+      // lifecycle RunEvents resolve to this workspace's live /stream.
+      expect(gateway.provisionCalls).toEqual([{ runId: 'run_ws_42' }]);
+    } finally {
+      rmSync(repoPath, { recursive: true, force: true });
+    }
   });
 
   it('tears down by destroying the sandbox through the gateway', async () => {

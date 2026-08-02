@@ -38,6 +38,18 @@ export interface CloudSandboxExecOptions {
 }
 
 /**
+ * Options for one sandbox provision. `runId` binds the sandbox to the
+ * conductor run that launched it, so the provisioner's sandbox lifecycle
+ * RunEvents carry a resolvable `runId` and reach the workspace's live
+ * `/stream` through the bus fan-out (recoder-qyvu). Absent ⇒ the sandbox is
+ * unattributed and its lifecycle events stay board-only (truthful skip).
+ */
+export interface CloudSandboxProvisionOptions {
+  /** The launching conductor run's id (`run_${workspaceId}`). */
+  readonly runId?: string;
+}
+
+/**
  * The bridge to the cloud sandbox provisioner, bound (at construction, by
  * bootstrap) to the tenant/region context a conductor run executes under.
  */
@@ -52,7 +64,7 @@ export interface CloudSandboxGatewayPort {
   /** Whether the provider is reachable + responsive right now (never throws). */
   isAvailable(): Promise<boolean>;
   /** Provision a bare remote sandbox; returns its external id (throws on failure). */
-  provision(): Promise<{ id: string; workDir?: string }>;
+  provision(options?: CloudSandboxProvisionOptions): Promise<{ id: string; workDir?: string }>;
   /** Resolve the sandbox's working-directory root. */
   getWorkDir(sandboxId: string): Promise<string>;
   /** Run a command inside the sandbox and capture its output. */

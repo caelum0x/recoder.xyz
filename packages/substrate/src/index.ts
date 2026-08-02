@@ -179,6 +179,7 @@ export type {
   DaytonaExecResult,
   DaytonaExecOptions,
   DaytonaSandboxRef,
+  DaytonaCreateSandboxContext,
   SshExecPort,
   SshExecResult,
   SshExecOptions,
