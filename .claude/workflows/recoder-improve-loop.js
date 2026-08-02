@@ -7,6 +7,7 @@ export const meta = {
     { title: 'Fix', detail: 'parallel fix agents, one per issue' },
     { title: 'Verify', detail: 'adversarial verify per fix' },
     { title: 'Critique', detail: 'completeness critic files next-round bd issues' },
+    { title: 'Land', detail: 'commit per issue, rebase, push (AGENTS.md Landing The Plane)' },
   ],
 }
 
@@ -67,6 +68,26 @@ const CRITIC_SCHEMA = {
   },
 }
 
+const LAND_SCHEMA = {
+  type: 'object',
+  required: ['commits', 'pushed'],
+  properties: {
+    commits: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['hash', 'subject'],
+        properties: {
+          hash: { type: 'string' },
+          subject: { type: 'string' },
+        },
+      },
+    },
+    pushed: { type: 'boolean' },
+    notes: { type: 'string' },
+  },
+}
+
 phase('Pick')
 const picked = await agent(`In ${ROOT}, run: bd ready --json
 Pick up to ${MAX_FIXES} issues that are concrete, self-contained engineering fixes (skip epics, DEFER items, wisps, and anything needing owner decisions or production access). Dimension filter: ${DIMENSION} (if not "any", prefer issues matching that dimension: ux/backend/architecture/positioning/website).
@@ -103,6 +124,24 @@ Your job keeps the loop alive: find the NEXT round of work across dimensions (ux
 4. File 2-4 NEW concrete bd issues for real findings: bd create "<title>" -d "<evidence + file pointers>" --json  (skip anything already in bd — check with: bd search "<keywords>" --status all --json -n 5).
 Return the ids you filed and your observations.`, { label: 'critic', phase: 'Critique', schema: CRITIC_SCHEMA, effort: 'high' })
 
+phase('Land')
+const passed = results.filter(Boolean).filter((r) => r.verdict && r.verdict.verdict === 'pass')
+let landing = null
+if (passed.length > 0) {
+  landing = await agent(`Land this round's verified work in ${ROOT} per AGENTS.md "Landing The Plane".
+PASSED fixes (their filesChanged lists are authoritative): ${JSON.stringify(passed.map((r) => ({ id: r.id, title: r.title, filesChanged: r.fix.filesChanged, summary: r.fix.summary })))}
+Steps, in order:
+1. Run git status. Confirm the changed files match the fixes above. NEVER add unrelated untracked files (screenshots, .playwright-mcp/, .artifacts/, *.png, gui captures) or files not traceable to a fix.
+2. One commit per issue where files are disjoint (conventional format "<type>(<scope>): <subject> (<bd-id>)", body = what+why+verification evidence). When two fixes share a file, combine them into one commit naming both ids — never split a file across commits, never let a commit leave the tree uncompilable.
+3. Include modified .beads/*.jsonl in the final commit as "chore(bd): round bookkeeping".
+4. git pull --rebase, then git push. If the push is rejected, rebase and retry once; report honestly if it still fails.
+5. Report every commit hash + subject. Do not close or reopen bd issues — the verify phase owns that.
+${CONVENTIONS}`, { label: 'land', phase: 'Land', schema: LAND_SCHEMA })
+  log(`landed ${(landing && landing.commits) ? landing.commits.length : 0} commits, pushed=${landing ? landing.pushed : false}`)
+} else {
+  log('nothing passed — nothing to land')
+}
+
 return {
-  round: { picked: work.map((w) => w.id), results: results.filter(Boolean), critic },
+  round: { picked: work.map((w) => w.id), results: results.filter(Boolean), critic, landing },
 }
