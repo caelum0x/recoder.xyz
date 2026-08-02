@@ -92,4 +92,26 @@ describe('conductor createWorkspace → repo-setup run hook', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(calls).toHaveLength(0);
   });
+
+  it('runs the COMMITTED settings.json setup when the governed store is empty (durable baseline)', async () => {
+    const { exec, calls } = makeRecordingExec();
+    const { module } = composeConductor({
+      substrates: [new FakeSubstrate()],
+      // Empty store (fresh in-process) — exactly the state after a backend
+      // relaunch. The committed file must still drive the hook.
+      repoSetupExec: exec,
+      repoSetupReadConfigFile: async () => ({
+        scripts: { setup: 'pnpm install --frozen-lockfile', run: '' },
+        port: { base: 4300, span: 200 },
+      }),
+    });
+
+    const result = await module.createWorkspace(makeCreateInput(), makePrincipal());
+    expect(result.ok).toBe(true);
+
+    await waitForCall(calls);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].bin).toBe('bash');
+    expect(calls[0].args).toEqual(['-lc', 'pnpm install --frozen-lockfile']);
+  });
 });

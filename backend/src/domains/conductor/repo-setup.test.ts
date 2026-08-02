@@ -13,6 +13,9 @@
  *  - repoKeyFor derives a stable, path-safe key (projectId preferred).
  */
 import { describe, it, expect } from 'vitest';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { ExecError } from '@recoder/substrate';
 import type { ExecOptions, ExecResult } from '@recoder/substrate';
 import {
@@ -20,7 +23,9 @@ import {
   repoKeyFor,
   type RepoSetupExec,
 } from './services/repo-setup.service.js';
+import type { RepoConfigFile } from './services/repo-config-file.js';
 import { createInMemoryRepoSetupStore } from './adapters/repo-setup-store.adapter.js';
+import type { RepoSetupStorePort } from './ports/repo-setup-store.port.js';
 import {
   makeGate,
   makeLogger,
@@ -51,18 +56,34 @@ function makeExec(behavior: (rec: Recorded) => ExecResult | ExecError): {
 }
 
 function makeService(
-  overrides: { gate?: FakeGate; exec?: RepoSetupExec } = {}
+  overrides: {
+    gate?: FakeGate;
+    exec?: RepoSetupExec;
+    store?: RepoSetupStorePort;
+    readConfigFile?: (worktreePath: string) => Promise<RepoConfigFile>;
+  } = {}
 ) {
-  const store = createInMemoryRepoSetupStore();
+  const store = overrides.store ?? createInMemoryRepoSetupStore();
   const gate = overrides.gate ?? makeGate('allow');
   const service = new RepoSetupService({
     store,
     gate,
     logger: makeLogger(),
     ...(overrides.exec ? { exec: overrides.exec } : {}),
+    ...(overrides.readConfigFile
+      ? { readConfigFile: overrides.readConfigFile }
+      : {}),
     now: () => new Date('2026-07-19T00:00:00.000Z'),
   });
   return { service, store, gate };
+}
+
+/** A committed-config reader stub returning the given setup script. */
+function fileWithSetup(setup: string) {
+  return async (): Promise<RepoConfigFile> => ({
+    scripts: { setup, run: '' },
+    port: { base: 4300, span: 200 },
+  });
 }
 
 describe('repoKeyFor', () => {
@@ -221,5 +242,94 @@ describe('repo setup run hook (create)', () => {
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain('ERR_PNPM_NO_LOCKFILE');
     expect(result.reason).toContain('code 1');
+  });
+});
+
+describe('repo setup resolution (governed store override → committed file baseline)', () => {
+  it('runs the COMMITTED .recoder/settings.json setup with an empty store (real fs, default reader)', async () => {
+    const worktree = await mkdtemp(join(tmpdir(), 'recoder-setup-'));
+    try {
+      await mkdir(join(worktree, '.recoder'), { recursive: true });
+      await writeFile(
+        join(worktree, '.recoder', 'settings.json'),
+        JSON.stringify({ scripts: { setup: 'echo committed-setup' } }),
+        'utf8'
+      );
+      const { exec, calls } = makeExec(() => ({ stdout: '', stderr: '', code: 0 }));
+      const { service } = makeService({ exec });
+
+      const result = await service.runSetup({ repoKey: 'proj_x', worktreePath: worktree });
+
+      expect(result.ran).toBe(true);
+      expect(result.ok).toBe(true);
+      expect(calls).toHaveLength(1);
+      expect(calls[0].args).toEqual(['-lc', 'echo committed-setup']);
+      expect(calls[0].options.cwd).toBe(worktree);
+    } finally {
+      await rm(worktree, { recursive: true, force: true });
+    }
+  });
+
+  it('a non-empty governed store script WINS over the committed file', async () => {
+    const store = createInMemoryRepoSetupStore();
+    await store.set({
+      repoKey: 'proj_x',
+      script: 'echo store-override',
+      updatedBy: 'user_1',
+      updatedAt: '2026-07-19T00:00:00.000Z',
+    });
+    const { service } = makeService({
+      store,
+      readConfigFile: fileWithSetup('echo committed-setup'),
+    });
+
+    const resolved = await service.resolveScript('proj_x', '/tmp/wt');
+
+    expect(resolved).toEqual({ script: 'echo store-override', source: 'store' });
+  });
+
+  it('a CLEARED store script (empty string) falls back to the committed baseline', async () => {
+    const store = createInMemoryRepoSetupStore();
+    await store.set({
+      repoKey: 'proj_x',
+      script: '',
+      updatedBy: 'user_1',
+      updatedAt: '2026-07-19T00:00:00.000Z',
+    });
+    const { service } = makeService({
+      store,
+      readConfigFile: fileWithSetup('echo committed-setup'),
+    });
+
+    const resolved = await service.resolveScript('proj_x', '/tmp/wt');
+
+    expect(resolved).toEqual({ script: 'echo committed-setup', source: 'file' });
+  });
+
+  it('a store read FAULT falls through to the committed file (restart survival), never a silent skip', async () => {
+    const faultyStore: RepoSetupStorePort = {
+      get: async () => {
+        throw new Error('store unavailable');
+      },
+      set: async () => {
+        throw new Error('store unavailable');
+      },
+    };
+    const { service } = makeService({
+      store: faultyStore,
+      readConfigFile: fileWithSetup('echo committed-setup'),
+    });
+
+    const resolved = await service.resolveScript('proj_x', '/tmp/wt');
+
+    expect(resolved).toEqual({ script: 'echo committed-setup', source: 'file' });
+  });
+
+  it('resolves to none when neither store nor committed file has a script', async () => {
+    const { service } = makeService({ readConfigFile: fileWithSetup('') });
+
+    const resolved = await service.resolveScript('proj_x', '/tmp/wt');
+
+    expect(resolved).toEqual({ script: '', source: 'none' });
   });
 });

@@ -324,8 +324,10 @@ export interface ConductorWriteResult<T> {
 export interface WorkspaceRunConfigView {
   /** Stable per-workspace dev-server port (`RECODER_PORT`). */
   readonly port: number;
-  /** Committed setup script (`.recoder/settings.json` scripts.setup); '' = none. */
+  /** EFFECTIVE setup script (governed store override, else committed file); '' = none. */
   readonly setup: string;
+  /** Where `setup` came from — the same resolver the create hook executes. */
+  readonly setupSource: 'store' | 'file' | 'none';
   /** Effective run command: committed run script, else the detected dev command, else ''. */
   readonly run: string;
   /** Where `run` came from, so the UI can be truthful about the source. */
@@ -525,6 +527,9 @@ export class ConductorComposer implements ConductorModule {
       gate: this.gate,
       logger: this.log,
       ...(deps.repoSetupExec ? { exec: deps.repoSetupExec } : {}),
+      ...(deps.repoSetupReadConfigFile
+        ? { readConfigFile: deps.repoSetupReadConfigFile }
+        : {}),
     });
     // Workspace PR status over the shared `gh` CLI seam (never throws; truthful
     // `available:false` when gh/worktree/branch is absent).
@@ -2369,9 +2374,17 @@ export class ConductorComposer implements ConductorModule {
   ): Promise<WorkspaceRunConfigView | null> {
     const workspace = await this.engine.getWorkspace(workspaceId);
     if (!workspace?.worktreePath) return null;
-    const [config, detected] = await Promise.all([
+    // Setup resolves through the SAME resolver the create hook executes
+    // (store override → committed file), so this read model can never show a
+    // script the hook would not run. repoKeyFor prefers the (required)
+    // projectId, matching the create-time key.
+    const [config, detected, setup] = await Promise.all([
       readRepoConfigFile(workspace.worktreePath),
       detectDevCommand(workspace.worktreePath),
+      this.repoSetup.resolveScript(
+        repoKeyFor(workspace.projectId, undefined),
+        workspace.worktreePath
+      ),
     ]);
     const port = computeWorkspacePort(
       workspaceId,
@@ -2390,7 +2403,8 @@ export class ConductorComposer implements ConductorModule {
           : 'none';
     return {
       port,
-      setup: config.scripts.setup,
+      setup: setup.script,
+      setupSource: setup.source,
       run,
       runSource,
       detectedCommand: detected?.command ?? null,

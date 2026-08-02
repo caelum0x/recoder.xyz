@@ -151,6 +151,7 @@ import type { CheckpointRecord, CheckpointStorePort } from './ports/checkpoint-s
 import type { BranchResultView, RestoreResultView } from './services/checkpoint.service.js';
 import type { RepoSetupStorePort } from './ports/repo-setup-store.port.js';
 import type { RepoSetupExec } from './services/repo-setup.service.js';
+import type { RepoConfigFile } from './services/repo-config-file.js';
 import type { CloneRepoInput, CloneRepoOutcome } from './services/repo-clone.service.js';
 import type { WorkspaceChecksView } from './services/pr-checks.service.js';
 export type { CloneRepoInput, CloneRepoOutcome } from './services/repo-clone.service.js';
@@ -293,6 +294,13 @@ export interface ConductorModuleDeps {
    * absent ⇒ the real bounded `execFileSafe`.
    */
   readonly repoSetupExec?: RepoSetupExec;
+  /**
+   * Optional committed-config reader seam for the repo-setup resolver (absent ⇒
+   * the real `.recoder/settings.json` reader). The committed file is the durable
+   * setup baseline the governed store overrides — test-injectable so the
+   * store-override → file-fallback resolution is provable without a real fs.
+   */
+  readonly repoSetupReadConfigFile?: (worktreePath: string) => Promise<RepoConfigFile>;
   /**
    * Optional delivery-feedback sink (the inference routing feedback seam, adapted
    * at the composition root). A MERGED workspace is THE positive delivery outcome:

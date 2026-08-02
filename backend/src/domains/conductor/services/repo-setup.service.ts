@@ -29,6 +29,8 @@ import type {
   RepoSetupConfig,
   RepoSetupStorePort,
 } from '../ports/repo-setup-store.port.js';
+import { readRepoConfigFile } from './repo-config-file.js';
+import type { RepoConfigFile } from './repo-config-file.js';
 import type { ConductorWriteResult } from '../conductor-module.js';
 import {
   conductorAuditEntry,
@@ -93,6 +95,23 @@ export interface RepoSetupServiceDeps {
   readonly exec?: RepoSetupExec;
   /** Injectable clock (defaults to the real one) — keeps `updatedAt` testable. */
   readonly now?: () => Date;
+  /**
+   * Committed-config reader seam (defaults to the real `readRepoConfigFile`).
+   * The committed `.recoder/settings.json` is the DURABLE setup baseline — it
+   * rides git, so it survives the backend restarts that empty the default
+   * in-process governed store.
+   */
+  readonly readConfigFile?: (worktreePath: string) => Promise<RepoConfigFile>;
+}
+
+/** Where the effective setup script came from — surfaced so UI and executor agree. */
+export type RepoSetupScriptSource = 'store' | 'file' | 'none';
+
+/** The effective setup script for a repo + where it was resolved from. */
+export interface ResolvedRepoSetupScript {
+  /** The script to run; '' = none configured anywhere. */
+  readonly script: string;
+  readonly source: RepoSetupScriptSource;
 }
 
 /**
@@ -117,6 +136,7 @@ export class RepoSetupService {
   private readonly log: Logger;
   private readonly exec: RepoSetupExec;
   private readonly now: () => Date;
+  private readonly readConfigFile: (worktreePath: string) => Promise<RepoConfigFile>;
 
   constructor(deps: RepoSetupServiceDeps) {
     this.store = deps.store;
@@ -124,6 +144,7 @@ export class RepoSetupService {
     this.log = deps.logger;
     this.exec = deps.exec ?? execFileSafe;
     this.now = deps.now ?? (() => new Date());
+    this.readConfigFile = deps.readConfigFile ?? readRepoConfigFile;
   }
 
   /** Read one repo's configured setup script, or null when none is set. */
@@ -183,24 +204,49 @@ export class RepoSetupService {
   }
 
   /**
-   * Run the repo's configured setup script inside a freshly-created worktree.
+   * The effective setup script for a repo: a non-empty GOVERNED store script wins
+   * as the override, else the COMMITTED `.recoder/settings.json` scripts.setup is
+   * the durable baseline (it rides git, so it survives backend restarts that
+   * empty the default in-process store). A store read fault falls through to the
+   * committed file instead of aborting — degrade to the durable base, never to
+   * silence. `setScript('')` therefore means "fall back to the committed
+   * baseline"; suppressing a committed script takes an explicit no-op like `true`.
+   */
+  async resolveScript(
+    repoKey: string,
+    worktreePath: string
+  ): Promise<ResolvedRepoSetupScript> {
+    let stored: RepoSetupConfig | null = null;
+    try {
+      stored = await this.store.get(repoKey);
+    } catch (err) {
+      this.log.warn(
+        { err, repoKey },
+        'conductor repo-setup store read faulted — falling back to committed config'
+      );
+    }
+    const storeScript = stored?.script?.trim();
+    if (storeScript) {
+      return { script: storeScript, source: 'store' };
+    }
+    const config = await this.readConfigFile(worktreePath);
+    const fileScript = config.scripts.setup.trim();
+    if (fileScript) {
+      return { script: fileScript, source: 'file' };
+    }
+    return { script: '', source: 'none' };
+  }
+
+  /**
+   * Run the repo's effective setup script inside a freshly-created worktree
+   * (governed store override, else the committed file — see resolveScript).
    * Fire-and-forget + NON-blocking + degrade-safe: never throws; no script is a
    * truthful skip; a non-zero exit is a captured failure (not an abort). The
    * create flow calls this AFTER the worktree exists and does not await it.
    */
   async runSetup(input: RunSetupInput): Promise<RepoSetupRunResult> {
-    let config: RepoSetupConfig | null;
-    try {
-      config = await this.store.get(input.repoKey);
-    } catch (err) {
-      this.log.warn(
-        { err, repoKey: input.repoKey },
-        'conductor repo-setup config read faulted — skipping setup'
-      );
-      return { ran: false, reason: 'setup config unavailable' };
-    }
-
-    const script = config?.script?.trim();
+    const resolved = await this.resolveScript(input.repoKey, input.worktreePath);
+    const script = resolved.script;
     if (!script) {
       return { ran: false, reason: 'no setup script configured' };
     }
