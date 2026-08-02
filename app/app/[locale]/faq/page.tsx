@@ -19,15 +19,15 @@ export default function FAQPage() {
     },
     {
       q: 'How do I get started?',
-      a: 'Sign up with Google or GitHub, add your API key in Settings → AI Providers, then launch the Web IDE or download the CLI. That\'s it!'
+      a: 'Download the Recoder desktop app, open a git repository, and point your coding agents (Claude Code, Codex, opencode) at a task. Each agent runs in its own isolated git worktree — review the diffs side by side and merge the best one. No account is required to start.'
     },
     {
       q: 'Is my code private?',
       a: 'Yes. Your code is processed by the AI provider you choose. We don\'t store your code on our servers. For maximum privacy, use local models with Ollama.'
     },
     {
-      q: 'What\'s the difference between Web IDE and CLI?',
-      a: 'Web IDE is a browser-based code editor - great for quick edits and working from any device. CLI is a terminal tool that integrates with your local development environment.'
+      q: 'Which coding agents does Recoder work with?',
+      a: 'Recoder drives the agent CLIs you already use: Claude Code, Codex, opencode, and any other terminal-based coding agent. It runs them in parallel isolated git worktrees on your machine and helps you converge their results into one trusted merge.'
     },
     {
       q: 'Can I use Recoder for commercial projects?',
