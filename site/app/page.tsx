@@ -47,7 +47,8 @@ function Hero() {
             </Link>
           </div>
           <p className="mt-4 text-xs text-faint">
-            Desktop app · macOS, Windows, Linux · bring your own agents and keys
+            Desktop app · macOS (Apple Silicon) · Windows &amp; Linux planned ·
+            bring your own agents and keys
           </p>
         </div>
       </div>
@@ -651,7 +652,8 @@ function FinalCta() {
         </Link>
       </div>
       <p className="mt-4 text-xs text-faint">
-        Desktop app · macOS, Windows, Linux · your agents, your keys.
+        Desktop app · macOS (Apple Silicon) · Windows &amp; Linux planned · your
+        agents, your keys.
       </p>
     </section>
   );

@@ -13,7 +13,7 @@ import {
 export const metadata: Metadata = {
   title: "Download Recoder",
   description:
-    "Download Recoder for macOS, Windows, and Linux. Runs your own Claude Code, Codex, and opencode, coordinated. Your agents, your keys.",
+    "Download Recoder for macOS (Apple Silicon). Windows and Linux builds haven't shipped yet — join the waitlist. Runs your own Claude Code, Codex, and opencode, coordinated. Your agents, your keys.",
 };
 
 const GETTING_STARTED: { title: string; body: string }[] = [
