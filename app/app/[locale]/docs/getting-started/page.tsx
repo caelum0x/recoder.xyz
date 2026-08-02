@@ -1,8 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Terminal, Globe, Key, Sparkles, CheckCircle, Code, Zap } from 'lucide-react';
-import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
+import {
+  ArrowRight,
+  Download,
+  Key,
+  Sparkles,
+  CheckCircle,
+  GitBranch,
+  GitMerge,
+  Terminal,
+} from 'lucide-react';
 import { SiteHeader } from '@/components/SiteHeader';
 
 export default function GettingStartedPage() {
@@ -20,14 +28,15 @@ export default function GettingStartedPage() {
               <span className="text-sm text-green-400">Getting Started Guide</span>
             </div>
             <h1 className="text-5xl md:text-6xl font-bold mb-4">
-              Get Started with
+              N agents in parallel.
               <br />
-              <span className="text-white">
-                Recoder.xyz
-              </span>
+              <span className="text-orange-400">One trusted merge.</span>
             </h1>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              Start building with AI in under 5 minutes. This guide will walk you through everything you need to know.
+              Recoder is a self-hosted desktop workspace that runs your coding
+              agents — Claude Code, Codex, opencode, and more — in parallel
+              isolated git worktrees, then helps you review and merge the best
+              result. Here&apos;s the whole loop in four steps.
             </p>
           </div>
 
@@ -42,31 +51,34 @@ export default function GettingStartedPage() {
                   <span className="text-2xl font-bold text-orange-500">1</span>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-2xl font-bold mb-3">Create Your Account</h3>
+                  <h3 className="text-2xl font-bold mb-3">Download the Desktop App</h3>
                   <p className="text-gray-400 mb-4">
-                    Sign up with GitHub or Google - no credit card required!
+                    Recoder runs on your machine — macOS, Windows, or Linux. It is
+                    local-first: your code and your keys never leave your computer
+                    unless you turn on team features.
                   </p>
                   <div className="p-4 rounded-lg bg-black/40 border border-white/10 mb-4">
                     <div className="flex items-center space-x-2 text-sm text-gray-400 mb-2">
                       <CheckCircle className="w-4 h-4 text-green-400" />
-                      <span>No payment information needed</span>
+                      <span>No account required to start</span>
                     </div>
                     <div className="flex items-center space-x-2 text-sm text-gray-400 mb-2">
                       <CheckCircle className="w-4 h-4 text-green-400" />
-                      <span>No trial period - it's free forever (during beta)</span>
+                      <span>Self-hosted — runs entirely on your machine</span>
                     </div>
                     <div className="flex items-center space-x-2 text-sm text-gray-400">
                       <CheckCircle className="w-4 h-4 text-green-400" />
-                      <span>Takes 30 seconds</span>
+                      <span>macOS build is signed and notarized</span>
                     </div>
                   </div>
-                  <Link
-                    href="/auth/signin"
+                  <a
+                    href="/download"
                     className="inline-flex items-center space-x-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-lg font-medium transition-all"
                   >
-                    <span>Sign Up Now</span>
+                    <Download className="w-4 h-4" />
+                    <span>Download Recoder</span>
                     <ArrowRight className="w-4 h-4" />
-                  </Link>
+                  </a>
                 </div>
               </div>
             </div>
@@ -78,77 +90,49 @@ export default function GettingStartedPage() {
                   <span className="text-2xl font-bold text-purple-500">2</span>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-2xl font-bold mb-3">Get Your API Key</h3>
+                  <h3 className="text-2xl font-bold mb-3">Bring Your Own Agents &amp; Keys</h3>
                   <p className="text-gray-400 mb-4">
-                    Choose an AI provider and get your API key. We recommend <span className="text-orange-500 font-semibold">OpenRouter</span> for beginners.
+                    Recoder drives the coding agents you already use — it does not
+                    replace them. Install any agent CLIs you want to run:
                   </p>
 
-                  {/* Provider Options */}
-                  <div className="grid md:grid-cols-3 gap-4 mb-6">
-                    <div className="p-4 rounded-lg border border-green-500/30 bg-green-500/5">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <span className="text-lg">📦</span>
-                        <span className="font-semibold text-green-400">OpenRouter</span>
-                      </div>
-                      <div className="text-xs text-gray-400 mb-3">Recommended for beginners</div>
-                      <div className="text-sm text-gray-300 mb-3">
-                        • 40+ models in one key<br />
-                        • $5 = 500+ requests<br />
-                        • Easy to set up
-                      </div>
-                      <a
-                        href="https://openrouter.ai/keys?ref=recoder"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center space-x-1 text-xs text-green-400 hover:text-green-300"
-                      >
-                        <span>Get OpenRouter Key</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </a>
-                    </div>
-
+                  <div className="grid md:grid-cols-2 gap-4 mb-6">
                     <div className="p-4 rounded-lg border border-white/10 bg-white/5">
                       <div className="flex items-center space-x-2 mb-2">
-                        <span className="text-lg">🤖</span>
-                        <span className="font-semibold">Anthropic</span>
+                        <Terminal className="w-4 h-4 text-purple-400" />
+                        <span className="font-semibold">Claude Code</span>
                       </div>
-                      <div className="text-xs text-gray-400 mb-3">Best for Claude models</div>
-                      <div className="text-sm text-gray-300 mb-3">
-                        • Claude 3.5 Sonnet<br />
-                        • Great for coding<br />
-                        • $5 free credit
+                      <div className="text-sm text-gray-300 font-mono text-xs p-2 rounded bg-black/40 border border-white/10">
+                        npm install -g @anthropic-ai/claude-code
                       </div>
-                      <a
-                        href="https://console.anthropic.com/settings/keys"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center space-x-1 text-xs text-gray-400 hover:text-white"
-                      >
-                        <span>Get Anthropic Key</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </a>
                     </div>
-
                     <div className="p-4 rounded-lg border border-white/10 bg-white/5">
                       <div className="flex items-center space-x-2 mb-2">
-                        <span className="text-lg">🔷</span>
-                        <span className="font-semibold">OpenAI</span>
+                        <Terminal className="w-4 h-4 text-purple-400" />
+                        <span className="font-semibold">Codex</span>
                       </div>
-                      <div className="text-xs text-gray-400 mb-3">For GPT models</div>
-                      <div className="text-sm text-gray-300 mb-3">
-                        • GPT-4 & GPT-4 Turbo<br />
-                        • Most popular<br />
-                        • $5 free credit
+                      <div className="text-sm text-gray-300 font-mono text-xs p-2 rounded bg-black/40 border border-white/10">
+                        npm install -g @openai/codex
                       </div>
-                      <a
-                        href="https://platform.openai.com/api-keys"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center space-x-1 text-xs text-gray-400 hover:text-white"
-                      >
-                        <span>Get OpenAI Key</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </a>
+                    </div>
+                    <div className="p-4 rounded-lg border border-white/10 bg-white/5">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Terminal className="w-4 h-4 text-purple-400" />
+                        <span className="font-semibold">opencode</span>
+                      </div>
+                      <div className="text-sm text-gray-300 font-mono text-xs p-2 rounded bg-black/40 border border-white/10">
+                        npm install -g opencode-ai
+                      </div>
+                    </div>
+                    <div className="p-4 rounded-lg border border-white/10 bg-white/5">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Terminal className="w-4 h-4 text-purple-400" />
+                        <span className="font-semibold">Any other agent CLI</span>
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        Cursor CLI, pi, and other terminal agents work too — if it
+                        runs in a terminal, Recoder can run it.
+                      </p>
                     </div>
                   </div>
 
@@ -156,8 +140,10 @@ export default function GettingStartedPage() {
                     <div className="flex items-start space-x-2">
                       <Key className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
                       <div className="text-sm text-gray-300">
-                        <span className="font-semibold text-white">Why do I need my own API key?</span><br />
-                        This is the BYOK (Bring Your Own Key) model. You pay AI providers directly, so there are no markups. We encrypt your key with AES-256-GCM and never see your usage.
+                        <span className="font-semibold text-white">BYOK — Bring Your Own Keys.</span>{' '}
+                        Your agents keep using the provider subscriptions and API
+                        keys they already have. Recoder orchestrates; it never
+                        proxies or resells tokens, and adds no markup.
                       </div>
                     </div>
                   </div>
@@ -172,9 +158,10 @@ export default function GettingStartedPage() {
                   <span className="text-2xl font-bold text-green-500">3</span>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-2xl font-bold mb-3">Add Your API Key to Recoder</h3>
+                  <h3 className="text-2xl font-bold mb-3">Run Agents in Parallel</h3>
                   <p className="text-gray-400 mb-4">
-                    Navigate to your dashboard and add your API key.
+                    Open your repository in Recoder and point one or more agents at
+                    the same task.
                   </p>
 
                   <div className="space-y-3 mb-6">
@@ -183,7 +170,7 @@ export default function GettingStartedPage() {
                         <span className="text-xs font-bold text-orange-500">a</span>
                       </div>
                       <div className="text-sm text-gray-300">
-                        Go to <Link href="/dashboard" className="text-orange-500 hover:text-orange-400">Dashboard</Link> after signing in
+                        Open the Recoder desktop app and add your git repository as a workspace
                       </div>
                     </div>
                     <div className="flex items-start space-x-3">
@@ -191,7 +178,9 @@ export default function GettingStartedPage() {
                         <span className="text-xs font-bold text-orange-500">b</span>
                       </div>
                       <div className="text-sm text-gray-300">
-                        Click <Link href="/settings/ai-providers" className="text-orange-500 hover:text-orange-400">"Manage API Keys"</Link>
+                        Describe the task once, then launch it on N agents — mix and
+                        match Claude Code, Codex, opencode, or several runs of the
+                        same agent
                       </div>
                     </div>
                     <div className="flex items-start space-x-3">
@@ -199,25 +188,20 @@ export default function GettingStartedPage() {
                         <span className="text-xs font-bold text-orange-500">c</span>
                       </div>
                       <div className="text-sm text-gray-300">
-                        Select your provider (OpenRouter/Anthropic/OpenAI)
-                      </div>
-                    </div>
-                    <div className="flex items-start space-x-3">
-                      <div className="w-6 h-6 rounded-full bg-orange-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-xs font-bold text-orange-500">d</span>
-                      </div>
-                      <div className="text-sm text-gray-300">
-                        Paste your API key and save
+                        Watch each run live in its own terminal — pause, steer, or
+                        stop any of them at any time
                       </div>
                     </div>
                   </div>
 
                   <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
                     <div className="flex items-start space-x-2">
-                      <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
+                      <GitBranch className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
                       <div className="text-sm text-gray-300">
-                        <span className="font-semibold text-white">Your key is encrypted!</span><br />
-                        We encrypt your API key with AES-256-GCM before storing it. Even we can't see your key in plain text.
+                        <span className="font-semibold text-white">Isolated git worktrees.</span>{' '}
+                        Every agent works in its own worktree on its own branch, so
+                        parallel attempts never collide and your working tree stays
+                        clean.
                       </div>
                     </div>
                   </div>
@@ -232,77 +216,50 @@ export default function GettingStartedPage() {
                   <span className="text-2xl font-bold text-blue-500">4</span>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-2xl font-bold mb-3">Start Building!</h3>
+                  <h3 className="text-2xl font-bold mb-3">Review &amp; Merge the Best Result</h3>
                   <p className="text-gray-400 mb-6">
-                    Choose your workflow: Web IDE or Terminal CLI (or both!)
+                    Fan-out is easy; convergence is the hard part. When the runs
+                    finish, Recoder shows you what each agent actually changed.
                   </p>
 
-                  <div className="grid md:grid-cols-2 gap-6 mb-6">
-                    <div className="p-6 rounded-xl border border-purple-500/30 bg-purple-500/5">
-                      <div className="flex items-center space-x-3 mb-4">
-                        <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                          <Globe className="w-5 h-5 text-purple-400" />
-                        </div>
-                        <h4 className="text-xl font-bold">Web IDE</h4>
+                  <div className="space-y-3 mb-6">
+                    <div className="flex items-start space-x-3">
+                      <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-xs font-bold text-blue-400">a</span>
                       </div>
-                      <p className="text-sm text-gray-400 mb-4">
-                        Code in your browser with AI assistance. Perfect for quick projects and prototyping.
-                      </p>
-                      <ul className="space-y-2 mb-4 text-sm text-gray-300">
-                        <li className="flex items-center space-x-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
-                          <span>Real-time preview</span>
-                        </li>
-                        <li className="flex items-center space-x-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
-                          <span>No setup required</span>
-                        </li>
-                        <li className="flex items-center space-x-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
-                          <span>Works on any device</span>
-                        </li>
-                      </ul>
-                      <LaunchWebIDEButton className="inline-flex items-center space-x-2 px-4 py-2 bg-purple-500 hover:bg-purple-600 rounded-lg text-sm font-medium transition-all">
-                        <span>Launch Web IDE</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </LaunchWebIDEButton>
+                      <div className="text-sm text-gray-300">
+                        Compare the divergent diffs side by side instead of
+                        hand-refereeing a pile of conflicting branches
+                      </div>
                     </div>
-
-                    <div className="p-6 rounded-xl border border-orange-500/30 bg-orange-500/5">
-                      <div className="flex items-center space-x-3 mb-4">
-                        <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center">
-                          <Terminal className="w-5 h-5 text-orange-400" />
-                        </div>
-                        <h4 className="text-xl font-bold">Terminal CLI</h4>
+                    <div className="flex items-start space-x-3">
+                      <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-xs font-bold text-blue-400">b</span>
                       </div>
-                      <p className="text-sm text-gray-400 mb-4">
-                        Build from your terminal with full file system access. Perfect for local development.
-                      </p>
-                      <ul className="space-y-2 mb-4 text-sm text-gray-300">
-                        <li className="flex items-center space-x-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
-                          <span>Local file access</span>
-                        </li>
-                        <li className="flex items-center space-x-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
-                          <span>Sync with Web IDE</span>
-                        </li>
-                        <li className="flex items-center space-x-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
-                          <span>40+ AI models</span>
-                        </li>
-                      </ul>
-                      <div className="p-3 rounded-lg bg-black/40 border border-white/10 font-mono text-xs text-gray-300">
-                        npm install -g recoder-code
+                      <div className="text-sm text-gray-300">
+                        Merge the best attempt into your branch — and discard the
+                        rest with one click
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-3">
+                      <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-xs font-bold text-blue-400">c</span>
+                      </div>
+                      <div className="text-sm text-gray-300">
+                        Keep an evidence record of what ran, what changed, and who
+                        approved it
                       </div>
                     </div>
                   </div>
 
                   <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
                     <div className="flex items-start space-x-2">
-                      <Zap className="w-5 h-5 text-orange-400 mt-0.5 flex-shrink-0" />
+                      <GitMerge className="w-5 h-5 text-orange-400 mt-0.5 flex-shrink-0" />
                       <div className="text-sm text-gray-300">
-                        <span className="font-semibold text-white">Pro tip:</span> Use both! Start in Web IDE, download to local machine, edit with CLI, and sync back. That's the power of Recoder!
+                        <span className="font-semibold text-white">Pro tip:</span>{' '}
+                        Launch three attempts at a hard task instead of one. Reviewing
+                        three finished diffs is faster than babysitting a single agent
+                        — that&apos;s the convergence loop.
                       </div>
                     </div>
                   </div>
@@ -313,11 +270,26 @@ export default function GettingStartedPage() {
 
           {/* Next Steps */}
           <div className="p-8 rounded-2xl border-2 border-green-500/30 bg-gradient-to-br from-green-500/10 to-blue-600/10">
-            <h2 className="text-3xl font-bold mb-6">🎉 You're All Set!</h2>
+            <h2 className="text-3xl font-bold mb-6">🎉 You&apos;re All Set!</h2>
             <p className="text-gray-300 mb-6">
-              You now have everything you need to start building with AI. Here's what to explore next:
+              That&apos;s the whole loop: launch, compare, merge. A Recoder account
+              is optional for local use — sign in when you want team features.
+              Here&apos;s what to explore next:
             </p>
             <div className="grid md:grid-cols-2 gap-4">
+              <a
+                href="/download"
+                className="p-4 rounded-lg border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all group"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold mb-1">Download the App</h3>
+                    <p className="text-sm text-gray-400">macOS, Windows &amp; Linux builds</p>
+                  </div>
+                  <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                </div>
+              </a>
+
               <Link
                 href="/docs/faq"
                 className="p-4 rounded-lg border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all group"
@@ -330,27 +302,12 @@ export default function GettingStartedPage() {
                   <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-white group-hover:translate-x-1 transition-all" />
                 </div>
               </Link>
-
-              <a
-                href="https://twitter.com/recoderxyz"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-4 rounded-lg border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all group"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold mb-1">Follow on Twitter</h3>
-                    <p className="text-sm text-gray-400">Updates, tips & community</p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-white group-hover:translate-x-1 transition-all" />
-                </div>
-              </a>
             </div>
           </div>
 
           {/* Support */}
           <div className="mt-12 text-center">
-            <p className="text-gray-400 mb-4">Need help? We're here for you!</p>
+            <p className="text-gray-400 mb-4">Need help? We&apos;re here for you!</p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <a
                 href="mailto:recoderxyz@gmail.com"
