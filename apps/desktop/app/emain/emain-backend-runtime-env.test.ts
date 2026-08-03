@@ -237,6 +237,42 @@ describe("readByokSecretsFromStore", () => {
         );
     });
 
+    // Contract test against the WRITER (server/pkg/secretstore/secretstore.go
+    // writeSecretsToFile): json.Marshal(whole map incl "wave:writets") ->
+    // electronencrypt wshrpc (safeStorage.encryptString -> base64 CipherText) ->
+    // the base64 string IS the entire file content. There is no per-secret
+    // encryption and no {ciphertext:...} JSON wrapper on disk.
+    it("parses the exact on-disk shape the Go secretstore writes (one safeStorage blob of the whole JSON map)", () => {
+        const encrypt = (plaintext: string) => Buffer.from(`enc:${plaintext}`, "utf-8").toString("base64");
+        const decrypt = (ciphertextBase64: string) => {
+            const raw = Buffer.from(ciphertextBase64, "base64").toString("utf-8");
+            if (!raw.startsWith("enc:")) {
+                throw new Error("not safeStorage ciphertext");
+            }
+            return raw.slice(4);
+        };
+        const goPlaintext = JSON.stringify({
+            ANTHROPIC_API_KEY: "sk-ant-real",
+            OPENROUTER_API_KEY: "sk-or-real",
+            MY_BANK_PASSWORD: "hunter2",
+            "wave:writets": "2026-08-04T00:00:00Z",
+        });
+        const fs = makeFs(encrypt(goPlaintext) + "\n");
+        const out = readByokSecretsFromStore({ secretsFilePath: storePath, decrypt, fs });
+        expect(out).toEqual({ ANTHROPIC_API_KEY: "sk-ant-real", OPENROUTER_API_KEY: "sk-or-real" });
+    });
+
+    it("returns {} for an empty secrets file without calling decrypt", () => {
+        let decryptCalls = 0;
+        const decrypt = (c: string) => {
+            decryptCalls++;
+            return decode(c);
+        };
+        const out = readByokSecretsFromStore({ secretsFilePath: storePath, decrypt, fs: makeFs("  \n") });
+        expect(out).toEqual({});
+        expect(decryptCalls).toBe(0);
+    });
+
     it("allowlists the TensorZero addressing + auth names", () => {
         expect(BYOK_SECRET_ENV_NAMES).toContain("TENSORZERO_URL");
         expect(BYOK_SECRET_ENV_NAMES).toContain("TENSORZERO_API_KEY");

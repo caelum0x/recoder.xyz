@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { globalStore } from "@/app/store/global";
+import { RpcApi } from "@/app/store/wshclientapi";
+import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl, setRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { RecoderSettingsView } from "./recoder-settings";
@@ -9,6 +11,11 @@ import { describeConductorHealth, summarizeHealthReport } from "./recoder-settin
 
 // Connection-test state: idle / in-flight / healthy / reachable-but-impaired / unreachable.
 type TestStatus = "" | "testing" | "ok" | "degraded" | "fail";
+
+// Canonical secret names: these must match the BYOK_SECRET_ENV_NAMES allowlist
+// in emain/emain-backend-runtime-env.ts — that is the exact set the supervisor
+// lifts out of <configDir>/secrets.enc into the embedded backend's spawn env.
+const ProviderKeyNames = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "GOOGLE_API_KEY"];
 
 class RecoderSettingsViewModel implements ViewModel {
     viewType: string;
@@ -20,6 +27,9 @@ class RecoderSettingsViewModel implements ViewModel {
     testStatusAtom: PrimitiveAtom<TestStatus>;
     testMessageAtom: PrimitiveAtom<string>;
     testDetailAtom: PrimitiveAtom<string[]>;
+    providerKeysSetAtom: PrimitiveAtom<Record<string, boolean>>;
+    providerKeyDraftsAtom: PrimitiveAtom<Record<string, string>>;
+    providerKeyErrorAtom: PrimitiveAtom<string>;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -31,6 +41,9 @@ class RecoderSettingsViewModel implements ViewModel {
         this.testStatusAtom = atom("") as PrimitiveAtom<TestStatus>;
         this.testMessageAtom = atom("") as PrimitiveAtom<string>;
         this.testDetailAtom = atom([]) as PrimitiveAtom<string[]>;
+        this.providerKeysSetAtom = atom({}) as PrimitiveAtom<Record<string, boolean>>;
+        this.providerKeyDraftsAtom = atom({}) as PrimitiveAtom<Record<string, string>>;
+        this.providerKeyErrorAtom = atom("") as PrimitiveAtom<string>;
     }
 
     get viewComponent(): ViewComponent {
@@ -50,6 +63,51 @@ class RecoderSettingsViewModel implements ViewModel {
 
     resetDefault() {
         this.save("");
+    }
+
+    setProviderKeyDraft(name: string, value: string) {
+        const drafts = globalStore.get(this.providerKeyDraftsAtom);
+        globalStore.set(this.providerKeyDraftsAtom, { ...drafts, [name]: value });
+    }
+
+    // The store never returns values to the UI — only NAMES. A saved key shows
+    // as "set" and can be overwritten or cleared, never read back.
+    async refreshProviderKeys() {
+        try {
+            const names = await RpcApi.GetSecretsNamesCommand(TabRpcClient);
+            const present: Record<string, boolean> = {};
+            for (const name of ProviderKeyNames) {
+                present[name] = Array.isArray(names) && names.includes(name);
+            }
+            globalStore.set(this.providerKeysSetAtom, present);
+            globalStore.set(this.providerKeyErrorAtom, "");
+        } catch (e) {
+            globalStore.set(this.providerKeyErrorAtom, `Failed to read secret store: ${e?.message ?? e}`);
+        }
+    }
+
+    async saveProviderKey(name: string) {
+        const draft = (globalStore.get(this.providerKeyDraftsAtom)[name] ?? "").trim();
+        if (draft == "") {
+            return;
+        }
+        try {
+            await RpcApi.SetSecretsCommand(TabRpcClient, { [name]: draft });
+            const drafts = globalStore.get(this.providerKeyDraftsAtom);
+            globalStore.set(this.providerKeyDraftsAtom, { ...drafts, [name]: "" });
+            await this.refreshProviderKeys();
+        } catch (e) {
+            globalStore.set(this.providerKeyErrorAtom, `Failed to save ${name}: ${e?.message ?? e}`);
+        }
+    }
+
+    async clearProviderKey(name: string) {
+        try {
+            await RpcApi.SetSecretsCommand(TabRpcClient, { [name]: null });
+            await this.refreshProviderKeys();
+        } catch (e) {
+            globalStore.set(this.providerKeyErrorAtom, `Failed to clear ${name}: ${e?.message ?? e}`);
+        }
     }
 
     // Backend doctor: probe /api/conductor/health and diagnose the BODY (a
@@ -93,4 +151,4 @@ class RecoderSettingsViewModel implements ViewModel {
     }
 }
 
-export { RecoderSettingsViewModel };
+export { ProviderKeyNames, RecoderSettingsViewModel };
