@@ -10,7 +10,7 @@ import { nanoid } from 'nanoid';
 // Constants
 const DEVICE_CODE_LENGTH = 32;
 const USER_CODE_LENGTH = 8;
-const DEVICE_CODE_EXPIRY_MINUTES = 10;
+const DEVICE_CODE_EXPIRY_MINUTES = 15;
 const ACCESS_TOKEN_EXPIRY_DAYS = 90;
 const REFRESH_TOKEN_EXPIRY_DAYS = 365;
 const CLIENT_ID = 'recoder-cli';
@@ -38,26 +38,29 @@ export class CLIAuthService {
    * Step 1: Generate device code for CLI authentication
    * CLI calls this to start the auth flow
    */
-  static async generateDeviceCode(clientId: string = CLIENT_ID) {
+  static async generateDeviceCode(clientId: string = CLIENT_ID, scope?: string) {
     const deviceCode = nanoid(DEVICE_CODE_LENGTH);
     const userCode = generateUserCode();
     const expiresAt = new Date(Date.now() + DEVICE_CODE_EXPIRY_MINUTES * 60 * 1000);
 
-    const record = await prisma.deviceCode.create({
+    await prisma.deviceCode.create({
       data: {
         deviceCode,
         userCode,
         clientId,
+        ...(scope ? { scope } : {}),
         status: 'pending',
         expiresAt,
       },
     });
 
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
+
     return {
       device_code: deviceCode,
       user_code: userCode,
-      verification_uri: `${process.env.NEXT_PUBLIC_APP_URL}/cli/auth`,
-      verification_uri_complete: `${process.env.NEXT_PUBLIC_APP_URL}/cli/auth?code=${userCode}`,
+      verification_uri: `${baseUrl}/cli/auth`,
+      verification_uri_complete: `${baseUrl}/cli/auth?code=${userCode}`,
       expires_in: DEVICE_CODE_EXPIRY_MINUTES * 60,
       interval: 5, // Poll every 5 seconds
     };

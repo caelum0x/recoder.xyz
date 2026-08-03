@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { auth } from '@/lib/auth-config';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { CLIAuthService } from '@/lib/services/cli-auth.service';
 
 const deviceFlowSchema = z.object({
   client_id: z.string(),
@@ -158,6 +159,8 @@ export async function POST(request: NextRequest) {
 
 /**
  * Handle device flow initiation
+ * Delegates to CLIAuthService so this surface and /api/auth/cli/device share
+ * one truth for verification_uri (/cli/auth) and expiry (15 minutes).
  */
 async function handleDeviceFlow(body: any): Promise<NextResponse> {
   const validation = deviceFlowSchema.safeParse(body);
@@ -170,36 +173,10 @@ async function handleDeviceFlow(body: any): Promise<NextResponse> {
 
   const { client_id, scope } = validation.data;
 
-  // Generate codes
-  const deviceCode = nanoid(32);
-  const userCode = generateUserCode();
-  const expiresIn = 15 * 60; // 15 minutes
-  const interval = 5; // 5 seconds
-
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz';
-  const verificationUri = `${baseUrl}/auth/device`;
-  const verificationUriComplete = `${baseUrl}/auth/device?user_code=${userCode}`;
-
-  // Store device flow request in database
-  await prisma.deviceCode.create({
-    data: {
-      deviceCode: deviceCode,
-      userCode: userCode,
-      clientId: client_id,
-      scope: scope,
-      expiresAt: new Date(Date.now() + expiresIn * 1000),
-      status: 'pending',
-    }
-  });
-
-  const deviceFlowData: DeviceFlowData = {
-    device_code: deviceCode,
-    user_code: userCode,
-    verification_uri: verificationUri,
-    verification_uri_complete: verificationUriComplete,
-    expires_in: expiresIn,
-    interval: interval
-  };
+  const deviceFlowData: DeviceFlowData = await CLIAuthService.generateDeviceCode(
+    client_id,
+    scope
+  );
 
   return NextResponse.json({
     success: true,
@@ -843,20 +820,6 @@ async function handleDeviceTokenPoll(body: any): Promise<NextResponse> {
       error: 'server_error'
     }, { status: 500 });
   }
-}
-
-/**
- * Generate user-friendly device code
- */
-function generateUserCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluding confusing chars
-  const randomBytes = new Uint8Array(8);
-  crypto.getRandomValues(randomBytes);
-  let result = '';
-  for (let i = 0; i < 8; i++) {
-    result += chars.charAt(randomBytes[i] % chars.length);
-  }
-  return result.slice(0, 4) + '-' + result.slice(4);
 }
 
 // Demo data is now initialized in the database service
