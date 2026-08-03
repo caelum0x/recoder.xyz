@@ -273,6 +273,9 @@ describe("assembleBackendEnv", () => {
         expect(env.RECODER_TMUX_BUILD_PATH).toBe("/repo/apps/desktop/engines/tmux/tmux");
         expect(env.TMUX_BIN).toBe("/repo/apps/desktop/engines/tmux/tmux");
         expect(env.RECODER_SOLO_MODE).toBe("1");
+        // The durable embedded state-of-record: without this, agent-os +
+        // conductor silently fall back to in-memory and lose state on restart.
+        expect(env.RECODER_SQLITE_PATH).toBe("/ud/backend-data/state-of-record.sqlite");
         expect(env.PATH).toBe("/bin");
         // Embedded desktop lowers the admission disk floor to 2GB (lightweight
         // worktrees on a single-user laptop), overridable via base env.
