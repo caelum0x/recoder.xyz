@@ -19,7 +19,7 @@ export function OrganizationSchema() {
       email: 'support@recoder.xyz',
       contactType: 'Customer Support',
     },
-    description: 'The only AI coding platform with seamless Web IDE + Terminal CLI sync. 100% FREE beta with BYOK (Bring Your Own Key).',
+    description: 'Self-hosted desktop workspace that runs coding agents in parallel isolated git worktrees, then helps you review and merge the best result. BYOK (Bring Your Own Key).',
   };
 
   return (
@@ -34,24 +34,18 @@ export function SoftwareApplicationSchema() {
   const schema = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
-    name: 'Recoder CLI',
+    name: 'Recoder Desktop',
     applicationCategory: 'DeveloperApplication',
     operatingSystem: 'macOS, Windows, Linux',
     offers: {
       '@type': 'Offer',
       price: '0',
       priceCurrency: 'USD',
-      description: '100% FREE beta with BYOK (Bring Your Own Key)',
+      description: 'Free with BYOK (Bring Your Own Key)',
     },
-    description: 'Terminal-first AI coding tool with 40+ AI models. Seamlessly sync with Web IDE.',
-    softwareVersion: '2.4.4',
-    downloadUrl: 'https://www.npmjs.com/package/recoder-code',
+    description: 'Desktop workspace that runs coding agents like Claude Code, Codex, and opencode in parallel isolated git worktrees, then helps you review and merge the best result.',
+    downloadUrl: 'https://recoder.xyz/download',
     screenshot: 'https://recoder.xyz/cli-screenshot.png',
-    aggregateRating: {
-      '@type': 'AggregateRating',
-      ratingValue: '4.8',
-      ratingCount: '100',
-    },
   };
 
   return (
@@ -65,18 +59,18 @@ export function SoftwareApplicationSchema() {
 export function WebApplicationSchema() {
   const schema = {
     '@context': 'https://schema.org',
-    '@type': 'WebApplication',
-    name: 'Recoder Web IDE',
+    '@type': 'SoftwareApplication',
+    name: 'Recoder Desktop',
     applicationCategory: 'DeveloperApplication',
-    browserRequirements: 'Requires JavaScript. Requires HTML5.',
+    operatingSystem: 'macOS, Windows, Linux',
     offers: {
       '@type': 'Offer',
       price: '0',
       priceCurrency: 'USD',
-      description: '100% FREE beta with BYOK',
+      description: 'Free with BYOK',
     },
-    description: 'Browser-based AI coding IDE with live preview and 40+ AI models.',
-    url: 'https://web.recoder.xyz',
+    description: 'Self-hosted desktop workspace that runs coding agents in parallel isolated git worktrees with review and merge tooling.',
+    url: 'https://recoder.xyz/download',
     screenshot: 'https://recoder.xyz/web-ide-screenshot.png',
   };
 
@@ -111,10 +105,10 @@ export function FAQPageSchema() {
       },
       {
         '@type': 'Question',
-        name: 'How does Web ↔ CLI sync work?',
+        name: 'How does Recoder run my coding agents?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Start projects in our Web IDE, then download them locally with "recoder web download <id>". Edit with any editor, then sync back with "recoder web sync". Seamless workflow between browser and terminal.',
+          text: 'Recoder is a desktop app that runs the agent CLIs you already use — Claude Code, Codex, opencode, and more — in parallel isolated git worktrees. When the runs finish, you compare the diffs side by side and merge the best result.',
         },
       },
       {
@@ -213,9 +207,9 @@ export function RecoderAgencySchema() {
 export function RecoderWebSchema() {
   return (
     <PlatformServiceSchema
-      name="Recoder Web IDE"
-      description="Browser-based AI IDE supporting 40+ AI models via BYOK, real-time preview, integrated terminal, and instant deployment for full-stack development."
-      url="https://recoder.xyz/platform/web"
+      name="Recoder Desktop"
+      description="Desktop workspace that runs coding agents in parallel isolated git worktrees with BYOK, live terminals per run, and side-by-side diff review and merge."
+      url="https://recoder.xyz/download"
       applicationCategory="DeveloperApplication"
     />
   );

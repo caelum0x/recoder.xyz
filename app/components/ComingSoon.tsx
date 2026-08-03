@@ -45,11 +45,11 @@ export default function ComingSoon({
           <ul className="space-y-2 text-gray-300">
             <li className="flex items-start">
               <span className="text-green-400 mr-2">✓</span>
-              <span>Unlimited Web IDE access</span>
+              <span>Full desktop app access</span>
             </li>
             <li className="flex items-start">
               <span className="text-green-400 mr-2">✓</span>
-              <span>Complete CLI tool integration</span>
+              <span>Run any agent CLI — Claude Code, Codex, opencode</span>
             </li>
             <li className="flex items-start">
               <span className="text-green-400 mr-2">✓</span>
@@ -57,7 +57,7 @@ export default function ComingSoon({
             </li>
             <li className="flex items-start">
               <span className="text-green-400 mr-2">✓</span>
-              <span>Web ↔ Terminal synchronization</span>
+              <span>Parallel agent runs in isolated git worktrees</span>
             </li>
             <li className="flex items-start">
               <span className="text-green-400 mr-2">✓</span>

@@ -295,7 +295,7 @@ const API: TagGroup[] = [
               price: 0,
               currency: 'USD',
               interval: 'month',
-              features: ['Access to web.recoder.xyz', 'Access to recoder-code CLI', 'All AI models', 'Must provide own OpenRouter API key'],
+              features: ['Recoder desktop app', 'Parallel agent runs', 'All AI models', 'Must provide own OpenRouter API key'],
               limits: { sessionsPerDay: 6, tokensPerSession: 10000, requests: 1000, tokens: 1000000 },
             },
             {

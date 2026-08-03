@@ -109,11 +109,11 @@ export default function LearnPage() {
       href: 'https://agency.recoder.xyz'
     },
     {
-      title: 'Web IDE',
-      description: 'Full-featured browser IDE with AI assistance, container-based execution, and live preview.',
+      title: 'Desktop App',
+      description: 'Run your coding agents in parallel isolated git worktrees, then review and merge the best result.',
       icon: Code,
       level: 'Intermediate',
-      href: 'https://web.recoder.xyz'
+      href: '/download'
     }
   ];
 

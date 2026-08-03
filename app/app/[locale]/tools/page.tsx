@@ -12,24 +12,24 @@ import {
 export default function DeveloperToolsPage() {
   const cliCommands = [
     {
-      title: "Install Recoder CLI",
-      command: "npm install -g recoder-code",
-      description: "Get started with our command-line interface"
+      title: "Install Claude Code",
+      command: "npm install -g @anthropic-ai/claude-code",
+      description: "Anthropic's terminal coding agent — Recoder orchestrates it"
     },
     {
-      title: "Create New Project",
-      command: "recoder create my-app --template react",
-      description: "Generate a new project from templates"
+      title: "Install Codex",
+      command: "npm install -g @openai/codex",
+      description: "OpenAI's terminal coding agent — Recoder orchestrates it"
     },
     {
-      title: "Generate Component",
-      command: "recoder generate component Button --props text,onClick",
-      description: "AI-powered component generation"
+      title: "Install opencode",
+      command: "npm install -g opencode-ai",
+      description: "Open-source terminal coding agent — Recoder orchestrates it"
     },
     {
-      title: "Deploy Project",
-      command: "recoder deploy --platform vercel",
-      description: "Deploy your project to any platform"
+      title: "Get the Desktop App",
+      command: "open https://recoder.xyz/download",
+      description: "Run your agents in parallel isolated git worktrees"
     }
   ];
 

@@ -235,7 +235,7 @@ export default function PricingPage() {
           </h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
             Start free with your own API key, or let us handle everything.
-            All plans include the full Web IDE + CLI experience.
+            All plans include the full desktop parallel-agent experience.
           </p>
         </div>
       </section>
@@ -261,8 +261,8 @@ export default function PricingPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
-                'Web IDE + Terminal CLI',
-                'Web-to-CLI sync',
+                'Desktop app for macOS, Windows & Linux',
+                'Parallel agent runs in git worktrees',
                 'Unlimited free model usage',
                 'Project management',
                 'Git integration',

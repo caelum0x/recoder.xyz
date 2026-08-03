@@ -31,8 +31,9 @@ export default function MobileAppPage() {
           </div>
           <p className="text-gray-400 leading-relaxed mb-6">
             The Recoder desktop app is built with Electron and gives you a native
-            experience on macOS, Windows, and Linux. It wraps the full Web IDE with
-            system-level integrations like file access and notifications.
+            experience on macOS, Windows, and Linux. It runs your coding agents in
+            parallel isolated git worktrees, with system-level integrations like
+            file access and notifications.
           </p>
           <Link
             href="/docs/getting-started"
@@ -53,9 +54,9 @@ export default function MobileAppPage() {
             </span>
           </div>
           <p className="text-gray-400 leading-relaxed mb-6">
-            recoder-code is our terminal-based coding tool. It connects to 40+ AI
-            models through your own API keys and works anywhere you have a terminal —
-            including on mobile via SSH clients.
+            Recoder runs the terminal coding agents you already use — Claude Code,
+            Codex, opencode, and more — with your own API keys. They work anywhere
+            you have a terminal, including on mobile via SSH clients.
           </p>
           <Link
             href="/cli"

@@ -208,7 +208,7 @@ function OnboardingContent() {
               </div>
               <h1 className="text-3xl font-bold text-white mb-4">You're All Set!</h1>
               <p className="text-gray-400 mb-8">
-                Your OpenRouter API key has been securely saved. You can now start using Recoder CLI.
+                Your OpenRouter API key has been securely saved. You can now set up the Recoder desktop app.
               </p>
 
               <div className="bg-white/5 rounded-lg p-6 mb-8 text-left border border-white/10">
@@ -217,22 +217,22 @@ function OnboardingContent() {
                   <div className="flex items-start">
                     <span className="inline-flex items-center justify-center w-6 h-6 bg-neutral-800 border border-neutral-700 text-white rounded-full text-sm font-medium mr-3 flex-shrink-0">1</span>
                     <div>
-                      <p className="font-medium text-white">Install Recoder CLI</p>
-                      <code className="text-sm bg-white/10 text-gray-300 px-2 py-1 rounded mt-1 block">npm install -g recoder-code</code>
+                      <p className="font-medium text-white">Download the Recoder desktop app</p>
+                      <a href="/download" className="text-sm text-gray-300 underline hover:text-white mt-1 block">recoder.xyz/download — macOS, Windows &amp; Linux</a>
                     </div>
                   </div>
                   <div className="flex items-start">
                     <span className="inline-flex items-center justify-center w-6 h-6 bg-neutral-800 border border-neutral-700 text-white rounded-full text-sm font-medium mr-3 flex-shrink-0">2</span>
                     <div>
-                      <p className="font-medium text-white">Authenticate</p>
-                      <code className="text-sm bg-white/10 text-gray-300 px-2 py-1 rounded mt-1 block">recoder auth login</code>
+                      <p className="font-medium text-white">Install the agent CLIs you want to run</p>
+                      <code className="text-sm bg-white/10 text-gray-300 px-2 py-1 rounded mt-1 block">npm install -g @anthropic-ai/claude-code</code>
                     </div>
                   </div>
                   <div className="flex items-start">
                     <span className="inline-flex items-center justify-center w-6 h-6 bg-neutral-800 border border-neutral-700 text-white rounded-full text-sm font-medium mr-3 flex-shrink-0">3</span>
                     <div>
-                      <p className="font-medium text-white">Start Building</p>
-                      <code className="text-sm bg-white/10 text-gray-300 px-2 py-1 rounded mt-1 block">recoder "build a React app"</code>
+                      <p className="font-medium text-white">Run agents in parallel, then merge the best result</p>
+                      <p className="text-sm text-gray-400 mt-1">Open your repo, launch N attempts, review the diffs.</p>
                     </div>
                   </div>
                 </div>

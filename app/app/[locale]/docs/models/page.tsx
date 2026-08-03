@@ -477,10 +477,10 @@ export default function ModelsGuidePage() {
                     1
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-white mb-2">In the Web IDE Chat</h3>
+                    <h3 className="font-semibold text-white mb-2">In the Desktop App</h3>
                     <p className="text-sm text-gray-400">
-                      Look for the model selector dropdown at the top of the chat interface.
-                      Click it to see all available models from your configured providers.
+                      Each agent run uses the model configured for that agent CLI.
+                      Your BYOK provider keys decide which models are available.
                     </p>
                   </div>
                 </div>
@@ -490,12 +490,12 @@ export default function ModelsGuidePage() {
                     2
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-white mb-2">In the Terminal CLI</h3>
+                    <h3 className="font-semibold text-white mb-2">In Your Agent CLIs</h3>
                     <p className="text-sm text-gray-400 mb-2">
-                      Use the <code className="px-2 py-1 rounded bg-black/30 text-neutral-300">--model</code> flag:
+                      Most agent CLIs accept a <code className="px-2 py-1 rounded bg-black/30 text-neutral-300">--model</code> flag, for example:
                     </p>
                     <div className="p-3 rounded-lg bg-black/30 border border-white/10 font-mono text-sm text-gray-300">
-                      recoder chat --model claude-3.5-sonnet
+                      claude --model claude-sonnet-4-5
                     </div>
                   </div>
                 </div>

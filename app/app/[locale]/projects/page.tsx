@@ -79,7 +79,7 @@ export default function ProjectsPage() {
                 Back to Dashboard
               </Link>
               <h1 className="text-4xl font-bold mb-2">Projects</h1>
-              <p className="text-gray-400">Your Web IDE projects and synced workspaces.</p>
+              <p className="text-gray-400">Your Recoder projects and workspaces.</p>
             </div>
             <button
               onClick={() => void loadProjects()}
@@ -95,16 +95,15 @@ export default function ProjectsPage() {
               <FolderOpen className="w-16 h-16 text-gray-500 mx-auto mb-4" />
               <h2 className="text-2xl font-semibold mb-2">No projects yet</h2>
               <p className="text-gray-400 mb-6">
-                Your account does not have any Web IDE projects yet. Create one in the Web IDE and it will show up here.
+                Your account does not have any projects yet. Open a repository in
+                the Recoder desktop app and it will show up here.
               </p>
               <a
-                href="https://web.recoder.xyz"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/download"
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-white text-black hover:bg-neutral-200 transition-colors"
               >
                 <Globe className="w-5 h-5" />
-                Open Web IDE
+                Download the Desktop App
               </a>
             </div>
           ) : (

@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
 import { useSession } from '@/lib/session-provider';
-import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 import { getServiceUrlClient } from '@/lib/config/platforms';
 
 const NAV_LINKS = [
@@ -71,7 +70,12 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
 
             {(session?.user || hasCookie) ? (
               <>
-                <LaunchWebIDEButton className="px-4 py-2 text-sm bg-white text-black hover:bg-neutral-200 rounded-lg transition-colors flex items-center space-x-2" />
+                <a
+                  href="/download"
+                  className="px-4 py-2 text-sm bg-white text-black hover:bg-neutral-200 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <span>Download App</span>
+                </a>
                 <Link
                   href="/auth/signout"
                   className="px-3 py-1.5 text-sm text-gray-400 hover:text-red-400 transition-colors"
@@ -135,7 +139,13 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
               <div className="border-t border-white/10 pt-3 space-y-3">
                 {(session?.user || hasCookie) ? (
                   <>
-                    <LaunchWebIDEButton className="w-full px-4 py-2.5 text-sm bg-white text-black hover:bg-neutral-200 rounded-lg transition-colors flex items-center justify-center space-x-2" />
+                    <a
+                      href="/download"
+                      onClick={() => setMobileOpen(false)}
+                      className="w-full px-4 py-2.5 text-sm bg-white text-black hover:bg-neutral-200 rounded-lg transition-colors flex items-center justify-center space-x-2"
+                    >
+                      <span>Download App</span>
+                    </a>
                     <Link
                       href="/auth/signout"
                       onClick={() => setMobileOpen(false)}

@@ -24,10 +24,11 @@ export default function CareersPage() {
         <div className="mb-12 p-8 rounded-2xl border border-white/10 bg-white/5">
           <h2 className="text-xl font-semibold mb-4">Who We Are</h2>
           <p className="text-gray-400 leading-relaxed">
-            Recoder is currently in public beta. We&apos;re building a platform that combines
-            a CLI tool, a Web IDE, AI agents, and a BYOK model architecture — letting
-            developers use 40+ AI models with their own API keys, at no markup. We&apos;re
-            remote-first and move fast.
+            Recoder is currently in public beta. We&apos;re building a desktop workspace
+            that runs coding agents in parallel isolated git worktrees, plus AI
+            agents and a BYOK model architecture — letting developers use 40+ AI
+            models with their own API keys, at no markup. We&apos;re remote-first and
+            move fast.
           </p>
         </div>
 

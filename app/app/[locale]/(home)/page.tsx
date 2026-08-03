@@ -25,7 +25,6 @@ import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import { TiltCard } from '@/components/TiltCard';
 import { useSession } from '@/lib/session-provider';
-import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 import { HeroCube } from '@/app/components/HeroCube';
 
 /* ------------------------------------------------------------------ */
@@ -59,15 +58,15 @@ const PRODUCTS = [
     features: ['40+ AI models', 'Thread management', 'Agent config & snapshots', 'Real-time monitoring'],
   },
   {
-    id: 'web',
-    name: 'Web IDE',
-    tagline: 'AI-powered code generation',
+    id: 'desktop',
+    name: 'Desktop App',
+    tagline: 'Parallel agent workspace',
     description:
-      'Full browser IDE with live preview, AI chat, terminal, and deployment. Build complete apps from natural language.',
-    href: () => getServiceUrlClient('web'),
+      'Run Claude Code, Codex, and any agent CLI in parallel isolated git worktrees, then review and merge the best result.',
+    href: () => '/download',
     external: true,
     icon: Code,
-    features: ['Live preview', 'Built-in terminal', 'AI code generation', 'One-click deploy'],
+    features: ['Parallel agent runs', 'Isolated git worktrees', 'Side-by-side diff review', 'One trusted merge'],
   },
   {
     id: 'pm',
@@ -93,14 +92,14 @@ const PRODUCTS = [
   },
   {
     id: 'cli',
-    name: 'recoder-code',
-    tagline: 'CLI for developers',
+    name: 'Bring Your Own Agents',
+    tagline: 'Your agent CLIs, orchestrated',
     description:
-      'Terminal-first AI development. Chat, generate code, manage files, create agents, and sync with the Web IDE.',
+      'Recoder drives the coding agents you already use — Claude Code, Codex, opencode, Cursor CLI — with your own API keys.',
     href: () => '/cli',
     external: false,
     icon: Terminal,
-    features: ['npx recoder-a2a', '40+ models', 'MCP servers', 'Sandbox mode'],
+    features: ['Claude Code', 'Codex', 'opencode & more', 'BYOK — your keys'],
   },
 ] as const;
 
@@ -112,7 +111,7 @@ const CONVERGENCE_STEPS = [
     id: 'launch',
     step: '01',
     name: 'Launch',
-    tagline: 'N agents, isolated worktrees',
+    tagline: 'Parallel agents, isolated worktrees',
     description:
       'Point Claude Code, Codex, Cursor — any agent CLI — at one task. Each runs in its own isolated git worktree with your own API keys, so attempts never collide.',
     icon: GitBranch,
@@ -215,7 +214,6 @@ function Eyebrow({ children }: { children: ReactNode }) {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 export default function HomePage() {
-  const [copiedCli, setCopiedCli] = useState(false);
   const [copiedA2a, setCopiedA2a] = useState(false);
   const { data: session } = useSession();
 
@@ -262,7 +260,7 @@ export default function HomePage() {
               </div>
 
               <h1 className="text-balance text-4xl font-bold leading-[1.05] tracking-tight text-white sm:text-5xl md:text-6xl xl:text-7xl">
-                N agents in parallel.
+                Many agents in parallel.
                 <br />
                 <span className="text-orange-400">One trusted merge.</span>
               </h1>
@@ -289,9 +287,9 @@ export default function HomePage() {
               <div className="mt-9 flex flex-col items-center gap-3 sm:flex-row lg:items-start lg:justify-start">
                 {session?.user ? (
                   <>
-                    <LaunchWebIDEButton className={PRIMARY_CTA}>
-                      Launch Web IDE <ArrowRight className="h-5 w-5" />
-                    </LaunchWebIDEButton>
+                    <a href="/download" className={PRIMARY_CTA}>
+                      Download the App <ArrowRight className="h-5 w-5" />
+                    </a>
                     <Link href="/dashboard" className={SECONDARY_CTA}>
                       Dashboard
                     </Link>
@@ -485,7 +483,7 @@ export default function HomePage() {
 
               <div className="flex flex-wrap items-center justify-center gap-4">
                 <span className="rounded border border-white/10 px-3 py-1.5 text-gray-300">Agents</span>
-                <span className="rounded border border-white/10 px-3 py-1.5 text-gray-300">Web IDE</span>
+                <span className="rounded border border-white/10 px-3 py-1.5 text-gray-300">Desktop</span>
                 <span className="rounded border border-white/10 px-3 py-1.5 text-gray-300">PM</span>
                 <span className="rounded border border-white/10 px-3 py-1.5 text-gray-300">Agency</span>
               </div>
@@ -533,41 +531,32 @@ export default function HomePage() {
             <div className="relative rounded-3xl border border-orange-500/20 bg-gradient-to-br from-orange-500/[0.04] to-transparent p-10 backdrop-blur-sm md:p-14">
               <div className="space-y-6 text-center">
                 <div className="flex justify-center">
-                  <Eyebrow>recoder-code CLI</Eyebrow>
+                  <Eyebrow>Recoder Desktop</Eyebrow>
                 </div>
 
                 <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-                  Get started in seconds
+                  Get started in minutes
                 </h2>
 
                 <p className="mx-auto max-w-xl text-gray-400">
-                  Install the CLI, add your API key, and start building with
-                  Claude, GPT-4, Gemini, DeepSeek, and 35+ more models.
+                  Download the desktop app, bring the agent CLIs you already use
+                  — Claude Code, Codex, opencode — and run them in parallel with
+                  your own API keys.
                 </p>
 
-                <div className="mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-white/15 bg-black/50 p-4">
-                  <code className="flex-1 text-left font-mono text-base text-white md:text-lg">
-                    npm install -g recoder-code
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => copy('npm install -g recoder-code', setCopiedCli)}
-                    aria-label="Copy npm install command to clipboard"
-                    className={`shrink-0 rounded-xl bg-orange-500 p-2.5 transition-colors hover:bg-orange-400 ${FOCUS_RING}`}
-                  >
-                    {copiedCli ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </button>
+                <div className="flex justify-center pt-2">
+                  <a href="/download" className={PRIMARY_CTA}>
+                    Download for macOS, Windows &amp; Linux{' '}
+                    <ArrowRight className="h-5 w-5" />
+                  </a>
                 </div>
-                <p className="h-5 text-sm text-orange-300" role="status" aria-live="polite">
-                  {copiedCli ? 'Copied to clipboard' : ''}
-                </p>
 
                 <div className="grid grid-cols-2 gap-4 pt-4 md:grid-cols-4">
                   {[
-                    { icon: Cpu, label: '40+ Models' },
-                    { icon: Code, label: 'Code Gen' },
-                    { icon: Zap, label: 'Tool Calling' },
-                    { icon: Shield, label: 'Sandbox' },
+                    { icon: Cpu, label: 'Any Agent CLI' },
+                    { icon: Code, label: 'Parallel Worktrees' },
+                    { icon: Zap, label: 'Diff Review' },
+                    { icon: Shield, label: 'Self-Hosted' },
                   ].map(({ icon: I, label }) => (
                     <div key={label} className="space-y-2 text-center">
                       <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03]">
@@ -703,9 +692,9 @@ export default function HomePage() {
                 <Link href="/dashboard" className={PRIMARY_CTA}>
                   Go to Dashboard <ArrowRight className="h-5 w-5" />
                 </Link>
-                <LaunchWebIDEButton className={SECONDARY_CTA}>
-                  Launch Web IDE <ArrowRight className="h-5 w-5" />
-                </LaunchWebIDEButton>
+                <a href="/download" className={SECONDARY_CTA}>
+                  Download the App <ArrowRight className="h-5 w-5" />
+                </a>
               </>
             ) : (
               <>

@@ -5,7 +5,6 @@ import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from '@/lib/session-provider';
-import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 import {
   Globe,
   ArrowRight, CheckCircle, Sparkles, TrendingUp,
@@ -54,7 +53,7 @@ const appDisplayNames: Record<string, string> = {
   agents: 'Agents',
   agency: 'Agency',
   pm: 'PM',
-  web: 'Web IDE',
+  web: 'Desktop',
 };
 
 const appIcons: Record<string, React.ElementType> = {
@@ -170,39 +169,37 @@ function DashboardContent() {
         <div className="mb-12">
           <h2 className="text-2xl font-bold mb-6">Your Platforms</h2>
           <div className="grid md:grid-cols-2 gap-6 max-w-2xl">
-            {/* CLI */}
+            {/* Desktop app */}
             <a
-              href="https://www.npmjs.com/package/recoder-code"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/download"
               className="group p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all"
             >
               <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <Terminal className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-bold text-lg mb-2">recoder-code CLI</h3>
-              <p className="text-sm text-gray-400 mb-4">Terminal-based development</p>
+              <h3 className="font-bold text-lg mb-2">Recoder Desktop</h3>
+              <p className="text-sm text-gray-400 mb-4">Run your coding agents in parallel git worktrees</p>
               <div className="flex items-center text-sm text-neutral-300 group-hover:text-white">
-                <span>Launch</span>
+                <span>Download</span>
                 <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
               </div>
             </a>
 
-            {/* Web IDE - with API key check */}
-            <div className="group p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all cursor-pointer">
+            {/* Getting started */}
+            <Link
+              href="/docs/getting-started"
+              className="group p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all"
+            >
               <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <Globe className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-bold text-lg mb-2">Web IDE</h3>
-              <p className="text-sm text-gray-400 mb-4">Browser-based code editor</p>
-              <LaunchWebIDEButton
-                className="flex items-center text-sm text-neutral-300 hover:text-white bg-transparent p-0 transition-colors"
-                showIcon={false}
-              >
-                <span>Launch</span>
+              <h3 className="font-bold text-lg mb-2">Getting Started</h3>
+              <p className="text-sm text-gray-400 mb-4">Launch, compare, and merge agent runs</p>
+              <div className="flex items-center text-sm text-neutral-300 group-hover:text-white">
+                <span>Read the guide</span>
                 <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
-              </LaunchWebIDEButton>
-            </div>
+              </div>
+            </Link>
           </div>
         </div>
 

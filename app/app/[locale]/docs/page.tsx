@@ -18,10 +18,10 @@ import { SiteFooter } from '@/components/SiteFooter';
 
 export const metadata: Metadata = {
   title: 'Documentation - Recoder.xyz',
-  description: 'Comprehensive documentation for Recoder.xyz. Guides for the CLI, Web IDE, AI providers, API reference, and more.',
+  description: 'Comprehensive documentation for Recoder.xyz. Guides for the desktop app, coding agents, AI providers, API reference, and more.',
   openGraph: {
     title: 'Documentation - Recoder.xyz',
-    description: 'Comprehensive documentation for Recoder.xyz. Guides for the CLI, Web IDE, AI providers, API reference, and more.',
+    description: 'Comprehensive documentation for Recoder.xyz. Guides for the desktop app, coding agents, AI providers, API reference, and more.',
     url: 'https://recoder.xyz/docs',
     siteName: 'Recoder.xyz',
     images: [{ url: 'https://recoder.xyz/og-image.png', width: 1200, height: 630, alt: 'Recoder Documentation' }],
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Documentation - Recoder.xyz',
-    description: 'Comprehensive documentation for Recoder.xyz. Guides for the CLI, Web IDE, AI providers, and API reference.',
+    description: 'Comprehensive documentation for Recoder.xyz. Guides for the desktop app, coding agents, AI providers, and API reference.',
     images: ['https://recoder.xyz/og-image.png'],
   },
   alternates: {
@@ -52,12 +52,11 @@ export default function DocsPage() {
       ]
     },
     {
-      title: 'CLI & Web IDE',
-      description: 'Terminal and web-based development tools',
+      title: 'Desktop App & Agent CLIs',
+      description: 'Run your coding agents in parallel git worktrees',
       icon: Terminal,
       articles: [
-        { title: 'CLI Overview', href: '/docs/cli', status: 'available' },
-        { title: 'Web IDE + CLI Sync', href: '/docs/web-cli-sync', status: 'available' },
+        { title: 'Agent CLIs Overview', href: '/docs/cli', status: 'available' },
         { title: 'Supported Models', href: '/docs/models', status: 'available' }
       ]
     },
