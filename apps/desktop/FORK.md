@@ -34,8 +34,9 @@ user-facing identity + the Go module path + the server binary name were changed.
 - **Full rebrand** — product strings → Recoder across emain (About/menus/quit/updater/app.setName) and
   frontend; in-app links → recoder.xyz; logos → the Recoder cube (`public/logos/*`).
 - **Cloud decoupled** — `telemetry:enabled=false` + the `wcloud` sender inert unless
-  `RECODER_TELEMETRY_URL` is set (never POSTs to Wave); auto-updater no-ops unless `RECODER_UPDATE_FEED`
-  is set (never contacts Wave's release server); default AI preset + `DefaultAIEndpoint` +
+  `RECODER_TELEMETRY_URL` is set (never POSTs to Wave); auto-updater defaults ON against the baked
+  Recoder feed (`dl.recoder.xyz/releases`, never Wave's release server) — set `RECODER_UPDATE_FEED=off`
+  to disable for self-host/dev; default AI preset + `DefaultAIEndpoint` +
   `ai:baseurl` point at Recoder's governed gateway (`/api/gateway/v1`); Wave-cloud AI modes hidden.
 - **Internal → Recoder** — Go module path `github.com/wavetermdev/waveterm` →
   `github.com/recoder/recoder-terminal` (239 files); backend server binary `wavesrv` → `recoder-server`.

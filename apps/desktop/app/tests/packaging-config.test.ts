@@ -60,19 +60,12 @@ describe("packaging config", () => {
         }
     });
 
-    it("bundles the recodergit + dmux engine dists where the backend resolvers expect them", () => {
+    it("bundles the dmux engine dist and excludes the noncommercially-licensed recodergit", () => {
         const entries: Array<{ from: string; to: string }> = config.extraResources;
         const byTo = new Map(entries.map((e) => [e.to, e.from]));
-        // recodergit-service.ts resolves __dirname(backend/dist/domains/engines)
-        // + '../../../apps/desktop/engines/recodergit/recodergit/dist/...', and
-        // dmux-adapter.ts walks ancestors for apps/desktop/engines/dmux — both
-        // land on <resources>/backend/apps/desktop/engines/... when packaged.
+        // dmux-adapter.ts walks ancestors for apps/desktop/engines/dmux and
+        // lands on <resources>/backend/apps/desktop/engines/... when packaged.
         const expected: Array<[string, string]> = [
-            ["backend/apps/desktop/engines/recodergit/recodergit/dist", "../engines/recodergit/recodergit/dist"],
-            [
-                "backend/apps/desktop/engines/recodergit/recodergit/package.json",
-                "../engines/recodergit/recodergit/package.json",
-            ],
             ["backend/apps/desktop/engines/dmux/dist", "../engines/dmux/dist"],
             ["backend/apps/desktop/engines/dmux/dmux", "../engines/dmux/dmux"],
             ["backend/apps/desktop/engines/dmux/package.json", "../engines/dmux/package.json"],
@@ -82,6 +75,12 @@ describe("packaging config", () => {
             expect(fs.existsSync(path.resolve(AppRoot, byTo.get(to)!)), `missing engine dist source: ${from}`).toBe(
                 true
             );
+        }
+        // recodergit is PolyForm Noncommercial (bd recoder-rxn0) — it must NOT
+        // ship in the commercial DMG; recodergit-service degrades truthfully
+        // when the dist is absent.
+        for (const entry of entries) {
+            expect(entry.from, "recodergit must not be bundled (license)").not.toContain("recodergit");
         }
         // The dmux launcher is a node-shebang script; it must stay executable in
         // the checkout so the copied resource keeps its exec bit.

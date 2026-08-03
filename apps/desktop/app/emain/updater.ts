@@ -13,6 +13,7 @@ import { setUserConfirmedQuit } from "./emain-activity";
 import { delay } from "./emain-util";
 import { focusedWaveWindow, getAllWaveWindows } from "./emain-window";
 import { ElectronWshClient } from "./emain-wsh";
+import { updateFeedEnabled } from "./updater-core";
 
 export let updater: Updater;
 
@@ -233,11 +234,10 @@ export async function configureAutoUpdater() {
         return;
     }
 
-    // Recoder fork: the auto-updater is inert by default so it never contacts an upstream
-    // release server. It only activates when an explicit RECODER_UPDATE_FEED is configured.
-    // The full mechanism below stays intact; this only changes the default to no-op.
-    if (!process.env.RECODER_UPDATE_FEED) {
-        console.log("skipping auto-updater: RECODER_UPDATE_FEED is not configured");
+    // Opt-out gate: packaged builds update by default from the baked app-update.yml feed;
+    // RECODER_UPDATE_FEED=off|0 disables it for self-host/dev overrides.
+    if (!updateFeedEnabled(process.env)) {
+        console.log("skipping auto-updater: RECODER_UPDATE_FEED is disabled");
         return;
     }
 

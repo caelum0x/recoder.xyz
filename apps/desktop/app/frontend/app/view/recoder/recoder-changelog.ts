@@ -9,21 +9,23 @@ import type { WhatsNewEntry } from "./recoder-whats-new";
 // a user would notice. The public changelog rhythm lives at CHANGELOG_URL.
 const CHANGELOG_ENTRIES: readonly WhatsNewEntry[] = [
     {
-        version: "1.1.0",
-        title: "Review, run, and search — sharpened",
+        version: "0.15.0",
+        title: "Auto-update and a truthful changelog",
         notes: [
-            "Review shows suggested next actions and keeps CI checks fresh (bounded re-poll + manual refresh).",
-            "Comment on changed lines and send the batch straight to the agent.",
-            "⌘K now finds workspaces by project, branch, task, or state.",
-            "First-run onboarding detects your git identity, agent configs, gh, and shell.",
+            "Auto-update is enabled — the app now keeps itself current.",
+            "This in-app changelog now reflects what actually shipped.",
+            "The recodergit engine is unbundled pending licensing review.",
+            "Cleaned up website claims to match the shipped product.",
         ],
     },
     {
-        version: "1.0.0",
+        version: "0.14.5",
         title: "Recoder Terminal",
         notes: [
-            "Run coding agents in parallel isolated git worktrees, then review and merge.",
-            "The Board turns a picked issue into a launched agent.",
+            "Signed macOS arm64 desktop build.",
+            "Run coding agents in parallel isolated git worktree workspaces.",
+            "Compare and converge parallel runs side by side.",
+            "Governed merge with an evidence trail.",
         ],
     },
 ];
