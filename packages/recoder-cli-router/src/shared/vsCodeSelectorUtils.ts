@@ -1,28 +1,16 @@
 /**
- * VS Code selector utilities (stub implementation for router)
+ * VS Code LM model selector utilities (upstream Roo/Kilo Code semantics).
  */
 
-export const SELECTOR_SEPARATOR = '::';
-
-export function stringifyVsCodeLmModelSelector(selector: any): string {
-  // This is a stub implementation for the router
-  // In a real implementation, this would stringify VS Code LM model selectors
-  if (typeof selector === 'string') {
-    return selector;
-  }
-  return JSON.stringify(selector);
+export interface VsCodeLmModelSelector {
+	vendor?: string
+	family?: string
+	version?: string
+	id?: string
 }
 
-export function parseVsCodeLmModelSelector(selectorString: string): any {
-  // This is a stub implementation
-  try {
-    return JSON.parse(selectorString);
-  } catch {
-    return selectorString;
-  }
-}
+export const SELECTOR_SEPARATOR = "/"
 
-export function validateVsCodeLmModelSelector(selector: any): boolean {
-  // This is a stub implementation
-  return true;
+export function stringifyVsCodeLmModelSelector(selector: VsCodeLmModelSelector): string {
+	return [selector.vendor, selector.family, selector.version, selector.id].filter(Boolean).join(SELECTOR_SEPARATOR)
 }
