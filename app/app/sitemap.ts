@@ -60,16 +60,6 @@ const blogPostPages: SitemapPage[] = [
   { path: '/blog/cli-web-ide-cross-platform',changeFrequency: 'monthly',  priority: 0.6 },
 ];
 
-// ── Platform pages ────────────────────────────────────────────────────────
-const platformPages: SitemapPage[] = [
-  { path: '/platform',                changeFrequency: 'weekly',   priority: 0.9 },
-  { path: '/platform/agents',         changeFrequency: 'weekly',   priority: 0.8 },
-  { path: '/platform/agency',         changeFrequency: 'weekly',   priority: 0.8 },
-  { path: '/platform/api',            changeFrequency: 'weekly',   priority: 0.8 },
-  { path: '/platform/pm',             changeFrequency: 'weekly',   priority: 0.8 },
-  { path: '/platform/web',            changeFrequency: 'weekly',   priority: 0.8 },
-];
-
 // ── CLI pages ─────────────────────────────────────────────────────────────
 const cliPages: SitemapPage[] = [
   { path: '/cli',                     changeFrequency: 'weekly',   priority: 0.9 },
@@ -95,8 +85,6 @@ const docsPages: SitemapPage[] = [
 const productPages: SitemapPage[] = [
   { path: '/agents',                  changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/tools',                   changeFrequency: 'weekly',   priority: 0.8 },
-  { path: '/playground',              changeFrequency: 'weekly',   priority: 0.7 },
-  { path: '/mobile',                  changeFrequency: 'monthly',  priority: 0.7 },
   { path: '/learn',                   changeFrequency: 'weekly',   priority: 0.7 },
 ];
 
@@ -153,7 +141,6 @@ const allPages: SitemapPage[] = [
   ...homepagePages,
   ...corePages,
   ...blogPostPages,
-  ...platformPages,
   ...cliPages,
   ...docsPages,
   ...productPages,

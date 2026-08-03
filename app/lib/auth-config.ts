@@ -132,7 +132,9 @@ export const auth = betterAuth({
   baseURL: getBaseURL(),
   database: customPrismaAdapter(prisma),
   emailAndPassword: {
-    enabled: true,
+    // Self-host operators may re-enable local accounts via AUTH_EMAIL_PASSWORD=on;
+    // the hosted product is OAuth-only.
+    enabled: process.env.AUTH_EMAIL_PASSWORD === "on",
     requireEmailVerification: true,
     password: {
       hash: async (password: string) => {

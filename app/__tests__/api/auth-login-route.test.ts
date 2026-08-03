@@ -72,6 +72,8 @@ describe('/api/auth/login route', () => {
     vi.resetModules();
     vi.clearAllMocks();
     process.env.JWT_SECRET = 'test-jwt-secret-for-testing';
+    // Legacy credential behavior requires the self-host flag; hosted default is OAuth-only.
+    process.env.AUTH_EMAIL_PASSWORD = 'on';
 
     // Default mock: traceRequest returns a traceId and passthrough applyTraceId
     mockTraceRequest.mockReturnValue({
@@ -85,9 +87,34 @@ describe('/api/auth/login route', () => {
     });
   });
 
+  afterEach(() => {
+    delete process.env.AUTH_EMAIL_PASSWORD;
+  });
+
   function req(url: string, init?: RequestInit): NextRequest {
     return new NextRequest(url, init);
   }
+
+  // --- OAuth-only default (410) ---
+
+  it('returns 410 when credential auth is disabled (hosted default)', async () => {
+    delete process.env.AUTH_EMAIL_PASSWORD;
+
+    const { POST } = await import('@/app/api/auth/login/route');
+    const response = await POST(
+      req('http://localhost/api/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'user@example.com', password: 'somepassword123' }),
+      })
+    );
+
+    expect(response.status).toBe(410);
+    const json = await response.json();
+    expect(json.error).toBe('credential auth disabled');
+    expect(json.reason).toBe('oauth_only');
+    expect(mockFindUnique).not.toHaveBeenCalled();
+  });
 
   // --- Validation errors (400) ---
 

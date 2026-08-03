@@ -120,7 +120,7 @@ function SignUpForm() {
     'Access to all Recoder platforms',
     'AI Agents IDE (agents.recoder.xyz)',
     'AI Agency Platform (agency.recoder.xyz)',
-    'Browser-based IDE (web.recoder.xyz)',
+    'Recoder Desktop — parallel coding agents in isolated worktrees',
     'BYOK — bring your own AI keys',
     'Community support'
   ];

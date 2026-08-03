@@ -35,9 +35,6 @@ export const analytics = {
   signOut: () => {
     trackEvent(AnalyticsEvents.LOGOUT);
   },
-  launchWebIDE: () => {
-    trackEvent(AnalyticsEvents.PLATFORM_PAGE_VIEWED, { platform: 'web-ide' });
-  },
   createProject: (type?: string) => {
     trackEvent(AnalyticsEvents.PROJECT_CREATED, { projectId: type });
   },

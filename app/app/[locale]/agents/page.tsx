@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Bot, Workflow, Code2, Sparkles, Globe } from 'lucide-react';
+import { Bot, Workflow, Code2, Sparkles, Globe } from 'lucide-react';
 import { getServiceUrlClient } from '@/lib/config/platforms';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -100,13 +100,6 @@ export default function AgentsPage() {
                       <Globe className="w-4 h-4" />
                       <span>Launch</span>
                     </a>
-                    <Link
-                      href={`/platform/${platform.id}`}
-                      className="text-sm text-gray-400 hover:text-white transition-colors flex items-center space-x-1"
-                    >
-                      <span>Details</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </Link>
                   </div>
                 </div>
               );
