@@ -103,6 +103,8 @@ import {
   type ConductorRuntimeView,
 } from './adapters/runtime-listing.adapter.js';
 import { createWorkspaceRepository } from './adapters/workspace-repository.adapter.js';
+import { tryCreateSqliteWorkspaceRepository } from './adapters/sqlite-workspace-repository.adapter.js';
+import { resolveStateOfRecordSqlitePath } from '../../shared/state-of-record.js';
 import { createRunEventSink } from './adapters/run-event-sink.adapter.js';
 import {
   createRunTailer,
@@ -568,8 +570,25 @@ export class ConductorComposer implements ConductorModule {
     // The canonical run/event tables (TaskRun/RunEvent/TaskSpec) delegate to the
     // injected agent-os state-of-record store so run history survives a restart
     // (P1 #8); absent it / DB-less they fall back truthfully (isDurable ⇒ false).
+    // Driver selection mirrors agent-os EXACTLY (same activation seam): when
+    // the state-of-record is the embedded sqlite file (DB-less desktop), the
+    // conductor tables persist into the SAME file so workspaces + tail cursors
+    // + reconcile findings survive a restart too (isDurable ⇒ true). An
+    // unopenable file falls back to the executor-backed default, truthfully.
+    const sqlitePath = resolveStateOfRecordSqlitePath(deps.config);
+    const sqliteRepository =
+      !deps.repository && sqlitePath
+        ? tryCreateSqliteWorkspaceRepository(
+            {
+              path: sqlitePath,
+              ...(deps.canonicalRunStore ? { canonicalStore: deps.canonicalRunStore } : {}),
+            },
+            this.log,
+          )
+        : null;
     this.repository =
       deps.repository ??
+      sqliteRepository ??
       createWorkspaceRepository({
         executor: deps.executor,
         ...(deps.canonicalRunStore ? { canonicalStore: deps.canonicalRunStore } : {}),

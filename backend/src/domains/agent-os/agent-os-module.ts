@@ -29,6 +29,10 @@ import type { OutboxPublisherPort } from './ports/outbox-publisher.port.js';
 import type { InstructionCompilerPort } from './ports/instruction-compiler.port.js';
 import { InMemoryAgentOsRepository } from './adapters/in-memory-agent-os.repository.js';
 import { PostgresAgentOsRepository } from './adapters/postgres-agent-os.repository.js';
+import {
+  SqliteAgentOsRepository,
+  tryCreateSqliteAgentOsRepository,
+} from './adapters/sqlite-agent-os.repository.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
 import { createGovernanceGateAdapter, type AgentOsGovernanceGate } from './adapters/governance-gate.adapter.js';
 import { MulticaCoordinationAdapter } from './adapters/multica-coordination.adapter.js';
@@ -70,6 +74,8 @@ export class AgentOsComposer implements AgentOsModule {
   private readonly log: Logger;
   private readonly cfg: AgentOsConfig;
   private readonly repo: AgentOsRepositoryPort;
+  /** The sqlite handle this composer opened itself (null when injected/other). */
+  private readonly ownedSqlite: SqliteAgentOsRepository | null;
   private readonly effectiveDriver: AgentOsRepositoryDriver;
   private readonly executor: QueryExecutor | null;
   private readonly outboxPublisher: OutboxPublisherPort & { close?(): Promise<void> };
@@ -105,16 +111,27 @@ export class AgentOsComposer implements AgentOsModule {
 
     // Repository selection: an explicit injection wins; else the DURABLE pg
     // adapter binds to the injected persistence executor when the configured
-    // driver is `postgres`; else degrade to in-memory and report the effective
-    // driver truthfully in health. A temporarily-down executor still binds pg
-    // (queries fail truthfully and recover with the pool; health shows degraded).
+    // driver is `postgres`; else the DURABLE embedded sqlite adapter when a
+    // sqlite path is configured (DB-less desktop); else degrade to in-memory
+    // and report the effective driver truthfully in health. A temporarily-down
+    // executor still binds pg (queries fail truthfully and recover with the
+    // pool; health shows degraded). An unopenable sqlite file degrades to
+    // in-memory with a truthful warn — never a faked durable driver.
     this.executor = deps.executor ?? null;
+    const sqliteRepo =
+      !deps.repository && cfg.repositoryDriver === 'sqlite' && cfg.sqlitePath
+        ? tryCreateSqliteAgentOsRepository(cfg.sqlitePath, this.log)
+        : null;
+    this.ownedSqlite = sqliteRepo;
     if (deps.repository) {
       this.repo = deps.repository;
       this.effectiveDriver = cfg.repositoryDriver;
     } else if (cfg.repositoryDriver === 'postgres' && this.executor) {
       this.repo = new PostgresAgentOsRepository(this.executor);
       this.effectiveDriver = 'postgres';
+    } else if (sqliteRepo) {
+      this.repo = sqliteRepo;
+      this.effectiveDriver = 'sqlite';
     } else {
       this.repo = new InMemoryAgentOsRepository();
       this.effectiveDriver = 'memory';
@@ -469,5 +486,8 @@ export class AgentOsComposer implements AgentOsModule {
     if (this.outboxPublisher.close) {
       await this.outboxPublisher.close().catch(() => undefined);
     }
+    // Close the embedded sqlite handle only when this composer opened it (an
+    // injected repository's lifecycle belongs to its owner).
+    this.ownedSqlite?.close();
   }
 }

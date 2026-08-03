@@ -21,7 +21,7 @@ import { z } from 'zod';
 import type { AppConfig } from '../../shared/app-config.js';
 
 /** Which state-of-record driver backs the repository port. */
-export const agentOsRepositoryDriverSchema = z.enum(['postgres', 'json', 'memory']);
+export const agentOsRepositoryDriverSchema = z.enum(['postgres', 'sqlite', 'json', 'memory']);
 export type AgentOsRepositoryDriver = z.infer<typeof agentOsRepositoryDriverSchema>;
 
 /**
@@ -62,6 +62,8 @@ export const agentOsConfigSchema = z.object({
   repositoryDriver: agentOsRepositoryDriverSchema,
   /** Postgres connection string for the state-of-record; `null` -> degrade to json/memory. */
   databaseUrl: z.string().nullable(),
+  /** Embedded sqlite file for the `sqlite` driver (DB-less desktop); `null` -> not configured. */
+  sqlitePath: z.string().nullable(),
   /** JSON-file state path for the `json` driver (dev/degrade); `null` -> memory. */
   stateFilePath: z.string().nullable(),
   /** NATS url for the CloudEvents outbox transport; `null` -> log-only sink. */
@@ -113,6 +115,7 @@ export type AgentOsConfig = z.infer<typeof agentOsConfigSchema>;
 export interface AgentOsConfigOverrides {
   readonly repositoryDriver?: AgentOsRepositoryDriver;
   readonly databaseUrl?: string | null;
+  readonly sqlitePath?: string | null;
   readonly stateFilePath?: string | null;
   readonly natsUrl?: string | null;
   readonly natsSubjectPrefix?: string;
@@ -140,23 +143,32 @@ const DEFAULT_SQUAD_AUTOPILOT_MAX_PER_TICK = 3;
  * `AppConfig` already carries (`database.url`, `internal.serviceKeyPresent`,
  * `runtime.isProduction`) and defaults the rest degrade-safe. The repository
  * driver is chosen fail-safe: an explicit override wins; else `postgres` when a
- * db url resolves; else `json` when a state file is set; else `memory`.
+ * db url resolves; else `sqlite` when a sqlite path is configured (override or
+ * `RECODER_SQLITE_PATH` — the DB-less desktop's durable state-of-record); else
+ * `json` when a state file is set; else `memory` (the test default).
  * `overrides` is the seam bootstrap uses to supply NATS / feature flags without
  * env reads.
  */
+// WHY an env read (in shared/): `AppConfig` carries no sqlite slice yet, and
+// the desktop activates the embedded state-of-record via RECODER_SQLITE_PATH.
+export { envSqlitePath, resolveStateOfRecordSqlitePath } from '../../shared/state-of-record.js';
+import { envSqlitePath } from '../../shared/state-of-record.js';
+
 export function sliceAgentOsConfig(
   app: AppConfig,
   overrides: AgentOsConfigOverrides = {},
 ): AgentOsConfig {
   const databaseUrl = overrides.databaseUrl ?? app.database.url ?? null;
+  const sqlitePath = overrides.sqlitePath ?? envSqlitePath();
   const stateFilePath = overrides.stateFilePath ?? null;
   const repositoryDriver: AgentOsRepositoryDriver =
     overrides.repositoryDriver ??
-    (databaseUrl ? 'postgres' : stateFilePath ? 'json' : 'memory');
+    (databaseUrl ? 'postgres' : sqlitePath ? 'sqlite' : stateFilePath ? 'json' : 'memory');
 
   return agentOsConfigSchema.parse({
     repositoryDriver,
     databaseUrl,
+    sqlitePath: sqlitePath || null,
     stateFilePath,
     natsUrl: overrides.natsUrl ?? null,
     natsSubjectPrefix: overrides.natsSubjectPrefix ?? DEFAULT_NATS_SUBJECT_PREFIX,
