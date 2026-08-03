@@ -64,6 +64,62 @@ test('cursor is TRUTHFULLY available iff cursor-agent is on PATH', async (t) => 
   assert.equal(present.path, fakeBin);
 });
 
+test('opencode is TRUTHFULLY available iff the opencode binary is on PATH', async (t) => {
+  const fakeBinDir = mkdtempSync(join(tmpdir(), 'substrate-opencode-'));
+  const originalPath = process.env.PATH;
+  t.after(() => {
+    process.env.PATH = originalPath;
+    rmSync(fakeBinDir, { recursive: true, force: true });
+  });
+
+  // PATH without opencode → listed but honestly unavailable, with the reason.
+  process.env.PATH = fakeBinDir;
+  const absent = (await runtimeAvailability()).find((r) => r.runtimeId === 'opencode');
+  assert.ok(absent, 'opencode missing from availability listing');
+  assert.equal(absent.bin, 'opencode');
+  assert.equal(absent.available, false);
+  assert.equal(absent.path, undefined);
+  assert.match(absent.reason ?? '', /'opencode' not found on PATH/);
+
+  // PATH with an executable opencode → available with its real path, no reason.
+  const fakeBin = join(fakeBinDir, 'opencode');
+  writeFileSync(fakeBin, '#!/bin/sh\nexit 0\n');
+  chmodSync(fakeBin, 0o755);
+  const present = (await runtimeAvailability()).find((r) => r.runtimeId === 'opencode');
+  assert.ok(present, 'opencode missing from availability listing');
+  assert.equal(present.available, true);
+  assert.equal(present.path, fakeBin);
+  assert.equal(present.reason, undefined);
+});
+
+test('cursor with ONLY the editor binary stays unavailable with an attach-only reason (never faked launchable)', async (t) => {
+  const fakeBinDir = mkdtempSync(join(tmpdir(), 'substrate-cursor-editor-'));
+  const originalPath = process.env.PATH;
+  t.after(() => {
+    process.env.PATH = originalPath;
+    rmSync(fakeBinDir, { recursive: true, force: true });
+  });
+
+  // Only the `cursor` EDITOR on PATH (no cursor-agent) → present-but-attach-only.
+  const editorBin = join(fakeBinDir, 'cursor');
+  writeFileSync(editorBin, '#!/bin/sh\nexit 0\n');
+  chmodSync(editorBin, 0o755);
+  process.env.PATH = fakeBinDir;
+  const editorOnly = (await runtimeAvailability()).find((r) => r.runtimeId === 'cursor');
+  assert.ok(editorOnly, 'cursor missing from availability listing');
+  assert.equal(editorOnly.available, false);
+  assert.equal(editorOnly.path, undefined);
+  assert.match(editorOnly.reason ?? '', /attach-only/);
+  assert.match(editorOnly.reason ?? '', /cursor-agent/);
+
+  // Nothing cursor-ish on PATH at all → the plain absent-binary reason.
+  rmSync(editorBin, { force: true });
+  const absent = (await runtimeAvailability()).find((r) => r.runtimeId === 'cursor');
+  assert.ok(absent, 'cursor missing from availability listing');
+  assert.equal(absent.available, false);
+  assert.match(absent.reason ?? '', /'cursor-agent' not found on PATH/);
+});
+
 test('isInProcessRuntimeId accepts only in-process runtimes (never CLIs)', () => {
   assert.equal(isInProcessRuntimeId('openfang'), true);
   assert.equal(isInProcessRuntimeId('cursor'), false);

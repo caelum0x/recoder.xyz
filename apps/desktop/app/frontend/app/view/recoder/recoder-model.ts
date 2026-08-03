@@ -36,6 +36,7 @@ import {
     type RecoderWorkspaceReadiness,
 } from "./recoder-board-logic";
 import { parseAgentAuthState, type AgentAuthState } from "./recoder-agent-auth";
+import { parseArchivedPage, type ArchivedPageMeta } from "./recoder-first-run-logic";
 import { parseCheckpointList, type RecoderCheckpoint } from "./recoder-checkpoint-logic";
 import { isGitHubRepoUrl, parseCloneResponse } from "./recoder-clone-logic";
 import {
@@ -246,6 +247,13 @@ class RecoderViewModel implements ViewModel {
     // while a history Show view (All / Archived) is open. [] until loaded /
     // when there is genuinely no history — never a fabricated row.
     archivedWorkspacesAtom: PrimitiveAtom<RecoderWorkspace[]>;
+    // The archived edge's pagination meta ({total,limit,offset}) from the LAST
+    // successful history read. null until a meta-carrying page lands (older
+    // backends send none) — the history view then shows no total, never a
+    // fabricated one.
+    archivedMetaAtom: PrimitiveAtom<ArchivedPageMeta>;
+    // True while a "show older" page fetch is in flight (gates double-clicks).
+    loadingOlderArchivedAtom: PrimitiveAtom<boolean>;
     // The live poll list + archived history folded together (live copy wins on an
     // id collision) — what the board's Show views and empty-state gates read.
     combinedWorkspacesAtom!: Atom<RecoderWorkspace[]>;
@@ -391,6 +399,8 @@ class RecoderViewModel implements ViewModel {
         this.viewName = atom("Recoder");
         this.allWorkspacesAtom = atom([]) as PrimitiveAtom<RecoderWorkspace[]>;
         this.archivedWorkspacesAtom = atom([]) as PrimitiveAtom<RecoderWorkspace[]>;
+        this.archivedMetaAtom = atom(null) as PrimitiveAtom<ArchivedPageMeta>;
+        this.loadingOlderArchivedAtom = atom(false) as PrimitiveAtom<boolean>;
         this.archivedLoaded = false;
         this.loadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
@@ -678,11 +688,50 @@ class RecoderViewModel implements ViewModel {
             if (!res.ok) {
                 return;
             }
-            const data = (await res.json())?.data;
-            const list = Array.isArray(data?.workspaces) ? data.workspaces : [];
-            globalStore.set(this.archivedWorkspacesAtom, list as RecoderWorkspace[]);
+            const { workspaces, meta } = parseArchivedPage(await res.json());
+            // The fresh first page wins on an id collision, but older pages the
+            // user already fetched via "show older" stay appended — a poll while
+            // a history view is open must not silently shrink the loaded history.
+            globalStore.set(
+                this.archivedWorkspacesAtom,
+                mergeArchivedHistory(workspaces, globalStore.get(this.archivedWorkspacesAtom))
+            );
+            // A meta-less 2xx body (older backend) must not wipe a known total —
+            // same guard as loadOlderArchived.
+            if (meta != null) {
+                globalStore.set(this.archivedMetaAtom, meta);
+            }
         } catch {
             // degrade-safe: an unreachable history read keeps the prior list
+        }
+    }
+
+    // "Show older" (recoder-oe8i): fetch the next archived page past what is
+    // already loaded and dedup-append it (mergeArchivedHistory), carrying the
+    // envelope meta forward so the "newest N of M" chip stays truthful. Degrade-
+    // safe: any failure / non-2xx leaves the loaded history and meta untouched.
+    async loadOlderArchived() {
+        if (globalStore.get(this.loadingOlderArchivedAtom)) {
+            return;
+        }
+        globalStore.set(this.loadingOlderArchivedAtom, true);
+        try {
+            const prior = globalStore.get(this.archivedWorkspacesAtom);
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/archived?limit=200&offset=${prior.length}`
+            );
+            if (!res.ok) {
+                return;
+            }
+            const { workspaces, meta } = parseArchivedPage(await res.json());
+            globalStore.set(this.archivedWorkspacesAtom, mergeArchivedHistory(prior, workspaces));
+            if (meta != null) {
+                globalStore.set(this.archivedMetaAtom, meta);
+            }
+        } catch {
+            // degrade-safe: an unreachable page read keeps the loaded history
+        } finally {
+            globalStore.set(this.loadingOlderArchivedAtom, false);
         }
     }
 

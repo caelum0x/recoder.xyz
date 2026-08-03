@@ -48,8 +48,11 @@ export const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
   opencode: {
     bin: 'opencode',
     build: (o) => `opencode run ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${extraArgs(o)}`,
-    // Interactive: the opencode TUI (no `run`), started with the prompt.
-    buildInteractive: (o) => `opencode ${initialPrompt(o)}${modelFlag('--model', o.model)}${extraArgs(o)}`.trimEnd(),
+    // Interactive: the opencode TUI (no `run`). The TUI's POSITIONAL arg is a
+    // project path, NOT a prompt (`opencode [project]`), so the initial prompt
+    // must go through `--prompt` (verified against `opencode --help`).
+    buildInteractive: (o) =>
+      `opencode${o.prompt && o.prompt.trim() ? ` --prompt ${shellQuote(o.prompt)}` : ''}${modelFlag('--model', o.model)}${extraArgs(o)}`,
   },
   cursor: {
     // cursor-agent is Cursor's CLI agent. `-p` runs it in headless print mode

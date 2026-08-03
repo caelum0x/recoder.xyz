@@ -32,9 +32,10 @@ type PortableLayout []struct {
 	Focused  bool              `json:"focused"`
 }
 
-// GetStarterLayout is the FIRST-LAUNCH experience. Recoder-first: the Recoder
-// conductor (workspaces / launch agents) is the focused primary block, with a
-// terminal alongside — the app opens into Recoder, terminal-native.
+// GetStarterLayout is the FIRST-LAUNCH experience. Default surface = the hub
+// (RECODER-PRODUCT-DESIGN.md §3, recoder-h2c9): one full-tab Recoder workspaces
+// block, nothing else. A plain terminal stays one keypress away via the rail
+// widget; the hub embeds its own terminal affordances.
 func GetStarterLayout() PortableLayout {
 	return PortableLayout{
 		{IndexArr: []int{0}, BlockDef: &waveobj.BlockDef{
@@ -42,12 +43,6 @@ func GetStarterLayout() PortableLayout {
 				waveobj.MetaKey_View: "recoder",
 			},
 		}, Focused: true},
-		{IndexArr: []int{1}, BlockDef: &waveobj.BlockDef{
-			Meta: waveobj.MetaMapType{
-				waveobj.MetaKey_View:       "term",
-				waveobj.MetaKey_Controller: "shell",
-			},
-		}},
 	}
 }
 
@@ -55,8 +50,7 @@ func GetNewTabLayout() PortableLayout {
 	return PortableLayout{
 		{IndexArr: []int{0}, BlockDef: &waveobj.BlockDef{
 			Meta: waveobj.MetaMapType{
-				waveobj.MetaKey_View:       "term",
-				waveobj.MetaKey_Controller: "shell",
+				waveobj.MetaKey_View: "recoder",
 			},
 		}, Focused: true},
 	}
