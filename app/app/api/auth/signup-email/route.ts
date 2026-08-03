@@ -14,10 +14,15 @@ import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { trackServerEvent, AnalyticsEvents } from '@/lib/analytics';
 import { extractAttribution } from '@/lib/attribution';
 import { generateReferralCode } from '@/lib/referral';
+import { credentialAuthDisabledResponse, isCredentialAuthEnabled } from '@/lib/auth/credential-auth-flag';
 
 const authRateLimiter = rateLimit(rateLimitConfigs.auth);
 
 export async function POST(request: NextRequest) {
+  if (!isCredentialAuthEnabled()) {
+    return credentialAuthDisabledResponse();
+  }
+
   try {
     // Rate limit: 5 requests per minute
     const rateLimitResponse = await authRateLimiter(request);

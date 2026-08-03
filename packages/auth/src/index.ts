@@ -79,7 +79,9 @@ export function createAuth(options: {
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     emailAndPassword: {
-      enabled: true,
+      // Self-host operators may re-enable local accounts via AUTH_EMAIL_PASSWORD=on;
+      // the hosted product is OAuth-only.
+      enabled: process.env.AUTH_EMAIL_PASSWORD === "on",
       sendResetPassword: options.sendResetPassword
         ? async ({ user, url }: { user: { email?: string | null }; url: string }) => {
             await options.sendResetPassword!({ user: { email: user.email ?? null }, url });

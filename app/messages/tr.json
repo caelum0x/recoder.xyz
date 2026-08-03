@@ -8,25 +8,24 @@
     "gettingStarted": "Başlangıç",
     "faq": "SSS",
     "docs": "Dokümantasyon",
-    "launchWebIDE": "Web IDE Başlat",
     "learnMore": "Daha Fazla"
   },
   "home": {
     "title": "AI ile Geliştir",
-    "subtitle": "Web IDE + CLI, 40+ Model",
-    "description": "Web IDE ve Terminal CLI senkronizasyonu sağlayan tek platform. BYOK ile %100 ÜCRETSİZ beta.",
+    "subtitle": "Kodlama ajanlarını tek terminalden paralel çalıştırın",
+    "description": "Recoder, kodlama ajanlarınızı paralel ve izole git worktree'lerinde çalıştıran bir masaüstü terminaldir. BYOK (Kendi Anahtarını Getir).",
     "freeBeta": "ÜCRETSİZ BETA - Kredi Kartı Gerektirmez",
     "byok": "Kendi Anahtarını Getir",
     "models": "40+ AI Model",
     "cta": "Ücretsiz Başla",
     "installCli": "CLI Yükle",
     "features": {
-      "webIde": "Web IDE",
-      "webIdeDesc": "Tarayıcıda AI destekli kodlama",
+      "agents": "Paralel Ajanlar",
+      "agentsDesc": "Claude Code, Codex ve daha fazlasını yan yana çalıştırın",
       "cli": "Terminal CLI",
       "cliDesc": "Aynı AI gücüyle yerel kodlama",
-      "sync": "Kesintisiz Senkronizasyon",
-      "syncDesc": "Tarayıcıda başla, terminalde devam et"
+      "sync": "İzole Worktree'ler",
+      "syncDesc": "Her ajan kendi git worktree'sinde çalışır"
     }
   },
   "dashboard": {

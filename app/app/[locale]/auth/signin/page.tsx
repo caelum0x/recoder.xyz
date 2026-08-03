@@ -116,7 +116,7 @@ function SignInForm() {
   };
 
   const platforms = [
-    { name: 'Web', description: 'Browser-based IDE', icon: Globe, url: 'https://web.recoder.xyz' },
+    { name: 'Desktop', description: 'Parallel agent terminal', icon: Globe, url: 'https://recoder.xyz/download' },
     { name: 'CLI', description: 'Terminal access', icon: Terminal, url: 'https://recoder.xyz/tools' },
   ];
 

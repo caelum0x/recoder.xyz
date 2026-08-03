@@ -235,7 +235,7 @@ export async function sendWelcomeEmail(email: string, name: string) {
               <li><strong>Dashboard:</strong> Access your personal dashboard to manage projects</li>
               <li><strong>CLI Tools:</strong> Install our CLI for terminal-based development</li>
               <li><strong>AI Models:</strong> Choose from Claude, GPT-4, Gemini, and more</li>
-              <li><strong>Web Platform:</strong> Use our browser-based development environment</li>
+              <li><strong>Desktop App:</strong> Run coding agents in parallel with the Recoder terminal</li>
             </ul>
             
             <a href="${APP_URL}/dashboard" class="button">Go to Dashboard</a>

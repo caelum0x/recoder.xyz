@@ -18,6 +18,7 @@ import { extractAttribution } from '@/lib/attribution';
 import { generateReferralCode } from '@/lib/referral';
 import { createVerificationRecord } from '@/lib/auth/verification-store';
 import { validatePassword } from '@/lib/password-validation';
+import { credentialAuthDisabledResponse, isCredentialAuthEnabled } from '@/lib/auth/credential-auth-flag';
 import { z } from 'zod';
 
 const authRateLimiter = rateLimit(rateLimitConfigs.auth);
@@ -30,6 +31,10 @@ const registerSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  if (!isCredentialAuthEnabled()) {
+    return credentialAuthDisabledResponse();
+  }
+
   try {
     // Rate limit: 5 requests per minute
     const rateLimitResponse = await authRateLimiter(request);

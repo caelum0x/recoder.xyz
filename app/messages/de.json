@@ -8,25 +8,24 @@
     "gettingStarted": "Erste Schritte",
     "faq": "FAQ",
     "docs": "Dokumentation",
-    "launchWebIDE": "Web IDE Starten",
     "learnMore": "Mehr erfahren"
   },
   "home": {
     "title": "KOSTENLOSE AI-Coding-Plattform",
-    "subtitle": "Web IDE + CLI mit 40+ Modellen",
-    "description": "Die einzige Plattform mit nahtloser Web IDE + Terminal CLI Synchronisierung. 100% KOSTENLOSE Beta mit BYOK.",
+    "subtitle": "Coding-Agents parallel in einem Terminal ausführen",
+    "description": "Recoder ist ein Desktop-Terminal, das deine Coding-Agents in parallelen, isolierten Git-Worktrees ausführt. BYOK (Eigenen API-Schlüssel nutzen).",
     "freeBeta": "100% KOSTENLOSE BETA",
     "byok": "Eigenen API-Schlüssel nutzen",
     "models": "40+ AI-Modelle",
     "cta": "Kostenlos Coden",
     "installCli": "CLI Installieren",
     "features": {
-      "webIde": "Web IDE",
-      "webIdeDesc": "Im Browser mit AI-Unterstützung coden",
+      "agents": "Parallele Agents",
+      "agentsDesc": "Claude Code, Codex und mehr nebeneinander ausführen",
       "cli": "Terminal CLI",
       "cliDesc": "Lokal mit der gleichen AI-Power coden",
-      "sync": "Nahtlose Synchronisierung",
-      "syncDesc": "Im Browser starten, im Terminal fortsetzen"
+      "sync": "Isolierte Worktrees",
+      "syncDesc": "Jeder Agent arbeitet in seinem eigenen Git-Worktree"
     }
   },
   "dashboard": {

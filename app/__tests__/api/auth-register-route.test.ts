@@ -98,6 +98,9 @@ describe('/api/auth/register route', () => {
     vi.resetModules();
     vi.clearAllMocks();
 
+    // Legacy credential behavior requires the self-host flag; hosted default is OAuth-only.
+    process.env.AUTH_EMAIL_PASSWORD = 'on';
+
     // Default: password passes validation
     mockValidatePassword.mockReturnValue({ valid: true, score: 3, errors: [] });
     // Default: no existing user
@@ -124,6 +127,10 @@ describe('/api/auth/register route', () => {
     mockScheduleOnboardingEmails.mockResolvedValue(undefined);
   });
 
+  afterEach(() => {
+    delete process.env.AUTH_EMAIL_PASSWORD;
+  });
+
   function req(body: Record<string, unknown>): NextRequest {
     return new NextRequest('http://localhost/api/auth/register', {
       method: 'POST',
@@ -131,6 +138,25 @@ describe('/api/auth/register route', () => {
       body: JSON.stringify(body),
     });
   }
+
+  // --- OAuth-only default (410) ---
+
+  it('returns 410 when credential auth is disabled (hosted default)', async () => {
+    delete process.env.AUTH_EMAIL_PASSWORD;
+
+    const { POST } = await import('@/app/api/auth/register/route');
+    const response = await POST(req({
+      email: 'newuser@example.com',
+      password: 'StrongPass123!',
+      name: 'New User',
+    }));
+
+    expect(response.status).toBe(410);
+    const json = await response.json();
+    expect(json.error).toBe('credential auth disabled');
+    expect(json.reason).toBe('oauth_only');
+    expect(mockCreateUser).not.toHaveBeenCalled();
+  });
 
   // --- Successful registration ---
 

@@ -8,10 +8,15 @@ import { prisma } from '@/lib/prisma';
 import { resolvePublicAppUrl, sendPasswordResetEmail } from '@/lib/email';
 import crypto from 'crypto';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+import { credentialAuthDisabledResponse, isCredentialAuthEnabled } from '@/lib/auth/credential-auth-flag';
 
 const passwordResetRateLimiter = rateLimit(rateLimitConfigs.passwordReset);
 
 export async function POST(request: NextRequest) {
+  if (!isCredentialAuthEnabled()) {
+    return credentialAuthDisabledResponse();
+  }
+
   try {
     // Rate limit: 3 requests per hour
     const rateLimitResponse = await passwordResetRateLimiter(request);

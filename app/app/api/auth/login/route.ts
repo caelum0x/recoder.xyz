@@ -13,6 +13,7 @@ import { logger } from '@/lib/logger';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { trackServerEvent, AnalyticsEvents } from '@/lib/analytics';
 import { traceRequest } from '@/lib/tracing-middleware';
+import { credentialAuthDisabledResponse, isCredentialAuthEnabled } from '@/lib/auth/credential-auth-flag';
 import { z } from 'zod';
 
 const authRateLimiter = rateLimit(rateLimitConfigs.auth);
@@ -23,6 +24,10 @@ const loginSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  if (!isCredentialAuthEnabled()) {
+    return credentialAuthDisabledResponse();
+  }
+
   const { traceId, applyTraceId, log } = traceRequest(request);
 
   try {
