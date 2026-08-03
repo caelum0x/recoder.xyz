@@ -875,10 +875,11 @@ export function writeWaveAIGatewayConfig(opts: {
  * work landed — git history of docs/DESKTOP-UX-STATE-AND-PLAN.md has them):
  * cockpit (dropped UI), session/launch/review (hub owns those entry paths),
  * sysinfo/processes (infra dashboards), plus the earlier-hidden infra views
- * whose keys may still be pinned in old user configs. Approvals/Memory were
- * retired here while their wiring was broken; §9 keeps them (governance
- * differentiators) and the wiring is fixed (8597b41ee), so they are now in
- * RestoredWidgetKeys instead.
+ * whose keys may still be pinned in old user configs. Board/approvals/memory/
+ * runs left the rail with the three-screens trim (recoder-h2c9, per
+ * RECODER-PRODUCT-DESIGN.md §3): those surfaces stay reachable inside the hub
+ * and the command palette, so the default rail is just workspaces / terminal /
+ * files / web.
  */
 export const RetiredWidgetKeys = [
     "defwidget@recoder-cockpit",
@@ -888,6 +889,9 @@ export const RetiredWidgetKeys = [
     "defwidget@sysinfo",
     "defwidget@processviewer",
     "defwidget@recoder-board",
+    "defwidget@recoder-approvals",
+    "defwidget@recoder-memory",
+    "defwidget@recoder-runs",
     "defwidget@recoder-tools",
     "defwidget@recoder-connectors",
     "defwidget@recoder-openfang",
@@ -901,8 +905,11 @@ export const RetiredWidgetKeys = [
  * (merge-delete), so simply un-retiring them is not enough — the persisted
  * tombstone would keep hiding the restored default forever. Lift ONLY an exact
  * `null` tombstone; a user-customized widget object is left untouched.
+ * Currently empty: the approvals/memory restore was reversed by the
+ * three-screens trim (recoder-h2c9). The lift mechanism stays for the next
+ * restore.
  */
-export const RestoredWidgetKeys = ["defwidget@recoder-approvals", "defwidget@recoder-memory"] as const;
+export const RestoredWidgetKeys: readonly string[] = [];
 
 /**
  * Self-heal the config-dir widgets.json so retired rail widgets stay gone.
@@ -940,7 +947,7 @@ export function removeRetiredWidgetConfig(opts: { configDir: string; fs?: FsLike
     }
     const healed = Object.fromEntries(
         Object.entries({ ...widgets, ...Object.fromEntries(stale.map((key) => [key, null])) }).filter(
-            ([key]) => !tombstoned.includes(key as (typeof RestoredWidgetKeys)[number])
+            ([key]) => !tombstoned.includes(key)
         )
     );
     fs.mkdirSync(opts.configDir, { recursive: true });

@@ -54,6 +54,9 @@ export async function listConductorRuntimes(
     bin: r.bin,
     path: r.path,
     available: r.available,
+    // The probe's truthful blocker (e.g. binary absent, or cursor present only
+    // as the attach-only editor) — surfaced verbatim, never rewritten.
+    ...(r.reason ? { reason: r.reason } : {}),
   }));
   const inProcess = await Promise.all(
     IN_PROCESS_RUNTIME_IDS.map(runtimeId =>

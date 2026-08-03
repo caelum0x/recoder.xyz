@@ -93,9 +93,10 @@ test('interactive request builds the TUI variant (no -p / exec / run / --print)'
     resolveRuntimeCommand('codex', { prompt: PROMPT, interactive: true }).commandLine,
     "codex 'fix the bug' --sandbox workspace-write",
   );
+  // opencode's TUI positional is a PROJECT PATH, so the prompt must ride --prompt.
   assert.equal(
     resolveRuntimeCommand('opencode', { prompt: PROMPT, interactive: true }).commandLine,
-    "opencode 'fix the bug'",
+    "opencode --prompt 'fix the bug'",
   );
   assert.equal(
     resolveRuntimeCommand('pi', { prompt: PROMPT, interactive: true }).commandLine,
@@ -104,6 +105,17 @@ test('interactive request builds the TUI variant (no -p / exec / run / --print)'
   assert.equal(
     resolveRuntimeCommand('cursor', { prompt: PROMPT, interactive: true }).commandLine,
     "cursor-agent 'fix the bug'",
+  );
+});
+
+test('opencode interactive with NO prompt opens the bare TUI (no stray positional/flag)', () => {
+  assert.equal(
+    resolveRuntimeCommand('opencode', { prompt: '', interactive: true }).commandLine,
+    'opencode',
+  );
+  assert.equal(
+    resolveRuntimeCommand('opencode', { prompt: '', interactive: true, model: 'anthropic/claude-sonnet-4-5' }).commandLine,
+    "opencode --model 'anthropic/claude-sonnet-4-5'",
   );
 });
 

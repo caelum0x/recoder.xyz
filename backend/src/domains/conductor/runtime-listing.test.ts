@@ -25,6 +25,19 @@ const probeCli = async (): Promise<readonly RuntimeAvailability[]> => [
     path: '/usr/local/bin/claude',
   },
   { runtimeId: 'codex', bin: 'codex', available: false },
+  {
+    runtimeId: 'opencode',
+    bin: 'opencode',
+    available: true,
+    path: '/usr/local/bin/opencode',
+  },
+  {
+    runtimeId: 'cursor',
+    bin: 'cursor-agent',
+    available: false,
+    reason:
+      "'cursor-agent' not found on PATH — only the Cursor editor ('cursor' at /usr/local/bin/cursor) is installed, which is attach-only and not launchable as a terminal agent",
+  },
 ];
 
 describe('conductor runtime listing (selection surface)', () => {
@@ -39,6 +52,8 @@ describe('conductor runtime listing (selection surface)', () => {
     expect(runtimes.map(r => r.runtimeId)).toEqual([
       'claude_code',
       'codex',
+      'opencode',
+      'cursor',
       'openfang',
     ]);
     const claude = runtimes.find(r => r.runtimeId === 'claude_code');
@@ -49,6 +64,59 @@ describe('conductor runtime listing (selection surface)', () => {
     });
     const codex = runtimes.find(r => r.runtimeId === 'codex');
     expect(codex).toMatchObject({ kind: 'cli', available: false });
+  });
+
+  it('lists opencode as a real launchable CLI runtime with its probed path', async () => {
+    const registry = createConductorRegistry({ config: cfg() });
+
+    const runtimes = await listConductorRuntimes({ registry, probeCli });
+    const opencode = runtimes.find(r => r.runtimeId === 'opencode');
+
+    expect(opencode).toMatchObject({
+      kind: 'cli',
+      bin: 'opencode',
+      available: true,
+      path: '/usr/local/bin/opencode',
+    });
+    expect(opencode?.reason).toBeUndefined();
+  });
+
+  it('surfaces the probe reason verbatim for cursor when only the attach-only editor is installed', async () => {
+    const registry = createConductorRegistry({ config: cfg() });
+
+    const runtimes = await listConductorRuntimes({ registry, probeCli });
+    const cursor = runtimes.find(r => r.runtimeId === 'cursor');
+
+    expect(cursor).toMatchObject({
+      kind: 'cli',
+      bin: 'cursor-agent',
+      available: false,
+    });
+    expect(cursor?.path).toBeUndefined();
+    expect(cursor?.reason).toMatch(/attach-only/);
+    expect(cursor?.reason).toMatch(/cursor-agent/);
+  });
+
+  it('reports an absent CLI binary truthfully (available:false + reason, no path)', async () => {
+    const registry = createConductorRegistry({ config: cfg() });
+    const absentProbe = async (): Promise<readonly RuntimeAvailability[]> => [
+      {
+        runtimeId: 'opencode',
+        bin: 'opencode',
+        available: false,
+        reason: "'opencode' not found on PATH",
+      },
+    ];
+
+    const runtimes = await listConductorRuntimes({
+      registry,
+      probeCli: absentProbe,
+    });
+    const opencode = runtimes.find(r => r.runtimeId === 'opencode');
+
+    expect(opencode).toMatchObject({ kind: 'cli', available: false });
+    expect(opencode?.path).toBeUndefined();
+    expect(opencode?.reason).toBe("'opencode' not found on PATH");
   });
 
   it('reports openfang available when the in_process substrate is wired and its engine is up', async () => {

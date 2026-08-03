@@ -20,6 +20,13 @@ import {
     RepoChipDisplayLimit,
     repoPickerHint,
 } from "./recoder-github-logic";
+import {
+    archivedHistoryNotice,
+    firstParallelPreselection,
+    firstRunAgentChips,
+    shouldShowGettingStarted,
+    showConvergeAffordance,
+} from "./recoder-first-run-logic";
 import { RecoderIdentityAffordance } from "./recoder-identity";
 import { RecoderIdentityModel } from "./recoder-identity-model";
 import {
@@ -190,9 +197,12 @@ type WorkspaceRowProps = {
     tmuxBin: string;
     selected: boolean;
     onSelect: () => void;
+    // Present only for rows in a 2+-sibling parallel group: the persistent quiet
+    // "Compare · Converge" affordance that opens the group's compare panel.
+    onConverge?: () => void;
 };
 
-function WorkspaceRow({ model, ws, summary, pr, status, busy, tmuxBin, selected, onSelect }: WorkspaceRowProps) {
+function WorkspaceRow({ model, ws, summary, pr, status, busy, tmuxBin, selected, onSelect, onConverge }: WorkspaceRowProps) {
     const ref = useRef<HTMLDivElement>(null);
     const usage = useAtomValue(model.usageAtom);
     const usageWorkspaceId = useAtomValue(model.usageWorkspaceIdAtom);
@@ -244,6 +254,15 @@ function WorkspaceRow({ model, ws, summary, pr, status, busy, tmuxBin, selected,
                 )}
                 <span className={`${META} ml-auto`}>{agentLabel(ws.runtimeId)}</span>
                 {age != "" && <span className={META}>{age}</span>}
+                {onConverge != null && (
+                    <button
+                        className={QUIET_BTN}
+                        title="Compare this parallel group side-by-side and converge on one branch"
+                        onClick={onConverge}
+                    >
+                        Compare · Converge
+                    </button>
+                )}
                 {!terminal && (
                     <button className={btnClass("session")} onClick={() => openSession(ws.workspaceId)}>
                         Session
@@ -380,7 +399,13 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const [paletteOpen, setPaletteOpen] = useAtom(model.commandPaletteOpenAtom);
     const [shortcutsOpen, setShortcutsOpen] = useAtom(model.shortcutsOpenAtom);
     const [cloneOpen, setCloneOpen] = useAtom(model.cloneOpenAtom);
-    const identity = useAtomValue(RecoderIdentityModel.getInstance().identityAtom);
+    const identityModel = RecoderIdentityModel.getInstance();
+    const identity = useAtomValue(identityModel.identityAtom);
+    const signingIn = useAtomValue(identityModel.signingInAtom);
+    const signInPrompt = useAtomValue(identityModel.promptAtom);
+    const archivedMeta = useAtomValue(model.archivedMetaAtom);
+    const archivedWorkspaces = useAtomValue(model.archivedWorkspacesAtom);
+    const loadingOlderArchived = useAtomValue(model.loadingOlderArchivedAtom);
     const [selectedId, setSelectedId] = useAtom(model.selectedWorkspaceIdAtom);
     const [repoPath, setRepoPath] = useAtom(model.launchRepoPathAtom);
     const [repoIsGit, setLaunchRepoIsGit] = useAtom(model.launchRepoIsGitAtom);
@@ -403,6 +428,9 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const agentAuth = useAtomValue(model.agentAuthAtom);
     const [gitIniting, setGitIniting] = useState(false);
     const [repoQuery, setRepoQuery] = useState("");
+    // A dimmed first-run chip's "install" affordance opens the existing agent
+    // setup panel even when some agents are already detected.
+    const [agentSetupOpen, setAgentSetupOpen] = useState(false);
 
     useEffect(() => {
         model.refresh();
@@ -581,7 +609,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     // surfaces a raw transport error on an empty board. Treat that as the calm
     // still-starting state rather than an alarming failure row.
     const coldStart = allWorkspaces.length == 0 && isConnectivityError(error);
-    const showGettingStarted = !loading && allWorkspaces.length == 0 && (error == "" || coldStart) && !launchOpen;
+    const showGettingStarted = shouldShowGettingStarted(loading, allWorkspaces.length, error, launchOpen);
     const needsPrompt = !interactive && prompt.trim() == "";
     // Block launch into a confirmed non-git folder — the worktree add would fail. The
     // inline "Not a git repository" warning below explains it; repoIsGit is optimistic
@@ -601,6 +629,11 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const clonableRepos = filterClonableRepos(githubRepos, recentRepos);
     const matchingClonableRepos = filterReposByQuery(clonableRepos, repoQuery);
     const clonableHint = repoPickerHint(matchingClonableRepos.length, githubRepos.length);
+    const firstRunChips = firstRunAgentChips(environment, setup.agents, agentAuth, githubStatus);
+    const parallelPreselect = firstParallelPreselection(setup.agents);
+    // The archived-history truth chip (recoder-oe8i): shown only on the history
+    // Show views and only when the backend reported more history than is loaded.
+    const archivedNotice = boardShow != "active" ? archivedHistoryNotice(archivedMeta, archivedWorkspaces.length) : "";
 
     // Auth read for the currently-selected agent: `/runtimes` proves it's installed
     // but never that it's logged in, so the picker offers an "authenticate" path
@@ -1048,6 +1081,31 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         </div>
                         <EnvironmentImportSummary env={environment} />
                     </div>
+                    {identity == null && (
+                        <div className="flex flex-col gap-1.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                    className={PRIMARY_BTN}
+                                    disabled={signingIn}
+                                    onClick={() => identityModel.signIn()}
+                                >
+                                    {signingIn ? "Waiting for browser…" : "Sign in with Recoder"}
+                                </button>
+                                <span className={META}>
+                                    Optional — sync memory and PRs. Local agents run without it.
+                                </span>
+                            </div>
+                            {signingIn && signInPrompt != null && (
+                                <div className={`${META} flex flex-wrap items-center gap-2`}>
+                                    <span>Enter code</span>
+                                    <code className="rounded border border-white/8 bg-white/[0.04] px-2 py-0.5 font-mono text-sm text-primary">
+                                        {signInPrompt.userCode}
+                                    </code>
+                                    <span>at {signInPrompt.verificationUri}</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <div className="flex flex-wrap gap-2">
                         <button
                             className={ENTRY_CARD}
@@ -1083,26 +1141,66 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                 </span>
                             </button>
                         )}
+                        {parallelPreselect != null && (
+                            <button
+                                className={ENTRY_CARD}
+                                onClick={() => {
+                                    setRuntimeId(parallelPreselect.primary);
+                                    setAlsoRun(parallelPreselect.also);
+                                    setLaunchOpen(true);
+                                }}
+                            >
+                                <span className={ROW_TITLE}>Run your first parallel task</span>
+                                <span className={META}>
+                                    Launch all {1 + parallelPreselect.also.length} detected agents on one task, each
+                                    in its own worktree, then compare and merge the best.
+                                </span>
+                            </button>
+                        )}
                     </div>
                     <div className={META}>
                         Press <span className="font-mono">⌘P</span> for commands ·{" "}
                         <span className="font-mono">N</span> for a new agent
                     </div>
                     {setup.loaded ? (
-                        <div className={`${META} flex flex-wrap items-center gap-x-3 gap-y-1`}>
-                            <span className={setup.git ? "" : "opacity-60"}>{setup.git ? "✓" : "✗"} git</span>
-                            {setup.agents.map((a) => {
-                                const pres = agentAuthPresentation(a.available, agentAuth[a.runtimeId] ?? "unknown");
-                                const mark = !a.available ? "✗" : pres.badge == "ready" ? "✓" : "•";
-                                const note =
-                                    pres.badge == "ready" || pres.badge == "not installed" ? "" : ` (${pres.badge})`;
-                                return (
-                                    <span key={a.runtimeId} className={a.available ? "" : "opacity-60"}>
-                                        {mark} {agentLabel(a.runtimeId)}
-                                        {note}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className={`${META} ${setup.git ? "" : "opacity-60"}`}>
+                                {setup.git ? "✓" : "✗"} git
+                            </span>
+                            {firstRunChips.map((chip) =>
+                                chip.present ? (
+                                    <span
+                                        key={chip.id}
+                                        className="rounded border border-white/8 px-2 py-0.5 text-xs text-secondary"
+                                        title={
+                                            chip.kind == "github"
+                                                ? "GitHub connected"
+                                                : chip.authed
+                                                  ? `${chip.label} detected and signed in`
+                                                  : `${chip.label} detected — sign-in not verified`
+                                        }
+                                    >
+                                        ✓ {chip.label}
                                     </span>
-                                );
-                            })}
+                                ) : chip.kind == "agent" ? (
+                                    <button
+                                        key={chip.id}
+                                        className={`${CHIP} opacity-60`}
+                                        title={`${chip.label} not detected — show install steps`}
+                                        onClick={() => setAgentSetupOpen((open) => !open)}
+                                    >
+                                        {chip.label} · install
+                                    </button>
+                                ) : (
+                                    <span
+                                        key={chip.id}
+                                        className="rounded border border-white/8 px-2 py-0.5 text-xs text-secondary opacity-60"
+                                        title="GitHub not connected — run `gh auth login` to pick repos here"
+                                    >
+                                        {chip.label}
+                                    </span>
+                                )
+                            )}
                         </div>
                     ) : setup.probed ? (
                         <div className={META}>
@@ -1111,7 +1209,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     ) : (
                         <div className={META}>Checking local setup...</div>
                     )}
-                    {setup.loaded && readyAgents.length == 0 && (
+                    {setup.loaded && (readyAgents.length == 0 || agentSetupOpen) && (
                         <RecoderAgentSetup model={model} probing={setupProbing} />
                     )}
                 </div>
@@ -1182,6 +1280,23 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             {allWorkspaces.length > 0 && boardRows.length == 0 && !loading && (
                 <div className={META}>No workspaces match this filter.</div>
             )}
+            {archivedNotice != "" && (
+                <div className={`${META} flex items-center gap-2`}>
+                    <span
+                        className="rounded border border-white/8 px-1.5 py-0.5"
+                        title="The archive holds more history than is loaded"
+                    >
+                        {archivedNotice}
+                    </span>
+                    <button
+                        className={QUIET_BTN}
+                        disabled={loadingOlderArchived}
+                        onClick={() => model.loadOlderArchived()}
+                    >
+                        {loadingOlderArchived ? "Loading…" : "Show older"}
+                    </button>
+                </div>
+            )}
             <div className="flex flex-col gap-2">
                 {buckets.map((bucket) => (
                     <div key={bucket.id} className="flex flex-col gap-1">
@@ -1209,6 +1324,15 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             const taskGroup = group.taskGroup ?? "";
                             const compareView = compare[taskGroup];
                             const isCompareOpen = compareOpen == taskGroup;
+                            // Open-only (never a toggle): the per-card affordance
+                            // must always land on the open panel.
+                            const onConverge = showConvergeAffordance(taskGroup, group.workspaces.length)
+                                ? () => {
+                                      if (compareOpen != taskGroup) {
+                                          model.toggleCompare(taskGroup, group.workspaces);
+                                      }
+                                  }
+                                : undefined;
                             return (
                                 <div key={taskGroup} className="flex flex-col gap-1 rounded border border-white/8 p-2">
                                     <div className="flex items-center gap-2">
@@ -1259,6 +1383,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                             tmuxBin={setup.tmuxBin}
                                             selected={selectedId == ws.workspaceId}
                                             onSelect={() => setSelectedId(ws.workspaceId)}
+                                            onConverge={onConverge}
                                         />
                                     ))}
                                 </div>

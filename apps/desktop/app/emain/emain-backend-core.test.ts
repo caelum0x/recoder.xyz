@@ -713,30 +713,35 @@ describe("removeRetiredWidgetConfig", () => {
         expect(removed).toBe(false);
     });
 
-    it("keeps approvals/memory out of the retired list (recoder-09j8 restore)", () => {
-        for (const key of RestoredWidgetKeys) {
-            expect(RetiredWidgetKeys).not.toContain(key);
+    it("retires the hub surfaces from the rail and keeps the restore list empty (recoder-h2c9 trim)", () => {
+        for (const key of [
+            "defwidget@recoder-board",
+            "defwidget@recoder-approvals",
+            "defwidget@recoder-memory",
+            "defwidget@recoder-runs",
+        ]) {
+            expect(RetiredWidgetKeys).toContain(key);
         }
+        expect(RestoredWidgetKeys).toHaveLength(0);
     });
 
-    it("lifts null tombstones for restored widgets so the shipped defaults reappear", () => {
-        const priorHeal = Object.fromEntries([...RetiredWidgetKeys, ...RestoredWidgetKeys].map((key) => [key, null]));
+    it("re-tombstones approvals/memory that an earlier build's restore had lifted", () => {
+        // Older builds LIFTED (deleted) the approvals/memory tombstones, so a
+        // user config from that era has no entry at all — the heal must pin
+        // them back to null so the stale embedded defaults stay hidden.
         const fs = makeMemFs({
-            [path.join("/cfg", "widgets.json")]: JSON.stringify({ ...priorHeal, "widget@mine": { label: "mine" } }),
+            [path.join("/cfg", "widgets.json")]: JSON.stringify({ "widget@mine": { label: "mine" } }),
         });
         const { widgetsPath, removed } = removeRetiredWidgetConfig({ configDir: "/cfg", fs: fs as unknown as FsLike });
         expect(removed).toBe(true);
         const widgets = JSON.parse(fs.files.get(widgetsPath));
-        for (const key of RestoredWidgetKeys) {
-            expect(key in widgets).toBe(false);
-        }
+        expect(widgets["defwidget@recoder-approvals"]).toBeNull();
+        expect(widgets["defwidget@recoder-memory"]).toBeNull();
+        expect(widgets["defwidget@recoder-runs"]).toBeNull();
         expect(widgets["widget@mine"]).toEqual({ label: "mine" });
-        for (const key of RetiredWidgetKeys) {
-            expect(widgets[key]).toBeNull();
-        }
     });
 
-    it("does not lift a user-customized (non-null) entry for a restored widget key", () => {
+    it("stomps a user-customized entry for a RETIRED key so stale configs converge to the trimmed rail", () => {
         const custom = { label: "my approvals", blockdef: { meta: { view: "recoder-approvals" } } };
         const allNull = Object.fromEntries(RetiredWidgetKeys.map((key) => [key, null]));
         const fs = makeMemFs({
@@ -746,9 +751,9 @@ describe("removeRetiredWidgetConfig", () => {
             }),
         });
         const { removed } = removeRetiredWidgetConfig({ configDir: "/cfg", fs: fs as unknown as FsLike });
-        expect(removed).toBe(false);
+        expect(removed).toBe(true);
         const widgets = JSON.parse(fs.files.get(path.join("/cfg", "widgets.json")));
-        expect(widgets["defwidget@recoder-approvals"]).toEqual(custom);
+        expect(widgets["defwidget@recoder-approvals"]).toBeNull();
     });
 });
 

@@ -47,4 +47,6 @@ export interface RuntimeAvailability {
   bin: string;
   available: boolean;
   path?: string;
+  /** Truthful blocker when `available` is false (e.g. binary absent, or only an attach-only sibling like the `cursor` editor is installed). */
+  reason?: string;
 }

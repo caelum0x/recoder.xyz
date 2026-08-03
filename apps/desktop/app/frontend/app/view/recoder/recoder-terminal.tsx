@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { createBlock } from "@/app/store/global";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
@@ -15,6 +16,15 @@ import {
 } from "./recoder-terminal-model";
 
 const UsageRefreshMs = 15_000;
+
+async function openWorkspaces() {
+    try {
+        await createBlock({ meta: { view: "recoder" } });
+    } catch {
+        // Best-effort escape hatch from an unbound session block; a failure
+        // here must not crash the view.
+    }
+}
 
 // Graphite-only palette: positive/actionable → accent, failure → the one reserved
 // crimson, everything else → neutral secondary.
@@ -208,9 +218,14 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
             {error != "" && <div className="text-error text-xs px-3 py-1 border-b border-border shrink-0">{error}</div>}
             <div ref={scrollRef} className="flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed">
                 {empty && status == "no-workspace" && (
-                    <div className="text-secondary">
-                        No workspace bound. Set block meta <code>recoder:workspaceid</code> to stream a live agent
-                        session.
+                    <div className="flex flex-col items-start gap-2 text-secondary">
+                        <div>This session isn't attached to a workspace yet.</div>
+                        <button
+                            className="bg-accent/80 text-primary rounded px-2 py-1 hover:bg-accent transition-colors cursor-pointer"
+                            onClick={() => void openWorkspaces()}
+                        >
+                            Open Workspaces
+                        </button>
                     </div>
                 )}
                 {empty && status == "connecting" && <div className="text-secondary">Connecting to session stream…</div>}

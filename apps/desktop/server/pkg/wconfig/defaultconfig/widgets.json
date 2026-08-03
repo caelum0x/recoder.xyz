@@ -9,46 +9,6 @@
             }
         }
     },
-    "defwidget@recoder-board": {
-        "display:order": -5.5,
-        "icon": "clipboard-list",
-        "label": "board",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-board"
-            }
-        }
-    },
-    "defwidget@recoder-approvals": {
-        "display:order": -5.2,
-        "icon": "shield-halved",
-        "label": "approvals",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-approvals"
-            }
-        }
-    },
-    "defwidget@recoder-memory": {
-        "display:order": -5.03,
-        "icon": "brain",
-        "label": "memory",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-memory"
-            }
-        }
-    },
-    "defwidget@recoder-runs": {
-        "display:order": -5.02,
-        "icon": "wave-square",
-        "label": "runs",
-        "blockdef": {
-            "meta": {
-                "view": "recoder-runs"
-            }
-        }
-    },
     "defwidget@terminal": {
         "display:order": -5,
         "icon": "square-terminal",
