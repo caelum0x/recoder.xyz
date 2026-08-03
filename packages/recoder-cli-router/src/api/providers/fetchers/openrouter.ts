@@ -1,17 +1,16 @@
 import axios, { type RawAxiosRequestHeaders /*kilocode_change*/ } from "axios"
 import { z } from "zod"
 
+import { type ModelInfo, isModelParameter, anthropicModels } from "roo-code-types"
+
 import {
-	type ModelInfo,
-	isModelParameter,
 	OPEN_ROUTER_COMPUTER_USE_MODELS,
 	OPEN_ROUTER_REASONING_BUDGET_MODELS,
 	OPEN_ROUTER_REQUIRED_REASONING_BUDGET_MODELS,
-	anthropicModels,
-} from "roo-code-types"
+} from "../../../shared/openrouter"
 
 import type { ApiHandlerOptions } from "recoder-shared"
-import { parseApiPrice } from "recoder-shared"
+import { parseApiPrice } from "../../../shared/cost"
 
 /**
  * OpenRouterBaseModel

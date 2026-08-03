@@ -8,8 +8,10 @@ import * as dotenvx from "@dotenvx/dotenvx"
 
 import { type ModelInfo, type GeminiModelId, geminiDefaultModelId, geminiModels } from "roo-code-types"
 
-import type { ApiHandlerOptions, GeminiCliModelId } from "recoder-shared"
-import { geminiCliDefaultModelId, geminiCliModels, t } from "recoder-shared"
+import type { ApiHandlerOptions } from "recoder-shared"
+import type { GeminiCliModelId } from "../../shared/gemini-cli"
+import { geminiCliDefaultModelId, geminiCliModels } from "../../shared/gemini-cli"
+import { t } from "recoder-shared"
 
 import { convertAnthropicContentToGemini, convertAnthropicMessageToGemini } from "../transform/gemini-format"
 import type { ApiStream } from "../transform/stream"

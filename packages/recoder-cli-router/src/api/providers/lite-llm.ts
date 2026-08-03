@@ -3,7 +3,7 @@ import { Anthropic } from "@anthropic-ai/sdk" // Keep for type usage only
 
 import { litellmDefaultModelId, litellmDefaultModelInfo } from "roo-code-types"
 
-import { calculateApiCostOpenAI } from "recoder-shared"
+import { calculateApiCostOpenAI } from "../../shared/cost"
 
 import { ApiHandlerOptions } from "recoder-shared"
 
@@ -89,15 +89,12 @@ export class LiteLLMHandler extends RouterProvider implements SingleCompletionHa
 				}
 
 				usageData.totalCost = calculateApiCostOpenAI(
-					modelId,
-					{
-						inputTokens: usageData.inputTokens,
-						outputTokens: usageData.outputTokens,
-						totalTokens: usageData.inputTokens + usageData.outputTokens,
-						cacheWriteTokens: usageData.cacheWriteTokens,
-						cacheReadTokens: usageData.cacheReadTokens,
-					}
-				).totalCost
+					info,
+					usageData.inputTokens,
+					usageData.outputTokens,
+					usageData.cacheWriteTokens,
+					usageData.cacheReadTokens,
+				)
 
 				yield usageData
 			}

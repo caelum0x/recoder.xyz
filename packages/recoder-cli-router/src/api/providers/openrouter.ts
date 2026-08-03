@@ -1,14 +1,14 @@
 import { Anthropic } from "@anthropic-ai/sdk"
 import OpenAI from "openai"
 
+import { type ModelInfo, DEEP_SEEK_DEFAULT_TEMPERATURE } from "roo-code-types"
+
 import {
-	type ModelInfo,
 	openRouterDefaultModelId,
 	openRouterDefaultModelInfo,
 	OPENROUTER_DEFAULT_PROVIDER_NAME,
 	OPEN_ROUTER_PROMPT_CACHING_MODELS,
-	DEEP_SEEK_DEFAULT_TEMPERATURE,
-} from "roo-code-types"
+} from "../../shared/openrouter"
 
 import type { ApiHandlerOptions, ModelRecord } from "recoder-shared"
 

@@ -351,7 +351,7 @@ export class VsCodeLmHandler extends BaseProvider implements SingleCompletionHan
 
 		// Convert Anthropic messages to VS Code LM messages
 		const vsCodeLmMessages: vscode.LanguageModelChatMessage[] = [
-			new vscode.LanguageModelChatMessage(vscode.LanguageModelChatMessageRole.User, systemPrompt),
+			vscode.LanguageModelChatMessage.User(systemPrompt),
 			...(convertToVsCodeLmMessages(cleanedMessages) as any),
 		]
 

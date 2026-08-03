@@ -1,6 +1,10 @@
 import { Anthropic } from "@anthropic-ai/sdk"
-// Conditional import for VS Code - fallback for CLI context
-declare namespace vscode {
+import * as vscodeModule from "vscode"
+
+// Local type declarations for the VS Code Language Model API. The installed
+// "vscode" npm package ships pre-LM-API typings, so the shapes used here are
+// declared locally and the runtime module is cast to them.
+declare namespace vscodeTypes {
 	export class LanguageModelChatMessage {
 		role: LanguageModelChatMessageRole;
 		content: string | (LanguageModelTextPart | LanguageModelToolResultPart | LanguageModelToolCallPart)[];
@@ -25,45 +29,10 @@ declare namespace vscode {
 	}
 }
 
-let vsCodeModule: any = null;
-try {
-	vsCodeModule = require("vscode");
-	// Use the real vscode module if available
-	(globalThis as any).vscode = vsCodeModule;
-} catch (error) {
-	// Fallback implementations for CLI context
-	const LanguageModelChatMessage = class {
-		constructor(public role: any, public content: any) {}
-		static Assistant(content: any) { return new LanguageModelChatMessage(1, content); }
-		static User(content: any) { return new LanguageModelChatMessage(2, content); }
-		static System(content: any) { return new LanguageModelChatMessage(0, content); }
-	};
-	
-	const LanguageModelTextPart = class {
-		constructor(public text: string) {}
-	};
-	
-	const LanguageModelToolResultPart = class {
-		constructor(public callId: string, public content: any[]) {}
-	};
-	
-	const LanguageModelToolCallPart = class {
-		constructor(public id: string, public name: string, public parameters: any) {}
-	};
-	
-	const LanguageModelChatMessageRole = {
-		Assistant: 1,
-		User: 2
-	};
-	
-	(globalThis as any).vscode = {
-		LanguageModelChatMessage,
-		LanguageModelTextPart,
-		LanguageModelToolResultPart,
-		LanguageModelToolCallPart,
-		LanguageModelChatMessageRole
-	};
-}
+// This module is only loaded from the VS Code LM provider (never on the CLI
+// path — `buildApiHandler` rejects "vscode-lm" outside VS Code), so a static
+// import is safe and lets tests mock the "vscode" module normally.
+const vscode = vscodeModule as unknown as typeof vscodeTypes
 
 /**
  * Safely converts a value into a plain object.
@@ -94,8 +63,8 @@ function asObjectSafe(value: any): object {
 
 export function convertToVsCodeLmMessages(
 	anthropicMessages: Anthropic.Messages.MessageParam[],
-): vscode.LanguageModelChatMessage[] {
-	const vsCodeLmMessages: vscode.LanguageModelChatMessage[] = []
+): vscodeTypes.LanguageModelChatMessage[] {
+	const vsCodeLmMessages: vscodeTypes.LanguageModelChatMessage[] = []
 
 	for (const anthropicMessage of anthropicMessages) {
 		// Handle simple string messages
@@ -131,7 +100,7 @@ export function convertToVsCodeLmMessages(
 					// Convert tool messages to ToolResultParts
 					...toolMessages.map((toolMessage) => {
 						// Process tool result content into TextParts
-						const toolContentParts: vscode.LanguageModelTextPart[] =
+						const toolContentParts: vscodeTypes.LanguageModelTextPart[] =
 							typeof toolMessage.content === "string"
 								? [new vscode.LanguageModelTextPart(toolMessage.content)]
 								: (toolMessage.content?.map((part) => {
@@ -213,7 +182,7 @@ export function convertToVsCodeLmMessages(
 	return vsCodeLmMessages
 }
 
-export function convertToAnthropicRole(vsCodeLmMessageRole: vscode.LanguageModelChatMessageRole): string | null {
+export function convertToAnthropicRole(vsCodeLmMessageRole: vscodeTypes.LanguageModelChatMessageRole): string | null {
 	switch (vsCodeLmMessageRole) {
 		case vscode.LanguageModelChatMessageRole.Assistant:
 			return "assistant"

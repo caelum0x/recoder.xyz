@@ -6,7 +6,7 @@ import { safeWriteJson } from "recoder-shared"
 
 import { ContextProxy } from "recoder-shared"
 import { getCacheDirectoryPath } from "recoder-shared"
-import { RouterName, ModelRecord, cerebrasModels } from "recoder-shared"
+import { RouterName, ModelRecord, cerebrasModels } from "../../../shared/api"
 import { fileExistsAtPath } from "recoder-shared"
 
 import { getOpenRouterModels } from "./openrouter"

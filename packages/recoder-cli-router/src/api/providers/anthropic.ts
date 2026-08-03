@@ -17,7 +17,7 @@ import { getModelParams } from "../transform/model-params"
 
 import { BaseProvider } from "./base-provider"
 import type { SingleCompletionHandler, ApiHandlerCreateMessageMetadata } from "../index"
-import { calculateApiCostAnthropic } from "recoder-shared"
+import { calculateApiCostAnthropic } from "../../shared/cost"
 
 export class AnthropicHandler extends BaseProvider implements SingleCompletionHandler {
 	private options: ApiHandlerOptions
@@ -221,15 +221,12 @@ export class AnthropicHandler extends BaseProvider implements SingleCompletionHa
 				inputTokens: 0,
 				outputTokens: 0,
 				totalCost: calculateApiCostAnthropic(
-					this.getModel().id,
-					{
-						inputTokens,
-						outputTokens,
-						totalTokens: inputTokens + outputTokens,
-						cacheWriteTokens,
-						cacheReadTokens,
-					}
-				).totalCost,
+					this.getModel().info,
+					inputTokens,
+					outputTokens,
+					cacheWriteTokens,
+					cacheReadTokens,
+				),
 			}
 		}
 	}
