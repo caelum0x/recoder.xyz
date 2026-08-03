@@ -403,6 +403,12 @@ export function assembleBackendEnv(opts: {
         // awaiting_approval. Governance still classifies risk + seals the Merkle
         // audit; a hard deny still blocks.
         RECODER_SOLO_MODE: "1",
+        // The embedded state-of-record: agent-os + conductor flip to the durable
+        // sqlite driver in lockstep (shared/state-of-record.ts) so workspaces,
+        // runs, and events survive an app restart without a DATABASE_URL. An
+        // explicit env override (dev shell) wins via the fill-only pattern.
+        RECODER_SQLITE_PATH:
+            opts.baseEnv.RECODER_SQLITE_PATH || nodePath.join(opts.dataDir, "state-of-record.sqlite"),
         // The default 5GB disk floor is a server-oriented guard. The embedded
         // desktop creates lightweight git worktrees for one local user, so a 2GB
         // floor is appropriate. Overridable via CONDUCTOR_MIN_FREE_DISK_GB.
