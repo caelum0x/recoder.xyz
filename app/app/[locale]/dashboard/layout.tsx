@@ -3,10 +3,9 @@
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useSession, signOut } from '@/lib/session-provider';
-import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 import {
   LayoutDashboard, Key, FolderOpen, BarChart3, Settings, LogOut,
-  User, ChevronDown, Globe, Terminal, Sparkles, Cpu, GitPullRequest
+  User, ChevronDown, Terminal, Sparkles, Cpu, GitPullRequest
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { MobileNav } from '@/app/components/MobileNav';
@@ -134,21 +133,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <p className="px-3 text-xs text-gray-600 uppercase tracking-wider mb-2">Launch</p>
             <div className="space-y-1">
               <a
-                href="https://www.npmjs.com/package/recoder-code"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/download"
                 className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
               >
                 <Terminal className="w-4 h-4" />
-                <span>CLI</span>
+                <span>Desktop App</span>
               </a>
-              <LaunchWebIDEButton
-                className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-colors w-full"
-                showIcon={false}
-              >
-                <Globe className="w-4 h-4" />
-                <span>Web IDE</span>
-              </LaunchWebIDEButton>
             </div>
           </div>
         </nav>

@@ -62,14 +62,14 @@ export default function MCPSetupPage() {
             </ol>
           </section>
 
-          {/* Step 2: Install recoder-code */}
+          {/* Step 2: Install recoder-a2a */}
           <section className="mb-12">
-            <h2 className="text-2xl font-semibold mb-4">Step 2: Install Recoder Code</h2>
+            <h2 className="text-2xl font-semibold mb-4">Step 2: Install the Recoder A2A MCP Server</h2>
             <pre className="bg-zinc-900 rounded-lg p-4 text-sm font-mono overflow-x-auto mb-4">
               <span className="text-zinc-500"># Install globally</span>{'\n'}
-              <span className="text-green-400">npm install -g recoder-code</span>{'\n\n'}
+              <span className="text-green-400">npm install -g recoder-a2a</span>{'\n\n'}
               <span className="text-zinc-500"># Or use directly with npx</span>{'\n'}
-              <span className="text-green-400">npx recoder-code</span>
+              <span className="text-green-400">npx recoder-a2a</span>
             </pre>
           </section>
 
@@ -84,9 +84,9 @@ export default function MCPSetupPage() {
   "mcpServers": {
     "recoder": {
       "command": "npx",
-      "args": ["-y", "recoder-code", "--mcp"],
+      "args": ["-y", "recoder-a2a"],
       "env": {
-        "RECODER_SESSION_TOKEN": "your-session-token-here"
+        "RECODER_API_TOKEN": "your-api-token-here"
       }
     }
   }

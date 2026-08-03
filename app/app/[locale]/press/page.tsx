@@ -24,11 +24,13 @@ export default function PressPage() {
         <div className="mb-12 p-8 rounded-2xl border border-white/10 bg-white/5">
           <h2 className="text-xl font-semibold mb-4">About Recoder</h2>
           <p className="text-gray-400 leading-relaxed">
-            Recoder is an AI-powered development platform that combines a CLI tool
-            (recoder-code), a browser-based Web IDE, AI agents, and a multi-model
-            BYOK (Bring Your Own Key) architecture. Currently in beta, the platform
-            lets developers use 40+ AI models from providers like OpenAI, Anthropic,
-            and Google through their own API keys — with no markup.
+            Recoder is a self-hosted desktop workspace that runs coding agents —
+            Claude Code, Codex, opencode, and more — in parallel isolated git
+            worktrees, then helps developers review and merge the best result.
+            Built on a multi-model BYOK (Bring Your Own Key) architecture,
+            currently in beta, it lets developers use 40+ AI models from providers
+            like OpenAI, Anthropic, and Google through their own API keys — with
+            no markup.
           </p>
         </div>
 

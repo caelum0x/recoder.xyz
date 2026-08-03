@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X, LayoutDashboard, Bot, BarChart3, Settings, Key, FolderOpen, Sparkles, User, Terminal, Globe, Cpu, LogOut } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Bot, BarChart3, Settings, Key, FolderOpen, Sparkles, User, Terminal, Cpu, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { signOut } from '@/lib/session-provider';
 
@@ -28,8 +28,7 @@ const drawerLinks = [
     { href: '/settings/account', label: 'Account', icon: User },
   ]},
   { section: 'Launch', items: [
-    { href: 'https://www.npmjs.com/package/recoder-code', label: 'CLI', icon: Terminal, external: true },
-    { href: 'https://web.recoder.xyz', label: 'Web IDE', icon: Globe, external: true },
+    { href: '/download', label: 'Desktop App', icon: Terminal, external: true },
   ]},
 ];
 

@@ -88,7 +88,6 @@ const docsPages: SitemapPage[] = [
   { path: '/docs/byok',               changeFrequency: 'weekly',   priority: 0.7 },
   { path: '/docs/cli',                changeFrequency: 'weekly',   priority: 0.7 },
   { path: '/docs/models',             changeFrequency: 'weekly',   priority: 0.7 },
-  { path: '/docs/web-cli-sync',       changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/docs/api-reference',     changeFrequency: 'weekly',   priority: 0.7 },
 ];
 

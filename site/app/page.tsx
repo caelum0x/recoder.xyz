@@ -29,7 +29,7 @@ function Hero() {
       <div className="relative mx-auto max-w-6xl px-6 pb-10 pt-16 md:pt-20">
         <div className="mx-auto max-w-3xl text-center">
           <h1 className="text-balance text-4xl font-semibold leading-[1.05] tracking-tight md:text-6xl">
-            N agents in parallel. One trusted merge.
+            Many agents in parallel. One trusted merge.
           </h1>
           <p className="text-balance mx-auto mt-5 max-w-2xl text-base text-muted md:text-lg">
             Recoder is a desktop app for running your own Claude Code, Codex,

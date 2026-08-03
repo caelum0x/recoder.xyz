@@ -25,11 +25,11 @@ const agentPlatforms = [
   },
   {
     id: 'web',
-    name: 'Recoder Web IDE',
-    description: 'Browser-based AI development environment. Build full-stack applications with AI assistance, real-time preview, and instant deployment.',
+    name: 'Recoder Desktop',
+    description: 'Desktop workspace for coding agents. Run Claude Code, Codex, and any agent CLI in parallel isolated git worktrees, then review and merge the best result.',
     icon: Code2,
     color: 'from-orange-500 to-yellow-500',
-    features: ['In-browser development', 'Real-time preview', 'Full-stack support', 'Instant deploy'],
+    features: ['Parallel agent runs', 'Isolated git worktrees', 'Diff review', 'One trusted merge'],
   },
   {
     id: 'pm',

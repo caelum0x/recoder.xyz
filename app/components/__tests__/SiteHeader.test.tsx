@@ -15,12 +15,6 @@ vi.mock('@/lib/config/platforms', () => ({
   getServiceUrlClient: mockGetServiceUrlClient,
 }));
 
-vi.mock('@/app/components/LaunchWebIDEButton', () => ({
-  LaunchWebIDEButton: ({ children, className }: { children: React.ReactNode; className?: string }) => (
-    <button className={className}>{children}</button>
-  ),
-}));
-
 import { SiteHeader } from '@/components/SiteHeader';
 
 describe('SiteHeader', () => {

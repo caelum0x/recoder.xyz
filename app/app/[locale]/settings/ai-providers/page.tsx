@@ -3,10 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useSearchParams } from 'next/navigation';
 import { Plus, Trash2, Eye, EyeOff, ExternalLink, CheckCircle2, ArrowLeft, Terminal, Key as KeyIcon, Loader2 } from 'lucide-react';
 import { useSession } from '@/lib/session-provider';
-import { getRecoderWebUrlClient } from '@/lib/config/platforms';
 
 interface ApiKey {
   id: string;
@@ -77,9 +75,7 @@ const PROVIDERS = [
 
 export default function AIProvidersPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { data: session, isPending } = useSession();
-  const redirectToWebIDE = searchParams.get('redirect') === 'web-ide';
   const redirectToSignIn = () => {
     const currentPath = typeof window !== 'undefined'
       ? `${window.location.pathname}${window.location.search}`
@@ -149,26 +145,13 @@ export default function AIProvidersPage() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        // Show appropriate success message based on redirect flow
-        if (redirectToWebIDE) {
-          setSuccess('API key added successfully! Redirecting to Web IDE...');
-        } else {
-          setSuccess(data.message);
-        }
+        setSuccess(data.message);
 
         setShowAddForm(false);
         setSelectedProvider('');
         setNewApiKey('');
         setKeyName('');
         fetchApiKeys();
-
-        // If user came from "Launch Web IDE" flow, redirect them to Web IDE
-        if (redirectToWebIDE) {
-          // Show success message briefly, then redirect
-          setTimeout(() => {
-            window.location.href = getRecoderWebUrlClient();
-          }, 1500); // 1.5 second delay to show success message
-        }
       } else {
         setError(data.error || 'Failed to add API key');
       }
@@ -253,9 +236,6 @@ export default function AIProvidersPage() {
             <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400 flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5" />
               <span>{success}</span>
-              {redirectToWebIDE && success.includes('Redirecting') && (
-                <Loader2 className="w-5 h-5 animate-spin ml-2" />
-              )}
             </div>
           )}
 
@@ -269,7 +249,7 @@ export default function AIProvidersPage() {
                 <div>
                   <h3 className="font-semibold text-white text-lg mb-1">Add an AI key to get started</h3>
                   <p className="text-gray-300 text-sm mb-3">
-                    Recoder needs an AI provider key to power the AI features across all apps — agents, web IDE, and more.
+                    Recoder needs an AI provider key to power AI features across the platform — agents, the desktop console, and more.
                     We recommend <strong className="text-white">OpenRouter</strong> for the widest model selection.
                   </p>
                   <button

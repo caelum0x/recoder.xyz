@@ -78,16 +78,16 @@ const comparisonData: ComparisonRow[] = [
     windsurfSupport: 'no',
   },
   {
-    feature: 'Web IDE',
+    feature: 'Parallel agent runs (isolated git worktrees)',
     recoder: 'Yes',
-    cursor: 'No (desktop only)',
-    replit: 'Yes',
-    copilot: 'Via VS Code Web',
-    windsurf: 'No (desktop only)',
+    cursor: 'Limited',
+    replit: 'No',
+    copilot: 'No',
+    windsurf: 'No',
     recoderSupport: 'yes',
-    cursorSupport: 'no',
-    replitSupport: 'yes',
-    copilotSupport: 'partial',
+    cursorSupport: 'partial',
+    replitSupport: 'no',
+    copilotSupport: 'no',
     windsurfSupport: 'no',
   },
   {
@@ -193,7 +193,7 @@ const differentiators: Differentiator[] = [
     icon: Layers,
     title: 'All-in-One Platform',
     description:
-      'Web IDE, CLI tool, multi-agent workflows via Agency, built-in project management with PM, and cloud deployment. Replace multiple subscriptions with a single platform that covers the entire development lifecycle.',
+      'Desktop workspace for parallel coding agents, multi-agent workflows via Agency, built-in project management with PM, and cloud deployment. Replace multiple subscriptions with a single platform that covers the entire development lifecycle.',
   },
   {
     icon: Server,
@@ -331,8 +331,8 @@ export default function AlternativesPage() {
           </h1>
           <p className="text-lg sm:text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
             The open, multi-model AI development platform. Access 40+ models,
-            bring your own API keys, and build with a CLI, Web IDE, and
-            multi-agent workflows &mdash; all in one place.
+            bring your own API keys, and run your coding agents in parallel
+            with multi-agent workflows &mdash; all in one place.
           </p>
         </div>
       </section>

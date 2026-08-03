@@ -32,7 +32,7 @@ export default function A2ADocsPage() {
                 <Terminal className="h-5 w-5 text-blue-400" />
                 1. Install
               </h3>
-              <pre className="bg-black rounded-md p-4 text-sm font-mono text-green-400 overflow-x-auto">{"npm install -g recoder-code\n\n# Or use directly with npx:\nnpx recoder-a2a"}</pre>
+              <pre className="bg-black rounded-md p-4 text-sm font-mono text-green-400 overflow-x-auto">{"npm install -g recoder-a2a\n\n# Or use directly with npx:\nnpx recoder-a2a"}</pre>
             </div>
 
             <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-6 mb-6">

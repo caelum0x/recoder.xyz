@@ -28,7 +28,7 @@ export default function GettingStartedPage() {
               <span className="text-sm text-green-400">Getting Started Guide</span>
             </div>
             <h1 className="text-5xl md:text-6xl font-bold mb-4">
-              N agents in parallel.
+              Many agents in parallel.
               <br />
               <span className="text-orange-400">One trusted merge.</span>
             </h1>
@@ -178,7 +178,7 @@ export default function GettingStartedPage() {
                         <span className="text-xs font-bold text-orange-500">b</span>
                       </div>
                       <div className="text-sm text-gray-300">
-                        Describe the task once, then launch it on N agents — mix and
+                        Describe the task once, then launch it across several agents — mix and
                         match Claude Code, Codex, opencode, or several runs of the
                         same agent
                       </div>

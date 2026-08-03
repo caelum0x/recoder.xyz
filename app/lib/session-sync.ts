@@ -47,7 +47,7 @@ export class SessionSyncManager {
   // Generate sync URLs for cross-platform access
   generateSyncUrls(syncToken: string): string[] {
     const domains = [
-      'web.recoder.xyz',        // Recoder Web IDE
+      'web.recoder.xyz',        // legacy hosted-project host (redirect-only)
       'agents.recoder.xyz',     // Recoder Agents
       'frontend.recoder.xyz',   // Legacy alias for agents
       'agency.recoder.xyz',     // AI agent workflows
