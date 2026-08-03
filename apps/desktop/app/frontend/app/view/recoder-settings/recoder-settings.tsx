@@ -3,13 +3,49 @@
 
 import { cn } from "@/util/util";
 import { useAtom, useAtomValue } from "jotai";
+import { useEffect } from "react";
 import { DefaultRecoderBackend } from "../recoder/recoder-endpoints";
-import { RecoderSettingsViewModel } from "./recoder-settings-model";
+import { ProviderKeyNames, RecoderSettingsViewModel } from "./recoder-settings-model";
 
 const PRIMARY_BTN =
     "bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer";
 const QUIET_BTN =
     "border border-border text-secondary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer";
+
+interface ProviderKeyRowProps {
+    model: RecoderSettingsViewModel;
+    name: string;
+}
+
+function ProviderKeyRow({ model, name }: ProviderKeyRowProps) {
+    const drafts = useAtomValue(model.providerKeyDraftsAtom);
+    const keysSet = useAtomValue(model.providerKeysSetAtom);
+    const draft = drafts[name] ?? "";
+    const isSet = keysSet[name] == true;
+
+    return (
+        <div className="flex items-center gap-2">
+            <span className="w-44 shrink-0 text-xs font-mono text-secondary">{name}</span>
+            <input
+                className="flex-1 min-w-0 bg-panel text-primary border border-border rounded px-2 py-1 text-sm font-mono"
+                type="password"
+                value={draft}
+                placeholder={isSet ? "•••••••• (saved)" : "not set"}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(e) => model.setProviderKeyDraft(name, e.target.value)}
+            />
+            <button className={PRIMARY_BTN} disabled={draft.trim() == ""} onClick={() => model.saveProviderKey(name)}>
+                Save
+            </button>
+            {isSet && (
+                <button className={QUIET_BTN} onClick={() => model.clearProviderKey(name)}>
+                    Clear
+                </button>
+            )}
+        </div>
+    );
+}
 
 function RecoderSettingsView({ model }: ViewComponentProps<RecoderSettingsViewModel>) {
     const [url, setUrl] = useAtom(model.urlAtom);
@@ -17,6 +53,11 @@ function RecoderSettingsView({ model }: ViewComponentProps<RecoderSettingsViewMo
     const testStatus = useAtomValue(model.testStatusAtom);
     const testMessage = useAtomValue(model.testMessageAtom);
     const testDetail = useAtomValue(model.testDetailAtom);
+    const providerKeyError = useAtomValue(model.providerKeyErrorAtom);
+
+    useEffect(() => {
+        model.refreshProviderKeys();
+    }, [model]);
 
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-3">
@@ -74,6 +115,16 @@ function RecoderSettingsView({ model }: ViewComponentProps<RecoderSettingsViewMo
                     ))}
                 </div>
             )}
+            <div className="flex flex-col gap-2 border-t border-border pt-3">
+                <label className="text-xs uppercase tracking-wide text-secondary">Provider keys</label>
+                {ProviderKeyNames.map((name) => (
+                    <ProviderKeyRow key={name} model={model} name={name} />
+                ))}
+                {providerKeyError != "" && <div className="text-sm text-error">{providerKeyError}</div>}
+                <div className="text-xs text-secondary">
+                    Agents launched by Recoder use their own CLI logins; these keys power the built-in gateway features.
+                </div>
+            </div>
         </div>
     );
 }
