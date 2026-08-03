@@ -118,22 +118,17 @@ const config = {
             from: "../server/engines/beads/bin/bd",
             to: "backend/engines/beads/bin/bd",
         },
-        // Vendored recodergit + dmux engine dists. Both backend resolvers land on
+        // Vendored dmux engine dist. The backend resolver lands on
         // <resources>/backend/apps/desktop/engines/... in packaged mode:
-        // recodergit-service.ts resolves dist-relative
-        // (__dirname=backend/dist/domains/engines, three ups + ../apps/...), and
         // dmux-adapter.ts walks ancestors for apps/desktop/engines/dmux. The
         // package.json files ride along so Node treats the dists as ESM
         // ("type": "module").
-        {
-            from: "../engines/recodergit/recodergit/dist",
-            to: "backend/apps/desktop/engines/recodergit/recodergit/dist",
-            filter: ["**/*"],
-        },
-        {
-            from: "../engines/recodergit/recodergit/package.json",
-            to: "backend/apps/desktop/engines/recodergit/recodergit/package.json",
-        },
+        //
+        // recodergit is DELIBERATELY NOT bundled (bd recoder-rxn0): its engine
+        // is PolyForm Noncommercial 1.0.0 — commercial distribution is not
+        // licensed. recodergit-service.ts degrades truthfully to 'unavailable'
+        // when the dist is absent (never throws into a request path). Do not
+        // re-add without a commercial license or a permissive replacement.
         {
             from: "../engines/dmux/dist",
             to: "backend/apps/desktop/engines/dmux/dist",

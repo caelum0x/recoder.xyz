@@ -84,6 +84,18 @@ skeleton-project rule: search, assess, wire-in, never hand-roll):
 All absorptions follow the standing rule: full Recoder rebrand, legal
 attribution, wire-in not delete.
 
+**License reality (audited 2026-08-04, bd recoder-rxn0):** the base and almost
+all absorbed engines are permissive — Wave fork Apache-2.0; mem0/tensorzero/
+pal/continuum Apache; openfang dual Apache/MIT; dmux/browser-use/colbert/
+ops-recorder/opencode-* MIT; tmux ISC. Exceptions: **recodergit is PolyForm
+Noncommercial** (now UNBUNDLED from the shipped DMG as of v0.15 — backend
+degrades truthfully; long-term: commercial license or permissive rebuild on
+gitoxide/git2); **multica** is Dify-style restricted Apache (verified NOT
+compiled into or shipped with the desktop — vendored source only; do not embed
+in a paid artifact without a license); **openclaw** has no license file
+(abandoned, not shipped); `.scratch/upstream/daytona` is AGPL — never copy
+code from it into the product.
+
 **Lever B — open-source Recoder itself.** Cursor stayed closed on an OSS base;
 Conductor is free-closed; Warp is closed. The thesis's declared biggest
 weakness is **distribution** (§7). An open(-core) desktop is the one move none
