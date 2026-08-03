@@ -3,8 +3,9 @@
  * plane reports the state of its three load-bearing seams, never a faked `up`:
  *
  *  - `repository:<driver>` — the state-of-record. `postgres` with a live
- *    executor is fully `up`; `json`/`memory` (or postgres with a down executor)
- *    is `degraded` (serving from a non-durable/degrade driver).
+ *    executor or the embedded `sqlite` file is fully `up`; `json`/`memory`
+ *    (or postgres with a down executor) is `degraded` (serving from a
+ *    non-durable/degrade driver).
  *  - `outbox-publisher`    — the CloudEvents transport. `down` when it is the
  *    log-only sink (NATS absent); records stay `pending`, never lost.
  *  - `instruction-compiler`— the on-disk instruction sources; `down` when the
@@ -35,7 +36,10 @@ export interface AgentOsHealthDeps {
 export async function buildAgentOsHealth(deps: AgentOsHealthDeps): Promise<ComponentHealth> {
   const { repositoryDriver, executorAvailable, outboxPublisher, instructionCompiler } = deps;
 
-  const repoUp = repositoryDriver === 'postgres' && executorAvailable;
+  // Durable drivers: postgres needs a live executor; sqlite is an embedded
+  // file handle (open ⇒ serving durably, no executor involved).
+  const repoUp =
+    (repositoryDriver === 'postgres' && executorAvailable) || repositoryDriver === 'sqlite';
   const repository: EngineStatus = repoUp
     ? { name: `repository:${repositoryDriver}`, status: 'up' }
     : {
