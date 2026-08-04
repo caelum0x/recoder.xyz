@@ -26,6 +26,9 @@ export type { ForgetService, ForgetServiceDeps, ForgetMemoryInput, ForgetResult 
 export { createHarvestService } from './harvest.js';
 export type { HarvestService, HarvestServiceDeps, HarvestInput, HarvestResult } from './harvest.js';
 
+export { shapeHarvestBody, shapeHarvestTitle, hasConvergenceProvenance } from './harvest-shaping.js';
+export type { HarvestShapeInput } from './harvest-shaping.js';
+
 export { createRelateService } from './relate.js';
 export type { RelateService, RelateServiceDeps, RelateInput } from './relate.js';
 

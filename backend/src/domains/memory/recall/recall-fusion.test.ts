@@ -310,4 +310,48 @@ describe('createRecallService.recall', () => {
     // mem0 still contributed.
     expect(result.memories.some((m) => m.provenance.source === 'mem0')).toBe(true);
   });
+
+  it('ranks a repo-matched lesson above a generic one AND preserves the degrade marker', async () => {
+    const svc = createRecallService(
+      deps({
+        repository: fakeRepo({
+          candidates: [
+            candidate('generic', 'note', 'a generic lesson about deploys'),
+            candidate('repo', 'note', 'On repoX, the deploys lesson kept pm2 restart'),
+          ],
+        }),
+        // identityReranker (colbert down) but the query overlaps the pool → the
+        // lexical fallback ranks and the degrade is carried in rerankerReason.
+      }),
+    );
+
+    const result = await svc.recall({ query: 'deploys lesson', userId: 'u1', repoRef: '/srv/repoX' });
+
+    // Cross-RUN scope boost lifts the repo-matched lesson to the top, tagged why.
+    expect(result.memories[0]?.provenance.ref).toBe('repo');
+    expect(result.memories[0]?.provenance.signals).toContain('repo-match');
+    // The degrade-truthful rerank marker survives the boost (never clobbered).
+    expect(result.reranker).toBe('lexical');
+    expect(result.rerankerReason).toContain('colbert reranker unavailable');
+  });
+
+  it('applies a recency boost using the injected clock (fresh lesson outranks stale)', async () => {
+    const now = Date.parse('2026-08-04T00:00:00Z');
+    const freshCand: MemoryCandidate = {
+      ...candidate('fresh', 'note', 'the deploys lesson swapfile cap'),
+      proposedAt: new Date(now - 24 * 60 * 60 * 1000).toISOString(), // 1 day old
+    };
+    const staleCand: MemoryCandidate = {
+      ...candidate('stale', 'note', 'the deploys lesson old pm2 note'),
+      proposedAt: new Date(now - 120 * 24 * 60 * 60 * 1000).toISOString(), // 120 days old
+    };
+    const svc = createRecallService(
+      deps({ repository: fakeRepo({ candidates: [staleCand, freshCand] }), clock: () => now }),
+    );
+
+    const result = await svc.recall({ query: 'deploys lesson', userId: 'u1' });
+
+    expect(result.memories[0]?.provenance.ref).toBe('fresh');
+    expect(result.memories[0]?.provenance.signals).toContain('recency');
+  });
 });

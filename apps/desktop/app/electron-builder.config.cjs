@@ -21,6 +21,22 @@ const macArch = (() => {
     return v === "x64" || v === "universal" ? v : "arm64";
 })();
 
+// Staged Windows/Linux targets, OFF by default (bd recoder-di8l). Same env-gate
+// shape as RECODER_MAC_ARCH: RECODER_BUILD_TARGETS is a comma list ("win",
+// "linux") and only the named platforms emit a target block below, so an UNSET
+// env yields the exact mac-only config — byte-identical to before these blocks
+// existed. The blocks are inert staging, not a shippable path: every bundled
+// engine artifact on disk today is arm64-darwin (the Rust NAPI addons, beads
+// `bd`, tmux, recoder-server), so a real win/linux artifact set plus on-target
+// native rebuilds are required before either produces a runnable app. See
+// docs/DESKTOP-CROSS-PLATFORM.md for the per-artifact readiness table + recipe.
+const buildTargets = new Set(
+    (process.env.RECODER_BUILD_TARGETS || "")
+        .split(",")
+        .map((t) => t.trim().toLowerCase())
+        .filter(Boolean)
+);
+
 // Deliberate cloud-or-degrade artifacts: absence is LOGGED LOUD by the
 // beforePack gate, never fatal. The Lance embedded vector store degrades to
 // Qdrant/no-op at runtime (backend/src/domains/memory). Its napi crate does not
@@ -209,15 +225,13 @@ const config = {
             NSAppleEventsUsageDescription: "A CLI application running in Recoder wants to use AppleScript.",
         },
     },
-    // Windows/Linux targets (inherited from the Wave fork) are DELIBERATELY
-    // ABSENT: every bundled engine artifact — the Rust NAPI addons listed in
-    // ARCH_SENSITIVE_EXTRA_RESOURCES, the beads `bd`, tmux, recoder-xds, and
-    // ziti binaries, and the recoder-server bin — exists only as arm64-darwin
-    // on disk, and the beforePack gate only understands Mach-O headers. A win
-    // or linux build would therefore either fail packaging or ship an app
-    // whose engines cannot start. Restore the removed `win`/`linux` (+ deb/
-    // appImage/snap/rpm) blocks from git history only once per-platform engine
-    // binaries and packaging exist — tracked in bd recoder-di8l.
+    // Windows/Linux target blocks are STAGED below the config (attached only
+    // when RECODER_BUILD_TARGETS names them) rather than inlined here, so the
+    // default mac-only object stays byte-identical. They remain inert until a
+    // per-platform engine artifact set exists: every bundled engine binary on
+    // disk today — the Rust NAPI addons in ARCH_SENSITIVE_EXTRA_RESOURCES, beads
+    // `bd`, tmux, recoder-server — is arm64-darwin, so a mac-host win/linux pack
+    // would ship engines that cannot start. See docs/DESKTOP-CROSS-PLATFORM.md.
     publish: {
         provider: "generic",
         url: "https://dl.recoder.xyz/releases",
@@ -228,11 +242,20 @@ const config = {
     beforePack: async (context) => {
         // context.arch is an Arch enum member; universal is a merged binary so the
         // per-arch check is skipped (null targetArch), matching the gate contract.
+        const platform = context && context.electronPlatformName;
         const archName = context && context.arch != null ? Arch[context.arch] : null;
+        // The Mach-O CPU-arch gate only applies to the mac build: every path in
+        // ARCH_SENSITIVE_EXTRA_RESOURCES is a darwin .node/bd artifact. For a
+        // win/linux target those must be swapped for on-target native builds
+        // (RECODER_BACKEND_NODE_MODULES → a per-platform deploy) and validated on
+        // that machine — reading a mac Mach-O header here would falsely reject or
+        // falsely pass them. So off darwin we keep the fail-loud EXISTENCE gate
+        // but truthfully skip the CPU-arch check (documented: DESKTOP-CROSS-PLATFORM.md).
+        const isDarwin = platform === "darwin";
         assertExtraResourcesExist(config.extraResources, __dirname, {
-            targetArch: archName === "universal" ? null : archName,
+            targetArch: isDarwin && archName !== "universal" ? archName : null,
             optional: OPTIONAL_EXTRA_RESOURCES,
-            archSensitive: ARCH_SENSITIVE_EXTRA_RESOURCES,
+            archSensitive: isDarwin ? ARCH_SENSITIVE_EXTRA_RESOURCES : new Set(),
         });
     },
     afterPack: (context) => {
@@ -253,5 +276,37 @@ const config = {
         }
     },
 };
+
+// Attach the staged cross-platform blocks only when explicitly requested. When
+// RECODER_BUILD_TARGETS is unset `buildTargets` is empty, so `config` keeps
+// exactly the mac-only shape above and the existing packaging test's mac
+// assertions are unaffected. x64 only — win-arm64/linux-arm64 native artifacts
+// are not built yet (docs/DESKTOP-CROSS-PLATFORM.md §readiness).
+if (buildTargets.has("win")) {
+    config.win = {
+        target: [
+            { target: "nsis", arch: ["x64"] },
+            { target: "portable", arch: ["x64"] },
+        ],
+        icon: "build/icon.ico",
+    };
+    config.nsis = {
+        oneClick: false,
+        perMachine: false,
+        allowToChangeInstallationDirectory: true,
+    };
+}
+
+if (buildTargets.has("linux")) {
+    config.linux = {
+        target: [
+            { target: "AppImage", arch: ["x64"] },
+            { target: "deb", arch: ["x64"] },
+        ],
+        icon: "build/icon.png",
+        category: "Development",
+        maintainer: "Recoder <support@recoder.xyz>",
+    };
+}
 
 module.exports = config;

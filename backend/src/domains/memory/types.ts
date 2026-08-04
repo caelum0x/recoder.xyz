@@ -52,6 +52,17 @@ export const MEMORY_SOURCES: readonly MemorySource[] = [
   'colbert',
 ] as const;
 
+/**
+ * WHY a recalled memory surfaced (the scope-boost signal vocabulary). A memory
+ * may carry several — e.g. it overlaps the query lexically AND pertains to the
+ * run's repo AND was harvested recently. Never fabricated: each signal is only
+ * set when its condition genuinely held.
+ *  - `repo-match`: the memory pertains to the run's repo (cross-RUN scoping).
+ *  - `recency`: the memory was harvested inside the freshness window.
+ *  - `lexical`: the memory's text overlaps the query (base relevance).
+ */
+export type RecallSignal = 'repo-match' | 'recency' | 'lexical';
+
 /** Provenance tag attached to every recalled memory (truthful attribution). */
 export interface Provenance {
   /** Which source produced this recall. */
@@ -62,6 +73,12 @@ export interface Provenance {
   readonly score: number;
   /** The scope this memory was recalled under, when known. */
   readonly scope?: string;
+  /**
+   * WHY this memory surfaced — the scope-boost signals that ranked it. Set by the
+   * cross-RUN scope-boost stage; absent on a memory that matched only by base
+   * relevance without any boost. Truthful: never claims a boost that did not fire.
+   */
+  readonly signals?: readonly RecallSignal[];
 }
 
 /** A recalled memory, normalized across sources and provenance-tagged. */
@@ -72,6 +89,12 @@ export interface RecalledMemory {
   readonly title?: string;
   /** The memory text (the fact/pattern recalled). */
   readonly body: string;
+  /**
+   * ISO timestamp the memory was created/harvested, when the source carries one
+   * (candidate `proposedAt`, item `createdAt`). Feeds the recency scope-boost;
+   * absent (mem0/beads/colbert) ⇒ no recency signal (truthful, never guessed).
+   */
+  readonly createdAt?: string;
   /** Truthful attribution — never fabricated. */
   readonly provenance: Provenance;
 }
@@ -86,6 +109,13 @@ export interface RecallQuery {
   readonly scope?: string;
   /** Optional scope ref (spaceId / repo path) when the scope is narrowed. */
   readonly scopeRef?: string;
+  /**
+   * Optional repo identity the run targets (repo path / display name). Feeds the
+   * cross-RUN scope-boost: a memory harvested on THIS repo (its shaped body cites
+   * it) is ranked above generic matches with a `repo-match` signal. Absent ⇒ no
+   * repo boost (recall spans the tenant's memory unnarrowed, as before).
+   */
+  readonly repoRef?: string;
   /** Max memories to return after fusion. Default applied by the fusion service. */
   readonly limit?: number;
 }

@@ -73,10 +73,21 @@ export interface AccountUsageSection {
   remaining: number;
   tokensPerSession: number;
   periodEnd: string;
+  /**
+   * Display-only: used/limit as a clamped 0–100 integer for the quiet progress
+   * bar. Derived from real counts; 0 when the limit is non-positive so the bar
+   * never divides by zero or renders a misleading fill.
+   */
+  usedPercent: number;
 }
+
+/** Top tier sells "unlimited everything" — there is nothing above it to upgrade to. */
+export const TOP_TIER_PLAN = 'enterprise';
 
 export interface AccountView {
   plan: ResolvedEntitlements;
+  /** Display-only: show the upgrade CTA only when a higher tier exists. */
+  canUpgrade: boolean;
   usage: AccountUsageSection | null;
   devices: AccountDeviceRow[];
   apiKeys: AccountApiKeyRow[];
@@ -101,11 +112,21 @@ export function buildAccountView(input: {
         remaining: Math.max(0, input.quota.sessionsPerDay - input.quota.sessionsUsedToday),
         tokensPerSession: input.quota.tokensPerSession,
         periodEnd: input.quota.periodEnd.toISOString(),
+        usedPercent:
+          input.quota.sessionsPerDay > 0
+            ? Math.min(
+                100,
+                Math.round((input.quota.sessionsUsedToday / input.quota.sessionsPerDay) * 100)
+              )
+            : 0,
       }
     : null;
 
+  const plan = resolveEntitlements(input.user, input.subscription);
+
   return {
-    plan: resolveEntitlements(input.user, input.subscription),
+    plan,
+    canUpgrade: plan.plan !== TOP_TIER_PLAN,
     usage,
     devices: input.cliSessions.map((session) => ({
       id: session.id,

@@ -210,6 +210,38 @@ describe('brain-memory adapter — enrichPrompt', () => {
     // No `colbertCollection` key at all — retrieval uses its default collection.
     expect(search).toHaveBeenCalledWith('boot?', { topK: 4 });
   });
+
+  it('threads the run repo into recall as repoRef (drives cross-RUN scope-boost)', async () => {
+    const recall = recallOf(fusion([]));
+    const brain = createBrainMemoryAdapter({ recall, harvest: harvestStub({ harvested: false, reason: 'x' }), logger });
+
+    await brain.enrichPrompt({ prompt: 'fix it', userId: 'u1', repoPath: '/srv/recoder.xyz' });
+
+    expect(recall.recall).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u1', repoRef: '/srv/recoder.xyz' }),
+    );
+  });
+
+  it('surfaces WHY a memory ranked (scope-boost signals) in the rendered recall bullet', async () => {
+    const recall = recallOf(
+      fusion([
+        {
+          id: 'm1',
+          title: 'auth verify',
+          body: 'delegate session verify over HTTP',
+          provenance: { source: 'candidates', ref: 'c9', score: 0.9, signals: ['repo-match', 'lexical'] },
+        },
+      ]),
+    );
+    const brain = createBrainMemoryAdapter({ recall, harvest: harvestStub({ harvested: false, reason: 'x' }), logger });
+
+    const out = await brain.enrichPrompt({ prompt: 'auth verify', userId: 'u1', repoPath: '/srv/recoder.xyz' });
+
+    // The bullet states the source AND why it surfaced (auditable, never silent).
+    expect(out.prompt).toContain('[candidates · why: repo-match, lexical] auth verify: delegate session verify over HTTP');
+    // The provenance ref stays first-class (unchanged shape for the audit trail).
+    expect(out.sources).toContainEqual({ source: 'candidates', ref: 'c9' });
+  });
 });
 
 describe('brain-memory adapter — harvestOnCompletion', () => {
@@ -248,5 +280,78 @@ describe('brain-memory adapter — harvestOnCompletion', () => {
     const res = await brain.harvestOnCompletion({ userId: 'u1', taskId: 't1', artifactId: 'a1', outcome: 'completed' });
 
     expect(res.harvested).toBe(false);
+  });
+
+  it('shapes a REUSABLE structured lesson from convergence provenance (thesis §7)', async () => {
+    const harvest = harvestStub({ harvested: true, candidate: { candidateId: 'c1' } as never });
+    const brain = createBrainMemoryAdapter({ recall: recallOf(fusion([])), harvest, logger });
+
+    await brain.harvestOnCompletion({
+      userId: 'u1',
+      taskId: 't1',
+      artifactId: 'a1',
+      outcome: 'completed',
+      repo: '/srv/recoder.xyz',
+      taskTitle: 'fix auth',
+      convergedAgents: 2,
+      winningApproach: 'delegated verify',
+      contestedPaths: ['packages/auth/src/session.ts'],
+      verified: true,
+    });
+
+    const call = (harvest.harvest as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.body).toBe(
+      "On recoder.xyz, task 'fix auth': converged 2 agents; kept delegated verify; " +
+        'contested packages/auth/src/session.ts; verified pass; outcome=completed. ' +
+        'Evidence: task t1, artifact a1.',
+    );
+    // The shaped body embeds the repo basename so a LATER run repo-matches it.
+    expect(call.body).toContain('On recoder.xyz,');
+    // Evidence anchor is always present (the candidate stays evidence-backed).
+    expect(call.evidence ?? { taskId: call.taskId, artifactId: call.artifactId }).toMatchObject({
+      taskId: 't1',
+      artifactId: 'a1',
+    });
+  });
+
+  it('keeps a shaped harvest a CANDIDATE — never auto-promotes to durable memory', async () => {
+    // The adapter only ever calls harvest.harvest (propose a wisp). There is NO
+    // promote/accept seam on it, so a harvested lesson stays ephemeral until the
+    // human/policy accept path runs (AGENTS.md). Assert the returned artifact is a
+    // candidate, and that harvest — not any durable write — is what was invoked.
+    const harvest = harvestStub({
+      harvested: true,
+      candidate: { candidateId: 'c1', status: 'candidate_created' } as never,
+    });
+    const brain = createBrainMemoryAdapter({ recall: recallOf(fusion([])), harvest, logger });
+
+    const res = await brain.harvestOnCompletion({
+      userId: 'u1',
+      taskId: 't1',
+      artifactId: 'a1',
+      outcome: 'completed',
+      convergedAgents: 3,
+    });
+
+    expect(res.harvested).toBe(true);
+    if (res.harvested) {
+      expect((res.candidate as unknown as { status: string }).status).toBe('candidate_created');
+    }
+    expect(harvest.harvest).toHaveBeenCalledTimes(1);
+    // No promote surface exists on the brain adapter (compile-time + runtime).
+    expect((brain as unknown as Record<string, unknown>).promote).toBeUndefined();
+    expect((brain as unknown as Record<string, unknown>).accept).toBeUndefined();
+  });
+
+  it('falls back to the plain default body when there is NO convergence provenance', async () => {
+    const harvest = harvestStub({ harvested: true, candidate: { candidateId: 'c1' } as never });
+    const brain = createBrainMemoryAdapter({ recall: recallOf(fusion([])), harvest, logger });
+
+    await brain.harvestOnCompletion({ userId: 'u1', taskId: 't1', artifactId: 'a1', runId: 'r1', outcome: 'completed' });
+
+    const call = (harvest.harvest as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    // No "converged"/"kept" shaping — just the truthful default, evidence-anchored.
+    expect(call.body).not.toContain('converged');
+    expect(call.body).toContain('Evidence: task t1, artifact a1.');
   });
 });
