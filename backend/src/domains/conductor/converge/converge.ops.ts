@@ -11,7 +11,7 @@
  * git layer and launches NO agent (unlike `engine.createWorkspace`, which spawns a
  * CLI): compose produces only a reviewable branch.
  *
- * Two materialization MODES per winning file (from the plan):
+ * Three materialization MODES per winning file (from the plan):
  *  - `pick`: the winning file is copied verbatim from the chosen sibling's worktree
  *    (the safe whole-file default);
  *  - `synthesize`: an automatic LINE-LEVEL 3-way merge of the contesting siblings'
@@ -21,7 +21,13 @@
  *    ancestor at every step (deterministic). A CLEAN merge is written; a CONFLICT is
  *    NEVER written as markers into a "trusted" branch — the path flips to UNRESOLVED
  *    (`synthesize-conflict`) and the whole compose aborts so the caller falls back to
- *    an explicit `pick` (preserving the "one TRUSTED change" invariant).
+ *    an explicit `pick` (preserving the "one TRUSTED change" invariant);
+ *  - `assisted` (explicit per-file opt-in): the SAME mechanical 3-way runs first, and
+ *    ONLY a conflicting fold escalates to a one-shot LLM synthesis via the injected
+ *    `deps.inference`. A VALIDATED response (non-empty, marker-free, preserving every
+ *    line both sides agreed on) is written and recorded on `plan.assisted` (never a
+ *    silent quality degrade); an invalid response, `routed:false`, or an unwired
+ *    inference dep falls through to the exact `synthesize-conflict` behavior above.
  *
  * Truthful throughout: an incomplete plan (unresolved contested paths) throws BEFORE
  * any git runs; a missing source worktree / git failure surfaces its real message —
@@ -34,10 +40,17 @@ import { tmpdir } from 'node:os';
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import type { Workspace } from '@recoder/agent-os';
 import type { Logger } from '../../../shared/logger.js';
+// Type-only cross-domain seam (erased at build — boundary-legal): the VALUE is
+// injected via `ConvergeOpsDeps.inference`, never imported here.
+import type {
+  TensorzeroInferenceInput,
+  TensorzeroInferenceResult,
+} from '../../inference/tensorzero-embedded-client.js';
 import { resolveRepoDefaultBranch } from '../git-default-branch.js';
 import {
   planConvergence,
   winnerSources,
+  type AssistedFileRecord,
   type ConflictRegion,
   type ContestedProbe,
   type ConvergenceMode,
@@ -46,7 +59,24 @@ import {
   type ConvergenceUnresolved,
 } from './converge-plan.service.js';
 
-export type { ConflictRegion } from './converge-plan.service.js';
+export type { AssistedFileRecord, ConflictRegion } from './converge-plan.service.js';
+
+/**
+ * The degrade-safe one-shot inference seam `assisted` synthesis runs over —
+ * signature-compatible with `postInference` (inference domain), which NEVER throws
+ * and answers `routed:false` on any unavailability.
+ */
+export type ConvergeInferenceFn = (
+  input: TensorzeroInferenceInput,
+) => Promise<TensorzeroInferenceResult>;
+
+/**
+ * The TensorZero function the assisted synthesis addresses — the stable
+ * `recoder_default` chat function the config generator emits for the first
+ * registered model (see `tensorzero-config.ts`). Unrouted (no model configured)
+ * degrades truthfully to the mechanical conflict path.
+ */
+export const ASSIST_INFERENCE_FUNCTION = 'recoder_default';
 
 /** Thrown when the plan still has unresolved contested paths — mapped to a 4xx. */
 export class UnresolvedConvergenceError extends Error {
@@ -71,9 +101,9 @@ export class EmptyConvergenceError extends Error {
 export interface ConvergenceSelectionRecord {
   readonly path: string;
   readonly mode: ConvergenceMode;
-  /** For `pick`: the winning sibling. ABSENT for `synthesize`. */
+  /** For `pick`: the winning sibling. ABSENT for `synthesize`/`assisted`. */
   readonly sourceWorkspaceId?: string;
-  /** For `synthesize`: the sibling ids whose versions were 3-way merged. ABSENT for `pick`. */
+  /** For `synthesize`/`assisted`: the sibling ids whose versions merged. ABSENT for `pick`. */
   readonly contributors?: readonly string[];
   readonly contested: boolean;
 }
@@ -84,6 +114,8 @@ export interface ConvergenceProvenance {
   readonly sourceCount: number;
   readonly fileCount: number;
   readonly selections: readonly ConvergenceSelectionRecord[];
+  /** Files whose conflicts an LLM resolved (validated output) — ABSENT when none. */
+  readonly assisted?: readonly AssistedFileRecord[];
 }
 
 /** Input to compose a convergence from a parallel-run group + a per-contested-file selection. */
@@ -125,6 +157,15 @@ export interface ConvergeOpsDeps {
   /** Persist the composed Workspace record (the composer's `repository.upsertWorkspace`). */
   readonly registerWorkspace: (workspace: Workspace) => Promise<Workspace>;
   readonly logger: Logger;
+  /**
+   * OPTIONAL one-shot LLM inference for `assisted` files. WIRING POINT: the
+   * composition layer (`conductor-module.convergeDeps`) injects `postInference`
+   * from `src/domains/inference/tensorzero-embedded-client.ts` here — a value
+   * import would cross the domain boundary, so the ops take it as a dep and stay
+   * pure. ABSENT ⇒ every `assisted` conflict falls back to `synthesize-conflict`
+   * (mechanical behavior; never a fake merge).
+   */
+  readonly inference?: ConvergeInferenceFn;
   /** Child-process seam for host git; defaults to `execFileSafe`. */
   readonly exec?: typeof execFileSafe;
   /** Id generator; defaults to `crypto.randomUUID`. */
@@ -242,8 +283,11 @@ export async function composeConvergence(
 
   // Scratch space for the 3-way `git merge-file` operands (base/ours/theirs).
   const tmpDir = await mkdtemp(path.join(tmpdir(), 'recoder-3way-'));
+  // Which files an LLM actually wrote (validated assisted syntheses) — recorded on
+  // the plan + provenance so the evidence trail NEVER hides a model-authored merge.
+  const assistedRecords: AssistedFileRecord[] = [];
   try {
-    // --- materialize each winning file (pick = copy, synthesize = 3-way) ------
+    // --- materialize each winning file (pick = copy, synthesize/assisted = 3-way) ---
     const synthConflicts: ConvergenceUnresolved[] = [];
     for (const file of plan.files) {
       if (!isSafeRelPath(file.path)) {
@@ -251,12 +295,13 @@ export async function composeConvergence(
       }
       const to = path.join(newWorktree, file.path);
 
-      if (file.mode === 'synthesize') {
+      if (file.mode === 'synthesize' || file.mode === 'assisted') {
         // The pristine worktree copy IS the base version (the worktree was created
         // off base and this path is not overwritten yet) — the 3-way common ancestor.
         const result = await synthesizeFile(deps, {
           basePath: to,
           relPath: file.path,
+          mode: file.mode,
           contributors: winnerSources(file),
           sourceWorktrees,
           tmpDir,
@@ -266,6 +311,7 @@ export async function composeConvergence(
           synthConflicts.push({ path: file.path, candidates: file.candidates, reason: 'synthesize-conflict' });
           continue;
         }
+        if (result.assisted) assistedRecords.push(result.assisted);
         await mkdir(path.dirname(to), { recursive: true });
         await writeFile(to, result.content);
         continue;
@@ -322,6 +368,10 @@ export async function composeConvergence(
   // --- register the composed workspace record (no agent launched) -------------
   const now = (deps.now ?? defaultNow)();
   const workspaceId = `ws_${(deps.newId ?? defaultId)()}`;
+  // The plan the caller gets back (and evidence serializes) carries the assisted
+  // record — `plan.files` iterates path-sorted, so the records are path-sorted too.
+  const finalPlan: ConvergencePlan =
+    assistedRecords.length > 0 ? { ...plan, assisted: assistedRecords } : plan;
   const provenance: ConvergenceProvenance = {
     fromTaskGroup: input.taskGroup,
     sourceCount: plan.sources.length,
@@ -333,6 +383,7 @@ export async function composeConvergence(
       ...(f.contributors ? { contributors: f.contributors } : {}),
       contested: f.contested,
     })),
+    ...(assistedRecords.length > 0 ? { assisted: assistedRecords } : {}),
   };
   const composed: Workspace = {
     ...primary,
@@ -365,7 +416,7 @@ export async function composeConvergence(
     base,
     taskGroup: input.taskGroup,
     fileCount: plan.files.length,
-    plan,
+    plan: finalPlan,
     workspace,
   };
 }
@@ -393,31 +444,211 @@ async function readOptional(filePath: string): Promise<string | null> {
   }
 }
 
+/** A synthesized file's outcome; `assisted` is set ONLY when an LLM wrote the content. */
+type SynthesisOutcome =
+  | { readonly clean: true; readonly content: string; readonly assisted?: AssistedFileRecord }
+  | { readonly clean: false };
+
 /**
  * LINE-LEVEL 3-way synthesis of a contested path across its contributors, against
  * the base (common ancestor). Folds pairwise in the given (workspaceId-sorted)
  * order: `running := contributor[0]`, then for each next contributor `running :=
  * merge-file(ours=running, base, theirs=next)`, base fixed as the ancestor. A clean
- * fold returns the merged content; ANY conflict (or a contributor that DELETED the
- * path — a delete/modify that cannot auto-merge) returns `{clean:false}` so the
- * caller flips the path to `synthesize-conflict`. Never throws for a merge conflict.
+ * fold returns the merged content. A CONFLICT: in `assisted` mode it escalates to a
+ * one-shot LLM synthesis ({@link assistSynthesis}); otherwise — and for a contributor
+ * that DELETED the path (a delete/modify with no version to fold OR prompt) — it
+ * returns `{clean:false}` so the caller flips the path to `synthesize-conflict`.
+ * Never throws for a merge conflict.
  */
 async function synthesizeFile(
   deps: ConvergeOpsDeps,
   args: {
     readonly basePath: string;
     readonly relPath: string;
+    readonly mode: 'synthesize' | 'assisted';
     readonly contributors: readonly string[];
     readonly sourceWorktrees: Map<string, string>;
     readonly tmpDir: string;
   },
-): Promise<{ clean: true; content: string } | { clean: false }> {
-  const { basePath, relPath, contributors, sourceWorktrees, tmpDir } = args;
+): Promise<SynthesisOutcome> {
+  const { basePath, relPath, mode, contributors, sourceWorktrees, tmpDir } = args;
   // Base = the pristine worktree copy; absent (added-by-both) ⇒ an empty ancestor.
   const baseContent = (await readOptional(basePath)) ?? '';
   const gathered = await gatherContributorVersions(sourceWorktrees, relPath, contributors);
   if (!gathered.ok) return { clean: false }; // missing contributor ⇒ delete/modify
-  return threeWayFold(deps, baseContent, gathered.versions, tmpDir);
+  const fold = await threeWayFold(deps, baseContent, gathered.versions, tmpDir);
+  if (fold.clean) return fold;
+  if (mode !== 'assisted') return { clean: false };
+  return assistSynthesis(deps, {
+    relPath,
+    baseContent,
+    contributors,
+    versions: gathered.versions,
+    conflictContent: fold.content,
+  });
+}
+
+/**
+ * One-shot LLM synthesis of a mechanically-unmergeable contested file. Asks the
+ * injected inference for a SINGLE complete merged file, then VALIDATES the reply
+ * (non-empty, marker-free, every line both sides agreed on outside the conflict
+ * regions still present) before trusting it. ANY failure — no inference wired,
+ * `routed:false`, unparsable/invalid output — returns `{clean:false}` so the caller
+ * falls back to the exact mechanical `synthesize-conflict` path (never a silent
+ * quality degrade, never a fabricated merge).
+ *
+ * WHY (prompt-injection posture): the model's output here is FILE CONTENT entering
+ * an ALREADY-reviewable composed workspace — the same trust level as agent-written
+ * code in a sibling worktree. It is never auto-merged: the composed branch still
+ * goes through review and the governed merge gate, and `plan.assisted` +
+ * provenance record exactly which files a model wrote.
+ */
+async function assistSynthesis(
+  deps: ConvergeOpsDeps,
+  args: {
+    readonly relPath: string;
+    readonly baseContent: string;
+    readonly contributors: readonly string[];
+    readonly versions: readonly string[];
+    readonly conflictContent?: string;
+  },
+): Promise<SynthesisOutcome> {
+  if (!deps.inference) return { clean: false }; // not wired ⇒ mechanical behavior
+  const regions = args.conflictContent != null ? parseConflictRegions(args.conflictContent) : [];
+  const prompt = buildAssistPrompt(args, regions);
+  const result = await deps.inference({
+    function_name: ASSIST_INFERENCE_FUNCTION,
+    input: { messages: [{ role: 'user', content: prompt }] },
+  });
+  if (!result.routed) {
+    deps.logger.warn(
+      { path: args.relPath, reason: result.reason },
+      'assisted synthesis unavailable — falling back to synthesize-conflict',
+    );
+    return { clean: false };
+  }
+  const merged = stripCodeFences(extractInferenceText(result.content));
+  if (!isValidAssistedMerge(merged, args.conflictContent)) {
+    deps.logger.warn(
+      { path: args.relPath, inferenceId: result.inference_id },
+      'assisted synthesis output failed validation — falling back to synthesize-conflict',
+    );
+    return { clean: false };
+  }
+  return {
+    clean: true,
+    content: merged,
+    assisted: {
+      path: args.relPath,
+      ...(result.inference_id ? { inference_id: result.inference_id } : {}),
+    },
+  };
+}
+
+/** Build the single-turn merge prompt: path, base, contributor versions, conflict regions. */
+function buildAssistPrompt(
+  args: {
+    readonly relPath: string;
+    readonly baseContent: string;
+    readonly contributors: readonly string[];
+    readonly versions: readonly string[];
+  },
+  regions: readonly ConflictRegion[],
+): string {
+  const parts: string[] = [
+    'You are merging divergent versions of one file produced by parallel coding agents.',
+    `File path: ${args.relPath}`,
+    'An automatic line-level 3-way merge of the versions below CONFLICTED. Produce the',
+    'single best merged file that preserves the INTENT of every version.',
+    '',
+    'Rules:',
+    '- Reply with the COMPLETE merged file content and NOTHING else.',
+    '- No conflict markers (<<<<<<< / ======= / >>>>>>>), no commentary, no code fences.',
+    '- Keep every line the versions agree on unchanged.',
+    '',
+    '--- BASE (common ancestor) ---',
+    args.baseContent,
+  ];
+  args.contributors.forEach((workspaceId, i) => {
+    parts.push(`--- VERSION from ${workspaceId} ---`, args.versions[i] ?? '');
+  });
+  if (regions.length > 0) {
+    parts.push('--- CONFLICTING REGIONS (from the failed automatic merge) ---');
+    for (const region of regions) {
+      parts.push(
+        `lines ${region.startLine}-${region.endLine}:`,
+        `  ours:   ${region.ours.join('\n          ')}`,
+        `  theirs: ${region.theirs.join('\n          ')}`,
+      );
+    }
+  }
+  return parts.join('\n');
+}
+
+/** Flatten a TensorZero `content` payload (string or text-block array) to plain text. */
+function extractInferenceText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((block) => {
+      if (typeof block === 'string') return block;
+      if (block && typeof block === 'object' && typeof (block as { text?: unknown }).text === 'string') {
+        return (block as { text: string }).text;
+      }
+      return '';
+    })
+    .join('');
+}
+
+/**
+ * Strip ONE wrapping markdown code fence (```lang … ```) when both the opening and
+ * closing fence are present — models add them despite instructions. Unfenced text
+ * passes through untouched; a non-empty result is normalized to end with a newline.
+ */
+function stripCodeFences(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return '';
+  let body = trimmed;
+  if (trimmed.startsWith('```')) {
+    const lines = trimmed.split('\n');
+    if (lines.length >= 2 && lines[lines.length - 1].trim() === '```') {
+      body = lines.slice(1, -1).join('\n');
+    }
+  }
+  return body.length > 0 && !body.endsWith('\n') ? `${body}\n` : body;
+}
+
+/**
+ * Cheap sanity gate over an assisted merge: non-empty, NO conflict markers, and
+ * every line both sides AGREED on (the non-region lines of the merged-with-markers
+ * fold output) still appears in the merged file — a model that dropped agreed
+ * content is rejected, not trusted.
+ */
+function isValidAssistedMerge(merged: string, conflictContent: string | undefined): boolean {
+  if (merged.trim().length === 0) return false;
+  const lines = merged.split('\n');
+  if (lines.some((line) => isOpenMarker(line) || isCloseMarker(line))) return false;
+  if (conflictContent == null) return true;
+  const mergedSet = new Set(lines);
+  return agreedLinesOutsideRegions(conflictContent).every((line) => mergedSet.has(line));
+}
+
+/** The non-region (both-sides-agreed) lines of merged-with-markers 3-way output. */
+function agreedLinesOutsideRegions(conflictContent: string): string[] {
+  const agreed: string[] = [];
+  let insideRegion = false;
+  for (const line of conflictContent.split('\n')) {
+    if (isOpenMarker(line)) {
+      insideRegion = true;
+      continue;
+    }
+    if (isCloseMarker(line)) {
+      insideRegion = false;
+      continue;
+    }
+    if (!insideRegion && line.length > 0) agreed.push(line);
+  }
+  return agreed;
 }
 
 /**

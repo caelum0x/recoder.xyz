@@ -8,12 +8,25 @@ import {
     WaveUIMessagePart,
 } from "@/app/aipanel/aitypes";
 import { FocusManager } from "@/app/store/focusManager";
-import { atoms, createBlock, getOrefMetaKeyAtom, getSettingsKeyAtom } from "@/app/store/global";
+import {
+    atoms,
+    createBlock,
+    getAllBlockComponentModels,
+    getOrefMetaKeyAtom,
+    getSettingsKeyAtom,
+} from "@/app/store/global";
 import { globalStore } from "@/app/store/jotaiStore";
 import { isBuilderWindow } from "@/app/store/windowtype";
 import * as WOS from "@/app/store/wos";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { getRecoderBackendUrl } from "@/app/view/recoder/recoder-endpoints";
+import {
+    shouldAttachWorkspaceContext,
+    workspaceContextAttachKey,
+    workspaceContextMessageText,
+    type WorkspaceAIContext,
+} from "@/app/view/recoder/recoder-waveai-context";
 import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 import { BuilderFocusManager } from "@/builder/store/builder-focusmanager";
 import { getWebServerEndpoint } from "@/util/endpoints";
@@ -31,6 +44,7 @@ import {
     validateFileSizeFromInfo,
 } from "./ai-utils";
 import type { AIPanelInputRef } from "./aipanelinput";
+import { fetchWorkspaceDiffFiles, gatherWorkspaceContext } from "./waveai-workspace-context";
 
 export interface DroppedFile {
     id: string;
@@ -96,6 +110,20 @@ export class WaveAIModel {
     >;
     restoreBackupStatus: jotai.PrimitiveAtom<"idle" | "processing" | "success" | "error"> = jotai.atom("idle");
     restoreBackupError: jotai.PrimitiveAtom<string> = jotai.atom(null) as jotai.PrimitiveAtom<string>;
+    // Candidate workspace-context block from the Recoder board's most-recently
+    // selected workspace; null = nothing to attach (no board / no selection).
+    workspaceContextAtom: jotai.PrimitiveAtom<WorkspaceAIContext> = jotai.atom(
+        null
+    ) as jotai.PrimitiveAtom<WorkspaceAIContext>;
+    // User clicked the indicator to detach — no context is sent while true.
+    workspaceContextDetachedAtom: jotai.PrimitiveAtom<boolean> = jotai.atom(false);
+    // The chatId::workspaceId key already attached (one attach per chat AND
+    // workspace — switching workspaces re-attaches once for the new one, so the
+    // indicator never promises a context that would not be sent).
+    workspaceContextAttachedKey: string = "";
+    // The last chatId a context refresh ran for (refresh-once-per-chat gate).
+    workspaceContextRefreshChatId: string = null;
+    workspaceContextRefreshing: boolean = false;
 
     private constructor(orefContext: ORef, inBuilder: boolean) {
         this.orefContext = orefContext;
@@ -343,9 +371,37 @@ export class WaveAIModel {
         if (!this.inBuilder && !WorkspaceLayoutModel.getInstance().getAIPanelVisible()) {
             WorkspaceLayoutModel.getInstance().setAIPanelVisible(true);
         }
+        void this.refreshWorkspaceContext();
         if (this.inputRef?.current) {
             this.inputRef.current.focus();
         }
+    }
+
+    // Refresh the candidate workspace-context block from the Recoder board
+    // (read-only: its most-recently-selected workspace + already-loaded read
+    // models, plus a one-shot per-file diff read). Degrade-safe: any failure
+    // clears the candidate — never a fabricated context. The in-flight guard
+    // keeps frequent focus events from stacking fetches.
+    async refreshWorkspaceContext() {
+        if (this.inBuilder || this.workspaceContextRefreshing) {
+            return;
+        }
+        this.workspaceContextRefreshing = true;
+        try {
+            const context = await gatherWorkspaceContext(getAllBlockComponentModels(), globalStore.get, (wsId) =>
+                fetchWorkspaceDiffFiles(getRecoderBackendUrl(), wsId, (input) => fetch(input))
+            );
+            globalStore.set(this.workspaceContextAtom, context);
+        } catch {
+            globalStore.set(this.workspaceContextAtom, null);
+        } finally {
+            this.workspaceContextRefreshing = false;
+        }
+    }
+
+    toggleWorkspaceContextDetached() {
+        const detached = globalStore.get(this.workspaceContextDetachedAtom);
+        globalStore.set(this.workspaceContextDetachedAtom, !detached);
     }
 
     async reloadChatFromBackend(chatIdValue: string): Promise<WaveUIMessage[]> {
@@ -525,8 +581,34 @@ export class WaveAIModel {
 
         this.clearError();
 
+        const chatIdValue = globalStore.get(this.chatId);
+        if (this.workspaceContextRefreshChatId != chatIdValue) {
+            this.workspaceContextRefreshChatId = chatIdValue;
+            await this.refreshWorkspaceContext();
+        }
+
         const aiMessageParts: AIMessagePart[] = [];
         const uiMessageParts: WaveUIMessagePart[] = [];
+
+        // Workspace context rides ONLY the real (backend) message as a labeled
+        // leading text part — once per conversation, never echoed into the UI
+        // transcript (the indicator strip is the visible truth).
+        const workspaceContext = globalStore.get(this.workspaceContextAtom);
+        const contextDetached = globalStore.get(this.workspaceContextDetachedAtom);
+        // Consume the attach slot only when a dispatcher exists — a hook-less
+        // send goes nowhere and must not burn the once-per-key attach.
+        if (
+            this.useChatSendMessage != null &&
+            shouldAttachWorkspaceContext(
+                this.workspaceContextAttachedKey,
+                chatIdValue,
+                contextDetached,
+                workspaceContext
+            )
+        ) {
+            aiMessageParts.push({ type: "text", text: workspaceContextMessageText(workspaceContext) });
+            this.workspaceContextAttachedKey = workspaceContextAttachKey(chatIdValue, workspaceContext);
+        }
 
         if (input.trim()) {
             aiMessageParts.push({ type: "text", text: input.trim() });

@@ -112,7 +112,7 @@ export {
   type EvidenceSignatureVerification,
 } from './evidence/evidence-signing.js';
 import type { ConvergencePlan } from './converge/converge-plan.service.js';
-export { SYNTHESIZE_SELECTION } from './converge/converge-plan.service.js';
+export { ASSISTED_SELECTION, SYNTHESIZE_SELECTION } from './converge/converge-plan.service.js';
 export type {
   ConvergencePlan,
   ConvergenceFileWinner,

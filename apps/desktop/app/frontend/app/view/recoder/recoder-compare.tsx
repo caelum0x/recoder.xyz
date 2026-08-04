@@ -1,8 +1,8 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useAtomValue } from "jotai";
-import { useEffect, useState } from "react";
+import { useAtom, useAtomValue } from "jotai";
+import { Fragment, useEffect, useState } from "react";
 import { agentLabel } from "./recoder-agent-labels";
 import {
     fetchPairwiseDiff,
@@ -13,6 +13,13 @@ import {
     type PairwiseView,
 } from "./recoder-compare-pairwise";
 import { ConvergePanel } from "./recoder-converge";
+import {
+    deriveCompareColumns,
+    headerPairSlot,
+    toggleSelection,
+    type CompareColumn,
+    type ConvergeSelection,
+} from "./recoder-converge-logic";
 import { buildConvergenceEvidence, saveConvergenceEvidence } from "./recoder-evidence";
 import {
     computePairwise,
@@ -177,10 +184,11 @@ function MergeVerdictLine({ record }: { record: RecoderMergeRecord }) {
 
 MergeVerdictLine.displayName = "MergeVerdictLine";
 
-type SiblingCompareRowProps = {
+type SiblingCompareColumnProps = {
     model: RecoderViewModel;
     sibling: SiblingCompareEntry;
     siblings: SiblingCompareEntry[];
+    column: CompareColumn;
     contested: ContestedFile[];
     taskGroup: string;
     readiness: ReadinessView;
@@ -191,12 +199,14 @@ type SiblingCompareRowProps = {
     pickedA: boolean;
     pickedB: boolean;
     suggestedReason: string;
+    onPickHeader: () => void;
 };
 
-function SiblingCompareRow({
+function SiblingCompareColumn({
     model,
     sibling,
     siblings,
+    column,
     contested,
     taskGroup,
     readiness,
@@ -207,8 +217,8 @@ function SiblingCompareRow({
     pickedA,
     pickedB,
     suggestedReason,
-}: SiblingCompareRowProps) {
-    const stat = sibling.diffStat;
+    onPickHeader,
+}: SiblingCompareColumnProps) {
     // Merged is authoritative server truth, not just this session's merge action:
     // after a restart or an out-of-band merge lastMerge is null, but the compare
     // feed reports state 'merged' and readiness reports verdict 'delivered'. Deriving
@@ -245,64 +255,65 @@ function SiblingCompareRow({
         saveConvergenceEvidence(evidence);
     };
     return (
-        <div className="flex flex-col gap-1 rounded border border-white/8 px-2 py-2 recoder-transition hover:bg-white/[0.04] hover:border-white/12">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <div className="flex items-center gap-1">
-                    <button
-                        className={pickedA ? PICK_BTN_ON : QUIET_BTN_XS}
-                        onClick={() => model.pickPair("A", sibling.workspaceId)}
-                        title={`Pick ${agentLabel(sibling.agent)} as A for the pairwise compare`}
-                    >
-                        A
-                    </button>
-                    <button
-                        className={pickedB ? PICK_BTN_ON : QUIET_BTN_XS}
-                        onClick={() => model.pickPair("B", sibling.workspaceId)}
-                        title={`Pick ${agentLabel(sibling.agent)} as B for the pairwise compare`}
-                    >
-                        B
-                    </button>
-                </div>
+        <div className="flex min-w-[16rem] flex-1 shrink-0 basis-64 flex-col gap-1 rounded border border-white/8 px-2 py-2 recoder-transition hover:bg-white/[0.04] hover:border-white/12">
+            <button
+                className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border px-1 py-0.5 text-left cursor-pointer recoder-transition ${
+                    pickedA || pickedB ? "border-accent/50 bg-accent/15" : "border-transparent hover:bg-white/[0.04]"
+                }`}
+                onClick={onPickHeader}
+                title={`Pick ${agentLabel(sibling.agent)} for the line-level A/B diff — click two column headers to load it`}
+            >
+                {(pickedA || pickedB) && <span className="text-xs text-accent">{pickedA ? "A" : "B"}</span>}
                 <span className="text-sm">{agentLabel(sibling.agent)}</span>
-                {suggestedReason != "" && (
-                    <span
-                        className="rounded border border-white/8 px-1.5 py-0.5 text-xs text-secondary"
-                        title={`Suggested by the loaded data (${suggestedReason}) — a non-binding hint. You still choose and click Merge.`}
-                    >
-                        suggested · {suggestedReason}
-                    </span>
-                )}
-                <span className={META}>{sibling.state}</span>
-                {stat != null ? (
+                <span className={META}>{column.state}</span>
+                {column.stat != null ? (
                     <span className={`${META} font-mono`}>
-                        +{stat.additions} −{stat.deletions} · {stat.files} file{stat.files == 1 ? "" : "s"}
+                        +{column.stat.additions} −{column.stat.deletions}
                     </span>
                 ) : (
-                    <span className={META}>{sibling.diffStatReason || "diff unavailable"}</span>
+                    <span className={META}>{column.statReason}</span>
                 )}
-                <div className="flex-1" />
-                {merged ? (
-                    <span
-                        className="rounded bg-accent/20 px-1.5 py-0.5 text-xs text-accent"
-                        title={`${agentLabel(sibling.agent)}'s branch ${sibling.branch} is merged — nothing left to merge`}
-                    >
-                        Merged
-                    </span>
-                ) : (
-                    <button
-                        className={QUIET_BTN_XS}
-                        disabled={busy}
-                        onClick={() => model.mergeWorkspace(sibling.workspaceId)}
-                        title={`Merge ${agentLabel(sibling.agent)}'s branch ${sibling.branch}`}
-                    >
-                        {busy ? "…" : "Merge this"}
-                    </button>
-                )}
-            </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <ReadinessBadge readiness={readiness} />
-                <MergeabilityBadge mergeability={mergeability} />
-            </div>
+            </button>
+            {suggestedReason != "" && (
+                <span
+                    className="self-start rounded border border-white/8 px-1.5 py-0.5 text-xs text-secondary"
+                    title={`Suggested by the loaded data (${suggestedReason}) — a non-binding hint. You still choose and click Merge.`}
+                >
+                    suggested · {suggestedReason}
+                </span>
+            )}
+            <ReadinessBadge readiness={readiness} />
+            <MergeabilityBadge mergeability={mergeability} />
+            {merged ? (
+                <span
+                    className="self-start rounded bg-accent/20 px-1.5 py-0.5 text-xs text-accent"
+                    title={`${agentLabel(sibling.agent)}'s branch ${sibling.branch} is merged — nothing left to merge`}
+                >
+                    Merged
+                </span>
+            ) : (
+                <button
+                    className={`self-start ${QUIET_BTN_XS}`}
+                    disabled={busy}
+                    onClick={() => model.mergeWorkspace(sibling.workspaceId)}
+                    title={`Merge ${agentLabel(sibling.agent)}'s branch ${sibling.branch}`}
+                >
+                    {busy ? "…" : "Merge this"}
+                </button>
+            )}
+            {column.filesReason != "" ? (
+                <span className={META}>{column.filesReason}</span>
+            ) : column.files.length == 0 ? (
+                <span className={META}>no changed files</span>
+            ) : (
+                <div className="flex max-h-48 flex-col gap-0.5 overflow-y-auto">
+                    {column.files.map((path) => (
+                        <span key={path} className="truncate font-mono text-xs text-secondary" title={path}>
+                            {path}
+                        </span>
+                    ))}
+                </div>
+            )}
             {mergeability != null &&
                 mergeability.available &&
                 mergeability.verdict == "conflicting" &&
@@ -365,32 +376,78 @@ function SiblingCompareRow({
     );
 }
 
-SiblingCompareRow.displayName = "SiblingCompareRow";
+SiblingCompareColumn.displayName = "SiblingCompareColumn";
 
-function ContestedSet({ compareView }: { compareView: CompareView }) {
+// The unified contested strip: one row per path 2+ agents touched, one cell per
+// sibling column. Clicking a sibling's cell picks its version as that file's
+// winner — building EXACTLY the converge selection map the ConvergePanel composes
+// from (one shared source of truth on the model). A sibling that never touched
+// the path renders an inert "—", never a pickable fabricated candidate.
+function ContestedStrip({
+    compareView,
+    selection,
+    onPick,
+}: {
+    compareView: CompareView;
+    selection: ConvergeSelection;
+    onPick: (path: string, workspaceId: string) => void;
+}) {
     const contested = compareView.contested ?? [];
-    const agentByWs = new Map(compareView.siblings.map((s) => [s.workspaceId, s.agent]));
+    const siblings = compareView.siblings;
     if (contested.length == 0) {
         return <div className={META}>No overlapping files across siblings — no contested set.</div>;
     }
     return (
         <div className="flex flex-col gap-1 rounded border border-white/8 px-2 py-2">
             <div className={FIELD_LABEL}>
-                Contested — {contested.length} file{contested.length == 1 ? "" : "s"} touched by 2+ agents
+                Contested — {contested.length} file{contested.length == 1 ? "" : "s"} touched by 2+ agents · click a
+                cell to pick that agent's version
             </div>
-            {contested.map((c) => (
-                <div key={c.path} className="flex flex-wrap items-center gap-x-2 text-sm">
-                    <span className="truncate font-mono">{c.path}</span>
-                    <span className={META}>
-                        {c.workspaceIds.map((id) => agentLabel(agentByWs.get(id) ?? id)).join(" · ")}
-                    </span>
+            <div className="overflow-x-auto">
+                <div
+                    className="grid items-center gap-x-2 gap-y-1"
+                    style={{ gridTemplateColumns: `minmax(12rem, 2fr) repeat(${siblings.length}, minmax(6rem, 1fr))` }}
+                >
+                    <span className={META}>file</span>
+                    {siblings.map((s) => (
+                        <span key={s.workspaceId} className={`${META} truncate`} title={agentLabel(s.agent)}>
+                            {agentLabel(s.agent)}
+                        </span>
+                    ))}
+                    {contested.map((c) => (
+                        <Fragment key={c.path}>
+                            <span className="truncate font-mono text-sm" title={c.path}>
+                                {c.path}
+                            </span>
+                            {siblings.map((s) => {
+                                if (!c.workspaceIds.includes(s.workspaceId)) {
+                                    return (
+                                        <span key={s.workspaceId} className={META}>
+                                            —
+                                        </span>
+                                    );
+                                }
+                                const picked = selection[c.path] == s.workspaceId;
+                                return (
+                                    <button
+                                        key={s.workspaceId}
+                                        className={`justify-self-start ${picked ? PICK_BTN_ON : QUIET_BTN_XS}`}
+                                        onClick={() => onPick(c.path, s.workspaceId)}
+                                        title={`Take ${agentLabel(s.agent)}'s version of ${c.path}`}
+                                    >
+                                        {picked ? "✓ winner" : "pick"}
+                                    </button>
+                                );
+                            })}
+                        </Fragment>
+                    ))}
                 </div>
-            ))}
+            </div>
         </div>
     );
 }
 
-ContestedSet.displayName = "ContestedSet";
+ContestedStrip.displayName = "ContestedStrip";
 
 function PairwiseStatLine({ label, stat, reason }: { label: string; stat: RecoderDiffSummary; reason: string }) {
     return (
@@ -558,6 +615,13 @@ function RecoderComparePanel({
     const lastMergeMap = useAtomValue(model.lastMergeAtom);
     const pairA = useAtomValue(model.pairAAtom);
     const pairB = useAtomValue(model.pairBAtom);
+    const [selection, setSelection] = useAtom(model.convergeSelectionAtom);
+    const taskGroup = compareView.taskGroup ?? "";
+    // A fresh open / a group switch always starts the winner selection clean so
+    // one group's picks can never leak into another group's converge compose.
+    useEffect(() => {
+        setSelection({});
+    }, [taskGroup]);
     const aEntry = compareView.siblings.find((s) => s.workspaceId == pairA);
     const bEntry = compareView.siblings.find((s) => s.workspaceId == pairB);
     const pair = aEntry != null && bEntry != null ? computePairwise(aEntry, bEntry, compareView.contested ?? []) : null;
@@ -572,40 +636,52 @@ function RecoderComparePanel({
             </div>
         );
     }
+    const columns = deriveCompareColumns(compareView.siblings);
+    const onPickWinner = (path: string, workspaceId: string) => {
+        setSelection((cur) => toggleSelection(cur, path, workspaceId));
+    };
     return (
         <div className="flex flex-col gap-1.5 rounded border border-white/8 p-2">
-            <ContestedSet compareView={compareView} />
+            <ContestedStrip compareView={compareView} selection={selection} onPick={onPickWinner} />
             {compareView.siblings.length >= 2 && (
                 <ConvergePanel
-                    taskGroup={compareView.taskGroup ?? ""}
+                    taskGroup={taskGroup}
                     contested={compareView.contested ?? []}
                     siblings={compareView.siblings}
+                    selection={selection}
+                    onSelectionChange={setSelection}
                     onReview={onReview}
                 />
             )}
-            {pair != null && <PairwisePanel pair={pair} taskGroup={compareView.taskGroup ?? ""} />}
-            <div className="flex flex-col gap-1">
-                {compareView.siblings.map((sibling) => {
-                    const merge = readinessMap[sibling.workspaceId];
-                    return (
-                        <SiblingCompareRow
-                            key={sibling.workspaceId}
-                            model={model}
-                            sibling={sibling}
-                            siblings={compareView.siblings}
-                            contested={compareView.contested ?? []}
-                            taskGroup={compareView.taskGroup ?? ""}
-                            readiness={merge?.readiness}
-                            mergeability={merge?.mergeability}
-                            status={rowStatus[sibling.workspaceId]}
-                            lastMerge={lastMergeMap[sibling.workspaceId]}
-                            busy={busyRow == sibling.workspaceId}
-                            pickedA={pairA == sibling.workspaceId}
-                            pickedB={pairB == sibling.workspaceId}
-                            suggestedReason={suggested?.workspaceId == sibling.workspaceId ? suggested.reason : ""}
-                        />
-                    );
-                })}
+            {pair != null && <PairwisePanel pair={pair} taskGroup={taskGroup} />}
+            <div className="overflow-x-auto">
+                <div className="flex gap-1">
+                    {compareView.siblings.map((sibling, i) => {
+                        const merge = readinessMap[sibling.workspaceId];
+                        return (
+                            <SiblingCompareColumn
+                                key={sibling.workspaceId}
+                                model={model}
+                                sibling={sibling}
+                                siblings={compareView.siblings}
+                                column={columns[i]}
+                                contested={compareView.contested ?? []}
+                                taskGroup={taskGroup}
+                                readiness={merge?.readiness}
+                                mergeability={merge?.mergeability}
+                                status={rowStatus[sibling.workspaceId]}
+                                lastMerge={lastMergeMap[sibling.workspaceId]}
+                                busy={busyRow == sibling.workspaceId}
+                                pickedA={pairA == sibling.workspaceId}
+                                pickedB={pairB == sibling.workspaceId}
+                                suggestedReason={suggested?.workspaceId == sibling.workspaceId ? suggested.reason : ""}
+                                onPickHeader={() =>
+                                    model.pickPair(headerPairSlot(pairA, pairB, sibling.workspaceId), sibling.workspaceId)
+                                }
+                            />
+                        );
+                    })}
+                </div>
             </div>
         </div>
     );

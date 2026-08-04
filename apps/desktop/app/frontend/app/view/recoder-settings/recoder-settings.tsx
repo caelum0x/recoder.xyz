@@ -1,16 +1,12 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { FIELD_LABEL, INPUT, PAGE_TITLE, PRIMARY_BTN, QUIET_BTN } from "@/app/view/recoder/recoder-styles";
 import { cn } from "@/util/util";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { DefaultRecoderBackend } from "../recoder/recoder-endpoints";
 import { ProviderKeyNames, RecoderSettingsViewModel } from "./recoder-settings-model";
-
-const PRIMARY_BTN =
-    "bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer";
-const QUIET_BTN =
-    "border border-border text-secondary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer";
 
 interface ProviderKeyRowProps {
     model: RecoderSettingsViewModel;
@@ -27,7 +23,7 @@ function ProviderKeyRow({ model, name }: ProviderKeyRowProps) {
         <div className="flex items-center gap-2">
             <span className="w-44 shrink-0 text-xs font-mono text-secondary">{name}</span>
             <input
-                className="flex-1 min-w-0 bg-panel text-primary border border-border rounded px-2 py-1 text-sm font-mono"
+                className={`${INPUT} flex-1 min-w-0 font-mono`}
                 type="password"
                 value={draft}
                 placeholder={isSet ? "•••••••• (saved)" : "not set"}
@@ -35,7 +31,7 @@ function ProviderKeyRow({ model, name }: ProviderKeyRowProps) {
                 autoComplete="off"
                 onChange={(e) => model.setProviderKeyDraft(name, e.target.value)}
             />
-            <button className={PRIMARY_BTN} disabled={draft.trim() == ""} onClick={() => model.saveProviderKey(name)}>
+            <button className={QUIET_BTN} disabled={draft.trim() == ""} onClick={() => model.saveProviderKey(name)}>
                 Save
             </button>
             {isSet && (
@@ -61,11 +57,11 @@ function RecoderSettingsView({ model }: ViewComponentProps<RecoderSettingsViewMo
 
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-3">
-            <span className="font-semibold">Recoder — Settings</span>
+            <span className={PAGE_TITLE}>Settings</span>
             <div className="flex flex-col gap-1">
-                <label className="text-xs uppercase tracking-wide text-secondary">Backend URL</label>
+                <label className={FIELD_LABEL}>Backend URL</label>
                 <input
-                    className="bg-panel text-primary border border-border rounded px-2 py-1 text-sm font-mono"
+                    className={`${INPUT} font-mono`}
                     value={url}
                     placeholder={DefaultRecoderBackend}
                     spellCheck={false}
@@ -116,7 +112,7 @@ function RecoderSettingsView({ model }: ViewComponentProps<RecoderSettingsViewMo
                 </div>
             )}
             <div className="flex flex-col gap-2 border-t border-border pt-3">
-                <label className="text-xs uppercase tracking-wide text-secondary">Provider keys</label>
+                <label className={FIELD_LABEL}>Provider keys</label>
                 {ProviderKeyNames.map((name) => (
                     <ProviderKeyRow key={name} model={model} name={name} />
                 ))}

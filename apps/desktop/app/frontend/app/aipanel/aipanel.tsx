@@ -26,6 +26,7 @@ import { AIPanelInput } from "./aipanelinput";
 import { AIPanelMessages } from "./aipanelmessages";
 import { AIRateLimitStrip } from "./airatelimitstrip";
 import { WaveUIMessage } from "./aitypes";
+import { AIWorkspaceContext } from "./aiworkspacecontext";
 import { BYOKAnnouncement } from "./byokannouncement";
 import { TelemetryRequiredMessage } from "./telemetryrequired";
 import { WaveAIModel } from "./waveai-model";
@@ -340,6 +341,12 @@ const AIPanelComponentInner = memo(({ roundTopLeft }: AIPanelComponentInnerProps
         model.ensureRateLimitSet();
     }, [model]);
 
+    useEffect(() => {
+        if (isPanelVisible) {
+            model.refreshWorkspaceContext();
+        }
+    }, [isPanelVisible, model]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         await model.handleSubmit();
@@ -593,6 +600,7 @@ const AIPanelComponentInner = memo(({ roundTopLeft }: AIPanelComponentInnerProps
                         )}
                         <AIErrorMessage />
                         <AIDroppedFiles model={model} />
+                        <AIWorkspaceContext />
                         <AIPanelInput onSubmit={handleSubmit} status={status} model={model} />
                     </>
                 )}

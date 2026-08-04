@@ -111,6 +111,20 @@ export interface EvidenceConvergence {
   readonly sourceCount: number;
   readonly fileCount: number;
   readonly selections: readonly EvidenceFileSelection[];
+  /**
+   * Files whose conflict regions a MODEL actually wrote (validated
+   * LLM-assisted synthesis) with the gateway inference id when reported —
+   * distinct from an `assisted`-mode selection that folded mechanically
+   * clean. ABSENT when no file needed the model; the evidence must never
+   * hide a model-authored merge.
+   */
+  readonly assisted?: readonly EvidenceAssistedFile[];
+}
+
+/** One model-written file in the convergence (mirrors converge `AssistedFileRecord`). */
+export interface EvidenceAssistedFile {
+  readonly path: string;
+  readonly inferenceId?: string;
 }
 
 /** The content-hashed, exportable convergence evidence record (the sealed artifact). */

@@ -90,6 +90,10 @@ import {
   isOpenfangRuntime,
 } from './adapters/runtime-substrate-selector.js';
 import { createCompletionHookSink } from './adapters/completion-hook.adapter.js';
+import {
+  createSiblingAwarenessSink,
+  stampSiblingAwareness,
+} from './adapters/sibling-awareness.adapter.js';
 import { readRepoPassages } from './adapters/repo-passages.adapter.js';
 import { resolveRepoDefaultBranch } from './git-default-branch.js';
 import { toLoggerPort } from './adapters/logger.adapter.js';
@@ -298,10 +302,33 @@ import type {
 export type CreateConductorWorkspaceInput = Omit<
   CreateWorkspaceInput,
   'createdBy'
->;
+> & {
+  /**
+   * Mid-run sibling awareness opt-out (recoder-i499). Defaults TRUE for a
+   * taskGroup launch (informing still-running siblings when one finishes is the
+   * point of launching 2+ parallel agents) and unset otherwise; an explicit
+   * `false` opts the workspace out. Persisted as `metadata.siblingAwareness` so
+   * the completion-time hook can check it.
+   */
+  readonly siblingAwareness?: boolean;
+};
 
 /** How many trailing terminal lines the attention probe captures. */
 const ATTENTION_TAIL_LINES = 60;
+
+/**
+ * The fixed internal identity sibling-awareness steers run under (recoder-i499).
+ * A service principal (never a request credential) so the mid-run note delivery
+ * clears the SAME governed `workspace.steer` path an operator uses — every
+ * delivery is gated + audited, and a policy deny is a truthful skip.
+ */
+const SIBLING_AWARENESS_PRINCIPAL: Principal = {
+  userId: 'internal-service',
+  scopes: ['internal', 'read', 'write'],
+  kind: 'internal',
+  isAnonymous: false,
+  raw: { kind: 'conductor-sibling-awareness' },
+};
 
 /**
  * The outcome of a governed conductor write. `ok` reflects whether the action was
@@ -630,7 +657,7 @@ export class ConductorComposer implements ConductorModule {
     // HARVESTS an evidence-backed memory candidate (brain) and CLOSES/NOTES the bd
     // issue (code-intel). Both are fire-and-forget + degrade-safe — a memory/beads
     // fault NEVER rethrows into the terminal-event path or stalls the live stream.
-    const sink = createCompletionHookSink({
+    const completionSink = createCompletionHookSink({
       inner: fannedSink,
       ...(this.brain ? { brain: this.brain } : {}),
       ...(this.codeIntel ? { codeIntel: this.codeIntel } : {}),
@@ -646,6 +673,22 @@ export class ConductorComposer implements ConductorModule {
       // composed (setMetrics). Unwired ⇒ a truthful no-op (no series recorded).
       getMetrics: () => this.metrics,
       getWorkspace: id => this.repository.getWorkspace(id),
+      logger: this.log,
+    });
+    // Mid-run sibling awareness (recoder-i499): the OUTERMOST terminal-event
+    // decorator. When one taskGroup sibling finishes, every still-RUNNING sibling
+    // gets a terse paths+stats note steered into its live session through the
+    // SAME governed steer path (internal principal ⇒ gated + audited), plus a
+    // `log` evidence event (`data.kind: sibling_context_delivered`) on the
+    // receiver. Fire-and-forget + per-sibling degrade-safe — a failed delivery
+    // NEVER touches the terminal path. Late-bound reads: the closures resolve
+    // `this.engine`/`this.steerTransport` per event, after construction.
+    const sink = createSiblingAwarenessSink({
+      inner: completionSink,
+      getWorkspace: id => this.repository.getWorkspace(id),
+      // Principal-less ⇒ the FULL group (an internal read, like merge evidence).
+      siblings: id => this.workspaceSiblings(id),
+      steer: input => this.steerWorkspace(input, SIBLING_AWARENESS_PRINCIPAL),
       logger: this.log,
     });
     // Path (b) token accounting: late-bind the completion-hook sink into the
@@ -1165,8 +1208,15 @@ export class ConductorComposer implements ConductorModule {
         launchEnv.RECODER_ACP_AGENT = acpBinaryForRuntime(runtimeId);
       const hasEnv = Object.keys(launchEnv).length > 0;
 
+      // Persist the sibling-awareness flag on the workspace metadata (default
+      // TRUE for a taskGroup launch, explicit `false` opts out, ungrouped stays
+      // byte-identical) so the completion-time hook can check it. The domain-only
+      // `siblingAwareness` field is stripped before the engine input.
+      const { siblingAwareness, ...engineInput } = input;
+      const metadata = stampSiblingAwareness(input.metadata, siblingAwareness);
       const workspace = await this.engine.createWorkspace({
-        ...input,
+        ...engineInput,
+        ...(metadata ? { metadata } : {}),
         ...(baseRef !== undefined ? { baseRef } : {}),
         substrate,
         ...(command !== undefined ? { command } : {}),
@@ -3177,9 +3227,24 @@ export class ConductorComposer implements ConductorModule {
     const raw = (workspace?.metadata as Record<string, unknown> | undefined)
       ?.convergence;
     if (!raw || typeof raw !== 'object') return undefined;
-    const value = raw as Partial<EvidenceConvergence>;
+    const value = raw as Partial<EvidenceConvergence> & {
+      assisted?: readonly { path?: unknown; inference_id?: unknown }[];
+    };
     if (!Array.isArray(value.selections) || typeof value.fileCount !== 'number')
       return undefined;
+    // The ops layer stamps model-written files as `assisted` (snake_case
+    // inference_id from the gateway) — carry them into the sealed evidence;
+    // dropping them here would hide a model-authored merge from the audit.
+    const assisted = Array.isArray(value.assisted)
+      ? value.assisted
+          .filter((a) => typeof a?.path === 'string')
+          .map((a) => ({
+            path: a.path as string,
+            ...(typeof a.inference_id === 'string'
+              ? { inferenceId: a.inference_id }
+              : {}),
+          }))
+      : [];
     return {
       fromTaskGroup:
         typeof value.fromTaskGroup === 'string' ? value.fromTaskGroup : null,
@@ -3187,6 +3252,7 @@ export class ConductorComposer implements ConductorModule {
         typeof value.sourceCount === 'number' ? value.sourceCount : 0,
       fileCount: value.fileCount,
       selections: value.selections,
+      ...(assisted.length > 0 ? { assisted } : {}),
     };
   }
 

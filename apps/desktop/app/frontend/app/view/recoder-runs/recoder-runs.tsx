@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { RecoderEmpty, RecoderErrorRow, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
+import { FIELD_LABEL, PAGE_TITLE } from "@/app/view/recoder/recoder-styles";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
@@ -74,16 +75,11 @@ function RunRow({ run, correlated, selected, drift, onSelect, onSession, onRevie
             }}
             className={cn(
                 "flex items-center gap-2 rounded border px-2 py-1 cursor-pointer recoder-transition",
-                selected ? "border-accent/60 bg-accent/10" : "border-border hover:bg-white/[0.03]",
+                selected ? "border-accent/60 bg-accent/10" : "border-border hover:bg-white/[0.03]"
             )}
             title={`${run.runId} · ${run.taskId}`}
         >
-            <span
-                className={cn(
-                    "rounded border px-1.5 py-0.5 text-xs whitespace-nowrap",
-                    stateBadgeClass(run.state),
-                )}
-            >
+            <span className={cn("rounded border px-1.5 py-0.5 text-xs whitespace-nowrap", stateBadgeClass(run.state))}>
                 {run.state}
             </span>
             <span className="text-sm truncate">{runLabel(run)}</span>
@@ -96,9 +92,7 @@ function RunRow({ run, correlated, selected, drift, onSelect, onSession, onRevie
                     {driftLabel(drift[0].kind)}
                 </span>
             )}
-            {run.assigneeAgentId && (
-                <span className="text-xs text-secondary truncate">{run.assigneeAgentId}</span>
-            )}
+            {run.assigneeAgentId && <span className="text-xs text-secondary truncate">{run.assigneeAgentId}</span>}
             <span className="text-xs text-secondary ml-auto whitespace-nowrap">{shortTime(run.updatedAt)}</span>
             {correlated ? (
                 <span className="flex items-center gap-1 whitespace-nowrap">
@@ -165,14 +159,22 @@ const SELECTED_EMPTY: Partial<Record<SelectedRunStatus, { title: string; hint: s
     },
 };
 
-function SelectedRunPanel({ status, events, label }: { status: SelectedRunStatus; events: RecoderRunEvent[]; label: string }) {
+function SelectedRunPanel({
+    status,
+    events,
+    label,
+}: {
+    status: SelectedRunStatus;
+    events: RecoderRunEvent[];
+    label: string;
+}) {
     if (status == "idle") {
         return null;
     }
     const empty = SELECTED_EMPTY[status];
     return (
         <div className="flex flex-col gap-1">
-            <div className="text-xs uppercase tracking-wide text-secondary">Run events · {label}</div>
+            <div className={FIELD_LABEL}>Run events · {label}</div>
             {status == "loading" && <RecoderSkeleton rows={3} />}
             {empty != null && <RecoderEmpty title={empty.title} hint={empty.hint} />}
             {status == "ready" && (
@@ -215,7 +217,7 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-3">
             <div className="flex items-center gap-2">
-                <span className="font-semibold">Recoder - Runs</span>
+                <span className={PAGE_TITLE}>Runs</span>
             </div>
             <RecoderErrorRow message={error} />
             {loading && runs.length == 0 && events.length == 0 && <RecoderSkeleton rows={4} />}
@@ -227,7 +229,7 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
             )}
             {connected && drift.length > 0 && (
                 <div className="flex flex-col gap-1">
-                    <div className="text-xs uppercase tracking-wide text-secondary">Drift</div>
+                    <div className={FIELD_LABEL}>Drift</div>
                     <div className="flex flex-col gap-0.5">
                         {drift.map((finding) => (
                             <DriftLine key={finding.findingId} finding={finding} />
@@ -237,7 +239,7 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
             )}
             {connected && (
                 <div className="flex flex-col gap-1">
-                    <div className="text-xs uppercase tracking-wide text-secondary">Runs</div>
+                    <div className={FIELD_LABEL}>Runs</div>
                     {showEmptyRuns && (
                         <RecoderEmpty
                             title="No runs yet"
@@ -263,7 +265,7 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
             )}
             {connected && events.length > 0 && (
                 <div className="flex flex-col gap-1">
-                    <div className="text-xs uppercase tracking-wide text-secondary">Recent events</div>
+                    <div className={FIELD_LABEL}>Recent events</div>
                     <div className="flex flex-col gap-0.5">
                         {events.map((event) => (
                             <EventLine key={event.eventId} event={event} />

@@ -330,6 +330,13 @@ class RecoderViewModel implements ViewModel {
     // the open panel; "" ⇒ that slot is unpicked. Reset whenever the panel toggles.
     pairAAtom: PrimitiveAtom<string>;
     pairBAtom: PrimitiveAtom<string>;
+    // The shared per-contested-file winner selection (path → winning workspaceId,
+    // or the converge "@synthesize" sentinel) — EXACTLY the converge compose input
+    // shape (ConvergeSelection). ONE source of truth read and edited by BOTH the
+    // compare panel's contested strip and the ConvergePanel; the compare panel
+    // clears it whenever the compared group changes so picks never bleed across
+    // groups. An absent path is deliberately unresolved, never a defaulted winner.
+    convergeSelectionAtom: PrimitiveAtom<Record<string, string>>;
     // Merge-decision views (readiness + mergeability) keyed by workspaceId; each
     // side absent ⇒ that probe degraded, never a fabricated verdict.
     readinessAtom: PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
@@ -432,6 +439,7 @@ class RecoderViewModel implements ViewModel {
         this.compareOpenAtom = atom("") as PrimitiveAtom<string>;
         this.pairAAtom = atom("") as PrimitiveAtom<string>;
         this.pairBAtom = atom("") as PrimitiveAtom<string>;
+        this.convergeSelectionAtom = atom({}) as PrimitiveAtom<Record<string, string>>;
         this.readinessAtom = atom({}) as PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
         this.lastMergeAtom = atom({}) as PrimitiveAtom<Record<string, RecoderMergeRecord>>;
         this.selectedWorkspaceIdAtom = atom("") as PrimitiveAtom<string>;

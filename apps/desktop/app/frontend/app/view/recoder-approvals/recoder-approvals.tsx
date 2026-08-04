@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { RecoderEmpty, RecoderErrorRow, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
+import { PAGE_TITLE, PRIMARY_BTN, QUIET_BTN, STATE_CHIP } from "@/app/view/recoder/recoder-styles";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { RecoderApproval, RecoderApprovalsViewModel } from "./recoder-approvals-model";
@@ -32,7 +33,7 @@ function RecoderApprovalsView({ model }: ViewComponentProps<RecoderApprovalsView
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
-                <span className="font-semibold">Recoder - Approvals</span>
+                <span className={PAGE_TITLE}>Approvals</span>
             </div>
             <RecoderErrorRow message={error} />
             <RecoderErrorRow message={actionError} />
@@ -51,11 +52,7 @@ function RecoderApprovalsView({ model }: ViewComponentProps<RecoderApprovalsView
                     const action = a.action || "";
                     const busy = acting == a.id;
                     return (
-                        <div
-                            key={a.id}
-                            className="flex flex-col gap-2 rounded border border-border p-3"
-                            title={a.id}
-                        >
+                        <div key={a.id} className="flex flex-col gap-2 rounded border border-border p-3" title={a.id}>
                             <div className="flex flex-col gap-0.5">
                                 <div className="text-sm font-medium">{a.reason || "Approval requested"}</div>
                                 {action != "" && (
@@ -63,21 +60,21 @@ function RecoderApprovalsView({ model }: ViewComponentProps<RecoderApprovalsView
                                 )}
                             </div>
                             <div className="flex items-center gap-2 text-xs text-secondary flex-wrap">
-                                <span className="rounded bg-border/60 px-1.5 py-0.5">{riskLabel(a)}</span>
+                                <span className={STATE_CHIP}>{riskLabel(a)}</span>
                                 <span>by {a.requestedBy || "unknown"}</span>
                                 <span className="ml-auto font-mono truncate">{a.taskId}</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
                                     disabled={busy}
-                                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
+                                    className={PRIMARY_BTN}
                                     onClick={() => model.decide(a.id, "approve")}
                                 >
                                     {busy ? "…" : "Approve"}
                                 </button>
                                 <button
                                     disabled={busy}
-                                    className="border border-border text-primary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer disabled:opacity-50"
+                                    className={QUIET_BTN}
                                     onClick={() => model.decide(a.id, "reject")}
                                 >
                                     {busy ? "…" : "Reject"}

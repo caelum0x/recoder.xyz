@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createBlock } from "@/app/store/global";
+import { RecoderEmpty, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
+import { FIELD_LABEL, PAGE_TITLE, QUIET_BTN, STATE_CHIP } from "@/app/view/recoder/recoder-styles";
+import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { BoardStatus, RecoderBoardViewModel } from "./recoder-board-model";
@@ -48,10 +51,10 @@ function RecoderBoardView({ model }: ViewComponentProps<RecoderBoardViewModel>) 
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
-                <span className="font-semibold">Recoder — Board</span>
+                <span className={PAGE_TITLE}>Board</span>
             </div>
-            {loading && issues.length == 0 && <div className="text-secondary text-sm">Loading…</div>}
-            {showNote && <div className="text-secondary text-sm">{note}</div>}
+            {loading && issues.length == 0 && <RecoderSkeleton rows={3} />}
+            {showNote && <RecoderEmpty title={note} />}
             <div className="flex flex-col gap-1">
                 {issues.map((issue) => (
                     <div
@@ -59,19 +62,12 @@ function RecoderBoardView({ model }: ViewComponentProps<RecoderBoardViewModel>) 
                         className="flex items-center gap-2 rounded border border-border px-2 py-1"
                         title={`${issue.id}${issue.priority != "" ? ` · ${issue.priority}` : ""}`}
                     >
-                        {issue.priority != "" && (
-                            <span className="text-xs text-secondary rounded bg-border/60 px-1.5 py-0.5 shrink-0">
-                                {issue.priority}
-                            </span>
-                        )}
+                        {issue.priority != "" && <span className={`${STATE_CHIP} shrink-0`}>{issue.priority}</span>}
                         <span className="text-sm truncate">{issue.title}</span>
                         {issue.id != "" && (
                             <span className="text-xs text-secondary font-mono ml-auto shrink-0">{issue.id}</span>
                         )}
-                        <button
-                            className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer shrink-0"
-                            onClick={() => pickUpIssue(issue.title)}
-                        >
+                        <button className={`${QUIET_BTN} shrink-0`} onClick={() => pickUpIssue(issue.title)}>
                             Pick up
                         </button>
                     </div>
@@ -79,18 +75,22 @@ function RecoderBoardView({ model }: ViewComponentProps<RecoderBoardViewModel>) 
             </div>
             {signals.length > 0 && (
                 <div className="flex flex-col gap-1 mt-1">
-                    <div className="text-xs uppercase tracking-wide text-secondary">Handed-off work (stuck / blocked)</div>
+                    <div className={FIELD_LABEL}>Handed-off work (stuck / blocked)</div>
                     {signals.map((sig, i) => (
                         <div
                             key={`${sig.workspaceId}-${i}`}
                             className="flex items-center gap-2 rounded border border-border px-2 py-1"
                             title={`${sig.workspaceId}${sig.when != "" ? ` · ${sig.when}` : ""}`}
                         >
-                            <span className="text-xs text-error rounded bg-border/60 px-1.5 py-0.5 shrink-0">{sig.kind}</span>
+                            <span className={cn(STATE_CHIP, "shrink-0 text-error")}>{sig.kind}</span>
                             <span className="text-sm truncate">{sig.detail != "" ? sig.detail : sig.workspaceId}</span>
                             <button
-                                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer shrink-0 ml-auto"
-                                onClick={() => pickUpIssue(sig.detail != "" ? sig.detail : `Pick up stuck work from ${sig.workspaceId}`)}
+                                className={`${QUIET_BTN} shrink-0 ml-auto`}
+                                onClick={() =>
+                                    pickUpIssue(
+                                        sig.detail != "" ? sig.detail : `Pick up stuck work from ${sig.workspaceId}`
+                                    )
+                                }
                             >
                                 Pick up
                             </button>

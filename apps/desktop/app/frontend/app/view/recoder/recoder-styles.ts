@@ -38,6 +38,8 @@ const SKELETON_ROW = "h-7 rounded border border-white/8 bg-border/20 animate-pul
 const ATTN_BADGE =
     "rounded border border-amber-400/40 bg-amber-400/15 text-amber-300 px-1.5 py-0.5 text-xs whitespace-nowrap";
 
+const STATE_CHIP = "rounded border border-white/8 px-1.5 py-0.5 text-xs text-secondary whitespace-nowrap";
+
 const PAGE_TITLE = "text-sm font-medium tracking-tight text-primary";
 const SECTION_TITLE = "text-sm font-medium tracking-tight text-primary";
 const FIELD_LABEL = "text-xs uppercase tracking-wide text-secondary";
@@ -61,4 +63,5 @@ export {
     SAVE_BTN,
     SECTION_TITLE,
     SKELETON_ROW,
+    STATE_CHIP,
 };

@@ -13,6 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   planConvergence,
+  ASSISTED_SELECTION,
   SYNTHESIZE_SELECTION,
   type ContestedProbe,
   type ConvergencePlan,
@@ -84,6 +85,31 @@ describe('planConvergence', () => {
     expect(shared?.sourceWorkspaceId).toBeUndefined();
     // The pure fold is OPTIMISTIC — it does no git; the ops layer proves cleanliness.
     expect(plan.complete).toBe(true);
+  });
+
+  it('resolves a contested path to ASSISTED (optimistic) when the assisted sentinel is selected', () => {
+    const plan = planConvergence(input({ selection: { 'src/shared.ts': ASSISTED_SELECTION } }));
+    const shared = plan.files.find((f) => f.path === 'src/shared.ts');
+    expect(shared).toEqual({
+      path: 'src/shared.ts',
+      mode: 'assisted',
+      contributors: ['ws-a', 'ws-b'],
+      contested: true,
+      candidates: ['ws-a', 'ws-b'],
+    });
+    expect(shared?.sourceWorkspaceId).toBeUndefined();
+    // Same optimism as synthesize — the ops layer proves cleanliness (LLM incl.).
+    expect(plan.complete).toBe(true);
+    // The PURE fold never records an assisted result — that is compose's job.
+    expect(plan.assisted).toBeUndefined();
+  });
+
+  it('an assisted file tallies EVERY contributor in sources (like synthesize)', () => {
+    const plan = planConvergence(input({ selection: { 'src/shared.ts': ASSISTED_SELECTION } }));
+    expect(plan.sources).toEqual([
+      { workspaceId: 'ws-a', agent: 'claude_code', fileCount: 2 }, // a.ts + shared.ts
+      { workspaceId: 'ws-b', agent: 'claude_code', fileCount: 2 }, // b.ts + shared.ts
+    ]);
   });
 
   it('non-contested paths are always pick (the sentinel only applies to contested)', () => {

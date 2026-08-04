@@ -48,16 +48,30 @@ export interface ConvergencePlanSiblingInput {
  */
 export const SYNTHESIZE_SELECTION = '@synthesize' as const;
 
-/** How a contested path's winner is produced: a whole-file `pick` or a 3-way `synthesize`. */
-export type ConvergenceMode = 'pick' | 'synthesize';
+/**
+ * The reserved selection VALUE that requests an LLM-ASSISTED synthesis of a
+ * contested path: the mechanical 3-way runs first, and ONLY a conflicting fold is
+ * escalated to a one-shot inference (the ops layer runs it; the fold stays pure).
+ * Same `@`-prefix collision guarantee as {@link SYNTHESIZE_SELECTION}. Explicit
+ * opt-in PER FILE — never a silent default.
+ */
+export const ASSISTED_SELECTION = '@assisted' as const;
+
+/**
+ * How a contested path's winner is produced: a whole-file `pick`, an automatic
+ * 3-way `synthesize`, or an `assisted` synthesize (3-way first, LLM on conflict).
+ */
+export type ConvergenceMode = 'pick' | 'synthesize' | 'assisted';
 
 /** The read-only inputs the pure plan folds over. */
 export interface ConvergencePlanInput {
   readonly taskGroup: string | null;
   readonly siblings: readonly ConvergencePlanSiblingInput[];
   /**
-   * Contested path → either a chosen sibling workspaceId (`pick`) or the
-   * {@link SYNTHESIZE_SELECTION} sentinel (`synthesize`). Non-contested paths ignore this.
+   * Contested path → either a chosen sibling workspaceId (`pick`), the
+   * {@link SYNTHESIZE_SELECTION} sentinel (`synthesize`), or the
+   * {@link ASSISTED_SELECTION} sentinel (`assisted`). Non-contested paths ignore
+   * this. Backward compatible: existing pick/synthesize values are unchanged.
    */
   readonly selection: Readonly<Record<string, string>>;
 }
@@ -65,11 +79,11 @@ export interface ConvergencePlanInput {
 /** A resolved winning file in the plan: how its content will be materialized. */
 export interface ConvergenceFileWinner {
   readonly path: string;
-  /** `pick` (a sibling's whole file) or `synthesize` (an automatic 3-way merge). */
+  /** `pick` (a sibling's whole file), `synthesize` (automatic 3-way), or `assisted`. */
   readonly mode: ConvergenceMode;
-  /** For `pick`: the workspaceId whose whole file wins. ABSENT for `synthesize`. */
+  /** For `pick`: the workspaceId whose whole file wins. ABSENT for `synthesize`/`assisted`. */
   readonly sourceWorkspaceId?: string;
-  /** For `synthesize`: the sibling ids whose versions are 3-way merged (sorted). ABSENT for `pick`. */
+  /** For `synthesize`/`assisted`: the sibling ids whose versions merge (sorted). ABSENT for `pick`. */
   readonly contributors?: readonly string[];
   /** True when 2+ siblings authored this path (the winner came from the selection). */
   readonly contested: boolean;
@@ -139,6 +153,18 @@ export interface ContestedProbe {
   readonly regions?: readonly ConflictRegion[];
 }
 
+/**
+ * One file whose conflicting regions were resolved by an LLM-assisted synthesis —
+ * recorded by the OPS layer (never the pure fold) so the plan, and the evidence
+ * emission that serializes it, truthfully carry WHICH files a model wrote and
+ * under WHICH inference id. NEVER a silent quality degrade.
+ */
+export interface AssistedFileRecord {
+  readonly path: string;
+  /** The gateway inference id (observability linkage), when the gateway reported one. */
+  readonly inference_id?: string;
+}
+
 /** The folded convergence plan (`GET …/converge-plan`) — the compose blueprint. */
 export interface ConvergencePlan {
   readonly taskGroup: string | null;
@@ -160,6 +186,12 @@ export interface ConvergencePlan {
    * callers/tests read only files/unresolved/sources/changedFiles/complete).
    */
   readonly contested?: readonly ContestedProbe[];
+  /**
+   * OPTIONAL: files whose conflicts an LLM resolved during compose — attached by
+   * the OPS layer ONLY after a validated assisted synthesis (the pure fold never
+   * sets it). Absent ⇒ no model wrote any content. Additive for existing readers.
+   */
+  readonly assisted?: readonly AssistedFileRecord[];
 }
 
 /** Build the per-path authorship map (path → set of authoring workspaceIds), degrade-truthful. */
@@ -202,10 +234,12 @@ export function planConvergence(input: ConvergencePlanInput): ConvergencePlan {
     }
     // Contested: the caller must select a real author (pick) or request a synthesize.
     const chosen = input.selection[path];
-    if (chosen === SYNTHESIZE_SELECTION) {
-      // OPTIMISTIC: the pure fold records the requested 3-way; the ops layer runs it
-      // and flips this to `synthesize-conflict` if the merge does not come out clean.
-      files.push({ path, mode: 'synthesize', contributors: candidates, contested: true, candidates });
+    if (chosen === SYNTHESIZE_SELECTION || chosen === ASSISTED_SELECTION) {
+      // OPTIMISTIC: the pure fold records the requested mode; the ops layer runs the
+      // 3-way (+ LLM escalation for `assisted`) and flips this to
+      // `synthesize-conflict` if the merge does not come out clean.
+      const mode: ConvergenceMode = chosen === ASSISTED_SELECTION ? 'assisted' : 'synthesize';
+      files.push({ path, mode, contributors: candidates, contested: true, candidates });
     } else if (!chosen) {
       unresolved.push({ path, candidates, reason: 'no-selection' });
     } else if (!authorSet.has(chosen)) {
@@ -240,7 +274,9 @@ export function planConvergence(input: ConvergencePlanInput): ConvergencePlan {
  * ops layer) to know which worktrees a file must materialize from.
  */
 export function winnerSources(file: ConvergenceFileWinner): readonly string[] {
-  if (file.mode === 'synthesize') return file.contributors ?? file.candidates;
+  if (file.mode === 'synthesize' || file.mode === 'assisted') {
+    return file.contributors ?? file.candidates;
+  }
   return file.sourceWorkspaceId ? [file.sourceWorkspaceId] : [];
 }
 
