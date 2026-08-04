@@ -52,6 +52,10 @@ import {
   type WorkflowDefinitionStore,
 } from './services/workflow.service.js';
 import { PostgresWorkflowDefinitionStore } from './adapters/postgres-workflow-definition.store.js';
+import {
+  tryCreateSqliteWorkflowDefinitionStore,
+  type SqliteWorkflowDefinitionStore,
+} from './adapters/sqlite-workflow-definition.store.js';
 import { AgentOsWorkflowRunnerDriver } from './adapters/agent-os-workflow-runner.driver.js';
 import { createBrowserCheckWorkflowHandler } from './adapters/browser-check-workflow.handler.js';
 import { createNativeWorkflowHandler } from '@recoder/agent-workflows';
@@ -76,6 +80,9 @@ export class AgentOsComposer implements AgentOsModule {
   private readonly repo: AgentOsRepositoryPort;
   /** The sqlite handle this composer opened itself (null when injected/other). */
   private readonly ownedSqlite: SqliteAgentOsRepository | null;
+  /** The sqlite workflow-definition handle this composer opened (null otherwise) —
+   * a SEPARATE better-sqlite3 connection that must be closed symmetrically. */
+  private readonly ownedWorkflowSqlite: SqliteWorkflowDefinitionStore | null;
   private readonly effectiveDriver: AgentOsRepositoryDriver;
   private readonly executor: QueryExecutor | null;
   private readonly outboxPublisher: OutboxPublisherPort & { close?(): Promise<void> };
@@ -216,19 +223,31 @@ export class AgentOsComposer implements AgentOsModule {
         : null;
 
     // Workflow-definition CRUD + dispatch. Definitions persist through the
-    // DURABLE pg store when the effective repository driver is postgres (they
-    // survive restart); else the in-memory store (no-DB degrade / tests), behind
-    // the same seam. Dispatch runs a stored definition through a `WorkflowDriver`:
+    // DURABLE pg store when the effective repository driver is postgres, else the
+    // DURABLE embedded sqlite store on the SAME state-of-record file when the
+    // sqlite driver is active (DB-less desktop — they survive restart, closing
+    // the durability gap where solo-mode definitions were lost on every restart);
+    // else the in-memory store (no-DB degrade / tests), behind the same seam. An
+    // unopenable sqlite file degrades to in-memory with a truthful warn — never a
+    // faked durable driver. Dispatch runs a stored definition through a
+    // `WorkflowDriver`:
     // an injected driver wins (tests / explicit composition); else the default
     // `AgentOsWorkflowRunnerDriver` — which SKINS the frozen
     // `@recoder/agent-workflows` runner, so dispatch executes truthfully (nodes
     // without a handler surface a `failed`/`waiting` run) instead of the legacy
     // permanent `not_configured`. Bootstrap may inject a richer driver (real node
     // handler ports) behind this same seam.
+    // Capture the sqlite variant so stop() can close its handle symmetrically
+    // with ownedSqlite (an unopenable file degrades to in-memory, nothing owned).
+    const sqliteWorkflowStore =
+      this.effectiveDriver === 'sqlite' && cfg.sqlitePath
+        ? tryCreateSqliteWorkflowDefinitionStore(cfg.sqlitePath, this.log)
+        : null;
+    this.ownedWorkflowSqlite = sqliteWorkflowStore;
     const workflowStore: WorkflowDefinitionStore =
       this.effectiveDriver === 'postgres' && this.executor
         ? new PostgresWorkflowDefinitionStore(this.executor)
-        : new InMemoryWorkflowDefinitionStore();
+        : (sqliteWorkflowStore ?? new InMemoryWorkflowDefinitionStore());
     // The default driver wires the LIVE `browser-check` node handler over the
     // injected browser-use engine (navigate → assert → screenshot → summary
     // artifact + optional autonomous `run_task`). Absent engine ⇒ the handler
@@ -486,8 +505,10 @@ export class AgentOsComposer implements AgentOsModule {
     if (this.outboxPublisher.close) {
       await this.outboxPublisher.close().catch(() => undefined);
     }
-    // Close the embedded sqlite handle only when this composer opened it (an
-    // injected repository's lifecycle belongs to its owner).
+    // Close the embedded sqlite handles only when this composer opened them (an
+    // injected repository's lifecycle belongs to its owner). The workflow-def
+    // store is a SEPARATE better-sqlite3 connection — close it symmetrically.
     this.ownedSqlite?.close();
+    this.ownedWorkflowSqlite?.close();
   }
 }
