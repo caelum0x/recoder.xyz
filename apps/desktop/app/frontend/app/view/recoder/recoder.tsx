@@ -18,8 +18,8 @@ import type { HealthTone } from "./recoder-health-logic";
 import { isConnectivityError } from "./recoder-errors";
 import {
     archivedHistoryNotice,
-    firstParallelPreselection,
     firstRunAgentChips,
+    firstRunHero,
     firstRunSignIn,
     shouldShowGettingStarted,
     showConvergeAffordance,
@@ -43,10 +43,10 @@ import {
 } from "./recoder-launch-logic";
 import { RecoderIdentityModel } from "./recoder-identity-model";
 import {
-    attentionBadgeLabel,
     convergeSelectDisabled,
     convergeSelectionRepo,
     deriveAdHocConverge,
+    deriveCardSummary,
     deriveClusterState,
     formatRelativeAge,
     isTerminalWorkspaceState,
@@ -67,7 +67,6 @@ import { RecoderShortcutsOverlay } from "./recoder-shortcuts";
 import { usageCostTitle } from "./recoder-metering";
 import { RecoderErrorRow, RecoderSkeleton } from "./recoder-states";
 import {
-    ATTN_BADGE,
     CHIP,
     ENTRY_CARD,
     ERROR_ROW,
@@ -224,15 +223,23 @@ function WorkspaceRow({
     const showUsage = selected && usage != null && usageWorkspaceId == ws.workspaceId;
     const terminal = isTerminalWorkspaceState(ws.state);
     const age = formatRelativeAge(ws.createdAt);
-    // "" for any attention the board must NOT badge (absent/unknown/working/…),
-    // so a row only ever shows a badge the backend actually reported.
-    const attnLabel = attentionBadgeLabel(ws.attention);
+    // The de-crowded glance: one derived read folds the row down to title + agent +
+    // ONE state (needs-input attention folded in) + the +/- diffstat. PR, age, and
+    // the row actions move to the selected secondary line / hover so the resting
+    // card reads in a single glance (DESIGN-REFERENCE §3A).
+    const card = deriveCardSummary(ws, summary);
     const suggestion = suggestNextAction(ws.state, summary, ws.sessionName != null && ws.sessionName != "");
     // Promote exactly one existing button to primary when it IS the suggested next
     // step; every other button stays quiet. Never invents an action. Only the
     // selected row gets the promotion so the board carries at most one accent.
     const btnClass = (action: RecoderRowActionId): string =>
         selected && suggestion != null && suggestion.action == action && !busy ? PRIMARY_BTN : QUIET_BTN;
+    // Row actions sit quiet until the card is the focus: revealed when selected, and
+    // on hover for the mouse. Hidden actions drop pointer-events so an invisible
+    // button is never clickable; focus-within keeps them reachable mid-tab.
+    const actionsReveal = selected
+        ? "opacity-100"
+        : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto";
     return (
         <div
             ref={ref}
@@ -240,80 +247,87 @@ function WorkspaceRow({
             data-selected={selected}
             onClick={onSelect}
             onFocus={onSelect}
-            className={`flex flex-col gap-1 rounded border border-white/8 px-3 py-2 recoder-transition hover:border-white/12 cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-white/50 ${selected ? "bg-accent" : "hover:bg-white/[0.04]"} ${terminal ? "opacity-60" : ""}`}
+            className={`group flex flex-col gap-1 rounded border border-white/8 px-3 py-2 recoder-transition hover:border-white/12 cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-white/50 ${selected ? "bg-accent" : "hover:bg-white/[0.04]"} ${terminal ? "opacity-60" : ""}`}
             title={`${ws.workspaceId} - ${ws.branch}`}
         >
             <div className="flex items-center gap-2">
-                <span className={`${ROW_TITLE} truncate font-mono`}>{ws.branch}</span>
-                <span className={STATE_CHIP}>{ws.state}</span>
-                {attnLabel != "" && (
-                    <span className={ATTN_BADGE} title="This agent stopped mid-run and is waiting on you">
-                        {attnLabel}
+                <span className={`${ROW_TITLE} min-w-0 truncate font-mono`}>{card.title}</span>
+                <span className={`${META} shrink-0`}>{card.agent}</span>
+                {card.needsYou ? (
+                    <span
+                        className={`${STATE_CHIP} inline-flex shrink-0 items-center gap-1 text-primary`}
+                        title="This agent stopped mid-run and is waiting on you"
+                    >
+                        <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                        {card.state}
                     </span>
+                ) : (
+                    <span className={`${STATE_CHIP} shrink-0`}>{card.state}</span>
                 )}
-                <WorkspacePrChip pr={pr} />
+                {card.diffstat != "" && <span className={`${META} shrink-0 font-mono`}>{card.diffstat}</span>}
                 <div className="flex-1" />
-                {onConverge != null && (
-                    <button
-                        className={QUIET_BTN}
-                        title="Compare this parallel group side-by-side and converge on one branch"
-                        onClick={onConverge}
-                    >
-                        Compare · Converge
+                {/* Actions stay quiet until the card is the focus (selected / hover /
+                    focus-within) so the resting glance is title + agent + state + diff. */}
+                <div className={`flex items-center gap-2 recoder-transition ${actionsReveal}`}>
+                    {onConverge != null && (
+                        <button
+                            className={QUIET_BTN}
+                            title="Compare this parallel group side-by-side and converge on one branch"
+                            onClick={onConverge}
+                        >
+                            Compare · Converge
+                        </button>
+                    )}
+                    {!terminal && (
+                        <button className={btnClass("session")} onClick={() => openSession(ws.workspaceId)}>
+                            Session
+                        </button>
+                    )}
+                    {!terminal && ws.sessionName && (
+                        <button className={QUIET_BTN} onClick={() => openTerminal(ws, tmuxBin)}>
+                            Terminal
+                        </button>
+                    )}
+                    {!terminal && ws.state != "awaiting_review" && (
+                        <button
+                            className={QUIET_BTN}
+                            disabled={busy}
+                            title="Stop this run (keeps the worktree)"
+                            onClick={() => model.stopWorkspace(ws.workspaceId)}
+                        >
+                            {busy ? "..." : "Stop"}
+                        </button>
+                    )}
+                    <button className={btnClass("review")} onClick={() => openReview(ws.workspaceId)}>
+                        Review
                     </button>
-                )}
-                {!terminal && (
-                    <button className={btnClass("session")} onClick={() => openSession(ws.workspaceId)}>
-                        Session
-                    </button>
-                )}
-                {!terminal && ws.sessionName && (
-                    <button className={QUIET_BTN} onClick={() => openTerminal(ws, tmuxBin)}>
-                        Terminal
-                    </button>
-                )}
-                {!terminal && ws.state != "awaiting_review" && (
-                    <button
-                        className={QUIET_BTN}
-                        disabled={busy}
-                        title="Stop this run (keeps the worktree)"
-                        onClick={() => model.stopWorkspace(ws.workspaceId)}
-                    >
-                        {busy ? "..." : "Stop"}
-                    </button>
-                )}
-                <button className={btnClass("review")} onClick={() => openReview(ws.workspaceId)}>
-                    Review
-                </button>
-                {!terminal && (
-                    <button
-                        className={btnClass("merge")}
-                        disabled={busy || ws.state != "awaiting_review"}
-                        title={ws.state != "awaiting_review" ? "Review first to enable merge" : undefined}
-                        onClick={() => model.mergeWorkspace(ws.workspaceId)}
-                    >
-                        {busy ? "..." : "Merge"}
-                    </button>
-                )}
-                {ws.state != "archived" && (
-                    <button
-                        className={btnClass("archive")}
-                        disabled={busy}
-                        onClick={() => model.archiveWorkspace(ws.workspaceId)}
-                    >
-                        Archive
-                    </button>
-                )}
+                    {!terminal && (
+                        <button
+                            className={btnClass("merge")}
+                            disabled={busy || ws.state != "awaiting_review"}
+                            title={ws.state != "awaiting_review" ? "Review first to enable merge" : undefined}
+                            onClick={() => model.mergeWorkspace(ws.workspaceId)}
+                        >
+                            {busy ? "..." : "Merge"}
+                        </button>
+                    )}
+                    {ws.state != "archived" && (
+                        <button
+                            className={btnClass("archive")}
+                            disabled={busy}
+                            onClick={() => model.archiveWorkspace(ws.workspaceId)}
+                        >
+                            Archive
+                        </button>
+                    )}
+                </div>
             </div>
-            <div className={`${META} flex items-center gap-2`}>
-                <span>{agentLabel(ws.runtimeId)}</span>
-                {summary != null && summary.files > 0 && (
-                    <span className="font-mono">
-                        +{summary.additions} -{summary.deletions}
-                    </span>
-                )}
-                {age != "" && <span>{age}</span>}
-            </div>
+            {selected && (pr != null || age != "") && (
+                <div className={`${META} flex items-center gap-2`}>
+                    <WorkspacePrChip pr={pr} />
+                    {age != "" && <span>{age}</span>}
+                </div>
+            )}
             {selected && suggestion != null && (
                 <div className={`${META} flex items-center gap-1.5`}>
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent/70 shrink-0" />
@@ -814,7 +828,9 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const matchingClonableRepos = filterReposByQuery(clonableRepos, repoQuery);
     const clonableHint = repoPickerHint(matchingClonableRepos.length, githubRepos.length);
     const firstRunChips = firstRunAgentChips(environment, setup.agents, agentAuth, githubStatus);
-    const parallelPreselect = firstParallelPreselection(setup.agents);
+    // The first-run HERO: with 2+ agents the parallel run is the star (preselect +
+    // open ready); with one, honest "install a second"; with none, the setup panel.
+    const hero = firstRunHero(setup.agents);
     const signIn = firstRunSignIn(signingIn, signInPrompt);
     // The archived-history truth chip (recoder-oe8i): shown only on the history
     // Show views and only when the backend reported more history than is loaded.
@@ -1291,6 +1307,50 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             )}
                         </div>
                     )}
+                    {/* The hero: with 2+ agents, "one task → N agents → merge the best" IS
+                        the star (preselect the detected agents, open launch ready to go). With
+                        exactly one, say so truthfully and point at installing a second — the
+                        core value genuinely needs 2+. Terminal-plain: copy + one action. */}
+                    {hero.mode == "parallel" && (
+                        <div className="flex flex-col gap-2 rounded border border-white/8 bg-white/[0.04] p-3">
+                            <div className="flex flex-col gap-1">
+                                <span className={ROW_TITLE}>Give one task to {hero.agentSummary} at once</span>
+                                <span className={META}>
+                                    Each agent works in its own isolated worktree — then you compare and merge
+                                    the best result. That’s the whole point of Recoder.
+                                </span>
+                            </div>
+                            <div>
+                                <button
+                                    className={PRIMARY_BTN}
+                                    onClick={() => {
+                                        setRuntimeId(hero.primary);
+                                        setAlsoRun(hero.also);
+                                        setLaunchOpen(true);
+                                    }}
+                                >
+                                    Run your first parallel task
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                    {hero.mode == "install-second" && (
+                        <div className="flex flex-col gap-2 rounded border border-white/8 bg-white/[0.04] p-3">
+                            <div className="flex flex-col gap-1">
+                                <span className={ROW_TITLE}>Install a second agent to unlock parallel runs</span>
+                                <span className={META}>
+                                    You have {hero.agentLabel}. Recoder’s edge is giving ONE task to two agents at
+                                    once and merging the best — that needs a second agent. Open a project to run{" "}
+                                    {hero.agentLabel} solo, or install another below.
+                                </span>
+                            </div>
+                            <div>
+                                <button className={QUIET_BTN} onClick={() => setAgentSetupOpen((open) => !open)}>
+                                    Show install steps
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <div className="flex flex-wrap gap-2">
                         <button
                             className={ENTRY_CARD}
@@ -1323,22 +1383,6 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                 <span className={ROW_TITLE}>Quick start</span>
                                 <span className={META}>
                                     Launch into {folderName(quickStartRepo)} with your last agent.
-                                </span>
-                            </button>
-                        )}
-                        {parallelPreselect != null && (
-                            <button
-                                className={ENTRY_CARD}
-                                onClick={() => {
-                                    setRuntimeId(parallelPreselect.primary);
-                                    setAlsoRun(parallelPreselect.also);
-                                    setLaunchOpen(true);
-                                }}
-                            >
-                                <span className={ROW_TITLE}>Run your first parallel task</span>
-                                <span className={META}>
-                                    Launch all {1 + parallelPreselect.also.length} detected agents on one task, each in
-                                    its own worktree, then compare and merge the best.
                                 </span>
                             </button>
                         )}

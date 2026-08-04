@@ -8,6 +8,7 @@ import {
     archivedHistoryNotice,
     firstParallelPreselection,
     firstRunAgentChips,
+    firstRunHero,
     firstRunSignIn,
     parseArchivedPage,
     shouldShowGettingStarted,
@@ -201,6 +202,57 @@ describe("firstParallelPreselection — the first-parallel-task CTA decision", (
 
     it("tolerates null input", () => {
         expect(firstParallelPreselection(null as unknown as { runtimeId: string; available: boolean }[])).toBeNull();
+    });
+});
+
+describe("firstRunHero — the first-run card's core-value decision", () => {
+    it("with 2+ launchable agents the parallel run is the HERO (preselect + labels + summary)", () => {
+        const hero = firstRunHero([
+            { runtimeId: "claude_code", available: true },
+            { runtimeId: "opencode", available: false },
+            { runtimeId: "codex", available: true },
+        ]);
+        expect(hero).toEqual({
+            mode: "parallel",
+            primary: "claude_code",
+            also: ["codex"],
+            agentLabels: ["Claude Code", "Codex"],
+            agentSummary: "Claude Code + Codex",
+            count: 2,
+        });
+    });
+
+    it("with exactly one agent it says so truthfully (install-second, never a solo 'parallel')", () => {
+        expect(firstRunHero([{ runtimeId: "claude_code", available: true }])).toEqual({
+            mode: "install-second",
+            agentLabel: "Claude Code",
+        });
+        // an installed-but-unavailable second agent does not count toward parallel.
+        expect(
+            firstRunHero([
+                { runtimeId: "claude_code", available: true },
+                { runtimeId: "codex", available: false },
+            ])
+        ).toEqual({ mode: "install-second", agentLabel: "Claude Code" });
+    });
+
+    it("with no launchable agents the setup panel owns the screen (mode none)", () => {
+        expect(firstRunHero([])).toEqual({ mode: "none" });
+        expect(firstRunHero([{ runtimeId: "codex", available: false }])).toEqual({ mode: "none" });
+        expect(firstRunHero(null as unknown as { runtimeId: string; available: boolean }[])).toEqual({ mode: "none" });
+    });
+
+    it("the parallel preselection matches the standalone helper (same primary/also)", () => {
+        const agents = [
+            { runtimeId: "claude_code", available: true },
+            { runtimeId: "codex", available: true },
+            { runtimeId: "gemini_cli", available: true },
+        ];
+        const hero = firstRunHero(agents);
+        expect(hero.mode).toBe("parallel");
+        if (hero.mode == "parallel") {
+            expect({ primary: hero.primary, also: hero.also }).toEqual(firstParallelPreselection(agents));
+        }
     });
 });
 

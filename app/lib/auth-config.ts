@@ -18,11 +18,16 @@
 import {
   createRecoderAuth,
   type CreateRecoderAuthOptions,
+  APPLE_ISSUER_URL,
 } from "@recoder/auth";
 import { customPrismaAdapter } from "./custom-prisma-adapter";
 import { prisma } from "./prisma";
 import { sendPasswordResetEmail, sendVerificationEmail } from "./email";
 import { SURFACE_ORIGINS } from "@recoder/auth/edge";
+import {
+  resolveAppleClientSecret,
+  appleMapProfileToUser,
+} from "./auth/apple-secret";
 
 // Determine baseURL based on environment
 const getBaseURL = () => {
@@ -41,6 +46,8 @@ const PRODUCTION_ORIGINS = [
   ...Object.values(SURFACE_ORIGINS),
   "https://www.recoder.xyz",
   "https://*.recoder.xyz",
+  // Apple posts the sign-in callback from its own origin (form_post response).
+  APPLE_ISSUER_URL,
 ];
 
 const DEV_ORIGINS = [
@@ -72,8 +79,26 @@ const skipAuthConfigValidation =
   process.env.SKIP_ENV_VALIDATION === 'true' ||
   process.env.NEXT_PHASE === 'phase-production-build';
 
+// Apple: either a pre-minted client secret JWT (APPLE_CLIENT_SECRET) or the
+// .p8 signing parts to derive it (APPLE_TEAM_ID + APPLE_KEY_ID + APPLE_PRIVATE_KEY).
+const appleClientId = process.env.APPLE_CLIENT_ID || '';
+const appleClientSecretDirect = process.env.APPLE_CLIENT_SECRET || '';
+const appleTeamId = process.env.APPLE_TEAM_ID || '';
+const appleKeyId = process.env.APPLE_KEY_ID || '';
+const applePrivateKey = process.env.APPLE_PRIVATE_KEY || '';
+const appleBundleId = process.env.APPLE_APP_BUNDLE_IDENTIFIER || '';
+
 const hasGithub = isRealCredential(githubClientId) && isRealCredential(githubClientSecret);
 const hasGoogle = isRealCredential(googleClientId) && isRealCredential(googleClientSecret);
+
+const hasAppleSigningParts =
+  isRealCredential(appleTeamId) &&
+  isRealCredential(appleKeyId) &&
+  isRealCredential(applePrivateKey);
+// The "secret" half is satisfied by a direct secret OR the derivable parts.
+const hasAppleSecretMaterial =
+  isRealCredential(appleClientSecretDirect) || hasAppleSigningParts;
+const hasApple = isRealCredential(appleClientId) && hasAppleSecretMaterial;
 
 // Validate: if only one half of a credential pair is set, something is wrong.
 if (!skipAuthConfigValidation && isRealCredential(githubClientId) && !isRealCredential(githubClientSecret)) {
@@ -100,13 +125,26 @@ if (!skipAuthConfigValidation && !isRealCredential(googleClientId) && isRealCred
     'Both must be provided for Google OAuth to work.'
   );
 }
+if (!skipAuthConfigValidation && isRealCredential(appleClientId) && !hasAppleSecretMaterial) {
+  throw new Error(
+    'APPLE_CLIENT_ID (Service ID) is set but no Apple client secret material is available. ' +
+    'Provide either APPLE_CLIENT_SECRET (a pre-minted JWT) or the signing parts ' +
+    'APPLE_TEAM_ID + APPLE_KEY_ID + APPLE_PRIVATE_KEY so the secret can be derived.'
+  );
+}
+if (!skipAuthConfigValidation && !isRealCredential(appleClientId) && hasAppleSecretMaterial) {
+  throw new Error(
+    'Apple client secret material is set but APPLE_CLIENT_ID (the Apple Service ID) is missing. ' +
+    'Both must be provided for Sign in with Apple to work.'
+  );
+}
 
 // In production, require at least one OAuth provider to be fully configured.
-if (!skipAuthConfigValidation && process.env.NODE_ENV === 'production' && !hasGithub && !hasGoogle) {
+if (!skipAuthConfigValidation && process.env.NODE_ENV === 'production' && !hasGithub && !hasGoogle && !hasApple) {
   throw new Error(
-    'No OAuth providers configured. In production at least one of GitHub or Google OAuth ' +
-    'must be fully configured (both client ID and secret). Set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET ' +
-    'and/or GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET.'
+    'No OAuth providers configured. In production at least one of GitHub, Google, or Apple ' +
+    'OAuth must be fully configured. Set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET, ' +
+    'GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET, and/or APPLE_CLIENT_ID + APPLE_CLIENT_SECRET.'
   );
 }
 
@@ -128,6 +166,30 @@ if (hasGoogle) {
     clientId: googleClientId,
     clientSecret: googleClientSecret,
     scope: ["openid", "email", "profile"],
+  };
+}
+// Apple's client secret is a signed JWT produced at config time — either taken
+// directly (APPLE_CLIENT_SECRET) or minted from the .p8 parts. Resolving it is
+// async, hence the top-level await (this module has no edge-runtime importers).
+const appleClientSecret = hasApple
+  ? await resolveAppleClientSecret({
+      clientSecret: appleClientSecretDirect || undefined,
+      clientId: appleClientId,
+      teamId: appleTeamId,
+      keyId: appleKeyId,
+      privateKey: applePrivateKey,
+    })
+  : undefined;
+if (hasApple && appleClientSecret) {
+  socialProviders.apple = {
+    clientId: appleClientId,
+    clientSecret: appleClientSecret,
+    ...(isRealCredential(appleBundleId)
+      ? { appBundleIdentifier: appleBundleId }
+      : {}),
+    // Apple only sends the email on first auth — persist it, and coerce Apple's
+    // string-typed email_verified truthfully.
+    mapProfileToUser: appleMapProfileToUser,
   };
 }
 

@@ -16,12 +16,12 @@ import {
     type DiffFileSection,
     type DiffHunkAnchor,
 } from "./recoder-diff-files";
+import { reviewDetailsDefaultOpen, reviewPrimaryAction } from "./recoder-diff-layout";
 import {
     isFailedConclusion,
     RecoderDiffViewModel,
     suggestReviewAction,
     type RecoderCheckRow,
-    type RecoderReviewActionId,
     type RecoderWorkspaceChecks,
 } from "./recoder-diff-model";
 import { EvidencePanel } from "./recoder-evidence-panel";
@@ -685,22 +685,61 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
         return () => clearInterval(id);
     }, [model]);
 
+    // The secondary panels (checks · evidence · PR/merge) live in one collapsed
+    // disclosure so the diff leads. Switching workspace resets to the calm default;
+    // a real blocker (address-feedback / resolve-conflicts) auto-opens it so the
+    // failing rows are never hidden — decisions live in reviewDetailsDefaultOpen.
+    const reviewSuggestion = suggestReviewAction(checks);
+    const [detailsOpen, setDetailsOpen] = useState(false);
+    useEffect(() => {
+        setDetailsOpen(reviewDetailsDefaultOpen(reviewSuggestion));
+        // Re-evaluated per workspace only; the effect below re-opens if a blocker
+        // arrives after checks finish loading.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedId]);
+    useEffect(() => {
+        if (reviewDetailsDefaultOpen(reviewSuggestion)) {
+            setDetailsOpen(true);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [reviewSuggestion?.action]);
+
     const showNotConnected = !loading && !connected;
     const showNoWorkspaces = !loading && connected && workspaces.length == 0;
     const hasPatch = diff != null && diff.patch != null && diff.patch.trim() != "";
 
-    // Checks-driven next step. Promotes exactly one header button when it IS the
-    // suggested action; with no suggestion, Merge keeps its default primary (the
-    // review→merge close) so the header never looks unowned.
-    const reviewSuggestion = suggestReviewAction(checks);
-    const reviewBtnClass = (action: RecoderReviewActionId): string =>
-        reviewSuggestion != null && reviewSuggestion.action == action ? PRIMARY_BTN : QUIET_BTN;
-
-    // Once a PR exists its live chip takes the header slot (click to open); until
-    // then the Create PR action lives there, DISABLED with a truthful reason when
-    // a PR can't be opened (no gh / no pushable remote) rather than hidden.
+    // Exactly one loud header action for the current state (reviewPrimaryAction);
+    // the non-primary action stays reachable — quiet — inside the tucked details
+    // disclosure so no capability is lost. A live PR chip is a small status badge,
+    // not an action, so it sits calmly beside the primary.
     const prChip = prView?.chip ?? null;
     const prGate = prCreateGate(prView);
+    const primary = reviewPrimaryAction({
+        hasSelection: selectedId != "",
+        suggestion: reviewSuggestion,
+        hasPr: prChip != null,
+        canCreatePr: prGate.canCreate,
+    });
+
+    // The non-primary actions that must stay reachable in the tucked details area.
+    const showMergeSecondary = primary != "merge";
+    const showCreatePrSecondary = primary != "create-pr" && prChip == null;
+
+    const mergeBtn = (className: string) => (
+        <button className={className} disabled={merging} onClick={() => model.mergeSelected()}>
+            {merging ? "Merging…" : "Merge"}
+        </button>
+    );
+    const createPrBtn = (className: string) => (
+        <button
+            className={className}
+            disabled={prCreating || !prGate.canCreate}
+            title={!prGate.canCreate ? prGate.reason : undefined}
+            onClick={() => model.createPr()}
+        >
+            {prCreating ? "Creating PR…" : "Create PR"}
+        </button>
+    );
 
     return (
         <div className="flex flex-col h-full overflow-hidden p-3 gap-2">
@@ -719,26 +758,9 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                         ))}
                     </select>
                 )}
-                {selectedId != "" && (
-                    <button
-                        className={reviewSuggestion != null ? reviewBtnClass("merge") : PRIMARY_BTN}
-                        disabled={merging}
-                        onClick={() => model.mergeSelected()}
-                    >
-                        {merging ? "Merging…" : "Merge"}
-                    </button>
-                )}
+                {primary == "merge" && mergeBtn(PRIMARY_BTN)}
+                {primary == "create-pr" && createPrBtn(PRIMARY_BTN)}
                 {selectedId != "" && prChip != null && <ReviewPrChip chip={prChip} />}
-                {selectedId != "" && prChip == null && (
-                    <button
-                        className={reviewBtnClass("create-pr")}
-                        disabled={prCreating || !prGate.canCreate}
-                        title={!prGate.canCreate ? prGate.reason : undefined}
-                        onClick={() => model.createPr()}
-                    >
-                        {prCreating ? "Creating PR…" : "Create PR"}
-                    </button>
-                )}
             </div>
             {inlineApproval != null && (
                 <InlineApprovalCard
@@ -749,22 +771,47 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                     onReject={() => model.decideInlineApproval("reject")}
                 />
             )}
-            {selectedId != "" && (
-                <ChecksStrip checks={checks} loading={checksLoading} onRefresh={() => model.refreshChecks()} />
-            )}
             {selectedId != "" && reviewSuggestion != null && (
                 <div className="flex items-center gap-1.5 text-xs text-secondary">
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent/70 shrink-0" />
                     <span>{reviewSuggestion.label}</span>
                 </div>
             )}
-            {selectedId != "" && prChip == null && !prGate.canCreate && (
-                <div className="text-xs text-secondary">Create PR unavailable — {prGate.reason}</div>
-            )}
             {mergeStatus != "" && <div className="text-xs text-secondary">{mergeStatus}</div>}
             {prStatus != "" && <div className="text-xs text-secondary">{prStatus}</div>}
             {discardStatus != "" && <div className="text-xs text-secondary">{discardStatus}</div>}
-            {selectedId != "" && <EvidencePanel workspaceId={selectedId} />}
+            {selectedId != "" && (
+                <div className="flex flex-col rounded border border-white/8">
+                    <button
+                        className="flex items-center gap-2 px-2 py-1 text-xs text-secondary hover:text-primary focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-white/50 recoder-transition cursor-pointer"
+                        aria-expanded={detailsOpen}
+                        onClick={() => setDetailsOpen((v) => !v)}
+                    >
+                        <span className="select-none w-3 text-center opacity-70">{detailsOpen ? "▾" : "▸"}</span>
+                        <span className="uppercase tracking-wide">Details</span>
+                        <span className="text-meta">checks · evidence · PR</span>
+                    </button>
+                    {detailsOpen && (
+                        <div className="flex flex-col gap-2 border-t border-white/8 px-2 py-2">
+                            <ChecksStrip
+                                checks={checks}
+                                loading={checksLoading}
+                                onRefresh={() => model.refreshChecks()}
+                            />
+                            {(showMergeSecondary || showCreatePrSecondary) && (
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {showMergeSecondary && mergeBtn(QUIET_BTN)}
+                                    {showCreatePrSecondary && createPrBtn(QUIET_BTN)}
+                                    {prChip == null && !prGate.canCreate && (
+                                        <span className="text-xs text-secondary">Create PR unavailable — {prGate.reason}</span>
+                                    )}
+                                </div>
+                            )}
+                            <EvidencePanel workspaceId={selectedId} />
+                        </div>
+                    )}
+                </div>
+            )}
 
             {showNotConnected && (
                 <RecoderEmpty title="Recoder is still starting…" hint="Your workspace diffs load once it is ready." />

@@ -73,6 +73,7 @@
     "dodopayments": "^2.6.0",
     "graphql": "16.13.2",
     "ioredis": "^5.8.2",
+    "jose": "^6.1.0",
     "jsonwebtoken": "^9.0.0",
     "lucide-react": "^0.400.0",
     "mjml": "^4.16.1",
