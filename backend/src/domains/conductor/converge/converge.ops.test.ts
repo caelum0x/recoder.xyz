@@ -25,7 +25,8 @@ import {
   probeSynthesizability,
   EmptyConvergenceError,
   UnresolvedConvergenceError,
-  ASSIST_INFERENCE_FUNCTION,
+  MAX_ASSIST_FILE_BYTES,
+  MAX_ASSIST_PROMPT_BYTES,
   MAX_CONFLICT_REGIONS,
   MAX_CONFLICT_SIDE_LINES,
   type ConvergeInferenceFn,
@@ -458,10 +459,13 @@ describe('composeConvergence (intra-file 3-way synthesize, real git)', () => {
  *
  * Proves (real git + fake inference): a VALID reply lands as the file content with
  * `plan.assisted` + provenance recording the model-authored path (incl. the
- * inference id); an INVALID reply (dropped agreed line / conflict markers / empty),
- * a `routed:false` gateway, and an UNWIRED inference dep all fall back to the exact
- * mechanical `synthesize-conflict` abort; a mechanically-clean assisted file never
- * calls the model; and the plain `synthesize` + `pick` paths never touch inference.
+ * inference id); an INVALID reply (dropped agreed line / conflict markers / a bare
+ * `=======` separator / empty), a `routed:false` gateway, an UNWIRED inference dep,
+ * a missing function name, and an over-cap payload (per-version / total prompt
+ * bytes) all fall back to the exact mechanical `synthesize-conflict` abort WITHOUT
+ * calling the model; the call addresses the INJECTED function name; a
+ * mechanically-clean assisted file never calls the model; and the plain
+ * `synthesize` + `pick` paths never touch inference.
  */
 describe('composeConvergence (LLM-assisted synthesize, real git + fake inference)', () => {
   let root: string;
@@ -498,11 +502,16 @@ describe('composeConvergence (LLM-assisted synthesize, real git + fake inference
     return { wtA, wtB };
   }
 
+  /** The function name the composition layer injects (the ops never hardcode one). */
+  const FUNCTION_NAME = 'recoder_default';
+
   function deps(
     worktrees: { wtA: string; wtB: string },
     registered: { ws?: Workspace },
     inference?: ConvergeInferenceFn,
+    opts?: { readonly changedFile?: string; readonly over?: Partial<ConvergeOpsDeps> },
   ): ConvergeOpsDeps {
+    const changed = opts?.changedFile ?? 'shared.ts';
     const workspaces: Record<string, Workspace> = {
       'ws-a': makeWs({ workspaceId: 'ws-a', worktreePath: worktrees.wtA, branch: 'agent-a' }),
       'ws-b': makeWs({ workspaceId: 'ws-b', worktreePath: worktrees.wtB, branch: 'agent-b' }),
@@ -511,8 +520,8 @@ describe('composeConvergence (LLM-assisted synthesize, real git + fake inference
       compare: async () => ({
         count: 2,
         siblings: [
-          { workspaceId: 'ws-a', agent: 'claude_code', changedFiles: ['shared.ts'] },
-          { workspaceId: 'ws-b', agent: 'codex', changedFiles: ['shared.ts'] },
+          { workspaceId: 'ws-a', agent: 'claude_code', changedFiles: [changed] },
+          { workspaceId: 'ws-b', agent: 'codex', changedFiles: [changed] },
         ],
       }),
       getWorkspace: async (id) => workspaces[id] ?? null,
@@ -522,7 +531,8 @@ describe('composeConvergence (LLM-assisted synthesize, real git + fake inference
       },
       logger: noopLogger,
       newId: () => 'assist00',
-      ...(inference ? { inference } : {}),
+      ...(inference ? { inference, inferenceFunctionName: FUNCTION_NAME } : {}),
+      ...opts?.over,
     };
   }
 
@@ -562,9 +572,10 @@ describe('composeConvergence (LLM-assisted synthesize, real git + fake inference
       contributors: ['ws-a', 'ws-b'],
     });
 
-    // ONE call, addressed at the stable default function, carrying the full context.
+    // ONE call, addressed at the INJECTED function name (the ops own no name),
+    // carrying the full context.
     expect(calls).toHaveLength(1);
-    expect(calls[0].function_name).toBe(ASSIST_INFERENCE_FUNCTION);
+    expect(calls[0].function_name).toBe(FUNCTION_NAME);
     const prompt = calls[0].input.messages[0].content as string;
     expect(prompt).toContain('shared.ts');
     expect(prompt).toContain('l3-from-A');
@@ -617,6 +628,91 @@ describe('composeConvergence (LLM-assisted synthesize, real git + fake inference
       routed: true,
       content: 'l1\nl2\n<<<<<<< a\nl3-from-A\n=======\nl3-from-B\n>>>>>>> b\nl4\nl5\n',
     }));
+  });
+
+  it('a reply with a BARE ======= separator line fails validation → synthesize-conflict abort', async () => {
+    // No open/close markers and every agreed line kept — only the naked separator
+    // (a model echoing half a conflict region) betrays the reply.
+    await expectFallbackToConflict(async () => ({
+      routed: true,
+      content: 'l1\nl2\n=======\nl3-merged\nl4\nl5\n',
+    }));
+  });
+
+  it('inference wired WITHOUT a function name never calls the model → synthesize-conflict abort', async () => {
+    let called = 0;
+    const inference: ConvergeInferenceFn = async () => {
+      called += 1;
+      return { routed: true, content: VALID_MERGE };
+    };
+    const registered: { ws?: Workspace } = {};
+    await expect(
+      // `inference` injected via `over` so NO functionName rides along with it.
+      composeConvergence(
+        deps(addConflictingSiblings(), registered, undefined, { over: { inference } }),
+        assistedInput,
+      ),
+    ).rejects.toMatchObject({ name: 'UnresolvedConvergenceError', plan: { complete: false } });
+    expect(called).toBe(0);
+    expect(registered.ws).toBeUndefined();
+  });
+
+  it('a contributor version over MAX_ASSIST_FILE_BYTES skips assist (no LLM call) → synthesize-conflict abort', async () => {
+    const worktrees = addConflictingSiblings();
+    // Push ws-b's version past the per-version cap while keeping the same-line conflict.
+    const linesB = [...BASE_LINES];
+    linesB[2] = 'l3-from-B';
+    linesB.push('x'.repeat(MAX_ASSIST_FILE_BYTES));
+    writeFileSync(path.join(worktrees.wtB, 'shared.ts'), linesB.join('\n'));
+
+    let called = 0;
+    const inference: ConvergeInferenceFn = async () => {
+      called += 1;
+      return { routed: true, content: VALID_MERGE };
+    };
+    const registered: { ws?: Workspace } = {};
+    await expect(
+      composeConvergence(deps(worktrees, registered, inference), assistedInput),
+    ).rejects.toMatchObject({
+      name: 'UnresolvedConvergenceError',
+      plan: { complete: false, unresolved: [{ path: 'shared.ts', reason: 'synthesize-conflict' }] },
+    });
+    expect(called).toBe(0);
+    expect(registered.ws).toBeUndefined();
+  });
+
+  it('a prompt over MAX_ASSIST_PROMPT_BYTES skips assist (no LLM call) → synthesize-conflict abort', async () => {
+    // A HUGE base with small rewritten versions: every contributor version stays
+    // UNDER the per-version cap, so only the TOTAL prompt cap (base + versions
+    // + instructions) trips.
+    writeFileSync(path.join(repo, 'big.ts'), `${'b'.repeat(MAX_ASSIST_PROMPT_BYTES)}\n`);
+    git(repo, ['add', '-A']);
+    git(repo, ['commit', '-m', 'big base']);
+    const wtA = path.join(root, 'ws-a');
+    const wtB = path.join(root, 'ws-b');
+    git(repo, ['worktree', 'add', '-b', 'agent-a', wtA, 'main']);
+    git(repo, ['worktree', 'add', '-b', 'agent-b', wtB, 'main']);
+    writeFileSync(path.join(wtA, 'big.ts'), 'rewritten-by-A\n');
+    writeFileSync(path.join(wtB, 'big.ts'), 'rewritten-by-B\n');
+
+    let called = 0;
+    const inference: ConvergeInferenceFn = async () => {
+      called += 1;
+      return { routed: true, content: VALID_MERGE };
+    };
+    const registered: { ws?: Workspace } = {};
+    await expect(
+      composeConvergence(deps({ wtA, wtB }, registered, inference, { changedFile: 'big.ts' }), {
+        taskGroup: 'g',
+        selection: { 'big.ts': ASSISTED_SELECTION },
+        createdBy: 'u',
+      }),
+    ).rejects.toMatchObject({
+      name: 'UnresolvedConvergenceError',
+      plan: { complete: false, unresolved: [{ path: 'big.ts', reason: 'synthesize-conflict' }] },
+    });
+    expect(called).toBe(0);
+    expect(registered.ws).toBeUndefined();
   });
 
   it('an EMPTY reply fails validation → synthesize-conflict abort', async () => {

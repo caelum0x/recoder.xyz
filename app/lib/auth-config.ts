@@ -5,21 +5,24 @@
  * frontend) share the session cookie set here via cross-subdomain cookies
  * on `.recoder.xyz`.
  *
- * Cookie / session configuration is aligned with `@recoder/auth` (the shared
- * package) so that every surface reads the same `recoder.session_token`
- * cookie with the same domain, prefix, and SameSite settings.
+ * Built through the shared `createRecoderAuth()` factory in `@recoder/auth`,
+ * so the cookie block (`RECODER_COOKIE_ADVANCED`) and account-linking policy
+ * are literally the same objects on every surface and cannot drift.
  *
- * The main app keeps its own `betterAuth()` call because:
+ * The main app keeps its own factory call because:
  *   - It uses the main Prisma client (not authDatabase)
  *   - It hosts the full auth API (`/api/auth/[...all]`)
  *   - It has its own email senders and social-provider config
  */
 
-import { betterAuth } from "better-auth";
+import {
+  createRecoderAuth,
+  type CreateRecoderAuthOptions,
+} from "@recoder/auth";
 import { customPrismaAdapter } from "./custom-prisma-adapter";
 import { prisma } from "./prisma";
 import { sendPasswordResetEmail, sendVerificationEmail } from "./email";
-import { COOKIE_DOMAIN, SURFACE_ORIGINS } from "@recoder/auth/edge";
+import { SURFACE_ORIGINS } from "@recoder/auth/edge";
 
 // Determine baseURL based on environment
 const getBaseURL = () => {
@@ -128,74 +131,57 @@ if (hasGoogle) {
   };
 }
 
-export const auth = betterAuth({
-  baseURL: getBaseURL(),
-  database: customPrismaAdapter(prisma),
-  emailAndPassword: {
-    // Self-host operators may re-enable local accounts via AUTH_EMAIL_PASSWORD=on;
-    // the hosted product is OAuth-only.
-    enabled: process.env.AUTH_EMAIL_PASSWORD === "on",
-    requireEmailVerification: true,
-    password: {
-      hash: async (password: string) => {
-        const bcrypt = await import('bcryptjs');
-        return bcrypt.hash(password, 10);
+/**
+ * Build this surface's factory input. Exported so parity tests can diff the
+ * resolved options against @recoder/auth's without booting Better Auth.
+ */
+export function buildAppAuthOptions(): CreateRecoderAuthOptions {
+  return {
+    adapter: customPrismaAdapter(prisma),
+    baseURL: getBaseURL(),
+    emailAndPassword: {
+      // Self-host operators may re-enable local accounts via AUTH_EMAIL_PASSWORD=on;
+      // the hosted product is OAuth-only.
+      enabled: process.env.AUTH_EMAIL_PASSWORD === "on",
+      requireEmailVerification: true,
+      password: {
+        hash: async (password: string) => {
+          const bcrypt = await import('bcryptjs');
+          return bcrypt.hash(password, 10);
+        },
+        verify: async ({ hash, password }: { hash: string; password: string }) => {
+          const bcrypt = await import('bcryptjs');
+          return bcrypt.compare(password, hash);
+        },
       },
-      verify: async ({ hash, password }: { hash: string; password: string }) => {
-        const bcrypt = await import('bcryptjs');
-        return bcrypt.compare(password, hash);
+    },
+    senders: {
+      sendResetPassword: async ({ user, url }) => {
+        await sendPasswordResetEmail(user.email, url);
+      },
+      sendVerificationEmail: async ({ user, url }) => {
+        await sendVerificationEmail(user.email, url);
       },
     },
-    sendResetPassword: async ({ user, url }) => {
-      await sendPasswordResetEmail(user.email, url);
+    socialProviders: socialProviders as CreateRecoderAuthOptions["socialProviders"],
+    session: {
+      expiresIn: 60 * 60 * 24 * 30, // 30 days
+      updateAge: 60 * 60 * 24, // Update session every 24 hours
+      cookieCache: {
+        enabled: true,
+        maxAge: 60 * 60 * 24 * 30, // 30 days to match session expiry
+      },
     },
-    sendVerificationEmail: async ({ user, url }) => {
-      await sendVerificationEmail(user.email, url);
+    trustedOrigins: process.env.NODE_ENV === 'production'
+      ? PRODUCTION_ORIGINS
+      : DEV_ORIGINS,
+    pages: {
+      signIn: "/auth/signin",
+      error: "/auth/signin",
     },
-  },
-  socialProviders,
-  account: {
-    // Trust Google/GitHub (verified-email providers) to link into an existing
-    // account with the same email. Without this, signing in with Google/GitHub
-    // when an account already exists for that email (e.g. created via
-    // email+password or the other provider) fails with `account_not_linked`.
-    // Mirrors @recoder/auth (packages/auth), which the two configs must stay in sync on.
-    accountLinking: {
-      enabled: true,
-      trustedProviders: ["github", "google"],
-    },
-  },
-  session: {
-    expiresIn: 60 * 60 * 24 * 30, // 30 days
-    updateAge: 60 * 60 * 24, // Update session every 24 hours
-    cookieCache: {
-      enabled: true,
-      maxAge: 60 * 60 * 24 * 30, // 30 days to match session expiry
-    },
-  },
-  /**
-   * Cookie configuration MUST match @recoder/auth exactly so that
-   * every surface reads the same `recoder.session_token` cookie.
-   */
-  advanced: {
-    cookiePrefix: "recoder",
-    crossSubDomainCookies: {
-      enabled: true,
-      domain: process.env.NODE_ENV === 'production' ? COOKIE_DOMAIN : undefined,
-    },
-    useSecureCookies: process.env.NODE_ENV === 'production',
-    defaultCookieAttributes: {
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    },
-    generateId: () => crypto.randomUUID(),
-  },
-  trustedOrigins: process.env.NODE_ENV === 'production'
-    ? PRODUCTION_ORIGINS
-    : DEV_ORIGINS,
-  pages: {
-    signIn: "/auth/signin",
-    error: "/auth/signin",
-  },
-});
+  };
+}
+
+export const auth = createRecoderAuth(buildAppAuthOptions());
 
 export type Session = typeof auth.$Infer.Session;

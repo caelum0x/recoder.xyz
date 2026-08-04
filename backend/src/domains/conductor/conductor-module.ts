@@ -317,6 +317,18 @@ export type CreateConductorWorkspaceInput = Omit<
 const ATTENTION_TAIL_LINES = 60;
 
 /**
+ * The inference function assisted convergence synthesis addresses — MUST equal the
+ * inference domain's canonical default chat function (`TENSORZERO_DEFAULT_FUNCTION`
+ * = 'recoder_default' in `domains/inference/tensorzero-config.ts`). A DOCUMENTED
+ * LITERAL, not an import: the inference PUBLIC surface (`domains/inference/index.ts`)
+ * exports no such constant, and a cross-domain VALUE import of the internal would
+ * break the domain-boundary invariant (only type-only seams are legal). The converge
+ * ops themselves stay name-free (`ConvergeOpsDeps.inferenceFunctionName`), so this
+ * composition layer is the ONE place the name lives on the conductor side.
+ */
+const CONVERGE_ASSIST_FUNCTION_NAME = 'recoder_default';
+
+/**
  * The fixed internal identity sibling-awareness steers run under (recoder-i499).
  * A service principal (never a request credential) so the mid-run note delivery
  * clears the SAME governed `workspace.steer` path an operator uses — every
@@ -3324,6 +3336,10 @@ export class ConductorComposer implements ConductorModule {
       registerWorkspace: workspace =>
         this.repository.upsertWorkspace(workspace),
       logger: this.log,
+      // The assist function name is owned HERE (composition), never by the ops —
+      // see CONVERGE_ASSIST_FUNCTION_NAME. Until an `inference` fn is injected the
+      // assisted path still degrades truthfully to synthesize-conflict.
+      inferenceFunctionName: CONVERGE_ASSIST_FUNCTION_NAME,
     };
   }
 
