@@ -170,7 +170,10 @@ describe('createRecallService.recall', () => {
     expect(avail.get('candidates')).toBe(true);
     expect(avail.get('items')).toBe(true);
     expect(avail.get('colbert')).toBe(false);
-    expect(result.reranker).toBe('identity');
+    // ColBERT is down but the query overlaps the pool → the BM25-ish lexical
+    // fallback ranks, and the degrade is carried truthfully in rerankerReason.
+    expect(result.reranker).toBe('lexical');
+    expect(result.rerankerReason).toContain('colbert reranker unavailable');
   });
 
   it('adds the colbert late-interaction source: its hits enter the fused recall', async () => {

@@ -6,7 +6,12 @@ import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { computeDiffLineAnchors, type DiffLineAnchor } from "./recoder-diff-comments";
-import { parseDiffFileSections, type DiffFileSection } from "./recoder-diff-files";
+import {
+    computeDiffHunkAnchors,
+    parseDiffFileSections,
+    type DiffFileSection,
+    type DiffHunkAnchor,
+} from "./recoder-diff-files";
 import {
     isFailedConclusion,
     RecoderDiffViewModel,
@@ -208,27 +213,149 @@ function DiffFileList({ sections, onJump }: { sections: DiffFileSection[]; onJum
     );
 }
 
+// The quiet reveal-on-hover discard trigger shared by file headers and hunk
+// headers. Destructive intent shows only on hover-to-error, never as a loud
+// standing button.
+const DISCARD_TRIGGER =
+    "select-none opacity-0 group-hover:opacity-100 focus:opacity-100 text-secondary/70 hover:text-error transition-opacity px-1 text-[11px] cursor-pointer shrink-0 disabled:opacity-50";
+
+// Inline destructive confirm — never a browser confirm(). Bordered in the del
+// marker's crimson so the destructive step reads as such without color-flooding.
+function DiscardConfirm({
+    label,
+    busy,
+    onConfirm,
+    onCancel,
+}: {
+    label: string;
+    busy: boolean;
+    onConfirm: () => void;
+    onCancel: () => void;
+}) {
+    return (
+        <div className="flex items-center gap-2 flex-wrap border-l-2 border-error/50 bg-white/[0.03] px-2 py-1 my-0.5 text-xs font-sans">
+            <span className="text-secondary">{label}</span>
+            <button
+                className={cn(QUIET_BTN, "border-error/50 text-error hover:bg-error/10")}
+                disabled={busy}
+                onClick={onConfirm}
+            >
+                {busy ? "Discarding…" : "Discard"}
+            </button>
+            <button className={QUIET_BTN} disabled={busy} onClick={onCancel}>
+                Cancel
+            </button>
+        </div>
+    );
+}
+
 // The collapsible per-file header inside the diff. Sticky so the filename stays
-// visible while scrolling its hunks; the caret encodes collapsed/expanded.
+// visible while scrolling its hunks; the caret encodes collapsed/expanded. Also
+// hosts the per-FILE reject: one governed discard call, confirmed inline.
 function DiffFileHeader({
     section,
     collapsed,
     onToggle,
+    armed,
+    discarding,
+    onArmDiscard,
+    onCancelDiscard,
+    onConfirmDiscard,
 }: {
     section: DiffFileSection;
     collapsed: boolean;
     onToggle: () => void;
+    armed: boolean;
+    discarding: boolean;
+    onArmDiscard: () => void;
+    onCancelDiscard: () => void;
+    onConfirmDiscard: () => void;
 }) {
     return (
-        <button
-            className="flex w-full items-center gap-2 text-left text-xs font-mono text-secondary hover:text-primary transition-colors cursor-pointer py-0.5 sticky top-0 bg-panel z-10"
-            onClick={onToggle}
-        >
-            <span className="select-none w-3 text-center opacity-70">{collapsed ? "▸" : "▾"}</span>
-            <span className="flex-1 truncate text-primary/80">{fileLabel(section)}</span>
-            <span className="text-primary/70 shrink-0">+{section.adds}</span>
-            <span className="text-error/70 shrink-0">-{section.dels}</span>
-        </button>
+        <div className="sticky top-0 bg-panel z-10 group">
+            <div className="flex w-full items-center gap-2 py-0.5 text-xs font-mono">
+                <button
+                    className="flex flex-1 min-w-0 items-center gap-2 text-left text-secondary hover:text-primary transition-colors cursor-pointer"
+                    onClick={onToggle}
+                >
+                    <span className="select-none w-3 text-center opacity-70">{collapsed ? "▸" : "▾"}</span>
+                    <span className="flex-1 truncate text-primary/80">{fileLabel(section)}</span>
+                    <span className="text-primary/70 shrink-0">+{section.adds}</span>
+                    <span className="text-error/70 shrink-0">-{section.dels}</span>
+                </button>
+                {section.path != "" && !section.renamed && (
+                    <button
+                        className={DISCARD_TRIGGER}
+                        title={`Discard all changes to ${section.path}`}
+                        disabled={discarding}
+                        onClick={() => (armed ? onCancelDiscard() : onArmDiscard())}
+                    >
+                        Discard
+                    </button>
+                )}
+                {section.renamed && (
+                    <span
+                        className="shrink-0 text-xs text-secondary opacity-60 select-none"
+                        title="Renamed files can't be discarded from here — a single-path revert would delete the file instead of restoring it. Use the terminal (git) for rename rollbacks."
+                    >
+                        renamed
+                    </span>
+                )}
+            </div>
+            {armed && (
+                <DiscardConfirm
+                    label={`Discard all changes to ${section.path}? This restores it to the review base.`}
+                    busy={discarding}
+                    onConfirm={onConfirmDiscard}
+                    onCancel={onCancelDiscard}
+                />
+            )}
+        </div>
+    );
+}
+
+// The `@@` hunk-header row with the per-HUNK reject: the same quiet affordance
+// wired to the governed discard-hunks edge, confirmed inline.
+function DiffHunkHeaderRow({
+    line,
+    anchor,
+    armed,
+    discarding,
+    onArmDiscard,
+    onCancelDiscard,
+    onConfirmDiscard,
+}: {
+    line: string;
+    anchor: DiffHunkAnchor;
+    armed: boolean;
+    discarding: boolean;
+    onArmDiscard: () => void;
+    onCancelDiscard: () => void;
+    onConfirmDiscard: () => void;
+}) {
+    return (
+        <div className="group">
+            <div className={cn("flex min-h-[1.25rem]", HunkRow)}>
+                <span className="select-none w-4 text-center opacity-70 font-mono">{NeutralGutter}</span>
+                <span className="flex-1 whitespace-pre">{line}</span>
+                <button
+                    className={DISCARD_TRIGGER}
+                    title={`Discard hunk ${anchor.hunkIndex + 1} of ${anchor.path}`}
+                    disabled={discarding}
+                    onClick={() => (armed ? onCancelDiscard() : onArmDiscard())}
+                >
+                    Discard hunk
+                </button>
+            </div>
+            {armed && (
+                <DiscardConfirm
+                    label={`Discard hunk ${anchor.hunkIndex + 1} of ${anchor.path}? This reverts just this hunk to the review base.`}
+                    busy={discarding}
+                    onConfirm={onConfirmDiscard}
+                    onCancel={onCancelDiscard}
+                />
+            )}
+        </div>
     );
 }
 
@@ -236,14 +363,43 @@ function DiffBody({ patch, model }: { patch: string; model: RecoderDiffViewModel
     const lines = patch.split("\n");
     const anchors = computeDiffLineAnchors(patch);
     const sections = parseDiffFileSections(patch);
+    const hunkAnchors = computeDiffHunkAnchors(patch);
+    const discarding = useAtomValue(model.discardingAtom);
     // Which rendered line has its comment composer open (-1 = none). Local UI
     // state: the enqueued comments themselves live on the model.
     const [activeLine, setActiveLine] = useState(-1);
+    // Which discard confirm is armed (-1 = none): a section index for a file
+    // discard, a global line index for a hunk discard. Arming one disarms the
+    // other — exactly one destructive confirm can be open. Pure UI state; the
+    // worktree truth stays server-side.
+    const [armedFileDiscard, setArmedFileDiscard] = useState(-1);
+    const [armedHunkDiscard, setArmedHunkDiscard] = useState(-1);
     // Per-section collapsed flags (default expanded). Keyed by section index.
     const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
     const sectionRefs = useRef<Record<number, HTMLDivElement>>({});
 
     const setCollapsedFor = (i: number, value: boolean) => setCollapsed((prev) => ({ ...prev, [i]: value }));
+
+    const armFileDiscard = (i: number) => {
+        setArmedFileDiscard(i);
+        setArmedHunkDiscard(-1);
+    };
+    const armHunkDiscard = (globalIndex: number) => {
+        setArmedHunkDiscard(globalIndex);
+        setArmedFileDiscard(-1);
+    };
+    const disarmDiscard = () => {
+        setArmedFileDiscard(-1);
+        setArmedHunkDiscard(-1);
+    };
+    const confirmFileDiscard = (section: DiffFileSection) => {
+        disarmDiscard();
+        model.discardFiles([section.path]);
+    };
+    const confirmHunkDiscard = (anchor: DiffHunkAnchor) => {
+        disarmDiscard();
+        model.discardHunks(anchor.path, [anchor.hunkIndex]);
+    };
 
     const jumpTo = (i: number) => {
         setCollapsedFor(i, false);
@@ -271,10 +427,34 @@ function DiffBody({ patch, model }: { patch: string; model: RecoderDiffViewModel
                                 section={section}
                                 collapsed={isCollapsed}
                                 onToggle={() => setCollapsedFor(si, !isCollapsed)}
+                                armed={armedFileDiscard == si}
+                                discarding={discarding}
+                                onArmDiscard={() => armFileDiscard(si)}
+                                onCancelDiscard={disarmDiscard}
+                                onConfirmDiscard={() => confirmFileDiscard(section)}
                             />
                             {!isCollapsed &&
                                 lines.slice(section.startIndex, section.endIndex).map((line, offset) => {
                                     const globalIndex = section.startIndex + offset;
+                                    // Renamed sections get NO hunk affordance — the
+                                    // backend's single-path re-diff sees a rename as a
+                                    // whole-file add, so a hunk discard would delete
+                                    // the file (see DiffFileSection.renamed).
+                                    const hunkAnchor = section.renamed ? null : hunkAnchors[globalIndex];
+                                    if (hunkAnchor != null) {
+                                        return (
+                                            <DiffHunkHeaderRow
+                                                key={globalIndex}
+                                                line={line}
+                                                anchor={hunkAnchor}
+                                                armed={armedHunkDiscard == globalIndex}
+                                                discarding={discarding}
+                                                onArmDiscard={() => armHunkDiscard(globalIndex)}
+                                                onCancelDiscard={disarmDiscard}
+                                                onConfirmDiscard={() => confirmHunkDiscard(hunkAnchor)}
+                                            />
+                                        );
+                                    }
                                     return (
                                         <DiffLineRow
                                             key={globalIndex}
@@ -416,6 +596,7 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     const prStatus = useAtomValue(model.prStatusAtom);
     const checks = useAtomValue(model.checksAtom);
     const checksLoading = useAtomValue(model.checksLoadingAtom);
+    const discardStatus = useAtomValue(model.discardStatusAtom);
 
     useEffect(() => {
         model.refresh();
@@ -477,6 +658,7 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
             )}
             {mergeStatus != "" && <div className="text-xs text-secondary">{mergeStatus}</div>}
             {prStatus != "" && <div className="text-xs text-secondary">{prStatus}</div>}
+            {discardStatus != "" && <div className="text-xs text-secondary">{discardStatus}</div>}
             {selectedId != "" && <EvidencePanel workspaceId={selectedId} />}
 
             {showNotConnected && (

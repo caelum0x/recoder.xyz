@@ -104,8 +104,15 @@ export interface FusionResult {
   readonly memories: readonly RecalledMemory[];
   /** Which sources contributed vs. degraded (truthful partial recall). */
   readonly sources: readonly SourceAvailability[];
-  /** Which reranker actually ran (`colbert` when up, else `identity`). */
-  readonly reranker: 'colbert' | 'identity';
+  /**
+   * Which reranker actually ran: `colbert` (late-interaction, sidecar up),
+   * `lexical` (BM25-ish pure-TS fallback when ColBERT is down but the query
+   * overlaps the pool), or `identity` (nothing could rank — order is
+   * source-score descending).
+   */
+  readonly reranker: 'colbert' | 'lexical' | 'identity';
+  /** Why ColBERT did NOT rank this recall. Set ONLY on a degraded rerank (`lexical`/`identity` after a real degrade) — truthful marker, never set when `colbert` ran. */
+  readonly rerankerReason?: string;
 }
 
 // ── Retrieval (RAG) input ─────────────────────────────────────────────────────

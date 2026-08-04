@@ -6,7 +6,8 @@
  * Pipeline (every stage degrade-safe):
  *   gather(mem0 ∪ beads ∪ candidates ∪ items)  ← each source independently, tenant-scoped
  *     → normalize to `RecalledMemory` + `Provenance`
- *     → rerank (ColBERT late-interaction; identity order when the sidecar is down)
+ *     → rerank (ColBERT late-interaction; BM25-ish lexical fallback when the
+ *       sidecar is down; identity order only with zero lexical signal)
  *     → dedupe (collapse near-duplicate facts, keep best-ranked copy)
  *     → rank + limit
  *     → FusionResult { memories, sources, reranker }
@@ -17,7 +18,9 @@
  *    fabricated one. `candidates` + `items` come from the store-of-record and are
  *    always attempted; `mem0` + `beads` are degrade-truthful mirrors (an empty
  *    harvest triggers a health probe so "no matches" is never confused with "down").
- *  - `reranker` reflects which reranker ACTUALLY ran (`colbert` vs `identity`).
+ *  - `reranker` reflects which reranker ACTUALLY ran (`colbert` | `lexical` |
+ *    `identity`); a degraded rerank carries `rerankerReason` so no caller can
+ *    mistake a fallback ordering for late-interaction ranking.
  *  - Every returned memory carries a `provenance { source, ref, score, scope? }`
  *    pointing at the real source id — nothing is anonymous.
  */
@@ -283,7 +286,12 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
       const limit = query.limit ?? config.recallLimit;
       const memories = deduped.slice(0, limit);
 
-      return { memories, sources, reranker: reranked.reranker };
+      return {
+        memories,
+        sources,
+        reranker: reranked.reranker,
+        ...(reranked.reason ? { rerankerReason: reranked.reason } : {}),
+      };
     },
   };
 }

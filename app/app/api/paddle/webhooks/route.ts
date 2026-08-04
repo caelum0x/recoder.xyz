@@ -1,50 +1,91 @@
 /**
  * Paddle Webhooks Handler
- * Processes subscription events from Paddle
+ *
+ * Signature verification (HMAC-SHA256 of the raw body, `paddle-signature`
+ * header, PADDLE_WEBHOOK_SECRET) + alert normalization live in the
+ * PaddleProvider (resolved through the payments registry); subscription
+ * state lands through the shared lib/payments/subscription-upsert path
+ * (ONE upsert path for all providers).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
-import { prisma } from '@/lib/prisma';
 import { emitSubscriptionCreated } from '@/lib/analytics';
+import { getProvider } from '@/lib/payments/registry';
+import { PADDLE_SIGNATURE_HEADER } from '@/lib/payments/paddle-provider';
+import {
+  cancelSubscriptionFromEvent,
+  recordPaymentOutcomeFromEvent,
+  updateSubscriptionFromEvent,
+  upsertSubscriptionFromEvent,
+} from '@/lib/payments/subscription-upsert';
+
+const CTX = { provider: 'paddle', route: 'api/paddle/webhooks' };
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
-    const signature = request.headers.get('paddle-signature');
+    const signature = request.headers.get(PADDLE_SIGNATURE_HEADER);
 
-    // Verify webhook signature
-    if (!verifyPaddleWebhook(body, signature)) {
+    const verified = getProvider('paddle').verifyWebhook(body, signature);
+    // `=== false` (not `!verified.ok`): this tsconfig is non-strict, where
+    // truthiness checks do not narrow discriminated unions.
+    if (verified.ok === false) {
+      if (verified.reason === 'paddle_unhandled_event') {
+        // Signature was valid; ack alerts we deliberately ignore.
+        return NextResponse.json({ success: true });
+      }
+      if (verified.reason === 'paddle_invalid_payload') {
+        return NextResponse.json({
+          success: false,
+          error: 'webhook_error'
+        }, { status: 500 });
+      }
+      // Missing secret and bad signatures both fail closed, as before.
       return NextResponse.json({
         success: false,
         error: 'invalid_signature'
       }, { status: 401 });
     }
 
-    const event = JSON.parse(body);
-    
-    // Handle different event types
-    switch (event.alert_name) {
-      case 'subscription_created':
-        await handleSubscriptionCreated(event);
+    const event = verified.event;
+
+    switch (event.type) {
+      case 'subscription.created':
+        await upsertSubscriptionFromEvent(event, CTX);
+        if (event.userId) {
+          // Conversion event — fired only from this verified webhook,
+          // carrying real fields parsed from the payload. Amount/currency are
+          // included only when Paddle actually provides them.
+          const raw = event.raw as { unit_price?: unknown; currency?: unknown };
+          const unitPrice =
+            typeof raw.unit_price === 'string' ? parseFloat(raw.unit_price) : undefined;
+          emitSubscriptionCreated({
+            userId: event.userId,
+            planId: event.planId || 'pro',
+            priceAmount:
+              typeof unitPrice === 'number' && Number.isFinite(unitPrice) ? unitPrice : undefined,
+            currency: typeof raw.currency === 'string' ? raw.currency : undefined,
+            provider: 'paddle',
+          });
+        }
         break;
-      
-      case 'subscription_updated':
-        await handleSubscriptionUpdated(event);
+
+      case 'subscription.updated':
+        await updateSubscriptionFromEvent(event, CTX);
         break;
-      
-      case 'subscription_cancelled':
-        await handleSubscriptionCancelled(event);
+
+      case 'subscription.canceled':
+        await cancelSubscriptionFromEvent(event, CTX);
         break;
-      
-      case 'subscription_payment_succeeded':
-        await handlePaymentSucceeded(event);
+
+      case 'payment.succeeded':
+        await recordPaymentOutcomeFromEvent(event, 'active', CTX);
         break;
-      
-      case 'subscription_payment_failed':
-        await handlePaymentFailed(event);
+
+      case 'payment.failed':
+        await recordPaymentOutcomeFromEvent(event, 'failed', CTX);
         break;
-      
+
       default:
         break;
     }
@@ -58,104 +99,4 @@ export async function POST(request: NextRequest) {
       error: 'webhook_error'
     }, { status: 500 });
   }
-}
-
-function verifyPaddleWebhook(body: string, signature: string | null): boolean {
-  if (!signature || !process.env.PADDLE_WEBHOOK_SECRET) {
-    return false;
-  }
-
-  const expected = crypto
-    .createHmac('sha256', process.env.PADDLE_WEBHOOK_SECRET)
-    .update(body)
-    .digest('hex');
-
-  if (expected.length !== signature.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
-}
-
-async function handleSubscriptionCreated(event: any) {
-  const { passthrough, subscription_id, status } = event;
-  const { userId, plan } = JSON.parse(passthrough || '{}');
-
-  if (!userId) {
-    console.warn('[Paddle] subscription_created missing userId in passthrough');
-    return;
-  }
-
-  await prisma.subscriptions.upsert({
-    where: { userId },
-    create: {
-      id: crypto.randomUUID(),
-      userId,
-      status: status || 'active',
-      provider: 'paddle',
-      providerId: String(subscription_id),
-      planId: plan || 'pro',
-      currentPeriodStart: new Date(),
-      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      updatedAt: new Date(),
-    },
-    update: {
-      status: status || 'active',
-      provider: 'paddle',
-      providerId: String(subscription_id),
-      planId: plan || 'pro',
-      updatedAt: new Date(),
-    },
-  });
-
-  // Conversion event — fired only from this verified subscription_created
-  // webhook, carrying real fields parsed from the payload. Amount/currency are
-  // included only when Paddle actually provides them (dropped otherwise).
-  const unitPrice =
-    typeof event.unit_price === 'string' ? parseFloat(event.unit_price) : undefined;
-  emitSubscriptionCreated({
-    userId,
-    planId: plan || 'pro',
-    priceAmount: typeof unitPrice === 'number' && Number.isFinite(unitPrice) ? unitPrice : undefined,
-    currency: typeof event.currency === 'string' ? event.currency : undefined,
-    provider: 'paddle',
-  });
-}
-
-async function handleSubscriptionUpdated(event: any) {
-  const { subscription_id, status } = event;
-
-  const sub = await prisma.subscriptions.findFirst({
-    where: { providerId: String(subscription_id), provider: 'paddle' },
-  });
-
-  if (sub) {
-    await prisma.subscriptions.update({
-      where: { id: sub.id },
-      data: { status: status || sub.status, updatedAt: new Date() },
-    });
-  }
-}
-
-async function handleSubscriptionCancelled(event: any) {
-  const { subscription_id } = event;
-
-  const sub = await prisma.subscriptions.findFirst({
-    where: { providerId: String(subscription_id), provider: 'paddle' },
-  });
-
-  if (sub) {
-    await prisma.subscriptions.update({
-      where: { id: sub.id },
-      data: {
-        status: 'cancelled',
-        cancelAtPeriodEnd: true,
-        cancelledAt: new Date(),
-        updatedAt: new Date(),
-      },
-    });
-  }
-}
-
-async function handlePaymentSucceeded(_event: any) {
-}
-
-async function handlePaymentFailed(_event: any) {
 }

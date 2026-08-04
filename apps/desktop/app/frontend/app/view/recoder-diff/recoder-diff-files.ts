@@ -22,6 +22,11 @@ type DiffFileSection = {
     dels: number;
     startIndex: number;
     endIndex: number;
+    // True for a rename section (old path != new path, both real). Discard is
+    // suppressed for renames: the backend's single-path re-diff cannot pair a
+    // rename, so a hunk/file discard would delete the renamed file outright
+    // instead of reverting the change (empirically verified).
+    renamed: boolean;
 };
 
 const GitHeaderPrefix = "diff --git ";
@@ -69,7 +74,8 @@ function buildSection(lines: string[], start: number, end: number): DiffFileSect
         }
     }
     const path = newPath || oldPath || gitPath || "";
-    return { path, adds, dels, startIndex: start, endIndex: end };
+    const renamed = oldPath != "" && newPath != "" && oldPath != newPath && oldPath != "/dev/null" && newPath != "/dev/null";
+    return { path, adds, dels, startIndex: start, endIndex: end, renamed };
 }
 
 // Split a raw unified diff into per-file sections at each "diff --git" boundary.
@@ -97,4 +103,35 @@ function parseDiffFileSections(patch: string): DiffFileSection[] {
     return sections;
 }
 
-export { parseDiffFileSections, parseGitHeaderPath, type DiffFileSection };
+// Anchor for one `@@` hunk-header line: the file's repo-relative path plus the
+// hunk's ORDINAL within that file's diff. The ordinal is exactly the index the
+// discard-hunks edge expects — the backend re-diffs the single path against the
+// SAME review base and splits on `@@` headers in order, so the nth header seen
+// here is the nth hunk it parses. No client-side patch math.
+type DiffHunkAnchor = {
+    path: string;
+    hunkIndex: number;
+};
+
+// Map global line index (into patch.split("\n")) → hunk anchor for every `@@`
+// line in a section with a resolvable path. Pathless sections yield no anchors —
+// there is nothing safe to POST for them.
+function computeDiffHunkAnchors(patch: string): Record<number, DiffHunkAnchor> {
+    const lines = patch.split("\n");
+    const anchors: Record<number, DiffHunkAnchor> = {};
+    for (const section of parseDiffFileSections(patch)) {
+        if (section.path == "") {
+            continue;
+        }
+        let hunkIndex = 0;
+        for (let i = section.startIndex; i < section.endIndex; i++) {
+            if (lines[i].startsWith("@@")) {
+                anchors[i] = { path: section.path, hunkIndex };
+                hunkIndex += 1;
+            }
+        }
+    }
+    return anchors;
+}
+
+export { computeDiffHunkAnchors, parseDiffFileSections, parseGitHeaderPath, type DiffFileSection, type DiffHunkAnchor };

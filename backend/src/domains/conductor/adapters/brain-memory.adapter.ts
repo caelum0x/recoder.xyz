@@ -10,6 +10,9 @@
  *
  * Pipeline (launch → enrich):
  *   recall.recall({ query: prompt, userId, scope })   ← mem0 ∪ beads ∪ candidates ∪ items → ColBERT rerank
+ *     → a DEGRADED rerank (colbert down ⇒ lexical/identity fallback) is surfaced
+ *       as a `recall-rerank` provenance ref (`degraded:<reranker>: <reason>`) so
+ *       the audit trail never implies late-interaction ranking that did not run
  *     → prepend a "## Recalled context" block
  *     → (optional) retrieval.search(prompt)            ← repo RAG passages
  *     → prepend a "## Repository context" block
@@ -43,6 +46,9 @@ import type { MemoryScope } from '../../memory/lifecycle/candidate-service.js';
 /** Section headers for the enriched prompt (stable, greppable, non-secret). */
 const RECALLED_HEADER = '## Recalled context';
 const REPO_HEADER = '## Repository context';
+
+/** Provenance source tag for the truthful degraded-rerank marker. */
+const RERANK_SOURCE = 'recall-rerank';
 
 /** Defaults kept small — enrichment is a hint, not the whole prompt. */
 const DEFAULT_MAX_RECALL = 6;
@@ -155,6 +161,15 @@ export function createBrainMemoryAdapter(deps: BrainMemoryAdapterDeps): Conducto
         source: m.provenance.source,
         ref: m.provenance.ref,
       }));
+      // TRUTHFUL DEGRADE MARKER: recall reported a degraded rerank (colbert did
+      // not rank a multi-memory pool) — carry that into the enrichment
+      // provenance so nothing downstream mistakes fallback order for ranking.
+      if (result.rerankerReason) {
+        sources.push({
+          source: RERANK_SOURCE,
+          ref: `degraded:${result.reranker}: ${result.rerankerReason}`,
+        });
+      }
       return { block, sources };
     } catch (err) {
       logger.warn({ err: errText(err) }, 'conductor brain: recall faulted (launch continues on raw prompt)');

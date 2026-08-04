@@ -18,28 +18,18 @@
 import { Router } from 'express';
 import {
   WorkspaceEngine,
-  execFileSafe,
-  reconcile as substrateReconcile,
   systemClock,
   uuidId,
-  type CreateWorkspaceInput,
   type ReconcileReport,
   type WorkspaceEngineDeps,
 } from '@recoder/substrate';
-import type {
-  RunEvent,
-  Workspace,
-  WorkspaceState,
-  WorkspaceSubstrate,
-} from '@recoder/agent-os';
+import type { RunEvent, Workspace, WorkspaceState } from '@recoder/agent-os';
 import type { Logger } from '../../shared/logger.js';
 import type { ComponentHealth } from '../../shared/health-types.js';
 import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { Principal } from '../identity/types.js';
 import { sliceConductorConfig, type ConductorConfig } from './config.js';
 import type {
-  GateVerdict,
-  GovernanceAction,
   TerminalStreamPort,
   GithubStatusPort,
   GithubStatusView,
@@ -54,66 +44,34 @@ import type { RunSignalPushPort } from './ports/run-signal-push.port.js';
 // TYPE-ONLY: the frozen Phase-11 metrics seam (erased at build; the VALUE is
 // late-bound by bootstrap via `setMetrics` — no runtime conductor→observability edge).
 import type { MetricsPort } from '../observability/ports/metrics.port.js';
-import type {
-  PrReviewEvidenceView,
-  PrReviewPort,
-} from './ports/pr-review.port.js';
-import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
+import type { PrReviewPort } from './ports/pr-review.port.js';
 import type { WorkspaceRepositoryPort } from './ports/workspace-repository.port.js';
 import type {
   ReconcileFindingView,
   SteerInput,
   SubstrateAvailabilityView,
-  SubstrateKind,
   WorkspaceView,
 } from './types.js';
-import {
-  classifyAttention,
-  type AttentionResult,
-} from './attention/attention-classifier.js';
 import type { ConductorModule, ConductorModuleDeps } from './index.js';
 import type { CodeIntelPort } from './ports/code-intel.port.js';
 import type {
   PreviewVerifyPort,
-  PreviewVerificationRecord,
   PreviewVerificationView,
 } from './ports/preview-verify.port.js';
 import type { CoordinationAdmissionPort } from './ports/coordination-admission.port.js';
-import type {
-  ConductorPlanPort,
-  ConductorPlanDecision,
-} from './ports/plan.port.js';
+import type { ConductorPlanPort } from './ports/plan.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
-import { deriveSeedTerms } from './adapters/code-intel.adapter.js';
-import {
-  selectSubstrateForRuntime,
-  isOpenfangRuntime,
-} from './adapters/runtime-substrate-selector.js';
-import { createCompletionHookSink } from './adapters/completion-hook.adapter.js';
-import {
-  createSiblingAwarenessSink,
-  stampSiblingAwareness,
-} from './adapters/sibling-awareness.adapter.js';
-import { readRepoPassages } from './adapters/repo-passages.adapter.js';
-import { resolveRepoDefaultBranch } from './git-default-branch.js';
 import { toLoggerPort } from './adapters/logger.adapter.js';
 import { createRecoderSessionLister } from './adapters/recoder-session-lister.adapter.js';
 import {
   createConductorRegistry,
   type ConductorRegistry,
 } from './adapters/substrate-registry.adapter.js';
-import {
-  listConductorRuntimes,
-  type ConductorRuntimeView,
-} from './adapters/runtime-listing.adapter.js';
+import type { ConductorRuntimeView } from './adapters/runtime-listing.adapter.js';
 import { createWorkspaceRepository } from './adapters/workspace-repository.adapter.js';
 import { tryCreateSqliteWorkspaceRepository } from './adapters/sqlite-workspace-repository.adapter.js';
 import { resolveStateOfRecordSqlitePath } from '../../shared/state-of-record.js';
-import { createRunEventSink } from './adapters/run-event-sink.adapter.js';
-import {
-  createRunTailer,
-  type ConductorRunTailer,
-} from './adapters/run-tailer.adapter.js';
+import type { ConductorRunTailer } from './adapters/run-tailer.adapter.js';
 import { createSubstrateScan } from './adapters/substrate-scan.adapter.js';
 import { TerminalStreamService } from './terminal/terminal-stream.js';
 import { buildConductorRoutes } from './routes/conductor.routes.js';
@@ -124,98 +82,46 @@ import {
 } from './mcp/conductor-write-tools.js';
 import type { McpInjectPort } from './ports/mcp-inject.port.js';
 import { buildConductorHealth } from './health.js';
-import {
-  conductorAuditEntry,
-  guardConductorWrite,
-  recordConductorAudit,
-} from './audit/conductor-audit.js';
-import {
-  archiveWorkspace as archiveWorkspaceOp,
-  workspaceDiff as workspaceDiffOp,
-  workspaceDiffFiles as workspaceDiffFilesOp,
-  workspaceFilePatch as workspaceFilePatchOp,
-  workspaceTree as workspaceTreeOp,
-  type ReviewOpsDeps,
-  type WorkspaceDiffView,
-  type WorkspaceDiffFilesView,
-  type WorkspaceFilePatchView,
-  type WorkspaceTreeView,
+import type {
+  WorkspaceDiffView,
+  WorkspaceDiffFilesView,
+  WorkspaceFilePatchView,
+  WorkspaceTreeView,
 } from './review/workspace-review.ops.js';
-import {
-  discardWorkspacePaths as discardWorkspacePathsOp,
-  type WorkspaceDiscardView,
-} from './review/workspace-discard.ops.js';
-import {
-  discardWorkspaceHunks as discardWorkspaceHunksOp,
-  type WorkspaceDiscardHunksView,
-} from './review/workspace-discard-hunks.ops.js';
-import {
-  createWorkspacePr as createWorkspacePrOp,
-  mergeWorkspace as mergeWorkspaceOp,
-  type CreatePrInput,
-  type CreatePrResultView,
-  type MergeInput,
-  type MergeResultView,
-  type PublishOpsDeps,
+import type { WorkspaceDiscardView } from './review/workspace-discard.ops.js';
+import type { WorkspaceDiscardHunksView } from './review/workspace-discard-hunks.ops.js';
+import type {
+  CreatePrInput,
+  CreatePrResultView,
+  MergeInput,
+  MergeResultView,
 } from './review/workspace-publish.ops.js';
-import {
-  continueWorkspace as continueWorkspaceOp,
-  type ContinueOpsDeps,
-  type ContinueWorkspaceInput,
-  type ContinueWorkspaceResult,
+import type {
+  ContinueWorkspaceInput,
+  ContinueWorkspaceResult,
 } from './review/workspace-continue.ops.js';
-import { normalizeLocalPreviewUrl } from './review/preview-url-guard.js';
-import {
-  composeReviewPrompt,
-  parseReviewComments,
-  type ReviewComment,
-} from './review/review-comments.js';
-import {
-  verifyWorkspacePreview,
-  type PreviewVerifyDeps,
-  type PreviewVerifyOptions,
-  type PreviewVerifyResult,
+import type { ReviewComment } from './review/review-comments.js';
+import type {
+  PreviewVerifyOptions,
+  PreviewVerifyResult,
 } from './services/preview-verify.service.js';
-import {
-  createBrowserPreviewVerifier,
-  DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS,
-} from './adapters/browser-preview-verify.adapter.js';
-import {
-  detectDevCommand,
-  type DevCommandView,
-} from './adapters/dev-command.adapter.js';
+import type { DevCommandView } from './adapters/dev-command.adapter.js';
 import type {
   CheckpointRecord,
   CheckpointStorePort,
 } from './ports/checkpoint-store.port.js';
 import { createGitCheckpointStore } from './adapters/git-checkpoint-store.adapter.js';
-import {
-  branchFromCheckpoint as branchFromCheckpointOp,
-  createCheckpoint as createCheckpointOp,
-  listCheckpoints as listCheckpointsOp,
-  restoreCheckpoint as restoreCheckpointOp,
-  type BranchFromCheckpointInput,
-  type BranchOpsDeps,
-  type BranchResultView,
-  type CheckpointOpsDeps,
-  type CreateCheckpointInput,
-  type RestoreResultView,
+import type {
+  BranchResultView,
+  RestoreResultView,
 } from './services/checkpoint.service.js';
-import {
-  filterWorkspaces,
-  sortByRecencyDesc,
-  type WorkspaceQueryFilters,
-} from './services/workspace-query.service.js';
+import type { WorkspaceQueryFilters } from './services/workspace-query.service.js';
 import { buildCompareRoutes } from './routes/compare.routes.js';
-import { canAccessWorkspace } from './routes/workspace-access.js';
 import { buildCheckpointRoutes } from './routes/checkpoint.routes.js';
 import { buildWorkspaceQueryRoutes } from './routes/workspaces-query.routes.js';
 import { buildRepoConfigRoutes } from './routes/repo-config.routes.js';
-import { RepoSetupService, repoKeyFor } from './services/repo-setup.service.js';
-import {
-  PrStatusService,
-  type PrStatusView,
-} from './services/pr-status.service.js';
+import { RepoSetupService } from './services/repo-setup.service.js';
+import { PrStatusService } from './services/pr-status.service.js';
 import {
   RepoCloneService,
   type CloneRepoInput,
@@ -230,9 +136,6 @@ import {
   type MergeabilityView,
 } from './services/mergeability.service.js';
 import { WorktreeStatusService } from './services/worktree-status.service.js';
-import { computeWorkspacePort } from './services/workspace-port.js';
-import { readWorkspacePanes } from './services/workspace-panes.js';
-import { readRepoConfigFile } from './services/repo-config-file.js';
 import {
   EnvironmentImportService,
   type EnvironmentImportView,
@@ -241,184 +144,52 @@ import {
   SessionTranscriptService,
   type TranscriptSearchView,
 } from './services/session-transcript.service.js';
-import {
-  foldReadiness,
-  type ReadinessView,
-} from './services/readiness.service.js';
-import {
-  assembleConvergenceEvidence,
-  type ConvergenceEvidenceRecord,
-  type EvidenceCandidateInput,
-  type EvidenceConvergence,
-  type EvidenceGovernance,
-} from './evidence/convergence-evidence.js';
-import {
-  renderEvidenceExport,
-  type EvidenceExport,
-} from './evidence/evidence-export.js';
-import {
-  loadEvidenceSigningKey,
-  signEvidenceExport,
-} from './evidence/evidence-signing.js';
-import {
-  renderPreviewEvidence,
-  signPreviewEvidence,
-  type PreviewEvidencePack,
-} from './evidence/preview-evidence.js';
+import type { ReadinessView } from './services/readiness.service.js';
+import type { ConvergenceEvidenceRecord } from './evidence/convergence-evidence.js';
+import type { EvidenceExport } from './evidence/evidence-export.js';
+import { loadEvidenceSigningKey } from './evidence/evidence-signing.js';
+import type { PreviewEvidencePack } from './evidence/preview-evidence.js';
 import type { KeyObject } from 'node:crypto';
-import {
-  planConvergence as planConvergenceOp,
-  type ConvergencePlan,
-} from './converge/converge-plan.service.js';
-import {
-  composeConvergence as composeConvergenceOp,
-  probeSynthesizability as probeSynthesizabilityOp,
-  EmptyConvergenceError,
-  UnresolvedConvergenceError,
-  type ComposeConvergenceInput,
-  type ComposeConvergenceResult,
-  type ConvergeOpsDeps,
+import type { ConvergencePlan } from './converge/converge-plan.service.js';
+import type {
+  ComposeConvergenceInput,
+  ComposeConvergenceResult,
 } from './converge/converge.ops.js';
 import { createInMemoryRepoSetupStore } from './adapters/repo-setup-store.adapter.js';
-import {
-  compareTaskGroup as compareTaskGroupOp,
-  workspaceSiblings as workspaceSiblingsOp,
-  parseDiffStat,
-  taskGroupOf,
-  type CompareDeps,
-  type CompareView,
-} from './services/compare.service.js';
-import {
-  pairwiseDiff as pairwiseDiffOp,
-  sharedPairPaths,
-  type PairwiseDiffView,
-} from './services/pairwise-diff.service.js';
+import type { CompareView } from './services/compare.service.js';
+import type { PairwiseDiffView } from './services/pairwise-diff.service.js';
 import type {
   WorkspaceGridPort,
   GroupGridArrangement,
 } from './ports/workspace-grid.port.js';
+import {
+  type ConductorContext,
+  type ConductorWriteResult,
+  type CreateConductorWorkspaceInput,
+  type ReviewCommentDelivery,
+  type WorkspaceRunConfigView,
+} from './module/shared.js';
+import { ConductorIntrospection } from './module/introspection.js';
+import { ConductorCheckpoints } from './module/checkpoints.js';
+import { ConductorPreview } from './module/preview.js';
+import { ConductorCompareConverge } from './module/compare-converge.js';
+import { ConductorReads } from './module/reads.js';
+import { ConductorGovernedWrites } from './module/governed-writes.js';
+import { buildRunEventPipeline } from './module/run-event-pipeline.js';
 
-/** The create request the routes/callers build (createdBy is stamped from the principal). */
-export type CreateConductorWorkspaceInput = Omit<
-  CreateWorkspaceInput,
-  'createdBy'
-> & {
-  /**
-   * Mid-run sibling awareness opt-out (recoder-i499). Defaults TRUE for a
-   * taskGroup launch (informing still-running siblings when one finishes is the
-   * point of launching 2+ parallel agents) and unset otherwise; an explicit
-   * `false` opts the workspace out. Persisted as `metadata.siblingAwareness` so
-   * the completion-time hook can check it.
-   */
-  readonly siblingAwareness?: boolean;
-};
+// The public result/read-model types + the advance-target whitelist moved to
+// `module/shared.ts` with the collaborator split; re-exported here so every
+// existing `from './conductor-module.js'` import keeps resolving unchanged.
+export { ADVANCE_TARGET_STATES } from './module/shared.js';
+export type {
+  ConductorWriteResult,
+  CreateConductorWorkspaceInput,
+  ReviewCommentDelivery,
+  WorkspaceRunConfigView,
+} from './module/shared.js';
 
 /** How many trailing terminal lines the attention probe captures. */
 const ATTENTION_TAIL_LINES = 60;
-
-/**
- * The inference function assisted convergence synthesis addresses — MUST equal the
- * inference domain's canonical default chat function (`TENSORZERO_DEFAULT_FUNCTION`
- * = 'recoder_default' in `domains/inference/tensorzero-config.ts`). A DOCUMENTED
- * LITERAL, not an import: the inference PUBLIC surface (`domains/inference/index.ts`)
- * exports no such constant, and a cross-domain VALUE import of the internal would
- * break the domain-boundary invariant (only type-only seams are legal). The converge
- * ops themselves stay name-free (`ConvergeOpsDeps.inferenceFunctionName`), so this
- * composition layer is the ONE place the name lives on the conductor side.
- */
-const CONVERGE_ASSIST_FUNCTION_NAME = 'recoder_default';
-
-/**
- * The fixed internal identity sibling-awareness steers run under (recoder-i499).
- * A service principal (never a request credential) so the mid-run note delivery
- * clears the SAME governed `workspace.steer` path an operator uses — every
- * delivery is gated + audited, and a policy deny is a truthful skip.
- */
-const SIBLING_AWARENESS_PRINCIPAL: Principal = {
-  userId: 'internal-service',
-  scopes: ['internal', 'read', 'write'],
-  kind: 'internal',
-  isAnonymous: false,
-  raw: { kind: 'conductor-sibling-awareness' },
-};
-
-/**
- * The outcome of a governed conductor write. `ok` reflects whether the action was
- * PERFORMED (gate allowed AND execution succeeded); `verdict` is always present;
- * `reason` carries the truthful blocker when `ok:false`.
- */
-export interface ConductorWriteResult<T> {
-  readonly ok: boolean;
-  readonly verdict: GateVerdict;
-  readonly value?: T;
-  readonly reason?: string;
-  /**
-   * OPTIONAL failure discriminator for a `ok:false` result whose cause is a CLIENT
-   * input error (a 4xx), NOT a governance deny or a service fault — e.g. a
-   * convergence that cannot be resolved as requested (`unresolved`) or has nothing
-   * to converge (`empty`). Absent ⇒ the caller maps deny→403 / allow-fail→503 as usual.
-   */
-  readonly code?: 'unresolved' | 'empty';
-}
-
-/** The `GET …/run-config` read-model: how to run a workspace + its dev port. */
-export interface WorkspaceRunConfigView {
-  /** Stable per-workspace dev-server port (`RECODER_PORT`). */
-  readonly port: number;
-  /** EFFECTIVE setup script (governed store override, else committed file); '' = none. */
-  readonly setup: string;
-  /** Where `setup` came from — the same resolver the create hook executes. */
-  readonly setupSource: 'store' | 'file' | 'none';
-  /** Effective run command: committed run script, else the detected dev command, else ''. */
-  readonly run: string;
-  /** Where `run` came from, so the UI can be truthful about the source. */
-  readonly runSource: 'config' | 'detected' | 'none';
-  /** The auto-detected dev command (null when unrecognized), for display/override. */
-  readonly detectedCommand: string | null;
-}
-
-/**
- * How a batch of review comments reached the agent — so the reviewer's client can
- * be truthful about whether the note steered a LIVE turn or kicked a NEW follow-up
- * run. Returned as the value of {@link ConductorModule.sendReviewComments}.
- */
-export interface ReviewCommentDelivery {
-  /** `'steer'` = folded into a live running agent's turn; `'run'` = a new gated worktree run. */
-  readonly delivery: 'steer' | 'run';
-  /** The follow-up run id (only when `delivery === 'run'`). */
-  readonly runId?: string;
-  /** The workspace state after the follow-up run started (only when `delivery === 'run'`). */
-  readonly state?: WorkspaceState;
-}
-
-/** States a `stop` may act on — exactly those with a legal `→ cancelled` transition. */
-const STOPPABLE_STATES: readonly WorkspaceState[] = [
-  'created',
-  'setting_up',
-  'ready',
-  'running',
-  'awaiting_approval',
-];
-
-/**
- * Legal `advance` targets — the PURE lifecycle steps of the review → merge flow
- * (RECODER-PRODUCT-DESIGN). Side-effectful/evidence-bearing states are excluded
- * on purpose: `merging`/`merged` require `/merge` (a real git delivery),
- * `archived` requires `/archive` (teardown), and `failed` must come from a real
- * failure, never a hand-set flag. `cancelled` is EXCLUDED too: it is reached only
- * through `stopWorkspace`, which kills the live substrate session and releases the
- * repo write-lock BEFORE flipping the record — advancing straight to `cancelled`
- * would strand a zombie agent + a held lock while the state falsely reads
- * cancelled. Legality of the specific from→to step is then enforced by the
- * canonical agent-os workspace state machine.
- */
-export const ADVANCE_TARGET_STATES: readonly WorkspaceState[] = [
-  'ready',
-  'running',
-  'awaiting_approval',
-  'awaiting_review',
-  'changes_requested',
-];
 
 export class ConductorComposer implements ConductorModule {
   readonly name = 'conductor' as const;
@@ -528,6 +299,14 @@ export class ConductorComposer implements ConductorModule {
    */
   private readonly auditReader?: AuditReaderPort;
   private started = false;
+  /** The narrow facade-bound dep slice the collaborators run over. */
+  private readonly ctx: ConductorContext;
+  private readonly introspection: ConductorIntrospection;
+  private readonly checkpoints: ConductorCheckpoints;
+  private readonly preview: ConductorPreview;
+  private readonly compareConverge: ConductorCompareConverge;
+  private readonly reads: ConductorReads;
+  private readonly writes: ConductorGovernedWrites;
 
   constructor(deps: ConductorModuleDeps) {
     this.log = deps.logger;
@@ -620,9 +399,11 @@ export class ConductorComposer implements ConductorModule {
         ? tryCreateSqliteWorkspaceRepository(
             {
               path: sqlitePath,
-              ...(deps.canonicalRunStore ? { canonicalStore: deps.canonicalRunStore } : {}),
+              ...(deps.canonicalRunStore
+                ? { canonicalStore: deps.canonicalRunStore }
+                : {}),
             },
-            this.log,
+            this.log
           )
         : null;
     this.repository =
@@ -630,7 +411,9 @@ export class ConductorComposer implements ConductorModule {
       sqliteRepository ??
       createWorkspaceRepository({
         executor: deps.executor,
-        ...(deps.canonicalRunStore ? { canonicalStore: deps.canonicalRunStore } : {}),
+        ...(deps.canonicalRunStore
+          ? { canonicalStore: deps.canonicalRunStore }
+          : {}),
       });
 
     // Terminal surface owns the sync hub; steering is gated through this composer.
@@ -642,107 +425,23 @@ export class ConductorComposer implements ConductorModule {
       },
     });
 
-    // Durable + live run-event sink; the tailer emits through it. When an external
-    // state-of-record sink is injected (the agent-os RunEvent bus, adapted at the
-    // composition root), fan out to it FIRST so the control plane sees every event,
-    // then to the conductor-local live sink. A failing external ingest is
-    // isolated (logged, swallowed) so the live terminal stream never stalls.
-    //
-    // DURABILITY OWNERSHIP (P1 #8): the local sink durably appends ONLY when there
-    // is NO external durable sink. With the bus wired, the bus IS the durable
-    // state-of-record writer (`repository.appendEvent` now delegates to the SAME
-    // agent-os store); a second local durable append would duplicate every event.
-    const localSink = createRunEventSink({
+    // Run-event pipeline: local durable+live sink → external fan-out → completion
+    // hook → sibling awareness → live tailer (module/run-event-pipeline.ts). The
+    // late-bound seams below read the CURRENT bootstrap bindings per event.
+    this.tailer = buildRunEventPipeline({
+      log: this.log,
+      cfg: this.cfg,
+      registry: this.registry,
       repository: this.repository,
-      persistDurably: !deps.runEventSink,
-      publish: event => this.terminalService.publishSync(event),
-      publishRun: (workspaceId, event) =>
-        this.terminalService.publishRunEvent(workspaceId, event),
-      logger: this.log,
-    });
-    const fannedSink = composeRunEventSink(
-      localSink,
-      deps.runEventSink,
-      this.log
-    );
-    // Terminal-event hook (h + i): on a `completed`/`failed` RunEvent the run flow
-    // HARVESTS an evidence-backed memory candidate (brain) and CLOSES/NOTES the bd
-    // issue (code-intel). Both are fire-and-forget + degrade-safe — a memory/beads
-    // fault NEVER rethrows into the terminal-event path or stalls the live stream.
-    const completionSink = createCompletionHookSink({
-      inner: fannedSink,
+      terminalService: this.terminalService,
+      externalSink: deps.runEventSink,
       ...(this.brain ? { brain: this.brain } : {}),
       ...(this.codeIntel ? { codeIntel: this.codeIntel } : {}),
-      // Late-bound meter: the sink reads it per terminal event, so bootstrap can
-      // inject the billing meter AFTER this module is constructed (setUsageMeter).
       getMeter: () => this.usageMeter,
-      // Late-bound reverse-push (§8.2 b): the sink reads it per terminal event, so
-      // bootstrap can inject the ops-recorder push port AFTER this module is
-      // constructed (setRunSignalPush). Unwired ⇒ a truthful no-op (no push).
       getRunSignalPush: () => this.runSignalPush,
-      // Late-bound metrics (BE-7.3): the sink reads the frozen MetricsPort per
-      // terminal event, so bootstrap can inject it AFTER observability is
-      // composed (setMetrics). Unwired ⇒ a truthful no-op (no series recorded).
       getMetrics: () => this.metrics,
-      getWorkspace: id => this.repository.getWorkspace(id),
-      logger: this.log,
-    });
-    // Mid-run sibling awareness (recoder-i499): the OUTERMOST terminal-event
-    // decorator. When one taskGroup sibling finishes, every still-RUNNING sibling
-    // gets a terse paths+stats note steered into its live session through the
-    // SAME governed steer path (internal principal ⇒ gated + audited), plus a
-    // `log` evidence event (`data.kind: sibling_context_delivered`) on the
-    // receiver. Fire-and-forget + per-sibling degrade-safe — a failed delivery
-    // NEVER touches the terminal path. Late-bound reads: the closures resolve
-    // `this.engine`/`this.steerTransport` per event, after construction.
-    const sink = createSiblingAwarenessSink({
-      inner: completionSink,
-      getWorkspace: id => this.repository.getWorkspace(id),
-      // Principal-less ⇒ the FULL group (an internal read, like merge evidence).
       siblings: id => this.workspaceSiblings(id),
-      steer: input => this.steerWorkspace(input, SIBLING_AWARENESS_PRINCIPAL),
-      logger: this.log,
-    });
-    // Path (b) token accounting: late-bind the completion-hook sink into the
-    // native openfang (`in_process`) substrate so its terminal event (workspaceId
-    // + real input/outputTokens) meters REAL `token` usage (the sink does not exist
-    // when the substrate is built in bootstrap). Degrade-safe: the substrate absent
-    // / not shaped ⇒ a truthful no-op (tokens stay unmetered).
-    try {
-      const inProc = this.registry.getFull(
-        'in_process' as SubstrateKind
-      ) as Partial<{
-        setRunSink(s: typeof sink): void;
-      }>;
-      inProc.setRunSink?.(sink);
-    } catch {
-      /* in_process not registered in this composition — nothing to wire */
-    }
-    // Live streaming driver: the tailer drives `@recoder/substrate`
-    // `startRunTail` against the REGISTERED substrate's capture/alive/exitCode,
-    // and — when `tmuxControlMode` is on, the run is on `tmux_worktree`, and the
-    // injected tmux binary provably speaks control mode — `selectControlModeTail`
-    // wraps that substrate so real-time `%output` streams into `log` RunEvents
-    // (the poller stays the liveness/exit-code authority). Any gate failing ⇒
-    // the plain poll tailer, the truthful degrade. Substrate resolution is
-    // truthful: an unregistered id returns `undefined` (attach marker only, no
-    // fabricated stream).
-    this.tailer = createRunTailer({
-      sink,
-      logger: this.log,
-      live: {
-        resolveSubstrate: id => {
-          try {
-            return this.registry.getFull(id as SubstrateKind);
-          } catch {
-            return undefined;
-          }
-        },
-        config: this.cfg,
-        clock: systemClock,
-        id: uuidId,
-        logger: loggerPort,
-      },
+      steer: (input, principal) => this.steerWorkspace(input, principal),
     });
 
     // The engine deps assembled behind the ports.
@@ -759,6 +458,132 @@ export class ConductorComposer implements ConductorModule {
       ...(deps.admission ? { admission: deps.admission } : {}),
     };
     this.engine = new WorkspaceEngine(this.engineDeps);
+
+    // Collaborator wiring: every method group runs over the SAME narrow context
+    // slice; cross-group calls route through facade-bound closures (lazy — the
+    // collaborators may reference each other only at call time).
+    this.ctx = this.buildContext();
+    this.introspection = new ConductorIntrospection(this.ctx);
+    this.checkpoints = new ConductorCheckpoints(this.ctx);
+    this.preview = new ConductorPreview(this.ctx);
+    this.compareConverge = new ConductorCompareConverge(this.ctx);
+    this.reads = new ConductorReads(this.ctx);
+    this.writes = new ConductorGovernedWrites(this.ctx);
+  }
+
+  private buildContext(): ConductorContext {
+    // EVERY field is a live getter over the composer's own field — the moved
+    // bodies read `this.<field>` at CALL time today, so a late rebinding (a
+    // bootstrap setter, or a test overriding a private probe) must stay visible.
+    const self = this;
+    return {
+      get log() {
+        return self.log;
+      },
+      get cfg() {
+        return self.cfg;
+      },
+      get gate() {
+        return self.gate;
+      },
+      get registry() {
+        return self.registry;
+      },
+      get repository() {
+        return self.repository;
+      },
+      get tailer() {
+        return self.tailer;
+      },
+      get terminalService() {
+        return self.terminalService;
+      },
+      get engine() {
+        return self.engine;
+      },
+      get engineDeps() {
+        return self.engineDeps;
+      },
+      get checkpointStore() {
+        return self.checkpointStore;
+      },
+      get repoSetup() {
+        return self.repoSetup;
+      },
+      get prStatus() {
+        return self.prStatus;
+      },
+      get prChecks() {
+        return self.prChecks;
+      },
+      get repoClone() {
+        return self.repoClone;
+      },
+      get mergeability() {
+        return self.mergeability;
+      },
+      get worktreeStatus() {
+        return self.worktreeStatus;
+      },
+      get environmentImportService() {
+        return self.environmentImportService;
+      },
+      get sessionTranscriptService() {
+        return self.sessionTranscriptService;
+      },
+      get brain() {
+        return self.brain;
+      },
+      get codeIntel() {
+        return self.codeIntel;
+      },
+      get previewVerify() {
+        return self.previewVerify;
+      },
+      get plan() {
+        return self.plan;
+      },
+      get coordinationAdmission() {
+        return self.coordinationAdmission;
+      },
+      get colbertIndex() {
+        return self.colbertIndex;
+      },
+      get github() {
+        return self.github;
+      },
+      get steerTransport() {
+        return self.steerTransport;
+      },
+      get onDeliveryFeedback() {
+        return self.onDeliveryFeedback;
+      },
+      get mcpInject() {
+        return self.mcpInject;
+      },
+      get workspaceGrid() {
+        return self.workspaceGrid;
+      },
+      get tmuxIntrospect() {
+        return self.tmuxIntrospect;
+      },
+      get auditReader() {
+        return self.auditReader;
+      },
+      get entitlementGate() {
+        return self.entitlementGate;
+      },
+      get prReview() {
+        return self.prReview;
+      },
+      getWorkspace: id => self.getWorkspace(id),
+      buildWorkspaceView: workspace => self.reads.buildWorkspaceView(workspace),
+      workspaceSiblings: (id, principal) =>
+        self.workspaceSiblings(id, principal),
+      workspaceReadiness: id => self.workspaceReadiness(id),
+      getPreviewVerification: id => self.getPreviewVerification(id),
+      resolveEvidenceSigningKey: () => self.resolveEvidenceSigningKey(),
+    };
   }
 
   /** Inject the optional billing entitlement gate (pre-dispatch quota check). */
@@ -801,584 +626,36 @@ export class ConductorComposer implements ConductorModule {
     this.prReview = port;
   }
 
-  /**
-   * Path (b) prompt enrichment: fold two capability blocks into the prompt the
-   * native openfang turn runs as its `command`:
-   *   1. MEMORY recall (mem0 ∪ beads ∪ candidates → rerank) — unchanged.
-   *   2. CODE-MAP (recodergit code-knowledge-graph): a bounded, code-aware launch
-   *      context (`codeIntel.queryContext`) appended AFTER the memory block.
-   * Degrade-safe: no brain / empty prompt / recall fault ⇒ the raw prompt (or
-   * `undefined` when there is no prompt, so the substrate refuses truthfully); an
-   * absent/disabled/not-indexed code-graph ⇒ the prompt is left memory-only.
-   *
-   * Ordering caveat (degrade-truthful, NOT a bug): `startCodeIntel` fires the repo
-   * index fire-and-forget AFTER this enrichment, so the FIRST launch of a
-   * never-indexed repo races the index and truthfully gets `queryContext === null`
-   * (memory-only prompt). The code-map warms on subsequent launches and after the
-   * completion-hook reindex — never forced ahead of the index here.
-   */
-  private async enrichOpenfangCommand(
-    input: CreateConductorWorkspaceInput,
-    principal: Principal
-  ): Promise<string | undefined> {
-    const raw = (input.prompt ?? '').trim();
-    if (!raw) return undefined;
-
-    // 1) MEMORY recall (unchanged): no brain ⇒ the raw prompt is the base; a
-    //    recall fault logs + leaves the base prompt, then the code-map still runs.
-    let prompt = input.prompt ?? '';
-    if (this.brain) {
-      try {
-        const enriched = await this.brain.enrichPrompt({
-          prompt: input.prompt ?? '',
-          userId: principal.userId,
-          ...(input.taskId ? { taskId: input.taskId } : {}),
-          ...(input.repoPath ? { repoPath: input.repoPath } : {}),
-          ...(input.library ? { library: input.library } : {}),
-          // Thread the SAME per-repo ColBERT collection `startCodeIntel` builds so
-          // the brain's first-stage retrieval reads the index instead of leaving it
-          // a dead write. Gated on `repoPath` — the only case `startCodeIntel`
-          // builds a `repo_<id>` collection — so we never point search at an index
-          // that was never built (absent ⇒ retrieval falls back to its default).
-          ...(input.repoPath
-            ? {
-                repoCollection: `repo_${repoIdFromRepoRef(input.projectId || input.repoPath)}`,
-              }
-            : {}),
-        });
-        prompt = enriched.prompt;
-      } catch (err) {
-        this.log.warn(
-          { err, runtimeId: input.runtimeId },
-          'conductor openfang prompt enrich faulted — running raw prompt'
-        );
-      }
-    }
-
-    // 2) CODE-MAP (recodergit code-graph), degrade-truthful. Probe the OPTIONAL
-    //    port method before calling (older impls omit it). Gated on `repoPath`
-    //    (the only case a `repo_<id>` index exists) and derived with the SAME
-    //    `repoIdFromRepoRef(projectId || repoPath)` `startCodeIntel` indexes under,
-    //    so we only query an index that was, or will be, built for this repo.
-    //    `queryContext` returns a rendered block OR a truthful `null` (disabled /
-    //    not-indexed / no seed match) ⇒ the prompt is left memory-only. Bounded +
-    //    non-blocking: a fault is logged and skipped, never crashing a launch.
-    if (input.repoPath && this.codeIntel?.queryContext) {
-      try {
-        const repoId = repoIdFromRepoRef(input.projectId || input.repoPath);
-        const seeds = deriveSeedTerms(input.prompt ?? '');
-        const block = await this.codeIntel.queryContext(repoId, seeds);
-        if (block) prompt = `${prompt}\n\n${block}`;
-      } catch (err) {
-        this.log.warn(
-          { err, runtimeId: input.runtimeId },
-          'conductor openfang code-context enrich faulted — skipped'
-        );
-      }
-    }
-
-    return prompt;
-  }
-
-  /**
-   * Fire-and-forget code-intel on workspace create: recodergit repo index + beads
-   * issue-graph claim + ColBERT PLAID index build. Never awaited (a slow/absent
-   * engine must not block launch); every call is `void` + self-logging +
-   * degrade-safe inside the adapter (or guarded by a truthful `configured()` probe).
-   */
-  private startCodeIntel(
-    input: CreateConductorWorkspaceInput,
-    workspace: Workspace
-  ): void {
-    const repoId = repoIdFromRepoRef(input.projectId || input.repoPath);
-    // ColBERT per-repo late-interaction index: chunk the repo's text files and
-    // build/refresh the PLAID collection so retrieval can surface passages the
-    // single-vector Qdrant top-K misses. Degrade-truthful: no daemon configured, an
-    // empty passage set, or a build fault is a logged skip — never blocks a launch.
-    if (this.colbertIndex?.configured() && input.repoPath) {
-      const collection = `repo_${repoId}`;
-      void readRepoPassages(input.repoPath)
-        .then(passages =>
-          passages.length > 0
-            ? this.colbertIndex!.ensureIndex(collection, passages, {
-                overwrite: true,
-              })
-            : undefined
-        )
-        .catch(err =>
-          this.log.warn({ err, repoId }, 'conductor colbert index hook faulted')
-        );
-    }
-    if (!this.codeIntel) return;
-    const codeIntel = this.codeIntel;
-    void codeIntel
-      .indexRepo(input.repoPath, repoId)
-      .catch(err =>
-        this.log.warn(
-          { err, repoId },
-          'conductor recodergit index hook faulted'
-        )
-      );
-    if (input.taskId) {
-      void codeIntel
-        .trackWork(input.taskId, workspace.workspaceId)
-        .catch(err =>
-          this.log.warn(
-            { err, taskId: input.taskId },
-            'conductor beads track hook faulted'
-          )
-        );
-    }
-  }
-
-  /**
-   * Inject the Recoder toolbelt `.mcp.json` into the launched workspace's worktree
-   * (fire-and-forget). Truthful degrade: no injector wired, or no worktree path on
-   * the record (e.g. a remote/in-process substrate without a local dir), is a
-   * logged skip — never a fabricated write, never a launch failure.
-   */
-  private injectWorktreeMcp(workspace: Workspace): void {
-    if (!this.mcpInject) return;
-    if (!workspace.worktreePath) {
-      this.log.debug(
-        { workspaceId: workspace.workspaceId, substrate: workspace.substrate },
-        'conductor .mcp.json injection skipped (no worktree path)'
-      );
-      return;
-    }
-    void this.mcpInject
-      .inject(workspace.worktreePath)
-      .catch(err =>
-        this.log.warn(
-          { err, workspaceId: workspace.workspaceId },
-          'conductor .mcp.json injection faulted'
-        )
-      );
-  }
-
-  /**
-   * Run the repo's configured setup script inside the freshly-created worktree
-   * (fire-and-forget). Truthful degrade: no worktree on the record, or no script
-   * configured for the repo, is a logged skip — the service NEVER throws and a
-   * failing script is a captured (non-blocking) failure, so an allowed launch is
-   * never aborted by setup. The repo key is derived from the projectId (preferred)
-   * falling back to the repoPath, matching the config write key.
-   */
-  private runRepoSetup(
-    input: CreateConductorWorkspaceInput,
-    workspace: Workspace
-  ): void {
-    if (!workspace.worktreePath) {
-      this.log.debug(
-        { workspaceId: workspace.workspaceId, substrate: workspace.substrate },
-        'conductor repo-setup skipped (no worktree path)'
-      );
-      return;
-    }
-    const repoKey = repoKeyFor(input.projectId, input.repoPath);
-    const recoderPort = computeWorkspacePort(workspace.workspaceId);
-    void this.repoSetup
-      .runSetup({
-        repoKey,
-        worktreePath: workspace.worktreePath,
-        workspaceId: workspace.workspaceId,
-        recoderPort,
-      })
-      .then(result => {
-        if (result.ran && result.ok === false) {
-          this.log.warn(
-            {
-              workspaceId: workspace.workspaceId,
-              repoKey,
-              exitCode: result.exitCode,
-            },
-            'conductor repo-setup script failed (non-blocking)'
-          );
-        }
-      })
-      .catch(err =>
-        this.log.warn(
-          { err, workspaceId: workspace.workspaceId, repoKey },
-          'conductor repo-setup hook faulted'
-        )
-      );
-  }
-
   async listWorkspaces(): Promise<Workspace[]> {
-    return this.engine.listWorkspaces();
+    return this.reads.listWorkspaces();
   }
 
-  /**
-   * Board search/filter — the state-of-record list narrowed by the query filters
-   * (free-text `q` over codename/repo/branch/task/goal/agent, plus exact `state`,
-   * substring `repo`/`agent`, and the tri-state `archived`). Read-only: it fetches
-   * the canonical list and applies the pure {@link filterWorkspaces}, never gating,
-   * auditing, or mutating. An empty match is a truthful empty list.
-   */
   async queryWorkspaces(filters: WorkspaceQueryFilters): Promise<Workspace[]> {
-    const workspaces = await this.engine.listWorkspaces();
-    return filterWorkspaces(workspaces, filters);
+    return this.reads.queryWorkspaces(filters);
   }
 
-  /**
-   * Archived history — every archived workspace, most-recent-first. A convenience
-   * over {@link queryWorkspaces} with `archived: true`; read-only and degrade-safe
-   * (no archived records ⇒ a truthful empty list).
-   */
   async listArchivedWorkspaces(): Promise<Workspace[]> {
-    const workspaces = await this.engine.listWorkspaces();
-    return sortByRecencyDesc(filterWorkspaces(workspaces, { archived: true }));
+    return this.reads.listArchivedWorkspaces();
   }
 
   async getWorkspace(workspaceId: string): Promise<Workspace | null> {
-    return this.engine.getWorkspace(workspaceId);
-  }
-
-  /**
-   * Resolve the concrete baseRef to persist for a launch. An explicit, concrete
-   * caller `baseRef` (e.g. the checkpoint-branch tag) always wins. Otherwise, when
-   * the caller left it unset or passed the detached `HEAD` sentinel, probe the repo
-   * git-native for its REAL integration base. Never throws; when git cannot answer
-   * it returns the caller's value unchanged (the engine then keeps `HEAD`, and the
-   * read/merge edges resolve git-native as defense-in-depth).
-   */
-  private async resolveLaunchBaseRef(
-    input: CreateConductorWorkspaceInput
-  ): Promise<string | undefined> {
-    if (input.baseRef && input.baseRef !== 'HEAD') return input.baseRef;
-    if (!input.repoPath) return input.baseRef;
-    const resolved = await resolveRepoDefaultBranch(
-      execFileSafe,
-      input.repoPath
-    );
-    return resolved ?? input.baseRef;
+    return this.reads.getWorkspace(workspaceId);
   }
 
   async createWorkspace(
     input: CreateConductorWorkspaceInput,
     principal: Principal
   ): Promise<ConductorWriteResult<Workspace>> {
-    const action = 'workspace.create';
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { path: input.repoPath },
-        ...(input.taskId ? { taskId: input.taskId } : {}),
-        metadata: {
-          projectId: input.projectId,
-          runtimeId: input.runtimeId,
-          substrate: input.substrate,
-        },
-      }
-    );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-
-    // Pre-dispatch billing quota gate (OPTIONAL). When wired, a run counts against
-    // the subject's `agent_run` quota BEFORE the substrate launches; over-quota is
-    // refused truthfully. Absent ⇒ degrade OPEN (no quota gate). A gate EXCEPTION
-    // (not a deny) degrades open too — a metering hiccup must not block launches
-    // the policy gate already allowed. The gate itself is fail-safe on `allowed`.
-    if (this.entitlementGate) {
-      try {
-        const decision = await this.entitlementGate.check(principal, {
-          quota: 'agent_run',
-        });
-        if (!decision.allowed) {
-          const reason =
-            decision.message ??
-            `run quota denied (${decision.reason ?? 'quota_exceeded'})`;
-          return { ok: false, verdict, reason };
-        }
-      } catch (err) {
-        this.log.warn(
-          { err, projectId: input.projectId },
-          'conductor entitlement quota check errored — degrading open'
-        );
-      }
-    }
-
-    // Pal launch advisory (OPTIONAL): after the write-gate allow, before substrate
-    // selection, consult the engines-owned `planLaunch` facet. Pal ADVISES — the
-    // caller's explicit choices always win, and pal only fills gaps the operator
-    // left blank. A throwing/faulted port NEVER fails a launch (degrade to no
-    // advisory); absent ⇒ the whole path is byte-identical to today. `planLaunch`
-    // is a pure in-proc verb, so this adds no I/O latency to the launch path.
-    let plan: ConductorPlanDecision | undefined;
-    if (this.plan) {
-      try {
-        plan = this.plan.plan({
-          ...(input.taskId ? { taskId: input.taskId } : {}),
-          ...(input.prompt ? { goal: input.prompt } : {}),
-        });
-      } catch (err) {
-        this.log.warn(
-          { err, taskId: input.taskId },
-          'conductor pal planLaunch faulted — launching without advisory'
-        );
-      }
-    }
-
-    // Coordination admission (OPTIONAL, degrade-open): on the axis
-    // resource-governor → coordination-admission → work-lock → launch, defer a
-    // launch whose ISSUE is ALREADY actively held by 2+ agents (a contention the
-    // Multica `conflictStatus` sees under 2+ members). Keyed on `input.taskId`
-    // (the bd issue the autopilot passes). FAIL-OPEN: absent gate / engine down /
-    // any fault ⇒ admit — a coordination engine being down must NEVER block a
-    // launch; only a LIVE, engine-confirmed double-assignment defers. The reroute
-    // WRITE is governance-gated by the caller (`coordination.reroute`); a
-    // deny/throw ⇒ no reroute, launch still deferred (fail-safe).
-    if (this.coordinationAdmission && input.taskId) {
-      const issueId = input.taskId;
-      try {
-        const decision = await this.coordinationAdmission.admitIssue(
-          { issueId },
-          {
-            authorizeReroute: async () =>
-              (
-                await guardConductorWrite(
-                  this.gate,
-                  'coordination.reroute',
-                  principal,
-                  {
-                    target: { path: input.repoPath },
-                    taskId: issueId,
-                    metadata: { issueId },
-                  }
-                )
-              ).allowed,
-          }
-        );
-        if (!decision.admit) {
-          // Truthful DEFER — not a governance deny: the write-gate already
-          // allowed this launch; coordination re-balances a contended issue.
-          await recordConductorAudit(
-            this.gate,
-            conductorAuditEntry(action, principal, verdict, {
-              coordinationDeferred: true,
-              contenders: decision.conflict?.contenders.length ?? 0,
-              rerouted: decision.reroute?.routed ?? false,
-            })
-          );
-          return {
-            ok: false,
-            verdict,
-            reason: decision.reason ?? 'issue contended — launch deferred',
-          };
-        }
-      } catch (err) {
-        // An optional enrichment gate faulting must NEVER block a launch the
-        // policy gate already allowed (fail-open, mirrors the entitlement gate).
-        this.log.warn(
-          { err, taskId: issueId },
-          'conductor coordination admission errored — degrading open'
-        );
-      }
-    }
-
-    try {
-      // Execution-path selection (the ONE seam that splits path a/b). openfang →
-      // the native in-process substrate; every CLI runtime → tmux+worktree (or the
-      // caller's explicitly requested, registered substrate). Both paths converge on
-      // engine.createWorkspace + the SAME capability seams below. The caller's
-      // runtimeId ALWAYS wins; pal's advisory runtime only fills a blank one.
-      const registered = this.registry.registry.list();
-      const runtimeId = input.runtimeId ?? plan?.runtimeId;
-      const openfang = isOpenfangRuntime(runtimeId);
-      const substrate: SubstrateKind = openfang
-        ? selectSubstrateForRuntime(runtimeId, { registered })
-        : (input.substrate ?? 'tmux_worktree');
-
-      // Path (b): the in-process substrate runs `command` as the agent turn, so the
-      // integrator enriches the prompt HERE (memory recall) and passes it as command
-      // — this bypasses the CLI-only resolveRuntimeCommand. Path (a): leave command
-      // undefined so WorkspaceEngine enriches (engineDeps.brain) + resolves the CLI.
-      let command = input.command;
-      if (openfang && !command) {
-        command = await this.enrichOpenfangCommand(input, principal);
-      }
-
-      // Resolve the repo's REAL integration base ONCE at launch so the workspace
-      // is persisted with a concrete baseRef (e.g. `master`/`develop`/a feature
-      // branch) instead of the detached `HEAD` sentinel. The worktree is then cut
-      // off that ref, and every downstream read/merge edge (mergeability, review
-      // diff, publish) reuses it directly rather than falling back to a hardcoded
-      // `main`. Degrade-truthful: an unset caller baseRef that git cannot resolve
-      // stays `HEAD` (the edges still resolve git-native as defense-in-depth); an
-      // explicit caller baseRef always wins.
-      const baseRef = await this.resolveLaunchBaseRef(input);
-
-      // Compose the launch env: the task-id anchor (RECODER_TASK_ID lets the
-      // in-process substrate + tailer attach RunEvents) plus — when the acp
-      // substrate is selected — the ACP agent binary for this runtime (codex →
-      // codex-acp, else claude-code-acp). The adapter resolves RECODER_ACP_AGENT
-      // per launch and re-spawns the same binary on reattach.
-      const launchEnv: Record<string, string> = { ...(input.env ?? {}) };
-      if (input.taskId) launchEnv.RECODER_TASK_ID = input.taskId;
-      if (substrate === 'acp')
-        launchEnv.RECODER_ACP_AGENT = acpBinaryForRuntime(runtimeId);
-      const hasEnv = Object.keys(launchEnv).length > 0;
-
-      // Persist the sibling-awareness flag on the workspace metadata (default
-      // TRUE for a taskGroup launch, explicit `false` opts out, ungrouped stays
-      // byte-identical) so the completion-time hook can check it. The domain-only
-      // `siblingAwareness` field is stripped before the engine input.
-      const { siblingAwareness, ...engineInput } = input;
-      const metadata = stampSiblingAwareness(input.metadata, siblingAwareness);
-      const workspace = await this.engine.createWorkspace({
-        ...engineInput,
-        ...(metadata ? { metadata } : {}),
-        ...(baseRef !== undefined ? { baseRef } : {}),
-        substrate,
-        ...(command !== undefined ? { command } : {}),
-        ...(hasEnv ? { env: launchEnv } : {}),
-        createdBy: principal.userId,
-      });
-
-      // Code-intel on create (a + b), fire-and-forget + degrade-safe: recodergit
-      // INDEXES the repo (live code-knowledge-graph) and beads TRACKS the workspace
-      // as an issue-graph node. A slow/absent engine never blocks the launch.
-      this.startCodeIntel(input, workspace);
-
-      // Point the launched agent at the GOVERNED backend MCP host: write a
-      // secret-free `.mcp.json` into its worktree (merge-safe + idempotent +
-      // git-excluded). Fire-and-forget + degrade-safe — no injector wired, or no
-      // worktree yet, is a truthful skip that NEVER fails an allowed launch.
-      this.injectWorktreeMcp(workspace);
-
-      // Ready the checkout for the agent: run the repo's configured setup script
-      // inside the new worktree (fire-and-forget + non-blocking + degrade-safe —
-      // no script / a failing script never aborts the allowed launch).
-      this.runRepoSetup(input, workspace);
-
-      await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, {
-          workspaceId: workspace.workspaceId,
-          substrate,
-          // Pal advisory (present ONLY when the port is wired and pal was
-          // consulted) — recorded for audit; pal advises, the governance kernel
-          // still decides. Absent port ⇒ these keys are omitted (byte-identical).
-          ...(plan
-            ? {
-                planRisk: plan.risk,
-                planApprovalRequired: plan.approvalRequired,
-                planSource: plan.source,
-              }
-            : {}),
-        })
-      );
-      return { ok: true, verdict, value: workspace };
-    } catch (err) {
-      const reason =
-        err instanceof Error ? err.message : 'workspace launch failed';
-      this.log.error(
-        { err, projectId: input.projectId },
-        'conductor createWorkspace failed'
-      );
-      return { ok: false, verdict, reason };
-    }
+    return this.writes.createWorkspace(input, principal);
   }
 
   async steerWorkspace(
     input: SteerInput,
     principal: Principal
   ): Promise<ConductorWriteResult<void>> {
-    const action = 'workspace.steer';
-    const workspace = await this.engine.getWorkspace(input.workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { path: input.workspaceId },
-        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-        metadata: { workspaceId: input.workspaceId },
-      }
-    );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    if (!workspace)
-      return { ok: false, verdict, reason: 'workspace not found' };
-    if (workspace.state !== 'running') {
-      return {
-        ok: false,
-        verdict,
-        reason: `workspace is ${workspace.state}, not running`,
-      };
-    }
-    // The live send-keys transport is wired at the composition root (tmux-backed);
-    // absent it, steering is refused truthfully (never faked).
-    if (!this.steerTransport) {
-      return {
-        ok: false,
-        verdict,
-        reason:
-          'steering requires a live send-keys transport (none wired in this composition)',
-      };
-    }
-    // No live session address ⇒ nothing to steer into (never launched / torn down).
-    if (!workspace.sessionName) {
-      return {
-        ok: false,
-        verdict,
-        reason: 'workspace has no live session handle (nothing to steer)',
-      };
-    }
-    const keys = input.keys;
-    if (!keys.trim()) {
-      return { ok: false, verdict, reason: 'steer keys must be non-empty' };
-    }
-    try {
-      await this.steerTransport.sendKeys({
-        sessionName: workspace.sessionName,
-        keys,
-        submit: input.submit ?? true,
-      });
-      await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, {
-          workspaceId: input.workspaceId,
-          bytes: keys.length,
-        })
-      );
-      return { ok: true, verdict };
-    } catch (err) {
-      const reason =
-        err instanceof Error ? err.message : 'steer delivery failed';
-      this.log.warn(
-        { err, workspaceId: input.workspaceId },
-        'conductor steerWorkspace delivery failed'
-      );
-      return { ok: false, verdict, reason };
-    }
+    return this.writes.steerWorkspace(input, principal);
   }
 
-  /**
-   * The review→agent roundtrip: fold the reviewer's line-anchored diff comments
-   * into ONE structured prompt (`composeReviewPrompt`) and DRIVE the agent with it,
-   * so `file:line — comment` notes become precise context the agent acts on.
-   *
-   * Routes by workspace state so the loop is wired for the REAL review flow (not
-   * just a mid-flight running agent):
-   *   - `running` (a live turn exists) ⇒ STEER the composed prompt into the session
-   *     (fastest roundtrip, no new run) — {@link steerWorkspace}, gated
-   *     `workspace.steer`.
-   *   - any other (`awaiting_review` / `changes_requested` / `awaiting_approval`,
-   *     the states a reviewer actually posts from) ⇒ drive a NEW gated run in the
-   *     worktree via the continue/message path — {@link sendWorkspaceMessage}, gated
-   *     `workspace.message`. This is the wiring the parity audit found missing: a
-   *     comment on a reviewed (non-running) workspace otherwise died with
-   *     "workspace is <state>, not running".
-   *
-   * Both branches inherit ALL governance from the method they delegate to (gate +
-   * ownership context + audit seal). Degrade-truthful: a workspace that cannot
-   * continue (no worktree / substrate has no in-place relaunch / not found) surfaces
-   * the real reason from the continue op — it never fakes a delivery. A payload with
-   * no valid comments composes to an empty prompt refused truthfully downstream
-   * (`steer keys must be non-empty` / `message text is required`); the HTTP route
-   * pre-validates for a clean 400 before we reach here.
-   */
   async sendReviewComments(
     input: {
       readonly workspaceId: string;
@@ -1386,378 +663,58 @@ export class ConductorComposer implements ConductorModule {
     },
     principal: Principal
   ): Promise<ConductorWriteResult<ReviewCommentDelivery>> {
-    const prompt = composeReviewPrompt(parseReviewComments(input.comments));
-    // Read the state ONLY to pick the delivery path; the actual write is gated
-    // (and ownership-guarded at the route) by whichever branch we delegate to.
-    const workspace = await this.engine.getWorkspace(input.workspaceId);
-
-    // Re-type a failure passthrough onto the delivery result (no value present).
-    const asFailure = (
-      r: ConductorWriteResult<unknown>
-    ): ConductorWriteResult<ReviewCommentDelivery> => ({
-      ok: false,
-      verdict: r.verdict,
-      ...(r.reason != null ? { reason: r.reason } : {}),
-      ...(r.code != null ? { code: r.code } : {}),
-    });
-
-    if (workspace?.state === 'running') {
-      const steered = await this.steerWorkspace(
-        { workspaceId: input.workspaceId, keys: prompt, submit: true },
-        principal
-      );
-      if (!steered.ok) return asFailure(steered);
-      return { ok: true, verdict: steered.verdict, value: { delivery: 'steer' } };
-    }
-
-    const run = await this.sendWorkspaceMessage(
-      input.workspaceId,
-      { text: prompt, createdBy: principal.userId },
-      principal
-    );
-    if (!run.ok) return asFailure(run);
-    return {
-      ok: true,
-      verdict: run.verdict,
-      value: { delivery: 'run', runId: run.value?.runId, state: run.value?.state },
-    };
+    return this.writes.sendReviewComments(input, principal);
   }
 
-  /**
-   * Gracefully STOP a workspace's run: kill the live substrate session (the
-   * worktree is PRESERVED for review), release the write-lock scope, transition
-   * the record to `cancelled`, and seal the action into the audit chain.
-   * Truthful throughout: a substrate kill that fails leaves the record's state
-   * UNCHANGED (the agent may still be live) and surfaces the reason.
-   */
   async stopWorkspace(
     workspaceId: string,
     principal: Principal
   ): Promise<ConductorWriteResult<Workspace>> {
-    const action = 'workspace.stop';
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { environment: 'conductor' },
-        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-        metadata: { workspaceId },
-      }
-    );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    if (!workspace)
-      return {
-        ok: false,
-        verdict,
-        reason: `workspace not found: ${workspaceId}`,
-      };
-    if (!STOPPABLE_STATES.includes(workspace.state)) {
-      return {
-        ok: false,
-        verdict,
-        reason: `workspace is ${workspace.state}, not stoppable`,
-      };
-    }
-
-    // Kill the live session FIRST (keep the worktree — the work stays reviewable).
-    // A kill fault refuses truthfully: the state of record must not claim
-    // `cancelled` while the agent may still be running.
-    if (workspace.sessionName || workspace.worktreePath) {
-      try {
-        await this.registry
-          .getFull(workspace.substrate)
-          .teardown(
-            {
-              ref: workspaceId,
-              sessionName: workspace.sessionName,
-              worktreePath: workspace.worktreePath,
-            },
-            { removeIsolation: false }
-          );
-      } catch (err) {
-        const reason =
-          err instanceof Error ? err.message : 'substrate kill failed';
-        this.log.warn(
-          { err, workspaceId },
-          'conductor stopWorkspace substrate kill failed'
-        );
-        return {
-          ok: false,
-          verdict,
-          reason: `stop failed (session may still be live): ${reason}`,
-        };
-      }
-    }
-
-    // Release the write-lock so the repo scope frees for the next workspace.
-    // Degrade-safe: a lock fault never blocks the stop (the agent is dead).
-    if (this.engineDeps.lock) {
-      try {
-        await this.engineDeps.lock.release({
-          workspaceId,
-          spaceId: workspace.spaceId,
-          taskId: workspace.taskId,
-        });
-      } catch (err) {
-        this.log.warn({ err, workspaceId }, 'lock release on stop failed');
-      }
-    }
-
-    try {
-      const stopped = await this.engine.advanceWorkspace(
-        workspaceId,
-        'cancelled',
-        undefined,
-        {
-          stoppedBy: principal.userId,
-          stoppedAt: new Date().toISOString(),
-        }
-      );
-      this.terminalService.publishSync({
-        workspaceId,
-        kind: 'state',
-        state: stopped.state,
-        at: stopped.updatedAt,
-      });
-      await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, {
-          workspaceId,
-          from: workspace.state,
-        })
-      );
-      return { ok: true, verdict, value: stopped };
-    } catch (err) {
-      return {
-        ok: false,
-        verdict,
-        reason: err instanceof Error ? err.message : 'stop failed',
-      };
-    }
+    return this.writes.stopWorkspace(workspaceId, principal);
   }
 
-  /**
-   * ADVANCE a workspace one lifecycle step (review → merge flow): a governed,
-   * PURE state transition. Only {@link ADVANCE_TARGET_STATES} are accepted
-   * (delivery states need their evidence-bearing edges); the from→to legality is
-   * enforced by the canonical agent-os state machine — an illegal step is a
-   * truthful refusal, never a forced write.
-   */
   async advanceWorkspaceState(
     workspaceId: string,
     to: WorkspaceState,
     principal: Principal
   ): Promise<ConductorWriteResult<Workspace>> {
-    const action = 'workspace.advance';
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { environment: 'conductor' },
-        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-        metadata: { workspaceId, to },
-      }
-    );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    if (!workspace)
-      return {
-        ok: false,
-        verdict,
-        reason: `workspace not found: ${workspaceId}`,
-      };
-    if (!ADVANCE_TARGET_STATES.includes(to)) {
-      return {
-        ok: false,
-        verdict,
-        reason: `'${to}' is not an advance target (merge/archive/stop own their transitions)`,
-      };
-    }
-    try {
-      const advanced = await this.engine.advanceWorkspace(
-        workspaceId,
-        to,
-        undefined,
-        {
-          advancedBy: principal.userId,
-        }
-      );
-      this.terminalService.publishSync({
-        workspaceId,
-        kind: 'state',
-        state: advanced.state,
-        at: advanced.updatedAt,
-      });
-      await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, {
-          workspaceId,
-          from: workspace.state,
-          to,
-        })
-      );
-      return { ok: true, verdict, value: advanced };
-    } catch (err) {
-      return {
-        ok: false,
-        verdict,
-        reason: err instanceof Error ? err.message : 'advance failed',
-      };
-    }
+    return this.writes.advanceWorkspaceState(workspaceId, to, principal);
   }
 
   async reconcile(
     principal: Principal
   ): Promise<ConductorWriteResult<ReconcileReport>> {
-    const action = 'workspace.reconcile';
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { environment: 'conductor' },
-        metadata: { op: 'reconcile' },
-      }
-    );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    const report = await substrateReconcile(this.engineDeps);
-    await recordConductorAudit(
-      this.gate,
-      conductorAuditEntry(action, principal, verdict, {
-        live: report.live.length,
-        orphanedWorkspaces: report.orphanedWorkspaces.length,
-      })
-    );
-    return { ok: true, verdict, value: report };
+    return this.writes.reconcile(principal);
   }
 
   // --- checkpoints & restore (git snapshot capability) -------------------------
 
-  /** The narrow deps slice the checkpoint ops run over (git seams + store). */
-  private checkpointDeps(): CheckpointOpsDeps {
-    return {
-      getWorkspace: id => this.engine.getWorkspace(id),
-      store: this.checkpointStore,
-      logger: this.log,
-      newId: () => uuidId.newId(),
-      now: () => systemClock.now(),
-    };
-  }
-
-  /**
-   * Capture a CHECKPOINT of the workspace's git state — GATED
-   * (`workspace.checkpoint`). Non-destructive: tags the committed HEAD plus any
-   * captured uncommitted work. A missing worktree refuses truthfully.
-   */
   async checkpointWorkspace(
     workspaceId: string,
     input: { label?: string; description?: string },
     principal: Principal
   ): Promise<ConductorWriteResult<CheckpointRecord>> {
-    const action = 'workspace.checkpoint';
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { environment: 'conductor' },
-        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-        metadata: { workspaceId },
-      }
-    );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    try {
-      const opInput: CreateCheckpointInput = {
-        ...(input.label ? { label: input.label } : {}),
-        ...(input.description ? { description: input.description } : {}),
-        createdBy: principal.userId,
-      };
-      const record = await createCheckpointOp(
-        this.checkpointDeps(),
-        workspaceId,
-        opInput
-      );
-      await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, {
-          workspaceId,
-          checkpointId: record.checkpointId,
-          ref: record.ref,
-        })
-      );
-      return { ok: true, verdict, value: record };
-    } catch (err) {
-      return {
-        ok: false,
-        verdict,
-        reason: err instanceof Error ? err.message : 'checkpoint failed',
-      };
-    }
+    return this.checkpoints.checkpointWorkspace(workspaceId, input, principal);
   }
 
-  /** List a workspace's checkpoints (newest-first). Read-only. */
   async listWorkspaceCheckpoints(
     workspaceId: string
   ): Promise<readonly CheckpointRecord[]> {
-    return listCheckpointsOp({ store: this.checkpointStore }, workspaceId);
+    return this.checkpoints.listWorkspaceCheckpoints(workspaceId);
   }
 
-  /**
-   * RESTORE a workspace's worktree to a checkpoint — GATED (`workspace.restore`).
-   * Takes an automatic safety snapshot first, then reproduces the checkpoint's
-   * file state. A missing worktree / unknown checkpoint refuses truthfully.
-   */
   async restoreCheckpoint(
     workspaceId: string,
     checkpointId: string,
     principal: Principal
   ): Promise<ConductorWriteResult<RestoreResultView>> {
-    const action = 'workspace.restore';
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { environment: 'conductor' },
-        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-        metadata: { workspaceId, checkpointId },
-      }
+    return this.checkpoints.restoreCheckpoint(
+      workspaceId,
+      checkpointId,
+      principal
     );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    try {
-      const result = await restoreCheckpointOp(
-        this.checkpointDeps(),
-        workspaceId,
-        checkpointId
-      );
-      await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, {
-          workspaceId,
-          checkpointId,
-          restoredTo: result.restoredTo,
-        })
-      );
-      return { ok: true, verdict, value: result };
-    } catch (err) {
-      return {
-        ok: false,
-        verdict,
-        reason: err instanceof Error ? err.message : 'restore failed',
-      };
-    }
   }
 
-  /**
-   * BRANCH a NEW workspace from a checkpoint — GATED (`workspace.branch`): launch
-   * a fresh workspace whose base ref is the checkpoint tag. The launched workspace
-   * runs the same capability seams as a normal create (`.mcp.json` injection).
-   */
   async branchFromCheckpoint(
     workspaceId: string,
     checkpointId: string,
@@ -1769,142 +726,51 @@ export class ConductorComposer implements ConductorModule {
     },
     principal: Principal
   ): Promise<ConductorWriteResult<BranchResultView>> {
-    const action = 'workspace.branch';
-    const source = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { environment: 'conductor' },
-        ...(source?.taskId ? { taskId: source.taskId } : {}),
-        metadata: { workspaceId, checkpointId },
-      }
+    return this.checkpoints.branchFromCheckpoint(
+      workspaceId,
+      checkpointId,
+      input,
+      principal
     );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    try {
-      const branchInput: BranchFromCheckpointInput = {
-        ...(input.branch ? { branch: input.branch } : {}),
-        ...(input.runtimeId ? { runtimeId: input.runtimeId } : {}),
-        ...(input.taskId ? { taskId: input.taskId } : {}),
-        ...(input.prompt ? { prompt: input.prompt } : {}),
-        createdBy: principal.userId,
-      };
-      const deps: BranchOpsDeps = {
-        ...this.checkpointDeps(),
-        createWorkspace: createInput =>
-          this.engine.createWorkspace(createInput),
-      };
-      const result = await branchFromCheckpointOp(
-        deps,
-        workspaceId,
-        checkpointId,
-        branchInput
-      );
-      // Same post-launch seam as createWorkspace: point the branched agent at the
-      // governed backend MCP host (fire-and-forget + degrade-safe).
-      this.injectWorktreeMcp(result.workspace);
-      await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, {
-          workspaceId,
-          checkpointId,
-          newWorkspaceId: result.workspace.workspaceId,
-        })
-      );
-      return { ok: true, verdict, value: result };
-    } catch (err) {
-      return {
-        ok: false,
-        verdict,
-        reason: err instanceof Error ? err.message : 'branch failed',
-      };
-    }
   }
 
   async substrates(): Promise<readonly SubstrateAvailabilityView[]> {
-    return this.registry.availability();
+    return this.introspection.substrates();
   }
 
-  /**
-   * Every selectable runtime with truthful availability: PATH-probed CLIs plus
-   * the native in-process openfang runtime (live engine probe via its
-   * registered substrate — unwired/engine-absent ⇒ `available:false` + reason).
-   */
   async runtimes(): Promise<readonly ConductorRuntimeView[]> {
-    return listConductorRuntimes({ registry: this.registry });
+    return this.introspection.runtimes();
   }
 
   async githubStatus(): Promise<GithubStatusView> {
-    if (!this.github) return { connected: false, source: null };
-    return this.github.status();
+    return this.introspection.githubStatus();
   }
 
   async githubRepos(): Promise<readonly GithubRepoView[]> {
-    if (!this.github) return [];
-    return this.github.repos();
+    return this.introspection.githubRepos();
   }
 
-  /**
-   * Clone a GitHub repo onto the box (`POST /repos/clone`). Ungated like the
-   * other local-box reads/probes on this surface: it writes only a fresh
-   * directory under the caller-chosen (or default) repos dir — every workspace
-   * launched FROM it still passes the governed `workspace.create` gate. Never
-   * throws: every failure is a typed, truthful outcome.
-   */
   async cloneRepo(input: CloneRepoInput): Promise<CloneRepoOutcome> {
-    return this.repoClone.clone(input);
+    return this.introspection.cloneRepo(input);
   }
 
-  /**
-   * The workspace's per-check PR rollup (`GET …/checks`) via `gh pr view` run
-   * in the worktree. Null when the workspace does not exist (→ 404 at the
-   * edge); otherwise ALWAYS a truthful view (`available:false` + reason when
-   * gh/auth/PR/GitHub-remote is absent — never fabricated).
-   */
   async workspaceChecks(
     workspaceId: string
   ): Promise<WorkspaceChecksView | null> {
-    const workspace = await this.getWorkspace(workspaceId);
-    if (!workspace) return null;
-    return this.prChecks.checks(workspace);
+    return this.introspection.workspaceChecks(workspaceId);
   }
 
   // --- workspace detail (the run screen): reads --------------------------------
 
-  /** The narrow deps slice the ported review/publish/continue ops run over. */
-  private reviewDeps(): ReviewOpsDeps {
-    return {
-      getWorkspace: id => this.engine.getWorkspace(id),
-      advanceWorkspace: (id, to, patch, metadata) =>
-        this.engine.advanceWorkspace(id, to, patch, metadata),
-      getSubstrate: (id: WorkspaceSubstrate) => this.registry.getFull(id),
-      logger: this.log,
-      ...(this.engineDeps.lock ? { lock: this.engineDeps.lock } : {}),
-    };
-  }
-
   async listWorkspaceEvents(workspaceId: string): Promise<RunEvent[]> {
-    return this.engine.listWorkspaceEvents(workspaceId);
+    return this.reads.listWorkspaceEvents(workspaceId);
   }
 
   async workspaceOutput(
     workspaceId: string,
     lines?: number
   ): Promise<{ output: string }> {
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
-    const substrate = this.registry.getFull(workspace.substrate);
-    const captured = await substrate.capture(
-      {
-        ref: workspaceId,
-        sessionName: workspace.sessionName,
-        worktreePath: workspace.worktreePath,
-      },
-      lines
-    );
-    // A gone handle captures null — an empty output is the truthful read.
-    return { output: captured ?? '' };
+    return this.reads.workspaceOutput(workspaceId, lines);
   }
 
   async workspaceStatus(workspaceId: string): Promise<{
@@ -1914,281 +780,35 @@ export class ConductorComposer implements ConductorModule {
     state: Workspace['state'];
     reason?: string;
   }> {
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
-    if (!workspace.sessionName && !workspace.worktreePath) {
-      return {
-        alive: false,
-        exitCode: null,
-        recentOutput: null,
-        state: workspace.state,
-        reason:
-          'no live substrate handle (never launched or already torn down)',
-      };
-    }
-    const substrate = this.registry.getFull(workspace.substrate);
-    const handle = {
-      ref: workspaceId,
-      sessionName: workspace.sessionName,
-      worktreePath: workspace.worktreePath,
-    };
-    const [alive, exitCode, recentOutput] = await Promise.all([
-      substrate.alive(handle),
-      substrate.exitCode
-        ? substrate.exitCode(handle)
-        : Promise.resolve(undefined),
-      substrate.capture(handle, 50),
-    ]);
-    return {
-      alive,
-      // `undefined` (still running / unknown) is not JSON-representable — the
-      // wire contract carries null for "no exit code yet"; NEVER a fabricated 0.
-      exitCode: exitCode ?? null,
-      recentOutput,
-      state: workspace.state,
-    };
+    return this.reads.workspaceStatus(workspaceId);
   }
 
   // --- workspace views (attention-enriched read model) --------------------------
 
-  /**
-   * The attention-enriched read model of one workspace, or null. The attention
-   * classification is derived truthfully from the durable state, the run's
-   * RunEvents, and (for live states) the captured terminal tail; every signal
-   * source is degrade-safe — a capture/repository fault is a MISSING signal
-   * (`'unknown'`), never a fabricated one.
-   */
   async workspaceView(workspaceId: string): Promise<WorkspaceView | null> {
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    if (!workspace) return null;
-    const view = await this.buildWorkspaceView(workspace);
-    // Pane probe — SINGLE-workspace read only (the list view must not shell out
-    // per record), gated on the same live-ish states as the attention probe.
-    // Degrade-truthful: no introspect port / no session / a fault ⇒ the facet
-    // is omitted (undefined), never a fabricated empty list.
-    const probePanes =
-      (workspace.state === 'running' ||
-        workspace.state === 'changes_requested') &&
-      Boolean(workspace.sessionName);
-    const panes = probePanes
-      ? await readWorkspacePanes(
-          this.tmuxIntrospect,
-          workspace.sessionName,
-          this.log
-        )
-      : undefined;
-    return panes ? { ...view, panes } : view;
+    return this.reads.workspaceView(workspaceId);
   }
 
-  /** Attention-enriched views of every workspace (the cockpit list's badges). */
   async listWorkspaceViews(): Promise<WorkspaceView[]> {
-    const workspaces = await this.engine.listWorkspaces();
-    return Promise.all(
-      workspaces.map(workspace => this.buildWorkspaceView(workspace))
-    );
-  }
-
-  private async buildWorkspaceView(
-    workspace: Workspace
-  ): Promise<WorkspaceView> {
-    // Probe the substrate ONLY where the live tail can decide (running-ish states
-    // with a handle) — listing must not shell out per archived record.
-    let tail: string | null | undefined;
-    let live: boolean | undefined;
-    const probeLive =
-      (workspace.state === 'running' ||
-        workspace.state === 'changes_requested') &&
-      Boolean(workspace.sessionName || workspace.worktreePath);
-    if (probeLive) {
-      try {
-        const substrate = this.registry.getFull(workspace.substrate);
-        const handle = {
-          ref: workspace.workspaceId,
-          sessionName: workspace.sessionName,
-          worktreePath: workspace.worktreePath,
-        };
-        [live, tail] = await Promise.all([
-          substrate.alive(handle),
-          substrate.capture(handle, ATTENTION_TAIL_LINES),
-        ]);
-      } catch (err) {
-        // Missing signal, not a fabricated one — the classifier reports unknown.
-        this.log.warn(
-          { err, workspaceId: workspace.workspaceId },
-          'attention probe faulted'
-        );
-      }
-    }
-
-    let events: readonly RunEvent[] | undefined;
-    try {
-      events = await this.engine.listWorkspaceEvents(workspace.workspaceId);
-    } catch (err) {
-      this.log.warn(
-        { err, workspaceId: workspace.workspaceId },
-        'attention event read faulted'
-      );
-    }
-
-    const attention: AttentionResult = classifyAttention({
-      state: workspace.state,
-      ...(events ? { events } : {}),
-      ...(tail !== undefined ? { tail } : {}),
-    });
-
-    return {
-      workspaceId: workspace.workspaceId,
-      spaceId: workspace.spaceId,
-      projectId: workspace.projectId,
-      taskId: workspace.taskId,
-      ...(workspace.runId ? { runId: workspace.runId } : {}),
-      runtimeId: workspace.runtimeId,
-      substrate: workspace.substrate,
-      branch: workspace.branch,
-      baseRef: workspace.baseRef,
-      ...(workspace.worktreePath
-        ? { worktreePath: workspace.worktreePath }
-        : {}),
-      ...(workspace.sessionName ? { sessionName: workspace.sessionName } : {}),
-      state: workspace.state,
-      createdBy: workspace.createdBy,
-      createdAt: workspace.createdAt,
-      updatedAt: workspace.updatedAt,
-      attention: attention.attention,
-      attentionReason: attention.reason,
-      ...(live !== undefined ? { live } : {}),
-    };
+    return this.reads.listWorkspaceViews();
   }
 
   // --- multi-agent compare (F3 parallel-run groups): read-only ------------------
-
-  /**
-   * The per-caller access predicate the compare/converge aggregation folds through
-   * (recoder-kybr). A group-scoped read/compose is keyed on a shared `taskGroup`,
-   * so the single-id `:id` guard cannot cover it — this restricts the group to the
-   * siblings the caller may access, reusing the SAME `canAccessWorkspace` semantics
-   * (createdBy/tenant + admin + solo fail-open) the `:id` routes enforce. A
-   * principal-less (INTERNAL) call ⇒ `undefined` (no filter — the FULL group, as the
-   * merge-time evidence read needs). Pure + side-effect free.
-   */
-  private compareAccessFilter(
-    principal?: Principal
-  ): ((workspace: Workspace) => boolean) | undefined {
-    if (!principal) return undefined;
-    const opts = { soloMode: this.cfg.soloMode };
-    return workspace => canAccessWorkspace(principal, workspace, opts);
-  }
-
-  /**
-   * The narrow read seams the compare service groups + projects over. When a
-   * `principal` is supplied (every HTTP route), the aggregate is narrowed to the
-   * caller's OWN siblings via {@link compareAccessFilter}; a principal-less internal
-   * call sees the full group.
-   */
-  private compareDeps(principal?: Principal): CompareDeps {
-    const canAccess = this.compareAccessFilter(principal);
-    return {
-      listWorkspaces: () => this.engine.listWorkspaces(),
-      getWorkspace: id => this.engine.getWorkspace(id),
-      buildView: workspace => this.buildWorkspaceView(workspace),
-      diffStat: workspace => this.computeDiffStat(workspace),
-      changedFiles: workspace => this.computeChangedFiles(workspace),
-      ...(canAccess ? { canAccess } : {}),
-    };
-  }
-
-  /**
-   * A READ-ONLY tracked changed-file path list for one workspace — the compare
-   * row's `changedFiles` + the input to the CONTESTED overlap. REUSES the shipped
-   * pure `workspaceDiffFiles` op (base fenced before `--`, NO agent pathspec,
-   * exec-bounded) — no new git surface. Mirrors `computeDiffStat`'s degrade
-   * posture: a record with no worktree, a non-repo/git-absent tree, or a racy
-   * vanish yields a truthful reason and NO list (never a fabricated set).
-   */
-  private async computeChangedFiles(
-    workspace: Workspace
-  ): Promise<{ files?: readonly string[]; reason?: string }> {
-    if (!workspace.worktreePath) {
-      return { reason: 'no worktree (never launched or already torn down)' };
-    }
-    try {
-      const view = await workspaceDiffFilesOp(
-        this.reviewDeps(),
-        workspace.workspaceId
-      );
-      if (!view.available) {
-        return {
-          reason: 'changed-file list unavailable (non-repo / git absent)',
-        };
-      }
-      return { files: view.files.map(f => f.path) };
-    } catch (err) {
-      return {
-        reason: err instanceof Error ? err.message : 'changed-file list failed',
-      };
-    }
-  }
-
-  /**
-   * A READ-ONLY diff footprint (files / +lines / -lines) for one workspace — the
-   * compare row's `diffStat`. Unlike `workspaceDiff`, this NEVER transitions the
-   * workspace (no running → awaiting_review side effect). Degrade-safe: a record
-   * with no worktree, or a substrate diff fault, yields a truthful reason and NO
-   * stat (never a fabricated `0/0/0`).
-   */
-  private async computeDiffStat(
-    workspace: Workspace
-  ): Promise<{ stat?: ReturnType<typeof parseDiffStat>; reason?: string }> {
-    if (!workspace.worktreePath) {
-      return { reason: 'no worktree (never launched or already torn down)' };
-    }
-    try {
-      const substrate = this.registry.getFull(workspace.substrate);
-      const diff = await substrate.diff(
-        {
-          ref: workspace.workspaceId,
-          sessionName: workspace.sessionName,
-          worktreePath: workspace.worktreePath,
-        },
-        workspace.baseRef || 'HEAD'
-      );
-      return { stat: parseDiffStat(diff.stat, diff.changedFiles) };
-    } catch (err) {
-      return { reason: err instanceof Error ? err.message : 'diff failed' };
-    }
-  }
 
   async compareTaskGroup(
     taskGroup: string,
     principal?: Principal
   ): Promise<CompareView> {
-    const view = await compareTaskGroupOp(
-      this.compareDeps(principal),
-      taskGroup
-    );
-    return this.withGridHint(view);
+    return this.compareConverge.compareTaskGroup(taskGroup, principal);
   }
 
   async workspaceSiblings(
     workspaceId: string,
     principal?: Principal
   ): Promise<CompareView | null> {
-    const view = await workspaceSiblingsOp(
-      this.compareDeps(principal),
-      workspaceId
-    );
-    return view ? this.withGridHint(view) : view;
+    return this.compareConverge.workspaceSiblings(workspaceId, principal);
   }
 
-  /**
-   * The TRUE line-level A-vs-B pairwise diff of a parallel-run pair — one unified
-   * patch per shared file across the TWO sibling worktrees (the Compare view's
-   * PairwisePanel edge). Read-only. recoder-kybr: the group is resolved with the
-   * SAME principal narrowing as {@link compareTaskGroup}, and BOTH `aId` and `bId`
-   * must be members of the caller-narrowed sibling set — either missing ⇒ `null`
-   * (the route's no-oracle 404, byte-identical to an unknown workspace). `paths`
-   * defaults to the pair's shared changed files from the compare view.
-   */
   async pairwiseDiff(
     taskGroup: string,
     aId: string,
@@ -2196,362 +816,77 @@ export class ConductorComposer implements ConductorModule {
     paths: readonly string[] | undefined,
     principal?: Principal
   ): Promise<PairwiseDiffView | null> {
-    const view = await compareTaskGroupOp(
-      this.compareDeps(principal),
-      taskGroup
+    return this.compareConverge.pairwiseDiff(
+      taskGroup,
+      aId,
+      bId,
+      paths,
+      principal
     );
-    const aSibling = view.siblings.find(s => s.workspaceId === aId);
-    const bSibling = view.siblings.find(s => s.workspaceId === bId);
-    if (!aSibling || !bSibling) return null;
-    const [a, b] = await Promise.all([
-      this.engine.getWorkspace(aId),
-      this.engine.getWorkspace(bId),
-    ]);
-    if (!a || !b) return null;
-    const resolved =
-      paths && paths.length > 0
-        ? paths
-        : sharedPairPaths(aSibling, bSibling, view.contested);
-    return pairwiseDiffOp({ logger: this.log }, { a, b, paths: resolved });
-  }
-
-  /**
-   * Enrich a compare read with the READ-ONLY operator-attach hint (never a
-   * mutation — the pure service stays substrate-free). Degrade-truthful: no grid
-   * seam, a singleton/ungrouped view, or no repo/sessions ⇒ the identical
-   * hint-less view; `attachHint` faulting ⇒ the view unchanged. The `attachCommand`
-   * half is tenant-gated inside the adapter (desktop-only); `visibleSessions`
-   * (intersected to the group) is always safe.
-   */
-  private async withGridHint(view: CompareView): Promise<CompareView> {
-    if (!this.workspaceGrid || view.count < 2) return view; // singleton/ungrouped ⇒ no grid
-    const sessions = view.siblings
-      .map(s => s.sessionName)
-      .filter(
-        (name): name is string =>
-          typeof name === 'string' && name.trim().length > 0
-      );
-    const repoPath = this.groupRepoPath(view);
-    if (!repoPath || sessions.length === 0) return view; // truthful: no repo/sessions ⇒ no hint
-    const hint = await this.workspaceGrid
-      .attachHint({ repoPath, groupSessionNames: sessions })
-      .catch(() => null);
-    return hint ? { ...view, grid: hint } : view; // dmux absent/fault ⇒ unchanged view
-  }
-
-  /**
-   * A real member worktree path the operator console launches in (dmux renders
-   * the box-wide `recoder-*` sessions from any cwd). The FIRST sibling with a real
-   * `worktreePath` — never a fabricated/shared repoPath; `undefined` when none has
-   * one (⇒ no hint).
-   */
-  private groupRepoPath(view: CompareView): string | undefined {
-    for (const sibling of view.siblings) {
-      if (
-        typeof sibling.worktreePath === 'string' &&
-        sibling.worktreePath.trim().length > 0
-      ) {
-        return sibling.worktreePath;
-      }
-    }
-    return undefined;
   }
 
   async arrangeCompareGrid(
     taskGroup: string,
     principal: Principal
   ): Promise<ConductorWriteResult<GroupGridArrangement | null>> {
-    const action = 'workspace.grid';
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { environment: 'conductor' },
-        metadata: { taskGroup },
-      }
-    );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    // dmux absent ⇒ truthful null (no grid) — the write is a governed no-op.
-    if (!this.workspaceGrid) return { ok: true, verdict, value: null };
-
-    // recoder-kybr: arrange ONLY the caller's own worktrees — never span a grid
-    // over another tenant's sibling of the same taskGroup.
-    const view = await compareTaskGroupOp(
-      this.compareDeps(principal),
-      taskGroup
-    );
-    const worktrees = view.siblings
-      .filter(
-        (s): s is typeof s & { worktreePath: string } =>
-          typeof s.worktreePath === 'string'
-      )
-      .map(s => ({ workspaceId: s.workspaceId, worktreePath: s.worktreePath }));
-    // No honest N-way grid to build — never a hollow one-dir grid.
-    if (worktrees.length < 2) return { ok: true, verdict, value: null };
-
-    const arrangement = await this.workspaceGrid
-      .arrangeGrid({ taskGroup, worktrees })
-      .catch(() => null);
-    if (arrangement) {
-      await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, {
-          taskGroup,
-          sessionName: arrangement.sessionName,
-          paneCount: arrangement.paneCount,
-        })
-      );
-    }
-    return { ok: true, verdict, value: arrangement }; // null on any tmux fault
+    return this.compareConverge.arrangeCompareGrid(taskGroup, principal);
   }
 
   async workspaceDiff(workspaceId: string): Promise<WorkspaceDiffView> {
-    return workspaceDiffOp(this.reviewDeps(), workspaceId);
+    return this.reads.workspaceDiff(workspaceId);
   }
 
   async workspaceTree(workspaceId: string): Promise<WorkspaceTreeView> {
-    return workspaceTreeOp(this.reviewDeps(), workspaceId);
+    return this.reads.workspaceTree(workspaceId);
   }
 
-  /**
-   * Per-file changed list — a faithful slice of the {@link workspaceDiff} blob
-   * (working tree vs the review base). PURE read (no state transition, unlike the
-   * legacy `/diff`); degrade-truthful (`available:false, files:[]` for a
-   * non-repo/no-worktree tree, never a fabricated file).
-   */
   async workspaceDiffFiles(
     workspaceId: string
   ): Promise<WorkspaceDiffFilesView> {
-    return workspaceDiffFilesOp(this.reviewDeps(), workspaceId);
+    return this.reads.workspaceDiffFiles(workspaceId);
   }
 
-  /**
-   * A single file's unified patch (working tree vs the review base). The
-   * agent-supplied `path` is passed ONLY as a pathspec after the `--` fence and is
-   * rejected pre-spawn if it begins with `-`. PURE read; degrade-truthful
-   * (`patch:null` when it cannot be computed, `patch:''` for no diff).
-   */
   async workspaceFilePatch(
     workspaceId: string,
     path: string
   ): Promise<WorkspaceFilePatchView> {
-    return workspaceFilePatchOp(this.reviewDeps(), workspaceId, path);
+    return this.reads.workspaceFilePatch(workspaceId, path);
   }
 
   async workspaceMergeability(workspaceId: string): Promise<MergeabilityView> {
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
-    return this.mergeability.probe(workspace);
+    return this.reads.workspaceMergeability(workspaceId);
   }
 
-  /**
-   * Fold the five merge-decision signals (lifecycle, worktree open-work,
-   * mergeability, PR checks, preview verification) into ONE truthful read-model
-   * (`GET …/readiness`). PURE read: no gate, no audit, no mutation. Each probe is
-   * settled INDEPENDENTLY via `Promise.allSettled`, so a rejected/hung probe degrades to
-   * an ABSENT input — the corresponding signal reports `'unknown'` and the edge
-   * never 500s, never a fabricated pass. `state` is read from the already-fetched
-   * workspace record (NOT the view probe), so lifecycle stays truthful even if the
-   * view probe rejects. A missing workspace throws (→ 404 at the edge). When the
-   * PR-status probe fulfilled with a REAL open PR, the ADVISORY auto-review probe
-   * ({@link probePrReview}) additionally attaches bounded review evidence — never
-   * a 6th signal, never a verdict input.
-   */
   async workspaceReadiness(workspaceId: string): Promise<ReadinessView> {
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
-    const [mergeR, prR, worktreeR, previewR, viewR] = await Promise.allSettled([
-      this.mergeability.probe(workspace),
-      this.prStatus.status(workspace),
-      this.worktreeStatus.probe(workspace),
-      this.getPreviewVerification(workspaceId),
-      this.buildWorkspaceView(workspace),
-    ]);
-    const review = await this.probePrReview(workspace, prR);
-    return foldReadiness({
-      state: workspace.state,
-      ...(viewR.status === 'fulfilled' && viewR.value.attention
-        ? { attention: viewR.value.attention }
-        : {}),
-      ...(mergeR.status === 'fulfilled' ? { mergeability: mergeR.value } : {}),
-      ...(prR.status === 'fulfilled' ? { prStatus: prR.value } : {}),
-      ...(worktreeR.status === 'fulfilled'
-        ? { worktree: worktreeR.value }
-        : {}),
-      ...(previewR.status === 'fulfilled' ? { preview: previewR.value } : {}),
-      ...(review ? { review } : {}),
-    });
-  }
-
-  /**
-   * ADVISORY auto-review probe backing the readiness `review` facet — NEVER a
-   * 6th signal. Fires ONLY when the port is wired AND the PR-status probe
-   * fulfilled with a real PR (`hasPr` + a numeric number) AND the workspace has
-   * a worktree; settled with the same allSettled discipline as the other
-   * probes, so a rejecting port degrades to `undefined` (facet omitted at the
-   * fold — the readiness read never 500s, never a fabricated review).
-   */
-  private async probePrReview(
-    workspace: Workspace,
-    prR: PromiseSettledResult<PrStatusView>,
-  ): Promise<PrReviewEvidenceView | undefined> {
-    const port = this.prReview;
-    if (!port || prR.status !== 'fulfilled') return undefined;
-    const prStatus = prR.value;
-    if (prStatus.hasPr !== true || typeof prStatus.number !== 'number') {
-      return undefined;
-    }
-    const repoRoot = workspace.worktreePath;
-    if (!repoRoot) return undefined;
-    const [settled] = await Promise.allSettled([
-      port.review({
-        prNumber: prStatus.number,
-        repoRoot,
-        workspaceId: workspace.workspaceId,
-      }),
-    ]);
-    return settled.status === 'fulfilled' ? settled.value : undefined;
+    return this.reads.workspaceReadiness(workspaceId);
   }
 
   async workspaceDevCommand(
     workspaceId: string
   ): Promise<DevCommandView | null> {
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    if (!workspace?.worktreePath) return null;
-    return detectDevCommand(workspace.worktreePath);
+    return this.reads.workspaceDevCommand(workspaceId);
   }
 
-  /**
-   * First-run environment import (`GET …/environment`): the host git identity,
-   * which agent CLIs are already configured, gh auth status, and the shell — so
-   * onboarding can say "we found your setup" instead of showing an empty start.
-   * PURE read, degrade-truthful (never throws, never fabricates a config).
-   */
   async environmentImport(): Promise<EnvironmentImportView> {
-    return this.environmentImportService.probe();
+    return this.reads.environmentImport();
   }
 
-  /**
-   * Search Claude session transcripts by message content (`GET …/transcript/search`)
-   * — the palette's "find that conversation" over ~/.claude/projects. PURE read,
-   * bounded + degrade-truthful (empty query → no hits; no sessions dir →
-   * available:false; never throws).
-   */
   async searchTranscripts(query: string): Promise<TranscriptSearchView> {
-    return this.sessionTranscriptService.search(query);
+    return this.reads.searchTranscripts(query);
   }
 
-  /**
-   * The effective run config for a workspace (`GET …/run-config`): the committed
-   * `.recoder/settings.json` scripts, the stable `RECODER_PORT` derived from the
-   * committed port window, and the auto-detected dev command. The `run` field is
-   * the committed run script when set, else the detected command, else '' — so
-   * the UI shows one truthful "how do I run this" answer. Degrade-safe: no
-   * worktree ⇒ null; a missing/broken config file degrades to defaults.
-   */
   async workspaceRunConfig(
     workspaceId: string
   ): Promise<WorkspaceRunConfigView | null> {
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    if (!workspace?.worktreePath) return null;
-    // Setup resolves through the SAME resolver the create hook executes
-    // (store override → committed file), so this read model can never show a
-    // script the hook would not run. repoKeyFor prefers the (required)
-    // projectId, matching the create-time key.
-    const [config, detected, setup] = await Promise.all([
-      readRepoConfigFile(workspace.worktreePath),
-      detectDevCommand(workspace.worktreePath),
-      this.repoSetup.resolveScript(
-        repoKeyFor(workspace.projectId, undefined),
-        workspace.worktreePath
-      ),
-    ]);
-    const port = computeWorkspacePort(
-      workspaceId,
-      config.port.base,
-      config.port.span
-    );
-    const run =
-      config.scripts.run !== ''
-        ? config.scripts.run
-        : (detected?.command ?? '');
-    const runSource: WorkspaceRunConfigView['runSource'] =
-      config.scripts.run !== ''
-        ? 'config'
-        : detected != null
-          ? 'detected'
-          : 'none';
-    return {
-      port,
-      setup: setup.script,
-      setupSource: setup.source,
-      run,
-      runSource,
-      detectedCommand: detected?.command ?? null,
-    };
+    return this.reads.workspaceRunConfig(workspaceId);
   }
 
   // --- workspace detail: governed writes ---------------------------------------
 
-  /**
-   * The narrow gate + verifier + read seams the preview-verify service runs over.
-   * Uses the wired verifier when present; else a truthful null-skip verifier, so
-   * the explicit `verifyPreview` path still runs its gate + seals a skipped record
-   * (never a faked pass). The fire-and-forget auto-verify guards on presence, so
-   * it never spends a gate/audit on a composition with no browsing facet.
-   */
-  private previewVerifyDeps(): PreviewVerifyDeps {
-    return {
-      gate: this.gate,
-      verifier: this.previewVerify ?? createBrowserPreviewVerifier(null),
-      getWorkspace: id => this.engine.getWorkspace(id),
-      // Write-back seam: persist the COMPACT verification summary onto the
-      // workspace record via the SAME same-state metadata-merge idiom
-      // `setPreviewUrl` uses (`advanceWorkspace` MERGES the `{ previewVerification }`
-      // patch, never replaces), so the `GET …/preview-verification` read edge can
-      // project it — the audit Merkle chain is not queryable by `workspaceId`.
-      // Degrade-truthful: a vanished workspace ⇒ a no-op (nothing to write onto).
-      persistVerification: async (id, record) => {
-        const workspace = await this.engine.getWorkspace(id);
-        if (!workspace) return;
-        await this.engine.advanceWorkspace(id, workspace.state, undefined, {
-          previewVerification: record,
-        });
-      },
-    };
-  }
-
-  /**
-   * PURE projection of a workspace's persisted preview-verification summary
-   * (`metadata.previewVerification`) into the read model the
-   * `GET …/preview-verification` edge returns — or `null` when the workspace does
-   * not exist OR was never verified (no record). Read-only: no gate, no audit, no
-   * mutation. `screenshotRef` is ALWAYS `null` in this cut (the screenshot PNG is
-   * not retained — only an opaque artifact id was sealed), so the cockpit shows
-   * "screenshot not retained", never a broken image. A never-verified workspace is
-   * a truthful `null` (⇒ a 404 at the edge), NEVER a fabricated pass.
-   */
   async getPreviewVerification(
     workspaceId: string
   ): Promise<PreviewVerificationView | null> {
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    if (!workspace) return null;
-    const raw = (workspace.metadata as Record<string, unknown> | undefined)
-      ?.previewVerification;
-    if (!raw || typeof raw !== 'object') return null;
-    const record = raw as PreviewVerificationRecord;
-    return {
-      workspaceId: workspace.workspaceId,
-      status: record.status,
-      checkedAt: record.checkedAt,
-      summary: record.summary,
-      degraded: record.degraded,
-      ...(record.reason !== undefined ? { reason: record.reason } : {}),
-      checks: Array.isArray(record.checks) ? record.checks : [],
-      // The screenshot PNG is not retained (only an opaque artifact id was sealed).
-      screenshotRef: null,
-    };
+    return this.preview.getPreviewVerification(workspaceId);
   }
 
   async setPreviewUrl(
@@ -2559,319 +894,52 @@ export class ConductorComposer implements ConductorModule {
     url: unknown,
     principal: Principal
   ): Promise<ConductorWriteResult<Workspace>> {
-    const action = 'workspace.preview_url';
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { environment: 'conductor' },
-        metadata: { workspaceId },
-      }
-    );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    const normalized = normalizeLocalPreviewUrl(url);
-    if (!normalized) {
-      return {
-        ok: false,
-        verdict,
-        reason: 'a http(s) localhost/loopback url is required',
-      };
-    }
-    try {
-      const workspace = await this.engine.getWorkspace(workspaceId);
-      if (!workspace)
-        return {
-          ok: false,
-          verdict,
-          reason: `workspace not found: ${workspaceId}`,
-        };
-      // Same-state advance (no illegal transition) — safe to call repeatedly as
-      // the run restarts on a new port.
-      const updated = await this.engine.advanceWorkspace(
-        workspaceId,
-        workspace.state,
-        undefined,
-        {
-          previewUrl: normalized,
-        }
-      );
-      await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, { workspaceId })
-      );
-      // Fire-and-forget preview verification (browsing facet). The persist above is
-      // AWAITED and truthful; this side effect is `void … .catch(…)` and NEVER
-      // rethrows into or blocks the caller — the completion-hook precedent. The URL
-      // is freshest here (newest, most likely still pointing at a live port), so
-      // firing now maximizes a real passed/failed. It crosses a SECOND, independent
-      // gate (`workspace.preview_verify`): a deny / needs_approval there is a
-      // truthful no-op — logged, never a block on the already-succeeded write. The
-      // bounded `timeoutMs` guarantees a slow/hung preview can never stall the
-      // caller (nor the completion hook downstream). Degrade-truthful end to end:
-      // no driver ⇒ skipped(degraded); page break ⇒ failed; never a fabricated pass.
-      if (this.previewVerify) {
-        void verifyWorkspacePreview(
-          this.previewVerifyDeps(),
-          workspaceId,
-          principal,
-          {
-            timeoutMs: DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS,
-          }
-        )
-          .then(r => {
-            if (!r.ok) {
-              this.log.info(
-                { workspaceId, verdict: r.verdict.effect, reason: r.reason },
-                'conductor preview auto-verify not run'
-              );
-            }
-          })
-          .catch(err =>
-            this.log.warn(
-              { err, workspaceId },
-              'conductor preview auto-verify faulted'
-            )
-          );
-      }
-      return { ok: true, verdict, value: updated };
-    } catch (err) {
-      return {
-        ok: false,
-        verdict,
-        reason:
-          err instanceof Error ? err.message : 'preview-url update failed',
-      };
-    }
+    return this.preview.setPreviewUrl(workspaceId, url, principal);
   }
 
-  /**
-   * VERIFY the workspace's stored preview URL — GATED (`workspace.preview_verify`),
-   * the awaited twin of the fire-and-forget auto-verify. Delegates to the governed
-   * {@link verifyWorkspacePreview} service, which runs the browser navigate →
-   * assert → screenshot and SEALS the summary + screenshot artifact ids into the
-   * durable audit chain. A bounded default deadline is applied unless the caller
-   * overrides it. Degrade-truthful: no verifier / no driver / no stored preview
-   * URL ⇒ a truthful `ok:false` or `skipped(degraded)` outcome with the real
-   * reason — never a fabricated pass, never a throw, never a block on a run/merge.
-   */
   async verifyPreview(
     workspaceId: string,
     principal: Principal,
     options?: PreviewVerifyOptions
   ): Promise<PreviewVerifyResult> {
-    return verifyWorkspacePreview(
-      this.previewVerifyDeps(),
-      workspaceId,
-      principal,
-      {
-        timeoutMs: DEFAULT_PREVIEW_VERIFY_TIMEOUT_MS,
-        ...(options ?? {}),
-      }
-    );
+    return this.preview.verifyPreview(workspaceId, principal, options);
   }
 
-  /**
-   * VERIFY the workspace's preview URL AND attach the outcome as a SIGNED,
-   * content-hashed evidence pack (BE-6.2) — the "preview browser-verify +
-   * evidence-attach" governed composition. Runs the already-gated
-   * {@link verifyPreview} (browser navigate → assert → screenshot, sealed into the
-   * durable audit chain), then lifts the SAME verification outcome into a portable
-   * {@link PreviewEvidencePack} and SIGNS it with the configured Ed25519 evidence
-   * key (reusing the convergence-export signing primitive). Degrade-truthful: a
-   * blocked verdict / missing workspace / no stored preview URL returns the
-   * verification's own `ok:false` + reason (no pack); a `skipped(degraded)` browser
-   * run yields a truthful skipped-but-signed pack, never a fabricated pass; an
-   * absent signing key ⇒ an UNSIGNED pack (`signature:null`), never a forged one.
-   */
   async attachPreviewEvidence(
     workspaceId: string,
     principal: Principal,
     options?: PreviewVerifyOptions
   ): Promise<ConductorWriteResult<PreviewEvidencePack>> {
-    const result = await this.verifyPreview(workspaceId, principal, options);
-    if (!result.ok || !result.value) {
-      return {
-        ok: false,
-        verdict: result.verdict,
-        ...(result.reason ? { reason: result.reason } : {}),
-      };
-    }
-    // Read-only provenance enrichment (the workspace exists — verify returned ok).
-    // A missing record or absent url degrades the subject fields, never the pack.
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    const url =
-      (workspace?.metadata as Record<string, unknown> | undefined)?.previewUrl;
-    const pack = renderPreviewEvidence({
-      workspaceId,
-      url: typeof url === 'string' ? url : '',
-      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-      verification: result.value,
-    });
-    const sealed = signPreviewEvidence(pack, {
-      privateKey: this.resolveEvidenceSigningKey(),
-      logger: this.log,
-    });
-    return { ok: true, verdict: result.verdict, value: sealed };
+    return this.preview.attachPreviewEvidence(workspaceId, principal, options);
   }
 
   async archiveWorkspace(
     workspaceId: string,
     principal: Principal
   ): Promise<ConductorWriteResult<Workspace>> {
-    const action = 'workspace.archive';
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { environment: 'conductor' },
-        metadata: { workspaceId },
-      }
-    );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    try {
-      const archived = await archiveWorkspaceOp(this.reviewDeps(), workspaceId);
-      await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, { workspaceId })
-      );
-      return { ok: true, verdict, value: archived };
-    } catch (err) {
-      return {
-        ok: false,
-        verdict,
-        reason: err instanceof Error ? err.message : 'archive failed',
-      };
-    }
+    return this.writes.archiveWorkspace(workspaceId, principal);
   }
 
-  /**
-   * FILE-LEVEL REJECT in review (`POST …/files/discard`) — restore the selected
-   * paths to the review base so Apply (= merge) delivers only the accepted set.
-   * GATED (`workspace.discard`): the governance gate runs BEFORE any git write
-   * (a deny never reaches the worktree) and the performed discard is sealed
-   * into the audit chain like every other workspace write. Degrade-truthful:
-   * per-path outcomes come back individually (a bad path fails that path, not
-   * the batch); a zero-effect call is a truthful no-op (`committed:false`).
-   */
   async discardWorkspaceFiles(
     workspaceId: string,
     paths: readonly string[],
     principal: Principal
   ): Promise<ConductorWriteResult<WorkspaceDiscardView>> {
-    const action = 'workspace.discard';
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { environment: 'conductor' },
-        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-        metadata: { workspaceId, pathCount: paths.length },
-      }
-    );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    if (!workspace)
-      return {
-        ok: false,
-        verdict,
-        reason: `workspace not found: ${workspaceId}`,
-      };
-    try {
-      const view = await discardWorkspacePathsOp(
-        this.reviewDeps(),
-        workspace,
-        paths
-      );
-      const count = (a: string) =>
-        view.results.filter(r => r.action === a).length;
-      await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, {
-          workspaceId,
-          requested: paths.length,
-          restored: count('restored'),
-          removed: count('removed'),
-          unchanged: count('unchanged'),
-          failed: count('failed'),
-          committed: view.committed,
-        })
-      );
-      return { ok: true, verdict, value: view };
-    } catch (err) {
-      return {
-        ok: false,
-        verdict,
-        reason: err instanceof Error ? err.message : 'discard failed',
-      };
-    }
+    return this.writes.discardWorkspaceFiles(workspaceId, paths, principal);
   }
 
-  /**
-   * HUNK-LEVEL REJECT in review (`POST …/files/discard-hunks`) — reverse-apply
-   * the selected hunks of ONE path against the review base so Apply (= merge)
-   * delivers only the accepted edits. GATED (`workspace.discard` — the SAME
-   * action as the file-level reject: same risk, same approval seam) and sealed
-   * into the audit chain like every other workspace write. Degrade-truthful:
-   * per-hunk outcomes come back individually (an out-of-range index fails that
-   * index, not the batch); the assembled patch applies atomically; a
-   * zero-effect call is a truthful no-op (`committed:false`).
-   */
   async discardWorkspaceHunks(
     workspaceId: string,
     filePath: string,
     hunkIndexes: readonly number[],
     principal: Principal
   ): Promise<ConductorWriteResult<WorkspaceDiscardHunksView>> {
-    const action = 'workspace.discard';
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { environment: 'conductor' },
-        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-        metadata: { workspaceId, path: filePath, hunkCount: hunkIndexes.length },
-      }
+    return this.writes.discardWorkspaceHunks(
+      workspaceId,
+      filePath,
+      hunkIndexes,
+      principal
     );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    if (!workspace)
-      return {
-        ok: false,
-        verdict,
-        reason: `workspace not found: ${workspaceId}`,
-      };
-    try {
-      const view = await discardWorkspaceHunksOp(
-        this.reviewDeps(),
-        workspace,
-        filePath,
-        hunkIndexes
-      );
-      const count = (a: string) =>
-        view.hunks.filter(h => h.action === a).length;
-      await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, {
-          workspaceId,
-          path: filePath,
-          requested: hunkIndexes.length,
-          discarded: count('discarded'),
-          failed: count('failed'),
-          committed: view.committed,
-        })
-      );
-      return { ok: true, verdict, value: view };
-    } catch (err) {
-      return {
-        ok: false,
-        verdict,
-        reason: err instanceof Error ? err.message : 'discard hunks failed',
-      };
-    }
   }
 
   async createWorkspacePr(
@@ -2879,41 +947,7 @@ export class ConductorComposer implements ConductorModule {
     input: CreatePrInput,
     principal: Principal
   ): Promise<ConductorWriteResult<CreatePrResultView>> {
-    const action = 'workspace.pr';
-    // Production rule: opening a PR pushes the branch (customer-visible delivery)
-    // — the governance gate is THE approval seam; a deny never reaches git/gh.
-    // The workspace's taskId anchors approval correlation: an `approved` record
-    // for (taskId, action) clears a needs_approval verdict on retry.
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { environment: 'conductor' },
-        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-        metadata: { workspaceId, base: input.base },
-      }
-    );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    try {
-      const deps: PublishOpsDeps = this.reviewDeps();
-      const result = await createWorkspacePrOp(deps, workspaceId, input);
-      await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, {
-          workspaceId,
-          url: result.url,
-        })
-      );
-      return { ok: true, verdict, value: result };
-    } catch (err) {
-      return {
-        ok: false,
-        verdict,
-        reason: err instanceof Error ? err.message : 'pr failed',
-      };
-    }
+    return this.writes.createWorkspacePr(workspaceId, input, principal);
   }
 
   async mergeWorkspace(
@@ -2921,288 +955,19 @@ export class ConductorComposer implements ConductorModule {
     input: MergeInput,
     principal: Principal
   ): Promise<ConductorWriteResult<MergeResultView>> {
-    const action = 'workspace.merge';
-    // A merge is THE customer-visible delivery — gate before any git/gh runs.
-    // The workspace's taskId anchors approval correlation: an `approved` record
-    // for (taskId, action) clears a needs_approval verdict on retry.
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { environment: 'conductor' },
-        ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-        metadata: { workspaceId, strategy: input.strategy },
-      }
-    );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    try {
-      // Gather the convergence-evidence inputs at DECISION TIME (before the merge
-      // mutates state): the candidate siblings + the folded pre-merge verification.
-      // Degrade-truthful — never throws, so a compare/readiness fault never blocks
-      // the merge (the evidence just records the parts it could truthfully gather).
-      const preMerge = await this.gatherConvergenceInputs(
-        workspaceId,
-        workspace
-      );
-
-      const deps: PublishOpsDeps = this.reviewDeps();
-      const result = await mergeWorkspaceOp(deps, workspaceId, input);
-
-      // Assemble the exportable convergence evidence record (step-3 headline
-      // artifact), seal its hash into the durable Merkle chain, and persist the
-      // full record for `GET …/evidence`. Never blocks/rolls back the merge:
-      // the merge already happened above, so ANY throw here degrades to a null
-      // record (truthful) rather than misreporting the succeeded merge as failed
-      // via the outer catch.
-      let emitted: {
-        record: ConvergenceEvidenceRecord | null;
-        sealed: AuditRecord | null;
-      } = {
-        record: null,
-        sealed: null,
-      };
-      try {
-        emitted = await this.emitConvergenceEvidence({
-          action,
-          principal,
-          verdict,
-          workspace,
-          result,
-          preMerge,
-        });
-      } catch (err) {
-        this.log.warn(
-          { err, workspaceId },
-          'convergence evidence emission failed (merge succeeded, unaffected)'
-        );
-      }
-
-      const value: MergeResultView = {
-        ...result,
-        auditId: emitted.sealed?.id ?? null,
-        auditSeq: emitted.sealed?.seq ?? null,
-        auditEntryHash: emitted.sealed?.entryHash ?? null,
-        evidenceHash: emitted.record?.evidence.contentHash ?? null,
-      };
-      // Delivery-feedback fusion: a MERGED workspace is THE positive delivery
-      // outcome. When the run's routed inference_id was persisted onto the record
-      // (`metadata.inferenceId`), fire the inference routing feedback seam so the
-      // LLM gateway learns `task_success` from real deliveries. Degrade-truthful:
-      // no persisted inference_id (non-napi run / no correlation) ⇒ a silent skip, never faked.
-      // The anchor IS persisted by the run-inference sink (bootstrap:1115 →
-      // recordRunInferenceId) for napi-tier completions carrying a correlationWorkspaceId.
-      if (result.merged && this.onDeliveryFeedback) {
-        const inferenceId = workspace?.metadata?.inferenceId;
-        if (typeof inferenceId === 'string' && inferenceId.length > 0) {
-          this.onDeliveryFeedback(inferenceId, principal.userId, true);
-        }
-      }
-      return { ok: true, verdict, value };
-    } catch (err) {
-      return {
-        ok: false,
-        verdict,
-        reason: err instanceof Error ? err.message : 'merge failed',
-      };
-    }
+    return this.writes.mergeWorkspace(workspaceId, input, principal);
   }
 
-  /**
-   * Gather the convergence-evidence inputs at DECISION TIME — the candidate
-   * siblings (the compare read) and the folded pre-merge verification (readiness).
-   * Both are settled INDEPENDENTLY so a rejected/hung probe degrades to an absent
-   * input (never throws). Candidates always include at least the merged workspace
-   * (`workspaceSiblings` returns a singleton for an ungrouped one; a bare fallback
-   * covers a compare fault) so the record can never be candidate-less.
-   */
-  private async gatherConvergenceInputs(
-    workspaceId: string,
-    workspace: Workspace | null
-  ): Promise<{
-    candidates: readonly EvidenceCandidateInput[];
-    verification?: { view?: ReadinessView; reason?: string };
-  }> {
-    const [siblingsR, readinessR] = await Promise.allSettled([
-      this.workspaceSiblings(workspaceId),
-      this.workspaceReadiness(workspaceId),
-    ]);
-
-    const candidates: EvidenceCandidateInput[] = [];
-    if (siblingsR.status === 'fulfilled' && siblingsR.value) {
-      for (const sibling of siblingsR.value.siblings) {
-        candidates.push({
-          workspaceId: sibling.workspaceId,
-          agent: sibling.agent,
-          branch: sibling.branch,
-          ...(sibling.runId ? { runId: sibling.runId } : {}),
-          state: sibling.state,
-          ...(sibling.diffStat ? { diffStat: sibling.diffStat } : {}),
-          ...(sibling.changedFiles
-            ? { changedFiles: sibling.changedFiles }
-            : {}),
-        });
-      }
-    }
-    // Fallback: a compare fault must not produce a candidate-less record — record
-    // at least the chosen workspace from the record we already hold.
-    if (candidates.length === 0 && workspace) {
-      candidates.push({
-        workspaceId: workspace.workspaceId,
-        agent: workspace.runtimeId,
-        branch: workspace.branch,
-        ...(workspace.runId ? { runId: workspace.runId } : {}),
-        state: workspace.state,
-      });
-    }
-
-    const verification =
-      readinessR.status === 'fulfilled'
-        ? { view: readinessR.value }
-        : { reason: 'readiness probe unavailable' };
-    return { candidates, verification };
-  }
-
-  /**
-   * Assemble + seal + persist the exportable convergence evidence record for a
-   * merge. The evidence `contentHash` is sealed INTO the durable Merkle chain
-   * payload (so the tamper-evident audit leaf commits to the exact evidence), then
-   * the full record (evidence + the returned chain pointer) is persisted onto the
-   * workspace for `GET …/evidence`. DEGRADE-TRUTHFUL: a sealing/persist fault
-   * degrades to `null` ids (the merge already succeeded and is never rolled back).
-   */
-  private async emitConvergenceEvidence(args: {
-    action: GovernanceAction;
-    principal: Principal;
-    verdict: GateVerdict;
-    workspace: Workspace | null;
-    result: MergeResultView;
-    preMerge: {
-      candidates: readonly EvidenceCandidateInput[];
-      verification?: { view?: ReadinessView; reason?: string };
-    };
-  }): Promise<{
-    record: ConvergenceEvidenceRecord | null;
-    sealed: AuditRecord | null;
-  }> {
-    const { action, principal, verdict, workspace, result, preMerge } = args;
-    const governance: EvidenceGovernance = {
-      action,
-      effect: verdict.effect,
-      riskTier: verdict.tier,
-      degraded: verdict.degraded,
-      ...(verdict.reason ? { reason: verdict.reason } : {}),
-      ...(verdict.approvalId ? { approvalId: verdict.approvalId } : {}),
-    };
-    const mergedAtRaw = workspace?.metadata?.mergedAt;
-    // Step-2 provenance: a COMPOSED convergence workspace carries its per-file
-    // selection block on `metadata.convergence` (stamped by `composeConvergence`).
-    // Present ⇒ the evidence shows WHICH sibling won each contested file; a plain
-    // single-agent merge has none (absent, never fabricated).
-    const convergence = this.readConvergenceProvenance(workspace);
-    const evidence = assembleConvergenceEvidence({
-      chosenWorkspaceId: result.workspaceId,
-      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
-      taskGroup: workspace ? (taskGroupOf(workspace) ?? null) : null,
-      ...(typeof result.mergeMode === 'string'
-        ? { mergeMode: result.mergeMode }
-        : {}),
-      candidates: preMerge.candidates,
-      governance,
-      ...(preMerge.verification ? { verification: preMerge.verification } : {}),
-      ...(convergence ? { convergence } : {}),
-      actorId: principal.userId,
-      mergedAt:
-        typeof mergedAtRaw === 'string'
-          ? mergedAtRaw
-          : new Date().toISOString(),
-    });
-
-    // Seal the evidence hash into the Merkle chain (the audit leaf commits to it).
-    const sealed = await recordConductorAudit(
-      this.gate,
-      conductorAuditEntry(action, principal, verdict, {
-        workspaceId: result.workspaceId,
-        merged: result.merged,
-        evidenceHash: evidence.contentHash,
-        taskGroup: evidence.taskGroup,
-        candidateCount: evidence.candidateCount,
-        verificationVerdict: evidence.verification.verdict ?? 'unavailable',
-      })
-    );
-
-    const record: ConvergenceEvidenceRecord = {
-      evidence,
-      seal: {
-        auditId: sealed?.id ?? null,
-        auditSeq: sealed?.seq ?? null,
-        auditEntryHash: sealed?.entryHash ?? null,
-      },
-    };
-    // Persist for retrieval via the SAME same-state metadata-merge idiom
-    // `previewVerification` uses (advanceWorkspace MERGES the patch, never replaces).
-    // Best-effort: a persist fault never rolls back the merge.
-    try {
-      const current = await this.engine.getWorkspace(result.workspaceId);
-      if (current) {
-        await this.engine.advanceWorkspace(
-          result.workspaceId,
-          current.state,
-          undefined,
-          {
-            convergenceEvidence: record,
-          }
-        );
-      }
-    } catch (err) {
-      this.log.warn(
-        { err, workspaceId: result.workspaceId },
-        'convergence evidence persist failed (merge unaffected)'
-      );
-    }
-    return { record, sealed };
-  }
-
-  /**
-   * The persisted exportable convergence evidence record for a workspace's merge
-   * (`GET …/evidence`) — a PURE projection over `metadata.convergenceEvidence`, or
-   * `null` when the workspace does not exist OR was never merged with evidence.
-   * Read-only: no gate, no audit, no mutation. A never-merged workspace is a
-   * truthful `null` (⇒ 404 at the edge), never a fabricated record.
-   */
   async getConvergenceEvidence(
     workspaceId: string
   ): Promise<ConvergenceEvidenceRecord | null> {
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    if (!workspace) return null;
-    const raw = (workspace.metadata as Record<string, unknown> | undefined)
-      ?.convergenceEvidence;
-    if (!raw || typeof raw !== 'object') return null;
-    return raw as ConvergenceEvidenceRecord;
+    return this.compareConverge.getConvergenceEvidence(workspaceId);
   }
 
-  /**
-   * The framework-mapped, exportable evidence PACK for a workspace's merge
-   * (`GET …/evidence/export`) — renders the stored {@link ConvergenceEvidenceRecord}
-   * into a control-mapped artifact (SOC 2 / EU AI Act / DORA / Recoder) with a
-   * human-readable summary, content-hashed for integrity. PURE over the stored
-   * record: no gate, no mutation, no network. Every control status is DERIVED from
-   * the backing fields (never a fabricated `met`). `null` when the workspace does
-   * not exist OR was never merged with evidence (⇒ 404 at the edge).
-   */
   async getConvergenceEvidenceExport(
     workspaceId: string
   ): Promise<EvidenceExport | null> {
-    const record = await this.getConvergenceEvidence(workspaceId);
-    if (!record) return null;
-    // PURE render first (deterministic hash/controls), THEN a thin detached-signature
-    // step — signing the stable contentHash, never mutating it. Unsigned when no key.
-    const pack = renderEvidenceExport(record);
-    return signEvidenceExport(pack, {
-      privateKey: this.resolveEvidenceSigningKey(),
-      logger: this.log,
-    });
+    return this.compareConverge.getConvergenceEvidenceExport(workspaceId);
   }
 
   /** Load + memoize the Ed25519 signing key from config (degrade-truthful: `null` = unsigned). */
@@ -3216,229 +981,32 @@ export class ConductorComposer implements ConductorModule {
     return this.evidenceSigningKey;
   }
 
-  /**
-   * The raw compare read (no grid enrichment) — the pure sibling aggregate. When a
-   * `principal` is supplied the aggregate is narrowed to the caller's OWN siblings
-   * (recoder-kybr); a principal-less internal read (merge-time evidence) sees all.
-   */
-  private async rawCompare(
-    taskGroup: string,
-    principal?: Principal
-  ): Promise<CompareView> {
-    return compareTaskGroupOp(this.compareDeps(principal), taskGroup);
-  }
-
-  /**
-   * Read the step-2 convergence provenance a composed workspace carries on
-   * `metadata.convergence`, narrowed to {@link EvidenceConvergence}. Absent /
-   * malformed ⇒ `undefined` (a plain single-agent merge has none — never fabricated).
-   */
-  private readConvergenceProvenance(
-    workspace: Workspace | null
-  ): EvidenceConvergence | undefined {
-    const raw = (workspace?.metadata as Record<string, unknown> | undefined)
-      ?.convergence;
-    if (!raw || typeof raw !== 'object') return undefined;
-    const value = raw as Partial<EvidenceConvergence> & {
-      assisted?: readonly { path?: unknown; inference_id?: unknown }[];
-    };
-    if (!Array.isArray(value.selections) || typeof value.fileCount !== 'number')
-      return undefined;
-    // The ops layer stamps model-written files as `assisted` (snake_case
-    // inference_id from the gateway) — carry them into the sealed evidence;
-    // dropping them here would hide a model-authored merge from the audit.
-    const assisted = Array.isArray(value.assisted)
-      ? value.assisted
-          .filter((a) => typeof a?.path === 'string')
-          .map((a) => ({
-            path: a.path as string,
-            ...(typeof a.inference_id === 'string'
-              ? { inferenceId: a.inference_id }
-              : {}),
-          }))
-      : [];
-    return {
-      fromTaskGroup:
-        typeof value.fromTaskGroup === 'string' ? value.fromTaskGroup : null,
-      sourceCount:
-        typeof value.sourceCount === 'number' ? value.sourceCount : 0,
-      fileCount: value.fileCount,
-      selections: value.selections,
-      ...(assisted.length > 0 ? { assisted } : {}),
-    };
-  }
-
-  /**
-   * PLAN a convergence (`GET …/converge-plan`) — the PURE fold of the group's N
-   * sibling diffs + a per-contested-file selection into a resolved file→source map.
-   * Read-only: no gate, no mutation. Non-contested paths auto-resolve; contested
-   * paths resolve to a VALID selection or surface as `unresolved` (a truthful
-   * "you must decide", never an invented winner). An empty/absent group is a
-   * truthful empty plan (`complete:false`).
-   *
-   * When `options.probe` is set, the plan is ENRICHED with a `contested[]`
-   * synthesizability probe (an OPT-IN, read-only dry-run 3-way merge over the
-   * contested paths — no worktree/mutation) so the UI can show which contested files
-   * auto-merge cleanly. Unprobed (the default), the pure fold is returned verbatim
-   * (no `contested` field) — existing callers are unaffected.
-   */
   async planConvergence(
     taskGroup: string,
     selection: Readonly<Record<string, string>>,
     options?: { readonly probe?: boolean },
     principal?: Principal
   ): Promise<ConvergencePlan> {
-    // recoder-kybr: plan over ONLY the caller's own siblings (a group is keyed on a
-    // shared taskGroup, so the `:id` guard cannot cover it). Principal-less ⇒ full group.
-    const view = await this.rawCompare(taskGroup, principal);
-    const siblings = view.siblings.map(s => ({
-      workspaceId: s.workspaceId,
-      agent: s.agent,
-      ...(s.changedFiles ? { changedFiles: s.changedFiles } : {}),
-    }));
-    const plan = planConvergenceOp({
-      taskGroup: view.taskGroup,
-      siblings,
+    return this.compareConverge.planConvergence(
+      taskGroup,
       selection,
-    });
-    if (!options?.probe) return plan;
-
-    // OPT-IN enrichment: dry-run the 3-way over every contested path (resolved-by-
-    // synthesize/pick AND still-unresolved) so the UI can offer `@synthesize` only
-    // where it will actually come out clean. Read-only — never mutates, never throws.
-    const contestedInputs = [
-      ...plan.files
-        .filter(f => f.contested)
-        .map(f => ({ path: f.path, workspaceIds: f.candidates })),
-      ...plan.unresolved.map(u => ({
-        path: u.path,
-        workspaceIds: u.candidates,
-      })),
-    ];
-    if (contestedInputs.length === 0) return { ...plan, contested: [] };
-    const contested = await probeSynthesizabilityOp(
-      this.convergeDeps(principal),
-      contestedInputs
+      options,
+      principal
     );
-    return { ...plan, contested };
   }
 
-  /**
-   * The injected seams the convergence ops (compose + probe) run over. When a
-   * `principal` is supplied the `compare` seam is narrowed to the caller's OWN
-   * siblings (recoder-kybr), so a converge folds only worktrees the caller owns;
-   * a principal-less internal call sees the full group.
-   */
-  private convergeDeps(principal?: Principal): ConvergeOpsDeps {
-    return {
-      compare: taskGroup => this.rawCompare(taskGroup, principal),
-      getWorkspace: id => this.engine.getWorkspace(id),
-      registerWorkspace: workspace =>
-        this.repository.upsertWorkspace(workspace),
-      logger: this.log,
-      // The assist function name is owned HERE (composition), never by the ops —
-      // see CONVERGE_ASSIST_FUNCTION_NAME. Until an `inference` fn is injected the
-      // assisted path still degrades truthfully to synthesize-conflict.
-      inferenceFunctionName: CONVERGE_ASSIST_FUNCTION_NAME,
-    };
-  }
-
-  /**
-   * COMPOSE a convergence (`POST …/converge`) — GATED (`workspace.branch`).
-   * Materializes a complete plan into a NEW convergence worktree/branch (whole-file
-   * pick, no agent launched), registers it as a reviewable workspace, and stamps
-   * the per-file provenance so the LATER governed merge emits an evidence record
-   * that shows which sibling won each contested file. The caller must have a
-   * COMPLETE plan (the route pre-validates); the op re-checks and throws a truthful
-   * error otherwise. Degrade-truthful: a git/compose fault returns `ok:false` with
-   * the real reason (never a fabricated success), and the gate deny short-circuits.
-   */
   async composeConvergence(
     input: ComposeConvergenceInput,
     principal: Principal
   ): Promise<ConductorWriteResult<ComposeConvergenceResult>> {
-    const action = 'workspace.branch';
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { environment: 'conductor' },
-        metadata: { taskGroup: input.taskGroup },
-      }
-    );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    try {
-      // recoder-kybr: fold ONLY the caller's own worktrees into the convergence.
-      const result = await composeConvergenceOp(this.convergeDeps(principal), {
-        ...input,
-        createdBy: input.createdBy || principal.userId,
-      });
-      await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, {
-          taskGroup: input.taskGroup,
-          workspaceId: result.workspaceId,
-          branch: result.branch,
-          fileCount: result.fileCount,
-          sourceCount: result.plan.sources.length,
-        })
-      );
-      return { ok: true, verdict, value: result };
-    } catch (err) {
-      // A CLIENT-input failure (nothing to converge / a requested path could not be
-      // resolved — incl. a `synthesize-conflict` discovered during the 3-way merge)
-      // is a 4xx, not a governance/service fault. Tag it so the edge maps it to 400.
-      if (err instanceof EmptyConvergenceError) {
-        return { ok: false, verdict, reason: err.message, code: 'empty' };
-      }
-      if (err instanceof UnresolvedConvergenceError) {
-        return { ok: false, verdict, reason: err.message, code: 'unresolved' };
-      }
-      return {
-        ok: false,
-        verdict,
-        reason:
-          err instanceof Error ? err.message : 'convergence compose failed',
-      };
-    }
+    return this.compareConverge.composeConvergence(input, principal);
   }
 
-  /**
-   * SINGLE-WRITER persist of a run's napi-tier `inference_id` onto the workspace
-   * record — the WRITE side of the merge → `feedback()` RLHF loop consumed at
-   * {@link mergeWorkspace} (`:1338`). Reuses the same-state metadata-patch idiom of
-   * {@link setPreviewUrl} (`:1245`): `advanceWorkspace` transitions the workspace to
-   * its CURRENT state and MERGES the `{ inferenceId }` patch onto existing metadata
-   * (verified: `transitionWorkspace` spreads `...metadata`), so a concurrent
-   * lifecycle advance is never clobbered and only `inferenceId` is written.
-   *
-   * WRITE-ONCE: an already-anchored workspace returns `true` without a write — the
-   * first napi-served completion of a run claims the anchor, minimizing the race
-   * window against concurrent advances and never overwriting a resolvable id.
-   *
-   * No governance gate: this is an internal correlation write on the sink's
-   * fire-and-forget path (mirrors the internal principal path the autopilot uses),
-   * not a customer-visible action. Degrade-truthful: a missing workspace ⇒ `false`.
-   */
   async recordRunInferenceId(
     workspaceId: string,
     inferenceId: string
   ): Promise<boolean> {
-    if (!inferenceId) return false;
-    const workspace = await this.engine.getWorkspace(workspaceId);
-    if (!workspace) return false;
-    // Write-once anchor: never clobber a persisted id.
-    const existing = workspace.metadata?.inferenceId;
-    if (typeof existing === 'string' && existing.length > 0) return true;
-    // Same-state advance (no illegal transition) — the metadata patch merges.
-    await this.engine.advanceWorkspace(
-      workspaceId,
-      workspace.state,
-      undefined,
-      { inferenceId }
-    );
-    return true;
+    return this.writes.recordRunInferenceId(workspaceId, inferenceId);
   }
 
   async sendWorkspaceMessage(
@@ -3446,80 +1014,20 @@ export class ConductorComposer implements ConductorModule {
     input: ContinueWorkspaceInput,
     principal: Principal
   ): Promise<ConductorWriteResult<ContinueWorkspaceResult>> {
-    const action = 'workspace.message';
-    const { allowed, verdict } = await guardConductorWrite(
-      this.gate,
-      action,
-      principal,
-      {
-        target: { environment: 'conductor' },
-        metadata: { workspaceId },
-      }
-    );
-    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
-    try {
-      const deps: ContinueOpsDeps = {
-        getWorkspace: id => this.engine.getWorkspace(id),
-        advanceWorkspace: (id, to, patch, metadata) =>
-          this.engine.advanceWorkspace(id, to, patch, metadata),
-        getSubstrate: (id: WorkspaceSubstrate) => this.registry.getFull(id),
-        repository: this.repository,
-        tailer: this.tailer,
-        logger: this.log,
-        ...(this.brain ? { brain: this.brain } : {}),
-      };
-      const result = await continueWorkspaceOp(deps, workspaceId, {
-        ...input,
-        createdBy: input.createdBy ?? principal.userId,
-      });
-      await recordConductorAudit(
-        this.gate,
-        conductorAuditEntry(action, principal, verdict, {
-          workspaceId,
-          runId: result.runId,
-        })
-      );
-      return { ok: true, verdict, value: result };
-    } catch (err) {
-      return {
-        ok: false,
-        verdict,
-        reason: err instanceof Error ? err.message : 'message failed',
-      };
-    }
+    return this.writes.sendWorkspaceMessage(workspaceId, input, principal);
   }
 
   async listReconcileFindings(
     workspaceId?: string
   ): Promise<readonly ReconcileFindingView[]> {
-    return this.repository.listReconcileFindings(workspaceId);
+    return this.reads.listReconcileFindings(workspaceId);
   }
 
-  /**
-   * The durable governance-audit trail for one workspace — the sealed
-   * control-plane events (merge/pr/advance/stop) whose payload carries this
-   * `workspaceId`, ascending by chain `seq`. Read-only (no gate/mutation). The
-   * READ half of the merge→audit seam: `POST …/merge` returns the sealed id and
-   * this edge lets the cockpit pull the full queryable trail. Absent reader ⇒ a
-   * truthful empty trail, never a fabricated record.
-   */
   async workspaceAudit(
     workspaceId: string,
     limit?: number
   ): Promise<readonly AuditRecord[]> {
-    if (!this.auditReader) return [];
-    // Solo/desktop (bootstrap-injected `cfg.soloMode`): no durable audit store, so
-    // the read hits an unavailable DB and would 503. Nothing is sealed to read
-    // locally — degrade to an empty trail. Cloud keeps the truthful failure so an
-    // audit-DB outage surfaces.
-    if (this.cfg.soloMode) {
-      try {
-        return await this.auditReader.byWorkspace(workspaceId, limit);
-      } catch {
-        return [];
-      }
-    }
-    return this.auditReader.byWorkspace(workspaceId, limit);
+    return this.reads.workspaceAudit(workspaceId, limit);
   }
 
   terminal(): TerminalStreamPort {
@@ -3629,53 +1137,4 @@ export class ConductorComposer implements ConductorModule {
   async stop(): Promise<void> {
     // Idempotent, degrade-safe: live sessions are substrate-owned and survive.
   }
-}
-
-/**
- * Derive a deterministic, path-safe repo id for the recodergit index from a repo
- * full-name or absolute path (lowercase; every non `[a-z0-9_-]` run → `__`). Kept
- * local so the conductor never imports an engines-domain internal.
- */
-function repoIdFromRepoRef(ref: string): string {
-  return ref
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '__');
-}
-
-/**
- * Map a runtime to the ACP agent binary that drives it on the `acp` substrate:
- * the `codex` runtime uses Zed's `codex-acp`, everything else the default
- * `claude-code-acp`. Surfaced to the adapter via the `RECODER_ACP_AGENT` env var.
- */
-function acpBinaryForRuntime(runtimeId: string | undefined): string {
-  return runtimeId === 'codex' ? 'codex-acp' : 'claude-code-acp';
-}
-
-/**
- * Fan a `RunEvent` out to the injected external state-of-record sink (agent-os)
- * AND the conductor-local durable+live sink. The external ingest runs first but is
- * isolated: a rejection is logged and swallowed so the local durable append + live
- * `/sync` publish always run (a state-plane hiccup never stalls the terminal). When
- * no external sink is injected, the local sink is returned unchanged.
- */
-function composeRunEventSink(
-  local: RunEventSinkPort,
-  external: RunEventSinkPort | undefined,
-  logger: Logger
-): RunEventSinkPort {
-  if (!external) return local;
-  return {
-    async append(event): Promise<void> {
-      try {
-        await external.append(event);
-      } catch (err) {
-        logger.error(
-          { err, eventId: event.eventId },
-          'conductor run-event state-of-record ingest failed'
-        );
-      }
-      await local.append(event);
-    },
-  };
 }
