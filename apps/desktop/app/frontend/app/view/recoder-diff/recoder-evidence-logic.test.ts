@@ -7,6 +7,7 @@ import {
     buildEvidenceExportFile,
     buildEvidenceSummary,
     canExportEvidence,
+    deriveFrameworkAnnotations,
     deriveSignatureStatus,
     deriveVerifiedSignature,
     evidenceExportFilename,
@@ -14,6 +15,7 @@ import {
     fetchEvidenceMarkdown,
     fetchEvidenceRecord,
     fetchPreviewVerification,
+    groupFrameworks,
     normalizeStatus,
     parseEvidenceExport,
     parsePreviewVerification,
@@ -134,6 +136,115 @@ describe("parseEvidenceExport — truthful projection of coverage + controls", (
         expect(view.integrityVerified).toBe(false);
         expect(view.controls).toEqual([]);
         expect(view.coverage).toEqual({ met: 0, partial: 0, notEvidenced: 0, total: 0 });
+    });
+});
+
+const FRAMEWORK_ANNOTATIONS = [
+    {
+        framework: "DORA",
+        control: "Art. 9(4)(e)",
+        satisfiedBy: ["verification", "seal"],
+        rationale: "ICT change management: pre-merge verification plus the sealed audit trail.",
+    },
+    {
+        framework: "SOC2",
+        control: "CC8.1",
+        satisfiedBy: ["governance.verdict", "approval", "seal"],
+        rationale: "Change management: governed verdict + human approval + audit seal.",
+    },
+    {
+        framework: "EU-AI-Act",
+        control: "Art. 14",
+        satisfiedBy: ["approval", "convergence.selections"],
+        rationale: "Human oversight: a recorded human approval overseeing the AI change.",
+    },
+];
+
+describe("parseEvidenceExport — framework annotations (present / absent / garbage)", () => {
+    it("projects the pack's frameworks[] verbatim when present", () => {
+        const view = parseEvidenceExport({ ...FULL_EXPORT, frameworks: FRAMEWORK_ANNOTATIONS });
+        expect(view.frameworks).toEqual(FRAMEWORK_ANNOTATIONS);
+    });
+
+    it("is an empty list when the pack carries no frameworks (never a hollow claim)", () => {
+        expect(parseEvidenceExport(FULL_EXPORT).frameworks).toEqual([]);
+        expect(parseEvidenceExport({ ...FULL_EXPORT, frameworks: null }).frameworks).toEqual([]);
+        expect(parseEvidenceExport({ ...FULL_EXPORT, frameworks: [] }).frameworks).toEqual([]);
+    });
+
+    it("drops malformed rows — an entry with no framework/control/backing sections is not truthful", () => {
+        const view = parseEvidenceExport({
+            ...FULL_EXPORT,
+            frameworks: [
+                null,
+                "junk",
+                { framework: "SOC2", control: "CC8.1", satisfiedBy: [], rationale: "no backing" },
+                { framework: "SOC2", satisfiedBy: ["seal"], rationale: "no control" },
+                { control: "CC4.1", satisfiedBy: ["seal"], rationale: "no framework" },
+                { framework: "DORA", control: "Art. 24", satisfiedBy: ["verification"], rationale: "ok" },
+            ],
+        });
+        expect(view.frameworks).toEqual([
+            { framework: "DORA", control: "Art. 24", satisfiedBy: ["verification"], rationale: "ok" },
+        ]);
+    });
+});
+
+describe("groupFrameworks — stable enterprise ordering, pure", () => {
+    it("groups by framework in SOC2 → EU-AI-Act → DORA order regardless of input order", () => {
+        const groups = groupFrameworks(FRAMEWORK_ANNOTATIONS);
+        expect(groups.map((g) => g.framework)).toEqual(["SOC2", "EU-AI-Act", "DORA"]);
+        expect(groups[0].controls.map((c) => c.control)).toEqual(["CC8.1"]);
+    });
+
+    it("keeps multiple controls per framework and lands unknown frameworks last, first-seen order", () => {
+        const groups = groupFrameworks([
+            { framework: "Custom", control: "X", satisfiedBy: ["seal"], rationale: "" },
+            { framework: "SOC2", control: "CC8.1", satisfiedBy: ["seal"], rationale: "" },
+            { framework: "SOC2", control: "CC4.1", satisfiedBy: ["seal"], rationale: "" },
+        ]);
+        expect(groups.map((g) => g.framework)).toEqual(["SOC2", "Custom"]);
+        expect(groups[0].controls.map((c) => c.control)).toEqual(["CC8.1", "CC4.1"]);
+    });
+
+    it("returns an empty list for empty/nullish input (panel renders nothing)", () => {
+        expect(groupFrameworks([])).toEqual([]);
+        expect(groupFrameworks(null)).toEqual([]);
+    });
+});
+
+describe("deriveFrameworkAnnotations — truthful, present-section-gated mapping", () => {
+    it("maps every catalog control when the record carries all evidence sections", () => {
+        const annotations = deriveFrameworkAnnotations(SEALED_RECORD);
+        const byControl = (control: string) => annotations.find((a) => a.control == control);
+        expect(byControl("CC8.1")?.satisfiedBy).toEqual(["governance.verdict", "approval", "seal"]);
+        expect(byControl("Art. 14")?.satisfiedBy).toEqual(["approval", "convergence.selections"]);
+        expect(byControl("Art. 9(4)(e)")?.satisfiedBy).toEqual(["verification", "seal"]);
+        expect(annotations.every((a) => a.satisfiedBy.length > 0)).toBe(true);
+        expect(annotations.map((a) => a.framework)).toContain("SOC2");
+        expect(annotations.map((a) => a.framework)).toContain("EU-AI-Act");
+        expect(annotations.map((a) => a.framework)).toContain("DORA");
+    });
+
+    it("omits mappings whose evidence is absent — no approval → no human-oversight, no verification → no DORA", () => {
+        const noApprovalNoVerify = {
+            evidence: {
+                governance: { effect: "allow", riskTier: "low" },
+                verification: { available: false, reason: "probes rejected" },
+                convergence: { selections: [{ path: "a", mode: "synthesize", contested: true }] },
+            },
+            seal: { auditEntryHash: "sealhash123" },
+        };
+        const annotations = deriveFrameworkAnnotations(noApprovalNoVerify);
+        expect(annotations.every((a) => !a.satisfiedBy.includes("approval"))).toBe(true);
+        expect(annotations.every((a) => a.framework != "DORA")).toBe(true);
+        expect(annotations.find((a) => a.control == "Art. 14")).toBeUndefined();
+    });
+
+    it("maps an empty/garbage record to nothing — never fabricates a mapping", () => {
+        for (const raw of [{}, null, "garbage", 42]) {
+            expect(deriveFrameworkAnnotations(raw)).toEqual([]);
+        }
     });
 });
 
@@ -417,6 +528,13 @@ describe("buildEvidenceSummary — the human section of the export file", () => 
         expect(text).not.toContain("src/c.ts");
         expect(text).toContain("Governance: allow · tier high · human approval app-9");
         expect(text).toContain("Verification: ready");
+        expect(text).toContain("Compliance mapping — controls this run's evidence supports");
+        expect(text).toContain("SOC2:");
+        expect(text).toContain("- CC8.1:");
+        expect(text).toContain("[backed by: governance.verdict, approval, seal]");
+        expect(text).toContain("EU-AI-Act:");
+        expect(text).toContain("- Art. 14:");
+        expect(text).toContain("DORA:");
         expect(text).toContain("Seal: content hash aabbccddeeff00112233");
         expect(text).toContain("Audit: durable audit seal sealhash123");
     });
@@ -429,6 +547,7 @@ describe("buildEvidenceSummary — the human section of the export file", () => 
             expect(text).toContain("Contested files: none recorded — single-agent merge");
             expect(text).toContain("Governance: verdict unrecorded.");
             expect(text).toContain("Verification: unrecorded.");
+            expect(text).toContain("Compliance mapping: none — this run's evidence doesn't defensibly support any catalogued control");
             expect(text).toContain("Seal: no content hash — the record is unsealed.");
             expect(text).toContain("Audit: no durable audit seal recorded.");
         }

@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { SiblingCompareEntry } from "./recoder-board-logic";
 import {
+    ASSISTED_VALUE,
+    assistedFilePaths,
+    assistedOption,
     autoResolvableCount,
     autoResolveSynthesizable,
     composeConvergence,
@@ -64,6 +67,33 @@ describe("toggleSelection — immutable per-path winner pick", () => {
         expect(picked).toEqual({ "a.ts": "@synthesize" });
         expect(toggleSelection(picked, "a.ts", SYNTHESIZE_VALUE)).toEqual({});
         expect(toggleSelection(picked, "a.ts", "ws2")).toEqual({ "a.ts": "ws2" });
+    });
+
+    it("models the @assisted sentinel like any other selection value", () => {
+        expect(ASSISTED_VALUE).toBe("@assisted");
+        const picked = toggleSelection({ "a.ts": "ws1" }, "a.ts", ASSISTED_VALUE);
+        expect(picked).toEqual({ "a.ts": "@assisted" });
+        // re-picking @assisted clears the path back to unresolved
+        expect(toggleSelection(picked, "a.ts", ASSISTED_VALUE)).toEqual({});
+        // switching from @assisted to @synthesize (or a whole-file winner) just moves it
+        expect(toggleSelection(picked, "a.ts", SYNTHESIZE_VALUE)).toEqual({ "a.ts": "@synthesize" });
+        expect(toggleSelection(picked, "a.ts", "ws2")).toEqual({ "a.ts": "ws2" });
+    });
+});
+
+describe("assistedOption — offer AI-assist wherever a synthesize was attempted", () => {
+    it("does not offer AI-assist for an un-probed path (no synthesize attempted)", () => {
+        expect(assistedOption(null)).toEqual({ offer: false, note: "" });
+    });
+
+    it("offers AI-assist for a non-synthesizable overlap with no 'suffices' note (it is the escalation)", () => {
+        expect(assistedOption({ synthesizable: false })).toEqual({ offer: true, note: "" });
+    });
+
+    it("still offers AI-assist for a trivially-mergeable path but notes Synthesize suffices", () => {
+        const opt = assistedOption({ synthesizable: true });
+        expect(opt.offer).toBe(true);
+        expect(opt.note).toContain("merges this cleanly");
     });
 });
 
@@ -327,6 +357,54 @@ describe("parseConvergePlan — truthful projection, never fabricated", () => {
         expect(plan.contested[0].regions).toBeUndefined();
         expect(plan.contested[1].regions).toBeUndefined();
     });
+
+    it("omits `assisted` on a plain (un-composed) plan so a model claim is never faked", () => {
+        expect(parseConvergePlan({ complete: true, files: [] }).assisted).toBeUndefined();
+        // present-but-empty stays an explicit [] (a fully-mechanical compose)
+        expect(parseConvergePlan({ assisted: [] }).assisted).toEqual([]);
+    });
+
+    it("reads a composed plan's assisted[] (path + inference_id), dropping pathless entries", () => {
+        const plan = parseConvergePlan({
+            complete: true,
+            files: [{ path: "a.ts" }, { path: "b.ts" }],
+            assisted: [
+                { path: "b.ts", inference_id: "inf_123" },
+                { path: "a.ts" },
+                { path: "" },
+                { workspaceId: "ws9" },
+            ],
+        });
+        expect(plan.assisted).toEqual([
+            { path: "b.ts", inferenceId: "inf_123" },
+            { path: "a.ts", inferenceId: "" },
+        ]);
+    });
+
+    it("tolerates a bare-string assisted entry and a camelCase inferenceId", () => {
+        const plan = parseConvergePlan({ assisted: ["x.ts", { path: "y.ts", inferenceId: "inf_9" }] });
+        expect(plan.assisted).toEqual([
+            { path: "x.ts", inferenceId: "" },
+            { path: "y.ts", inferenceId: "inf_9" },
+        ]);
+    });
+});
+
+describe("assistedFilePaths — the AI-written review-chip decision", () => {
+    it("returns [] when the plan carried no model files (chip hidden)", () => {
+        expect(assistedFilePaths(parseConvergePlan({ complete: true, files: [] }))).toEqual([]);
+        expect(assistedFilePaths(parseConvergePlan({ assisted: [] }))).toEqual([]);
+    });
+
+    it("lists the AI-written paths so the panel can flag them for close review", () => {
+        const plan = parseConvergePlan({
+            assisted: [
+                { path: "src/a.ts", inference_id: "inf_1" },
+                { path: "src/b.ts" },
+            ],
+        });
+        expect(assistedFilePaths(plan)).toEqual(["src/a.ts", "src/b.ts"]);
+    });
 });
 
 describe("presentConflictRegions — truthful collision rows, never an invented location", () => {
@@ -409,6 +487,53 @@ describe("envelope unwrapping — must read the backend's nested payload keys", 
         mockFetchOnce({ success: true, data: { convergence: {} } });
         const result = await composeConvergence("grp1", { "a.ts": "ws1" });
         expect(result.ok).toBe(false);
+    });
+
+    it("composeConvergence surfaces the composed plan.assisted[] paths (AI-written files)", async () => {
+        mockFetchOnce({
+            success: true,
+            data: {
+                convergence: {
+                    workspaceId: "ws_composed",
+                    branch: "recoder/converge-abc",
+                    plan: {
+                        complete: true,
+                        files: [{ path: "a.ts" }, { path: "b.ts" }],
+                        assisted: [
+                            { path: "b.ts", inference_id: "inf_42" },
+                            { path: "a.ts" },
+                        ],
+                    },
+                },
+            },
+        });
+        const result = await composeConvergence("grp1", { "a.ts": ASSISTED_VALUE, "b.ts": ASSISTED_VALUE });
+        expect(result.ok).toBe(true);
+        expect(result.ok && result.assisted).toEqual(["b.ts", "a.ts"]);
+    });
+
+    it("composeConvergence returns [] assisted for a fully-mechanical compose (never fabricated)", async () => {
+        mockFetchOnce({
+            success: true,
+            data: { convergence: { workspaceId: "ws_composed", branch: "b", plan: { complete: true, files: [] } } },
+        });
+        const result = await composeConvergence("grp1", { "a.ts": SYNTHESIZE_VALUE });
+        expect(result.ok && result.assisted).toEqual([]);
+    });
+
+    it("degrades truthfully when assisted resolution fails server-side (inference down ⇒ 400 unresolved)", async () => {
+        mockFetchOnce(
+            {
+                success: false,
+                error: "convergence plan has 1 unresolved contested path(s): src/shared.ts",
+            },
+            400
+        );
+        const result = await composeConvergence("grp1", { "src/shared.ts": ASSISTED_VALUE });
+        expect(result.ok).toBe(false);
+        // the panel shows the file stayed contested — the backend's verbatim reason, never a fake success
+        expect(result.error).toContain("src/shared.ts");
+        expect(result.error).toContain("unresolved");
     });
 
     it("a probed fetch requests ?probe=1 and surfaces plan.contested[]", async () => {

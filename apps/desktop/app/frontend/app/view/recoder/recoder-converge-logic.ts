@@ -44,6 +44,17 @@ type ConvergeContestedProbe = {
 // whole-file winner. The selection map stays Record<string,string>.
 const SYNTHESIZE_VALUE = "@synthesize";
 
+// The selection value that requests an LLM-ASSISTED merge for a path: the mechanical
+// 3-way runs first and ONLY a conflicting fold escalates to a one-shot model
+// synthesis (validated server-side). Mirrors SYNTHESIZE_VALUE — an `@`-prefixed
+// sentinel that can never collide with a real workspaceId. Explicit opt-in per file.
+const ASSISTED_VALUE = "@assisted";
+
+// One file whose conflict an LLM actually resolved in a composed plan: the backend's
+// `plan.assisted[]` record. `inferenceId` is "" when the gateway reported none —
+// never invented. These are the files the user must review most closely.
+type ConvergeAssisted = { path: string; inferenceId: string };
+
 // The read-only converge preview. Every field is a truthful projection of the
 // backend plan: `winners` is the count of resolved winner files, `sources` the
 // per-sibling winner counts, `changedFiles` the files the composed workspace
@@ -58,6 +69,10 @@ type ConvergePlan = {
     // Populated only from a probed plan; `undefined` when unprobed so the panel can
     // tell "no probe" apart from "probed, nothing synthesizable" ([]).
     contested?: ConvergeContestedProbe[];
+    // Populated only from a COMPOSED plan (the compose response), listing the files an
+    // LLM actually wrote; `undefined` on a plain plan poll so the panel can tell "not
+    // composed / no model files" apart from a fabricated claim. Never invented.
+    assisted?: ConvergeAssisted[];
 };
 
 // Loose result shapes (not a discriminated union): this frontend runs with
@@ -65,7 +80,16 @@ type ConvergePlan = {
 // the repo convention (see RecoderLaunchResult) is `ok` + optional payload/error.
 type ConvergePlanResult = { ok: boolean; plan?: ConvergePlan; error?: string };
 
-type ConvergeComposeResult = { ok: boolean; workspaceId?: string; branch?: string; error?: string };
+// `assisted` lists the composed files an LLM actually wrote (from the response's
+// `plan.assisted[]`) so the caller can flag them for close review. [] when the
+// compose was fully mechanical or the backend reported none — never fabricated.
+type ConvergeComposeResult = {
+    ok: boolean;
+    workspaceId?: string;
+    branch?: string;
+    assisted?: string[];
+    error?: string;
+};
 
 function asObject(value: unknown): Record<string, unknown> | null {
     return value != null && typeof value == "object" ? (value as Record<string, unknown>) : null;
@@ -203,6 +227,59 @@ function normalizeContested(value: unknown): ConvergeContestedProbe[] {
     return out;
 }
 
+// The composed plan's `assisted[]` — files an LLM wrote. A non-array (a plain,
+// un-composed plan) yields `undefined` so the panel keeps "no model files" distinct
+// from a fabricated claim. Each entry needs a real path; `inference_id` degrades to
+// "" (never invented). The backend key is snake_case (`inference_id`); a camelCase
+// `inferenceId` is also tolerated.
+function normalizeAssisted(value: unknown): ConvergeAssisted[] {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+    const out: ConvergeAssisted[] = [];
+    for (const item of value) {
+        if (typeof item == "string") {
+            if (item != "") out.push({ path: item, inferenceId: "" });
+            continue;
+        }
+        const obj = asObject(item);
+        if (obj == null) {
+            continue;
+        }
+        const path = typeof obj.path == "string" ? obj.path : "";
+        if (path == "") {
+            continue;
+        }
+        const inferenceId =
+            typeof obj.inference_id == "string"
+                ? obj.inference_id
+                : typeof obj.inferenceId == "string"
+                  ? obj.inferenceId
+                  : "";
+        out.push({ path, inferenceId });
+    }
+    return out;
+}
+
+// The AI-written file paths of a composed plan, for the "AI-assisted" review chip —
+// [] hides the chip (a plain plan or a fully-mechanical compose). Never fabricated.
+function assistedFilePaths(plan: ConvergePlan): string[] {
+    return plan != null && plan.assisted != null ? plan.assisted.map((a) => a.path) : [];
+}
+
+// Whether to offer the "AI-assisted" merge for a contested path, and a truthful note.
+// Assisted = synthesize-with-LLM-fallback, so it is offered wherever a synthesize was
+// at least ATTEMPTED (the probe covered the path ⇒ `synth != null`). When the path is
+// already trivially synthesizable, assisted is UNNECESSARY (mechanical merge suffices)
+// — still allowed, but the note says so. A path the probe never covered offers nothing.
+type AssistedOption = { offer: boolean; note: string };
+function assistedOption(synth: { synthesizable: boolean } | null): AssistedOption {
+    if (synth == null) {
+        return { offer: false, note: "" };
+    }
+    return { offer: true, note: synth.synthesizable ? "synthesize already merges this cleanly" : "" };
+}
+
 // A conflict region ready to render: the "L12–L27" range label plus each side's
 // text (rendered font-mono by the panel) and the server-side truncation flag.
 type ConflictRegionRow = {
@@ -255,6 +332,10 @@ function parseConvergePlan(data: Record<string, unknown>): ConvergePlan {
     const contested = normalizeContested(data.contested);
     if (contested != null) {
         plan.contested = contested;
+    }
+    const assisted = normalizeAssisted(data.assisted);
+    if (assisted != null) {
+        plan.assisted = assisted;
     }
     return plan;
 }
@@ -449,13 +530,21 @@ async function composeConvergence(
                 : typeof workspace?.branch == "string"
                   ? workspace.branch
                   : "";
-        return { ok: true, workspaceId, branch: branchOut };
+        // The composed plan (`convergence.plan`) carries `assisted[]` — the files an
+        // LLM wrote. Parse it through the same truthful projection so the caller can
+        // flag exactly those paths for review; absent ⇒ [] (never fabricated).
+        const composedPlan = asObject(conv.plan);
+        const assisted = composedPlan != null ? assistedFilePaths(parseConvergePlan(composedPlan)) : [];
+        return { ok: true, workspaceId, branch: branchOut, assisted };
     } catch {
         return { ok: false, error: "Converge unavailable — Recoder isn’t reachable." };
     }
 }
 
 export {
+    ASSISTED_VALUE,
+    assistedFilePaths,
+    assistedOption,
     autoResolvableCount,
     autoResolveSynthesizable,
     composeConvergence,
@@ -467,9 +556,11 @@ export {
     presentConflictRegions,
     SYNTHESIZE_VALUE,
     toggleSelection,
+    type AssistedOption,
     type CompareColumn,
     type ConflictRegionRow,
     type ConflictRegionView,
+    type ConvergeAssisted,
     type ConvergeComposeResult,
     type ConvergeConflictRegion,
     type ConvergeContestedProbe,

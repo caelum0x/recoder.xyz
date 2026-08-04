@@ -1,9 +1,11 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { Fragment, useEffect, useState } from "react";
 import { agentLabel } from "./recoder-agent-labels";
+import { fileVersionsKey } from "./recoder-compare-logic";
+import type { FileVersionColumn as FileVersionEntry, FileVersionsFetchResult } from "./recoder-compare-logic";
 import {
     fetchPairwiseDiff,
     pairwiseLineKind,
@@ -387,10 +389,14 @@ function ContestedStrip({
     compareView,
     selection,
     onPick,
+    onOpenFile,
+    openFilePath,
 }: {
     compareView: CompareView;
     selection: ConvergeSelection;
     onPick: (path: string, workspaceId: string) => void;
+    onOpenFile: (path: string) => void;
+    openFilePath: string;
 }) {
     const contested = compareView.contested ?? [];
     const siblings = compareView.siblings;
@@ -401,7 +407,7 @@ function ContestedStrip({
         <div className="flex flex-col gap-1 rounded border border-white/8 px-2 py-2">
             <div className={FIELD_LABEL}>
                 Contested — {contested.length} file{contested.length == 1 ? "" : "s"} touched by 2+ agents · click a
-                cell to pick that agent's version
+                path to read every version · click a cell to pick that agent's version
             </div>
             <div className="overflow-x-auto">
                 <div
@@ -416,9 +422,15 @@ function ContestedStrip({
                     ))}
                     {contested.map((c) => (
                         <Fragment key={c.path}>
-                            <span className="truncate font-mono text-sm" title={c.path}>
+                            <button
+                                className={`justify-self-start truncate text-left font-mono text-sm cursor-pointer recoder-transition ${
+                                    openFilePath == c.path ? "text-accent" : "text-primary hover:text-accent"
+                                }`}
+                                onClick={() => onOpenFile(c.path)}
+                                title={`Read every agent's version of ${c.path} side by side`}
+                            >
                                 {c.path}
-                            </span>
+                            </button>
                             {siblings.map((s) => {
                                 if (!c.workspaceIds.includes(s.workspaceId)) {
                                     return (
@@ -448,6 +460,168 @@ function ContestedStrip({
 }
 
 ContestedStrip.displayName = "ContestedStrip";
+
+// One column of the N-up file view: a single sibling's (or the base's) copy of the
+// clicked path, rendered mono and line-per-row for alignment across columns. This is
+// an N-way content read, not a 2-way diff, so there is no add/del coloring — legibility
+// over highlight. An absent version (deleted / never created / no worktree) renders a
+// calm labeled state carrying the backend's truthful reason, NEVER an empty pane; a
+// genuinely-empty file reads as an explicit "empty file", distinct from a deletion.
+function FileVersionColumn({
+    label,
+    hasContent,
+    content,
+    reason,
+    truncated,
+    absentLabel,
+    isBase,
+}: {
+    label: string;
+    hasContent: boolean;
+    content: string;
+    reason: string;
+    truncated: boolean;
+    absentLabel?: string;
+    isBase?: boolean;
+}) {
+    return (
+        <div className="flex min-w-[18rem] flex-1 shrink-0 basis-72 flex-col rounded border border-white/8">
+            <div className="flex items-center gap-2 border-b border-white/8 px-2 py-1">
+                <span className={`truncate text-sm ${isBase ? "text-secondary" : "text-primary"}`} title={label}>
+                    {label}
+                </span>
+                {truncated && <span className={META}>(truncated at 64KB)</span>}
+            </div>
+            {!hasContent ? (
+                <div className="flex flex-col gap-0.5 px-2 py-2">
+                    <span className="text-xs text-secondary">{absentLabel ?? "not present here"}</span>
+                    {reason != "" && <span className={META}>{reason}</span>}
+                </div>
+            ) : content == "" ? (
+                <div className="px-2 py-2 text-xs italic text-secondary">empty file</div>
+            ) : (
+                <div className="max-h-96 overflow-auto font-mono text-xs leading-relaxed">
+                    {content.split("\n").map((line, i) => (
+                        <div key={i} className="whitespace-pre px-2 text-primary/80">
+                            {line == "" ? " " : line}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+FileVersionColumn.displayName = "FileVersionColumn";
+
+// The N-up file view: every sibling's version of ONE contested path, side by side and
+// aligned, with the base shown as a quiet leading column (toggleable). Columns scroll
+// horizontally beyond a few, one accent, no color noise. Load state and any fetch
+// failure are surfaced truthfully — a degraded read shows a quiet error row with a
+// retry, never a blank or fabricated set of versions.
+function FileVersionsPanel({
+    model,
+    taskGroup,
+    path,
+    result,
+    onClose,
+}: {
+    model: RecoderViewModel;
+    taskGroup: string;
+    path: string;
+    result: FileVersionsFetchResult;
+    onClose: () => void;
+}) {
+    const [showBase, setShowBase] = useState(true);
+    const missing = result == null;
+    useEffect(() => {
+        if (missing) {
+            model.loadFileVersions(taskGroup, path);
+        }
+    }, [taskGroup, path, missing]);
+    if (result == null) {
+        return (
+            <div className="flex items-center gap-2 rounded border border-accent/30 px-2 py-2">
+                <span className={META}>Loading every version of {path}…</span>
+                <button className={QUIET_BTN_XS} onClick={onClose}>
+                    close
+                </button>
+            </div>
+        );
+    }
+    if (!result.ok) {
+        return (
+            <div className="flex flex-wrap items-center gap-2 rounded border border-error/30 px-2 py-2">
+                <span className="text-xs text-error">
+                    Could not read versions of {path} — {result.error}
+                </span>
+                <button className={QUIET_BTN_XS} onClick={() => model.loadFileVersions(taskGroup, path)}>
+                    Retry
+                </button>
+                <button className={QUIET_BTN_XS} onClick={onClose}>
+                    close
+                </button>
+            </div>
+        );
+    }
+    const view = result.view;
+    return (
+        <div className="flex flex-col gap-1.5 rounded border border-accent/30 px-2 py-2">
+            <div className="flex flex-wrap items-center gap-2">
+                <span className={FIELD_LABEL}>Versions — {path}</span>
+                <span className={META}>
+                    {view.versions.length} agent{view.versions.length == 1 ? "" : "s"}
+                </span>
+                {view.hasBase && (
+                    <button className={QUIET_BTN_XS} onClick={() => setShowBase((v) => !v)}>
+                        {showBase ? "hide base" : "show base"}
+                    </button>
+                )}
+                <button className={QUIET_BTN_XS} onClick={onClose}>
+                    close
+                </button>
+            </div>
+            <div className="overflow-x-auto">
+                <div className="flex gap-1">
+                    {showBase &&
+                        (view.hasBase ? (
+                            <FileVersionColumn
+                                label="base"
+                                hasContent={true}
+                                content={view.base}
+                                reason=""
+                                truncated={view.baseTruncated}
+                                isBase={true}
+                            />
+                        ) : (
+                            <FileVersionColumn
+                                label="base"
+                                hasContent={false}
+                                content=""
+                                reason="no sibling worktree resolved — nothing to read the base ref from"
+                                truncated={false}
+                                absentLabel="base unavailable"
+                                isBase={true}
+                            />
+                        ))}
+                    {view.versions.map((v: FileVersionEntry) => (
+                        <FileVersionColumn
+                            key={v.workspaceId}
+                            label={agentLabel(v.agent)}
+                            hasContent={v.hasContent}
+                            content={v.content}
+                            reason={v.reason}
+                            truncated={v.truncated}
+                            absentLabel={`no version from ${agentLabel(v.agent)}`}
+                        />
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+FileVersionsPanel.displayName = "FileVersionsPanel";
 
 function PairwiseStatLine({ label, stat, reason }: { label: string; stat: RecoderDiffSummary; reason: string }) {
     return (
@@ -616,11 +790,17 @@ function RecoderComparePanel({
     const pairA = useAtomValue(model.pairAAtom);
     const pairB = useAtomValue(model.pairBAtom);
     const [selection, setSelection] = useAtom(model.convergeSelectionAtom);
+    const fileVersionsMap = useAtomValue(model.fileVersionsAtom);
+    const setFileVersions = useSetAtom(model.fileVersionsAtom);
+    const [openFilePath, setOpenFilePath] = useState("");
     const taskGroup = compareView.taskGroup ?? "";
-    // A fresh open / a group switch always starts the winner selection clean so
-    // one group's picks can never leak into another group's converge compose.
+    // A fresh open / a group switch always starts the winner selection AND the N-up
+    // file view clean so one group's picks or loaded file versions can never leak into
+    // another group's converge compose.
     useEffect(() => {
         setSelection({});
+        setOpenFilePath("");
+        setFileVersions({});
     }, [taskGroup]);
     const aEntry = compareView.siblings.find((s) => s.workspaceId == pairA);
     const bEntry = compareView.siblings.find((s) => s.workspaceId == pairB);
@@ -640,9 +820,27 @@ function RecoderComparePanel({
     const onPickWinner = (path: string, workspaceId: string) => {
         setSelection((cur) => toggleSelection(cur, path, workspaceId));
     };
+    const onOpenFile = (path: string) => {
+        setOpenFilePath((cur) => (cur == path ? "" : path));
+    };
     return (
         <div className="flex flex-col gap-1.5 rounded border border-white/8 p-2">
-            <ContestedStrip compareView={compareView} selection={selection} onPick={onPickWinner} />
+            <ContestedStrip
+                compareView={compareView}
+                selection={selection}
+                onPick={onPickWinner}
+                onOpenFile={onOpenFile}
+                openFilePath={openFilePath}
+            />
+            {openFilePath != "" && (
+                <FileVersionsPanel
+                    model={model}
+                    taskGroup={taskGroup}
+                    path={openFilePath}
+                    result={fileVersionsMap[fileVersionsKey(taskGroup, openFilePath)]}
+                    onClose={() => setOpenFilePath("")}
+                />
+            )}
             {compareView.siblings.length >= 2 && (
                 <ConvergePanel
                     taskGroup={taskGroup}

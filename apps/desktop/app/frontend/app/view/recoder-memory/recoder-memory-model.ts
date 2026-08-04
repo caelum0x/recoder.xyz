@@ -30,6 +30,14 @@ type RecoderMemoryCandidate = {
     proposedBy: string;
 };
 
+// WHY a lesson surfaced — mirrors the backend RecallSignal vocabulary
+// (backend/src/domains/memory/types.ts). Each is only present when its
+// scope-boost genuinely fired, so rendering them shows the recall is learning
+// across runs (repo-scoped / fresh) rather than generic.
+type RecallSignal = "repo-match" | "recency" | "lexical";
+
+const RECALL_SIGNALS: readonly RecallSignal[] = ["repo-match", "recency", "lexical"];
+
 // Fused recall record projected from POST /api/agent-os/memory/recall
 // (RecalledMemory { id, title?, body, provenance }); only the fields the
 // terminal renders. Provenance is optional here because the projection drops
@@ -39,6 +47,7 @@ type RecoderMemoryProvenance = {
     ref: string;
     score: number;
     scope?: string;
+    signals?: readonly RecallSignal[];
 };
 
 type RecoderMemoryResult = {
@@ -289,15 +298,29 @@ function readProvenance(value: unknown): RecoderMemoryProvenance {
     if (typeof p.score != "number" || !Number.isFinite(p.score)) {
         return null;
     }
-    const provenance: RecoderMemoryProvenance = {
+    let provenance: RecoderMemoryProvenance = {
         source: p.source,
         ref: p.ref,
         score: Math.min(1, Math.max(0, p.score)),
     };
     if (typeof p.scope == "string" && p.scope != "") {
-        return { ...provenance, scope: p.scope };
+        provenance = { ...provenance, scope: p.scope };
+    }
+    const signals = readSignals(p.signals);
+    if (signals.length > 0) {
+        provenance = { ...provenance, signals };
     }
     return provenance;
+}
+
+// Keep only the known scope-boost signals, deduped and in canonical order, so a
+// malformed or unknown tag never leaks into the UI or fabricates a "why".
+function readSignals(value: unknown): RecallSignal[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    const present = new Set(value.filter((s): s is string => typeof s == "string"));
+    return RECALL_SIGNALS.filter((s) => present.has(s));
 }
 
 // Truthful partial-degrade line: names every faulted source (and its reason
@@ -330,7 +353,9 @@ function acceptOutcomeNotice(data: unknown): string {
 
 export {
     RecoderMemoryViewModel,
+    type RecallSignal,
     type RecoderMemoryItem,
     type RecoderMemoryCandidate,
+    type RecoderMemoryProvenance,
     type RecoderMemoryResult,
 };

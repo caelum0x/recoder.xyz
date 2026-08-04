@@ -77,6 +77,39 @@ describe("RecoderMemoryViewModel.refresh", () => {
         expect(globalStore.get(model.candidatesAtom)).toEqual([pending, reviewed]);
     });
 
+    it("separates durable items from shaped harvest candidates onto distinct atoms", async () => {
+        const item = { memoryId: "m1", scope: "repo", title: "durable fact", body: "b", status: "active" };
+        const lesson = {
+            candidateId: "c1",
+            scope: "repo",
+            title: "converged 3 agents",
+            body: "converged 3 agents; kept auth-fix; contested router.ts; verified pnpm test",
+            status: "candidate_created",
+            proposedBy: "conductor",
+        };
+        vi.stubGlobal("fetch", mockMemoryFetch([item], [lesson]));
+
+        const model = makeModel();
+        await model.refresh();
+
+        expect(globalStore.get(model.itemsAtom)).toEqual([item]);
+        expect(globalStore.get(model.candidatesAtom)).toEqual([lesson]);
+        // The shaped lesson body is surfaced verbatim (never flattened into items).
+        expect(globalStore.get(model.candidatesAtom)[0].body).toContain("contested router.ts");
+    });
+
+    it("leaves both atoms empty on a connected first run so the calm empty voice shows", async () => {
+        vi.stubGlobal("fetch", mockMemoryFetch([], []));
+
+        const model = makeModel();
+        await model.refresh();
+
+        expect(globalStore.get(model.connectedAtom)).toBe(true);
+        expect(globalStore.get(model.itemsAtom)).toEqual([]);
+        expect(globalStore.get(model.candidatesAtom)).toEqual([]);
+        expect(globalStore.get(model.errorAtom)).toBe("");
+    });
+
     it("tolerates a non-array data payload without crashing", async () => {
         vi.stubGlobal("fetch", mockMemoryFetch({ items: [] }, null));
 
@@ -170,6 +203,81 @@ describe("RecoderMemoryViewModel.search", () => {
         ]);
         expect(globalStore.get(model.searchNoticeAtom)).toBe("");
         expect(globalStore.get(model.sourcesNoticeAtom)).toBe("");
+    });
+
+    it("projects the scope-boost signals that surfaced each lesson (the recall moat)", async () => {
+        const fetchMock = vi.fn().mockImplementation(() =>
+            okJson({
+                memories: [
+                    {
+                        id: "m1",
+                        body: "repo lesson",
+                        provenance: {
+                            source: "items",
+                            ref: "i1",
+                            score: 0.9,
+                            scope: "repo",
+                            signals: ["repo-match", "recency", "lexical"],
+                        },
+                    },
+                    {
+                        id: "m2",
+                        body: "generic hit",
+                        provenance: { source: "mem0", ref: "r2", score: 0.4 },
+                    },
+                ],
+                sources: [{ source: "items", available: true }],
+            })
+        );
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        model.setQuery("lesson");
+        await model.search();
+
+        const results = globalStore.get(model.resultsAtom);
+        expect(results[0].provenance?.signals).toEqual(["repo-match", "recency", "lexical"]);
+        expect(results[1].provenance?.signals).toBeUndefined();
+    });
+
+    it("keeps only known signals in canonical order and drops unknown/empty tags", async () => {
+        const fetchMock = vi.fn().mockImplementation(() =>
+            okJson({
+                memories: [
+                    {
+                        id: "m1",
+                        body: "a",
+                        provenance: {
+                            source: "items",
+                            ref: "i1",
+                            score: 0.5,
+                            signals: ["lexical", "made-up", "repo-match", 7],
+                        },
+                    },
+                    {
+                        id: "m2",
+                        body: "b",
+                        provenance: { source: "mem0", ref: "r2", score: 0.5, signals: [] },
+                    },
+                    {
+                        id: "m3",
+                        body: "c",
+                        provenance: { source: "mem0", ref: "r3", score: 0.5, signals: "lexical" },
+                    },
+                ],
+                sources: [{ source: "items", available: true }],
+            })
+        );
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        model.setQuery("q");
+        await model.search();
+
+        const results = globalStore.get(model.resultsAtom);
+        expect(results[0].provenance?.signals).toEqual(["repo-match", "lexical"]);
+        expect(results[1].provenance?.signals).toBeUndefined();
+        expect(results[2].provenance?.signals).toBeUndefined();
     });
 
     it("omits malformed provenance instead of crashing", async () => {
