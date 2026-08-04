@@ -7,7 +7,7 @@
     "productName": "Recoder",
     "description": "Self-hosted convergence layer for parallel coding agents \u2014 launch any agent in parallel isolated git worktrees, review the diffs, and merge one trusted change.",
     "license": "Apache-2.0",
-    "version": "0.15.0",
+    "version": "0.16.0",
     "homepage": "https://recoder.xyz",
     "build": {
         "appId": "xyz.recoder.terminal"
