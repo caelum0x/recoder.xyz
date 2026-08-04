@@ -400,6 +400,29 @@ gap).
 
 # PART III — SEQUENCE, GATES, RISKS
 
+## REPRIORITIZED 2026-08-04 (owner directive): unique product over everything
+
+Status: Phase 0 + Phase 1 SHIPPED (code landed 2026-08-04; v0.15.0 signed,
+notarization in flight). Owner verdict after seeing the live app: "are we just
+a bundle on Wave?" — the next epoch must make the answer unambiguous. Three
+tracks jump the original queue (bd issues filed):
+
+1. **Mid-run agent communication** (bd recoder-i499, P0) — cross-sibling
+   context via the verified completion-hook + steer seams (B4 §II pulled
+   forward). THE feature that makes Codex+Claude a team instead of parallel
+   strangers. Today's honest answer to "do the agents talk?" is NO.
+2. **Use everything we ship** (bd recoder-2xck) — (a) Wave's own AI-terminal
+   capability wired into the product flow (waveai panel ⇄ governed gateway ⇄
+   current workspace diff); (b) every dark engine gets ONE product verb in the
+   converge loop or an explicit parked-with-reason note.
+3. **Clean-design pass** (bd recoder-667l) — DESIGN-REFERENCE conformance
+   sweep across every recoder-* view; one primary action per screen, calm
+   empty states. The product must LOOK like one thing.
+
+Billing: Creem approved (bd recoder-t24j) — provider module + webhook verify,
+then rotate the key. Assisted-synthesize (B3) + N-up (A4) remain the v0.17
+demo core and pair naturally with track 1.
+
 ## Order of execution (dependency-honest)
 
 ```
