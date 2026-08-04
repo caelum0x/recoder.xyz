@@ -28,6 +28,15 @@ import {
     repoPickerHint,
 } from "./recoder-github-logic";
 import { RecoderIdentityAffordance } from "./recoder-identity";
+import {
+    launchDisabledReason,
+    orderedRecentRepos,
+    parallelSelectionHint,
+    reconcileSelection,
+    seedAgentSelection,
+    selectedAgentIds,
+    toggleAgentSelection,
+} from "./recoder-launch-logic";
 import { RecoderIdentityModel } from "./recoder-identity-model";
 import {
     attentionBadgeLabel,
@@ -46,6 +55,7 @@ import { navigationCommands } from "./recoder-nav-commands";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
 import { prChipLabel, prChipTone, type RecoderPrChip } from "./recoder-pr-status";
 import { RecoderShortcutsOverlay } from "./recoder-shortcuts";
+import { usageCostTitle } from "./recoder-metering";
 import { RecoderErrorRow, RecoderSkeleton } from "./recoder-states";
 import {
     ATTN_BADGE,
@@ -56,6 +66,7 @@ import {
     INPUT,
     META,
     PAGE_TITLE,
+    PICK_BTN_ON,
     PRIMARY_BTN,
     QUIET_BTN,
     ROW_TITLE,
@@ -104,33 +115,6 @@ function openTerminal(ws: RecoderWorkspace, tmuxBin: string) {
 // show just the leaf folder name and keep the full path on hover/title.
 function folderName(repoPath: string): string {
     return repoPath.split(/[\\/]/).filter(Boolean).pop() ?? repoPath;
-}
-
-// Self-explains the greyed Launch button: empty string means nothing to say
-// (either ready to launch, or already posting).
-function launchDisabledReason(
-    repoPath: string,
-    runtimeId: string,
-    needsPrompt: boolean,
-    probed: boolean,
-    readyCount: number
-): string {
-    if (repoPath.trim() == "") {
-        return "Choose a folder to launch.";
-    }
-    if (runtimeId == "") {
-        if (!probed) {
-            return "Detecting installed agents…";
-        }
-        if (readyCount == 0) {
-            return "No coding agents found on PATH. Install Claude Code, Codex, or opencode, then reopen.";
-        }
-        return "Choose an agent to launch.";
-    }
-    if (needsPrompt) {
-        return "Add a first message, or turn on interactive session.";
-    }
-    return "";
 }
 
 // The palette's Sessions provider: backend transcript search → pure projection
@@ -325,10 +309,10 @@ function WorkspaceRow({
             )}
             {status && <div className={META}>{status}</div>}
             {showUsage && (
-                <div className={`${META} font-mono`} title={`Metered inference spend for ${usage.scopeLabel}`}>
+                <div className={`${META} font-mono`} title={usageCostTitle(usage)}>
                     {usage.totals.calls == "0"
-                        ? "No metered usage attributed to this workspace"
-                        : `${usage.totals.cost} · ${usage.totals.totalTokens} tok · ${usage.totals.calls} calls`}
+                        ? "No usage attributed to this workspace yet"
+                        : `${usage.provenance == "estimated" ? "~" : ""}${usage.totals.cost} · ${usage.totals.totalTokens} tok · ${usage.totals.calls} calls`}
                 </div>
             )}
             {selected && !terminal && <WorkspaceCheckpoints model={model} workspaceId={ws.workspaceId} busy={busy} />}
@@ -543,23 +527,49 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     }, [launchOpen]);
 
     const readyAgents = setup.agents.filter((a) => a.available);
+    const readyAgentIds = readyAgents.map((a) => a.runtimeId);
+    const readyAgentKey = readyAgentIds.join(",");
 
-    // Zero-config: the ctor seeds the last-used agent from localStorage. If none
-    // is remembered, preselect the first installed agent. If a remembered agent is
-    // no longer installed, fall back to the first ready one rather than leaving an
-    // unavailable selection. A live deliberate choice otherwise stays.
+    // Seed the agent multi-select once per panel open: the ctor primes the atoms
+    // from the dev's last remembered selection; if that leaves nothing usable, every
+    // detected agent is pre-selected so "fan one task across agents" is the
+    // zero-config default. Seeding only when the current selection is empty means a
+    // deliberate later de-selection is never re-filled — "Select at least one agent"
+    // stays reachable.
+    const agentSeededRef = useRef(false);
     useEffect(() => {
-        if (readyAgents.length == 0) {
+        if (!launchOpen) {
+            agentSeededRef.current = false;
             return;
         }
-        if (runtimeId == "") {
-            setRuntimeId(readyAgents[0].runtimeId);
+        if (agentSeededRef.current || readyAgentIds.length == 0) {
             return;
         }
-        if (!readyAgents.some((a) => a.runtimeId == runtimeId)) {
-            setRuntimeId(readyAgents[0].runtimeId);
+        agentSeededRef.current = true;
+        const seed = seedAgentSelection(readyAgentIds, selectedAgentIds(runtimeId, alsoRun));
+        setRuntimeId(seed[0] ?? "");
+        setAlsoRun(seed.slice(1));
+    }, [launchOpen, readyAgentKey]);
+
+    // Drop any now-uninstalled agent from the selection when the setup probe changes
+    // (never re-adds, so a deliberate de-selection survives a re-scan). Keeps the
+    // primary anchored to a still-detected agent without forcing a fresh pick.
+    // Gated behind the seed: if the first probe lands in the SAME commit as the
+    // open-seed, reconcile must not clobber the just-computed zero-config default
+    // to empty (both effects would otherwise read the stale ctor selection).
+    useEffect(() => {
+        if (readyAgentIds.length == 0 || !agentSeededRef.current) {
+            return;
         }
-    }, [readyAgents.length, runtimeId]);
+        const current = selectedAgentIds(runtimeId, alsoRun);
+        const next = reconcileSelection(readyAgentIds, runtimeId, alsoRun);
+        const nextIds = selectedAgentIds(next.primary, next.also);
+        if (nextIds.length == current.length && nextIds.every((id, i) => id == current[i])) {
+            return;
+        }
+        setRuntimeId(next.primary);
+        setAlsoRun(next.also);
+    }, [readyAgentKey]);
 
     // Flat, render-order list of the visible board rows (recency buckets, then
     // singleton + parallel-group rows) so keyboard nav walks the FILTERED board
@@ -629,11 +639,13 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     // Block launch into a confirmed non-git folder — the worktree add would fail. The
     // inline "Not a git repository" warning below explains it; repoIsGit is optimistic
     // (true until the async check confirms otherwise) so this never blocks prematurely.
-    const canLaunch = !posting && repoPath.trim() != "" && runtimeId != "" && !needsPrompt && repoIsGit;
-    const disabledReason = launchDisabledReason(repoPath, runtimeId, needsPrompt, setup.probed, readyAgents.length);
-    const parallelAgents = readyAgents.filter((a) => a.runtimeId != runtimeId);
-    const allParallelSelected = parallelAgents.length > 0 && parallelAgents.every((a) => alsoRun.includes(a.runtimeId));
-    const parallelCount = alsoRun.filter((id) => id != runtimeId && id != "").length;
+    const selectedAgents = selectedAgentIds(runtimeId, alsoRun);
+    const selectedCount = selectedAgents.length;
+    const canLaunch = !posting && repoPath.trim() != "" && selectedCount >= 1 && !needsPrompt && repoIsGit;
+    const disabledReason = launchDisabledReason(repoPath, selectedCount, needsPrompt, setup.probed, readyAgents.length);
+    const parallelHint = parallelSelectionHint(selectedCount);
+    const orderedRecents = orderedRecentRepos(recentRepos, repoPath);
+    const allAgentsSelected = readyAgents.length > 0 && readyAgents.every((a) => selectedAgents.includes(a.runtimeId));
     const isGitError = /git|worktree|repositor/i.test(launchResult?.error ?? "");
     const quickStartRepo = recentRepos.find((r) => r.trim() != "") ?? "";
     // GitHub auto-detect (/github/status + /github/repos): the account's repos
@@ -659,7 +671,16 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             ? agentAuthPresentation(true, agentAuth[selectedAgent.runtimeId] ?? "unknown")
             : null;
 
-    const toggleAlso = (id: string, on: boolean) => setAlsoRun(on ? [...alsoRun, id] : alsoRun.filter((x) => x != id));
+    const toggleAgent = (id: string, on: boolean) => {
+        const next = toggleAgentSelection(runtimeId, alsoRun, id, on);
+        setRuntimeId(next.primary);
+        setAlsoRun(next.also);
+    };
+    const selectAllAgents = () => {
+        const next = allAgentsSelected ? [] : readyAgentIds;
+        setRuntimeId(next[0] ?? "");
+        setAlsoRun(next.slice(1));
+    };
 
     // Read-only, non-blocking pre-launch check: warn inline the moment a folder is
     // chosen if it isn't a git repo, instead of after a failed worktree add. Fails
@@ -835,25 +856,40 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     >
                         <div className={SECTION_TITLE}>Launch a coding agent</div>
 
-                        <label className="flex flex-col gap-1">
-                            <span className={FIELD_LABEL}>Agent</span>
-                            <select
-                                className={`${INPUT} cursor-pointer`}
-                                value={runtimeId}
-                                onChange={(e) => setRuntimeId(e.target.value)}
-                            >
-                                {readyAgents.length == 0 && (
-                                    <option value="">
-                                        {setup.probed ? "No agents found on PATH" : "Detecting agents…"}
-                                    </option>
+                        <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between">
+                                <span className={FIELD_LABEL}>Agents</span>
+                                {readyAgents.length > 1 && (
+                                    <button className={QUIET_BTN} onClick={selectAllAgents}>
+                                        {allAgentsSelected ? "Clear" : "Select all"}
+                                    </button>
                                 )}
-                                {setup.agents.map((a) => (
-                                    <option key={a.runtimeId} value={a.runtimeId} disabled={!a.available}>
-                                        {agentLabel(a.runtimeId)}
-                                        {agentAuthOptionSuffix(a.available, agentAuth[a.runtimeId] ?? "unknown")}
-                                    </option>
-                                ))}
-                            </select>
+                            </div>
+                            {/* One task, N agents: ticked chips fan the task across every
+                                selected agent as parallel siblings in one taskGroup; a
+                                single ticked chip is the trivial solo launch. */}
+                            <div className="flex flex-wrap gap-1.5">
+                                {setup.agents.map((a) => {
+                                    const on = selectedAgents.includes(a.runtimeId);
+                                    return (
+                                        <button
+                                            key={a.runtimeId}
+                                            className={`${on ? PICK_BTN_ON : CHIP} ${a.available ? "" : "opacity-50 cursor-default"}`}
+                                            disabled={!a.available}
+                                            aria-pressed={on}
+                                            title={
+                                                a.available
+                                                    ? `${on ? "Running" : "Add"} ${agentLabel(a.runtimeId)} on this task`
+                                                    : `${agentLabel(a.runtimeId)} not detected on PATH`
+                                            }
+                                            onClick={() => toggleAgent(a.runtimeId, !on)}
+                                        >
+                                            {agentLabel(a.runtimeId)}
+                                            {agentAuthOptionSuffix(a.available, agentAuth[a.runtimeId] ?? "unknown")}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                             {selectedAuthPres?.needsAuth && (
                                 <AgentAuthAffordance runtimeId={runtimeId} badge={selectedAuthPres.badge} />
                             )}
@@ -871,7 +907,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     </button>
                                 </div>
                             )}
-                        </label>
+                        </div>
 
                         <label className="flex flex-col gap-1">
                             <span className={FIELD_LABEL}>Folder</span>
@@ -890,23 +926,21 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     </button>
                                 </div>
                             )}
-                            {recentRepos.filter((r) => r != repoPath).length > 0 && (
+                            {orderedRecents.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5">
-                                    {recentRepos
-                                        .filter((r) => r != repoPath)
-                                        .map((r) => (
-                                            <button
-                                                key={r}
-                                                className={CHIP}
-                                                title={r}
-                                                onClick={() => {
-                                                    setRepoPath(r);
-                                                    checkRepo(r);
-                                                }}
-                                            >
-                                                {folderName(r)}
-                                            </button>
-                                        ))}
+                                    {orderedRecents.map((r) => (
+                                        <button
+                                            key={r}
+                                            className={CHIP}
+                                            title={r}
+                                            onClick={() => {
+                                                setRepoPath(r);
+                                                checkRepo(r);
+                                            }}
+                                        >
+                                            {folderName(r)}
+                                        </button>
+                                    ))}
                                 </div>
                             )}
                             {clonableRepos.length > 0 && (
@@ -973,42 +1007,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             />
                         </label>
 
-                        {parallelAgents.length > 0 && (
-                            <div className="flex flex-col gap-1">
-                                <div className="flex items-center justify-between">
-                                    <span className={FIELD_LABEL}>Also run in parallel (optional)</span>
-                                    <button
-                                        className={QUIET_BTN}
-                                        onClick={() =>
-                                            setAlsoRun(
-                                                allParallelSelected ? [] : parallelAgents.map((a) => a.runtimeId)
-                                            )
-                                        }
-                                    >
-                                        {allParallelSelected ? "Clear" : "Select all"}
-                                    </button>
-                                </div>
-                                <div className="flex flex-wrap gap-3">
-                                    {parallelAgents.map((a) => (
-                                        <label
-                                            key={a.runtimeId}
-                                            className="flex items-center gap-1.5 text-sm cursor-pointer"
-                                            title={`Also run this task with ${agentLabel(a.runtimeId)} in its own worktree`}
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                className="cursor-pointer"
-                                                checked={alsoRun.includes(a.runtimeId)}
-                                                onChange={(e) => toggleAlso(a.runtimeId, e.target.checked)}
-                                            />
-                                            <span>{agentLabel(a.runtimeId)}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {alsoRun.filter((id) => id != runtimeId).length == 0 && (
+                        {selectedCount <= 1 && (
                             <label className="flex flex-col gap-1">
                                 <span className={FIELD_LABEL}>Branch (optional)</span>
                                 <input
@@ -1038,11 +1037,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             <button className={QUIET_BTN} onClick={() => setLaunchOpen(false)}>
                                 Cancel
                             </button>
-                            {parallelCount > 0 && (
-                                <span className="text-xs text-secondary">
-                                    Launches {1 + parallelCount} agents, each in its own worktree.
-                                </span>
-                            )}
+                            {parallelHint != "" && <span className="text-xs text-secondary">{parallelHint}</span>}
                             {posting && launchProgress != "" && <span className={META}>{launchProgress}</span>}
                         </div>
 

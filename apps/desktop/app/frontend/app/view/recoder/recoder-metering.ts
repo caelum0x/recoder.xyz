@@ -48,7 +48,20 @@ type UsagePayloadLike = {
     totals?: UsageTotalsLike;
     recent?: readonly UsageRowLike[];
     scope?: UsageScopeLike;
+    // The backend MAY assert these totals are a settled meter reading rather than
+    // a catalog-priced estimate. Absent/false ⇒ estimated — which is the current
+    // reality: every cost is computed from catalog pricing × token counts (the
+    // token counts themselves heuristic when the gateway is silent), so the strip
+    // must not present it as a settled bill. Only an explicit `metered === true`
+    // upgrades the label; we never infer "metered" on our own.
+    metered?: boolean;
 };
+
+// Whether the strip's cost is a settled meter reading or a catalog-priced
+// estimate. An estimate is not a bill — for BYOK/self-keyed routing the user's
+// own provider issues the real invoice and our number is only indicative. When
+// we cannot positively confirm a settled reading, we say "estimated".
+type MeteringProvenance = "metered" | "estimated";
 
 interface MeteringTotalsDisplay {
     inputTokens: string;
@@ -82,6 +95,10 @@ interface MeteringDisplay {
     // Labels what the numbers describe, from the scope the backend ECHOED (not
     // the one the caller asked for) — "all usage" when the read was unscoped.
     scopeLabel: string;
+    // Whether `cost` is a settled meter reading or a catalog-priced estimate. The
+    // view MUST use this to label the strip so an estimate is never shown as a
+    // bill. Defaults to "estimated" — see MeteringProvenance / describeUsageProvenance.
+    provenance: MeteringProvenance;
 }
 
 const MicroUsdPerUsd = 1_000_000;
@@ -139,6 +156,24 @@ function describeRowAttribution(row: UsageRowLike): string {
     if (ws == "" && task == "") return "unattributed";
     if (ws != "" && task != "") return `${ws} · ${task}`;
     return ws != "" ? ws : task;
+}
+
+// The cost's provenance. "metered" is claimed ONLY when the backend explicitly
+// asserts a settled reading (`metered === true`); every other payload — the
+// current reality, where costs are catalog-priced estimates — stays the honest
+// "estimated". We never upgrade to "metered" by inference.
+function describeUsageProvenance(payload?: UsagePayloadLike): MeteringProvenance {
+    return payload?.metered === true ? "metered" : "estimated";
+}
+
+// The strip's title/label: what the cost describes AND how trustworthy it is. An
+// estimate is explicitly flagged as catalog-priced, never a settled bill, so the
+// view can drop this in verbatim instead of hardcoding "Metered …".
+function usageCostTitle(display: Pick<MeteringDisplay, "provenance" | "scopeLabel">): string {
+    if (display.provenance == "metered") {
+        return `Metered inference spend for ${display.scopeLabel}`;
+    }
+    return `Estimated inference cost for ${display.scopeLabel} — priced from token counts against the model catalog, not a settled bill`;
 }
 
 // Label for the ECHOED scope of a usage payload — what the totals/rows describe.
@@ -205,11 +240,13 @@ function summarizeUsage(payload?: UsagePayloadLike): MeteringDisplay {
         totals: summarizeUsageTotals(payload?.totals),
         recent: rows.map(describeUsageRow),
         scopeLabel: describeUsageScope(payload?.scope),
+        provenance: describeUsageProvenance(payload),
     };
 }
 
 export {
     buildUsagePath,
+    describeUsageProvenance,
     describeUsageRow,
     describeUsageScope,
     formatCount,
@@ -217,7 +254,9 @@ export {
     formatMicroUsd,
     summarizeUsage,
     summarizeUsageTotals,
+    usageCostTitle,
     type MeteringDisplay,
+    type MeteringProvenance,
     type MeteringRowDisplay,
     type MeteringTotalsDisplay,
     type UsagePayloadLike,
