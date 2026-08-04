@@ -10,6 +10,31 @@ import { describe, expect, it } from "vitest";
 const require = createRequire(import.meta.url);
 const AppRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+// Re-require the electron-builder config under a chosen RECODER_BUILD_TARGETS
+// value (undefined = unset), busting the require cache each time so the env-gated
+// win/linux blocks re-evaluate. Restores the prior env afterward so tests stay
+// order-independent.
+function loadConfig(targets: string | undefined): any {
+    const configPath = path.join(AppRoot, "electron-builder.config.cjs");
+    const prev = process.env.RECODER_BUILD_TARGETS;
+    if (targets == null) {
+        delete process.env.RECODER_BUILD_TARGETS;
+    } else {
+        process.env.RECODER_BUILD_TARGETS = targets;
+    }
+    delete require.cache[require.resolve(configPath)];
+    try {
+        return require(configPath);
+    } finally {
+        if (prev == null) {
+            delete process.env.RECODER_BUILD_TARGETS;
+        } else {
+            process.env.RECODER_BUILD_TARGETS = prev;
+        }
+        delete require.cache[require.resolve(configPath)];
+    }
+}
+
 const LogoSourceFiles = [
     "emain/emain-window.ts",
     "emain/emain-builder.ts",
@@ -95,6 +120,60 @@ describe("packaging config", () => {
         for (const rel of checkedIn) {
             expect(fs.existsSync(path.resolve(AppRoot, rel)), `missing extraResources source: ${rel}`).toBe(true);
         }
+    });
+
+    it("emits no win/linux target blocks when RECODER_BUILD_TARGETS is unset (mac build unaffected)", () => {
+        const fresh = loadConfig(undefined);
+        expect(fresh.win, "win block must be absent by default").toBeUndefined();
+        expect(fresh.linux, "linux block must be absent by default").toBeUndefined();
+        expect(fresh.nsis, "nsis block must be absent by default").toBeUndefined();
+    });
+
+    it("staged win/linux blocks are inert: mac config is byte-identical whether or not they are requested", () => {
+        const baseline = loadConfig(undefined);
+        const withTargets = loadConfig("win,linux");
+        expect(withTargets.mac, "mac block must not change when win/linux are staged").toEqual(baseline.mac);
+        expect(withTargets.extraResources, "extraResources must not change").toEqual(baseline.extraResources);
+        expect(withTargets.publish, "publish must not change").toEqual(baseline.publish);
+        expect(withTargets.asarUnpack, "asarUnpack must not change").toEqual(baseline.asarUnpack);
+    });
+
+    it("RECODER_BUILD_TARGETS=win stages nsis+portable x64 with a windows icon, no linux block", () => {
+        const winConfig = loadConfig("win");
+        expect(winConfig.linux, "linux block must stay absent for win-only").toBeUndefined();
+        const targets = winConfig.win.target.map((t: { target: string; arch: string[] }) => t.target);
+        expect(targets).toContain("nsis");
+        expect(targets).toContain("portable");
+        for (const t of winConfig.win.target as Array<{ arch: string[] }>) {
+            expect(t.arch, "staged windows targets are x64-only (no arm64 native artifacts yet)").toEqual(["x64"]);
+        }
+        expect(winConfig.win.icon).toBe("build/icon.ico");
+        expect(fs.existsSync(path.resolve(AppRoot, winConfig.win.icon)), "windows icon asset must exist").toBe(true);
+        expect(winConfig.nsis.oneClick).toBe(false);
+    });
+
+    it("RECODER_BUILD_TARGETS=linux stages AppImage+deb x64 with a png icon, no win block", () => {
+        const linuxConfig = loadConfig("linux");
+        expect(linuxConfig.win, "win block must stay absent for linux-only").toBeUndefined();
+        const targets = linuxConfig.linux.target.map((t: { target: string; arch: string[] }) => t.target);
+        expect(targets).toContain("AppImage");
+        expect(targets).toContain("deb");
+        for (const t of linuxConfig.linux.target as Array<{ arch: string[] }>) {
+            expect(t.arch, "staged linux targets are x64-only (no arm64 native artifacts yet)").toEqual(["x64"]);
+        }
+        expect(linuxConfig.linux.icon).toBe("build/icon.png");
+        expect(fs.existsSync(path.resolve(AppRoot, linuxConfig.linux.icon)), "linux icon asset must exist").toBe(true);
+    });
+
+    it("beforePack skips the Mach-O CPU-arch gate off darwin but keeps the existence gate", async () => {
+        // A win/linux target on a mac host must not be arch-rejected by the mac
+        // Mach-O header check (arm64 .node files would falsely mismatch x64); the
+        // existence gate still runs. We assert the gate does NOT throw an
+        // arch-mismatch for a linux x64 context given the present arm64 artifacts.
+        const cfg = loadConfig("linux");
+        await expect(
+            cfg.beforePack({ electronPlatformName: "linux", arch: 1 })
+        ).resolves.not.toThrow();
     });
 
     it("every logo referenced by emain and onboarding exists under public/logos", () => {

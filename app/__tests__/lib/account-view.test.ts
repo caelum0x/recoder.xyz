@@ -62,6 +62,26 @@ describe('buildAccountView', () => {
     expect(view.plan.features.parallel_agents).toBe(8);
   });
 
+  it('offers an upgrade for a non-top tier but not for enterprise', () => {
+    const pro = buildAccountView({
+      user: { subscriptionPlan: 'pro', subscriptionStatus: 'active' },
+      subscription: null,
+      quota: null,
+      cliSessions: [],
+      apiKeys: [],
+    });
+    expect(pro.canUpgrade).toBe(true);
+
+    const enterprise = buildAccountView({
+      user: { subscriptionPlan: 'enterprise', subscriptionStatus: 'active' },
+      subscription: null,
+      quota: null,
+      cliSessions: [],
+      apiKeys: [],
+    });
+    expect(enterprise.canUpgrade).toBe(false);
+  });
+
   it('degrades a non-active subscription to free features while keeping the truthful status', () => {
     const view = buildAccountView({
       user: { subscriptionPlan: 'pro', subscriptionStatus: 'past_due' },
@@ -94,7 +114,39 @@ describe('buildAccountView', () => {
       remaining: 0,
       tokensPerSession: 10000,
       periodEnd: '2026-08-02T23:59:59.000Z',
+      // over-limit usage clamps the display bar at 100, never past it
+      usedPercent: 100,
     });
+  });
+
+  it('derives a mid-range usedPercent and guards a zero limit against divide-by-zero', () => {
+    const partial = buildAccountView({
+      user: null,
+      subscription: null,
+      quota: {
+        sessionsPerDay: 8,
+        sessionsUsedToday: 2,
+        tokensPerSession: 10000,
+        periodEnd: new Date('2026-08-02T23:59:59Z'),
+      },
+      cliSessions: [],
+      apiKeys: [],
+    });
+    expect(partial.usage?.usedPercent).toBe(25);
+
+    const zeroLimit = buildAccountView({
+      user: null,
+      subscription: null,
+      quota: {
+        sessionsPerDay: 0,
+        sessionsUsedToday: 3,
+        tokensPerSession: 10000,
+        periodEnd: new Date('2026-08-02T23:59:59Z'),
+      },
+      cliSessions: [],
+      apiKeys: [],
+    });
+    expect(zeroLimit.usage?.usedPercent).toBe(0);
   });
 
   it('reports absent usage as null instead of faking zeros', () => {

@@ -42,6 +42,12 @@ import type { RecallQuery, RecalledMemory } from '../../memory/types.js';
 import type { RetrievalPort } from '../../memory/ports/retrieval.port.js';
 import type { HarvestService, HarvestResult } from '../../memory/lifecycle/harvest.js';
 import type { MemoryScope } from '../../memory/lifecycle/candidate-service.js';
+import {
+  hasConvergenceProvenance,
+  shapeHarvestBody,
+  shapeHarvestTitle,
+  type HarvestShapeInput,
+} from '../../memory/lifecycle/harvest-shaping.js';
 
 /** Section headers for the enriched prompt (stable, greppable, non-secret). */
 const RECALLED_HEADER = '## Recalled context';
@@ -80,6 +86,22 @@ export interface RunHarvestInput {
   readonly proposedBy?: string;
   /** Optional bd id this was discovered from. */
   readonly discoveredFrom?: string;
+  /**
+   * Repo the run operated on (path/display). When present it is embedded in the
+   * shaped lesson body so a LATER run on the same repo can repo-match it — the
+   * cross-RUN link that makes the memory compound (thesis §7).
+   */
+  readonly repo?: string;
+  /** Human task title for the shaped lesson (falls back to the taskId). */
+  readonly taskTitle?: string;
+  /** How many parallel agents converged into the winning result (convergence provenance). */
+  readonly convergedAgents?: number;
+  /** Short signal of the approach the merge kept (the reusable lesson). */
+  readonly winningApproach?: string;
+  /** Paths the agents contested (the risky surface for the next run). */
+  readonly contestedPaths?: readonly string[];
+  /** Whether the run's verification passed (distinct from merely completing). */
+  readonly verified?: boolean;
 }
 
 /** The conductor brain: a substrate `BrainPort` plus the completion harvest hook. */
@@ -124,11 +146,20 @@ function recallScope(input: BrainEnrichInput): string | undefined {
   return repo ? repo : undefined;
 }
 
-/** Render one recalled memory as a bullet, tagged with its source for the agent. */
+/**
+ * Render one recalled memory as a bullet, tagged with its source AND — when the
+ * scope-boost surfaced it for a reason — WHY it surfaced (`repo-match`/`recency`/
+ * `lexical`). Unsignalled memories keep the original `[source]` tag exactly, so
+ * the audit trail only ever states a reason that genuinely fired.
+ */
 function renderMemory(memory: RecalledMemory): string {
   const label = memory.title?.trim() ? `${memory.title.trim()}: ` : '';
   const body = memory.body.trim().replace(/\s+/g, ' ');
-  return `- [${memory.provenance.source}] ${label}${body}`;
+  const signals = memory.provenance.signals;
+  const tag = signals && signals.length > 0
+    ? `${memory.provenance.source} · why: ${signals.join(', ')}`
+    : memory.provenance.source;
+  return `- [${tag}] ${label}${body}`;
 }
 
 /**
@@ -146,11 +177,15 @@ export function createBrainMemoryAdapter(deps: BrainMemoryAdapterDeps): Conducto
     userId: string,
   ): Promise<{ block: string; sources: BrainProvenanceRef[] }> {
     const scope = recallScope(input);
+    // Thread the repo the run targets so the scope-boost can rank a lesson
+    // harvested on THIS repo above generic matches (cross-RUN scoping).
+    const repoRef = input.repoPath?.trim();
     const query: RecallQuery = {
       query: input.prompt,
       userId,
       limit: maxRecall,
       ...(scope ? { scope } : {}),
+      ...(repoRef ? { repoRef } : {}),
     };
     try {
       const result = await recall.recall(query);
@@ -242,8 +277,16 @@ export function createBrainMemoryAdapter(deps: BrainMemoryAdapterDeps): Conducto
         return { harvested: false, reason: 'harvest skipped: no userId on the run' };
       }
 
-      const title = input.title?.trim() || defaultTitle(input);
-      const body = input.body?.trim() || defaultBody(input);
+      // HARVEST SHAPING: when the run carries convergence provenance, distil a
+      // STRUCTURED, reusable lesson ("On <repo>, task …: converged N agents; kept
+      // <winning>; contested <paths>; verified <pass/fail>.") so the candidate is
+      // a convention a later run can act on — not a raw log line. An explicit
+      // caller-supplied title/body always wins; else the shaped lesson; else the
+      // plain default. It stays a CANDIDATE (promotion is human/policy-gated).
+      const shape = toShapeInput(input);
+      const shaped = hasConvergenceProvenance(shape);
+      const title = input.title?.trim() || (shaped ? shapeHarvestTitle(shape) : defaultTitle(input));
+      const body = input.body?.trim() || (shaped ? shapeHarvestBody(shape) : defaultBody(input));
 
       try {
         return await harvest.harvest({
@@ -264,6 +307,21 @@ export function createBrainMemoryAdapter(deps: BrainMemoryAdapterDeps): Conducto
         return { harvested: false, reason };
       }
     },
+  };
+}
+
+/** Project the harvest input onto the pure shaping input (convergence provenance). */
+function toShapeInput(input: RunHarvestInput): HarvestShapeInput {
+  return {
+    taskId: input.taskId,
+    artifactId: input.artifactId,
+    outcome: input.outcome,
+    ...(input.repo !== undefined ? { repo: input.repo } : {}),
+    ...(input.taskTitle !== undefined ? { taskTitle: input.taskTitle } : {}),
+    ...(input.convergedAgents !== undefined ? { convergedAgents: input.convergedAgents } : {}),
+    ...(input.winningApproach !== undefined ? { winningApproach: input.winningApproach } : {}),
+    ...(input.contestedPaths !== undefined ? { contestedPaths: input.contestedPaths } : {}),
+    ...(input.verified !== undefined ? { verified: input.verified } : {}),
   };
 }
 

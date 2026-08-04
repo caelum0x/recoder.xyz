@@ -40,6 +40,7 @@ import type {
 } from '../types.js';
 import { dedupeMemories } from './dedupe.js';
 import { lexicalScore, rerankMemories, type PassageReranker } from './rank.js';
+import { applyScopeBoost } from './scope-boost.js';
 
 /** The public recall seam other domains (brain, pal, conductor launch) consume. */
 export interface RecallService {
@@ -62,6 +63,8 @@ export interface RecallServiceDeps {
    * source reports `down` and contributes ZERO memories (degrade-truthful).
    */
   readonly colbertSearch?: ColbertSearchPort;
+  /** Injectable wall clock (ms) for the recency scope-boost; defaults to `Date.now`. */
+  readonly clock?: () => number;
   /** The ColBERT collection recall searches; defaults to `config.mem0Collection`. */
   readonly colbertCollection?: string;
 }
@@ -101,6 +104,7 @@ function provenance(source: MemorySource, ref: string, score: number, scope?: st
 export function createRecallService(deps: RecallServiceDeps): RecallService {
   const { mem0, beads, repository, reranker, config, logger, colbertSearch } = deps;
   const colbertCollection = deps.colbertCollection?.trim() || config.mem0Collection;
+  const clock = deps.clock ?? (() => Date.now());
 
   const perSourceLimit = (query: RecallQuery): number => query.limit ?? config.recallLimit;
 
@@ -169,6 +173,7 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
           id: c.candidateId,
           title: c.title,
           body: c.body,
+          createdAt: c.proposedAt,
           provenance: provenance('candidates', c.candidateId, score, c.scope),
         }));
       return { memories: scored, availability: up('candidates') };
@@ -191,6 +196,7 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
           id: i.memoryId,
           title: i.title,
           body: i.body,
+          createdAt: i.createdAt,
           provenance: provenance('items', i.memoryId, score, i.scope),
         }));
       return { memories: scored, availability: up('items') };
@@ -283,8 +289,18 @@ export function createRecallService(deps: RecallServiceDeps): RecallService {
 
       const reranked = await rerankMemories(trimmed, pooled, reranker);
       const deduped = dedupeMemories(reranked.ordered, config.dedupeThreshold);
+      // Cross-RUN scope boost: repo-matched / fresh lessons rise above generic
+      // matches BEFORE the limit truncates, so a repo lesson is never dropped in
+      // favour of a generic one. Reorders within the reranked pool only — the
+      // `reranker`/`rerankerReason` fields below are left exactly as the reranker
+      // reported them (the degrade-truthful marker is preserved untouched).
+      const boosted = applyScopeBoost(deduped, {
+        query: trimmed,
+        nowMs: clock(),
+        ...(query.repoRef?.trim() ? { repoRef: query.repoRef.trim() } : {}),
+      });
       const limit = query.limit ?? config.recallLimit;
-      const memories = deduped.slice(0, limit);
+      const memories = boosted.slice(0, limit);
 
       return {
         memories,

@@ -115,6 +115,41 @@ function totalTokens(event: RunEvent): number {
 }
 
 /**
+ * Best-effort convergence provenance a terminal RunEvent may carry (the converge
+ * flow forwards `data.convergedAgents` / `winningApproach` / `contestedPaths` /
+ * `verified` on the terminal event). Each field is read defensively and only when
+ * genuinely present — an absent field stays undefined so the harvest shaper omits
+ * its clause rather than fabricating one. Never throws.
+ */
+function convergenceFromEvent(event: RunEvent): {
+  readonly convergedAgents?: number;
+  readonly winningApproach?: string;
+  readonly contestedPaths?: readonly string[];
+  readonly verified?: boolean;
+  readonly taskTitle?: string;
+} {
+  const data = event.data ?? {};
+  const num = (v: unknown): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined;
+  const str = (v: unknown): string | undefined =>
+    typeof v === 'string' && v.trim().length > 0 ? v.trim() : undefined;
+  const paths = Array.isArray(data.contestedPaths)
+    ? data.contestedPaths.filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+    : undefined;
+  const convergedAgents = num(data.convergedAgents);
+  const winningApproach = str(data.winningApproach);
+  const verified = typeof data.verified === 'boolean' ? data.verified : undefined;
+  const taskTitle = str(data.taskTitle);
+  return {
+    ...(convergedAgents !== undefined ? { convergedAgents } : {}),
+    ...(winningApproach !== undefined ? { winningApproach } : {}),
+    ...(paths && paths.length > 0 ? { contestedPaths: paths } : {}),
+    ...(verified !== undefined ? { verified } : {}),
+    ...(taskTitle !== undefined ? { taskTitle } : {}),
+  };
+}
+
+/**
  * Derive the deterministic, path-safe recodergit repoId from a repo full-name or
  * absolute path (lowercase; every non `[a-z0-9_-]` run → `__`). MUST stay in sync
  * with `conductor-module.ts` `repoIdFromRepoRef`, which derives the SAME id at
@@ -180,7 +215,12 @@ export function createCompletionHookSink(
         }
 
         // (h) memory harvest — needs a tenant + evidence anchor; else truthful skip.
+        // Thread the repo + any convergence provenance the terminal event carries so
+        // the harvest is shaped into a REUSABLE cross-RUN lesson (thesis §7). Every
+        // extra field is optional and degrade-safe — a run with no convergence data
+        // still harvests the plain default. Stays a CANDIDATE (promotion is gated).
         if (brain && userId && taskId) {
+          const repo = workspace?.projectId || workspace?.worktreePath;
           void brain
             .harvestOnCompletion({
               userId,
@@ -190,6 +230,8 @@ export function createCompletionHookSink(
               outcome,
               scope: 'task-type',
               proposedBy: 'conductor',
+              ...(repo ? { repo } : {}),
+              ...convergenceFromEvent(event),
             })
             .catch(err =>
               logger.warn({ err, taskId }, 'conductor harvest hook faulted')
