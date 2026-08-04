@@ -22,6 +22,7 @@
  */
 
 import * as nodeFs from "fs";
+import * as nodeOs from "os";
 import * as nodePath from "path";
 
 export interface DeviceIdentity {
@@ -55,6 +56,12 @@ interface StoredDeviceSession {
 export interface DeviceAuthDeps {
     /** recoder.xyz origin (override for staging/e2e). */
     baseUrl?: string;
+    /**
+     * Non-secret, human-recognizable label for THIS device, sent at device-flow
+     * init so /account can show which device each session is. Defaults to
+     * os.hostname()+platform; injectable for tests. NEVER a fingerprint or secret.
+     */
+    deviceLabel?: string;
     /** Where the encrypted session file lives (userData). */
     sessionPath: string;
     /** Encrypt/decrypt for the persisted session (glue passes safeStorage). */
@@ -73,6 +80,22 @@ const DefaultPollIntervalMs = 5000;
 const MaxPollIntervalMs = 15000;
 /** Refresh this far before the stored token actually expires. */
 export const SessionRefreshSkewMs = 5 * 60 * 1000;
+
+/**
+ * A stable, non-secret label for this device: hostname + platform (e.g.
+ * "my-macbook (darwin)"). NOT a fingerprint — just enough for the user to
+ * recognize which device a session belongs to on /account.
+ */
+export function defaultDeviceLabel(os: Pick<typeof nodeOs, "hostname" | "platform"> = nodeOs): string {
+    let host = "";
+    try {
+        host = (os.hostname() || "").trim();
+    } catch {
+        // Some sandboxes deny hostname(); the platform alone is still useful.
+    }
+    const platform = os.platform();
+    return host ? `${host} (${platform})` : platform;
+}
 
 export function identityFromUser(user: unknown): DeviceIdentity | undefined {
     if (user == null || typeof user !== "object") {
@@ -105,6 +128,7 @@ export function identityFromUser(user: unknown): DeviceIdentity | undefined {
 
 export class DeviceAuthManager {
     private baseUrl: string;
+    private deviceLabel: string;
     private sessionPath: string;
     private fetchFn: typeof fetch;
     private openExternal: (url: string) => Promise<void>;
@@ -118,6 +142,7 @@ export class DeviceAuthManager {
 
     constructor(deps: DeviceAuthDeps) {
         this.baseUrl = (deps.baseUrl || DefaultAuthBaseUrl).replace(/\/+$/, "");
+        this.deviceLabel = deps.deviceLabel || defaultDeviceLabel();
         this.sessionPath = deps.sessionPath;
         this.fetchFn = deps.fetchFn || fetch;
         this.openExternal = deps.openExternal || (async () => {});
@@ -152,7 +177,10 @@ export class DeviceAuthManager {
             interval?: number;
         };
         try {
-            start = await this.postJson("/api/auth/cli/device", { client_id: ClientId });
+            start = await this.postJson("/api/auth/cli/device", {
+                client_id: ClientId,
+                device_label: this.deviceLabel,
+            });
         } catch (e) {
             return { ok: false, reason: `network: ${e instanceof Error ? e.message : String(e)}` };
         }

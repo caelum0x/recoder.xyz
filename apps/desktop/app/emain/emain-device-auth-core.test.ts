@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
     DeviceAuthManager,
     DeviceLoginPrompt,
+    defaultDeviceLabel,
     identityFromUser,
     SessionRefreshSkewMs,
 } from "./emain-device-auth-core";
@@ -67,6 +68,26 @@ describe("identityFromUser — avatar threading", () => {
     });
 });
 
+describe("defaultDeviceLabel — recognizable, never a secret", () => {
+    it("combines hostname and platform", () => {
+        expect(defaultDeviceLabel({ hostname: () => "my-macbook", platform: () => "darwin" } as never)).toBe(
+            "my-macbook (darwin)"
+        );
+    });
+
+    it("falls back to platform alone when hostname is empty or throws", () => {
+        expect(defaultDeviceLabel({ hostname: () => "", platform: () => "linux" } as never)).toBe("linux");
+        expect(
+            defaultDeviceLabel({
+                hostname: () => {
+                    throw new Error("denied");
+                },
+                platform: () => "win32",
+            } as never)
+        ).toBe("win32");
+    });
+});
+
 /** A scripted token endpoint: shift one response per poll. */
 function makeFetch(tokenResponses: Array<{ status: number; body: unknown }>) {
     const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
@@ -100,9 +121,10 @@ function makeFetch(tokenResponses: Array<{ status: number; body: unknown }>) {
 let file: FakeFile;
 let opened: string[];
 
-function makeManager(fetchFn: typeof fetch, nowRef?: { t: number }): DeviceAuthManager {
+function makeManager(fetchFn: typeof fetch, nowRef?: { t: number }, deviceLabel?: string): DeviceAuthManager {
     return new DeviceAuthManager({
         baseUrl: "https://recoder.xyz",
+        deviceLabel,
         sessionPath: "/fake/session.json",
         fs: makeFakeFs(file),
         encrypt: (s) => `enc:${Buffer.from(s).toString("base64")}`,
@@ -166,6 +188,16 @@ describe("device login", () => {
         // Identity now resolves from the persisted session.
         expect(manager.getIdentity()).toEqual(identity);
         expect(manager.hasSession()).toBe(true);
+    });
+
+    it("sends a stable non-secret device_label on the init call so /account can name the device", async () => {
+        const { fetchFn, calls } = makeFetch([
+            { status: 200, body: { access_token: "at1", refresh_token: "rt1", user: identity } },
+        ]);
+        await makeManager(fetchFn, undefined, "my-macbook (darwin)").deviceLogin();
+        const deviceCall = calls.find((c) => c.url.endsWith("/api/auth/cli/device"));
+        expect(deviceCall?.body.device_label).toBe("my-macbook (darwin)");
+        expect(deviceCall?.body.client_id).toBe("recoder-desktop");
     });
 
     it("resolves { ok: false, reason: 'denied' } when the user declines", async () => {

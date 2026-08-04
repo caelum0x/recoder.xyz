@@ -9,10 +9,12 @@ import {
     computePairwise,
     computeSiblingOverlap,
     computeSuggestedWinner,
+    deriveClusterState,
     detectAttentionTransitions,
     detectNeedsInputTransitions,
     diffSummaryFetchKey,
     filterWorkspaces,
+    isSettledSiblingState,
     formatRelativeAge,
     groupByTaskGroup,
     isNeedsInputAttention,
@@ -29,6 +31,7 @@ import {
     workspaceSearchKeywords,
     DEFAULT_PROJECT_ID,
     TASK_GROUP_METADATA_KEY,
+    type CompareView,
     type ContestedFile,
     type RecoderWorkspace,
     type RecoderWorkspaceGroup,
@@ -74,6 +77,132 @@ describe("isTerminalWorkspaceState", () => {
         for (const state of ["created", "running", "setting_up", "ready", "awaiting_review", ""]) {
             expect(isTerminalWorkspaceState(state)).toBe(false);
         }
+    });
+});
+
+function makeCompareView(contested: ContestedFile[]): CompareView {
+    return { taskGroup: "grp_a", count: 2, siblings: [], contested };
+}
+
+describe("isSettledSiblingState — has the fan-out finished for this sibling", () => {
+    it("treats reviewable / delivering / delivered / dead states as settled", () => {
+        for (const state of ["awaiting_review", "merging", "merged", "failed", "cancelled", "archived"]) {
+            expect(isSettledSiblingState(state)).toBe(true);
+        }
+    });
+
+    it("treats in-flight states (and any unknown future state) as NOT settled", () => {
+        for (const state of [
+            "created",
+            "setting_up",
+            "ready",
+            "running",
+            "awaiting_approval",
+            "changes_requested",
+            "verifying-some-future-state",
+            "",
+        ]) {
+            expect(isSettledSiblingState(state)).toBe(false);
+        }
+    });
+});
+
+describe("deriveClusterState — the board's converge entry point", () => {
+    it("returns null for a solo / ungrouped workspace (nothing to converge)", () => {
+        expect(deriveClusterState([makeWs({ state: "awaiting_review" })])).toBeNull();
+        expect(deriveClusterState([])).toBeNull();
+    });
+
+    it("running: any in-flight sibling keeps converge quiet with a truthful progress read", () => {
+        const cluster = deriveClusterState([
+            makeWs({ state: "awaiting_review" }),
+            makeWs({ state: "running" }),
+            makeWs({ state: "merged" }),
+        ]);
+        expect(cluster?.phase).toBe("running");
+        expect(cluster?.convergePrimary).toBe(false);
+        expect(cluster?.settledCount).toBe(2);
+        expect(cluster?.progress).toBe("2 of 3 done");
+        expect(cluster?.detail).toBe("2 of 3 done");
+        expect(cluster?.summary).toBe("3 agents · 2 of 3 done");
+        expect(cluster?.reason).toBe("agents still running");
+    });
+
+    it("running: awaiting_approval and changes_requested are still in flight (not done)", () => {
+        const cluster = deriveClusterState([
+            makeWs({ state: "awaiting_approval" }),
+            makeWs({ state: "changes_requested" }),
+        ]);
+        expect(cluster?.phase).toBe("running");
+        expect(cluster?.settledCount).toBe(0);
+        expect(cluster?.progress).toBe("0 of 2 done");
+    });
+
+    it("ready (divergence unknown): all settled but compare unloaded offers Compare & Converge", () => {
+        const cluster = deriveClusterState([
+            makeWs({ state: "awaiting_review" }),
+            makeWs({ state: "awaiting_review" }),
+        ]);
+        expect(cluster?.phase).toBe("ready");
+        expect(cluster?.convergePrimary).toBe(true);
+        expect(cluster?.divergenceKnown).toBe(false);
+        expect(cluster?.divergedFiles).toBe(0);
+        expect(cluster?.detail).toBe("ready to compare");
+        expect(cluster?.summary).toBe("2 agents · ready to compare");
+        expect(cluster?.reason).toBe("");
+    });
+
+    it("ready (divergence known): counts diverged agents and contested files", () => {
+        const a = makeWs({ state: "awaiting_review" });
+        const b = makeWs({ state: "merged" });
+        const c = makeWs({ state: "failed" });
+        const contested: ContestedFile[] = [
+            { path: "src/one.ts", workspaceIds: [a.workspaceId, b.workspaceId] },
+            { path: "src/two.ts", workspaceIds: [a.workspaceId, b.workspaceId] },
+            { path: "src/three.ts", workspaceIds: [b.workspaceId, c.workspaceId] },
+        ];
+        const cluster = deriveClusterState([a, b, c], makeCompareView(contested));
+        expect(cluster?.phase).toBe("ready");
+        expect(cluster?.convergePrimary).toBe(true);
+        expect(cluster?.divergenceKnown).toBe(true);
+        expect(cluster?.divergedAgents).toBe(3);
+        expect(cluster?.divergedFiles).toBe(3);
+        expect(cluster?.detail).toBe("3 diverged on 3 files");
+        expect(cluster?.summary).toBe("3 agents · 3 diverged on 3 files");
+    });
+
+    it("ready: pluralizes a single contested file truthfully", () => {
+        const a = makeWs({ state: "awaiting_review" });
+        const b = makeWs({ state: "awaiting_review" });
+        const cluster = deriveClusterState(
+            [a, b],
+            makeCompareView([{ path: "only.ts", workspaceIds: [a.workspaceId, b.workspaceId] }])
+        );
+        expect(cluster?.detail).toBe("2 diverged on 1 file");
+    });
+
+    it("agree: all settled with ZERO contested files never offers converge", () => {
+        const cluster = deriveClusterState(
+            [makeWs({ state: "awaiting_review" }), makeWs({ state: "merged" })],
+            makeCompareView([])
+        );
+        expect(cluster?.phase).toBe("agree");
+        expect(cluster?.convergePrimary).toBe(false);
+        expect(cluster?.divergenceKnown).toBe(true);
+        expect(cluster?.divergedFiles).toBe(0);
+        expect(cluster?.detail).toBe("agree — no divergence");
+        expect(cluster?.reason).toBe("agents agree — no convergence needed");
+    });
+
+    it("a still-running sibling outranks a loaded contested set (readiness gates on states first)", () => {
+        const a = makeWs({ state: "running" });
+        const b = makeWs({ state: "awaiting_review" });
+        const cluster = deriveClusterState(
+            [a, b],
+            makeCompareView([{ path: "x.ts", workspaceIds: [a.workspaceId, b.workspaceId] }])
+        );
+        expect(cluster?.phase).toBe("running");
+        expect(cluster?.convergePrimary).toBe(false);
     });
 });
 

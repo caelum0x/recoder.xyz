@@ -40,6 +40,7 @@ import {
 import { RecoderIdentityModel } from "./recoder-identity-model";
 import {
     attentionBadgeLabel,
+    deriveClusterState,
     formatRelativeAge,
     isTerminalWorkspaceState,
     RecoderViewModel,
@@ -1340,6 +1341,14 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             const taskGroup = group.taskGroup ?? "";
                             const compareView = compare[taskGroup];
                             const isCompareOpen = compareOpen == taskGroup;
+                            // The cluster's convergence phase — the board's entry
+                            // point into compare/converge. Non-null here (2+ siblings).
+                            const cluster = deriveClusterState(group.workspaces, compareView);
+                            // Converge is the cluster's PRIMARY next step only when the
+                            // fan-out has finished with real divergence to reconcile —
+                            // and only while the panel (which carries its own accent) is
+                            // closed, so a cluster never shows two accents at once.
+                            const convergeReady = cluster?.convergePrimary && !isCompareOpen;
                             // Open-only (never a toggle): the per-card affordance
                             // must always land on the open panel.
                             const onConverge = showConvergeAffordance(taskGroup, group.workspaces.length)
@@ -1353,6 +1362,11 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                 <div key={taskGroup} className="flex flex-col gap-1 rounded border border-white/8 p-2">
                                     <div className="flex items-center gap-2">
                                         <span className={ROW_TITLE}>{group.workspaces.length} agents</span>
+                                        {cluster != null && (
+                                            <span className={META} title={cluster.reason || undefined}>
+                                                · {cluster.detail}
+                                            </span>
+                                        )}
                                         <span className={`${META} font-mono`} title={taskGroup}>
                                             {shortTaskGroup(taskGroup)}
                                         </span>
@@ -1367,12 +1381,27 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                         >
                                             Open all
                                         </button>
-                                        <button
-                                            className={QUIET_BTN}
-                                            onClick={() => model.toggleCompare(taskGroup, group.workspaces)}
-                                        >
-                                            {isCompareOpen ? "Hide compare" : "Compare"}
-                                        </button>
+                                        {convergeReady ? (
+                                            <button
+                                                className={PRIMARY_BTN}
+                                                onClick={() => model.toggleCompare(taskGroup, group.workspaces)}
+                                                title="Compare all agents side-by-side and converge on one branch"
+                                            >
+                                                Compare &amp; Converge
+                                            </button>
+                                        ) : (
+                                            <button
+                                                className={QUIET_BTN}
+                                                onClick={() => model.toggleCompare(taskGroup, group.workspaces)}
+                                                title={
+                                                    !isCompareOpen && cluster != null && cluster.reason != ""
+                                                        ? cluster.reason
+                                                        : undefined
+                                                }
+                                            >
+                                                {isCompareOpen ? "Hide compare" : "Compare"}
+                                            </button>
+                                        )}
                                     </div>
                                     {isCompareOpen && (
                                         <div className="recoder-enter">

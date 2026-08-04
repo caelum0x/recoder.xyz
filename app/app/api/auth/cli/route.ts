@@ -14,7 +14,8 @@ import { CLIAuthService } from '@/lib/services/cli-auth.service';
 
 const deviceFlowSchema = z.object({
   client_id: z.string(),
-  scope: z.string().optional().default('cli:full profile')
+  scope: z.string().optional().default('cli:full profile'),
+  device_label: z.string().optional()
 });
 
 interface DeviceFlowData {
@@ -171,11 +172,12 @@ async function handleDeviceFlow(body: any): Promise<NextResponse> {
     }, { status: 400 });
   }
 
-  const { client_id, scope } = validation.data;
+  const { client_id, scope, device_label } = validation.data;
 
   const deviceFlowData: DeviceFlowData = await CLIAuthService.generateDeviceCode(
     client_id,
-    scope
+    scope,
+    device_label
   );
 
   return NextResponse.json({

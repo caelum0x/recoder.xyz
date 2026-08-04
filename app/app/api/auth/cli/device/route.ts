@@ -25,8 +25,11 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     const clientId = body.client_id || 'recoder-cli';
+    // Non-secret, human-recognizable label so /account can show WHICH device
+    // this session is (the service sanitizes + caps it). Untrusted client input.
+    const deviceLabel = typeof body.device_label === 'string' ? body.device_label : undefined;
 
-    const result = await CLIAuthService.generateDeviceCode(clientId);
+    const result = await CLIAuthService.generateDeviceCode(clientId, undefined, deviceLabel);
 
     return NextResponse.json(result, { status: 200 });
   } catch (error) {

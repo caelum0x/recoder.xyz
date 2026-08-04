@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('../prisma', () => ({
   prisma: {
     deviceCode: {
+      create: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
     },
@@ -43,6 +44,38 @@ const baseUser = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe('generateDeviceCode device label', () => {
+  function createdData() {
+    const call = mockPrisma.deviceCode.create.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    return call.data;
+  }
+
+  it('persists a sanitized, non-secret device label onto the device code', async () => {
+    mockPrisma.deviceCode.create.mockResolvedValue({} as never);
+    await CLIAuthService.generateDeviceCode('recoder-desktop', undefined, 'arhan-macbook (darwin)');
+    expect(createdData().deviceName).toBe('arhan-macbook (darwin)');
+  });
+
+  it('strips control chars/newlines and caps length (never trusts client input)', async () => {
+    mockPrisma.deviceCode.create.mockResolvedValue({} as never);
+    await CLIAuthService.generateDeviceCode('recoder-desktop', undefined, `line1\nline2\t${'x'.repeat(200)}`);
+    const label = createdData().deviceName as string;
+    expect(label).not.toMatch(/[\n\t]/);
+    expect(label.startsWith('line1 line2 ')).toBe(true);
+    expect(label.length).toBe(80);
+  });
+
+  it('omits deviceName entirely when the label is absent or blank — never stores junk', async () => {
+    mockPrisma.deviceCode.create.mockResolvedValue({} as never);
+    await CLIAuthService.generateDeviceCode('recoder-desktop', undefined, '   ');
+    expect('deviceName' in createdData()).toBe(false);
+
+    mockPrisma.deviceCode.create.mockClear();
+    await CLIAuthService.generateDeviceCode('recoder-desktop');
+    expect('deviceName' in createdData()).toBe(false);
+  });
 });
 
 describe('pollDeviceCode identity payload', () => {

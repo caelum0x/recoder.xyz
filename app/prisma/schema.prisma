@@ -410,6 +410,11 @@ model DeviceCode {
   userCode   String   @unique
   clientId   String   @default("recoder-cli")
   scope      String?
+  // Non-secret, human-recognizable device label the client self-reports at
+  // device-flow init (e.g. "my-macbook (darwin)"). Carried onto the created
+  // cli_session so /account can show WHICH device each session is. Nullable:
+  // older clients that send none stay valid.
+  deviceName String?
   status     String   @default("pending")
   expiresAt  DateTime
   userId     String?

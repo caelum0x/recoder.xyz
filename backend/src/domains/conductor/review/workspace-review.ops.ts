@@ -103,8 +103,9 @@ const PER_FILE_DIFF_MAX_BUFFER = 8 * 1024 * 1024;
  * the detached `HEAD`, or begins with `-` (a poisoned ref that could inject a git
  * option), in which case fall back to `main`. Used by BOTH per-file edges so the
  * base can never become a git flag and matches the mergeability panel reviewers
- * already read. The legacy {@link workspaceDiff} keeps its own `baseRef || 'HEAD'`
- * rule untouched (zero consumer break).
+ * already read. {@link workspaceDiff} now resolves through the same rule (via
+ * {@link resolveReviewBaseResolved}) so the rendered diff and the discard target
+ * always share one base.
  */
 export function resolveReviewBase(ws: Pick<Workspace, 'baseRef'>): string {
   const baseRef = ws.baseRef;
@@ -361,7 +362,12 @@ export async function workspaceDiff(
   workspaceId: string,
 ): Promise<WorkspaceDiffView> {
   const workspace = await requireWorktree(deps, workspaceId);
-  const base = workspace.baseRef || 'HEAD';
+  // Resolve through the SAME rule the discard edges use
+  // (resolveReviewBaseResolved), so the diff the user reviews and the diff a
+  // hunk/file-discard reverse-applies always share one base. Diffing against a
+  // different base (the old `baseRef || 'HEAD'`) let confirmed hunk ordinals
+  // anchor to a different diff for legacy/unresolvable records.
+  const base = await resolveReviewBaseResolved(deps, workspace);
 
   const result = await deps.getSubstrate(workspace.substrate).diff(
     { ref: workspaceId, sessionName: workspace.sessionName, worktreePath: workspace.worktreePath },
