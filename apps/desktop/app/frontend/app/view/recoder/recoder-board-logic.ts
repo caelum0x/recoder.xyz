@@ -399,6 +399,142 @@ function groupByTaskGroup(workspaces: RecoderWorkspace[]): RecoderWorkspaceGroup
     return groups;
 }
 
+// The sibling states past the agent's OWN work — the fan-out has FINISHED for this
+// sibling (it is reviewable, being delivered, delivered, or dead). Everything else
+// (created / setting_up / ready / running / awaiting_approval / changes_requested —
+// and any unknown future state) is treated as still in flight, so cluster readiness
+// is never claimed prematurely: an unknown state keeps converge quiet, never fakes
+// "done".
+const SETTLED_SIBLING_STATES: ReadonlySet<string> = new Set([
+    "awaiting_review",
+    "merging",
+    "merged",
+    "failed",
+    "cancelled",
+    "archived",
+]);
+
+function isSettledSiblingState(state: string): boolean {
+    return SETTLED_SIBLING_STATES.has(state);
+}
+
+// The convergence phase of a parallel-run cluster — the board's ENTRY POINT into
+// compare/converge, and the read that decides whether the board SHOUTS "converge
+// now" (quietly) or stays calm:
+//   - "running": the fan-out is still going (>=1 sibling has not settled). Converge
+//     is premature — it stays quiet with a truthful reason and a live "M of N done".
+//   - "ready": every sibling has settled AND real divergence exists (2+ agents
+//     contest a file) — converge is the cluster's ONE primary next step.
+//   - "agree": every sibling settled but NOTHING is contested — there is nothing to
+//     converge, so we say so and point at review (never a fabricated converge CTA).
+// When the compare aggregate is not loaded yet the contested set is UNKNOWN; an
+// all-settled cluster is then "ready" (offer Compare & Converge — comparing is the
+// discovery step) with file counts omitted rather than invented.
+type ClusterConvergePhase = "running" | "ready" | "agree";
+
+type ClusterState = {
+    phase: ClusterConvergePhase;
+    // N — the sibling count of the cluster.
+    agentCount: number;
+    // How many siblings have settled (past running); drives the "M of N done" read.
+    settledCount: number;
+    // Whether the contested set has been computed (the compare aggregate loaded).
+    // false ⇒ divergedAgents/divergedFiles are 0 as "unknown", never as "none".
+    divergenceKnown: boolean;
+    // M — distinct agents that contest at least one file (0 when unknown).
+    divergedAgents: number;
+    // K — contested file count (0 when unknown).
+    divergedFiles: number;
+    // The board's ONE accent for this cluster: converge is the primary next action.
+    convergePrimary: boolean;
+    // Truthful reason converge is NOT primary ("" when it is). Surfaced on the quiet
+    // affordance so the board never hides WHY it isn't offering converge.
+    reason: string;
+    // Compact spec line: "N agents · M diverged on K files" (ready, known),
+    // "N agents · ready to compare" (ready, unknown), "N agents · M of N done"
+    // (running), "N agents · agree — no divergence" (agree).
+    summary: string;
+    // The state detail without the leading "N agents · " (the header renders the
+    // agent count separately). Never "" — always a truthful phrase.
+    detail: string;
+    // "M of N done" while running; "" otherwise.
+    progress: string;
+};
+
+function pluralizeFiles(n: number): string {
+    return n == 1 ? "1 file" : `${n} files`;
+}
+
+// Pure + degrade-safe: derive one parallel-run cluster's convergence phase from its
+// siblings' real states + (when loaded) the group contested set. Returns null for a
+// solo/ungrouped workspace (fewer than 2 siblings) — there is nothing to converge,
+// so the board renders it as a plain row with NO converge affordance. Never
+// fabricates a count or a readiness it cannot prove (see ClusterState).
+function deriveClusterState(workspaces: RecoderWorkspace[], compareView?: CompareView): ClusterState | null {
+    const agentCount = workspaces.length;
+    if (agentCount < 2) {
+        return null;
+    }
+    const settledCount = workspaces.filter((ws) => isSettledSiblingState(ws.state)).length;
+    const allSettled = settledCount == agentCount;
+
+    const contested = compareView?.contested;
+    const divergenceKnown = contested != null;
+    const divergedFiles = divergenceKnown ? contested.length : 0;
+    const divergedAgents = divergenceKnown ? new Set(contested.flatMap((c) => c.workspaceIds)).size : 0;
+
+    if (!allSettled) {
+        const detail = `${settledCount} of ${agentCount} done`;
+        return {
+            phase: "running",
+            agentCount,
+            settledCount,
+            divergenceKnown,
+            divergedAgents,
+            divergedFiles,
+            convergePrimary: false,
+            reason: "agents still running",
+            summary: `${agentCount} agents · ${detail}`,
+            detail,
+            progress: detail,
+        };
+    }
+
+    if (divergenceKnown && divergedFiles == 0) {
+        const detail = "agree — no divergence";
+        return {
+            phase: "agree",
+            agentCount,
+            settledCount,
+            divergenceKnown,
+            divergedAgents,
+            divergedFiles,
+            convergePrimary: false,
+            reason: "agents agree — no convergence needed",
+            summary: `${agentCount} agents · ${detail}`,
+            detail,
+            progress: "",
+        };
+    }
+
+    const detail = divergenceKnown
+        ? `${divergedAgents} diverged on ${pluralizeFiles(divergedFiles)}`
+        : "ready to compare";
+    return {
+        phase: "ready",
+        agentCount,
+        settledCount,
+        divergenceKnown,
+        divergedAgents,
+        divergedFiles,
+        convergePrimary: true,
+        reason: "",
+        summary: `${agentCount} agents · ${detail}`,
+        detail,
+        progress: "",
+    };
+}
+
 // Terminal-dead states: history, not live work. The default Active board view
 // hides them; the Archived view shows exactly them.
 function isTerminalWorkspaceState(state: string): boolean {
@@ -877,6 +1013,9 @@ export {
     workspaceAttentionMap,
     NEEDS_INPUT_ATTENTIONS,
     groupByTaskGroup,
+    isSettledSiblingState,
+    deriveClusterState,
+    SETTLED_SIBLING_STATES,
     filterWorkspaces,
     mergeArchivedHistory,
     diffSummaryFetchKey,
@@ -921,4 +1060,6 @@ export {
     type RecoderWorkspaceGroup,
     type RecoderBoardShow,
     type RecoderBoardBucket,
+    type ClusterConvergePhase,
+    type ClusterState,
 };

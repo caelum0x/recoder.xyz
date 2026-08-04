@@ -14,6 +14,21 @@ const DEVICE_CODE_EXPIRY_MINUTES = 15;
 const ACCESS_TOKEN_EXPIRY_DAYS = 90;
 const REFRESH_TOKEN_EXPIRY_DAYS = 365;
 const CLIENT_ID = 'recoder-cli';
+const DEVICE_LABEL_MAX_LENGTH = 80;
+const DEFAULT_DEVICE_NAME = 'CLI Device Flow';
+
+/**
+ * Normalize a client-supplied device label. It is a human-recognizable name for
+ * the /account device list, NEVER token material or trusted input: strip
+ * control chars/newlines, trim, and cap length. Returns undefined when nothing
+ * usable remains so we fall back to the neutral default instead of storing junk.
+ */
+function sanitizeDeviceLabel(label: unknown): string | undefined {
+  if (typeof label !== 'string') return undefined;
+  const cleaned = label.replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim();
+  if (!cleaned) return undefined;
+  return cleaned.slice(0, DEVICE_LABEL_MAX_LENGTH);
+}
 
 // Generate random user code (e.g., "ABCD-1234")
 function generateUserCode(): string {
@@ -38,10 +53,11 @@ export class CLIAuthService {
    * Step 1: Generate device code for CLI authentication
    * CLI calls this to start the auth flow
    */
-  static async generateDeviceCode(clientId: string = CLIENT_ID, scope?: string) {
+  static async generateDeviceCode(clientId: string = CLIENT_ID, scope?: string, deviceLabel?: string) {
     const deviceCode = nanoid(DEVICE_CODE_LENGTH);
     const userCode = generateUserCode();
     const expiresAt = new Date(Date.now() + DEVICE_CODE_EXPIRY_MINUTES * 60 * 1000);
+    const deviceName = sanitizeDeviceLabel(deviceLabel);
 
     await prisma.deviceCode.create({
       data: {
@@ -49,6 +65,7 @@ export class CLIAuthService {
         userCode,
         clientId,
         ...(scope ? { scope } : {}),
+        ...(deviceName ? { deviceName } : {}),
         status: 'pending',
         expiresAt,
       },
@@ -179,7 +196,7 @@ export class CLIAuthService {
       const tokens = await this.createCLISession(
         record.user.id,
         deviceCode,
-        'CLI Device Flow'
+        record.deviceName || DEFAULT_DEVICE_NAME
       );
 
       // Mark device code as completed

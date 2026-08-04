@@ -264,6 +264,36 @@ describe('CLI device flow (Set A: /api/auth/cli/*)', () => {
     expect(refreshed.user.email).toBe(testUser.email);
   });
 
+  it('carries the client device_label onto the created cli_session so /account can name it', async () => {
+    const { POST } = await import('@/app/api/auth/cli/device/route');
+    const initResp = await POST(
+      jsonRequest('http://localhost/api/auth/cli/device', {
+        client_id: 'recoder-desktop',
+        device_label: 'arhan-macbook (darwin)',
+      })
+    );
+    const init = await initResp.json();
+
+    // The label is persisted on the device code awaiting authorization.
+    const dc = db.deviceCodes.find((entry) => entry.deviceCode === init.device_code) as
+      | (DeviceCodeRecord & { deviceName?: string })
+      | undefined;
+    expect(dc?.deviceName).toBe('arhan-macbook (darwin)');
+
+    await authorizeDevice(init.user_code, 'approve');
+    await pollToken(init.device_code);
+
+    // ...and flows through to the cli_session the user sees on /account.
+    expect(db.cliSessions[0].deviceName).toBe('arhan-macbook (darwin)');
+  });
+
+  it('falls back to the neutral device name when no label is sent (older clients)', async () => {
+    const { json: init } = await initDeviceFlow();
+    await authorizeDevice(init.user_code, 'approve');
+    await pollToken(init.device_code);
+    expect(db.cliSessions[0].deviceName).toBe('CLI Device Flow');
+  });
+
   it('returns expired_token when the device code is past its expiry', async () => {
     const { json: init } = await initDeviceFlow();
     const record = db.deviceCodes.find((entry) => entry.deviceCode === init.device_code);

@@ -1,0 +1,11 @@
+-- 20260804000000_add_devicecode_devicename
+--
+-- WHAT: Add a nullable, non-secret device label captured at device-flow init.
+--       The desktop sends os.hostname()+platform in POST /api/auth/cli/device;
+--       pollDeviceCode carries it onto the created cli_session (cli_sessions
+--       .deviceName already exists) so /account can show WHICH device each
+--       session is, instead of a constant "CLI Device Flow" for every row.
+--
+-- SAFETY: additive + nullable. Existing DeviceCode rows and older desktop
+--         builds that send no label stay valid (deviceName = NULL).
+ALTER TABLE "DeviceCode" ADD COLUMN "deviceName" TEXT;
