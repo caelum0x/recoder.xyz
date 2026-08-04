@@ -1,11 +1,14 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getApi } from "@/app/store/global";
+import { createBlock, getApi } from "@/app/store/global";
 import type { RecoderApproval } from "@/app/view/recoder-approvals/recoder-approvals-model";
+import { agentLabel } from "@/app/view/recoder/recoder-agent-labels";
+import { RecoderDetailHeader, workspaceOptionLabel } from "@/app/view/recoder/recoder-detail-header";
+import { openWorkspaceTerminal } from "@/app/view/recoder/recoder-open-terminal";
 import { prChipLabel, prChipTone, prCreateGate, type RecoderPrChip } from "@/app/view/recoder/recoder-pr-status";
 import { RecoderEmpty, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
-import { PAGE_TITLE, PRIMARY_BTN, QUIET_BTN } from "@/app/view/recoder/recoder-styles";
+import { PRIMARY_BTN, QUIET_BTN } from "@/app/view/recoder/recoder-styles";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
@@ -659,6 +662,23 @@ function InlineApprovalCard({
 
 InlineApprovalCard.displayName = "InlineApprovalCard";
 
+// Open the OTHER detail face for the SAME workspace as its own block — the exact
+// view meta the hub's openSession/openReview use, so the shared header's segments
+// navigate the three faces as one detail. Fire-and-forget: a failed cross-block
+// open must never crash the Review view.
+async function openDetailBlock(view: "recoder-terminal" | "recoder-diff", workspaceId: string) {
+    // Loosely-typed def (like the hub's openBlock) so the workspace-id meta key
+    // isn't rejected by the block MetaType literal check.
+    const blockDef: { meta: Record<string, unknown> } = {
+        meta: { view, "recoder:workspaceid": workspaceId },
+    };
+    try {
+        await createBlock(blockDef);
+    } catch {
+        // degrade-safe: opening a sibling block should never take down Review
+    }
+}
+
 function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     const workspaces = useAtomValue(model.workspacesAtom);
     const selectedId = useAtomValue(model.selectedIdAtom);
@@ -741,27 +761,60 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
         </button>
     );
 
+    // The SHARED detail frame (identity + switcher + Session·Review·Terminal
+    // segments) so Review reads as one face of the same workspace-detail Session
+    // shows. Identity comes from the selected record; the raw-terminal segment is
+    // wired only when that record carries a tmux session (truthful degrade).
+    const selectedWorkspace = workspaces.find((w) => w.workspaceId == selectedId) ?? null;
+    const detailIdentity = {
+        branch: selectedWorkspace?.branch ?? "",
+        agent: selectedWorkspace?.runtimeId ? agentLabel(selectedWorkspace.runtimeId) : undefined,
+        stateChip:
+            selectedWorkspace != null && selectedWorkspace.state != ""
+                ? { label: selectedWorkspace.state, tone: "neutral" as const }
+                : undefined,
+    };
+    const detailSwitcher =
+        workspaces.length > 0
+            ? {
+                  options: workspaces.map((w) => ({
+                      id: w.workspaceId,
+                      label: workspaceOptionLabel(w.branch, w.state),
+                  })),
+                  selectedId,
+                  onSelect: (id: string) => model.selectWorkspace(id),
+              }
+            : undefined;
+    const onOpenTerminal = selectedWorkspace?.sessionName
+        ? () =>
+              openWorkspaceTerminal({
+                  sessionName: selectedWorkspace.sessionName,
+                  cwd: selectedWorkspace.worktreePath,
+              })
+        : undefined;
+    const hasHeaderPrimary = primary == "merge" || primary == "create-pr" || (selectedId != "" && prChip != null);
+    const headerPrimary = (
+        <div className="flex items-center gap-2">
+            {primary == "merge" && mergeBtn(PRIMARY_BTN)}
+            {primary == "create-pr" && createPrBtn(PRIMARY_BTN)}
+            {selectedId != "" && prChip != null && <ReviewPrChip chip={prChip} />}
+        </div>
+    );
+
     return (
-        <div className="flex flex-col h-full overflow-hidden p-3 gap-2">
-            <div className="flex items-center gap-2">
-                <span className={PAGE_TITLE}>Review</span>
-                {workspaces.length > 0 && (
-                    <select
-                        className="ml-auto bg-panel text-primary border border-border rounded px-2 py-0.5 text-sm cursor-pointer"
-                        value={selectedId}
-                        onChange={(e) => model.selectWorkspace(e.target.value)}
-                    >
-                        {workspaces.map((ws) => (
-                            <option key={ws.workspaceId} value={ws.workspaceId}>
-                                {ws.branch} · {ws.state}
-                            </option>
-                        ))}
-                    </select>
-                )}
-                {primary == "merge" && mergeBtn(PRIMARY_BTN)}
-                {primary == "create-pr" && createPrBtn(PRIMARY_BTN)}
-                {selectedId != "" && prChip != null && <ReviewPrChip chip={prChip} />}
-            </div>
+        <div className="flex flex-col h-full overflow-hidden">
+            <RecoderDetailHeader
+                workspaceId={selectedId}
+                view="review"
+                identity={detailIdentity}
+                switcher={detailSwitcher}
+                onNavigate={(target) =>
+                    openDetailBlock(target == "session" ? "recoder-terminal" : "recoder-diff", selectedId)
+                }
+                onOpenTerminal={onOpenTerminal}
+                primaryAction={hasHeaderPrimary ? headerPrimary : undefined}
+            />
+            <div className="flex flex-col flex-1 min-h-0 overflow-hidden p-3 gap-2">
             {inlineApproval != null && (
                 <InlineApprovalCard
                     approval={inlineApproval}
@@ -858,6 +911,7 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                     )}
                 </div>
             )}
+            </div>
         </div>
     );
 }

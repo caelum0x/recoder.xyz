@@ -186,8 +186,8 @@ class RecoderMemoryViewModel implements ViewModel {
             }
             if (results.length === 0) {
                 if (sources.length > 0 && down.length === sources.length) {
-                    const reason = down.find((s: { reason?: string }) => s?.reason)?.reason;
-                    globalStore.set(this.searchNoticeAtom, reason ? String(reason) : "memory sources unavailable");
+                    // No engine names to the user — the reason is backend plumbing.
+                    globalStore.set(this.searchNoticeAtom, "Memory is temporarily unavailable — try again in a moment.");
                 } else {
                     globalStore.set(this.searchNoticeAtom, "No matches.");
                 }
@@ -323,15 +323,14 @@ function readSignals(value: unknown): RecallSignal[] {
     return RECALL_SIGNALS.filter((s) => present.has(s));
 }
 
-// Truthful partial-degrade line: names every faulted source (and its reason
-// when the backend reported one) so a half-empty recall never reads as complete.
+// Truthful partial-degrade line WITHOUT naming engines (the invisible-engines
+// contract): a half-empty recall never reads as complete, but "beads/colbert/
+// mem0" are backend plumbing the user must never see — a count is equally
+// truthful and stays terminal-plain.
 function partialRecallNotice(down: { source?: unknown; reason?: unknown }[]): string {
-    const parts = down.map((s) => {
-        const source = typeof s?.source == "string" && s.source != "" ? s.source : "unknown source";
-        const reason = typeof s?.reason == "string" && s.reason != "" ? ` (${s.reason})` : "";
-        return `${source} unavailable${reason}`;
-    });
-    return `partial recall: ${parts.join(", ")}`;
+    const n = down.length;
+    const src = n == 1 ? "source is" : "sources are";
+    return `${n} memory ${src} temporarily unavailable — showing partial results.`;
 }
 
 // Translate the gated AcceptResult into a truthful one-line outcome. `promoted`

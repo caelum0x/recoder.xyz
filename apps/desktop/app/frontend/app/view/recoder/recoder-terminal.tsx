@@ -5,10 +5,13 @@ import { createBlock } from "@/app/store/global";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
+import { agentLabel } from "./recoder-agent-labels";
 import { decideApproval } from "./recoder-approval-action";
+import { RecoderDetailHeader, workspaceOptionLabel, type RecoderStateTone } from "./recoder-detail-header";
 import { type MeteringDisplay } from "./recoder-metering";
+import { openWorkspaceTerminal } from "./recoder-open-terminal";
 import { type RunEventSeverity } from "./recoder-run-event";
-import { PAGE_TITLE, PRIMARY_BTN, QUIET_BTN } from "./recoder-styles";
+import { PRIMARY_BTN, QUIET_BTN } from "./recoder-styles";
 import {
     RecoderTerminalStatus,
     RecoderTerminalViewModel,
@@ -140,13 +143,28 @@ function statusText(status: RecoderTerminalStatus): string {
     return "idle";
 }
 
-function statusColor(status: RecoderTerminalStatus): string {
+function statusTone(status: RecoderTerminalStatus): RecoderStateTone {
     // Graphite-only per the design system: connected is a real positive → accent;
-    // connecting is a neutral pending state; error keeps the one reserved crimson.
-    if (status == "connected") return "bg-accent/20 text-accent";
-    if (status == "connecting") return "border border-white/8 text-secondary";
-    if (status == "error") return "bg-error/20 text-error";
-    return "bg-secondary/20 text-secondary";
+    // error keeps the one reserved crimson; everything else stays neutral.
+    if (status == "connected") return "accent";
+    if (status == "error") return "error";
+    return "neutral";
+}
+
+// Open the Review face for the SAME workspace as its own block — the exact view
+// meta the hub's openReview uses, so the shared header's Review segment navigates
+// this Session's workspace. Fire-and-forget; a failed open never crashes Session.
+async function openReviewBlock(workspaceId: string) {
+    // Loosely-typed def (like the hub's openBlock) so the workspace-id meta key
+    // isn't rejected by the block MetaType literal check.
+    const blockDef: { meta: Record<string, unknown> } = {
+        meta: { view: "recoder-diff", "recoder:workspaceid": workspaceId },
+    };
+    try {
+        await createBlock(blockDef);
+    } catch {
+        // degrade-safe: opening the sibling Review block must not take down Session
+    }
 }
 
 function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewModel>) {
@@ -158,11 +176,13 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
     const sendStatus = useAtomValue(model.sendStatusAtom);
     const usage = useAtomValue(model.usageAtom);
     const usageStatus = useAtomValue(model.usageStatusAtom);
+    const workspaces = useAtomValue(model.workspacesAtom);
     const scrollRef = useRef<HTMLDivElement>(null);
     const [draft, setDraft] = useState("");
 
     useEffect(() => {
         model.connect();
+        void model.refreshWorkspaces();
         return () => model.dispose();
     }, [model]);
 
@@ -196,22 +216,53 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
         void submit();
     };
 
+    // The SHARED detail frame (identity + switcher + Session·Review·Terminal
+    // segments) so Session reads as one face of the same workspace-detail Review
+    // shows. Identity is resolved from the SAME list edge Review uses; the state
+    // chip is this Session's live connection status; the raw-terminal segment is
+    // wired only when the bound record carries a tmux session (truthful degrade).
+    const boundSummary = workspaces.find((w) => w.workspaceId == workspaceId) ?? null;
+    const detailIdentity = {
+        branch: boundSummary?.branch ?? "",
+        agent: boundSummary?.runtimeId ? agentLabel(boundSummary.runtimeId) : undefined,
+        stateChip: { label: statusText(status), tone: statusTone(status) },
+    };
+    const detailSwitcher =
+        workspaces.length > 0
+            ? {
+                  options: workspaces.map((w) => ({
+                      id: w.workspaceId,
+                      label: workspaceOptionLabel(w.branch, w.state),
+                  })),
+                  selectedId: workspaceId,
+                  onSelect: (id: string) => model.switchWorkspace(id),
+              }
+            : undefined;
+    const onOpenTerminal = boundSummary?.sessionName
+        ? () => openWorkspaceTerminal({ sessionName: boundSummary.sessionName, cwd: boundSummary.worktreePath })
+        : undefined;
+    // Reconnect only exists when there's a bound session to reconnect to — an
+    // unbound Session (pick a workspace from the switcher first) shows no action.
+    const reconnectBtn =
+        workspaceId != "" ? (
+            <button className={QUIET_BTN} onClick={() => model.connect()}>
+                Reconnect
+            </button>
+        ) : undefined;
+
     return (
         <div className="flex flex-col h-full overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border shrink-0">
-                <span className={PAGE_TITLE}>Session</span>
-                {workspaceId != "" && (
-                    <span className="text-xs text-secondary truncate" title={workspaceId}>
-                        {workspaceId}
-                    </span>
-                )}
-                <span className={cn("ml-auto rounded px-1.5 py-0.5 text-xs", statusColor(status))}>
-                    {statusText(status)}
-                </span>
-                <button className={QUIET_BTN} onClick={() => model.connect()}>
-                    Reconnect
-                </button>
-            </div>
+            <RecoderDetailHeader
+                workspaceId={workspaceId}
+                view="session"
+                identity={detailIdentity}
+                switcher={detailSwitcher}
+                onNavigate={(target) => {
+                    if (target == "review") void openReviewBlock(workspaceId);
+                }}
+                onOpenTerminal={onOpenTerminal}
+                primaryAction={reconnectBtn}
+            />
             <UsageStrip display={usage} status={usageStatus} />
             {error != "" && <div className="text-error text-xs px-3 py-1 border-b border-border shrink-0">{error}</div>}
             <div ref={scrollRef} className="flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed">

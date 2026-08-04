@@ -18,6 +18,7 @@ import {
     driftForRun,
     driftLabel,
     parseReconcileFindings,
+    unpinnedDriftFindings,
     type RunsDriftFinding,
 } from "./recoder-runs-findings";
 import { RecoderRunsViewModel } from "./recoder-runs-model";
@@ -138,6 +139,29 @@ describe("driftForRun", () => {
     it("excludes findings without a workspaceId from row badges", () => {
         const findings = [finding({ findingId: "f1" }), finding({ findingId: "f2", workspaceId: "w1" })];
         expect(driftForRun("run-1", correlation, findings).map((f) => f.findingId)).toEqual(["f2"]);
+    });
+});
+
+describe("unpinnedDriftFindings", () => {
+    const correlation = new Map([["run-1", "w1"]]);
+
+    it("keeps only findings no run row can pin (unlinked or an uncorrelated workspace)", () => {
+        const findings = [
+            finding({ findingId: "f1", workspaceId: "w1" }),
+            finding({ findingId: "f2", workspaceId: "w2" }),
+            finding({ findingId: "f3" }),
+        ];
+        expect(unpinnedDriftFindings(findings, correlation).map((f) => f.findingId)).toEqual(["f2", "f3"]);
+    });
+
+    it("returns everything when nothing is correlated (no row carries the marker)", () => {
+        const findings = [finding({ findingId: "f1", workspaceId: "w1" })];
+        expect(unpinnedDriftFindings(findings, new Map()).map((f) => f.findingId)).toEqual(["f1"]);
+    });
+
+    it("returns [] when every finding is already pinned to a correlated run", () => {
+        const findings = [finding({ findingId: "f1", workspaceId: "w1" })];
+        expect(unpinnedDriftFindings(findings, correlation)).toEqual([]);
     });
 });
 

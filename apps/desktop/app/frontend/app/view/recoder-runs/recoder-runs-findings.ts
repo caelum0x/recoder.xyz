@@ -103,4 +103,24 @@ function driftForRun(
     return findings.filter((f) => f.workspaceId != null && f.workspaceId == workspaceId);
 }
 
-export { activeDriftFindings, driftForRun, driftLabel, parseReconcileFindings, type RunsDriftFinding };
+// The active findings NOT already pinned to a run row (see driftForRun): a finding
+// with no workspaceId, or whose workspace matches no correlated run. Each run row
+// carries its own drift marker, so the standalone Drift section only needs to show
+// what no row can — dropping the duplicate keeps the list calm without ever hiding
+// an unattributable finding.
+function unpinnedDriftFindings(
+    findings: readonly RunsDriftFinding[],
+    correlation: ReadonlyMap<string, string>,
+): RunsDriftFinding[] {
+    const pinned = new Set(correlation.values());
+    return findings.filter((f) => f.workspaceId == null || !pinned.has(f.workspaceId));
+}
+
+export {
+    activeDriftFindings,
+    driftForRun,
+    driftLabel,
+    parseReconcileFindings,
+    unpinnedDriftFindings,
+    type RunsDriftFinding,
+};

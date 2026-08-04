@@ -239,3 +239,26 @@ describe("RecoderTerminalViewModel.entriesAtom (structured run stream)", () => {
         expect(entries[1]).toEqual({ kind: "system", text: "[stream complete]", tone: "muted" });
     });
 });
+
+describe("switchWorkspace — anti-bleed on rebind", () => {
+    it("clears the prior workspace's scrollback + usage so run A never shows under run B", () => {
+        const model = makeModel();
+        // Seed run A's transcript + usage, then rebind to run B.
+        globalStore.set(model.entriesAtom, [{ kind: "system", text: "A output", tone: "muted" }]);
+        globalStore.set(model.linesAtom, ["A line"]);
+        globalStore.set(model.usageAtom, { totals: { cost: "$1", calls: "3", totalTokens: "9" } } as never);
+        model.switchWorkspace("ws-B");
+        expect(globalStore.get(model.entriesAtom)).toEqual([]);
+        expect(globalStore.get(model.linesAtom)).toEqual([]);
+        expect(globalStore.get(model.usageAtom)).toBeNull();
+    });
+
+    it("is a no-op for a blank id or the already-bound id (no needless reconnect/clear)", () => {
+        const model = makeModel();
+        globalStore.set(model.workspaceIdAtom, "ws-A");
+        globalStore.set(model.entriesAtom, [{ kind: "system", text: "keep", tone: "muted" }]);
+        model.switchWorkspace("");
+        model.switchWorkspace("ws-A");
+        expect(globalStore.get(model.entriesAtom)).toEqual([{ kind: "system", text: "keep", tone: "muted" }]);
+    });
+});

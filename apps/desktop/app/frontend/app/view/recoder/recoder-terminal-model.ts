@@ -18,6 +18,19 @@ type RunStreamEntry =
 
 type RecoderTerminalStatus = "idle" | "no-workspace" | "connecting" | "connected" | "closed" | "error";
 
+// A lenient subset of the conductor Workspace record, folded from the SAME list
+// edge Review uses, so the shared detail header's switcher + identity read
+// identically in Session and Review. Everything past the id is optional — an
+// older/newer backend degrades to "just the id", never a fabricated field.
+type TerminalWorkspaceSummary = {
+    workspaceId: string;
+    branch: string;
+    state: string;
+    runtimeId: string;
+    sessionName?: string;
+    worktreePath?: string;
+};
+
 // The cost/token strip's truthful state: idle (no workspace / not asked yet),
 // ready (a real scoped payload rendered), unavailable (the usage read failed —
 // shown as "usage unavailable", NEVER as a fake all-zero strip).
@@ -153,6 +166,7 @@ class RecoderTerminalViewModel implements ViewModel {
     statusAtom: PrimitiveAtom<RecoderTerminalStatus>;
     errorAtom: PrimitiveAtom<string>;
     workspaceIdAtom: PrimitiveAtom<string>;
+    workspacesAtom: PrimitiveAtom<TerminalWorkspaceSummary[]>;
     sendingAtom: PrimitiveAtom<boolean>;
     sendStatusAtom: PrimitiveAtom<string>;
     usageAtom: PrimitiveAtom<MeteringDisplay>;
@@ -162,6 +176,10 @@ class RecoderTerminalViewModel implements ViewModel {
     reconnectAttempt: number;
     lastEventId: number;
     reconnectTimer: ReturnType<typeof setTimeout> | null;
+    // In-place workspace override for the switcher: "" ⇒ connect() reads the id
+    // from block meta (the launched binding); a non-empty value ⇒ the operator
+    // switched this Session to another workspace without opening a new block.
+    boundWorkspaceId: string;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -174,6 +192,7 @@ class RecoderTerminalViewModel implements ViewModel {
         this.statusAtom = atom("idle") as PrimitiveAtom<RecoderTerminalStatus>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
         this.workspaceIdAtom = atom("") as PrimitiveAtom<string>;
+        this.workspacesAtom = atom([]) as PrimitiveAtom<TerminalWorkspaceSummary[]>;
         this.sendingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.sendStatusAtom = atom("") as PrimitiveAtom<string>;
         this.usageAtom = atom(null) as PrimitiveAtom<MeteringDisplay>;
@@ -183,6 +202,7 @@ class RecoderTerminalViewModel implements ViewModel {
         this.reconnectAttempt = 0;
         this.lastEventId = 0;
         this.reconnectTimer = null;
+        this.boundWorkspaceId = "";
     }
 
     get viewComponent(): ViewComponent {
@@ -201,7 +221,7 @@ class RecoderTerminalViewModel implements ViewModel {
         this.teardownSocket();
 
         const block = globalStore.get(this.blockAtom);
-        const workspaceId = readWorkspaceId(block);
+        const workspaceId = this.boundWorkspaceId != "" ? this.boundWorkspaceId : readWorkspaceId(block);
         globalStore.set(this.workspaceIdAtom, workspaceId);
         globalStore.set(this.errorAtom, "");
 
@@ -410,6 +430,38 @@ class RecoderTerminalViewModel implements ViewModel {
         }
     }
 
+    // Fold the workspace list from the SAME edge Review reads, for the shared
+    // header's switcher + identity. Degrade-safe: a failed/odd-shaped read leaves
+    // the switcher as-is (the header still shows the bound id) — never a fake row.
+    async refreshWorkspaces(): Promise<void> {
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/workspaces`);
+            const body = await res.json();
+            const data = body?.data;
+            const list = Array.isArray(data?.workspaces) ? data.workspaces : Array.isArray(data) ? data : [];
+            const workspaces = (list as TerminalWorkspaceSummary[]).filter((w) => w.state != "archived");
+            if (this.disposed) return;
+            globalStore.set(this.workspacesAtom, workspaces);
+        } catch {
+            // list unavailable — keep whatever the switcher had; never fabricate one
+        }
+    }
+
+    // Switch this Session to another workspace IN-PLACE (mirrors Review's switcher
+    // so the two faces feel identical): rebind, clear the previous workspace's
+    // scrollback + usage so they can't bleed into the new stream, then reconnect.
+    // A no-op when the id is unchanged or empty.
+    switchWorkspace(workspaceId: string): void {
+        const next = workspaceId.trim();
+        if (next == "" || next == globalStore.get(this.workspaceIdAtom)) return;
+        this.boundWorkspaceId = next;
+        globalStore.set(this.linesAtom, []);
+        globalStore.set(this.entriesAtom, []);
+        globalStore.set(this.usageAtom, null);
+        globalStore.set(this.usageStatusAtom, "idle");
+        this.connect();
+    }
+
     dispose(): void {
         this.disposed = true;
         this.clearReconnectTimer();
@@ -427,5 +479,6 @@ export {
     type RecoderRunEvent,
     type RecoderTerminalStatus,
     type RunStreamEntry,
+    type TerminalWorkspaceSummary,
     type UsageStripStatus,
 };

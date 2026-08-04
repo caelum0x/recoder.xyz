@@ -331,12 +331,12 @@ describe("RecoderMemoryViewModel.search", () => {
 
         expect(globalStore.get(model.resultsAtom)).toHaveLength(1);
         expect(globalStore.get(model.sourcesNoticeAtom)).toBe(
-            "partial recall: beads unavailable (bd daemon unreachable), colbert unavailable"
+            "2 memory sources are temporarily unavailable — showing partial results."
         );
         expect(globalStore.get(model.searchNoticeAtom)).toBe("");
     });
 
-    it("keeps the full-degrade reason notice when every source is down and results are empty", async () => {
+    it("shows a human, engine-name-free full-degrade notice when every source is down and results are empty", async () => {
         vi.stubGlobal(
             "fetch",
             vi.fn().mockImplementation(() =>
@@ -355,7 +355,8 @@ describe("RecoderMemoryViewModel.search", () => {
         await model.search();
 
         expect(globalStore.get(model.resultsAtom)).toEqual([]);
-        expect(globalStore.get(model.searchNoticeAtom)).toBe("mem0 sidecar down");
+        // No engine names (mem0/beads) leak to the user.
+        expect(globalStore.get(model.searchNoticeAtom)).toBe("Memory is temporarily unavailable — try again in a moment.");
         expect(globalStore.get(model.sourcesNoticeAtom)).toBe("");
     });
 
@@ -383,7 +384,7 @@ describe("RecoderMemoryViewModel.search", () => {
         const model = makeModel();
         model.setQuery("hit");
         await model.search();
-        expect(globalStore.get(model.sourcesNoticeAtom)).toBe("partial recall: beads unavailable (down)");
+        expect(globalStore.get(model.sourcesNoticeAtom)).toBe("1 memory source is temporarily unavailable — showing partial results.");
 
         await model.search();
         expect(globalStore.get(model.sourcesNoticeAtom)).toBe("");
@@ -397,7 +398,7 @@ describe("RecoderMemoryViewModel.search", () => {
         const model = makeModel();
         globalStore.set(model.resultsAtom, [{ id: "m1", memory: "stale" }]);
         globalStore.set(model.searchNoticeAtom, "No matches.");
-        globalStore.set(model.sourcesNoticeAtom, "partial recall: beads unavailable");
+        globalStore.set(model.sourcesNoticeAtom, "1 memory source is temporarily unavailable — showing partial results.");
         model.setQuery("   ");
         await model.search();
 
