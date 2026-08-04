@@ -1,9 +1,11 @@
-import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { magicLink } from "better-auth/plugins";
 import { authDatabase } from "./database";
 import { getAuthEnv } from "./keys";
-import { COOKIE_DOMAIN, SURFACE_ORIGINS } from "./edge";
+import { SURFACE_ORIGINS } from "./edge";
+import {
+  createRecoderAuth,
+  type CreateRecoderAuthOptions,
+} from "./create-recoder-auth";
 
 export type { AuthEnv } from "./keys";
 export { getAuthEnv } from "./keys";
@@ -33,6 +35,16 @@ export {
   isTrustedOrigin,
   AUTH_ORIGIN,
 } from "./cross-domain";
+export {
+  createRecoderAuth,
+  buildRecoderAuthOptions,
+  RECODER_COOKIE_ADVANCED,
+  RECODER_ACCOUNT_LINKING,
+} from "./create-recoder-auth";
+export type {
+  CreateRecoderAuthOptions,
+  RecoderAuthInstance,
+} from "./create-recoder-auth";
 
 /**
  * Trusted origins for cross-subdomain session sharing.
@@ -41,8 +53,6 @@ export {
 const PRODUCTION_ORIGINS = [
   ...Object.values(SURFACE_ORIGINS),
   "https://www.recoder.xyz",
-  "https://app.recoder.xyz",
-  "https://ide.recoder.xyz",
 ];
 
 const DEV_ORIGINS = [
@@ -58,30 +68,39 @@ const DEV_ORIGINS = [
   ...PRODUCTION_ORIGINS,
 ];
 
-/**
- * Create the shared better-auth instance.
- *
- * Each app calls this once and gets back a fully configured auth handler.
- * The `sendMagicLink` callback must be provided by the consuming app
- * (since email delivery depends on the app's Resend/SMTP setup).
- */
-export function createAuth(options: {
+export interface CreateAuthOptions {
   sendMagicLink: (params: { email: string; url: string }) => Promise<void>;
   sendResetPassword?: (params: { user: { email?: string | null }; url: string }) => Promise<void>;
   sendVerificationEmail?: (params: { user: { email?: string | null }; url: string }) => Promise<void>;
-}) {
+}
+
+/**
+ * Build this surface's factory input. Exported so parity tests can diff the
+ * resolved options against the main app's without booting Better Auth.
+ */
+export function buildCreateAuthOptions(
+  options: CreateAuthOptions
+): CreateRecoderAuthOptions {
   const env = getAuthEnv();
 
-  return betterAuth({
-    database: prismaAdapter(authDatabase, {
+  return {
+    adapter: prismaAdapter(authDatabase, {
       provider: "postgresql",
     }),
+    modelNames: {
+      user: "user",
+      account: "account",
+      session: "session",
+      verification: "verification",
+    },
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     emailAndPassword: {
       // Self-host operators may re-enable local accounts via AUTH_EMAIL_PASSWORD=on;
       // the hosted product is OAuth-only.
       enabled: process.env.AUTH_EMAIL_PASSWORD === "on",
+    },
+    senders: {
       sendResetPassword: options.sendResetPassword
         ? async ({ user, url }: { user: { email?: string | null }; url: string }) => {
             await options.sendResetPassword!({ user: { email: user.email ?? null }, url });
@@ -92,17 +111,9 @@ export function createAuth(options: {
             await options.sendVerificationEmail!({ user: { email: user.email ?? null }, url });
           }
         : undefined,
-    },
-    plugins: [
-      magicLink({
-        sendMagicLink: async ({ email, url }) => {
-          await options.sendMagicLink({ email, url });
-        },
-      }),
-    ],
-    accountLinking: {
-      enabled: true,
-      trustedProviders: ["github", "google"],
+      sendMagicLink: async ({ email, url }) => {
+        await options.sendMagicLink({ email, url });
+      },
     },
     socialProviders: {
       ...(env.GITHUB_APP_CLIENT_ID && env.GITHUB_APP_CLIENT_SECRET
@@ -122,34 +133,20 @@ export function createAuth(options: {
           }
         : {}),
     },
-    advanced: {
-      cookiePrefix: "recoder",
-      crossSubDomainCookies: {
-        enabled: true,
-        domain:
-          process.env.NODE_ENV === "production" ? COOKIE_DOMAIN : undefined,
-      },
-      useSecureCookies: process.env.NODE_ENV === "production",
-      defaultCookieAttributes: {
-        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      },
-      generateId: () => crypto.randomUUID(),
-    },
     trustedOrigins:
       process.env.NODE_ENV === "production" ? PRODUCTION_ORIGINS : DEV_ORIGINS,
-    user: {
-      modelName: "user",
-    },
-    account: {
-      modelName: "account",
-    },
-    session: {
-      modelName: "session",
-    },
-    verification: {
-      modelName: "verification",
-    },
-  });
+  };
+}
+
+/**
+ * Create the shared better-auth instance.
+ *
+ * Each app calls this once and gets back a fully configured auth handler.
+ * The `sendMagicLink` callback must be provided by the consuming app
+ * (since email delivery depends on the app's Resend/SMTP setup).
+ */
+export function createAuth(options: CreateAuthOptions) {
+  return createRecoderAuth(buildCreateAuthOptions(options));
 }
 
 export type RecoderAuth = ReturnType<typeof createAuth>;

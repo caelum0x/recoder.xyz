@@ -71,12 +71,13 @@ export type ConvergeInferenceFn = (
 ) => Promise<TensorzeroInferenceResult>;
 
 /**
- * The TensorZero function the assisted synthesis addresses — the stable
- * `recoder_default` chat function the config generator emits for the first
- * registered model (see `tensorzero-config.ts`). Unrouted (no model configured)
- * degrades truthfully to the mechanical conflict path.
+ * Bounded assist payloads — an oversized contributor version (per-version cap) or
+ * an oversized composed prompt (total cap) SKIPS the LLM escalation and degrades
+ * truthfully to the mechanical `synthesize-conflict` path (a plan-visible
+ * unresolved entry + a logged note), never an unbounded inference call.
  */
-export const ASSIST_INFERENCE_FUNCTION = 'recoder_default';
+export const MAX_ASSIST_FILE_BYTES = 64 * 1024;
+export const MAX_ASSIST_PROMPT_BYTES = 256 * 1024;
 
 /** Thrown when the plan still has unresolved contested paths — mapped to a 4xx. */
 export class UnresolvedConvergenceError extends Error {
@@ -166,6 +167,14 @@ export interface ConvergeOpsDeps {
    * (mechanical behavior; never a fake merge).
    */
   readonly inference?: ConvergeInferenceFn;
+  /**
+   * The inference function name the assist call addresses. OWNED by the
+   * composition layer (the inference domain's canonical default chat function —
+   * `TENSORZERO_DEFAULT_FUNCTION`), NEVER hardcoded here: the ops stay name-free
+   * so a rename in the inference domain cannot silently drift. `inference` wired
+   * WITHOUT a name ⇒ assist skips truthfully (mechanical `synthesize-conflict`).
+   */
+  readonly inferenceFunctionName?: string;
   /** Child-process seam for host git; defaults to `execFileSafe`. */
   readonly exec?: typeof execFileSafe;
   /** Id generator; defaults to `crypto.randomUUID`. */
@@ -514,10 +523,33 @@ async function assistSynthesis(
   },
 ): Promise<SynthesisOutcome> {
   if (!deps.inference) return { clean: false }; // not wired ⇒ mechanical behavior
+  const functionName = deps.inferenceFunctionName;
+  if (!functionName) {
+    // Never guess a function name — the composition layer owns it (see the dep doc).
+    deps.logger.warn(
+      { path: args.relPath },
+      'assisted synthesis skipped — inference wired without a function name; falling back to synthesize-conflict',
+    );
+    return { clean: false };
+  }
+  if (args.versions.some((v) => Buffer.byteLength(v, 'utf8') > MAX_ASSIST_FILE_BYTES)) {
+    deps.logger.warn(
+      { path: args.relPath, capBytes: MAX_ASSIST_FILE_BYTES },
+      'assisted synthesis skipped — a contributor version exceeds the per-version byte cap; falling back to synthesize-conflict',
+    );
+    return { clean: false };
+  }
   const regions = args.conflictContent != null ? parseConflictRegions(args.conflictContent) : [];
   const prompt = buildAssistPrompt(args, regions);
+  if (Buffer.byteLength(prompt, 'utf8') > MAX_ASSIST_PROMPT_BYTES) {
+    deps.logger.warn(
+      { path: args.relPath, capBytes: MAX_ASSIST_PROMPT_BYTES },
+      'assisted synthesis skipped — the merge prompt exceeds the total byte cap; falling back to synthesize-conflict',
+    );
+    return { clean: false };
+  }
   const result = await deps.inference({
-    function_name: ASSIST_INFERENCE_FUNCTION,
+    function_name: functionName,
     input: { messages: [{ role: 'user', content: prompt }] },
   });
   if (!result.routed) {
@@ -619,15 +651,18 @@ function stripCodeFences(text: string): string {
 }
 
 /**
- * Cheap sanity gate over an assisted merge: non-empty, NO conflict markers, and
- * every line both sides AGREED on (the non-region lines of the merged-with-markers
- * fold output) still appears in the merged file — a model that dropped agreed
- * content is rejected, not trusted.
+ * Cheap sanity gate over an assisted merge: non-empty, NO conflict markers
+ * (open/close AND the bare `=======` separator — a model echoing half a region
+ * would otherwise slip through), and every line both sides AGREED on (the
+ * non-region lines of the merged-with-markers fold output) still appears in the
+ * merged file — a model that dropped agreed content is rejected, not trusted.
  */
 function isValidAssistedMerge(merged: string, conflictContent: string | undefined): boolean {
   if (merged.trim().length === 0) return false;
   const lines = merged.split('\n');
-  if (lines.some((line) => isOpenMarker(line) || isCloseMarker(line))) return false;
+  if (lines.some((line) => isOpenMarker(line) || isCloseMarker(line) || line === '=======')) {
+    return false;
+  }
   if (conflictContent == null) return true;
   const mergedSet = new Set(lines);
   return agreedLinesOutsideRegions(conflictContent).every((line) => mergedSet.has(line));
