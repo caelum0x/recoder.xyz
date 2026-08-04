@@ -175,6 +175,35 @@ export function buildCompareRoutes(deps: CompareRouterDeps): Router {
     }),
   );
 
+  // N-up per-file versions (A4) — for ONE contested `path`, EACH sibling's version of
+  // that file + the base version, so the desktop can render N columns of the SAME file
+  // side by side. Read-only, no gate (same as siblings/pairwise/converge-plan).
+  // recoder-kybr: the module resolves the group with the caller's principal, so a group
+  // the caller owns no sibling of ⇒ a no-oracle 404 byte-identical to an unknown group.
+  router.get(
+    '/workspaces/compare/:taskGroup/file-versions',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      const taskGroup = req.params.taskGroup?.trim();
+      if (!taskGroup) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`taskGroup` path param is required'));
+        return;
+      }
+      const relPath = firstString(req.query.path);
+      if (!relPath) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`path` query param is required'));
+        return;
+      }
+      const fileVersions = await module.fileVersions(taskGroup, relPath, req.principal!);
+      if (!fileVersions) {
+        // Caller owns no sibling of this group ⇒ no-oracle 404.
+        sendError(res, createError(ErrorCode.NOT_FOUND, 'workspace not found'));
+        return;
+      }
+      sendSuccess(res, { fileVersions });
+    }),
+  );
+
   // Convergence COMPOSE (product step 2 → 3) — GATED (`workspace.branch`).
   // Pre-validates the plan (a group with <2 candidates, no changed files, or any
   // UNRESOLVED contested path is a truthful 400 with the offending paths — a user

@@ -124,6 +124,7 @@ export type {
 import type {
   ComposeConvergenceInput,
   ComposeConvergenceResult,
+  ConvergeInferenceFn,
 } from './converge/converge.ops.js';
 export type { ComposeConvergenceInput, ComposeConvergenceResult } from './converge/converge.ops.js';
 import type {
@@ -142,6 +143,8 @@ import type { WorkspaceQueryFilters } from './services/workspace-query.service.j
 import type { CompareView } from './services/compare.service.js';
 import type { PairwiseDiffView } from './services/pairwise-diff.service.js';
 export type { PairwiseDiffView, PairwiseFileDiff } from './services/pairwise-diff.service.js';
+import type { FileVersionsView } from './converge/converge.ops.js';
+export type { FileVersionsView, FileVersionEntry } from './converge/converge.ops.js';
 import type { WorkspaceGridPort, GroupGridArrangement } from './ports/workspace-grid.port.js';
 // Type-only across the boundary (the guard allows types): the read-only
 // `/sessions` attach bridge observes through an INJECTED engines-owned tmux
@@ -367,6 +370,16 @@ export interface ConductorModuleDeps {
    * builds it over the persistence `KvStore`; absent ⇒ no behavior change.
    */
   readonly idempotency?: RequestHandler;
+  /**
+   * OPTIONAL degrade-safe one-shot LLM inference for ASSISTED convergence
+   * synthesis (`ConvergeOpsDeps.inference`) — the headline conflict-resolution
+   * seam. Bootstrap binds inference's PUBLIC `postInference` one-shot here (a
+   * cross-domain value import legal ONLY at the composition root); it returns
+   * `{ routed:false }` when no gateway is up, so ABSENT (or a down gateway) ⇒
+   * every assisted conflict degrades truthfully to synthesize-conflict (the
+   * mechanical behavior, never a fabricated merge). See `module/compare-converge.ts`.
+   */
+  readonly infer?: ConvergeInferenceFn;
 }
 
 /** The public surface bootstrap registers and the edge/interop consume. */
@@ -463,6 +476,20 @@ export interface ConductorModule {
     paths: readonly string[] | undefined,
     principal?: Principal,
   ): Promise<PairwiseDiffView | null>;
+  /**
+   * The N-up per-file version read — for ONE contested `path`, EACH sibling's version
+   * of that file + the base version, so the desktop can render N columns of the SAME
+   * file side by side. Read-only; reuses the synthesize probe's version-gathering (no
+   * new git logic). recoder-kybr: the group is narrowed to the caller's OWN siblings —
+   * a group the caller owns no sibling of ⇒ `null` (the route's no-oracle 404). A
+   * deleted/unreadable sibling ⇒ `content:null` + a truthful reason; each version is
+   * bounded with a `truncated` flag.
+   */
+  fileVersions(
+    taskGroup: string,
+    relPath: string,
+    principal?: Principal,
+  ): Promise<FileVersionsView | null>;
   /**
    * Arrange the parallel-run group's operator grid — GATED (`workspace.grid`):
    * ensure the dedicated `recoder-group-<taskGroup>` session then build one pane

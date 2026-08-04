@@ -86,6 +86,10 @@ import {
   createOpenfangWorkflowDriver,
 } from '../domains/engines/index.js';
 import { createInferenceModule } from '../domains/inference/index.js';
+// The inference domain's PUBLIC degrade-safe one-shot — bound into the conductor's
+// ASSISTED convergence synthesis (a cross-domain value import legal ONLY here at the
+// composition root). It answers `{ routed:false }` when no gateway is up.
+import { postInference } from '../domains/inference/tensorzero-embedded-client.js';
 import { createInferenceRoutePalAdapter } from '../domains/inference/adapters/pal-route.adapter.js';
 // The composition root owns the engines→inference config bridge: the concrete
 // tensorzero config-generation module is injected into the engines tensorzero
@@ -965,6 +969,14 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
           /* accounting must never throw into the merge path */
         });
     },
+    // ASSISTED convergence synthesis (the headline LLM conflict-resolution): bind
+    // inference's degrade-safe one-shot so a mechanically-unmergeable contested
+    // file can escalate to a VALIDATED LLM merge (recorded on `plan.assisted` +
+    // the exportable evidence). Inference is composed ABOVE (:454), so a direct
+    // bind needs no lazy accessor. `postInference` returns `{ routed:false }` when
+    // no gateway is up ⇒ the assisted path degrades truthfully to
+    // synthesize-conflict (mechanical behavior, never a fabricated merge).
+    infer: postInference,
     overrides: {
       tmuxBin: config.conductor.tmuxBin,
       worktreeRoot: config.conductor.worktreeRoot,
