@@ -35,6 +35,8 @@ import {
     convergeSelectionRepo,
     convergeSelectDisabled,
     deriveAdHocConverge,
+    deriveCardSummary,
+    humanizeWorkspaceState,
     adHocCompareIds,
     DEFAULT_PROJECT_ID,
     TASK_GROUP_METADATA_KEY,
@@ -984,6 +986,51 @@ describe("suggestNextAction", () => {
     it("suggests nothing for archived or unknown states (degrade-safe)", () => {
         expect(suggestNextAction("archived", withChanges, true)).toBe(null);
         expect(suggestNextAction("some_future_state", withChanges, true)).toBe(null);
+    });
+});
+
+describe("humanizeWorkspaceState — engine states → plain phrases", () => {
+    it("maps the known lifecycle states to human labels", () => {
+        expect(humanizeWorkspaceState("awaiting_review")).toBe("Needs review");
+        expect(humanizeWorkspaceState("awaiting_approval")).toBe("Needs approval");
+        expect(humanizeWorkspaceState("changes_requested")).toBe("Changes requested");
+        expect(humanizeWorkspaceState("running")).toBe("Running");
+        expect(humanizeWorkspaceState("merged")).toBe("Merged");
+    });
+
+    it("title-cases an unknown/future state rather than hiding it", () => {
+        expect(humanizeWorkspaceState("some_future_state")).toBe("Some future state");
+        expect(humanizeWorkspaceState("")).toBe("");
+    });
+});
+
+describe("deriveCardSummary — the de-crowded glance (title/agent/one-state/diffstat)", () => {
+    it("folds a plain running row to the four glanceable essentials", () => {
+        const ws = makeWs({ branch: "feat/login", runtimeId: "claude_code", state: "running" });
+        expect(deriveCardSummary(ws, { additions: 12, deletions: 3, files: 2 })).toEqual({
+            title: "feat/login",
+            agent: "Claude Code",
+            state: "Running",
+            needsYou: false,
+            diffstat: "+12 -3",
+        });
+    });
+
+    it("a needs-input attention OVERRIDES the state and flags needsYou (one indicator, not a badge)", () => {
+        const idle = makeWs({ state: "running", attention: "agent_idle_prompt" });
+        expect(deriveCardSummary(idle, undefined)).toMatchObject({ state: "Needs input", needsYou: true });
+        const approval = makeWs({ state: "running", attention: "awaiting_approval" });
+        expect(deriveCardSummary(approval, undefined)).toMatchObject({ state: "Needs approval", needsYou: true });
+    });
+
+    it("an attention the board must not badge leaves the lifecycle state showing", () => {
+        const working = makeWs({ state: "running", attention: "working" });
+        expect(deriveCardSummary(working, undefined)).toMatchObject({ state: "Running", needsYou: false });
+    });
+
+    it("omits the diffstat when there is no changed-file summary (never a fabricated +0 -0)", () => {
+        expect(deriveCardSummary(makeWs(), undefined).diffstat).toBe("");
+        expect(deriveCardSummary(makeWs(), { additions: 0, deletions: 0, files: 0 }).diffstat).toBe("");
     });
 });
 

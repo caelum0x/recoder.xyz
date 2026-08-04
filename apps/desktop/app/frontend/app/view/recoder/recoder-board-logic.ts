@@ -735,6 +735,75 @@ function suggestNextAction(
     return null;
 }
 
+// The de-crowded board card's glanceable read (DESIGN-REFERENCE §3A: "codename,
+// repo/branch, the agent, a glanceable state — no engine chatter"). Folds the row
+// down to the four things a dev scans at rest — title, agent, ONE state, +/-
+// diffstat — so PR / attention / age / row actions can move to hover or the
+// selected secondary line without the resting card ever reading as crowded.
+type RecoderCardSummary = {
+    title: string;
+    agent: string;
+    state: string;
+    // The needs-input attention (an agent stopped and is waiting on the human) is
+    // folded INTO `state` so the card carries ONE indicator, never a chip PLUS a
+    // badge; `needsYou` lets the view spend the card's single accent on that moment.
+    needsYou: boolean;
+    // "+A -D", or "" when there is no changed-file summary (never a fabricated
+    // "+0 -0").
+    diffstat: string;
+};
+
+// Human-readable state labels — the raw backend states (awaiting_review,
+// changes_requested, …) are engine vocabulary, so the card shows a plain phrase.
+// An unknown/future state degrades to a title-cased form of the raw string rather
+// than being hidden, so the board never silently swallows a state it doesn't know.
+const WORKSPACE_STATE_LABELS: Record<string, string> = {
+    created: "Queued",
+    queued: "Queued",
+    setting_up: "Setting up",
+    ready: "Ready",
+    running: "Running",
+    merging: "Merging",
+    awaiting_review: "Needs review",
+    changes_requested: "Changes requested",
+    awaiting_approval: "Needs approval",
+    merged: "Merged",
+    archived: "Archived",
+    failed: "Failed",
+    cancelled: "Cancelled",
+};
+
+function titleCaseState(state: string): string {
+    const cleaned = (state ?? "").replace(/[_-]+/g, " ").trim();
+    if (cleaned == "") {
+        return "";
+    }
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+function humanizeWorkspaceState(state: string): string {
+    return WORKSPACE_STATE_LABELS[state] ?? titleCaseState(state);
+}
+
+// Pure: fold a workspace + its diff summary into the card's glanceable read. A
+// needs-input attention OVERRIDES the lifecycle state as the single label and flags
+// `needsYou` — that human-turn is the most useful thing to glance, and folding it
+// here keeps the card to one state indicator. Degrade-safe: absent branch/runtime/
+// summary yield empty strings, never a fabricated value.
+function deriveCardSummary(ws: RecoderWorkspace, summary: RecoderDiffSummary | undefined): RecoderCardSummary {
+    const attnLabel = attentionBadgeLabel(ws.attention);
+    const needsYou = attnLabel != "";
+    const state = needsYou ? attnLabel : humanizeWorkspaceState(ws.state);
+    const diffstat = summary != null && summary.files > 0 ? `+${summary.additions} -${summary.deletions}` : "";
+    return {
+        title: ws.branch ?? "",
+        agent: agentLabel(ws.runtimeId ?? ""),
+        state,
+        needsYou,
+        diffstat,
+    };
+}
+
 // A needs-human moment observed between two polls: an agent finished and wants
 // review, a workspace died, or (attention axis) the agent stopped mid-run and is
 // waiting on the user — for input (`needs_input`) or an approval/permission
@@ -1227,6 +1296,8 @@ export {
     formatRelativeAge,
     isTerminalWorkspaceState,
     suggestNextAction,
+    deriveCardSummary,
+    humanizeWorkspaceState,
     workspaceStateMap,
     deriveProjectIdentity,
     deriveProjects,
@@ -1238,6 +1309,7 @@ export {
     TASK_GROUP_METADATA_KEY,
     type ProjectIdentity,
     type ProjectSummary,
+    type RecoderCardSummary,
     type RecoderRowActionId,
     type RecoderRowSuggestion,
     type RecoderAttentionEvent,

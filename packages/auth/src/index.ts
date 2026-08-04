@@ -6,6 +6,7 @@ import {
   createRecoderAuth,
   type CreateRecoderAuthOptions,
 } from "./create-recoder-auth";
+import { APPLE_ISSUER_URL } from "./apple-client-secret";
 
 export type { AuthEnv } from "./keys";
 export { getAuthEnv } from "./keys";
@@ -45,6 +46,17 @@ export type {
   CreateRecoderAuthOptions,
   RecoderAuthInstance,
 } from "./create-recoder-auth";
+export {
+  generateAppleClientSecret,
+  resolveAppleClientSecret,
+  hasAppleSecretParts,
+  APPLE_ISSUER_URL,
+  APPLE_CLIENT_SECRET_MAX_TTL_SECONDS,
+} from "./apple-client-secret";
+export type {
+  GenerateAppleClientSecretParams,
+  AppleSecretParts,
+} from "./apple-client-secret";
 
 /**
  * Trusted origins for cross-subdomain session sharing.
@@ -53,6 +65,8 @@ export type {
 const PRODUCTION_ORIGINS = [
   ...Object.values(SURFACE_ORIGINS),
   "https://www.recoder.xyz",
+  // Apple posts the sign-in callback from its own origin (form_post response).
+  APPLE_ISSUER_URL,
 ];
 
 const DEV_ORIGINS = [
@@ -129,6 +143,23 @@ export function buildCreateAuthOptions(
             google: {
               clientId: env.GOOGLE_OAUTH_CLIENT_ID,
               clientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET,
+            },
+          }
+        : {}),
+      // Apple's client secret is a pre-minted ES256 JWT (see apple-client-secret.ts);
+      // this surface takes it directly from APPLE_CLIENT_SECRET, mirroring the
+      // GitHub/Google presence gate. Absent creds => provider omitted, never faked.
+      ...(process.env.APPLE_CLIENT_ID && process.env.APPLE_CLIENT_SECRET
+        ? {
+            apple: {
+              clientId: process.env.APPLE_CLIENT_ID,
+              clientSecret: process.env.APPLE_CLIENT_SECRET,
+              ...(process.env.APPLE_APP_BUNDLE_IDENTIFIER
+                ? {
+                    appBundleIdentifier:
+                      process.env.APPLE_APP_BUNDLE_IDENTIFIER,
+                  }
+                : {}),
             },
           }
         : {}),

@@ -14,13 +14,14 @@
     "./keys": "./src/keys.ts"
   },
   "scripts": {
-    "test": "node --import tsx --test src/edge.test.ts src/cross-domain.test.ts",
+    "test": "node --import tsx --test src/edge.test.ts src/cross-domain.test.ts src/apple-client-secret.test.ts",
     "build": "prisma generate --schema=\"./prisma/schema.prisma\" --no-hints",
     "postinstall": "prisma generate --schema=\"./prisma/schema.prisma\" --no-hints"
   },
   "dependencies": {
     "@prisma/client": "6.19.2",
     "better-auth": "^1.2.0",
+    "jose": "^6.1.0",
     "prisma": "6.19.2"
   },
   "devDependencies": {

@@ -208,7 +208,7 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                 <span className={cn("ml-auto rounded px-1.5 py-0.5 text-xs", statusColor(status))}>
                     {statusText(status)}
                 </span>
-                <button className={PRIMARY_BTN} onClick={() => model.connect()}>
+                <button className={QUIET_BTN} onClick={() => model.connect()}>
                     Reconnect
                 </button>
             </div>

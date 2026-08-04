@@ -145,6 +145,47 @@ function firstParallelPreselection(
     return { primary: ready[0].runtimeId, also: ready.slice(1).map((a) => a.runtimeId) };
 }
 
+// The first-run card's HERO decision — the ONE thing that must make Recoder's core
+// value obvious to a brand-new dev: give one task to MULTIPLE agents and merge the
+// best. With 2+ launchable agents the parallel run IS the hero — the view preselects
+// them and opens the launch flow ready to go. With exactly one agent we say so
+// truthfully and point at installing a second (the value genuinely needs 2+, so a
+// solo launch is never dressed up as "parallel"). With none, the setup/install panel
+// owns the screen. Pure + degrade-safe: null input reads as "none".
+type FirstRunHeroParallel = {
+    mode: "parallel";
+    primary: string;
+    also: string[];
+    // Display labels in launch order, and their " + "-joined summary for the copy
+    // ("Give one task to Claude Code + Codex at once").
+    agentLabels: string[];
+    agentSummary: string;
+    // Total launchable agents (1 + also.length) — the "all N detected agents" count.
+    count: number;
+};
+type FirstRunHeroInstallSecond = { mode: "install-second"; agentLabel: string };
+type FirstRunHeroNone = { mode: "none" };
+type FirstRunHeroDecision = FirstRunHeroParallel | FirstRunHeroInstallSecond | FirstRunHeroNone;
+
+function firstRunHero(setupAgents: FirstRunSetupAgent[]): FirstRunHeroDecision {
+    const ready = (setupAgents ?? []).filter((a) => a.available && a.runtimeId != "");
+    if (ready.length == 0) {
+        return { mode: "none" };
+    }
+    if (ready.length == 1) {
+        return { mode: "install-second", agentLabel: agentLabel(ready[0].runtimeId) };
+    }
+    const agentLabels = ready.map((a) => agentLabel(a.runtimeId));
+    return {
+        mode: "parallel",
+        primary: ready[0].runtimeId,
+        also: ready.slice(1).map((a) => a.runtimeId),
+        agentLabels,
+        agentSummary: agentLabels.join(" + "),
+        count: ready.length,
+    };
+}
+
 // A board card gets the persistent "Compare · Converge" affordance only when it
 // genuinely has siblings to converge: a real taskGroup with 2+ members.
 function showConvergeAffordance(taskGroup: string | null, siblingCount: number): boolean {
@@ -190,6 +231,7 @@ export {
     archivedHistoryNotice,
     firstParallelPreselection,
     firstRunAgentChips,
+    firstRunHero,
     firstRunSignIn,
     parseArchivedPage,
     shouldShowGettingStarted,
@@ -197,6 +239,7 @@ export {
     type ArchivedPageMeta,
     type FirstRunChip,
     type FirstRunEnvironment,
+    type FirstRunHeroDecision,
     type FirstRunSetupAgent,
     type FirstRunSignIn,
 };
