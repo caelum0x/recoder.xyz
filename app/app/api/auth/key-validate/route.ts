@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PlatformApiKeyService } from '@/lib/services/platform-api-key.service';
+import { rateLimit, rateLimitConfigs, ipIdentifier } from '@/lib/middleware/rate-limit';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 
 const validateSchema = z.object({
   apiKey: z.string().startsWith('sk-recoder-', 'Invalid API key format'),
 });
+
+// Unauthenticated credential-check endpoint (the caller supplies a key to
+// validate). Cap it so it can't be used to brute-force/flood key guesses.
+// IP-keyed (not token-keyed): the Bearer token is the guessed secret,
+// so the bucket must throttle the source IP, not each distinct guess.
+const keyValidateRateLimiter = rateLimit({ ...rateLimitConfigs.public, identifier: ipIdentifier });
 
 /**
  * POST /api/auth/key-validate
@@ -14,6 +21,9 @@ const validateSchema = z.object({
  */
 export async function POST(req: NextRequest) {
   try {
+    const rateLimitResponse = await keyValidateRateLimiter(req);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await req.json();
     const validation = validateSchema.safeParse(body);
 
@@ -67,6 +77,9 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(req: NextRequest) {
   try {
+    const rateLimitResponse = await keyValidateRateLimiter(req);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const authHeader = req.headers.get('authorization');
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {

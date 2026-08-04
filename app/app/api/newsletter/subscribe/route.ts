@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { extractAttribution } from '@/lib/attribution';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 
@@ -20,8 +21,15 @@ const subscribeSchema = z.object({
   source: z.string().max(50).optional().default('website'),
 });
 
+// Public lead-capture endpoint: each call writes a subscriber row, so cap
+// signup flooding/spam (matches the newsletter/unsubscribe + support routes).
+const publicRateLimiter = rateLimit(rateLimitConfigs.public);
+
 export async function POST(request: NextRequest) {
   try {
+    const rateLimitResponse = await publicRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const rawBody = await request.json();
     const parsed = subscribeSchema.safeParse(rawBody);
     if (!parsed.success) {
