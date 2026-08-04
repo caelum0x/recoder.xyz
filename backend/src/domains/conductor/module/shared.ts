@@ -54,6 +54,10 @@ import type { SessionTranscriptService } from '../services/session-transcript.se
 import type { ReadinessView } from '../services/readiness.service.js';
 import type { CompareView } from '../services/compare.service.js';
 import type { WorkspaceGridPort } from '../ports/workspace-grid.port.js';
+// Same-domain type-only seam: the degrade-safe one-shot inference shape the
+// convergence ops (`ConvergeOpsDeps.inference`) run over. The VALUE is bound at
+// the composition root (bootstrap → `ConductorModuleDeps.infer`), never here.
+import type { ConvergeInferenceFn } from '../converge/converge.ops.js';
 
 /** The create request the routes/callers build (createdBy is stamped from the principal). */
 export type CreateConductorWorkspaceInput = Omit<
@@ -183,6 +187,15 @@ export interface ConductorContext {
   readonly entitlementGate: EntitlementGate | undefined;
   /** Late-bound advisory PR auto-review port (bootstrap `setPrReview`). */
   readonly prReview: PrReviewPort | undefined;
+  /**
+   * OPTIONAL degrade-safe one-shot LLM inference for ASSISTED convergence
+   * synthesis (the `ConvergeOpsDeps.inference` shape). Bootstrap binds inference's
+   * PUBLIC degrade-safe one-shot here (cross-DOMAIN via the public surface only).
+   * OPTIONAL so a DB-less / inference-absent boot still composes; ABSENT ⇒ every
+   * assisted conflict degrades truthfully to synthesize-conflict (the mechanical
+   * behavior, never a fabricated merge). Read by `compare-converge.convergeDeps`.
+   */
+  readonly infer?: ConvergeInferenceFn;
 
   /** Cross-group read: the state-of-record workspace (reads group). */
   getWorkspace(workspaceId: string): Promise<Workspace | null>;

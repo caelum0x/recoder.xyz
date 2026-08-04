@@ -343,3 +343,131 @@ No-go if ANY:
 - workspace: `ls packages/` (no `database`; `ui`, `ecosystem-config` present),
   `pnpm-workspace.yaml`, root `pnpm-lock.yaml` size
 - config: reads of `app/next.config.js`, `app/middleware.ts`, `app/scripts/verify-next-security.js`
+
+---
+
+## 7. Staging validation run (2026-08-04)
+
+De-risk pass executed on `feat/enterprise-s0-p0` HEAD against the **already-linked**
+Next `16.2.6` + React/React-DOM `19.2.7` toolchain in `app/node_modules` (versions read
+directly from `node_modules/{next,react,react-dom}/package.json`). No package versions
+were changed. **No `app/` source fixes were required** — the source compiled and
+type-checked clean under the 16/19 toolchain, which independently confirms the §1.3–1.5
+"source already migrated" claim. This section records **real** command output.
+
+### 7.1 Prisma client generate (build prerequisite)
+
+```
+$ ./node_modules/.bin/prisma generate
+✔ Generated Prisma Client (v6.19.2) to ./../node_modules/.pnpm/@prisma+client@6.19.2_.../node_modules/@prisma/client in 5.47s
+```
+
+### 7.2 Prebuild security gate
+
+```
+$ node scripts/verify-next-security.js
+[security] Next.js 16.2.6 passes the minimum patched-version gate.   # exit 0
+```
+
+### 7.3 Type check — CLEAN
+
+```
+$ ./node_modules/.bin/tsc --noEmit
+# TSC_EXIT=0   — 0 errors, empty output
+```
+
+### 7.4 Unit/integration suite — GREEN
+
+```
+$ ./node_modules/.bin/vitest run __tests__
+ Test Files  64 passed (64)
+      Tests  524 passed (524)
+   Duration  23.75s
+# VITEST_EXIT=0
+```
+
+### 7.5 Production compile under Next 16.2.6 + React 19.2.7 — COMPILE SUCCEEDS
+
+**What was run (and why):** the local APFS volume is disk-pressured (~2–9 GB free; MEMORY
+`project_disk_constraint`). `app/next.config.js` sets `output: 'standalone'` (`:66`) with
+`outputFileTracingRoot` = the **monorepo root** (`:16`), so a full `next build` ends with a
+node-file-trace step that copies the *entire monorepo* (electron `.app`, tree-sitter
+prebuilt binaries, beads Go sources, every `@esbuild/*` platform pkg) into
+`.next/standalone/`. That copy needs many GB the local box does not have and ENOSPCs. On
+the **prod box** this copy succeeds (its layout + disk differ); locally it cannot. To get a
+provable, honest signal without risking an ENOSPC that "blocks ALL tools", the migration-
+critical phase was run via `--experimental-build-mode=compile` (compiles every route /
+page under the real 16.2.6 + Turbopack + React 19 runtime — the phase that would surface a
+Next-16 route-handler signature break, a React-19 removed-API, or an async-`params` miss).
+**This is a compile-mode build, not a full prerender build — stated plainly.**
+
+```
+$ NODE_OPTIONS=--max-old-space-size=6144 NEXT_TELEMETRY_DISABLED=1 \
+    ./node_modules/.bin/next build --experimental-build-mode=compile
+▲ Next.js 16.2.6 (Turbopack)
+  Creating an optimized production build ...
+✓ Compiled successfully in 120s          # (2.4min on a cold first run)
+  Collecting page data using 7 workers ...
+  Finalizing page optimization ...
+  Build ran with "compile" mode, to finalize the build run either "generate" or "generate-env" mode as well
+⚠ Failed to copy traced files ... Error: ENOSPC: no space left on device
+    copyfile '.../apps/desktop/.../Electron Framework.framework/.../libvk_swiftshader.dylib' -> '.../.next/standalone/...'
+```
+
+Compiled-output evidence captured before the standalone-copy step exhausted disk:
+
+- `BUILD_ID` written: **`bSMN2LVfRi4W1Wj6Vm6lw`**
+- `app-paths-manifest.json`: **270 route entries** = **185 API route handlers** (`route.js`)
+  + **85 pages** (`page.js`), all emitted by the compiler.
+- `routes-manifest.json`: **165 static + 105 dynamic** routes resolved.
+
+**Interpretation:** the exit-1 is *entirely* the post-compile `output:'standalone'` NFT
+copy hitting the local disk ceiling — **not** a source/type/API failure. The compiler
+accepted 100% of `app/` under Next 16.2.6 + React 19.2.7. This is the same evidence class
+as MEMORY `project_website_app_install_blocker` ("next build ✓ on HEAD").
+
+### 7.6 Non-blocking warnings surfaced (record for the prod window)
+
+The compile emitted three warnings that **do not block the build** but are Next-16 hygiene
+items the owner should know about (none change the GO decision):
+
+1. **`next.config.js` `eslint` key is unrecognized in Next 16** — "Unrecognized key(s) in
+   object: 'eslint'". The block is silently ignored (build-time lint already runs via the
+   separate `next lint`/CI path, and `eslint.ignoreDuringBuilds`-style config is no longer
+   read here). Cosmetic; a future cleanup, not a blocker.
+2. **`middleware` file convention is deprecated → rename to `proxy`** in Next 16. `app/middleware.ts`
+   still loads and runs (§1.5 stands — functionally compatible), but Next 16 now emits a
+   deprecation warning. Track a follow-up to rename `middleware.ts` → `proxy.ts`; **not**
+   required for this cutover.
+3. **Turbopack "overly broad file pattern" warnings** from `packages/auth/prisma/auth-client/index.js`
+   (a `path.join(process.cwd(), …)` dynamic dirname) and `next.config.js` being pulled into
+   the NFT trace. These are what inflate the standalone copy; they are pre-existing and
+   version-independent (they'd warn on 15.x too). Optional future scoping.
+
+### 7.7 Confidence update
+
+The §6 **GO** verdict holds and is **strengthened**, not weakened, by this run:
+
+- **No source breakage exists to fix** — `tsc` 0 errors + a clean Turbopack compile of all
+  270 routes under 16.2.6/19.2.7 prove the async-`params` (§1.4) and React-19-API (§1.3)
+  audits empirically, not just by grep. The migration remains a **deps + rebuild + cutover**,
+  not a source rewrite.
+- **App suite is green** (524/524) on the target toolchain.
+- The one thing this local run could **not** exercise is the full prerender + `standalone`
+  file-copy, which is **disk-bound, not code-bound**, and is exactly the risk §4.2–§4.3
+  already call out (`pnpm store prune`, `df` headroom gate, `NODE_OPTIONS` heap cap,
+  `/swapfile-deploy`). The prod box must have real headroom before §4.3 — that remains the
+  **primary residual risk**, and it is an ops/disk risk, not a Next-16 correctness risk.
+- Net: **the eventual prod migration is low-surprise on the code axis.** The owner window's
+  remaining job is the disk/install choreography (§4.2–§4.6) and the post-cutover smoke gate
+  (§5), plus optionally the two Next-16 hygiene renames in §7.6.
+
+Commands are reproducible from `app/`:
+```bash
+./node_modules/.bin/prisma generate
+node scripts/verify-next-security.js
+./node_modules/.bin/tsc --noEmit
+./node_modules/.bin/vitest run __tests__
+NODE_OPTIONS=--max-old-space-size=6144 ./node_modules/.bin/next build --experimental-build-mode=compile
+```
+

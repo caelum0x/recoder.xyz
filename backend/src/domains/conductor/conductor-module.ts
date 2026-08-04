@@ -154,10 +154,12 @@ import type { ConvergencePlan } from './converge/converge-plan.service.js';
 import type {
   ComposeConvergenceInput,
   ComposeConvergenceResult,
+  ConvergeInferenceFn,
 } from './converge/converge.ops.js';
 import { createInMemoryRepoSetupStore } from './adapters/repo-setup-store.adapter.js';
 import type { CompareView } from './services/compare.service.js';
 import type { PairwiseDiffView } from './services/pairwise-diff.service.js';
+import type { FileVersionsView } from './converge/converge.ops.js';
 import type {
   WorkspaceGridPort,
   GroupGridArrangement,
@@ -298,6 +300,14 @@ export class ConductorComposer implements ConductorModule {
    * empty trail (`[]`), never a fabricated record.
    */
   private readonly auditReader?: AuditReaderPort;
+  /**
+   * OPTIONAL degrade-safe one-shot inference for ASSISTED convergence synthesis —
+   * the headline LLM conflict-resolution seam. A constructor dep (inference is
+   * composed BEFORE the conductor in bootstrap, so a direct bind needs no late
+   * setter); read by `compare-converge.convergeDeps` via `ctx.infer`. Absent ⇒
+   * every assisted conflict degrades truthfully to synthesize-conflict.
+   */
+  private readonly infer?: ConvergeInferenceFn;
   private started = false;
   /** The narrow facade-bound dep slice the collaborators run over. */
   private readonly ctx: ConductorContext;
@@ -327,6 +337,7 @@ export class ConductorComposer implements ConductorModule {
     this.workspaceGrid = deps.workspaceGrid;
     this.tmuxIntrospect = deps.tmuxIntrospect;
     this.auditReader = deps.auditReader;
+    this.infer = deps.infer;
     // Durable by default WITHOUT a database: metadata rides each workspace repo's
     // annotated `recoder-checkpoint/<id>` tags, rebuilt on list after a restart
     // (the desktop relaunches the embedded backend every app start). The
@@ -576,6 +587,9 @@ export class ConductorComposer implements ConductorModule {
       get prReview() {
         return self.prReview;
       },
+      get infer() {
+        return self.infer;
+      },
       getWorkspace: id => self.getWorkspace(id),
       buildWorkspaceView: workspace => self.reads.buildWorkspaceView(workspace),
       workspaceSiblings: (id, principal) =>
@@ -823,6 +837,14 @@ export class ConductorComposer implements ConductorModule {
       paths,
       principal
     );
+  }
+
+  async fileVersions(
+    taskGroup: string,
+    relPath: string,
+    principal?: Principal
+  ): Promise<FileVersionsView | null> {
+    return this.compareConverge.fileVersions(taskGroup, relPath, principal);
   }
 
   async arrangeCompareGrid(

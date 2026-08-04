@@ -134,6 +134,41 @@ describe('GET /api/user/cli-sessions', () => {
     expect(raw).not.toContain(USER_B_TOKEN);
     expect(raw).toContain('"tokenPrefix"');
   });
+
+  it('marks only the most-recently-used active session as isMostRecent', async () => {
+    state.sessions = [
+      makeSession({ id: 'a-old', lastUsedAt: new Date('2026-08-01T00:00:00Z') }),
+      makeSession({ id: 'a-new', lastUsedAt: new Date('2026-08-05T00:00:00Z') }),
+      makeSession({
+        id: 'a-revoked',
+        lastUsedAt: new Date('2026-08-09T00:00:00Z'),
+        revokedAt: new Date('2026-08-09T01:00:00Z'),
+        isActive: false,
+      }),
+    ];
+    const res = await GET(getRequest());
+    const body = await res.json();
+    const byId = Object.fromEntries(
+      body.sessions.map((s: { id: string; isMostRecent: boolean }) => [s.id, s.isMostRecent])
+    );
+    // Newest *active* wins; a newer revoked row does not, and it is not "current".
+    expect(byId['a-new']).toBe(true);
+    expect(byId['a-old']).toBe(false);
+    expect(byId['a-revoked']).toBe(false);
+    expect(JSON.stringify(body)).not.toContain('isCurrent');
+  });
+
+  it('marks no session when all of the user own sessions are revoked (honest degrade)', async () => {
+    state.sessions = [
+      makeSession({ id: 'a-1', isActive: false, revokedAt: new Date('2026-08-02T00:00:00Z') }),
+      makeSession({ id: 'a-2', isActive: false, revokedAt: new Date('2026-08-03T00:00:00Z') }),
+    ];
+    const res = await GET(getRequest());
+    const body = await res.json();
+    expect(
+      body.sessions.every((s: { isMostRecent: boolean }) => s.isMostRecent === false)
+    ).toBe(true);
+  });
 });
 
 describe('DELETE /api/user/cli-sessions', () => {

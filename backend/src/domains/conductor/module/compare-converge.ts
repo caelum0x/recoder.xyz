@@ -27,11 +27,13 @@ import {
 import {
   composeConvergence as composeConvergenceOp,
   probeSynthesizability as probeSynthesizabilityOp,
+  gatherFileVersions as gatherFileVersionsOp,
   EmptyConvergenceError,
   UnresolvedConvergenceError,
   type ComposeConvergenceInput,
   type ComposeConvergenceResult,
   type ConvergeOpsDeps,
+  type FileVersionsView,
 } from '../converge/converge.ops.js';
 import type { ConvergenceEvidenceRecord } from '../evidence/convergence-evidence.js';
 import {
@@ -217,6 +219,36 @@ export class ConductorCompareConverge {
         ? paths
         : sharedPairPaths(aSibling, bSibling, view.contested);
     return pairwiseDiffOp({ logger: this.ctx.log }, { a, b, paths: resolved });
+  }
+
+  /**
+   * The N-up per-file version read (`GET …/file-versions?path=`) — for ONE contested
+   * path, EACH sibling's version of that file + the base version, so the desktop can
+   * render N columns of the SAME file side by side (the deferred costly part of the
+   * N-up compare). Read-only. Reuses the SAME version-gathering the synthesize probe
+   * uses (`gatherContributorVersions` / `showFileAtRef`) — no new git logic.
+   *
+   * recoder-kybr: the group is narrowed to the caller's OWN siblings via
+   * {@link rawCompare}. A group the caller owns no sibling of ⇒ `null` (the route's
+   * no-oracle 404, byte-identical to an unknown group). A deleted/unreadable sibling
+   * ⇒ `content:null` + a truthful reason (never a fabricated version); each version is
+   * bounded with a `truncated` flag.
+   */
+  async fileVersions(
+    taskGroup: string,
+    relPath: string,
+    principal?: Principal
+  ): Promise<FileVersionsView | null> {
+    const view = await this.rawCompare(taskGroup, principal);
+    if (view.count === 0) return null; // no accessible sibling ⇒ no-oracle 404
+    const siblings = view.siblings.map(s => ({
+      workspaceId: s.workspaceId,
+      agent: s.agent,
+    }));
+    return gatherFileVersionsOp(this.convergeDeps(principal), {
+      siblings,
+      relPath,
+    });
   }
 
   /**
@@ -433,9 +465,16 @@ export class ConductorCompareConverge {
       registerWorkspace: workspace =>
         this.ctx.repository.upsertWorkspace(workspace),
       logger: this.ctx.log,
+      // The headline LLM conflict-resolution seam: the injected degrade-safe
+      // one-shot the `assisted` path escalates a mechanically-unmergeable file to,
+      // threaded from bootstrap through `ctx.infer`. ABSENT (a DB-less /
+      // inference-absent boot) ⇒ the assisted path degrades truthfully to
+      // synthesize-conflict (mechanical behavior, never a fabricated merge).
+      // Conditional spread so an absent seam is never a literal `inference:undefined`
+      // (exactOptionalPropertyTypes).
+      ...(this.ctx.infer ? { inference: this.ctx.infer } : {}),
       // The assist function name is owned HERE (composition), never by the ops —
-      // see CONVERGE_ASSIST_FUNCTION_NAME. Until an `inference` fn is injected the
-      // assisted path still degrades truthfully to synthesize-conflict.
+      // see CONVERGE_ASSIST_FUNCTION_NAME.
       inferenceFunctionName: CONVERGE_ASSIST_FUNCTION_NAME,
     };
   }

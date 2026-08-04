@@ -961,6 +961,140 @@ async function showFileAtRef(
   }
 }
 
+/** One sibling's version of ONE path for the N-up compare — null content + a truthful reason when absent. */
+export interface FileVersionEntry {
+  readonly workspaceId: string;
+  readonly agent: string;
+  /** The sibling's on-disk content of the path, or `null` when absent/unreadable (NEVER fabricated). */
+  readonly content: string | null;
+  /** WHY `content` is null (no worktree / deleted / unsafe path); omitted when content is present. */
+  readonly reason?: string;
+  /** True when `content` was cut to {@link MAX_ASSIST_FILE_BYTES} (the UI shows a "truncated" marker). */
+  readonly truncated?: boolean;
+}
+
+/**
+ * The N-up file-versions view — the base version + each sibling's version of ONE
+ * contested path, side by side, so the desktop can render N columns of the SAME file.
+ */
+export interface FileVersionsView {
+  readonly path: string;
+  /** The base (task-base ref) version of the path, or `null` when no worktree resolves to read it. */
+  readonly base: string | null;
+  /** True when `base` was cut to {@link MAX_ASSIST_FILE_BYTES}. */
+  readonly baseTruncated?: boolean;
+  /** One entry per sibling, in the given order (deleted/unreadable siblings carry `content:null`). */
+  readonly versions: readonly FileVersionEntry[];
+}
+
+/**
+ * Cap a string to {@link MAX_ASSIST_FILE_BYTES}, flagging truncation — a DISPLAY
+ * bound so an N-up view never ships an unbounded blob. A split trailing multibyte
+ * char at the cut is tolerated (display-only, never re-parsed as source).
+ */
+function capToAssistBytes(content: string): { content: string; truncated: boolean } {
+  const buf = Buffer.from(content, 'utf8');
+  if (buf.byteLength <= MAX_ASSIST_FILE_BYTES) return { content, truncated: false };
+  return { content: buf.subarray(0, MAX_ASSIST_FILE_BYTES).toString('utf8'), truncated: true };
+}
+
+/**
+ * Read each sibling's version of ONE path + the base version, side by side — the
+ * N-up compare edge (the desktop renders N columns of the SAME file). REUSE-ONLY: it
+ * runs the SAME per-file reads the synthesize probe does — `gatherContributorVersions`
+ * for each sibling's worktree copy and `showFileAtRef` for the base — inventing NO new
+ * git logic. DEGRADE-TRUTHFUL + NEVER throws: a sibling with no resolvable worktree, or
+ * one that DELETED / never-created the path, yields `content:null` + a truthful
+ * `reason` (never a fabricated version); each version (and the base) is bounded by
+ * {@link MAX_ASSIST_FILE_BYTES} with a `truncated` flag. `base` is null ONLY when no
+ * sibling worktree resolves (there is then no repo to run `git show` from); a path
+ * untracked at base (added by every sibling) reads as `''` per `showFileAtRef`'s
+ * empty-ancestor convention, matching compose's 3-way base.
+ */
+export async function gatherFileVersions(
+  deps: ConvergeOpsDeps,
+  args: {
+    readonly siblings: readonly { readonly workspaceId: string; readonly agent: string }[];
+    readonly relPath: string;
+  },
+): Promise<FileVersionsView> {
+  const { siblings, relPath } = args;
+  // Reject a poisoned path up front (defense-in-depth over the caller-supplied path):
+  // no base, every sibling truthfully absent — never a spawn, never a fabricated read.
+  if (!isSafeRelPath(relPath)) {
+    return {
+      path: relPath,
+      base: null,
+      versions: siblings.map((s) => ({
+        workspaceId: s.workspaceId,
+        agent: s.agent,
+        content: null,
+        reason: 'unsafe path rejected',
+      })),
+    };
+  }
+
+  // Resolve each sibling's worktree once; keep the FIRST resolvable one as the primary
+  // whose repo + base ref the base version is read from (mirrors probeSynthesizability).
+  const worktrees = new Map<string, string>();
+  let primary: Workspace | null = null;
+  for (const s of siblings) {
+    const ws = await deps.getWorkspace(s.workspaceId).catch(() => null);
+    if (ws?.worktreePath) {
+      worktrees.set(s.workspaceId, ws.worktreePath);
+      primary ??= ws;
+    }
+  }
+
+  // Base version via `git show <base>:<path>` (reuse showFileAtRef). Null ONLY when no
+  // worktree resolves — there is then no repo to read the base from (a truthful absence,
+  // never a fabricated base). Bounded like every version.
+  let base: string | null = null;
+  let baseTruncated = false;
+  if (primary?.worktreePath) {
+    const repoPath = await resolveMainRepo(deps, primary.worktreePath);
+    const baseRef = await resolveBase(deps, primary, repoPath);
+    const capped = capToAssistBytes(await showFileAtRef(deps, repoPath, baseRef, relPath));
+    base = capped.content;
+    baseTruncated = capped.truncated;
+  }
+
+  // Each sibling's worktree copy — reuse the probe's gatherContributorVersions per id.
+  // The worktree is pre-checked resolved here, so its `{ok:false}` means the file is
+  // MISSING on disk (a deletion / never-created), distinct from an unresolved worktree.
+  const versions: FileVersionEntry[] = [];
+  for (const s of siblings) {
+    if (!worktrees.has(s.workspaceId)) {
+      versions.push({
+        workspaceId: s.workspaceId,
+        agent: s.agent,
+        content: null,
+        reason: 'no worktree (never launched or already torn down)',
+      });
+      continue;
+    }
+    const gathered = await gatherContributorVersions(worktrees, relPath, [s.workspaceId]);
+    if (!gathered.ok) {
+      versions.push({
+        workspaceId: s.workspaceId,
+        agent: s.agent,
+        content: null,
+        reason: 'file not present in this sibling (deleted or never created)',
+      });
+      continue;
+    }
+    const capped = capToAssistBytes(gathered.versions[0]);
+    versions.push({
+      workspaceId: s.workspaceId,
+      agent: s.agent,
+      content: capped.content,
+      ...(capped.truncated ? { truncated: true } : {}),
+    });
+  }
+
+  return { path: relPath, base, ...(baseTruncated ? { baseTruncated: true } : {}), versions };
+}
+
 /** Best-effort removal of a half-created worktree (a failure here is only logged). */
 async function abortWorktree(
   deps: ConvergeOpsDeps,

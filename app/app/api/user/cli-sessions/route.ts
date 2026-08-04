@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { cliTokenPrefix } from '@/app/[locale]/account/account-view';
+import { cliTokenPrefix, mostRecentActiveDeviceId } from '@/app/[locale]/account/account-view';
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,11 +38,19 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // Honest "most recent" marker only — NOT a true current-device signal.
+    // The web session shares no deviceId with these desktop cli_sessions (see
+    // AccountDeviceRow.isMostRecent), so the closest truthful proxy is the
+    // most-recently-used active session. Computed server-side over the full
+    // owner-scoped set so the flag can't be spoofed client-side.
+    const mostRecentId = mostRecentActiveDeviceId(sessions);
+
     return NextResponse.json({
       success: true,
       sessions: sessions.map(({ accessToken, ...safe }) => ({
         ...safe,
         tokenPrefix: cliTokenPrefix(accessToken),
+        isMostRecent: safe.id === mostRecentId,
       })),
     });
   } catch (error) {

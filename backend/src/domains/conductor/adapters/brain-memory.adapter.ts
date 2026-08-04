@@ -42,12 +42,15 @@ import type { RecallQuery, RecalledMemory } from '../../memory/types.js';
 import type { RetrievalPort } from '../../memory/ports/retrieval.port.js';
 import type { HarvestService, HarvestResult } from '../../memory/lifecycle/harvest.js';
 import type { MemoryScope } from '../../memory/lifecycle/candidate-service.js';
+// Conductor-domain: the shaping folds conductor's own convergence provenance
+// into a reusable lesson body (moved out of memory/lifecycle to keep the
+// domain-boundary invariant — a memory-domain VALUE import here was illegal).
 import {
   hasConvergenceProvenance,
   shapeHarvestBody,
   shapeHarvestTitle,
   type HarvestShapeInput,
-} from '../../memory/lifecycle/harvest-shaping.js';
+} from './harvest-shaping.js';
 
 /** Section headers for the enriched prompt (stable, greppable, non-secret). */
 const RECALLED_HEADER = '## Recalled context';

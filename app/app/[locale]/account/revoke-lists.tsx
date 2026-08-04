@@ -72,12 +72,36 @@ function RevokeButton({
   );
 }
 
+/**
+ * Quiet "most recent" chip. Deliberately NOT labelled "current device": the
+ * web viewer and these desktop cli_sessions share no join key, so the only
+ * truthful claim is recency, not presence (see AccountDeviceRow.isMostRecent).
+ */
+function MostRecentChip() {
+  return (
+    <span className="ml-2 inline-flex items-center rounded-full border border-white/15 px-1.5 py-0.5 align-middle text-[10px] font-medium uppercase tracking-wide text-gray-300">
+      Most recent
+    </span>
+  );
+}
+
 export function DeviceSessionsList({ initialDevices }: { initialDevices: AccountDeviceRow[] }) {
   const [devices, setDevices] = useState(initialDevices);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   async function revoke(id: string) {
+    // Guard the most-recently-active session: it is most likely (never
+    // certainly) the device you are on, so confirm before cutting it. Copy
+    // stays truthful about what we actually know — recency, not presence.
+    const target = devices.find((row) => row.id === id);
+    if (target?.isMostRecent && !target.revoked) {
+      const proceed =
+        typeof window === 'undefined' ||
+        window.confirm('This is your most recently active device. Revoke anyway?');
+      if (!proceed) return;
+    }
+
     setBusyId(id);
     setError('');
     try {
@@ -108,6 +132,7 @@ export function DeviceSessionsList({ initialDevices }: { initialDevices: Account
             <p className="truncate text-sm text-white">
               {device.deviceName}
               <span className="ml-2 text-xs text-gray-500">{device.deviceType}</span>
+              {device.isMostRecent && !device.revoked && <MostRecentChip />}
             </p>
             <p className="mt-0.5 text-xs text-gray-500">
               <code className="font-mono">{device.tokenPrefix}</code>

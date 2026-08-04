@@ -40,6 +40,20 @@ export interface AccountDeviceRow {
   createdAt: string;
   lastUsedAt: string;
   revoked: boolean;
+  /**
+   * Neutral "most recently active" marker — deliberately NOT "current device".
+   * The /account viewer is a Better Auth *web* session (cookie, `sessions`
+   * table) while these rows are desktop device-flow *cli_sessions*. The two
+   * share no join key: the web session carries no deviceId (see
+   * lib/auth-helpers.ts getSession, which exposes only user + expires) and
+   * `sessions` has no deviceId column, while `cli_sessions.deviceId` is a
+   * random UUID minted during device flow (lib/prisma.ts createCLISession).
+   * So there is no truthful signal that says "you are ON this device" — the
+   * most-recently-used active session is the closest HONEST proxy. A real
+   * current-device marker needs the web session to carry a deviceId that
+   * matches `cli_sessions.deviceId` (bd follow-up).
+   */
+  isMostRecent: boolean;
 }
 
 export interface AccountApiKeyInput {
@@ -84,6 +98,31 @@ export interface AccountUsageSection {
 /** Top tier sells "unlimited everything" — there is nothing above it to upgrade to. */
 export const TOP_TIER_PLAN = 'enterprise';
 
+/**
+ * Id of the most-recently-used *non-revoked* CLI session, or null when none
+ * are active. This backs the neutral "most recent" chip (see AccountDeviceRow
+ * .isMostRecent for why this is NOT a truthful "current device" signal).
+ * Revoked sessions are excluded so a fully-revoked list marks nothing, and a
+ * strict `>` comparison makes the earliest row win a lastUsedAt tie
+ * deterministically without depending on input order.
+ */
+export function mostRecentActiveDeviceId(
+  sessions: readonly AccountCliSessionInput[]
+): string | null {
+  let winnerId: string | null = null;
+  let winnerTime = -Infinity;
+  for (const session of sessions) {
+    const revoked = Boolean(session.revokedAt) || !session.isActive;
+    if (revoked) continue;
+    const time = session.lastUsedAt.getTime();
+    if (time > winnerTime) {
+      winnerTime = time;
+      winnerId = session.id;
+    }
+  }
+  return winnerId;
+}
+
 export interface AccountView {
   plan: ResolvedEntitlements;
   /** Display-only: show the upgrade CTA only when a higher tier exists. */
@@ -124,6 +163,8 @@ export function buildAccountView(input: {
 
   const plan = resolveEntitlements(input.user, input.subscription);
 
+  const mostRecentId = mostRecentActiveDeviceId(input.cliSessions);
+
   return {
     plan,
     canUpgrade: plan.plan !== TOP_TIER_PLAN,
@@ -136,6 +177,7 @@ export function buildAccountView(input: {
       createdAt: session.createdAt.toISOString(),
       lastUsedAt: session.lastUsedAt.toISOString(),
       revoked: Boolean(session.revokedAt) || !session.isActive,
+      isMostRecent: session.id === mostRecentId,
     })),
     apiKeys: input.apiKeys.map((key) => ({
       id: key.id,
