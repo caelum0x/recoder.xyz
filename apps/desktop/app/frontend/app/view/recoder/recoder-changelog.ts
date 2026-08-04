@@ -9,6 +9,17 @@ import type { WhatsNewEntry } from "./recoder-whats-new";
 // a user would notice. The public changelog rhythm lives at CHANGELOG_URL.
 const CHANGELOG_ENTRIES: readonly WhatsNewEntry[] = [
     {
+        version: "0.16.0",
+        title: "Clearer, calmer, and it remembers",
+        notes: [
+            "Give one task to several agents at once, then merge the best result — the core loop is front and center.",
+            "Converge agents you launched separately, not just ones started together.",
+            "A calmer workspace: de-crowded cards, lifecycle columns, and a unified Session · Review detail.",
+            "Agents now share what they learn across runs, and remember it.",
+            "Sign in with GitHub, Google, or Apple.",
+        ],
+    },
+    {
         version: "0.15.0",
         title: "Auto-update and a truthful changelog",
         notes: [
