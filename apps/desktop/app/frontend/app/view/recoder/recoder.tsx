@@ -12,11 +12,14 @@ import { RecoderCloneModal } from "./recoder-clone";
 import { RecoderCommandPalette, type RecoderCommand } from "./recoder-command-palette";
 import { RecoderComparePanel } from "./recoder-compare";
 import { RecoderConnectionModel } from "./recoder-connection-model";
+import { RecoderHealthModel } from "./recoder-health-model";
+import type { HealthTone } from "./recoder-health-logic";
 import { isConnectivityError } from "./recoder-errors";
 import {
     archivedHistoryNotice,
     firstParallelPreselection,
     firstRunAgentChips,
+    firstRunSignIn,
     shouldShowGettingStarted,
     showConvergeAffordance,
 } from "./recoder-first-run-logic";
@@ -80,6 +83,10 @@ import { RecoderWhatsNew } from "./recoder-whats-new-panel";
 // Same cadence as the terminal view's UsageStrip so the board's cost line stays
 // live during an active run instead of freezing at selection time.
 const UsageRefreshMs = 15_000;
+
+// The health dot polls the backend rollup on a calm cadence — a quiet up/down
+// signal, not a hot loop.
+const HealthRefreshMs = 10_000;
 
 // createBlock is fire-and-forget from event handlers; a failed cross-block open
 // must never crash the view, so every call is wrapped and errors are swallowed.
@@ -377,6 +384,36 @@ function RecoderConnectionBadge() {
 
 RecoderConnectionBadge.displayName = "RecoderConnectionBadge";
 
+// The single quiet health dot (DESIGN-REFERENCE §3C): overall backend up /
+// degraded / down from /health/full, NEVER an engine grid. The detail lives in
+// the tooltip. A separate axis from RecoderConnectionBadge (that one is poll
+// freshness); this one is real backend component health. Never green when the
+// backend can't be reached or confirmed.
+const HealthDotTone: Record<HealthTone, string> = {
+    up: "bg-emerald-400/70",
+    degraded: "bg-amber-400/80",
+    down: "bg-red-400/80",
+};
+
+function RecoderHealthDot() {
+    const health = RecoderHealthModel.getInstance();
+    const dot = useAtomValue(health.healthDotAtom);
+    useEffect(() => {
+        health.refresh();
+        const id = setInterval(() => health.refresh(), HealthRefreshMs);
+        return () => clearInterval(id);
+    }, []);
+    return (
+        <span
+            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${HealthDotTone[dot.tone]}`}
+            title={dot.label}
+            aria-label={dot.label}
+        />
+    );
+}
+
+RecoderHealthDot.displayName = "RecoderHealthDot";
+
 function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const workspaces = useAtomValue(model.workspacesAtom);
     const allWorkspaces = useAtomValue(model.combinedWorkspacesAtom);
@@ -658,6 +695,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const clonableHint = repoPickerHint(matchingClonableRepos.length, githubRepos.length);
     const firstRunChips = firstRunAgentChips(environment, setup.agents, agentAuth, githubStatus);
     const parallelPreselect = firstParallelPreselection(setup.agents);
+    const signIn = firstRunSignIn(signingIn, signInPrompt);
     // The archived-history truth chip (recoder-oe8i): shown only on the history
     // Show views and only when the backend reported more history than is loaded.
     const archivedNotice = boardShow != "active" ? archivedHistoryNotice(archivedMeta, archivedWorkspaces.length) : "";
@@ -822,6 +860,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         <div className="flex flex-col h-full overflow-auto p-3 gap-2" onKeyDown={onBoardKeyDown}>
             <div className="flex items-center gap-2">
                 <span className={PAGE_TITLE}>Workspaces</span>
+                <RecoderHealthDot />
                 <RecoderConnectionBadge />
                 <div className="flex-1" />
                 <RecoderIdentityAffordance />
@@ -1094,33 +1133,33 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             {showGettingStarted && (
                 <div className="flex flex-col gap-3 rounded border border-white/8 p-4 mt-1 recoder-enter">
                     <div className="flex flex-col gap-1">
-                        <div className={SECTION_TITLE}>Welcome to Recoder</div>
+                        <h2 className={SECTION_TITLE}>Welcome to Recoder</h2>
                         <div className={META}>
                             Run your coding agents in parallel isolated worktrees, then review and merge.
                         </div>
                         <EnvironmentImportSummary env={environment} />
                     </div>
                     {identity == null && (
-                        <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-col gap-2">
                             <div className="flex flex-wrap items-center gap-2">
                                 <button
                                     className={QUIET_BTN}
-                                    disabled={signingIn}
+                                    disabled={signIn.waiting}
                                     onClick={() => identityModel.signIn()}
                                 >
-                                    {signingIn ? "Waiting for browser…" : "Sign in with Recoder"}
+                                    {signIn.label}
                                 </button>
                                 <span className={META}>
-                                    Optional — sync memory and PRs. Local agents run without it.
+                                    Optional — syncs memory and PRs. Local agents run without it.
                                 </span>
                             </div>
-                            {signingIn && signInPrompt != null && (
-                                <div className={`${META} flex flex-wrap items-center gap-2`}>
+                            {signIn.showCode && (
+                                <div className={`${META} flex flex-wrap items-center gap-2`} aria-live="polite">
                                     <span>Enter code</span>
                                     <code className="rounded border border-white/8 bg-white/[0.04] px-2 py-0.5 font-mono text-sm text-primary">
-                                        {signInPrompt.userCode}
+                                        {signIn.code}
                                     </code>
-                                    <span>at {signInPrompt.verificationUri}</span>
+                                    <span>at {signIn.verificationUri}</span>
                                 </div>
                             )}
                         </div>

@@ -4,15 +4,13 @@
 import { getApi } from "@/app/store/global";
 import { useEffect, useState } from "react";
 import { CHANGELOG_ENTRIES, CHANGELOG_URL } from "./recoder-changelog";
-import { selectWhatsNew, type WhatsNewEntry } from "./recoder-whats-new";
+import { readSeenVersion, selectWhatsNew, writeSeenVersion, type WhatsNewEntry } from "./recoder-whats-new";
 
-const SEEN_KEY = "recoder:whats-new-seen";
-
-function readSeen(): string {
+function seenStore(): Storage | null {
     try {
-        return localStorage.getItem(SEEN_KEY) ?? "";
+        return localStorage;
     } catch {
-        return "";
+        return null;
     }
 }
 
@@ -35,7 +33,7 @@ function RecoderWhatsNew() {
     useEffect(() => {
         const current = currentVersion();
         setVersion(current);
-        setEntries(selectWhatsNew(CHANGELOG_ENTRIES, readSeen(), current));
+        setEntries(selectWhatsNew(CHANGELOG_ENTRIES, readSeenVersion(seenStore()), current));
     }, []);
 
     if (entries.length == 0) {
@@ -43,23 +41,19 @@ function RecoderWhatsNew() {
     }
 
     const dismiss = () => {
-        try {
-            localStorage.setItem(SEEN_KEY, version);
-        } catch {
-            // a corrupt store must never break the dismiss
-        }
+        writeSeenVersion(seenStore(), version);
         setEntries([]);
     };
 
     return (
         <div className="flex flex-col gap-2 rounded border border-white/8 p-3 recoder-enter">
             <div className="flex items-center gap-2">
-                <span className="text-sm font-medium tracking-tight text-primary">
+                <h2 className="text-sm font-medium tracking-tight text-primary">
                     What's new{version != "" ? ` in ${version}` : ""}
-                </span>
+                </h2>
                 <div className="flex-1" />
                 <button
-                    className="text-xs text-secondary hover:text-primary underline underline-offset-2 cursor-pointer"
+                    className="text-xs text-secondary hover:text-primary underline underline-offset-2 rounded focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-white/50 cursor-pointer"
                     onClick={() => {
                         try {
                             getApi().openExternal(CHANGELOG_URL);
@@ -71,7 +65,7 @@ function RecoderWhatsNew() {
                     Full changelog
                 </button>
                 <button
-                    className="border border-white/8 text-secondary rounded px-2 py-0.5 text-xs hover:bg-border/40 hover:text-primary recoder-transition cursor-pointer"
+                    className="border border-white/8 text-secondary rounded px-2 py-0.5 text-xs hover:bg-border/40 hover:text-primary focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-white/50 recoder-transition cursor-pointer"
                     onClick={dismiss}
                 >
                     Got it

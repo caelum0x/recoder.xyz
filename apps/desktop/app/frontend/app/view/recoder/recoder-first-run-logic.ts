@@ -106,6 +106,32 @@ function firstRunAgentChips(
     return chips;
 }
 
+// The first-run card's optional sign-in affordance. Recoder is local-first, so
+// sign-in is ONE quiet action, never a gate. While the device flow is in flight
+// we surface the inline user-code + URL so the user finishes in the browser
+// without hunting for it. Pure + null-safe: the code/URL stay "" until the
+// backend actually issues a prompt, so the view never renders a blank "Enter
+// code  at " row (no fabricated step).
+type FirstRunSignIn = {
+    label: string;
+    waiting: boolean;
+    code: string;
+    verificationUri: string;
+    showCode: boolean;
+};
+
+function firstRunSignIn(signingIn: boolean, prompt: RecoderSignInPrompt | null): FirstRunSignIn {
+    const code = prompt?.userCode ?? "";
+    const verificationUri = prompt?.verificationUri ?? "";
+    return {
+        label: signingIn ? "Waiting for browser…" : "Sign in with Recoder",
+        waiting: signingIn,
+        code,
+        verificationUri,
+        showCode: signingIn && code != "",
+    };
+}
+
 // The "Run your first parallel task" preselection: the first detected agent as
 // primary, every other detected agent ticked to also-run. null (no CTA) when
 // fewer than two agents are actually launchable — never a one-agent "parallel".
@@ -164,6 +190,7 @@ export {
     archivedHistoryNotice,
     firstParallelPreselection,
     firstRunAgentChips,
+    firstRunSignIn,
     parseArchivedPage,
     shouldShowGettingStarted,
     showConvergeAffordance,
@@ -171,4 +198,5 @@ export {
     type FirstRunChip,
     type FirstRunEnvironment,
     type FirstRunSetupAgent,
+    type FirstRunSignIn,
 };
