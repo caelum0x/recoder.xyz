@@ -140,7 +140,10 @@ import type {
 import type { DevCommandView } from './adapters/dev-command.adapter.js';
 import type { ConductorRuntimeView } from './adapters/runtime-listing.adapter.js';
 import type { WorkspaceQueryFilters } from './services/workspace-query.service.js';
-import type { CompareView } from './services/compare.service.js';
+import type { CompareView, AdHocCompareOutcome } from './services/compare.service.js';
+export type { AdHocCompareOutcome } from './services/compare.service.js';
+import type { AdHocReject, AdHocPlanOutcome } from './module/compare-converge.js';
+export type { AdHocReject, AdHocPlanOutcome } from './module/compare-converge.js';
 import type { PairwiseDiffView } from './services/pairwise-diff.service.js';
 export type { PairwiseDiffView, PairwiseFileDiff } from './services/pairwise-diff.service.js';
 import type { FileVersionsView } from './converge/converge.ops.js';
@@ -792,6 +795,46 @@ export interface ConductorModule {
     input: ComposeConvergenceInput,
     principal: Principal,
   ): Promise<ConductorWriteResult<ComposeConvergenceResult>>;
+  /**
+   * AD-HOC compare (PW1 #1) — form a converge group from an EXPLICIT list of
+   * separately-launched workspaces (each its own taskGroup, or none) and return the
+   * SAME grid-enriched {@link CompareView} the taskGroup compare does. Fail-closed:
+   * <2 distinct ids ⇒ `too-few`; any missing/inaccessible id ⇒ `not-found` (the
+   * route's no-oracle 404); workspaces from different repos ⇒ `incompatible`.
+   * recoder-kybr: every id is narrowed to the caller's OWN workspaces.
+   */
+  compareAdHoc(
+    workspaceIds: readonly string[],
+    principal?: Principal,
+  ): Promise<AdHocCompareOutcome>;
+  /**
+   * PLAN an ad-hoc convergence — the SAME pure fold as {@link planConvergence} over an
+   * explicit workspace set (`options.probe` adds the read-only synthesizability
+   * dry-run). A typed reject on the ad-hoc validation failures; else the folded plan.
+   */
+  planConvergenceAdHoc(
+    workspaceIds: readonly string[],
+    selection: Readonly<Record<string, string>>,
+    options?: { readonly probe?: boolean },
+    principal?: Principal,
+  ): Promise<AdHocPlanOutcome>;
+  /**
+   * COMPOSE an ad-hoc convergence (`POST …/compare/ad-hoc/converge`) — GATED
+   * (`workspace.branch`), mirrors {@link composeConvergence} over an EXPLICIT set.
+   * Reuses the same compose op with its compare seam fixed to the ad-hoc view; the
+   * composed workspace's provenance records which separately-launched workspaces it
+   * converged. Returns a typed {@link AdHocReject} (not-found/too-few/incompatible)
+   * for a bad set, else the governed write result.
+   */
+  composeConvergenceAdHoc(
+    input: {
+      readonly workspaceIds: readonly string[];
+      readonly selection: Readonly<Record<string, string>>;
+      readonly branch?: string;
+      readonly createdBy: string;
+    },
+    principal: Principal,
+  ): Promise<ConductorWriteResult<ComposeConvergenceResult> | AdHocReject>;
   /** The terminal WS surface (edge registers `terminalBackends()`). */
   terminal(): TerminalStreamPort;
   /** The `/api/conductor` router. */

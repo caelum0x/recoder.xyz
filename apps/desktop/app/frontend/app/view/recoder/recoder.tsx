@@ -49,6 +49,7 @@ import {
     RecoderViewModel,
     suggestNextAction,
     workspaceSearchKeywords,
+    type CompareView,
     type RecoderBoardShow,
     type RecoderDiffSummary,
     type RecoderEnvironment,
@@ -384,16 +385,23 @@ function RecoderConnectionBadge() {
 
 RecoderConnectionBadge.displayName = "RecoderConnectionBadge";
 
-// The single quiet health dot (DESIGN-REFERENCE §3C): overall backend up /
-// degraded / down from /health/full, NEVER an engine grid. The detail lives in
-// the tooltip. A separate axis from RecoderConnectionBadge (that one is poll
-// freshness); this one is real backend component health. Never green when the
-// backend can't be reached or confirmed.
+// The single quiet health dot (DESIGN-REFERENCE §3C): ONE quiet color, not a
+// stoplight. Graphite by default — a dim neutral dot when up, the SAME neutral
+// merely emphasized (higher opacity) when degraded, and the one muted crimson
+// reserved for a real down. Never green/amber: a health signal must not borrow a
+// "go" hue it hasn't earned, and degraded is a de-emphasis of the neutral rather
+// than a second warning color. The detail lives only in the tooltip. A separate
+// axis from RecoderConnectionBadge (that one is poll freshness); this one is real
+// backend component health.
 const HealthDotTone: Record<HealthTone, string> = {
-    up: "bg-emerald-400/70",
-    degraded: "bg-amber-400/80",
-    down: "bg-red-400/80",
+    up: "bg-white/25",
+    degraded: "bg-white/60",
+    down: "bg-error/70",
 };
+
+function healthDotToneClass(tone: HealthTone): string {
+    return HealthDotTone[tone] ?? HealthDotTone.degraded;
+}
 
 function RecoderHealthDot() {
     const health = RecoderHealthModel.getInstance();
@@ -405,7 +413,7 @@ function RecoderHealthDot() {
     }, []);
     return (
         <span
-            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${HealthDotTone[dot.tone]}`}
+            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${healthDotToneClass(dot.tone)}`}
             title={dot.label}
             aria-label={dot.label}
         />
@@ -413,6 +421,67 @@ function RecoderHealthDot() {
 }
 
 RecoderHealthDot.displayName = "RecoderHealthDot";
+
+// Compare & Converge gets its own room: a full-view in-view modal instead of a
+// panel crammed into the expanded board row. The board row keeps the trigger
+// (the Compare button toggles compareOpen); this overlay is where the columns and
+// the single decision list finally read cleanly with real width. Terminal-plain —
+// a backdrop, a thin border, a title, and space; no new chrome.
+function RecoderCompareOverlay({
+    model,
+    taskGroup,
+    compareView,
+    onClose,
+}: {
+    model: RecoderViewModel;
+    taskGroup: string;
+    compareView: CompareView;
+    onClose: () => void;
+}) {
+    const paletteOpen = useAtomValue(model.commandPaletteOpenAtom);
+    const shortcutsOpen = useAtomValue(model.shortcutsOpenAtom);
+    // Escape composes with the palette/shortcuts overlays: while one of them is open
+    // this handler stands down so a single Escape never tears down the whole stack.
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key != "Escape" || paletteOpen || shortcutsOpen) {
+                return;
+            }
+            e.stopPropagation();
+            onClose();
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [onClose, paletteOpen, shortcutsOpen]);
+    return (
+        <div className="fixed inset-0 z-[var(--zindex-typeahead-modal)]">
+            <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+            <div className="absolute inset-x-4 top-6 bottom-6 flex flex-col gap-2 rounded-md border border-white/8 bg-modalbg p-3 shadow-lg recoder-enter">
+                <div className="flex items-center gap-2">
+                    <span className={SECTION_TITLE}>Compare &amp; Converge</span>
+                    <span className={`${META} font-mono`} title={taskGroup}>
+                        {shortTaskGroup(taskGroup)}
+                    </span>
+                    <div className="flex-1" />
+                    <button className={QUIET_BTN} onClick={onClose} title="Close compare (Esc)">
+                        Close
+                    </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-auto">
+                    {compareView != null ? (
+                        <RecoderComparePanel model={model} compareView={compareView} onReview={openReview} />
+                    ) : (
+                        <div className="rounded border border-white/8 p-2">
+                            <RecoderSkeleton rows={3} />
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+RecoderCompareOverlay.displayName = "RecoderCompareOverlay";
 
 function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const workspaces = useAtomValue(model.workspacesAtom);
@@ -1453,21 +1522,6 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                             </button>
                                         )}
                                     </div>
-                                    {isCompareOpen && (
-                                        <div className="recoder-enter">
-                                            {compareView != null ? (
-                                                <RecoderComparePanel
-                                                    model={model}
-                                                    compareView={compareView}
-                                                    onReview={openReview}
-                                                />
-                                            ) : (
-                                                <div className="rounded border border-white/8 p-2">
-                                                    <RecoderSkeleton rows={2} />
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
                                     {group.workspaces.map((ws) => (
                                         <WorkspaceRow
                                             key={ws.workspaceId}
@@ -1490,6 +1544,17 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                 ))}
             </div>
 
+            {/* Compare & Converge lives here as a full-view overlay (not inside the
+                board row) so it gets real room. Rendered before the palette/shortcuts
+                so those paint above it and its own Escape stands down while they're open. */}
+            {compareOpen != "" && (
+                <RecoderCompareOverlay
+                    model={model}
+                    taskGroup={compareOpen}
+                    compareView={compare[compareOpen]}
+                    onClose={() => model.toggleCompare(compareOpen, [])}
+                />
+            )}
             {/* Rendered before the palette/shortcuts so those paint above it; its
                 Escape handler stands down while either of them is open. */}
             {cloneOpen && <RecoderCloneModal model={model} onClose={() => setCloneOpen(false)} />}
@@ -1507,4 +1572,4 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
 
 RecoderConductorView.displayName = "RecoderConductorView";
 
-export { RecoderConductorView };
+export { HealthDotTone, healthDotToneClass, RecoderConductorView };

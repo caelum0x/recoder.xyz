@@ -11,9 +11,11 @@ import { workspaceDiffFiles as workspaceDiffFilesOp } from '../review/workspace-
 import {
   compareTaskGroup as compareTaskGroupOp,
   workspaceSiblings as workspaceSiblingsOp,
+  compareWorkspaces as compareWorkspacesOp,
   parseDiffStat,
   type CompareDeps,
   type CompareView,
+  type AdHocCompareOutcome,
 } from '../services/compare.service.js';
 import {
   pairwiseDiff as pairwiseDiffOp,
@@ -64,6 +66,22 @@ import {
  * composition layer is the ONE place the name lives on the conductor side.
  */
 const CONVERGE_ASSIST_FUNCTION_NAME = 'recoder_default';
+
+/**
+ * The failure arm of an AD-HOC converge (PW1 #1) — the route maps `not-found` to a
+ * no-oracle 404 and `too-few`/`incompatible` to a truthful 400. Mirrors {@link
+ * AdHocCompareOutcome}'s failure cases (it carries NO `verdict`, which is how a
+ * caller discriminates it from a governed {@link ConductorWriteResult} failure).
+ */
+export type AdHocReject =
+  | { readonly ok: false; readonly code: 'not-found' }
+  | { readonly ok: false; readonly code: 'too-few'; readonly reason: string }
+  | { readonly ok: false; readonly code: 'incompatible'; readonly reason: string };
+
+/** The outcome of an ad-hoc convergence PLAN: the folded plan, or a typed reject. */
+export type AdHocPlanOutcome =
+  | { readonly ok: true; readonly plan: ConvergencePlan }
+  | AdHocReject;
 
 export class ConductorCompareConverge {
   constructor(private readonly ctx: ConductorContext) {}
@@ -525,6 +543,166 @@ export class ConductorCompareConverge {
       // A CLIENT-input failure (nothing to converge / a requested path could not be
       // resolved — incl. a `synthesize-conflict` discovered during the 3-way merge)
       // is a 4xx, not a governance/service fault. Tag it so the edge maps it to 400.
+      if (err instanceof EmptyConvergenceError) {
+        return { ok: false, verdict, reason: err.message, code: 'empty' };
+      }
+      if (err instanceof UnresolvedConvergenceError) {
+        return { ok: false, verdict, reason: err.message, code: 'unresolved' };
+      }
+      return {
+        ok: false,
+        verdict,
+        reason:
+          err instanceof Error ? err.message : 'convergence compose failed',
+      };
+    }
+  }
+
+  // --- AD-HOC convergence (PW1 #1): converge workspaces launched SEPARATELY --------
+  // The taskGroup compare/converge keys off `metadata.taskGroup`, so a dev who ran
+  // Claude in one workspace and Codex in another (each its own group) had NO converge
+  // path. These methods form the group from an EXPLICIT id list and reuse the SAME
+  // compare service + converge ops — only the discovery set changes, never the math.
+
+  /**
+   * AD-HOC compare — form a converge group from an EXPLICIT list of separately-
+   * launched workspaces and return the SAME grid-enriched {@link CompareView} the
+   * taskGroup compare does. recoder-kybr: every id is narrowed to the caller's OWN
+   * workspaces (a foreign/missing id ⇒ `not-found`, the route's no-oracle 404). See
+   * {@link compareWorkspacesOp} for the fail-closed validation.
+   */
+  async compareAdHoc(
+    workspaceIds: readonly string[],
+    principal?: Principal
+  ): Promise<AdHocCompareOutcome> {
+    const outcome = await compareWorkspacesOp(
+      this.compareDeps(principal),
+      workspaceIds
+    );
+    if (!outcome.ok) return outcome;
+    return { ok: true, view: await this.withGridHint(outcome.view) };
+  }
+
+  /**
+   * PLAN an ad-hoc convergence — the SAME pure fold as {@link planConvergence}, over
+   * an explicit workspace set instead of a taskGroup (`options.probe` opts into the
+   * identical read-only synthesizability dry-run). Returns a typed reject on the
+   * ad-hoc validation failures so a bad set never reaches the fold.
+   */
+  async planConvergenceAdHoc(
+    workspaceIds: readonly string[],
+    selection: Readonly<Record<string, string>>,
+    options?: { readonly probe?: boolean },
+    principal?: Principal
+  ): Promise<AdHocPlanOutcome> {
+    const outcome = await compareWorkspacesOp(
+      this.compareDeps(principal),
+      workspaceIds
+    );
+    if (!outcome.ok) return outcome;
+    const view = outcome.view;
+    const siblings = view.siblings.map(s => ({
+      workspaceId: s.workspaceId,
+      agent: s.agent,
+      ...(s.changedFiles ? { changedFiles: s.changedFiles } : {}),
+    }));
+    const plan = planConvergenceOp({
+      taskGroup: view.taskGroup,
+      siblings,
+      selection,
+    });
+    if (!options?.probe) return { ok: true, plan };
+
+    // OPT-IN enrichment (identical to the taskGroup path): the probe reads each
+    // contested path's siblings by id via `getWorkspace`, so the regular convergeDeps
+    // seam works unchanged (it never calls `compare`).
+    const contestedInputs = [
+      ...plan.files
+        .filter(f => f.contested)
+        .map(f => ({ path: f.path, workspaceIds: f.candidates })),
+      ...plan.unresolved.map(u => ({ path: u.path, workspaceIds: u.candidates })),
+    ];
+    if (contestedInputs.length === 0) {
+      return { ok: true, plan: { ...plan, contested: [] } };
+    }
+    const contested = await probeSynthesizabilityOp(
+      this.convergeDeps(principal),
+      contestedInputs
+    );
+    return { ok: true, plan: { ...plan, contested } };
+  }
+
+  /**
+   * COMPOSE an ad-hoc convergence — GATED (`workspace.branch`), mirrors {@link
+   * composeConvergence} but over an EXPLICIT workspace set. Resolves + validates the
+   * set (typed reject on too-few/not-found/incompatible) BEFORE gating, then reuses
+   * the SAME `composeConvergence` op with its `compare` seam FIXED to the resolved
+   * ad-hoc view — the op's taskGroup arg becomes the synthetic ad-hoc group id, so the
+   * composed workspace's provenance + sealed evidence (`convergedFromTaskGroup` /
+   * `fromTaskGroup`) truthfully record WHICH separately-launched workspaces it
+   * converged. The converge math is NOT duplicated — only the discovery set changes.
+   */
+  async composeConvergenceAdHoc(
+    input: {
+      readonly workspaceIds: readonly string[];
+      readonly selection: Readonly<Record<string, string>>;
+      readonly branch?: string;
+      readonly createdBy: string;
+    },
+    principal: Principal
+  ): Promise<ConductorWriteResult<ComposeConvergenceResult> | AdHocReject> {
+    // Validate the ad-hoc set FIRST (ownership/distinct/repo) so a bad set is a 4xx
+    // BEFORE the gate is ever consulted (and never a governance/service error).
+    const outcome = await compareWorkspacesOp(
+      this.compareDeps(principal),
+      input.workspaceIds
+    );
+    if (!outcome.ok) return outcome;
+    const view = outcome.view;
+    // Never null here: a valid ad-hoc view always carries the synthetic group id.
+    const groupId = view.taskGroup as string;
+
+    const action = 'workspace.branch';
+    const { allowed, verdict } = await guardConductorWrite(
+      this.ctx.gate,
+      action,
+      principal,
+      {
+        target: { environment: 'conductor' },
+        metadata: {
+          taskGroup: groupId,
+          adHoc: true,
+          workspaceIds: [...input.workspaceIds],
+        },
+      }
+    );
+    if (!allowed) return { ok: false, verdict, reason: verdict.reason };
+    try {
+      // Reuse the SAME compose op; FIX its `compare` seam to the resolved ad-hoc set
+      // (its taskGroup arg is only the provenance label, never a discovery key here).
+      const deps: ConvergeOpsDeps = {
+        ...this.convergeDeps(principal),
+        compare: async () => view,
+      };
+      const result = await composeConvergenceOp(deps, {
+        taskGroup: groupId,
+        selection: input.selection,
+        ...(input.branch ? { branch: input.branch } : {}),
+        createdBy: input.createdBy || principal.userId,
+      });
+      await recordConductorAudit(
+        this.ctx.gate,
+        conductorAuditEntry(action, principal, verdict, {
+          taskGroup: groupId,
+          adHoc: true,
+          workspaceId: result.workspaceId,
+          branch: result.branch,
+          fileCount: result.fileCount,
+          sourceCount: result.plan.sources.length,
+        })
+      );
+      return { ok: true, verdict, value: result };
+    } catch (err) {
       if (err instanceof EmptyConvergenceError) {
         return { ok: false, verdict, reason: err.message, code: 'empty' };
       }

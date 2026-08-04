@@ -11,7 +11,6 @@ type RecoderNavTarget = { id: string; title: string; view: string };
 
 const RecoderNavTargets: RecoderNavTarget[] = [
     { id: "nav-runs", title: "Open Runs", view: "recoder-runs" },
-    { id: "nav-approvals", title: "Open Approvals", view: "recoder-approvals" },
     { id: "nav-memory", title: "Open Memory", view: "recoder-memory" },
     { id: "nav-board", title: "Open Board", view: "recoder-board" },
     { id: "nav-settings", title: "Open Settings", view: "recoder-settings" },

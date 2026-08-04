@@ -18,7 +18,6 @@ import { blockViewToIcon, blockViewToName } from "./blockutil";
 import { HelpViewModel } from "@/view/helpview/helpview";
 import { RecoderViewModel } from "@/app/view/recoder/recoder-model";
 import { RecoderTerminalViewModel } from "@/app/view/recoder/recoder-terminal-model";
-import { RecoderApprovalsViewModel } from "@/app/view/recoder-approvals/recoder-approvals-model";
 import { RecoderDiffViewModel } from "@/app/view/recoder-diff/recoder-diff-model";
 import { RecoderBoardViewModel } from "@/app/view/recoder-board/recoder-board-model";
 import { RecoderMemoryViewModel } from "@/app/view/recoder-memory/recoder-memory-model";
@@ -45,15 +44,15 @@ BlockRegistry.set("waveconfig", WaveConfigViewModel);
 BlockRegistry.set("processviewer", ProcessViewerViewModel);
 BlockRegistry.set("recoder", RecoderViewModel);
 BlockRegistry.set("recoder-terminal", RecoderTerminalViewModel);
-BlockRegistry.set("recoder-approvals", RecoderApprovalsViewModel);
 BlockRegistry.set("recoder-diff", RecoderDiffViewModel);
 BlockRegistry.set("recoder-board", RecoderBoardViewModel);
 BlockRegistry.set("recoder-memory", RecoderMemoryViewModel);
 BlockRegistry.set("recoder-runs", RecoderRunsViewModel);
 BlockRegistry.set("recoder-settings", RecoderSettingsViewModel);
-// Retired views (recoder-tools/-hands/-openfang/-connectors/-health/-launch) were
-// removed 2026-08-01; an old saved layout referencing one falls through to a
-// neutral default view (makeDefaultViewModel), never a crash.
+// Retired views (recoder-tools/-hands/-openfang/-connectors/-health/-launch, and
+// the standalone recoder-approvals tab whose approvals now surface inline on the
+// diff/session stream) were removed; an old saved layout referencing one falls
+// through to a neutral default view (makeDefaultViewModel), never a crash.
 
 function makeDefaultViewModel(viewType: string): ViewModel {
     const viewModel: ViewModel = {

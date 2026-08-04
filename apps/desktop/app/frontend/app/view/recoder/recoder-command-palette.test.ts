@@ -51,7 +51,6 @@ describe("navigationCommands", () => {
         const cmds = navigationCommands(() => {});
         expect(cmds.map((c) => c.title)).toEqual([
             "Open Runs",
-            "Open Approvals",
             "Open Memory",
             "Open Board",
             "Open Settings",
@@ -66,7 +65,6 @@ describe("navigationCommands", () => {
         expect(opened).toEqual(RecoderNavTargets.map((t) => t.view));
         expect(opened).toEqual([
             "recoder-runs",
-            "recoder-approvals",
             "recoder-memory",
             "recoder-board",
             "recoder-settings",

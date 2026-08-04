@@ -157,7 +157,10 @@ import type {
   ConvergeInferenceFn,
 } from './converge/converge.ops.js';
 import { createInMemoryRepoSetupStore } from './adapters/repo-setup-store.adapter.js';
-import type { CompareView } from './services/compare.service.js';
+import type {
+  CompareView,
+  AdHocCompareOutcome,
+} from './services/compare.service.js';
 import type { PairwiseDiffView } from './services/pairwise-diff.service.js';
 import type { FileVersionsView } from './converge/converge.ops.js';
 import type {
@@ -174,7 +177,11 @@ import {
 import { ConductorIntrospection } from './module/introspection.js';
 import { ConductorCheckpoints } from './module/checkpoints.js';
 import { ConductorPreview } from './module/preview.js';
-import { ConductorCompareConverge } from './module/compare-converge.js';
+import {
+  ConductorCompareConverge,
+  type AdHocReject,
+  type AdHocPlanOutcome,
+} from './module/compare-converge.js';
 import { ConductorReads } from './module/reads.js';
 import { ConductorGovernedWrites } from './module/governed-writes.js';
 import { buildRunEventPipeline } from './module/run-event-pipeline.js';
@@ -1022,6 +1029,39 @@ export class ConductorComposer implements ConductorModule {
     principal: Principal
   ): Promise<ConductorWriteResult<ComposeConvergenceResult>> {
     return this.compareConverge.composeConvergence(input, principal);
+  }
+
+  async compareAdHoc(
+    workspaceIds: readonly string[],
+    principal?: Principal
+  ): Promise<AdHocCompareOutcome> {
+    return this.compareConverge.compareAdHoc(workspaceIds, principal);
+  }
+
+  async planConvergenceAdHoc(
+    workspaceIds: readonly string[],
+    selection: Readonly<Record<string, string>>,
+    options?: { readonly probe?: boolean },
+    principal?: Principal
+  ): Promise<AdHocPlanOutcome> {
+    return this.compareConverge.planConvergenceAdHoc(
+      workspaceIds,
+      selection,
+      options,
+      principal
+    );
+  }
+
+  async composeConvergenceAdHoc(
+    input: {
+      readonly workspaceIds: readonly string[];
+      readonly selection: Readonly<Record<string, string>>;
+      readonly branch?: string;
+      readonly createdBy: string;
+    },
+    principal: Principal
+  ): Promise<ConductorWriteResult<ComposeConvergenceResult> | AdHocReject> {
+    return this.compareConverge.composeConvergenceAdHoc(input, principal);
   }
 
   async recordRunInferenceId(

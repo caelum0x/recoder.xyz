@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { decideApproval } from "./recoder-approval-action";
 import { type MeteringDisplay } from "./recoder-metering";
 import { type RunEventSeverity } from "./recoder-run-event";
+import { PAGE_TITLE, PRIMARY_BTN, QUIET_BTN } from "./recoder-styles";
 import {
     RecoderTerminalStatus,
     RecoderTerminalViewModel,
@@ -75,14 +76,14 @@ function RunEntryRow({ entry }: { entry: RunStreamEntry }) {
                     ) : (
                         <>
                             <button
-                                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-xs hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
+                                className={PRIMARY_BTN}
                                 onClick={() => void act("approve")}
                                 disabled={approval.phase == "acting"}
                             >
                                 {approval.phase == "acting" ? "…" : "Approve"}
                             </button>
                             <button
-                                className="rounded border border-border px-2 py-0.5 text-xs text-secondary hover:text-primary hover:border-white/20 transition-colors cursor-pointer disabled:opacity-50"
+                                className={QUIET_BTN}
                                 onClick={() => void act("reject")}
                                 disabled={approval.phase == "acting"}
                             >
@@ -198,7 +199,7 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
     return (
         <div className="flex flex-col h-full overflow-hidden">
             <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border shrink-0">
-                <span className="font-semibold text-sm">Recoder Session</span>
+                <span className={PAGE_TITLE}>Session</span>
                 {workspaceId != "" && (
                     <span className="text-xs text-secondary truncate" title={workspaceId}>
                         {workspaceId}
@@ -207,10 +208,7 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                 <span className={cn("ml-auto rounded px-1.5 py-0.5 text-xs", statusColor(status))}>
                     {statusText(status)}
                 </span>
-                <button
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-xs hover:bg-accent transition-colors cursor-pointer"
-                    onClick={() => model.connect()}
-                >
+                <button className={PRIMARY_BTN} onClick={() => model.connect()}>
                     Reconnect
                 </button>
             </div>
@@ -220,10 +218,7 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                 {empty && status == "no-workspace" && (
                     <div className="flex flex-col items-start gap-2 text-secondary">
                         <div>This session isn't attached to a workspace yet.</div>
-                        <button
-                            className="bg-accent/80 text-primary rounded px-2 py-1 hover:bg-accent transition-colors cursor-pointer"
-                            onClick={() => void openWorkspaces()}
-                        >
+                        <button className={PRIMARY_BTN} onClick={() => void openWorkspaces()}>
                             Open Workspaces
                         </button>
                     </div>
@@ -261,11 +256,7 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                         placeholder={noWorkspace ? "no workspace bound" : "Direct the agent — press Enter to send"}
                         className="flex-1 min-w-0 rounded border border-border bg-transparent px-2 py-1 text-sm outline-none focus:border-accent disabled:opacity-50"
                     />
-                    <button
-                        className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50 disabled:hover:bg-accent/80"
-                        onClick={() => void submit()}
-                        disabled={!canSend}
-                    >
+                    <button className={PRIMARY_BTN} onClick={() => void submit()} disabled={!canSend}>
                         {sending ? "Sending…" : "Send"}
                     </button>
                 </div>

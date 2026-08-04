@@ -27,9 +27,9 @@ const STATUS_MESSAGES: Record<BoardStatus, string> = {
     loading: "",
     ok: "",
     empty: "Nothing pending — no ready issues on the board.",
-    unavailable: "Issue board not available — the `bd` CLI is not installed on this machine.",
-    unreachable: "Issue board not available — the ready-issue bridge is not reachable from here.",
-    "not-available": "Issue board not available on this backend.",
+    unavailable: "Issue tracking isn't set up on this machine.",
+    unreachable: "Issue tracking isn't reachable from here.",
+    "not-available": "Issue tracking isn't available on this backend.",
     "not-connected": "Not connected — start the Recoder backend to see ready work.",
 };
 
