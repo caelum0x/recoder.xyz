@@ -334,8 +334,10 @@ export class ConductorCompareConverge {
    * into a control-mapped artifact (SOC 2 / EU AI Act / DORA / Recoder) with a
    * human-readable summary, content-hashed for integrity. PURE over the stored
    * record: no gate, no mutation, no network. Every control status is DERIVED from
-   * the backing fields (never a fabricated `met`). `null` when the workspace does
-   * not exist OR was never merged with evidence (⇒ 404 at the edge).
+   * the backing fields (never a fabricated `met`), and the pack's optional
+   * `frameworks` annotations are export-time derived metadata — the SEALED record
+   * (and its contentHash) is never altered by exporting. `null` when the workspace
+   * does not exist OR was never merged with evidence (⇒ 404 at the edge).
    */
   async getConvergenceEvidenceExport(
     workspaceId: string

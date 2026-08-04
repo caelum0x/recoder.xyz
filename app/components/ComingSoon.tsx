@@ -11,8 +11,8 @@ interface ComingSoonProps {
 export default function ComingSoon({
   title = "Coming Soon",
   description = "This feature will be available after the beta period. Recoder.xyz is currently 100% FREE with BYOK (Bring Your Own Key).",
-  backLink = "/dashboard",
-  backText = "Back to Dashboard"
+  backLink = "/account",
+  backText = "Back to Account"
 }: ComingSoonProps) {
   return (
     <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center p-4">

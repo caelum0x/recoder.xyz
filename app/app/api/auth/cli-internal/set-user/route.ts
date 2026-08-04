@@ -2,15 +2,60 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { nanoid } from 'nanoid';
 import { logger } from '@/lib/logger';
+import { requireAuth } from '@/lib/auth-helpers';
+import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
 
 /**
  * POST - Store user info for an auth code (called from cli-callback page)
  * Also syncs user from better-auth to our users table
+ *
+ * Auth: either a signed internal-service request (INTERNAL_SERVICE_KEY, for
+ * server-to-server callers, which may specify the target user in the body) or
+ * an authenticated browser session (the cli-callback page). Session callers
+ * bind the auth code to THEIR OWN session identity — client-supplied user_id /
+ * user_email / user_name in the body are ignored so a logged-in user cannot
+ * bind a CLI auth code to somebody else's account.
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { code, user_id, user_email, user_name, redirect_uri, client_id } = body;
+    const rawBody = await request.text();
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: 'invalid_json'
+      }, { status: 400 });
+    }
+
+    const { code, redirect_uri, client_id } = body as {
+      code?: string;
+      redirect_uri?: string;
+      client_id?: string;
+    };
+
+    let user_id: string | undefined;
+    let user_email: string | undefined;
+    let user_name: string | undefined;
+
+    const internal = verifyInternalServiceRequest(request, { rawBody });
+    if (internal.ok) {
+      user_id = typeof body.user_id === 'string' ? body.user_id : undefined;
+      user_email = typeof body.user_email === 'string' ? body.user_email : undefined;
+      user_name = typeof body.user_name === 'string' ? body.user_name : undefined;
+    } else {
+      const authResult = await requireAuth(request);
+      if (authResult.error) {
+        return NextResponse.json({
+          success: false,
+          error: 'unauthorized'
+        }, { status: 401 });
+      }
+      user_id = authResult.user.id;
+      user_email = authResult.user.email ?? undefined;
+      user_name = authResult.user.name ?? undefined;
+    }
 
     if (!code || !user_id) {
       return NextResponse.json({
@@ -24,7 +69,7 @@ export async function POST(request: NextRequest) {
       where: { id: user_id }
     });
 
-    if (!appUser) {
+    if (!appUser && user_email) {
       // Try to find by email
       appUser = await prisma.users.findUnique({
         where: { email: user_email }
@@ -89,8 +134,20 @@ export async function POST(request: NextRequest) {
 
 /**
  * GET - Retrieve user info for an auth code (called during token exchange)
+ *
+ * Auth: signed internal-service request only. This handler maps an auth code
+ * to a user identity, so it must never be reachable by unauthenticated
+ * callers; no browser page consumes it (token exchange is server-to-server).
  */
 export async function GET(request: NextRequest) {
+  const internal = verifyInternalServiceRequest(request, { rawBody: '' });
+  if (!internal.ok) {
+    return NextResponse.json({
+      success: false,
+      error: 'unauthorized'
+    }, { status: 401 });
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get('code');
 

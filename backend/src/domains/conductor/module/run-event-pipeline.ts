@@ -114,14 +114,18 @@ export function buildRunEventPipeline(
     getWorkspace: id => repository.getWorkspace(id),
     logger: log,
   });
-  // Mid-run sibling awareness (recoder-i499): the OUTERMOST terminal-event
-  // decorator. When one taskGroup sibling finishes, every still-RUNNING sibling
-  // gets a terse paths+stats note steered into its live session through the
-  // SAME governed steer path (internal principal ⇒ gated + audited), plus a
-  // `log` evidence event (`data.kind: sibling_context_delivered`) on the
-  // receiver. Fire-and-forget + per-sibling degrade-safe — a failed delivery
-  // NEVER touches the terminal path. Late-bound reads: the closures resolve
-  // the facade's engine/steerTransport per event, after construction.
+  // Sibling awareness (recoder-i499): the OUTERMOST decorator. v1: when one
+  // taskGroup sibling finishes, every still-RUNNING sibling gets a terse
+  // paths+stats note steered into its live session through the SAME governed
+  // steer path (internal principal ⇒ gated + audited), plus a `log` evidence
+  // event (`data.kind: sibling_context_delivered`) on the receiver. v2: mid-run
+  // MILESTONE broadcasts — the sink treats every mid-run event as a throttled
+  // tick over the same `siblings` read model (first nonzero diff, then +N
+  // files/+lines steps) and steers a one-line progress note, rate-capped and
+  // deduped per receiver, evidence reused with a `milestone` marker. Everything
+  // is fire-and-forget + per-sibling degrade-safe — a failed delivery NEVER
+  // touches the event path. Late-bound reads: the closures resolve the facade's
+  // engine/steerTransport per event, after construction.
   const sink = createSiblingAwarenessSink({
     inner: completionSink,
     getWorkspace: id => repository.getWorkspace(id),

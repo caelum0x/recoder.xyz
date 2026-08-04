@@ -10,7 +10,7 @@ import { getServiceUrlClient } from '@/lib/config/platforms';
 
 const NAV_LINKS = [
   { href: getServiceUrlClient('agents'), label: 'Agents', external: true },
-  { href: '/dashboard', label: 'Dashboard', external: false },
+  { href: '/account', label: 'Account', external: false },
 ];
 
 interface SiteHeaderProps {

@@ -3,24 +3,22 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X, LayoutDashboard, Bot, BarChart3, Settings, Key, FolderOpen, Sparkles, User, Terminal, Cpu, LogOut } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Bot, BarChart3, Settings, Key, FolderOpen, Sparkles, User, Terminal, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { signOut } from '@/lib/session-provider';
 
 const bottomTabs = [
-  { href: '/dashboard/overview', label: 'Overview', icon: LayoutDashboard },
+  { href: '/account', label: 'Account', icon: LayoutDashboard },
   { href: '/agents', label: 'Agents', icon: Bot },
-  { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/projects', label: 'Projects', icon: BarChart3 },
   { href: '/settings/account', label: 'Settings', icon: Settings },
 ];
 
 const drawerLinks = [
-  { section: 'Dashboard', items: [
-    { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true },
-    { href: '/dashboard/api-keys', label: 'API Keys', icon: Key },
-    { href: '/dashboard/projects', label: 'Projects', icon: FolderOpen },
-    { href: '/dashboard/usage', label: 'Usage', icon: BarChart3 },
-    { href: '/dashboard/analytics', label: 'Analytics', icon: Cpu },
+  { section: 'Account', items: [
+    { href: '/account', label: 'Account', icon: LayoutDashboard, exact: true },
+    { href: '/settings/api', label: 'API Keys', icon: Key },
+    { href: '/projects', label: 'Projects', icon: FolderOpen },
   ]},
   { section: 'Settings', items: [
     { href: '/settings', label: 'Settings', icon: Settings, exact: true },

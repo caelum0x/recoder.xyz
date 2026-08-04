@@ -3,14 +3,23 @@ import { prisma } from '@/lib/prisma';
 import { decrypt } from '@/lib/encryption';
 import { requireAuth } from '@/lib/auth-helpers';
 import { logger } from '@/lib/logger';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 
 /**
  * GET /api/user/ai-provider-keys/decrypt?provider=openrouter
  * Get decrypted API key for a specific provider
  * This endpoint is used internally when making AI API calls
+ *
+ * The response contains a decrypted BYOK provider key, so this handler is
+ * rate limited before any other work and must never log the decrypted value.
  */
 export async function GET(request: NextRequest) {
   try {
+    // Throttle before auth: decrypted keys are high-value, so brute-force
+    // probing of this endpoint is limited even for unauthenticated callers.
+    const limited = await rateLimit(rateLimitConfigs.apiKeys)(request);
+    if (limited) return limited;
+
     const authResult = await requireAuth(request);
     if (authResult.error) return authResult.response;
     const { user } = authResult;

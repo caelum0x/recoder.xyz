@@ -18,13 +18,14 @@ vi.mock('@/lib/config/platforms', () => ({
 import { SiteHeader } from '@/components/SiteHeader';
 
 describe('SiteHeader', () => {
-  it('shows only Agents and Dashboard nav tabs', () => {
+  it('shows only Agents and Account nav tabs (dashboard retired to /account)', () => {
     mockUseSession.mockReturnValue({ data: null });
 
     render(<SiteHeader fixed={false} />);
 
     expect(screen.getByText('Agents')).toBeDefined();
-    expect(screen.getByText('Dashboard')).toBeDefined();
+    expect(screen.getByText('Account')).toBeDefined();
+    expect(screen.queryByText('Dashboard')).toBeNull();
     expect(screen.queryByText('Plan')).toBeNull();
     expect(screen.queryByText('Platform')).toBeNull();
   });

@@ -27,6 +27,7 @@ function resolveSiteOrigin(): string {
  */
 const DISALLOWED_PATHS = [
   '/dashboard',
+  '/account',
   '/billing',
   '/settings',
   '/api',
