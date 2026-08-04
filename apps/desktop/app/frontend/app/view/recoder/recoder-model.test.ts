@@ -29,6 +29,13 @@ import {
     filterByProject,
     parseGhqLayout,
     workspaceSearchKeywords,
+    workspaceLifecycle,
+    groupLifecycle,
+    deriveLifecycleColumns,
+    convergeSelectionRepo,
+    convergeSelectDisabled,
+    deriveAdHocConverge,
+    adHocCompareIds,
     DEFAULT_PROJECT_ID,
     TASK_GROUP_METADATA_KEY,
     type CompareView,
@@ -1097,5 +1104,107 @@ describe("parseGhqLayout + deriveProjectIdentity (ghq host/owner/repo)", () => {
         const id = deriveProjectIdentity("/Users/x/recoder.xyz");
         expect(id).toEqual({ projectId: "recoder.xyz", projectName: "recoder.xyz" });
         expect(id.owner).toBeUndefined();
+    });
+});
+
+function groupOf(...workspaces: RecoderWorkspace[]): RecoderWorkspaceGroup {
+    const raw = workspaces[0]?.metadata?.taskGroup;
+    return { taskGroup: typeof raw === "string" ? raw : null, workspaces };
+}
+
+describe("workspaceLifecycle — a state's board column", () => {
+    it("maps running/merging to running", () => {
+        expect(workspaceLifecycle("running")).toBe("running");
+        expect(workspaceLifecycle("merging")).toBe("running");
+    });
+
+    it("maps the human-turn states to review", () => {
+        for (const s of ["awaiting_review", "changes_requested", "awaiting_approval"]) {
+            expect(workspaceLifecycle(s)).toBe("review");
+        }
+    });
+
+    it("maps terminal states to done", () => {
+        for (const s of ["merged", "archived", "failed", "cancelled"]) {
+            expect(workspaceLifecycle(s)).toBe("done");
+        }
+    });
+
+    it("maps setup/unknown states to queued (never silently to done)", () => {
+        for (const s of ["created", "setting_up", "ready", "queued", "some_future_state", ""]) {
+            expect(workspaceLifecycle(s)).toBe("queued");
+        }
+    });
+});
+
+describe("groupLifecycle — a group's most-urgent phase", () => {
+    it("surfaces a group in review when ANY sibling needs review, even with a still-running sibling", () => {
+        const g = groupOf(makeWs({ state: "running" }), makeWs({ state: "awaiting_review" }));
+        expect(groupLifecycle(g)).toBe("review");
+    });
+
+    it("is done only when EVERY sibling is terminal", () => {
+        expect(groupLifecycle(groupOf(makeWs({ state: "merged" }), makeWs({ state: "archived" })))).toBe("done");
+        expect(groupLifecycle(groupOf(makeWs({ state: "merged" }), makeWs({ state: "running" })))).toBe("running");
+    });
+});
+
+describe("deriveLifecycleColumns — group the board by state, not recency", () => {
+    it("buckets groups into queued → running → needs-review → done, dropping empty columns", () => {
+        const groups = [
+            groupOf(makeWs({ state: "running" })),
+            groupOf(makeWs({ state: "awaiting_review" })),
+            groupOf(makeWs({ state: "created" })),
+        ];
+        const cols = deriveLifecycleColumns(groups);
+        expect(cols.map((c) => c.id)).toEqual(["queued", "running", "review"]);
+        expect(cols.find((c) => c.id === "done")).toBeUndefined();
+    });
+
+    it("orders groups newest-first within a column", () => {
+        const older = groupOf(makeWs({ state: "running", createdAt: "2026-07-01T00:00:00.000Z" }));
+        const newer = groupOf(makeWs({ state: "running", createdAt: "2026-07-20T00:00:00.000Z" }));
+        const cols = deriveLifecycleColumns([older, newer]);
+        const running = cols.find((c) => c.id === "running");
+        expect(running?.groups).toEqual([newer, older]);
+    });
+});
+
+describe("ad-hoc converge selection (PW1 #1)", () => {
+    it("shapes the compare ids — trim, drop blanks, de-dupe, preserve order", () => {
+        expect(adHocCompareIds([" ws1 ", "ws2", "ws1", "", "ws3"])).toEqual(["ws1", "ws2", "ws3"]);
+        expect(adHocCompareIds([])).toEqual([]);
+    });
+
+    it("locks the selection to the first selected workspace's repo", () => {
+        const a = makeWs({ workspaceId: "a", projectId: "repo-x" });
+        const b = makeWs({ workspaceId: "b", projectId: "repo-x" });
+        expect(convergeSelectionRepo([a, b], new Set(["b"]))).toBe("repo-x");
+        expect(convergeSelectionRepo([a, b], new Set())).toBeNull();
+    });
+
+    it("disables a cross-repo card once a repo is locked (never a bad request)", () => {
+        const other = makeWs({ workspaceId: "c", projectId: "repo-y" });
+        const same = makeWs({ workspaceId: "d", projectId: "repo-x" });
+        expect(convergeSelectDisabled(other, "repo-x")).toBe(true);
+        expect(convergeSelectDisabled(same, "repo-x")).toBe(false);
+        expect(convergeSelectDisabled(other, null)).toBe(false);
+    });
+
+    it("gates converge on 2+ picks of the SAME repo, with a truthful reason otherwise", () => {
+        const a = makeWs({ workspaceId: "a", projectId: "repo-x" });
+        const b = makeWs({ workspaceId: "b", projectId: "repo-x" });
+        const c = makeWs({ workspaceId: "c", projectId: "repo-y" });
+
+        const one = deriveAdHocConverge([a, b, c], new Set(["a"]));
+        expect(one.canConverge).toBe(false);
+        expect(one.reason).toMatch(/2\+/);
+
+        const ready = deriveAdHocConverge([a, b, c], new Set(["a", "b"]));
+        expect(ready).toMatchObject({ canConverge: true, count: 2, repo: "repo-x", ids: ["a", "b"], reason: "" });
+
+        const mixed = deriveAdHocConverge([a, b, c], new Set(["a", "c"]));
+        expect(mixed.canConverge).toBe(false);
+        expect(mixed.reason).toMatch(/different repos/);
     });
 });

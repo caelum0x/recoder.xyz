@@ -85,7 +85,7 @@ function RunRow({ run, correlated, selected, drift, onSelect, onSession, onRevie
             <span className="text-sm truncate">{runLabel(run)}</span>
             {drift.length > 0 && (
                 <span
-                    className="flex items-center gap-1 text-xs text-warning whitespace-nowrap"
+                    className="flex items-center gap-1 text-xs text-secondary whitespace-nowrap"
                     title={drift.map((f) => driftLabel(f.kind)).join(" · ")}
                 >
                     <i className="fa-solid fa-triangle-exclamation" />
@@ -122,7 +122,7 @@ function DriftLine({ finding }: { finding: RunsDriftFinding }) {
     return (
         <div className="flex items-baseline gap-2 text-xs" title={finding.findingId}>
             <span className="text-secondary font-mono whitespace-nowrap">{shortTime(finding.observedAt)}</span>
-            <span className="rounded border border-warning/40 text-warning px-1.5 py-0.5 whitespace-nowrap">
+            <span className="rounded border border-border text-secondary px-1.5 py-0.5 whitespace-nowrap">
                 {driftLabel(finding.kind)}
             </span>
             <span className="text-primary truncate">

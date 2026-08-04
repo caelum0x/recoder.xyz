@@ -209,7 +209,7 @@ function AgentSetupRow({ row, highlight }: AgentSetupRowProps) {
         <div className={cn("flex items-center gap-2 rounded px-1 py-0.5", highlight && "bg-accent/[0.06] ring-1 ring-accent/30")}>
             <span className={`${ROW_TITLE} w-28 shrink-0`}>{agentLabel(row.runtimeId)}</span>
             {row.step == "ready" ? (
-                <span className="text-xs text-emerald-400/90">✓ Signed in — ready to launch</span>
+                <span className="text-xs text-accent">✓ Signed in — ready to launch</span>
             ) : (
                 <>
                     <span className={cn(META, "w-14 shrink-0")}>{AGENT_STEP_LABEL[row.step]}</span>

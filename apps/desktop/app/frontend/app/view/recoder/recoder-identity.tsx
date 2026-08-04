@@ -3,12 +3,14 @@
 
 import { useAtomValue } from "jotai";
 import { useEffect, useState } from "react";
-import { identityInitials } from "./recoder-identity-avatar";
+import { avatarMenuEntries, identityInitials } from "./recoder-identity-avatar";
 import { RecoderIdentityModel } from "./recoder-identity-model";
 
 // Quiet, optional sign-in affordance for the Workspaces hub header. Never a wall:
 // signed-out is fine, offline is fine, local agents run without an account.
-function RecoderIdentityAffordance() {
+// `onOpenSettings` wires the avatar-menu Settings entry (PW3 #10) to the hub's
+// openView; absent ⇒ the Settings entry is omitted rather than a dead click.
+function RecoderIdentityAffordance({ onOpenSettings }: { onOpenSettings?: () => void }) {
     const model = RecoderIdentityModel.getInstance();
     const identity = useAtomValue(model.identityAtom);
     const signingIn = useAtomValue(model.signingInAtom);
@@ -62,15 +64,27 @@ function RecoderIdentityAffordance() {
                         <span className="text-xs text-secondary truncate" title={detail || label}>
                             {detail || label}
                         </span>
-                        <button
-                            className="rounded px-1 py-0.5 text-left text-sm text-secondary hover:bg-white/[0.06] hover:text-primary recoder-transition cursor-pointer"
-                            onClick={() => {
-                                setMenuOpen(false);
-                                model.signOut();
-                            }}
-                        >
-                            Sign out
-                        </button>
+                        {avatarMenuEntries().map((entry) => {
+                            if (entry.id == "settings" && onOpenSettings == null) {
+                                return null;
+                            }
+                            return (
+                                <button
+                                    key={entry.id}
+                                    className="rounded px-1 py-0.5 text-left text-sm text-secondary hover:bg-white/[0.06] hover:text-primary recoder-transition cursor-pointer"
+                                    onClick={() => {
+                                        setMenuOpen(false);
+                                        if (entry.id == "settings") {
+                                            onOpenSettings?.();
+                                            return;
+                                        }
+                                        model.signOut();
+                                    }}
+                                >
+                                    {entry.label}
+                                </button>
+                            );
+                        })}
                     </div>
                 )}
             </div>

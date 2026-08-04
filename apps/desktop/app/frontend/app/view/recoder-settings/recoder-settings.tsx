@@ -91,12 +91,10 @@ function RecoderSettingsView({ model }: ViewComponentProps<RecoderSettingsViewMo
                     className={cn(
                         "text-sm",
                         testStatus == "ok"
-                            ? "text-success"
-                            : testStatus == "degraded"
-                              ? "text-warning"
-                              : testStatus == "fail"
-                                ? "text-error"
-                                : "text-secondary"
+                            ? "text-accent"
+                            : testStatus == "fail"
+                              ? "text-error"
+                              : "text-secondary"
                     )}
                 >
                     {testStatus == "testing" ? "Testing…" : testMessage}

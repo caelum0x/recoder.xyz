@@ -225,6 +225,20 @@ describe("prChipLabel / prChipTone", () => {
         expect(open).not.toBe(merged);
         expect(failing).toBe(closed);
     });
+
+    it("stays graphite-only: real pass=accent, real fail=crimson, settled=neutral — never emerald/green/amber/purple", () => {
+        const tones = (["open", "draft", "merged", "closed"] as const).map((state) =>
+            prChipTone({ number: 1, state, url: "", checks: "none" }),
+        );
+        for (const tone of tones) {
+            expect(tone).not.toMatch(/emerald|green|amber|yellow|purple|blue|red-\d/);
+        }
+        // open = the one graphite accent (live/actionable), closed = the one muted crimson.
+        expect(prChipTone({ number: 1, state: "open", url: "", checks: "none" })).toContain("text-accent");
+        expect(prChipTone({ number: 1, state: "closed", url: "", checks: "none" })).toContain("text-error");
+        // A failing rollup on any state is a real failure → the same crimson tone.
+        expect(prChipTone({ number: 1, state: "merged", url: "", checks: "failing" })).toContain("text-error");
+    });
 });
 
 describe("shouldRefetchPrStatus", () => {

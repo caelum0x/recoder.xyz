@@ -5,7 +5,10 @@ import { getApi, globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { agentLabel } from "./recoder-agent-labels";
 import {
-    bucketWorkspaceGroups,
+    deriveLifecycleColumns,
+    adHocCompareIds,
+    convergeSelectionRepo,
+    workspaceProjectId,
     deriveProjectIdentity,
     deriveProjects,
     detectAttentionTransitions,
@@ -25,7 +28,7 @@ import {
     type ReadinessView,
     type RecoderAttentionEvent,
     type RecoderAuditEntry,
-    type RecoderBoardBucket,
+    type RecoderLifecycleColumn,
     type RecoderBoardShow,
     type RecoderDiffSummary,
     type RecoderMergeOutcome,
@@ -349,9 +352,20 @@ class RecoderViewModel implements ViewModel {
     projectsAtom!: Atom<ProjectSummary[]>;
     // The board's visible rows: Show view + text query + project applied to the unfiltered list.
     boardWorkspacesAtom!: Atom<RecoderWorkspace[]>;
-    // The visible rows grouped by taskGroup and folded into recency buckets —
-    // exactly the order the board renders and keyboard nav walks.
-    boardBucketsAtom!: Atom<RecoderBoardBucket[]>;
+    // The visible rows grouped by taskGroup and folded into lifecycle columns
+    // (queued → running → needs-review → done) — exactly the order the board renders
+    // and keyboard nav walks. Grouped by STATE (PW3 #8), not recency.
+    boardColumnsAtom!: Atom<RecoderLifecycleColumn[]>;
+    // Ad-hoc converge selection (PW1 #1): the board's "tick 2+ separately-launched
+    // workspaces to converge them" affordance. selectModeAtom toggles the quiet
+    // checkboxes; selectedForConvergeAtom is the ticked id set. Cleared together when
+    // select mode closes so a stale pick never leaks into the next session.
+    selectModeAtom: PrimitiveAtom<boolean>;
+    selectedForConvergeAtom: PrimitiveAtom<Set<string>>;
+    // Truthful reason the last ad-hoc compare load could not form a group (a 400
+    // too-few/incompatible, 404 unowned, or unreachable backend); "" when the overlay
+    // opened. Surfaced as a quiet line — never a fabricated group.
+    adHocConvergeErrorAtom: PrimitiveAtom<string>;
     // Side-by-side compare view keyed by taskGroup; absent ⇒ never loaded / degraded.
     compareAtom: PrimitiveAtom<Record<string, CompareView>>;
     // The taskGroup whose full compare panel is expanded; "" ⇒ none open.
@@ -500,6 +514,9 @@ class RecoderViewModel implements ViewModel {
         this.boardFilterAtom = atom("") as PrimitiveAtom<string>;
         this.boardShowAtom = atom("active") as PrimitiveAtom<RecoderBoardShow>;
         this.boardProjectAtom = atom("") as PrimitiveAtom<string>;
+        this.selectModeAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.selectedForConvergeAtom = atom(new Set<string>()) as PrimitiveAtom<Set<string>>;
+        this.adHocConvergeErrorAtom = atom("") as PrimitiveAtom<string>;
         this.combinedWorkspacesAtom = atom((get) =>
             mergeArchivedHistory(get(this.allWorkspacesAtom), get(this.archivedWorkspacesAtom))
         );
@@ -514,10 +531,8 @@ class RecoderViewModel implements ViewModel {
                 get(this.boardProjectAtom)
             )
         );
-        // `new Date()` at compute time is fresh enough: the 6s poll re-sets
-        // allWorkspacesAtom, which recomputes the buckets.
-        this.boardBucketsAtom = atom((get) =>
-            bucketWorkspaceGroups(groupByTaskGroup(get(this.boardWorkspacesAtom)), new Date())
+        this.boardColumnsAtom = atom((get) =>
+            deriveLifecycleColumns(groupByTaskGroup(get(this.boardWorkspacesAtom)))
         );
         wireAttentionClicks(this);
     }
@@ -1027,6 +1042,96 @@ class RecoderViewModel implements ViewModel {
             globalStore.set(this.compareAtom, { ...cur, [tg]: compare as CompareView });
         } catch {
             // degrade-safe: an unreachable/failed compare leaves the map unchanged
+        }
+    }
+
+    // --- Ad-hoc converge selection (PW1 #1) -----------------------------------------
+    // The board "select 2+ separately-launched workspaces, then converge" flow. The
+    // COMPARE loads from the ad-hoc edge and feeds the SAME compareAtom/overlay the
+    // taskGroup path uses (keyed by the synthetic adhoc: group id the backend returns).
+
+    setSelectMode(on: boolean) {
+        globalStore.set(this.selectModeAtom, on);
+        if (!on) {
+            globalStore.set(this.selectedForConvergeAtom, new Set<string>());
+            globalStore.set(this.adHocConvergeErrorAtom, "");
+        }
+    }
+
+    toggleSelectMode() {
+        this.setSelectMode(!globalStore.get(this.selectModeAtom));
+    }
+
+    // Toggle a workspace into the ad-hoc converge selection (immutable Set copy). A
+    // cross-repo pick is refused at the source too — the UI disables it, but the model
+    // fail-closes so the set is always converge-valid (converging across repos is
+    // nonsense the backend would 400).
+    toggleSelectForConverge(workspaceId: string) {
+        if (!workspaceId) {
+            return;
+        }
+        const cur = globalStore.get(this.selectedForConvergeAtom);
+        const next = new Set(cur);
+        if (next.has(workspaceId)) {
+            next.delete(workspaceId);
+            globalStore.set(this.selectedForConvergeAtom, next);
+            return;
+        }
+        const all = globalStore.get(this.combinedWorkspacesAtom);
+        const repo = convergeSelectionRepo(all, cur);
+        const ws = all.find((w) => w.workspaceId == workspaceId);
+        if (repo != null && ws != null && workspaceProjectId(ws) != repo) {
+            return;
+        }
+        next.add(workspaceId);
+        globalStore.set(this.selectedForConvergeAtom, next);
+    }
+
+    // Load the ad-hoc compare aggregate for an EXPLICIT id set and feed the SAME
+    // compareAtom/overlay the taskGroup path uses, keyed by the synthetic adhoc: group
+    // id the backend returns as CompareView.taskGroup. Degrade-safe + truthful: a 400
+    // too-few/incompatible, a 404 unowned/missing, an unrecognized shape, or an
+    // unreachable backend sets adHocConvergeErrorAtom and opens NO overlay — never a
+    // fabricated group. On success it clears the pairwise picker and opens the overlay.
+    async loadAdHocCompare(workspaceIds: string[]) {
+        const ids = adHocCompareIds(workspaceIds);
+        globalStore.set(this.adHocConvergeErrorAtom, "");
+        if (ids.length < 2) {
+            globalStore.set(this.adHocConvergeErrorAtom, "Select 2+ workspaces to converge.");
+            return;
+        }
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/compare/ad-hoc?ids=${encodeURIComponent(ids.join(","))}`
+            );
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                globalStore.set(
+                    this.adHocConvergeErrorAtom,
+                    readErrorReason(body) || `Couldn’t compare these workspaces (HTTP ${res.status}).`
+                );
+                return;
+            }
+            const view = body?.data?.compare as CompareView;
+            const tg = typeof view?.taskGroup == "string" ? view.taskGroup : "";
+            if (view == null || tg == "" || !Array.isArray(view.siblings)) {
+                globalStore.set(
+                    this.adHocConvergeErrorAtom,
+                    "Couldn’t compare these workspaces — unrecognized response."
+                );
+                return;
+            }
+            const cur = globalStore.get(this.compareAtom);
+            globalStore.set(this.compareAtom, { ...cur, [tg]: view });
+            globalStore.set(this.pairAAtom, "");
+            globalStore.set(this.pairBAtom, "");
+            globalStore.set(this.compareOpenAtom, tg);
+            void this.loadGroupReadiness(view.siblings.map((s) => ({ workspaceId: s.workspaceId })));
+        } catch {
+            globalStore.set(
+                this.adHocConvergeErrorAtom,
+                "Couldn’t compare these workspaces — Recoder isn’t reachable."
+            );
         }
     }
 
