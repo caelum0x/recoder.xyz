@@ -4,9 +4,37 @@ import crypto from 'node:crypto';
 
 // --- Mocks for the route's side-effect dependencies -------------------------
 
+// In-memory subscriptions store with real upsert-by-userId semantics so the
+// shared subscription-upsert path (C6) can be asserted for idempotency.
+const subscriptionsStore = new Map<string, Record<string, unknown>>();
+
 const prismaMock = {
   users: { update: vi.fn().mockResolvedValue({}), findUnique: vi.fn().mockResolvedValue(null) },
   audit_logs: { create: vi.fn().mockResolvedValue({}) },
+  subscriptions: {
+    upsert: vi.fn(async ({ where, update, create }: any) => {
+      const existing = [...subscriptionsStore.values()].find((s) => s.userId === where.userId);
+      if (existing) {
+        const next = { ...existing, ...update };
+        subscriptionsStore.set(existing.id as string, next);
+        return next;
+      }
+      subscriptionsStore.set(create.id, { ...create });
+      return create;
+    }),
+    findFirst: vi.fn(async ({ where }: any) => {
+      return (
+        [...subscriptionsStore.values()].find((s) => s.providerId === where.providerId) ?? null
+      );
+    }),
+    update: vi.fn(async ({ where, data }: any) => {
+      const existing = subscriptionsStore.get(where.id);
+      if (!existing) throw new Error('Record not found');
+      const next = { ...existing, ...data };
+      subscriptionsStore.set(where.id, next);
+      return next;
+    }),
+  },
 };
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
@@ -53,6 +81,7 @@ async function loadRoute() {
 describe('POST /api/webhooks/dodo — SUBSCRIPTION_CREATED conversion wire', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    subscriptionsStore.clear();
     process.env.DODO_WEBHOOK_SECRET = SECRET;
   });
 
@@ -84,6 +113,40 @@ describe('POST /api/webhooks/dodo — SUBSCRIPTION_CREATED conversion wire', () 
     });
   });
 
+  it('lands the subscriptions row through the shared upsert path, idempotently on redelivery', async () => {
+    const { POST } = await loadRoute();
+    const body = JSON.stringify({
+      type: 'subscription.created',
+      data: {
+        user_id: 'user_abc',
+        plan: 'monthly',
+        subscription_id: 'sub_1',
+        status: 'active',
+        current_period_end: 1_800_000_000,
+        amount: 20,
+        currency: 'USD',
+      },
+    });
+    const request = () => makeRequest(body, sign(body, SECRET));
+
+    const first = await POST(request());
+    const second = await POST(request());
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(subscriptionsStore.size).toBe(1);
+    const row = [...subscriptionsStore.values()][0];
+    expect(row).toMatchObject({
+      userId: 'user_abc',
+      status: 'active',
+      provider: 'dodo',
+      providerId: 'sub_1',
+      planId: 'monthly',
+      amount: 20,
+      currency: 'USD',
+    });
+  });
+
   it('does NOT fire on an unverified (bad signature) webhook and returns 401', async () => {
     const { POST } = await loadRoute();
     const body = JSON.stringify({
@@ -97,6 +160,7 @@ describe('POST /api/webhooks/dodo — SUBSCRIPTION_CREATED conversion wire', () 
     expect(res.status).toBe(401);
     expect(emitSubscriptionCreated).not.toHaveBeenCalled();
     expect(prismaMock.users.update).not.toHaveBeenCalled();
+    expect(prismaMock.subscriptions.upsert).not.toHaveBeenCalled();
   });
 
   it('does NOT fire for a non-subscription event (payment.succeeded)', async () => {

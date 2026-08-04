@@ -1,3 +1,12 @@
+/**
+ * Dodo webhook — signature verification + event normalization live in the
+ * DodoProvider (resolved through the payments registry), and subscription
+ * state lands through the shared lib/payments/subscription-upsert path
+ * (ONE upsert path for all providers). Dodo-specific side effects
+ * (legacy users.plan mirror, audit logs, emails, conversion analytics)
+ * stay here.
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
@@ -5,41 +14,85 @@ import { logger } from '@/lib/logger';
 import { sendPaymentFailedEmail, sendSubscriptionCancelledEmail } from '@/lib/email';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { emitSubscriptionCreated } from '@/lib/analytics';
+import { getProvider } from '@/lib/payments/registry';
+import { DODO_NOT_CONFIGURED, DODO_SIGNATURE_HEADER } from '@/lib/payments/dodo-provider';
+import {
+  cancelSubscriptionFromEvent,
+  updateSubscriptionFromEvent,
+  upsertSubscriptionFromEvent,
+} from '@/lib/payments/subscription-upsert';
 
 const webhookRateLimiter = rateLimit(rateLimitConfigs.webhook);
-const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET || '';
 
-function verifyDodoSignature(payload: string, signature: string): boolean {
-  if (!DODO_WEBHOOK_SECRET) return false;
-
-  const hmac = crypto.createHmac('sha256', DODO_WEBHOOK_SECRET);
-  const expectedSignature = hmac.update(payload).digest('hex');
-
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expectedSignature)
-  );
-}
+const CTX = { provider: 'dodo', route: 'api/webhooks/dodo' };
 
 export async function POST(request: NextRequest) {
   try {
     const rateLimitResponse = await webhookRateLimiter(request);
     if (rateLimitResponse) return rateLimitResponse;
 
-    const signature = request.headers.get('x-dodo-signature') || '';
+    const signature = request.headers.get(DODO_SIGNATURE_HEADER);
     const payload = await request.text();
-    
-    if (!verifyDodoSignature(payload, signature)) {
+
+    const verified = getProvider('dodo').verifyWebhook(payload, signature);
+    // `=== false` (not `!verified.ok`): this tsconfig is non-strict, where
+    // truthiness checks do not narrow discriminated unions.
+    if (verified.ok === false) {
+      if (verified.reason === DODO_NOT_CONFIGURED) {
+        logger.error('Dodo webhook received but Dodo is not configured', {
+          route: 'api/webhooks/dodo',
+        });
+        return NextResponse.json(
+          { error: 'Dodo billing not configured', reason: verified.reason },
+          { status: 503 }
+        );
+      }
+      if (verified.reason === 'dodo_invalid_payload') {
+        return NextResponse.json(
+          { error: 'Invalid payload', reason: verified.reason },
+          { status: 400 }
+        );
+      }
+      if (verified.reason === 'dodo_unhandled_event') {
+        // Signature was valid; refunds keep their audit trail, everything
+        // else is acked so Dodo stops redelivering.
+        const parsed = JSON.parse(payload) as { type?: string; data?: Record<string, unknown> };
+        if (parsed.type === 'refund.created') {
+          await handleRefundCreated(parsed.data ?? {});
+          return NextResponse.json({ success: true, processed: 'refund.created' });
+        }
+        logger.warn('Unhandled DODO webhook type', {
+          route: 'api/webhooks/dodo',
+          type: parsed.type,
+        });
+        return NextResponse.json({ success: true, processed: null });
+      }
       logger.error('Invalid DODO webhook signature', { route: 'api/webhooks/dodo' });
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
-    const event = JSON.parse(payload);
-    const { type, data } = event;
+    const event = verified.event;
+    const raw = event.raw as { type?: string; data?: Record<string, unknown> };
+    const rawType = raw.type ?? event.type;
+    const data: any = raw.data ?? {};
 
-    logger.info('Processing DODO webhook', { route: 'api/webhooks/dodo', type });
+    logger.info('Processing DODO webhook', { route: 'api/webhooks/dodo', type: rawType });
 
-    switch (type) {
+    // Shared subscription-table path (same helper as the Creem webhook).
+    switch (event.type) {
+      case 'subscription.created':
+        await upsertSubscriptionFromEvent(event, CTX);
+        break;
+      case 'subscription.updated':
+        await updateSubscriptionFromEvent(event, CTX);
+        break;
+      case 'subscription.canceled':
+        await cancelSubscriptionFromEvent(event, CTX);
+        break;
+    }
+
+    // Dodo-specific side effects, keyed on the raw provider event type.
+    switch (rawType) {
       case 'payment.succeeded':
         await handlePaymentSucceeded(data);
         break;
@@ -64,15 +117,11 @@ export async function POST(request: NextRequest) {
         await handleSubscriptionRenewed(data);
         break;
 
-      case 'refund.created':
-        await handleRefundCreated(data);
-        break;
-
       default:
-        logger.warn('Unhandled DODO webhook type', { route: 'api/webhooks/dodo', type });
+        break;
     }
 
-    return NextResponse.json({ success: true, processed: type });
+    return NextResponse.json({ success: true, processed: rawType });
 
   } catch (error) {
     logger.error('DODO webhook error', { route: 'api/webhooks/dodo', error: error instanceof Error ? error.message : String(error) });

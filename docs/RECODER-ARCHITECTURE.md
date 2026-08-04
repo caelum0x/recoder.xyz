@@ -190,10 +190,14 @@ Native-first, subprocess-second, http-last. Every path degrades to a truthful `d
 
 ## Where this is honestly shallow today
 
+Post dark-engines sweep (2026-08-04): each shallow engine either got one product verb in the converge loop or is explicitly PARKED with the reason. WIRED vs PARKED below is the current truth.
+
 - **Modules are shipped but shallow.** 15 domain composers under `backend/src/domains/*` boot (tsc clean); the depth per domain and folding the remaining scattered `src/conductor`/`src/agent-os` consumers behind each interface is the open work. The build order is in RECODER-MODULES.md.
-- **The Python engines are supervised sidecars but their deep loops are unused:** `backend/engines/py/mem0` (`MEM0_BASE_URL`) and `backend/engines/py/browser-use` (`BROWSER_USE_URL`) now health-probe as sidecars, but the live functional path is still the owned TS packages.
-- **AGENT-ENGINE is dispatchable via the in-process spec path but shallow; NETWORKING is registered but not live:** openfang routes through `IN_PROCESS_RUNTIME_SPECS` (not the closed `ConductorRuntimeId` CLI union); recoder-xds gets no live config push. Both are still partial capabilities.
-- **Two GitHub engines, two terminal restart mechanisms, five memory recall copies** — the consolidation work is exactly moving these behind one composer per domain.
+- **WIRED — recall rerank is now degrade-truthful (was: silent identity when torch absent).** When the ColBERT sidecar is down, recall fusion ranks with a pure-TS BM25-ish lexical fallback (`reranker: 'lexical'`, `src/domains/memory/recall/rank.ts`) instead of pretending source order was ranked, and the degrade reason flows to the conductor brain's enrichment provenance as a `recall-rerank` / `degraded:<reranker>: <reason>` ref in `BrainEnrichResult.sources` (`brain-memory.adapter.ts`) and out of the `memory_recall` MCP tool as `rerankerReason`. Absent-torch installs get better-than-insertion-order recall AND an auditable marker.
+- **PARKED — the Python sidecar deep loops:** `backend/engines/py/mem0` (`MEM0_BASE_URL`) and `backend/engines/py/browser-use` (`BROWSER_USE_URL`) stay health-probed supervision shells because the owned TS packages (`@recoder/mem0` OSS mode over Qdrant, `@recoder/agent-browser` over puppeteer) already serve the live recall/browse paths — no converge-loop verb needs the sidecar loops today, so wiring them would add a process without adding capability.
+- **PARKED — openfang Hands lifecycle:** openfang is dispatchable in-process via `IN_PROCESS_RUNTIME_SPECS` (`openfang-runtime.ts`), but the Hands lifecycle stays unwired because the napi `runAgent` call is synchronous/blocking on the Node event loop and `ConductorRuntimeId` is a closed subprocess-CLI union — a converge-loop verb would need an async seam first.
+- **PARKED — NETWORKING registered but not live:** recoder-xds gets no live config push; still a partial capability.
+- **Two GitHub engines, two terminal restart mechanisms, several memory recall copies** — the consolidation work is exactly moving these behind one composer per domain.
 
 ---
 

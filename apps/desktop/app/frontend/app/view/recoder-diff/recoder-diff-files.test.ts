@@ -36,6 +36,7 @@ describe("parseDiffFileSections", () => {
             dels: 1,
             startIndex: 0,
             endIndex: patch.split("\n").length,
+            renamed: false,
         });
     });
 
@@ -82,6 +83,31 @@ describe("parseDiffFileSections", () => {
         }
     });
 
+    it("marks a rename section (discard suppression depends on this — a single-path revert would delete the file)", () => {
+        const patch = [
+            "diff --git a/old.ts b/new.ts",
+            "similarity index 90%",
+            "rename from old.ts",
+            "rename to new.ts",
+            "--- a/old.ts",
+            "+++ b/new.ts",
+            "@@ -1,2 +1,2 @@",
+            "-before",
+            "+after",
+            " same",
+        ].join("\n");
+        const [s] = parseDiffFileSections(patch);
+        expect(s.path).toBe("new.ts");
+        expect(s.renamed).toBe(true);
+    });
+
+    it("does NOT mark adds/deletes as renames (/dev/null sides)", () => {
+        const added = ["diff --git a/x.ts b/x.ts", "--- /dev/null", "+++ b/x.ts", "@@ -0,0 +1 @@", "+hi"].join("\n");
+        expect(parseDiffFileSections(added)[0].renamed).toBe(false);
+        const deleted = ["diff --git a/y.ts b/y.ts", "--- a/y.ts", "+++ /dev/null", "@@ -1 +0,0 @@", "-bye"].join("\n");
+        expect(parseDiffFileSections(deleted)[0].renamed).toBe(false);
+    });
+
     it("uses the OLD path for a deleted file (+++ /dev/null)", () => {
         const patch = [
             "diff --git a/gone.ts b/gone.ts",
@@ -121,7 +147,7 @@ describe("parseDiffFileSections", () => {
 
     it("returns an empty list for an empty patch", () => {
         expect(parseDiffFileSections("")).toEqual([
-            { path: "", adds: 0, dels: 0, startIndex: 0, endIndex: 1 },
+            { path: "", adds: 0, dels: 0, startIndex: 0, endIndex: 1, renamed: false },
         ]);
     });
 });

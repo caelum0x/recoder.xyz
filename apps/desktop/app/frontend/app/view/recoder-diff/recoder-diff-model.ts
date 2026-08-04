@@ -171,6 +171,50 @@ function parseChecksData(data: unknown): RecoderWorkspaceChecks {
     };
 }
 
+// Human summary of a 200 discard response (`data.discard`: the file view's
+// per-path `results` or the hunk view's per-hunk `hunks`). A 200 can still
+// carry per-item failures — the backend reports each item truthfully, never
+// batch-faked — so failures surface here with their real reasons.
+function summarizeDiscardOutcome(data: unknown): string {
+    const raw = data != null && typeof data == "object" ? (data as Record<string, unknown>).discard : null;
+    if (raw == null || typeof raw != "object") {
+        return "Discarded.";
+    }
+    const view = raw as Record<string, unknown>;
+    const isHunkView = Array.isArray(view.hunks);
+    const rows = isHunkView ? (view.hunks as unknown[]) : Array.isArray(view.results) ? (view.results as unknown[]) : [];
+    const noun = isHunkView ? "hunk" : "file";
+    let discarded = 0;
+    const failures: string[] = [];
+    for (const row of rows) {
+        if (row == null || typeof row != "object") {
+            continue;
+        }
+        const r = row as Record<string, unknown>;
+        const label = isHunkView
+            ? `hunk ${typeof r.index == "number" ? r.index + 1 : "?"}`
+            : typeof r.path == "string" && r.path != ""
+              ? r.path
+              : "(file)";
+        if (r.action == "failed") {
+            const reason = typeof r.reason == "string" && r.reason != "" ? r.reason : "failed";
+            failures.push(`${label} — ${reason}`);
+            continue;
+        }
+        if (r.action == "restored" || r.action == "removed" || r.action == "discarded") {
+            discarded += 1;
+        }
+    }
+    if (failures.length > 0) {
+        const failText = `could not discard ${failures.join("; ")}`;
+        return discarded > 0 ? `Discarded ${discarded} ${noun}${discarded == 1 ? "" : "s"}; ${failText}.` : `Could not discard ${failures.join("; ")}.`;
+    }
+    if (discarded == 0) {
+        return "Nothing to discard — already matches the review base.";
+    }
+    return `Discarded ${discarded} ${noun}${discarded == 1 ? "" : "s"}.`;
+}
+
 class RecoderDiffViewModel implements ViewModel {
     viewType: string;
     viewIcon: Atom<string>;
@@ -196,6 +240,9 @@ class RecoderDiffViewModel implements ViewModel {
     checksLoadingAtom: PrimitiveAtom<boolean>;
     // Draft line-anchored review comments, queued client-side until the reviewer
     // sends them to the agent (POST …/review-comments). Cleared on a successful send.
+    discardingAtom: PrimitiveAtom<boolean>;
+    // Human result of the last discard ("Discarded 1 file.", verdict reason, …).
+    discardStatusAtom: PrimitiveAtom<string>;
     pendingCommentsAtom: PrimitiveAtom<ReviewCommentDraft[]>;
     commentSendingAtom: PrimitiveAtom<boolean>;
     // Human result of the last send ("Sent 3 comments to the agent.", reason, …).
@@ -231,6 +278,8 @@ class RecoderDiffViewModel implements ViewModel {
         this.prStatusAtom = atom("") as PrimitiveAtom<string>;
         this.checksAtom = atom(null) as PrimitiveAtom<RecoderWorkspaceChecks>;
         this.checksLoadingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.discardingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.discardStatusAtom = atom("") as PrimitiveAtom<string>;
         this.pendingCommentsAtom = atom([]) as PrimitiveAtom<ReviewCommentDraft[]>;
         this.commentSendingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.commentStatusAtom = atom("") as PrimitiveAtom<string>;
@@ -600,6 +649,71 @@ class RecoderDiffViewModel implements ViewModel {
             globalStore.set(this.commentSendingAtom, false);
         }
     }
+
+    // FILE-level reject (POST …/files/discard): restore the paths to the review
+    // base server-side. Discarding is the ONLY destructive action — "keep the
+    // rest" is implicit, so there is no client staging state to drift from the
+    // worktree.
+    async discardFiles(paths: string[]) {
+        if (paths.length == 0 || paths.some((p) => p.trim() == "")) {
+            return;
+        }
+        await this.postDiscard("files/discard", { paths });
+    }
+
+    // HUNK-level reject (POST …/files/discard-hunks). `hunkIndexes` are the
+    // file's `@@` ordinals vs the review base — exactly what the backend's own
+    // parse expects (it re-diffs the single path itself; no client patch math).
+    async discardHunks(path: string, hunkIndexes: number[]) {
+        if (path.trim() == "" || hunkIndexes.length == 0) {
+            return;
+        }
+        await this.postDiscard("files/discard-hunks", { path, hunkIndexes });
+    }
+
+    // Shared degrade-safe POST for both discard edges (the mergeSelected
+    // pattern): 403 surfaces the governance verdict's truthful reason, 503 the
+    // truthful failure; a 200 renders the per-item outcome (which can itself
+    // carry per-item failures) then reloads the diff so the view shows the real
+    // worktree. Never fabricates.
+    async postDiscard(edge: string, body: Record<string, unknown>) {
+        const workspaceId = globalStore.get(this.selectedIdAtom);
+        if (!workspaceId) {
+            return;
+        }
+        globalStore.set(this.discardingAtom, true);
+        globalStore.set(this.discardStatusAtom, "");
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/${edge}`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                }
+            );
+            const resBody = await res.json().catch(() => null);
+            if (res.ok) {
+                globalStore.set(this.discardStatusAtom, summarizeDiscardOutcome(resBody?.data));
+                await this.loadDiff(workspaceId);
+                return;
+            }
+            const reason = readErrorReason(resBody);
+            if (res.status == 403) {
+                globalStore.set(this.discardStatusAtom, reason || "Discard blocked — needs approval.");
+                return;
+            }
+            if (res.status == 503) {
+                globalStore.set(this.discardStatusAtom, `Discard could not complete — ${reason || "operation failed"}.`);
+                return;
+            }
+            globalStore.set(this.discardStatusAtom, reason || `Discard failed (${res.status}).`);
+        } catch {
+            globalStore.set(this.discardStatusAtom, "Discard unavailable — Recoder isn’t reachable.");
+        } finally {
+            globalStore.set(this.discardingAtom, false);
+        }
+    }
 }
 
 export {
@@ -608,6 +722,7 @@ export {
     parseChecksData,
     RecoderDiffViewModel,
     suggestReviewAction,
+    summarizeDiscardOutcome,
     type RecoderCheckRow,
     type RecoderReviewActionId,
     type RecoderReviewSuggestion,

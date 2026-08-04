@@ -60,6 +60,50 @@ describe('brain-memory adapter — enrichPrompt', () => {
     expect(out.sources).toEqual([{ source: 'items', ref: 'mem_1' }]);
   });
 
+  it('propagates a degraded rerank into the enrichment provenance (truthful marker, never silent)', async () => {
+    const recall = recallOf({
+      memories: [
+        {
+          id: 'm1',
+          body: 'the box has 16gb',
+          provenance: { source: 'beads', ref: 'bd-9', score: 0.4 },
+        },
+      ],
+      sources: [],
+      reranker: 'lexical',
+      rerankerReason: 'colbert reranker unavailable (torch/sidecar absent)',
+    });
+    const brain = createBrainMemoryAdapter({ recall, harvest: harvestStub({ harvested: false, reason: 'x' }), logger });
+
+    const out = await brain.enrichPrompt({ prompt: 'how much ram', userId: 'u1' });
+
+    expect(out.sources).toContainEqual({
+      source: 'recall-rerank',
+      ref: 'degraded:lexical: colbert reranker unavailable (torch/sidecar absent)',
+    });
+    // The memory's own provenance is still first-class alongside the marker.
+    expect(out.sources).toContainEqual({ source: 'beads', ref: 'bd-9' });
+  });
+
+  it('adds NO degrade marker when ColBERT actually ranked the recall', async () => {
+    const recall = recallOf({
+      memories: [
+        {
+          id: 'm1',
+          body: 'the box has 16gb',
+          provenance: { source: 'mem0', ref: 'mem-1', score: 0.8 },
+        },
+      ],
+      sources: [],
+      reranker: 'colbert',
+    });
+    const brain = createBrainMemoryAdapter({ recall, harvest: harvestStub({ harvested: false, reason: 'x' }), logger });
+
+    const out = await brain.enrichPrompt({ prompt: 'how much ram', userId: 'u1' });
+
+    expect(out.sources).toEqual([{ source: 'mem0', ref: 'mem-1' }]);
+  });
+
   it('returns the raw prompt unchanged when recall is empty (never fabricates)', async () => {
     const recall = recallOf(fusion([]));
     const brain = createBrainMemoryAdapter({ recall, harvest: harvestStub({ harvested: false, reason: 'x' }), logger });

@@ -176,6 +176,7 @@ export function buildMemoryMcpTools(module: MemoryMcpModule): readonly McpToolRe
           memories: result.memories,
           sources: result.sources,
           reranker: result.reranker,
+          ...(result.rerankerReason ? { rerankerReason: result.rerankerReason } : {}),
         };
       },
     },
