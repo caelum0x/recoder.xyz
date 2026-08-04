@@ -52,7 +52,6 @@ describe("navigationCommands", () => {
         expect(cmds.map((c) => c.title)).toEqual([
             "Open Runs",
             "Open Memory",
-            "Open Board",
             "Open Settings",
         ]);
     });
@@ -66,7 +65,6 @@ describe("navigationCommands", () => {
         expect(opened).toEqual([
             "recoder-runs",
             "recoder-memory",
-            "recoder-board",
             "recoder-settings",
         ]);
     });
