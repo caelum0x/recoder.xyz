@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CLIAuthService } from '@/lib/services/cli-auth.service';
+import { rateLimit, rateLimitConfigs, ipIdentifier } from '@/lib/middleware/rate-limit';
 import { logger } from '@/lib/logger';
+
+// Unauthenticated OAuth token endpoint (device_code exchange + refresh). A
+// lenient public cap absorbs the CLI's ~5s device-code polling while still
+// blocking floods / device-code + refresh-token brute forcing.
+// IP-keyed (not token-keyed): the Bearer token is the guessed secret,
+// so the bucket must throttle the source IP, not each distinct guess.
+const tokenRateLimiter = rateLimit({ ...rateLimitConfigs.public, identifier: ipIdentifier });
 
 type TokenRequestBody = {
   grant_type?: string;
@@ -18,6 +26,9 @@ type TokenRequestBody = {
  * - refresh_token
  */
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = await tokenRateLimiter(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
   let body: TokenRequestBody = {};
 
   try {

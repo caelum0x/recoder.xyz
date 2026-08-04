@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { emitSubscriptionCreated } from '@/lib/analytics';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { getProvider } from '@/lib/payments/registry';
 import { PADDLE_SIGNATURE_HEADER } from '@/lib/payments/paddle-provider';
 import {
@@ -19,10 +20,18 @@ import {
   upsertSubscriptionFromEvent,
 } from '@/lib/payments/subscription-upsert';
 
+// This endpoint is reachable unauthenticated (Paddle posts here). Signature
+// verification below is the real auth gate; the rate limit only caps flooding
+// and webhook-retry storms, matching the creem/dodo webhook siblings.
+const webhookRateLimiter = rateLimit(rateLimitConfigs.webhook);
+
 const CTX = { provider: 'paddle', route: 'api/paddle/webhooks' };
 
 export async function POST(request: NextRequest) {
   try {
+    const rateLimitResponse = await webhookRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await request.text();
     const signature = request.headers.get(PADDLE_SIGNATURE_HEADER);
 

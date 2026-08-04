@@ -10,7 +10,14 @@ import { z } from 'zod';
 import { auth } from '@/lib/auth-config';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { CLIAuthService } from '@/lib/services/cli-auth.service';
+
+// Unauthenticated multiplexed CLI-auth endpoint: one POST fans out to device
+// init, password/api-key auth, code exchange, refresh, and device polling.
+// A lenient public cap absorbs the ~5s device polling while blocking password /
+// token brute-force floods against this otherwise-open surface.
+const cliAuthRateLimiter = rateLimit(rateLimitConfigs.public);
 
 const deviceFlowSchema = z.object({
   client_id: z.string(),
@@ -126,6 +133,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const rateLimitResponse = await cliAuthRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await request.json();
     const { action } = body;
 

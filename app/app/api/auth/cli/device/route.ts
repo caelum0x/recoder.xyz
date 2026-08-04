@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CLIAuthService } from '@/lib/services/cli-auth.service';
+import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { logger } from '@/lib/logger';
+
+// Device-flow init is unauthenticated and mints a device/user code per call.
+// A stricter (cliAuth) limit stops an attacker flooding the code space or
+// exhausting storage; legitimate CLI login only calls this once per session.
+const deviceInitRateLimiter = rateLimit(rateLimitConfigs.cliAuth);
 
 /**
  * POST /api/auth/cli/device
@@ -23,6 +29,9 @@ import { logger } from '@/lib/logger';
  */
 export async function POST(request: NextRequest) {
   try {
+    const rateLimitResponse = await deviceInitRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await request.json().catch(() => ({}));
     const clientId = body.client_id || 'recoder-cli';
     // Non-secret, human-recognizable label so /account can show WHICH device

@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CLIAuthService } from '@/lib/services/cli-auth.service';
+import { rateLimit, rateLimitConfigs, ipIdentifier } from '@/lib/middleware/rate-limit';
 import { logger } from '@/lib/logger';
+
+// Unauthenticated token-introspection endpoint. Lenient public cap blocks
+// flooding / token-guessing while allowing normal CLI verify calls. GET
+// delegates to POST, so this one guard covers both verbs.
+// IP-keyed (not token-keyed): the Bearer token is the guessed secret,
+// so the bucket must throttle the source IP, not each distinct guess.
+const verifyRateLimiter = rateLimit({ ...rateLimitConfigs.public, identifier: ipIdentifier });
 
 /**
  * POST /api/auth/cli/verify
@@ -28,6 +36,9 @@ import { logger } from '@/lib/logger';
  */
 export async function POST(request: NextRequest) {
   try {
+    const rateLimitResponse = await verifyRateLimiter(request);
+    if (rateLimitResponse) return rateLimitResponse;
+
     // Try to get token from Authorization header
     const authHeader = request.headers.get('authorization');
     let token: string | undefined;

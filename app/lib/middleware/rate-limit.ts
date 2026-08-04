@@ -50,7 +50,16 @@ function getIdentifier(request: NextRequest): string {
     }
   }
 
-  // Fall back to IP address
+  return ipIdentifier(request);
+}
+
+/**
+ * IP-only bucket. Use this identifier for TOKEN-INTROSPECTION / auth routes
+ * where the Bearer token IS the attacker-guessed secret — keying on the token
+ * would give every guess its own bucket (unlimited brute force). Keying on the
+ * source IP throttles the guesser instead.
+ */
+export function ipIdentifier(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
   const ip = forwarded ? forwarded.split(',')[0] :
              request.headers.get('x-real-ip') ||
