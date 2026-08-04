@@ -26,4 +26,17 @@ function identityInitials(name?: string, email?: string): string {
     return "?";
 }
 
-export { identityInitials };
+// The signed-in avatar menu's actions, in render order (DESIGN §3C: the avatar menu
+// is where account + settings live, not bare header chrome). Settings moves BEHIND
+// the avatar (PW3 #10) — it was palette-only before. Pure so the entry set is
+// unit-tested without rendering; the component maps each id onto its handler.
+type AvatarMenuAction = { id: "settings" | "signout"; label: string };
+
+function avatarMenuEntries(): AvatarMenuAction[] {
+    return [
+        { id: "settings", label: "Settings" },
+        { id: "signout", label: "Sign out" },
+    ];
+}
+
+export { identityInitials, avatarMenuEntries, type AvatarMenuAction };

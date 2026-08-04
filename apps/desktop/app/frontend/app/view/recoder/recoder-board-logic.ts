@@ -1000,6 +1000,175 @@ function bucketWorkspaceGroups(groups: RecoderWorkspaceGroup[], now: Date): Reco
     return result;
 }
 
+// The board's lifecycle phases, in the order a task moves through them: still
+// setting up / queued → an agent actively working → finished and waiting on the
+// human → terminal history. Grouping the board by THIS (instead of recency) lets a
+// dev scan "which agent needs review" at a glance (PW3 #8).
+type RecoderLifecyclePhase = "queued" | "running" | "review" | "done";
+
+// The states that mean "the agent finished and is waiting on the human" — the
+// review column. changes_requested/awaiting_approval sit here too: all three are a
+// human-turn, not agent work.
+const REVIEW_LIFECYCLE_STATES: ReadonlySet<string> = new Set([
+    "awaiting_review",
+    "changes_requested",
+    "awaiting_approval",
+]);
+
+// Terminal history — the done column. Mirrors isTerminalWorkspaceState's hides plus
+// the merged/cancelled ends so a shipped or abandoned run leaves the live columns.
+const DONE_LIFECYCLE_STATES: ReadonlySet<string> = new Set(["merged", "archived", "failed", "cancelled"]);
+
+// Pure: map ONE workspace state to its lifecycle phase. An unknown/未来 backend state
+// falls to "queued" (the earliest actionable column) rather than "done", so a new
+// state is never silently swept into history — it stays visible for the dev.
+function workspaceLifecycle(state: string): RecoderLifecyclePhase {
+    if (state == "running" || state == "merging") {
+        return "running";
+    }
+    if (REVIEW_LIFECYCLE_STATES.has(state)) {
+        return "review";
+    }
+    if (DONE_LIFECYCLE_STATES.has(state)) {
+        return "done";
+    }
+    return "queued";
+}
+
+// Later phase = more urgent to surface: a group with ANY sibling needing review
+// belongs in the review column even if its other agents are still running, because
+// "an agent needs you" is what the dev is scanning for. done ranks lowest so a group
+// only lands in history once EVERY sibling is terminal.
+const LIFECYCLE_PRIORITY: Record<RecoderLifecyclePhase, number> = { review: 3, running: 2, queued: 1, done: 0 };
+
+// Pure: a parallel-run group's column is its most-urgent sibling's phase (see
+// LIFECYCLE_PRIORITY). A solo workspace is a group of 1, so this also covers the
+// singleton rows. An empty group (never produced by groupByTaskGroup) reads "done".
+function groupLifecycle(group: RecoderWorkspaceGroup): RecoderLifecyclePhase {
+    let best: RecoderLifecyclePhase = "done";
+    for (const ws of group.workspaces) {
+        const phase = workspaceLifecycle(ws.state);
+        if (LIFECYCLE_PRIORITY[phase] > LIFECYCLE_PRIORITY[best]) {
+            best = phase;
+        }
+    }
+    return best;
+}
+
+type RecoderLifecycleColumn = { id: RecoderLifecyclePhase; label: string; groups: RecoderWorkspaceGroup[] };
+
+const LIFECYCLE_COLUMN_DEFS: { id: RecoderLifecyclePhase; label: string }[] = [
+    { id: "queued", label: "Queued" },
+    { id: "running", label: "Running" },
+    { id: "review", label: "Needs review" },
+    { id: "done", label: "Done" },
+];
+
+// Fold task groups into fixed lifecycle columns (queued → running → needs-review →
+// done), newest group first within a column. Replaces the recency buckets so the
+// board reads by STATE. Empty columns are dropped (terminal-plain — no hollow
+// headers); a group with no parseable createdAt sorts last within its column.
+function deriveLifecycleColumns(groups: RecoderWorkspaceGroup[]): RecoderLifecycleColumn[] {
+    const byPhase = new Map<RecoderLifecyclePhase, { group: RecoderWorkspaceGroup; ts: number }[]>();
+    for (const group of groups) {
+        const id = groupLifecycle(group);
+        const list = byPhase.get(id) ?? [];
+        list.push({ group, ts: groupTimestamp(group) });
+        byPhase.set(id, list);
+    }
+    const result: RecoderLifecycleColumn[] = [];
+    for (const def of LIFECYCLE_COLUMN_DEFS) {
+        const entries = byPhase.get(def.id);
+        if (entries == null || entries.length == 0) {
+            continue;
+        }
+        entries.sort((a, b) => (b.ts ?? Number.NEGATIVE_INFINITY) - (a.ts ?? Number.NEGATIVE_INFINITY));
+        result.push({ id: def.id, label: def.label, groups: entries.map((e) => e.group) });
+    }
+    return result;
+}
+
+// The repo (projectId) an ad-hoc converge selection is LOCKED to — the first
+// selected workspace's repo, or null when nothing is selected yet. Converging
+// across repos is nonsense (the backend rejects it too), so this is the key the
+// per-card disable and the action gate both read. First match in board order.
+function convergeSelectionRepo(
+    workspaces: readonly RecoderWorkspace[],
+    selectedIds: ReadonlySet<string>
+): string | null {
+    for (const ws of workspaces) {
+        if (selectedIds.has(ws.workspaceId)) {
+            return workspaceProjectId(ws);
+        }
+    }
+    return null;
+}
+
+// Pure: whether a workspace's ad-hoc converge checkbox should be DISABLED — true
+// only for a workspace of a DIFFERENT repo than the one the current selection locked
+// (an already-selected/unselected same-repo row is always tickable). `selectedRepo`
+// null (empty selection) disables nothing, so the first pick can be any repo.
+function convergeSelectDisabled(ws: RecoderWorkspace, selectedRepo: string | null): boolean {
+    return selectedRepo != null && workspaceProjectId(ws) != selectedRepo;
+}
+
+// The read-model for the "Converge N selected" action: how many compatible
+// workspaces are picked, the locked repo, whether the ad-hoc converge edge can be
+// called (2+ picks, one repo), and a truthful reason when it cannot. Never lies that
+// converge is ready — a single pick or a cross-repo mix reports why-not.
+type AdHocConvergeDecision = {
+    ids: string[];
+    count: number;
+    repo: string | null;
+    canConverge: boolean;
+    reason: string;
+};
+
+// Pure: derive the ad-hoc converge action state from the board's workspaces + the
+// ticked id set. `ids` are the selected workspaces IN BOARD ORDER (a selected id no
+// longer on the board is dropped — never a phantom pick). Cross-repo picks are
+// prevented at tick time, but this still fail-closes on a mixed set defensively so
+// the action never shapes a request the backend would 400.
+function deriveAdHocConverge(
+    workspaces: readonly RecoderWorkspace[],
+    selectedIds: ReadonlySet<string>
+): AdHocConvergeDecision {
+    const selected = workspaces.filter((ws) => selectedIds.has(ws.workspaceId));
+    const ids = selected.map((ws) => ws.workspaceId);
+    const repo = selected.length > 0 ? workspaceProjectId(selected[0]) : null;
+    if (ids.length < 2) {
+        return { ids, count: ids.length, repo, canConverge: false, reason: "Select 2+ workspaces to converge." };
+    }
+    const mixed = selected.some((ws) => workspaceProjectId(ws) != repo);
+    if (mixed) {
+        return {
+            ids,
+            count: ids.length,
+            repo,
+            canConverge: false,
+            reason: "Selected workspaces span different repos — converge needs one repo.",
+        };
+    }
+    return { ids, count: ids.length, repo, canConverge: true, reason: "" };
+}
+
+// Pure request-shaping for the ad-hoc compare edge (GET …/compare/ad-hoc?ids=…):
+// trim, drop blanks, and de-dupe (preserving order) so a doubled or blank id never
+// shapes a bad `ids` query. The model joins the result with commas.
+function adHocCompareIds(selectedIds: readonly string[]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const raw of selectedIds) {
+        const id = (raw ?? "").trim();
+        if (id == "" || seen.has(id)) {
+            continue;
+        }
+        seen.add(id);
+        out.push(id);
+    }
+    return out;
+}
+
 // "" ⇒ no trustworthy createdAt; the row simply shows no age.
 function formatRelativeAge(createdAt: string, now: Date = new Date()): string {
     if (typeof createdAt != "string" || createdAt == "") {
@@ -1048,6 +1217,13 @@ export {
     diffSummaryFetchKey,
     shouldRefetchDiffSummary,
     bucketWorkspaceGroups,
+    workspaceLifecycle,
+    groupLifecycle,
+    deriveLifecycleColumns,
+    convergeSelectionRepo,
+    convergeSelectDisabled,
+    deriveAdHocConverge,
+    adHocCompareIds,
     formatRelativeAge,
     isTerminalWorkspaceState,
     suggestNextAction,
@@ -1087,6 +1263,9 @@ export {
     type RecoderWorkspaceGroup,
     type RecoderBoardShow,
     type RecoderBoardBucket,
+    type RecoderLifecyclePhase,
+    type RecoderLifecycleColumn,
+    type AdHocConvergeDecision,
     type ClusterConvergePhase,
     type ClusterState,
 };

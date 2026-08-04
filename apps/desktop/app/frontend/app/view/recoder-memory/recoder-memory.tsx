@@ -160,7 +160,7 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
             {hasQuery && (
                 <div className="flex flex-col gap-1">
                     <div className={FIELD_LABEL}>Search results</div>
-                    {sourcesNotice != "" && <div className="text-warning text-sm">{sourcesNotice}</div>}
+                    {sourcesNotice != "" && <div className="text-secondary text-sm">{sourcesNotice}</div>}
                     {searchNotice != "" && <div className="text-secondary text-sm">{searchNotice}</div>}
                     {results.map((r) => (
                         <ResultRow key={r.id} result={r} />

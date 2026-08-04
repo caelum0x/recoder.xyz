@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import RecoderCubeLogo from "@/app/asset/logo.svg";
 import { createBlock, getApi } from "@/app/store/global";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -43,6 +44,9 @@ import {
 import { RecoderIdentityModel } from "./recoder-identity-model";
 import {
     attentionBadgeLabel,
+    convergeSelectDisabled,
+    convergeSelectionRepo,
+    deriveAdHocConverge,
     deriveClusterState,
     formatRelativeAge,
     isTerminalWorkspaceState,
@@ -487,7 +491,10 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const workspaces = useAtomValue(model.workspacesAtom);
     const allWorkspaces = useAtomValue(model.combinedWorkspacesAtom);
     const groups = useAtomValue(model.groupsAtom);
-    const buckets = useAtomValue(model.boardBucketsAtom);
+    const columns = useAtomValue(model.boardColumnsAtom);
+    const selectMode = useAtomValue(model.selectModeAtom);
+    const selectedForConverge = useAtomValue(model.selectedForConvergeAtom);
+    const adHocConvergeError = useAtomValue(model.adHocConvergeErrorAtom);
     const [boardFilter, setBoardFilter] = useAtom(model.boardFilterAtom);
     const boardShow = useAtomValue(model.boardShowAtom);
     const [boardProject, setBoardProject] = useAtom(model.boardProjectAtom);
@@ -678,11 +685,55 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         setAlsoRun(next.also);
     }, [readyAgentKey]);
 
-    // Flat, render-order list of the visible board rows (recency buckets, then
+    // Flat, render-order list of the visible board rows (lifecycle columns, then
     // singleton + parallel-group rows) so keyboard nav walks the FILTERED board
     // exactly as it reads.
-    const boardRows = buckets.flatMap((b) => b.groups.flatMap((g) => g.workspaces));
+    const boardRows = columns.flatMap((c) => c.groups.flatMap((g) => g.workspaces));
     const orderedIds = boardRows.map((w) => w.workspaceId);
+
+    // Ad-hoc converge selection reads (PW1 #1): the locked repo (so cross-repo cards
+    // disable) + the action decision (2+ same-repo picks ⇒ converge is callable).
+    const selectedRepo = convergeSelectionRepo(allWorkspaces, selectedForConverge);
+    const adHocDecision = deriveAdHocConverge(allWorkspaces, selectedForConverge);
+
+    // One board row, optionally prefixed with an ad-hoc converge checkbox while select
+    // mode is on. A cross-repo card's checkbox is disabled with a truthful reason so a
+    // pick that couldn't converge is never offered (the model fail-closes too).
+    const renderBoardRow = (ws: RecoderWorkspace, onConverge?: () => void) => {
+        const row = (
+            <WorkspaceRow
+                key={ws.workspaceId}
+                model={model}
+                ws={ws}
+                summary={diffSummaries[ws.workspaceId]}
+                pr={prStatuses[ws.workspaceId]}
+                status={rowStatus[ws.workspaceId]}
+                busy={busyRow == ws.workspaceId}
+                tmuxBin={setup.tmuxBin}
+                selected={selectedId == ws.workspaceId}
+                onSelect={() => setSelectedId(ws.workspaceId)}
+                onConverge={onConverge}
+            />
+        );
+        if (!selectMode) {
+            return row;
+        }
+        const checked = selectedForConverge.has(ws.workspaceId);
+        const disabled = !checked && convergeSelectDisabled(ws, selectedRepo);
+        return (
+            <div key={ws.workspaceId} className="flex items-start gap-2">
+                <input
+                    type="checkbox"
+                    className="mt-2 cursor-pointer disabled:cursor-default"
+                    checked={checked}
+                    disabled={disabled}
+                    title={disabled ? "Different repo — converge needs one repo" : "Select to converge"}
+                    onChange={() => model.toggleSelectForConverge(ws.workspaceId)}
+                />
+                <div className="min-w-0 flex-1">{row}</div>
+            </div>
+        );
+    };
 
     // Keep the selection anchored to a live row: seed the first row when nothing is
     // selected, and re-seed if a refresh dropped the previously-selected workspace.
@@ -928,11 +979,18 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2" onKeyDown={onBoardKeyDown}>
             <div className="flex items-center gap-2">
+                <span
+                    className="flex h-[18px] items-center [&>svg]:h-full [&>svg]:w-auto opacity-90"
+                    aria-hidden="true"
+                    title="Recoder"
+                >
+                    <RecoderCubeLogo />
+                </span>
                 <span className={PAGE_TITLE}>Workspaces</span>
                 <RecoderHealthDot />
                 <RecoderConnectionBadge />
                 <div className="flex-1" />
-                <RecoderIdentityAffordance />
+                <RecoderIdentityAffordance onOpenSettings={() => openView("recoder-settings")} />
                 <button className={PRIMARY_BTN} onClick={() => setLaunchOpen(!launchOpen)}>
                     New agent
                     <span className="ml-1.5 text-xs text-meta font-mono">N</span>
@@ -1389,9 +1447,36 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         />
                         <span>Notify</span>
                     </label>
+                    <button
+                        className={selectMode ? PICK_BTN_ON : QUIET_BTN}
+                        onClick={() => model.toggleSelectMode()}
+                        title="Tick 2+ workspaces from separate runs to compare and converge them"
+                    >
+                        {selectMode ? "Selecting…" : "Select to converge"}
+                    </button>
                     <button className={QUIET_BTN} onClick={() => setCloneOpen(true)}>
                         Clone repo
                     </button>
+                </div>
+            )}
+            {selectMode && (
+                <div className={`${META} flex flex-wrap items-center gap-2`}>
+                    <span>
+                        {adHocDecision.count} selected
+                        {adHocDecision.repo != null && adHocDecision.count > 0 ? ` · ${adHocDecision.repo}` : ""}
+                    </span>
+                    <button
+                        className={adHocDecision.canConverge ? PRIMARY_BTN : QUIET_BTN}
+                        disabled={!adHocDecision.canConverge}
+                        title={adHocDecision.reason || "Compare the selected workspaces side-by-side and converge"}
+                        onClick={() => model.loadAdHocCompare(adHocDecision.ids)}
+                    >
+                        Converge {adHocDecision.count} selected
+                    </button>
+                    <button className={QUIET_BTN} onClick={() => model.setSelectMode(false)}>
+                        Cancel
+                    </button>
+                    {adHocConvergeError != "" && <span className="text-error">{adHocConvergeError}</span>}
                 </div>
             )}
             {allWorkspaces.length > 0 && (
@@ -1423,28 +1508,14 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                 </div>
             )}
             <div className="flex flex-col gap-2">
-                {buckets.map((bucket) => (
-                    <div key={bucket.id} className="flex flex-col gap-1">
+                {columns.map((column) => (
+                    <div key={column.id} className="flex flex-col gap-1">
                         <div className={FIELD_LABEL}>
-                            {bucket.label} · {bucket.groups.reduce((n, g) => n + g.workspaces.length, 0)}
+                            {column.label} · {column.groups.reduce((n, g) => n + g.workspaces.length, 0)}
                         </div>
-                        {bucket.groups.map((group) => {
+                        {column.groups.map((group) => {
                             if (group.workspaces.length <= 1) {
-                                const ws = group.workspaces[0];
-                                return (
-                                    <WorkspaceRow
-                                        key={ws.workspaceId}
-                                        model={model}
-                                        ws={ws}
-                                        summary={diffSummaries[ws.workspaceId]}
-                                        pr={prStatuses[ws.workspaceId]}
-                                        status={rowStatus[ws.workspaceId]}
-                                        busy={busyRow == ws.workspaceId}
-                                        tmuxBin={setup.tmuxBin}
-                                        selected={selectedId == ws.workspaceId}
-                                        onSelect={() => setSelectedId(ws.workspaceId)}
-                                    />
-                                );
+                                return renderBoardRow(group.workspaces[0]);
                             }
                             const taskGroup = group.taskGroup ?? "";
                             const compareView = compare[taskGroup];
@@ -1522,21 +1593,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                             </button>
                                         )}
                                     </div>
-                                    {group.workspaces.map((ws) => (
-                                        <WorkspaceRow
-                                            key={ws.workspaceId}
-                                            model={model}
-                                            ws={ws}
-                                            summary={diffSummaries[ws.workspaceId]}
-                                            pr={prStatuses[ws.workspaceId]}
-                                            status={rowStatus[ws.workspaceId]}
-                                            busy={busyRow == ws.workspaceId}
-                                            tmuxBin={setup.tmuxBin}
-                                            selected={selectedId == ws.workspaceId}
-                                            onSelect={() => setSelectedId(ws.workspaceId)}
-                                            onConverge={onConverge}
-                                        />
-                                    ))}
+                                    {group.workspaces.map((ws) => renderBoardRow(ws, onConverge))}
                                 </div>
                             );
                         })}

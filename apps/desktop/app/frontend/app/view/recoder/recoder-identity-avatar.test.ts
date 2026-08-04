@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from "vitest";
-import { identityInitials } from "./recoder-identity-avatar";
+import { avatarMenuEntries, identityInitials } from "./recoder-identity-avatar";
 
 describe("identityInitials", () => {
     it("uses first + last word initials for a multi-word name", () => {
@@ -24,5 +24,14 @@ describe("identityInitials", () => {
         expect(identityInitials()).toBe("?");
         expect(identityInitials("   ", "   ")).toBe("?");
         expect(identityInitials("", "@nolocalpart")).toBe("?");
+    });
+});
+
+describe("avatarMenuEntries — Settings lives behind the avatar (PW3 #10)", () => {
+    it("carries a Settings entry ahead of Sign out", () => {
+        const entries = avatarMenuEntries();
+        expect(entries.map((e) => e.id)).toEqual(["settings", "signout"]);
+        expect(entries.find((e) => e.id === "settings")?.label).toBe("Settings");
+        expect(entries.find((e) => e.id === "signout")?.label).toBe("Sign out");
     });
 });

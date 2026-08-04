@@ -150,15 +150,18 @@ function prChipLabel(chip: RecoderPrChip): string {
     return chip.checks == "none" ? base : `${base} · checks ${chip.checks}`;
 }
 
+// Graphite-only tones: an open PR is the live/actionable state (the one accent);
+// draft and merged are settled/neutral (the label carries the full truth); only a
+// truly closed PR earns the single muted crimson. No decorative emerald/purple.
 const PrChipTones: Record<RecoderPrChipState, string> = {
-    open: "border-emerald-400/40 bg-emerald-400/15 text-emerald-300",
+    open: "border-accent/50 bg-accent/20 text-accent",
     draft: "border-white/15 bg-white/[0.06] text-secondary",
-    merged: "border-purple-400/40 bg-purple-400/15 text-purple-300",
-    closed: "border-red-400/40 bg-red-400/15 text-red-300",
+    merged: "border-border bg-white/[0.04] text-secondary",
+    closed: "border-error/40 bg-error/15 text-error",
 };
 
-// Failing checks are the actionable signal regardless of PR state, so they take
-// the alert tone; the label still carries the full truth.
+// Failing checks are the actionable failure regardless of PR state, so they take
+// the crimson closed/alert tone; the label still carries the full truth.
 function prChipTone(chip: RecoderPrChip): string {
     return chip.checks == "failing" ? PrChipTones.closed : PrChipTones[chip.state];
 }
