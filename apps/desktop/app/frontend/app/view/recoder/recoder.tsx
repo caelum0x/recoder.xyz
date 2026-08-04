@@ -14,19 +14,19 @@ import { RecoderComparePanel } from "./recoder-compare";
 import { RecoderConnectionModel } from "./recoder-connection-model";
 import { isConnectivityError } from "./recoder-errors";
 import {
-    filterClonableRepos,
-    filterReposByQuery,
-    githubIdentityLabel,
-    RepoChipDisplayLimit,
-    repoPickerHint,
-} from "./recoder-github-logic";
-import {
     archivedHistoryNotice,
     firstParallelPreselection,
     firstRunAgentChips,
     shouldShowGettingStarted,
     showConvergeAffordance,
 } from "./recoder-first-run-logic";
+import {
+    filterClonableRepos,
+    filterReposByQuery,
+    githubIdentityLabel,
+    RepoChipDisplayLimit,
+    repoPickerHint,
+} from "./recoder-github-logic";
 import { RecoderIdentityAffordance } from "./recoder-identity";
 import { RecoderIdentityModel } from "./recoder-identity-model";
 import {
@@ -40,20 +40,13 @@ import {
     type RecoderDiffSummary,
     type RecoderEnvironment,
     type RecoderRowActionId,
-    type RecoderRowSuggestion,
     type RecoderWorkspace,
 } from "./recoder-model";
 import { navigationCommands } from "./recoder-nav-commands";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
 import { prChipLabel, prChipTone, type RecoderPrChip } from "./recoder-pr-status";
 import { RecoderShortcutsOverlay } from "./recoder-shortcuts";
-import { RecoderWhatsNew } from "./recoder-whats-new-panel";
 import { RecoderErrorRow, RecoderSkeleton } from "./recoder-states";
-import {
-    fetchTranscriptSearch,
-    projectTranscriptSearchResult,
-    transcriptCommands,
-} from "./recoder-transcript-search";
 import {
     ATTN_BADGE,
     CHIP,
@@ -67,7 +60,10 @@ import {
     QUIET_BTN,
     ROW_TITLE,
     SECTION_TITLE,
+    STATE_CHIP,
 } from "./recoder-styles";
+import { fetchTranscriptSearch, projectTranscriptSearchResult, transcriptCommands } from "./recoder-transcript-search";
+import { RecoderWhatsNew } from "./recoder-whats-new-panel";
 
 // Same cadence as the terminal view's UsageStrip so the board's cost line stays
 // live during an active run instead of freezing at selection time.
@@ -202,7 +198,18 @@ type WorkspaceRowProps = {
     onConverge?: () => void;
 };
 
-function WorkspaceRow({ model, ws, summary, pr, status, busy, tmuxBin, selected, onSelect, onConverge }: WorkspaceRowProps) {
+function WorkspaceRow({
+    model,
+    ws,
+    summary,
+    pr,
+    status,
+    busy,
+    tmuxBin,
+    selected,
+    onSelect,
+    onConverge,
+}: WorkspaceRowProps) {
     const ref = useRef<HTMLDivElement>(null);
     const usage = useAtomValue(model.usageAtom);
     const usageWorkspaceId = useAtomValue(model.usageWorkspaceIdAtom);
@@ -225,9 +232,10 @@ function WorkspaceRow({ model, ws, summary, pr, status, busy, tmuxBin, selected,
     const attnLabel = attentionBadgeLabel(ws.attention);
     const suggestion = suggestNextAction(ws.state, summary, ws.sessionName != null && ws.sessionName != "");
     // Promote exactly one existing button to primary when it IS the suggested next
-    // step; every other button stays quiet. Never invents an action.
+    // step; every other button stays quiet. Never invents an action. Only the
+    // selected row gets the promotion so the board carries at most one accent.
     const btnClass = (action: RecoderRowActionId): string =>
-        suggestion != null && suggestion.action == action && !busy ? PRIMARY_BTN : QUIET_BTN;
+        selected && suggestion != null && suggestion.action == action && !busy ? PRIMARY_BTN : QUIET_BTN;
     return (
         <div
             ref={ref}
@@ -240,20 +248,14 @@ function WorkspaceRow({ model, ws, summary, pr, status, busy, tmuxBin, selected,
         >
             <div className="flex items-center gap-2">
                 <span className={`${ROW_TITLE} truncate font-mono`}>{ws.branch}</span>
-                <span className={META}>{ws.state}</span>
+                <span className={STATE_CHIP}>{ws.state}</span>
                 {attnLabel != "" && (
                     <span className={ATTN_BADGE} title="This agent stopped mid-run and is waiting on you">
                         {attnLabel}
                     </span>
                 )}
                 <WorkspacePrChip pr={pr} />
-                {summary != null && summary.files > 0 && (
-                    <span className={`${META} font-mono`}>
-                        +{summary.additions} -{summary.deletions}
-                    </span>
-                )}
-                <span className={`${META} ml-auto`}>{agentLabel(ws.runtimeId)}</span>
-                {age != "" && <span className={META}>{age}</span>}
+                <div className="flex-1" />
                 {onConverge != null && (
                     <button
                         className={QUIET_BTN}
@@ -297,12 +299,25 @@ function WorkspaceRow({ model, ws, summary, pr, status, busy, tmuxBin, selected,
                     </button>
                 )}
                 {ws.state != "archived" && (
-                    <button className={btnClass("archive")} disabled={busy} onClick={() => model.archiveWorkspace(ws.workspaceId)}>
+                    <button
+                        className={btnClass("archive")}
+                        disabled={busy}
+                        onClick={() => model.archiveWorkspace(ws.workspaceId)}
+                    >
                         Archive
                     </button>
                 )}
             </div>
-            {suggestion != null && (
+            <div className={`${META} flex items-center gap-2`}>
+                <span>{agentLabel(ws.runtimeId)}</span>
+                {summary != null && summary.files > 0 && (
+                    <span className="font-mono">
+                        +{summary.additions} -{summary.deletions}
+                    </span>
+                )}
+                {age != "" && <span>{age}</span>}
+            </div>
+            {selected && suggestion != null && (
                 <div className={`${META} flex items-center gap-1.5`}>
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent/70 shrink-0" />
                     <span>{suggestion.label}</span>
@@ -617,8 +632,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const canLaunch = !posting && repoPath.trim() != "" && runtimeId != "" && !needsPrompt && repoIsGit;
     const disabledReason = launchDisabledReason(repoPath, runtimeId, needsPrompt, setup.probed, readyAgents.length);
     const parallelAgents = readyAgents.filter((a) => a.runtimeId != runtimeId);
-    const allParallelSelected =
-        parallelAgents.length > 0 && parallelAgents.every((a) => alsoRun.includes(a.runtimeId));
+    const allParallelSelected = parallelAgents.length > 0 && parallelAgents.every((a) => alsoRun.includes(a.runtimeId));
     const parallelCount = alsoRun.filter((id) => id != runtimeId && id != "").length;
     const isGitError = /git|worktree|repositor/i.test(launchResult?.error ?? "");
     const quickStartRepo = recentRepos.find((r) => r.trim() != "") ?? "";
@@ -645,8 +659,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             ? agentAuthPresentation(true, agentAuth[selectedAgent.runtimeId] ?? "unknown")
             : null;
 
-    const toggleAlso = (id: string, on: boolean) =>
-        setAlsoRun(on ? [...alsoRun, id] : alsoRun.filter((x) => x != id));
+    const toggleAlso = (id: string, on: boolean) => setAlsoRun(on ? [...alsoRun, id] : alsoRun.filter((x) => x != id));
 
     // Read-only, non-blocking pre-launch check: warn inline the moment a folder is
     // chosen if it isn't a git repo, instead of after a failed worktree add. Fails
@@ -708,9 +721,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             { id: "shortcuts", title: "Show keyboard shortcuts", shortcut: "⌘/", run: () => setShortcutsOpen(true) },
             {
                 id: "notify-toggle",
-                title: notifyOnAttention
-                    ? "Turn off attention notifications"
-                    : "Turn on attention notifications",
+                title: notifyOnAttention ? "Turn off attention notifications" : "Turn on attention notifications",
                 run: () => model.setNotifyOnAttention(!notifyOnAttention),
             },
             ...navigationCommands(openView),
@@ -773,24 +784,28 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             });
         }
         return list;
-    }, [workspaces, groups, identity, model, setup.tmuxBin, notifyOnAttention, setLaunchOpen, setShortcutsOpen, setCloneOpen]);
+    }, [
+        workspaces,
+        groups,
+        identity,
+        model,
+        setup.tmuxBin,
+        notifyOnAttention,
+        setLaunchOpen,
+        setShortcutsOpen,
+        setCloneOpen,
+    ]);
 
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2" onKeyDown={onBoardKeyDown}>
             <div className="flex items-center gap-2">
-                <span className={PAGE_TITLE}>Recoder - Workspaces</span>
+                <span className={PAGE_TITLE}>Workspaces</span>
                 <RecoderConnectionBadge />
                 <div className="flex-1" />
                 <RecoderIdentityAffordance />
                 <button className={PRIMARY_BTN} onClick={() => setLaunchOpen(!launchOpen)}>
-                    {launchOpen ? (
-                        "Close"
-                    ) : (
-                        <>
-                            New agent
-                            <span className="ml-1.5 text-xs text-meta font-mono">N</span>
-                        </>
-                    )}
+                    New agent
+                    <span className="ml-1.5 text-xs text-meta font-mono">N</span>
                 </button>
             </div>
 
@@ -800,246 +815,254 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             {loading && workspaces.length == 0 && error == "" && <RecoderSkeleton rows={3} />}
 
             {launchOpen && (
-                <div
-                    className="flex flex-col gap-3 rounded border border-white/8 p-3 mt-1 recoder-enter"
-                    onKeyDown={(e) => {
-                        // launch chord lives here (not on a single field) so keydown bubbling from
-                        // any inner select/input/textarea fires it - one owner avoids a double-launch
-                        if (e.key == "Escape") {
-                            setLaunchOpen(false);
-                            e.stopPropagation();
-                            return;
-                        }
-                        if ((e.metaKey || e.ctrlKey) && e.key == "Enter" && canLaunch) {
-                            e.preventDefault();
-                            model.launch();
-                        }
-                    }}
-                >
-                    <div className={SECTION_TITLE}>Launch a coding agent</div>
-
-                    <label className="flex flex-col gap-1">
-                        <span className={FIELD_LABEL}>Agent</span>
-                        <select
-                            className={`${INPUT} cursor-pointer`}
-                            value={runtimeId}
-                            onChange={(e) => setRuntimeId(e.target.value)}
-                        >
-                            {readyAgents.length == 0 && (
-                                <option value="">{setup.probed ? "No agents found on PATH" : "Detecting agents…"}</option>
-                            )}
-                            {setup.agents.map((a) => (
-                                <option key={a.runtimeId} value={a.runtimeId} disabled={!a.available}>
-                                    {agentLabel(a.runtimeId)}
-                                    {agentAuthOptionSuffix(a.available, agentAuth[a.runtimeId] ?? "unknown")}
-                                </option>
-                            ))}
-                        </select>
-                        {selectedAuthPres?.needsAuth && (
-                            <AgentAuthAffordance runtimeId={runtimeId} badge={selectedAuthPres.badge} />
-                        )}
-                        {setup.probed && readyAgents.length == 0 && (
-                            <div className="flex items-center gap-2">
-                                <span className={META}>
-                                    No agent detected on PATH. Install one, then re-scan — no restart needed.
-                                </span>
-                                <button
-                                    className={QUIET_BTN}
-                                    disabled={setupProbing}
-                                    onClick={() => model.rescanAgents()}
-                                >
-                                    {setupProbing ? "Scanning…" : "Re-scan"}
-                                </button>
-                            </div>
-                        )}
-                    </label>
-
-                    <label className="flex flex-col gap-1">
-                        <span className={FIELD_LABEL}>Folder</span>
-                        {repoPath.trim() == "" ? (
-                            <button ref={folderBtnRef} className={`${PRIMARY_BTN} w-full`} onClick={browseFolder}>
-                                Choose folder...
-                            </button>
-                        ) : (
-                            <div className="flex items-center gap-2" title={repoPath}>
-                                <div className="flex min-w-0 flex-1 flex-col">
-                                    <span className={`${ROW_TITLE} truncate`}>{folderName(repoPath)}</span>
-                                    <span className={`${META} truncate font-mono`}>{repoPath}</span>
-                                </div>
-                                <button className={QUIET_BTN} onClick={browseFolder}>
-                                    Change
-                                </button>
-                            </div>
-                        )}
-                        {recentRepos.filter((r) => r != repoPath).length > 0 && (
-                            <div className="flex flex-wrap gap-1.5">
-                                {recentRepos
-                                    .filter((r) => r != repoPath)
-                                    .map((r) => (
-                                        <button
-                                            key={r}
-                                            className={CHIP}
-                                            title={r}
-                                            onClick={() => {
-                                                setRepoPath(r);
-                                                checkRepo(r);
-                                            }}
-                                        >
-                                            {folderName(r)}
-                                        </button>
-                                    ))}
-                            </div>
-                        )}
-                        {clonableRepos.length > 0 && (
-                            <div className="flex flex-col gap-1">
-                                <span className={META}>
-                                    From your GitHub{githubIdentity != "" ? ` (${githubIdentity})` : ""} — pick to
-                                    clone:
-                                </span>
-                                {clonableRepos.length > RepoChipDisplayLimit && (
-                                    <input
-                                        className={`${INPUT} font-mono`}
-                                        placeholder="Type to filter repos…"
-                                        value={repoQuery}
-                                        onChange={(e) => setRepoQuery(e.target.value)}
-                                    />
-                                )}
-                                <div className="flex flex-wrap gap-1.5">
-                                    {matchingClonableRepos.slice(0, RepoChipDisplayLimit).map((r) => (
-                                        <button
-                                            key={r.nameWithOwner}
-                                            className={CHIP}
-                                            title={r.url}
-                                            disabled={cloning}
-                                            onClick={() => model.cloneRepo(r.url)}
-                                        >
-                                            {r.nameWithOwner}
-                                        </button>
-                                    ))}
-                                </div>
-                                {matchingClonableRepos.length == 0 && repoQuery.trim() != "" && (
-                                    <span className={META}>No listed repos match.</span>
-                                )}
-                                {clonableHint != "" && <span className={META}>{clonableHint}</span>}
-                                {cloning && <span className={META}>Cloning…</span>}
-                                {!cloning && cloneError != "" && <div className={ERROR_ROW}>{cloneError}</div>}
-                            </div>
-                        )}
-                        {repoPath.trim() != "" && !repoIsGit && (
-                            <div className="flex flex-wrap items-center gap-2">
-                                <span className={META}>
-                                    Not a git repository — Recoder needs one to create isolated worktrees.
-                                </span>
-                                <button className={QUIET_BTN} disabled={gitIniting} onClick={initGit}>
-                                    {gitIniting ? "Initializing…" : "Initialize git repository"}
-                                </button>
-                            </div>
-                        )}
-                    </label>
-
-                    <label className="flex flex-col gap-1">
-                        <span className={FIELD_LABEL}>First message{interactive ? " (optional)" : " (required)"}</span>
-                        <textarea
-                            ref={messageRef}
-                            className={`${INPUT} min-h-16 resize-y`}
-                            placeholder={
-                                interactive
-                                    ? "Optionally start the agent with a message - or leave empty and chat once it's running..."
-                                    : "Describe the task - required for a non-interactive run."
+                <div className="fixed inset-0 z-[var(--zindex-typeahead-modal)]">
+                    <div className="absolute inset-0 bg-black/40" onClick={() => setLaunchOpen(false)} />
+                    <div
+                        className="absolute left-1/2 top-[10%] flex max-h-[80vh] w-[560px] max-w-[90vw] -translate-x-1/2 flex-col gap-3 overflow-y-auto rounded-md border border-white/8 bg-modalbg p-4 shadow-lg recoder-enter"
+                        onKeyDown={(e) => {
+                            // launch chord lives here (not on a single field) so keydown bubbling from
+                            // any inner select/input/textarea fires it - one owner avoids a double-launch
+                            if (e.key == "Escape") {
+                                setLaunchOpen(false);
+                                e.stopPropagation();
+                                return;
                             }
-                            value={prompt}
-                            onChange={(e) => setPrompt(e.target.value)}
-                        />
-                    </label>
+                            if ((e.metaKey || e.ctrlKey) && e.key == "Enter" && canLaunch) {
+                                e.preventDefault();
+                                model.launch();
+                            }
+                        }}
+                    >
+                        <div className={SECTION_TITLE}>Launch a coding agent</div>
 
-                    {parallelAgents.length > 0 && (
-                        <div className="flex flex-col gap-1">
-                            <div className="flex items-center justify-between">
-                                <span className={FIELD_LABEL}>Also run in parallel (optional)</span>
-                                <button
-                                    className={QUIET_BTN}
-                                    onClick={() =>
-                                        setAlsoRun(
-                                            allParallelSelected ? [] : parallelAgents.map((a) => a.runtimeId)
-                                        )
-                                    }
-                                >
-                                    {allParallelSelected ? "Clear" : "Select all"}
-                                </button>
-                            </div>
-                            <div className="flex flex-wrap gap-3">
-                                {parallelAgents.map((a) => (
-                                    <label
-                                        key={a.runtimeId}
-                                        className="flex items-center gap-1.5 text-sm cursor-pointer"
-                                        title={`Also run this task with ${agentLabel(a.runtimeId)} in its own worktree`}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            className="cursor-pointer"
-                                            checked={alsoRun.includes(a.runtimeId)}
-                                            onChange={(e) => toggleAlso(a.runtimeId, e.target.checked)}
-                                        />
-                                        <span>{agentLabel(a.runtimeId)}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {alsoRun.filter((id) => id != runtimeId).length == 0 && (
                         <label className="flex flex-col gap-1">
-                            <span className={FIELD_LABEL}>Branch (optional)</span>
-                            <input
-                                className={INPUT}
-                                placeholder="auto-named if empty"
-                                value={branch}
-                                onChange={(e) => setBranch(e.target.value)}
+                            <span className={FIELD_LABEL}>Agent</span>
+                            <select
+                                className={`${INPUT} cursor-pointer`}
+                                value={runtimeId}
+                                onChange={(e) => setRuntimeId(e.target.value)}
+                            >
+                                {readyAgents.length == 0 && (
+                                    <option value="">
+                                        {setup.probed ? "No agents found on PATH" : "Detecting agents…"}
+                                    </option>
+                                )}
+                                {setup.agents.map((a) => (
+                                    <option key={a.runtimeId} value={a.runtimeId} disabled={!a.available}>
+                                        {agentLabel(a.runtimeId)}
+                                        {agentAuthOptionSuffix(a.available, agentAuth[a.runtimeId] ?? "unknown")}
+                                    </option>
+                                ))}
+                            </select>
+                            {selectedAuthPres?.needsAuth && (
+                                <AgentAuthAffordance runtimeId={runtimeId} badge={selectedAuthPres.badge} />
+                            )}
+                            {setup.probed && readyAgents.length == 0 && (
+                                <div className="flex items-center gap-2">
+                                    <span className={META}>
+                                        No agent detected on PATH. Install one, then re-scan — no restart needed.
+                                    </span>
+                                    <button
+                                        className={QUIET_BTN}
+                                        disabled={setupProbing}
+                                        onClick={() => model.rescanAgents()}
+                                    >
+                                        {setupProbing ? "Scanning…" : "Re-scan"}
+                                    </button>
+                                </div>
+                            )}
+                        </label>
+
+                        <label className="flex flex-col gap-1">
+                            <span className={FIELD_LABEL}>Folder</span>
+                            {repoPath.trim() == "" ? (
+                                <button ref={folderBtnRef} className={`${PRIMARY_BTN} w-full`} onClick={browseFolder}>
+                                    Choose folder...
+                                </button>
+                            ) : (
+                                <div className="flex items-center gap-2" title={repoPath}>
+                                    <div className="flex min-w-0 flex-1 flex-col">
+                                        <span className={`${ROW_TITLE} truncate`}>{folderName(repoPath)}</span>
+                                        <span className={`${META} truncate font-mono`}>{repoPath}</span>
+                                    </div>
+                                    <button className={QUIET_BTN} onClick={browseFolder}>
+                                        Change
+                                    </button>
+                                </div>
+                            )}
+                            {recentRepos.filter((r) => r != repoPath).length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                    {recentRepos
+                                        .filter((r) => r != repoPath)
+                                        .map((r) => (
+                                            <button
+                                                key={r}
+                                                className={CHIP}
+                                                title={r}
+                                                onClick={() => {
+                                                    setRepoPath(r);
+                                                    checkRepo(r);
+                                                }}
+                                            >
+                                                {folderName(r)}
+                                            </button>
+                                        ))}
+                                </div>
+                            )}
+                            {clonableRepos.length > 0 && (
+                                <div className="flex flex-col gap-1">
+                                    <span className={META}>
+                                        From your GitHub{githubIdentity != "" ? ` (${githubIdentity})` : ""} — pick to
+                                        clone:
+                                    </span>
+                                    {clonableRepos.length > RepoChipDisplayLimit && (
+                                        <input
+                                            className={`${INPUT} font-mono`}
+                                            placeholder="Type to filter repos…"
+                                            value={repoQuery}
+                                            onChange={(e) => setRepoQuery(e.target.value)}
+                                        />
+                                    )}
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {matchingClonableRepos.slice(0, RepoChipDisplayLimit).map((r) => (
+                                            <button
+                                                key={r.nameWithOwner}
+                                                className={CHIP}
+                                                title={r.url}
+                                                disabled={cloning}
+                                                onClick={() => model.cloneRepo(r.url)}
+                                            >
+                                                {r.nameWithOwner}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {matchingClonableRepos.length == 0 && repoQuery.trim() != "" && (
+                                        <span className={META}>No listed repos match.</span>
+                                    )}
+                                    {clonableHint != "" && <span className={META}>{clonableHint}</span>}
+                                    {cloning && <span className={META}>Cloning…</span>}
+                                    {!cloning && cloneError != "" && <div className={ERROR_ROW}>{cloneError}</div>}
+                                </div>
+                            )}
+                            {repoPath.trim() != "" && !repoIsGit && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className={META}>
+                                        Not a git repository — Recoder needs one to create isolated worktrees.
+                                    </span>
+                                    <button className={QUIET_BTN} disabled={gitIniting} onClick={initGit}>
+                                        {gitIniting ? "Initializing…" : "Initialize git repository"}
+                                    </button>
+                                </div>
+                            )}
+                        </label>
+
+                        <label className="flex flex-col gap-1">
+                            <span className={FIELD_LABEL}>
+                                First message{interactive ? " (optional)" : " (required)"}
+                            </span>
+                            <textarea
+                                ref={messageRef}
+                                className={`${INPUT} min-h-16 resize-y`}
+                                placeholder={
+                                    interactive
+                                        ? "Optionally start the agent with a message - or leave empty and chat once it's running..."
+                                        : "Describe the task - required for a non-interactive run."
+                                }
+                                value={prompt}
+                                onChange={(e) => setPrompt(e.target.value)}
                             />
                         </label>
-                    )}
 
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <input
-                            type="checkbox"
-                            className="cursor-pointer"
-                            checked={interactive}
-                            onChange={(e) => setInteractive(e.target.checked)}
-                        />
-                        <span>Interactive session - run the real agent TUI</span>
-                    </label>
-
-                    <div className="flex items-center gap-2">
-                        <button className={PRIMARY_BTN} disabled={!canLaunch} onClick={() => model.launch()}>
-                            {posting ? "Launching..." : "Launch"}
-                        </button>
-                        {parallelCount > 0 && (
-                            <span className="text-xs text-secondary">
-                                Launches {1 + parallelCount} agents, each in its own worktree.
-                            </span>
-                        )}
-                        {posting && launchProgress != "" && <span className={META}>{launchProgress}</span>}
-                        <span className={`${META} ml-auto`}>
-                            <span className="font-mono">⌘/Ctrl+Enter</span> to launch
-                        </span>
-                    </div>
-
-                    {!canLaunch && disabledReason != "" && <div className={META}>{disabledReason}</div>}
-
-                    {launchResult != null && !launchResult.ok && (
-                        <div className="flex flex-col gap-1">
-                            <div className={ERROR_ROW}>{launchResult.error || "Launch failed"}</div>
-                            {isGitError && (
-                                <div className={META}>
-                                    Recoder needs a git repository here. Run `git init` in this folder, or choose a
-                                    repo folder.
+                        {parallelAgents.length > 0 && (
+                            <div className="flex flex-col gap-1">
+                                <div className="flex items-center justify-between">
+                                    <span className={FIELD_LABEL}>Also run in parallel (optional)</span>
+                                    <button
+                                        className={QUIET_BTN}
+                                        onClick={() =>
+                                            setAlsoRun(
+                                                allParallelSelected ? [] : parallelAgents.map((a) => a.runtimeId)
+                                            )
+                                        }
+                                    >
+                                        {allParallelSelected ? "Clear" : "Select all"}
+                                    </button>
                                 </div>
-                            )}
-                            <button className={QUIET_BTN} onClick={browseFolder}>
-                                Choose another folder
+                                <div className="flex flex-wrap gap-3">
+                                    {parallelAgents.map((a) => (
+                                        <label
+                                            key={a.runtimeId}
+                                            className="flex items-center gap-1.5 text-sm cursor-pointer"
+                                            title={`Also run this task with ${agentLabel(a.runtimeId)} in its own worktree`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                className="cursor-pointer"
+                                                checked={alsoRun.includes(a.runtimeId)}
+                                                onChange={(e) => toggleAlso(a.runtimeId, e.target.checked)}
+                                            />
+                                            <span>{agentLabel(a.runtimeId)}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {alsoRun.filter((id) => id != runtimeId).length == 0 && (
+                            <label className="flex flex-col gap-1">
+                                <span className={FIELD_LABEL}>Branch (optional)</span>
+                                <input
+                                    className={INPUT}
+                                    placeholder="auto-named if empty"
+                                    value={branch}
+                                    onChange={(e) => setBranch(e.target.value)}
+                                />
+                            </label>
+                        )}
+
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="cursor-pointer"
+                                checked={interactive}
+                                onChange={(e) => setInteractive(e.target.checked)}
+                            />
+                            <span>Interactive session - run the real agent TUI</span>
+                        </label>
+
+                        <div className="flex items-center gap-2">
+                            <button className={PRIMARY_BTN} disabled={!canLaunch} onClick={() => model.launch()}>
+                                {posting ? "Launching..." : "Launch"}
+                                {!posting && <span className="ml-1.5 text-xs text-meta font-mono">⌘↵</span>}
                             </button>
+                            <button className={QUIET_BTN} onClick={() => setLaunchOpen(false)}>
+                                Cancel
+                            </button>
+                            {parallelCount > 0 && (
+                                <span className="text-xs text-secondary">
+                                    Launches {1 + parallelCount} agents, each in its own worktree.
+                                </span>
+                            )}
+                            {posting && launchProgress != "" && <span className={META}>{launchProgress}</span>}
                         </div>
-                    )}
+
+                        {!canLaunch && disabledReason != "" && <div className={META}>{disabledReason}</div>}
+
+                        {launchResult != null && !launchResult.ok && (
+                            <div className="flex flex-col gap-1">
+                                <div className={ERROR_ROW}>{launchResult.error || "Launch failed"}</div>
+                                {isGitError && (
+                                    <div className={META}>
+                                        Recoder needs a git repository here. Run `git init` in this folder, or choose a
+                                        repo folder.
+                                    </div>
+                                )}
+                                <button className={QUIET_BTN} onClick={browseFolder}>
+                                    Choose another folder
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -1085,7 +1108,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         <div className="flex flex-col gap-1.5">
                             <div className="flex flex-wrap items-center gap-2">
                                 <button
-                                    className={PRIMARY_BTN}
+                                    className={QUIET_BTN}
                                     disabled={signingIn}
                                     onClick={() => identityModel.signIn()}
                                 >
@@ -1152,15 +1175,15 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             >
                                 <span className={ROW_TITLE}>Run your first parallel task</span>
                                 <span className={META}>
-                                    Launch all {1 + parallelPreselect.also.length} detected agents on one task, each
-                                    in its own worktree, then compare and merge the best.
+                                    Launch all {1 + parallelPreselect.also.length} detected agents on one task, each in
+                                    its own worktree, then compare and merge the best.
                                 </span>
                             </button>
                         )}
                     </div>
                     <div className={META}>
-                        Press <span className="font-mono">⌘P</span> for commands ·{" "}
-                        <span className="font-mono">N</span> for a new agent
+                        Press <span className="font-mono">⌘P</span> for commands · <span className="font-mono">N</span>{" "}
+                        for a new agent
                     </div>
                     {setup.loaded ? (
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -1203,9 +1226,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             )}
                         </div>
                     ) : setup.probed ? (
-                        <div className={META}>
-                            Couldn’t reach Recoder yet - it may still be starting.
-                        </div>
+                        <div className={META}>Couldn’t reach Recoder yet - it may still be starting.</div>
                     ) : (
                         <div className={META}>Checking local setup...</div>
                     )}
@@ -1344,7 +1365,9 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                         {/* explicit click, not an auto-open — parallel launches never AUTO-open */}
                                         <button
                                             className={QUIET_BTN}
-                                            onClick={() => group.workspaces.forEach((ws) => openSession(ws.workspaceId))}
+                                            onClick={() =>
+                                                group.workspaces.forEach((ws) => openSession(ws.workspaceId))
+                                            }
                                             title={`Open a session for each of the ${group.workspaces.length} agents`}
                                         >
                                             Open all

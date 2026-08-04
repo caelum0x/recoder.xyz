@@ -31,6 +31,11 @@ type ConvergePanelProps = {
     taskGroup: string;
     contested: ContestedFile[];
     siblings: SiblingCompareEntry[];
+    // The model-held selection (see RecoderViewModel.convergeSelectionAtom) shared
+    // with the compare panel's contested strip: this panel reflects and edits the
+    // SAME map — it never owns a private copy that could drift from the strip.
+    selection: ConvergeSelection;
+    onSelectionChange: (next: ConvergeSelection) => void;
     onReview: (workspaceId: string) => void;
 };
 
@@ -188,16 +193,21 @@ function ConvergePlanSummary({ plan, agentByWs }: { plan: ConvergePlan; agentByW
             </div>
             {sources.length > 0 && (
                 <div className={META}>
-                    winners by agent: {sources.map((s) => `${agentLabel(agentByWs.get(s.workspaceId) ?? s.workspaceId)} ${s.count}`).join(" · ")}
+                    winners by agent:{" "}
+                    {sources
+                        .map((s) => `${agentLabel(agentByWs.get(s.workspaceId) ?? s.workspaceId)} ${s.count}`)
+                        .join(" · ")}
                 </div>
             )}
             {unresolvedCount > 0 && (
                 <div className="flex flex-col gap-0.5 rounded border border-white/8 px-2 py-1">
-                    <div className="text-xs text-secondary">
-                        Unresolved — pick a winner for each before composing:
-                    </div>
+                    <div className="text-xs text-secondary">Unresolved — pick a winner for each before composing:</div>
                     {plan.unresolved.map((u) => (
-                        <span key={u.path} className="truncate font-mono text-xs text-secondary" title={u.reason || undefined}>
+                        <span
+                            key={u.path}
+                            className="truncate font-mono text-xs text-secondary"
+                            title={u.reason || undefined}
+                        >
                             {u.path}
                             {u.reason ? ` — ${u.reason}` : ""}
                         </span>
@@ -214,8 +224,7 @@ ConvergePlanSummary.displayName = "ConvergePlanSummary";
 // contested path, live-preview the plan, and compose the winners into a new
 // reviewable workspace. Plan/compose state is local to this widget — it is
 // ephemeral and never survives a panel collapse, so it stays out of the model.
-function ConvergePanel({ taskGroup, contested, siblings, onReview }: ConvergePanelProps) {
-    const [selection, setSelection] = useState<ConvergeSelection>({});
+function ConvergePanel({ taskGroup, contested, siblings, selection, onSelectionChange, onReview }: ConvergePanelProps) {
     const [plan, setPlan] = useState<ConvergePlan>(null);
     const [planLoading, setPlanLoading] = useState(false);
     const [planError, setPlanError] = useState("");
@@ -285,6 +294,14 @@ function ConvergePanel({ taskGroup, contested, siblings, onReview }: ConvergePan
         // selectionKey stands in for the selection object's value identity.
     }, [taskGroup, selectionKey, hasContested]);
 
+    // A selection edit from EITHER path (panel rows or the compare strip)
+    // invalidates a prior compose outcome — keeping the success/error line
+    // for a selection it no longer matches would lie about state.
+    useEffect(() => {
+        setComposedId("");
+        setComposeError("");
+    }, [selectionKey]);
+
     if (!hasContested) {
         return (
             <div className="rounded border border-white/8 px-2 py-2">
@@ -300,13 +317,13 @@ function ConvergePanel({ taskGroup, contested, siblings, onReview }: ConvergePan
     const onPick = (path: string, value: string) => {
         setComposeError("");
         setComposedId("");
-        setSelection((cur) => toggleSelection(cur, path, value));
+        onSelectionChange(toggleSelection(selection, path, value));
     };
 
     const onAutoResolve = () => {
         setComposeError("");
         setComposedId("");
-        setSelection((cur) => autoResolveSynthesizable(cur, synthMap));
+        onSelectionChange(autoResolveSynthesizable(selection, synthMap));
     };
 
     const onCompose = async () => {
@@ -369,7 +386,11 @@ function ConvergePanel({ taskGroup, contested, siblings, onReview }: ConvergePan
             {composedId != "" ? (
                 <div className="flex items-center gap-2">
                     <span className="text-xs text-accent">Convergence workspace created — opening review.</span>
-                    <button className={QUIET_BTN} onClick={() => onReview(composedId)} title="Open the convergence workspace diff">
+                    <button
+                        className={QUIET_BTN}
+                        onClick={() => onReview(composedId)}
+                        title="Open the convergence workspace diff"
+                    >
                         Open review
                     </button>
                 </div>

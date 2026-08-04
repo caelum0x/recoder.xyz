@@ -3,6 +3,7 @@
 
 import { base64ToArrayBuffer } from "@/util/util";
 import { atom, type PrimitiveAtom } from "jotai";
+import { agentLabel } from "../recoder/recoder-agent-labels";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readErrorReason } from "../recoder/recoder-errors";
 
@@ -494,13 +495,191 @@ function triggerTextDownload(filename: string, content: string, mime: string): v
     }
 }
 
+// The sealed record from GET …/evidence, kept as the backend's VERBATIM JSON
+// ({ evidence, seal }) — its contentHash covers those exact bytes, so the export
+// never re-projects it. Same 404 = truthful no-evidence discipline as the pack.
+type EvidenceRecordResult = { ok: boolean; record?: Record<string, unknown>; noEvidence?: boolean; error?: string };
+
+async function fetchEvidenceRecord(workspaceId: string): Promise<EvidenceRecordResult> {
+    const id = (workspaceId ?? "").trim();
+    if (id == "") {
+        return { ok: false, error: "No workspace selected." };
+    }
+    try {
+        const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(id)}/evidence`);
+        if (res.status == 404) {
+            return { ok: false, noEvidence: true };
+        }
+        const body = await res.json().catch(() => null);
+        if (!res.ok) {
+            return { ok: false, error: readErrorReason(body) || `Evidence unavailable (HTTP ${res.status}).` };
+        }
+        const envelope = asObject(asObject(body)?.data) ?? asObject(body) ?? {};
+        const record = asObject(envelope.evidence);
+        if (record == null) {
+            return { ok: false, error: "Evidence response carried no record." };
+        }
+        return { ok: true, record };
+    } catch {
+        return { ok: false, error: "Evidence unavailable — Recoder isn’t reachable." };
+    }
+}
+
+const EvidenceSummaryUnknown = "(unknown)";
+
+function summarizeContested(evidence: Record<string, unknown>, candidates: Record<string, unknown>[]): string[] {
+    const convergence = asObject(evidence.convergence);
+    if (convergence == null) {
+        return ["Contested files: none recorded — single-agent merge (no per-file convergence provenance)."];
+    }
+    const selections = Array.isArray(convergence.selections)
+        ? convergence.selections.map(asObject).filter((s) => s != null)
+        : [];
+    const contested = selections.filter((s) => s.contested === true);
+    if (contested.length == 0) {
+        return ["Contested files: none — every converged path had a single author."];
+    }
+    const agentByWorkspace: Record<string, string> = {};
+    for (const c of candidates) {
+        const ws = stringOr(c.workspaceId, "");
+        const agent = stringOr(c.agent, "");
+        if (ws != "" && agent != "") {
+            agentByWorkspace[ws] = agentLabel(agent);
+        }
+    }
+    const nameOf = (ws: string) => agentByWorkspace[ws] ?? ws;
+    const lines = [`Contested files (${contested.length}):`];
+    for (const s of contested) {
+        const path = stringOr(s.path, EvidenceSummaryUnknown);
+        const mode = stringOr(s.mode, "");
+        if (mode == "pick") {
+            const source = stringOr(s.sourceWorkspaceId, "");
+            lines.push(`  - ${path}: picked from ${source == "" ? "(source unrecorded)" : nameOf(source)}`);
+            continue;
+        }
+        if (mode == "synthesize") {
+            const contributors = stringArray(s.contributors).map(nameOf);
+            const from = contributors.length == 0 ? "(contributors unrecorded)" : contributors.join(" + ");
+            lines.push(`  - ${path}: assisted synthesize (3-way merge) of ${from}`);
+            continue;
+        }
+        lines.push(`  - ${path}: resolution mode unrecorded`);
+    }
+    return lines;
+}
+
+function summarizeGovernance(governance: Record<string, unknown>): string[] {
+    if (governance == null) {
+        return ["Governance: verdict unrecorded."];
+    }
+    const effect = stringOr(governance.effect, EvidenceSummaryUnknown);
+    const tier = stringOr(governance.riskTier, EvidenceSummaryUnknown);
+    const degraded = governance.degraded === true ? " · degraded" : "";
+    const approvalId = stringOr(governance.approvalId, "");
+    const approval = approvalId == "" ? "no human approval recorded" : `human approval ${approvalId}`;
+    return [`Governance: ${effect} · tier ${tier}${degraded} · ${approval}`];
+}
+
+function summarizeVerification(verification: Record<string, unknown>): string[] {
+    if (verification == null) {
+        return ["Verification: unrecorded."];
+    }
+    if (verification.available !== true) {
+        return [`Verification: unavailable — ${stringOr(verification.reason, "no reason recorded")}`];
+    }
+    const verdict = stringOr(verification.verdict, "no verdict recorded");
+    const blockers = stringArray(verification.blockers);
+    return [`Verification: ${verdict}${blockers.length > 0 ? ` · blockers: ${blockers.join(", ")}` : ""}`];
+}
+
+// The human-readable section of the export file, built client-side from the sealed
+// record (the backend pack's summary covers controls, not the per-file story):
+// what ran, which agents, contested files + how each was resolved (picked vs
+// assisted synthesize), the governance verdict, and the seal hashes. PURE +
+// degrade-truthful: an absent field reads as its honest gap, never a guess.
+function buildEvidenceSummary(record: unknown): string[] {
+    const root = asObject(record) ?? {};
+    const evidence = asObject(root.evidence) ?? {};
+    const seal = asObject(root.seal) ?? {};
+    const provenance = asObject(evidence.provenance) ?? {};
+    const lines: string[] = ["Recoder convergence evidence — human summary (the `sealed` block is the artifact of record)."];
+
+    const taskId = stringOr(evidence.taskId, "");
+    const taskGroup = stringOr(evidence.taskGroup, "");
+    lines.push(`Run: task ${taskId == "" ? "(none)" : taskId} · group ${taskGroup == "" ? "(ungrouped)" : taskGroup}`);
+    const mergedAt = stringOr(provenance.mergedAt, EvidenceSummaryUnknown);
+    const actorId = stringOr(provenance.actorId, EvidenceSummaryUnknown);
+    lines.push(`Merged: workspace ${stringOr(evidence.chosenWorkspaceId, EvidenceSummaryUnknown)} at ${mergedAt} by ${actorId}`);
+
+    const candidates = Array.isArray(evidence.candidates)
+        ? evidence.candidates.map(asObject).filter((c) => c != null)
+        : [];
+    if (candidates.length == 0) {
+        lines.push("Agents: no candidate runs recorded.");
+    } else {
+        lines.push(`Agents (${candidates.length}):`);
+        for (const c of candidates) {
+            const label = agentLabel(stringOr(c.agent, EvidenceSummaryUnknown));
+            const chosen = c.chosen === true ? "chosen" : "not chosen";
+            lines.push(`  - ${label} · ${stringOr(c.workspaceId, EvidenceSummaryUnknown)} · ${chosen} · state ${stringOr(c.state, EvidenceSummaryUnknown)}`);
+        }
+    }
+
+    lines.push(...summarizeContested(evidence, candidates));
+    lines.push(...summarizeGovernance(asObject(evidence.governance)));
+    lines.push(...summarizeVerification(asObject(evidence.verification)));
+
+    const contentHash = stringOr(evidence.contentHash, "");
+    lines.push(contentHash == "" ? "Seal: no content hash — the record is unsealed." : `Seal: content hash ${contentHash}`);
+    const auditEntryHash = stringOr(seal.auditEntryHash, "");
+    lines.push(auditEntryHash == "" ? "Audit: no durable audit seal recorded." : `Audit: durable audit seal ${auditEntryHash}`);
+    return lines;
+}
+
+const SealPrefixLength = 12;
+
+function evidenceSealPrefix(record: unknown): string {
+    const evidence = asObject(asObject(record)?.evidence) ?? {};
+    const hash = stringOr(evidence.contentHash, "");
+    return hash == "" ? "unsealed" : hash.slice(0, SealPrefixLength);
+}
+
+function evidenceExportFilename(workspaceId: string, record: unknown): string {
+    return `recoder-evidence-${sanitizeForFilename(workspaceId)}-${sanitizeForFilename(evidenceSealPrefix(record))}.json`;
+}
+
+const EvidenceFileSchema = "recoder.evidence-file/v1";
+
+// The one-file export: the backend's sealed record VERBATIM under `sealed` (its
+// contentHash still re-verifies) plus the client-built human summary alongside —
+// two artifacts, one JSON.
+function buildEvidenceExportFile(workspaceId: string, record: Record<string, unknown>): Record<string, unknown> {
+    return {
+        schema: EvidenceFileSchema,
+        workspaceId,
+        summary: buildEvidenceSummary(record),
+        sealed: record,
+    };
+}
+
+// The affordance gate: export is only offered once a real evidence pack loaded —
+// a no-evidence / errored / still-loading panel truthfully shows no export button.
+function canExportEvidence(view: EvidenceExportView): boolean {
+    return view != null;
+}
+
 export {
+    buildEvidenceExportFile,
+    buildEvidenceSummary,
+    canExportEvidence,
     cryptoVerifyEd25519,
     deriveSignatureStatus,
     deriveVerifiedSignature,
+    evidenceExportFilename,
     evidenceFilename,
     fetchEvidenceExport,
     fetchEvidenceMarkdown,
+    fetchEvidenceRecord,
     fetchPreviewVerification,
     normalizeStatus,
     parseEvidenceExport,
@@ -513,6 +692,7 @@ export {
     type EvidenceExportResult,
     type EvidenceExportView,
     type EvidenceMarkdownResult,
+    type EvidenceRecordResult,
     type EvidenceSignatureView,
     type EvidenceStatus,
     type PreviewCheckRow,

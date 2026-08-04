@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { SiblingCompareEntry } from "./recoder-board-logic";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { readErrorReason } from "./recoder-errors";
 
@@ -315,6 +316,56 @@ function autoResolvableCount(
     return n;
 }
 
+// One sibling's column in the N-up compare grid. `stat` is ABSENT (never a
+// fabricated 0/0/0) when the sibling's diffStat was uncomputable; `filesReason`
+// is non-empty only when the changed-file list itself was unavailable — an empty
+// `files` with reason "" is a genuine "no changed files".
+type CompareColumn = {
+    workspaceId: string;
+    agent: string;
+    state: string;
+    stat?: { additions: number; deletions: number; files: number };
+    statReason: string;
+    files: string[];
+    filesReason: string;
+};
+
+// Pure: project the compare feed's siblings into column display data, one column
+// per sibling in feed order. Degrade-safe per column — a missing diffStat or
+// changedFiles carries the sibling's own reason instead of an invented value.
+function deriveCompareColumns(siblings: SiblingCompareEntry[]): CompareColumn[] {
+    if (!Array.isArray(siblings)) {
+        return [];
+    }
+    return siblings.map((s) => ({
+        workspaceId: s.workspaceId,
+        agent: s.agent,
+        state: s.state,
+        ...(s.diffStat != null
+            ? { stat: { additions: s.diffStat.additions, deletions: s.diffStat.deletions, files: s.diffStat.files } }
+            : {}),
+        statReason: s.diffStat != null ? "" : s.diffStatReason || "diff unavailable",
+        files: s.changedFiles ?? [],
+        filesReason: s.changedFiles != null ? "" : s.changedFilesReason || "changed-file list unavailable",
+    }));
+}
+
+// Which pairwise slot a column-header click should target: clicking a header
+// already holding a slot re-targets that slot (the model's pickPair then clears
+// it), otherwise fill A first, then B. Pure — the caller passes the current picks.
+function headerPairSlot(pairA: string, pairB: string, workspaceId: string): "A" | "B" {
+    if (workspaceId == pairA) {
+        return "A";
+    }
+    if (workspaceId == pairB) {
+        return "B";
+    }
+    if (pairA == "") {
+        return "A";
+    }
+    return "B";
+}
+
 // GET the read-only converge plan for the current selection. Degrade-safe: any
 // non-2xx surfaces the backend's verbatim reason (or a status-scoped fallback),
 // and an unreachable backend surfaces a truthful connectivity line. Never throws.
@@ -409,11 +460,14 @@ export {
     autoResolveSynthesizable,
     composeConvergence,
     composeStatusFallback,
+    deriveCompareColumns,
     fetchConvergePlan,
+    headerPairSlot,
     parseConvergePlan,
     presentConflictRegions,
     SYNTHESIZE_VALUE,
     toggleSelection,
+    type CompareColumn,
     type ConflictRegionRow,
     type ConflictRegionView,
     type ConvergeComposeResult,

@@ -5,12 +5,16 @@ import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect, useState } from "react";
 import {
+    buildEvidenceExportFile,
+    canExportEvidence,
     cryptoVerifyEd25519,
     deriveSignatureStatus,
     deriveVerifiedSignature,
+    evidenceExportFilename,
     evidenceFilename,
     fetchEvidenceExport,
     fetchEvidenceMarkdown,
+    fetchEvidenceRecord,
     previewVerificationStateAtom,
     signaturePublicKeyFingerprint,
     triggerTextDownload,
@@ -212,6 +216,22 @@ function CompliancePackSection({ workspaceId }: { workspaceId: string }) {
         setDownloadStatus(result.noEvidence ? "No evidence pack to download yet." : result.error);
     };
 
+    const onExport = async () => {
+        setDownloadStatus("Preparing evidence export…");
+        const result = await fetchEvidenceRecord(workspaceId);
+        if (result.ok) {
+            const file = buildEvidenceExportFile(workspaceId, result.record);
+            triggerTextDownload(
+                evidenceExportFilename(workspaceId, result.record),
+                JSON.stringify(file, null, 2),
+                "application/json"
+            );
+            setDownloadStatus("Evidence exported to your downloads.");
+            return;
+        }
+        setDownloadStatus(result.noEvidence ? "No sealed evidence to export yet." : result.error);
+    };
+
     if (loading) {
         return (
             <div className="flex flex-col gap-1 rounded border border-border p-2">
@@ -245,6 +265,15 @@ function CompliancePackSection({ workspaceId }: { workspaceId: string }) {
                 <span className="text-xs uppercase tracking-wide text-secondary">Evidence</span>
                 {view.schema != "" && <span className="text-xs text-secondary/70 font-mono">{view.schema}</span>}
                 <div className="flex-1" />
+                {canExportEvidence(view) && (
+                    <button
+                        className={QUIET_BTN}
+                        onClick={onExport}
+                        title="Export the sealed evidence record + human summary as one JSON file"
+                    >
+                        Export evidence
+                    </button>
+                )}
                 <button className={QUIET_BTN} onClick={onDownload} title="Download the Markdown compliance pack">
                     Download
                 </button>

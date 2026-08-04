@@ -3,17 +3,36 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { SiblingCompareEntry } from "./recoder-board-logic";
 import {
     autoResolvableCount,
     autoResolveSynthesizable,
     composeConvergence,
     composeStatusFallback,
+    deriveCompareColumns,
     fetchConvergePlan,
+    headerPairSlot,
     parseConvergePlan,
     presentConflictRegions,
     SYNTHESIZE_VALUE,
     toggleSelection,
 } from "./recoder-converge-logic";
+
+let siblingSeq = 0;
+
+function makeSibling(overrides: Partial<SiblingCompareEntry> = {}): SiblingCompareEntry {
+    siblingSeq += 1;
+    return {
+        workspaceId: `ws-${siblingSeq}`,
+        agent: "claude_code",
+        runtimeId: "claude_code",
+        branch: `agent/branch-${siblingSeq}`,
+        state: "awaiting_review",
+        createdAt: "2026-08-01T00:00:00Z",
+        updatedAt: "2026-08-01T00:00:00Z",
+        ...overrides,
+    };
+}
 
 function mockFetchOnce(bodyObj: unknown, status = 200): void {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -45,6 +64,124 @@ describe("toggleSelection — immutable per-path winner pick", () => {
         expect(picked).toEqual({ "a.ts": "@synthesize" });
         expect(toggleSelection(picked, "a.ts", SYNTHESIZE_VALUE)).toEqual({});
         expect(toggleSelection(picked, "a.ts", "ws2")).toEqual({ "a.ts": "ws2" });
+    });
+});
+
+describe("contested-strip winner selection — one shared converge selection map", () => {
+    it("builds the per-file Record<path, workspaceId> from successive cell clicks", () => {
+        let sel = {};
+        sel = toggleSelection(sel, "src/a.ts", "ws1");
+        sel = toggleSelection(sel, "src/b.ts", "ws2");
+        expect(sel).toEqual({ "src/a.ts": "ws1", "src/b.ts": "ws2" });
+    });
+
+    it("clicking another sibling's cell moves the win; re-clicking the winner clears it", () => {
+        let sel = toggleSelection({}, "src/a.ts", "ws1");
+        sel = toggleSelection(sel, "src/a.ts", "ws2");
+        expect(sel).toEqual({ "src/a.ts": "ws2" });
+        sel = toggleSelection(sel, "src/a.ts", "ws2");
+        expect(sel).toEqual({});
+    });
+
+    it("strip picks and the ConvergePanel's @synthesize coexist in the one map", () => {
+        let sel = toggleSelection({}, "src/a.ts", "ws1");
+        sel = toggleSelection(sel, "src/b.ts", SYNTHESIZE_VALUE);
+        expect(sel).toEqual({ "src/a.ts": "ws1", "src/b.ts": "@synthesize" });
+        // auto-resolve fills only unresolved paths — it never overrides a strip pick
+        const next = autoResolveSynthesizable(sel, {
+            "src/a.ts": { synthesizable: true },
+            "src/c.ts": { synthesizable: true },
+        });
+        expect(next).toEqual({ "src/a.ts": "ws1", "src/b.ts": "@synthesize", "src/c.ts": "@synthesize" });
+    });
+});
+
+describe("deriveCompareColumns — N-up column data from the compare feed", () => {
+    it("derives one column per sibling in feed order with stat and files", () => {
+        const columns = deriveCompareColumns([
+            makeSibling({
+                workspaceId: "ws1",
+                agent: "claude_code",
+                state: "awaiting_review",
+                diffStat: { additions: 10, deletions: 2, files: 3 },
+                changedFiles: ["src/a.ts", "src/b.ts", "src/c.ts"],
+            }),
+            makeSibling({
+                workspaceId: "ws2",
+                agent: "codex",
+                state: "running",
+                diffStat: { additions: 4, deletions: 1, files: 1 },
+                changedFiles: ["src/a.ts"],
+            }),
+        ]);
+        expect(columns).toEqual([
+            {
+                workspaceId: "ws1",
+                agent: "claude_code",
+                state: "awaiting_review",
+                stat: { additions: 10, deletions: 2, files: 3 },
+                statReason: "",
+                files: ["src/a.ts", "src/b.ts", "src/c.ts"],
+                filesReason: "",
+            },
+            {
+                workspaceId: "ws2",
+                agent: "codex",
+                state: "running",
+                stat: { additions: 4, deletions: 1, files: 1 },
+                statReason: "",
+                files: ["src/a.ts"],
+                filesReason: "",
+            },
+        ]);
+    });
+
+    it("drops stat and carries the sibling's own reason when diffStat is absent (never a fabricated 0)", () => {
+        const [column] = deriveCompareColumns([
+            makeSibling({ diffStatReason: "worktree missing", changedFilesReason: "worktree missing" }),
+        ]);
+        expect(column.stat).toBeUndefined();
+        expect(column.statReason).toBe("worktree missing");
+        expect(column.files).toEqual([]);
+        expect(column.filesReason).toBe("worktree missing");
+    });
+
+    it("falls back to generic reasons when the sibling carried none", () => {
+        const [column] = deriveCompareColumns([makeSibling({})]);
+        expect(column.statReason).toBe("diff unavailable");
+        expect(column.filesReason).toBe("changed-file list unavailable");
+    });
+
+    it("keeps a genuine 'no changed files' ([] with empty reason) distinct from an unavailable list", () => {
+        const [column] = deriveCompareColumns([
+            makeSibling({ diffStat: { additions: 0, deletions: 0, files: 0 }, changedFiles: [] }),
+        ]);
+        expect(column.files).toEqual([]);
+        expect(column.filesReason).toBe("");
+    });
+
+    it("degrades a non-array input to no columns", () => {
+        expect(deriveCompareColumns(undefined as unknown as SiblingCompareEntry[])).toEqual([]);
+    });
+});
+
+describe("headerPairSlot — two header clicks assemble the A/B pairwise picks", () => {
+    it("fills A first, then B", () => {
+        expect(headerPairSlot("", "", "ws1")).toBe("A");
+        expect(headerPairSlot("ws1", "", "ws2")).toBe("B");
+    });
+
+    it("re-targets the slot a column already holds so pickPair toggles it off", () => {
+        expect(headerPairSlot("ws1", "ws2", "ws1")).toBe("A");
+        expect(headerPairSlot("ws1", "ws2", "ws2")).toBe("B");
+    });
+
+    it("with both slots held, a third column replaces B and keeps A anchored", () => {
+        expect(headerPairSlot("ws1", "ws2", "ws3")).toBe("B");
+    });
+
+    it("fills A when only B is held", () => {
+        expect(headerPairSlot("", "ws2", "ws1")).toBe("A");
     });
 });
 

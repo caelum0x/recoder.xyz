@@ -25,11 +25,13 @@ import {
   probeSynthesizability,
   EmptyConvergenceError,
   UnresolvedConvergenceError,
+  ASSIST_INFERENCE_FUNCTION,
   MAX_CONFLICT_REGIONS,
   MAX_CONFLICT_SIDE_LINES,
+  type ConvergeInferenceFn,
   type ConvergeOpsDeps,
 } from './converge.ops.js';
-import { SYNTHESIZE_SELECTION } from './converge-plan.service.js';
+import { ASSISTED_SELECTION, SYNTHESIZE_SELECTION } from './converge-plan.service.js';
 
 const noopLogger: Logger = {
   info: () => {},
@@ -446,6 +448,253 @@ describe('composeConvergence (intra-file 3-way synthesize, real git)', () => {
       }
     ).selections.find((s) => s.path === 'shared.ts')!;
     expect(sel.contributors).toEqual(['ws-a', 'ws-b', 'ws-c']); // deterministic sorted fold order
+  });
+});
+
+/**
+ * LLM-ASSISTED synthesis — a contested file the mechanical 3-way CANNOT merge is
+ * escalated (explicit per-file opt-in) to a one-shot inference, whose reply is
+ * validated before it is trusted.
+ *
+ * Proves (real git + fake inference): a VALID reply lands as the file content with
+ * `plan.assisted` + provenance recording the model-authored path (incl. the
+ * inference id); an INVALID reply (dropped agreed line / conflict markers / empty),
+ * a `routed:false` gateway, and an UNWIRED inference dep all fall back to the exact
+ * mechanical `synthesize-conflict` abort; a mechanically-clean assisted file never
+ * calls the model; and the plain `synthesize` + `pick` paths never touch inference.
+ */
+describe('composeConvergence (LLM-assisted synthesize, real git + fake inference)', () => {
+  let root: string;
+  let repo: string;
+  const BASE_LINES = ['l1', 'l2', 'l3', 'l4', 'l5', ''];
+  const VALID_MERGE = 'l1\nl2\nl3-merged\nl4\nl5\n';
+
+  beforeEach(() => {
+    root = mkdtempSync(path.join(tmpdir(), 'recoder-assist-'));
+    repo = path.join(root, 'repo');
+    mkdirSync(repo, { recursive: true });
+    git(repo, ['init', '-b', 'main']);
+    writeFileSync(path.join(repo, 'shared.ts'), BASE_LINES.join('\n'));
+    git(repo, ['add', '-A']);
+    git(repo, ['commit', '-m', 'base']);
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  /** Two siblings whose same-line edits make the mechanical 3-way CONFLICT. */
+  function addConflictingSiblings(): { wtA: string; wtB: string } {
+    const wtA = path.join(root, 'ws-a');
+    const wtB = path.join(root, 'ws-b');
+    git(repo, ['worktree', 'add', '-b', 'agent-a', wtA, 'main']);
+    git(repo, ['worktree', 'add', '-b', 'agent-b', wtB, 'main']);
+    const linesA = [...BASE_LINES];
+    const linesB = [...BASE_LINES];
+    linesA[2] = 'l3-from-A';
+    linesB[2] = 'l3-from-B';
+    writeFileSync(path.join(wtA, 'shared.ts'), linesA.join('\n'));
+    writeFileSync(path.join(wtB, 'shared.ts'), linesB.join('\n'));
+    return { wtA, wtB };
+  }
+
+  function deps(
+    worktrees: { wtA: string; wtB: string },
+    registered: { ws?: Workspace },
+    inference?: ConvergeInferenceFn,
+  ): ConvergeOpsDeps {
+    const workspaces: Record<string, Workspace> = {
+      'ws-a': makeWs({ workspaceId: 'ws-a', worktreePath: worktrees.wtA, branch: 'agent-a' }),
+      'ws-b': makeWs({ workspaceId: 'ws-b', worktreePath: worktrees.wtB, branch: 'agent-b' }),
+    };
+    return {
+      compare: async () => ({
+        count: 2,
+        siblings: [
+          { workspaceId: 'ws-a', agent: 'claude_code', changedFiles: ['shared.ts'] },
+          { workspaceId: 'ws-b', agent: 'codex', changedFiles: ['shared.ts'] },
+        ],
+      }),
+      getWorkspace: async (id) => workspaces[id] ?? null,
+      registerWorkspace: async (ws) => {
+        registered.ws = ws;
+        return ws;
+      },
+      logger: noopLogger,
+      newId: () => 'assist00',
+      ...(inference ? { inference } : {}),
+    };
+  }
+
+  const assistedInput = {
+    taskGroup: 'g',
+    selection: { 'shared.ts': ASSISTED_SELECTION },
+    createdBy: 'u',
+  };
+
+  it('a VALID assisted reply resolves the conflict and is recorded on plan + provenance', async () => {
+    const calls: Parameters<ConvergeInferenceFn>[0][] = [];
+    const inference: ConvergeInferenceFn = async (input) => {
+      calls.push(input);
+      return { routed: true, inference_id: 'inf-1', content: VALID_MERGE };
+    };
+    const registered: { ws?: Workspace } = {};
+
+    const result = await composeConvergence(
+      deps(addConflictingSiblings(), registered, inference),
+      assistedInput,
+    );
+
+    // The model's merged content landed, marker-free, and was committed.
+    const wt = result.workspace.worktreePath!;
+    expect(readFileSync(path.join(wt, 'shared.ts'), 'utf8')).toBe(VALID_MERGE);
+    expect(execFileSync('git', ['-C', wt, 'status', '--porcelain'], { encoding: 'utf8' }).trim()).toBe('');
+
+    // Recorded on the returned plan (evidence serializes the plan) + provenance.
+    expect(result.plan.assisted).toEqual([{ path: 'shared.ts', inference_id: 'inf-1' }]);
+    const conv = (registered.ws!.metadata as Record<string, unknown>).convergence as {
+      selections: { path: string; mode: string; contributors?: string[] }[];
+      assisted?: { path: string; inference_id?: string }[];
+    };
+    expect(conv.assisted).toEqual([{ path: 'shared.ts', inference_id: 'inf-1' }]);
+    expect(conv.selections.find((s) => s.path === 'shared.ts')).toMatchObject({
+      mode: 'assisted',
+      contributors: ['ws-a', 'ws-b'],
+    });
+
+    // ONE call, addressed at the stable default function, carrying the full context.
+    expect(calls).toHaveLength(1);
+    expect(calls[0].function_name).toBe(ASSIST_INFERENCE_FUNCTION);
+    const prompt = calls[0].input.messages[0].content as string;
+    expect(prompt).toContain('shared.ts');
+    expect(prompt).toContain('l3-from-A');
+    expect(prompt).toContain('l3-from-B');
+    expect(prompt).toContain('VERSION from ws-a');
+    expect(prompt).toContain('VERSION from ws-b');
+  });
+
+  it('accepts a fence-wrapped reply (models add fences despite instructions)', async () => {
+    const inference: ConvergeInferenceFn = async () => ({
+      routed: true,
+      inference_id: 'inf-2',
+      content: '```ts\n' + VALID_MERGE + '```',
+    });
+    const registered: { ws?: Workspace } = {};
+    const result = await composeConvergence(
+      deps(addConflictingSiblings(), registered, inference),
+      assistedInput,
+    );
+    expect(readFileSync(path.join(result.workspace.worktreePath!, 'shared.ts'), 'utf8')).toBe(VALID_MERGE);
+    expect(result.plan.assisted).toEqual([{ path: 'shared.ts', inference_id: 'inf-2' }]);
+  });
+
+  async function expectFallbackToConflict(inference?: ConvergeInferenceFn): Promise<void> {
+    const registered: { ws?: Workspace } = {};
+    await expect(
+      composeConvergence(deps(addConflictingSiblings(), registered, inference), assistedInput),
+    ).rejects.toMatchObject({
+      name: 'UnresolvedConvergenceError',
+      plan: {
+        complete: false,
+        unresolved: [{ path: 'shared.ts', candidates: ['ws-a', 'ws-b'], reason: 'synthesize-conflict' }],
+      },
+    });
+    // Nothing registered; the partial convergence worktree was cleaned up.
+    expect(registered.ws).toBeUndefined();
+    expect(existsSync(path.join(root, 'repo-converge-assist00'))).toBe(false);
+  }
+
+  it('a reply that DROPS an agreed line fails validation → synthesize-conflict abort', async () => {
+    // 'l1' (agreed on by both sides) is missing — the model lost content.
+    await expectFallbackToConflict(async () => ({
+      routed: true,
+      content: 'l2\nl3-merged\nl4\nl5\n',
+    }));
+  });
+
+  it('a reply CONTAINING conflict markers fails validation → synthesize-conflict abort', async () => {
+    await expectFallbackToConflict(async () => ({
+      routed: true,
+      content: 'l1\nl2\n<<<<<<< a\nl3-from-A\n=======\nl3-from-B\n>>>>>>> b\nl4\nl5\n',
+    }));
+  });
+
+  it('an EMPTY reply fails validation → synthesize-conflict abort', async () => {
+    await expectFallbackToConflict(async () => ({ routed: true, content: '   \n' }));
+  });
+
+  it('routed:false (gateway unavailable) falls back → synthesize-conflict abort', async () => {
+    await expectFallbackToConflict(async () => ({ routed: false, reason: 'gateway down' }));
+  });
+
+  it('an UNWIRED inference dep falls back → synthesize-conflict abort (mechanical behavior)', async () => {
+    await expectFallbackToConflict(undefined);
+  });
+
+  it('a mechanically-CLEAN assisted file never calls the model (no assisted record)', async () => {
+    // Non-overlapping edits: the 3-way folds clean, so no escalation happens.
+    const wtA = path.join(root, 'ws-a');
+    const wtB = path.join(root, 'ws-b');
+    git(repo, ['worktree', 'add', '-b', 'agent-a', wtA, 'main']);
+    git(repo, ['worktree', 'add', '-b', 'agent-b', wtB, 'main']);
+    const linesA = [...BASE_LINES];
+    const linesB = [...BASE_LINES];
+    linesA[0] = 'l1-from-A';
+    linesB[4] = 'l5-from-B';
+    writeFileSync(path.join(wtA, 'shared.ts'), linesA.join('\n'));
+    writeFileSync(path.join(wtB, 'shared.ts'), linesB.join('\n'));
+
+    let called = 0;
+    const inference: ConvergeInferenceFn = async () => {
+      called += 1;
+      return { routed: true, content: VALID_MERGE };
+    };
+    const registered: { ws?: Workspace } = {};
+    const result = await composeConvergence(deps({ wtA, wtB }, registered, inference), assistedInput);
+
+    expect(called).toBe(0);
+    expect(result.plan.assisted).toBeUndefined();
+    const content = readFileSync(path.join(result.workspace.worktreePath!, 'shared.ts'), 'utf8');
+    expect(content).toContain('l1-from-A');
+    expect(content).toContain('l5-from-B');
+    const conv = (registered.ws!.metadata as Record<string, unknown>).convergence as {
+      assisted?: unknown;
+    };
+    expect(conv.assisted).toBeUndefined();
+  });
+
+  it("a plain 'synthesize' conflict NEVER calls inference even when wired (path unchanged)", async () => {
+    let called = 0;
+    const inference: ConvergeInferenceFn = async () => {
+      called += 1;
+      return { routed: true, content: VALID_MERGE };
+    };
+    const registered: { ws?: Workspace } = {};
+    await expect(
+      composeConvergence(deps(addConflictingSiblings(), registered, inference), {
+        taskGroup: 'g',
+        selection: { 'shared.ts': SYNTHESIZE_SELECTION },
+        createdBy: 'u',
+      }),
+    ).rejects.toMatchObject({ name: 'UnresolvedConvergenceError' });
+    expect(called).toBe(0);
+  });
+
+  it("a 'pick' resolution NEVER calls inference even when wired (path unchanged)", async () => {
+    let called = 0;
+    const inference: ConvergeInferenceFn = async () => {
+      called += 1;
+      return { routed: true, content: VALID_MERGE };
+    };
+    const registered: { ws?: Workspace } = {};
+    const result = await composeConvergence(deps(addConflictingSiblings(), registered, inference), {
+      taskGroup: 'g',
+      selection: { 'shared.ts': 'ws-b' },
+      createdBy: 'u',
+    });
+    expect(called).toBe(0);
+    expect(result.plan.assisted).toBeUndefined();
+    expect(readFileSync(path.join(result.workspace.worktreePath!, 'shared.ts'), 'utf8')).toContain('l3-from-B');
   });
 });
 

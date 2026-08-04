@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { RecoderEmpty, RecoderErrorRow, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
+import { FIELD_LABEL, INPUT, PAGE_TITLE, PRIMARY_BTN, QUIET_BTN, STATE_CHIP } from "@/app/view/recoder/recoder-styles";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import {
@@ -18,7 +19,7 @@ function MemoryItemRow({ item }: { item: RecoderMemoryItem }) {
         <div className="flex flex-col gap-0.5 rounded border border-border p-2" title={item.memoryId}>
             <div className="flex items-center gap-2">
                 <span className="text-sm font-medium truncate">{item.title || "Untitled memory"}</span>
-                <span className="text-xs text-secondary rounded bg-border/60 px-1.5 py-0.5 ml-auto">{item.scope}</span>
+                <span className={`${STATE_CHIP} ml-auto`}>{item.scope}</span>
             </div>
             {item.body != "" && <div className="text-xs text-secondary line-clamp-3">{item.body}</div>}
             {item.evidence?.taskId && (
@@ -58,27 +59,17 @@ function CandidateRow({ candidate, busy, onAccept, onReject }: CandidateRowProps
         <div className="flex flex-col gap-1 rounded border border-border p-2" title={candidate.candidateId}>
             <div className="flex items-center gap-2">
                 <span className="text-sm font-medium truncate">{candidate.title || "Untitled candidate"}</span>
-                <span className="text-xs text-secondary rounded bg-border/60 px-1.5 py-0.5 ml-auto">
-                    {candidate.status}
-                </span>
+                <span className={`${STATE_CHIP} ml-auto`}>{candidate.status}</span>
             </div>
             {candidate.body != "" && (
                 <div className="text-xs text-secondary whitespace-pre-wrap break-words">{candidate.body}</div>
             )}
             <div className="text-xs text-secondary">by {candidate.proposedBy || "unknown"}</div>
             <div className="flex items-center gap-2">
-                <button
-                    disabled={busy}
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
-                    onClick={onAccept}
-                >
+                <button disabled={busy} className={PRIMARY_BTN} onClick={onAccept}>
                     {busy ? "…" : "Accept"}
                 </button>
-                <button
-                    disabled={busy}
-                    className="border border-border text-primary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer disabled:opacity-50"
-                    onClick={onReject}
-                >
+                <button disabled={busy} className={QUIET_BTN} onClick={onReject}>
                     {busy ? "…" : "Reject"}
                 </button>
             </div>
@@ -114,11 +105,11 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
-                <span className="font-semibold">Recoder - Memory</span>
+                <span className={PAGE_TITLE}>Memory</span>
             </div>
             <div className="flex items-center gap-2">
                 <input
-                    className="flex-1 rounded border border-border bg-transparent px-2 py-0.5 text-sm outline-none focus:border-accent"
+                    className={`${INPUT} flex-1`}
                     placeholder="Search memory…"
                     value={query}
                     onChange={(e) => model.setQuery(e.target.value)}
@@ -128,11 +119,7 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
                         }
                     }}
                 />
-                <button
-                    disabled={searching}
-                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
-                    onClick={() => model.search()}
-                >
+                <button disabled={searching} className={QUIET_BTN} onClick={() => model.search()}>
                     {searching ? "…" : "Search"}
                 </button>
             </div>
@@ -146,7 +133,7 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
 
             {hasQuery && (
                 <div className="flex flex-col gap-1">
-                    <div className="text-xs uppercase tracking-wide text-secondary">Search results</div>
+                    <div className={FIELD_LABEL}>Search results</div>
                     {sourcesNotice != "" && <div className="text-warning text-sm">{sourcesNotice}</div>}
                     {searchNotice != "" && <div className="text-secondary text-sm">{searchNotice}</div>}
                     {results.map((r) => (
@@ -165,7 +152,7 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
                     )}
                     {items.length > 0 && (
                         <div className="flex flex-col gap-1">
-                            <div className="text-xs uppercase tracking-wide text-secondary">Memory ({items.length})</div>
+                            <div className={FIELD_LABEL}>Memory ({items.length})</div>
                             {items.map((item) => (
                                 <MemoryItemRow key={item.memoryId} item={item} />
                             ))}
@@ -173,9 +160,7 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
                     )}
                     {candidates.length > 0 && (
                         <div className="flex flex-col gap-1">
-                            <div className="text-xs uppercase tracking-wide text-secondary">
-                                Pending candidates ({candidates.length})
-                            </div>
+                            <div className={FIELD_LABEL}>Pending candidates ({candidates.length})</div>
                             {candidates.map((c) => (
                                 <CandidateRow
                                     key={c.candidateId}
