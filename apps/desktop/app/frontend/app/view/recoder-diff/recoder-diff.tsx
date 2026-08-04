@@ -1,6 +1,9 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getApi } from "@/app/store/global";
+import type { RecoderApproval } from "@/app/view/recoder-approvals/recoder-approvals-model";
+import { prChipLabel, prChipTone, prCreateGate, type RecoderPrChip } from "@/app/view/recoder/recoder-pr-status";
 import { RecoderEmpty, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
@@ -582,6 +585,84 @@ function ChecksStrip({
     );
 }
 
+// The live PR chip on the Review header — the workspace's pull-request state
+// from the same gh-backed pr-status edge the board uses, reusing prChipLabel/
+// prChipTone so the two surfaces read identically. Clicking opens the PR.
+function ReviewPrChip({ chip }: { chip: RecoderPrChip }) {
+    const clickable = chip.url != "";
+    return (
+        <span
+            className={cn(
+                "rounded border px-1.5 py-0.5 text-sm whitespace-nowrap",
+                prChipTone(chip),
+                clickable && "cursor-pointer hover:opacity-80"
+            )}
+            title={clickable ? chip.url : "Pull-request state via gh"}
+            onClick={() => {
+                if (!clickable) {
+                    return;
+                }
+                try {
+                    getApi().openExternal(chip.url);
+                } catch {
+                    // no external opener wired — the chip stays a passive badge
+                }
+            }}
+        >
+            {prChipLabel(chip)}
+        </span>
+    );
+}
+
+ReviewPrChip.displayName = "ReviewPrChip";
+
+// The inline governance block (DESIGN-REFERENCE 3B): when the selected run is
+// blocked awaiting an approval, its ONE pending approval surfaces here in-context
+// — the risky action + the real governance reason, with a single approve/reject —
+// instead of sending the reviewer to a separate Approvals tab. Approve advances
+// the run server-side; a failed decision surfaces its truthful reason and keeps
+// the card (never a fabricated "approved").
+function InlineApprovalCard({
+    approval,
+    deciding,
+    error,
+    onApprove,
+    onReject,
+}: {
+    approval: RecoderApproval;
+    deciding: boolean;
+    error: string;
+    onApprove: () => void;
+    onReject: () => void;
+}) {
+    const action = approval.action || "";
+    const reason = approval.reason || "This run is waiting on your approval before it can continue.";
+    return (
+        <div className="flex flex-col gap-2 rounded border border-accent/40 bg-accent/5 p-3">
+            <div className="flex items-center gap-2">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+                <span className="text-sm font-medium">Waiting on your approval</span>
+                {approval.riskTier && (
+                    <span className="ml-auto text-[10px] uppercase tracking-wide text-secondary">{approval.riskTier}</span>
+                )}
+            </div>
+            <div className="text-sm text-primary/90">{reason}</div>
+            {action != "" && <div className="text-xs font-mono text-secondary truncate">{action}</div>}
+            <div className="flex items-center gap-2">
+                <button className={PRIMARY_BTN} disabled={deciding} onClick={onApprove}>
+                    {deciding ? "…" : "Approve"}
+                </button>
+                <button className={QUIET_BTN} disabled={deciding} onClick={onReject}>
+                    {deciding ? "…" : "Reject"}
+                </button>
+            </div>
+            {error != "" && <div className="text-xs text-error">{error}</div>}
+        </div>
+    );
+}
+
+InlineApprovalCard.displayName = "InlineApprovalCard";
+
 function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     const workspaces = useAtomValue(model.workspacesAtom);
     const selectedId = useAtomValue(model.selectedIdAtom);
@@ -594,9 +675,13 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     const mergeStatus = useAtomValue(model.mergeStatusAtom);
     const prCreating = useAtomValue(model.prCreatingAtom);
     const prStatus = useAtomValue(model.prStatusAtom);
+    const prView = useAtomValue(model.prViewAtom);
     const checks = useAtomValue(model.checksAtom);
     const checksLoading = useAtomValue(model.checksLoadingAtom);
     const discardStatus = useAtomValue(model.discardStatusAtom);
+    const inlineApproval = useAtomValue(model.inlineApprovalAtom);
+    const approvalDeciding = useAtomValue(model.approvalDecidingAtom);
+    const approvalError = useAtomValue(model.approvalErrorAtom);
 
     useEffect(() => {
         model.refresh();
@@ -614,6 +699,12 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     const reviewSuggestion = suggestReviewAction(checks);
     const reviewBtnClass = (action: RecoderReviewActionId): string =>
         reviewSuggestion != null && reviewSuggestion.action == action ? PRIMARY_BTN : QUIET_BTN;
+
+    // Once a PR exists its live chip takes the header slot (click to open); until
+    // then the Create PR action lives there, DISABLED with a truthful reason when
+    // a PR can't be opened (no gh / no pushable remote) rather than hidden.
+    const prChip = prView?.chip ?? null;
+    const prGate = prCreateGate(prView);
 
     return (
         <div className="flex flex-col h-full overflow-hidden p-3 gap-2">
@@ -641,12 +732,27 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                         {merging ? "Merging…" : "Merge"}
                     </button>
                 )}
-                {selectedId != "" && (
-                    <button className={reviewBtnClass("create-pr")} disabled={prCreating} onClick={() => model.createPr()}>
+                {selectedId != "" && prChip != null && <ReviewPrChip chip={prChip} />}
+                {selectedId != "" && prChip == null && (
+                    <button
+                        className={reviewBtnClass("create-pr")}
+                        disabled={prCreating || !prGate.canCreate}
+                        title={!prGate.canCreate ? prGate.reason : undefined}
+                        onClick={() => model.createPr()}
+                    >
                         {prCreating ? "Creating PR…" : "Create PR"}
                     </button>
                 )}
             </div>
+            {inlineApproval != null && (
+                <InlineApprovalCard
+                    approval={inlineApproval}
+                    deciding={approvalDeciding}
+                    error={approvalError}
+                    onApprove={() => model.decideInlineApproval("approve")}
+                    onReject={() => model.decideInlineApproval("reject")}
+                />
+            )}
             {selectedId != "" && (
                 <ChecksStrip checks={checks} loading={checksLoading} onRefresh={() => model.refreshChecks()} />
             )}
@@ -655,6 +761,9 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent/70 shrink-0" />
                     <span>{reviewSuggestion.label}</span>
                 </div>
+            )}
+            {selectedId != "" && prChip == null && !prGate.canCreate && (
+                <div className="text-xs text-secondary">Create PR unavailable — {prGate.reason}</div>
             )}
             {mergeStatus != "" && <div className="text-xs text-secondary">{mergeStatus}</div>}
             {prStatus != "" && <div className="text-xs text-secondary">{prStatus}</div>}

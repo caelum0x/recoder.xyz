@@ -3,18 +3,27 @@
 
 import { globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
+import type { RecoderApproval } from "../recoder-approvals/recoder-approvals-model";
+import { decideApproval } from "../recoder/recoder-approval-action";
 import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readErrorReason, readFetchError } from "../recoder/recoder-errors";
+import { fetchWorkspacePrStatusView, PrStatusRefreshMs, type RecoderPrStatus } from "../recoder/recoder-pr-status";
+import { selectWorkspaceApproval, shouldShowInlineApproval } from "./recoder-diff-approval";
 import type { ReviewCommentDraft } from "./recoder-diff-comments";
 import { fetchPreviewVerification, previewVerificationStateAtom } from "./recoder-evidence-logic";
 import { RecoderDiffView } from "./recoder-diff";
 
+// `taskId`/`runId` ride on the canonical conductor Workspace record the list edge
+// returns (packages/agent-os Workspace); they correlate this run to its pending
+// governance approval so a blocked run can show an inline approve/reject.
 type RecoderWorkspace = {
     workspaceId: string;
     branch: string;
     state: string;
     runtimeId: string;
+    taskId?: string;
+    runId?: string;
 };
 
 const WorkspaceIdMetaKey = "recoder:workspaceid";
@@ -236,6 +245,9 @@ class RecoderDiffViewModel implements ViewModel {
     prCreatingAtom: PrimitiveAtom<boolean>;
     // Human result of the last PR action ("PR created: <url>", approval reason, …).
     prStatusAtom: PrimitiveAtom<string>;
+    // The workspace's live gh-backed PR view: the chip once a PR exists, plus the
+    // truthful degrade reason that gates the Create PR action. null until probed.
+    prViewAtom: PrimitiveAtom<RecoderPrStatus>;
     checksAtom: PrimitiveAtom<RecoderWorkspaceChecks>;
     checksLoadingAtom: PrimitiveAtom<boolean>;
     // Draft line-anchored review comments, queued client-side until the reviewer
@@ -247,6 +259,14 @@ class RecoderDiffViewModel implements ViewModel {
     commentSendingAtom: PrimitiveAtom<boolean>;
     // Human result of the last send ("Sent 3 comments to the agent.", reason, …).
     commentStatusAtom: PrimitiveAtom<string>;
+    // The ONE pending governance approval the selected run is blocked on (null =
+    // none). Populated ONLY when the workspace is awaiting_approval AND a real
+    // pending record correlates to it — never a fabricated card.
+    inlineApprovalAtom: PrimitiveAtom<RecoderApproval | null>;
+    approvalDecidingAtom: PrimitiveAtom<boolean>;
+    // Truthful reason a decide failed (403/503/transport) — the card surfaces it
+    // and stays; a failed approve is NEVER shown as approved.
+    approvalErrorAtom: PrimitiveAtom<string>;
     // Which workspace checksAtom describes — lets the 6s refresh poll skip
     // re-probing gh (the checks edge shells out per call) unless the selection
     // actually changed.
@@ -258,6 +278,15 @@ class RecoderDiffViewModel implements ViewModel {
     // pattern): the 6s refresh poll skips re-fetching unless the selection
     // changed, and a newer fetch supersedes an in-flight one.
     previewWorkspaceId: string;
+    // Which workspace prViewAtom describes, and when it was probed: pr-status is a
+    // real gh call, so the 6s poll only re-probes on a selection change or once
+    // the slow PrStatusRefreshMs window elapses (GitHub moves without the row).
+    prViewWorkspaceId: string;
+    prProbedAtMs: number;
+    // Which workspace the inline-approval read describes: a newer read supersedes
+    // an in-flight one so a stale resolver never writes a card the current
+    // selection doesn't own (the checksWorkspaceId pattern).
+    approvalsWorkspaceId: string;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -276,6 +305,7 @@ class RecoderDiffViewModel implements ViewModel {
         this.mergeStatusAtom = atom("") as PrimitiveAtom<string>;
         this.prCreatingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.prStatusAtom = atom("") as PrimitiveAtom<string>;
+        this.prViewAtom = atom(null) as PrimitiveAtom<RecoderPrStatus>;
         this.checksAtom = atom(null) as PrimitiveAtom<RecoderWorkspaceChecks>;
         this.checksLoadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.discardingAtom = atom(false) as PrimitiveAtom<boolean>;
@@ -283,9 +313,15 @@ class RecoderDiffViewModel implements ViewModel {
         this.pendingCommentsAtom = atom([]) as PrimitiveAtom<ReviewCommentDraft[]>;
         this.commentSendingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.commentStatusAtom = atom("") as PrimitiveAtom<string>;
+        this.inlineApprovalAtom = atom(null) as PrimitiveAtom<RecoderApproval | null>;
+        this.approvalDecidingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.approvalErrorAtom = atom("") as PrimitiveAtom<string>;
         this.checksWorkspaceId = "";
         this.checksProbedAtMs = 0;
         this.previewWorkspaceId = "";
+        this.prViewWorkspaceId = "";
+        this.prProbedAtMs = 0;
+        this.approvalsWorkspaceId = "";
     }
 
     get viewComponent(): ViewComponent {
@@ -334,6 +370,9 @@ class RecoderDiffViewModel implements ViewModel {
             this.checksWorkspaceId = "";
             globalStore.set(previewVerificationStateAtom, null);
             this.previewWorkspaceId = "";
+            globalStore.set(this.prViewAtom, null);
+            this.prViewWorkspaceId = "";
+            this.clearInlineApproval();
             return;
         }
         const checksStale = this.checksWorkspaceId != selected;
@@ -345,10 +384,16 @@ class RecoderDiffViewModel implements ViewModel {
             checksArePending(globalStore.get(this.checksAtom)) &&
             Date.now() - this.checksProbedAtMs >= CHECKS_REPOLL_MS;
         const previewStale = this.previewWorkspaceId != selected;
+        const prStale = this.prViewWorkspaceId != selected;
+        // Re-probe gh for the PR view only on a selection change or once the slow
+        // window elapses, so the 6s poll never fans out a gh call per tick.
+        const prRepollDue = !prStale && Date.now() - this.prProbedAtMs >= PrStatusRefreshMs;
         await Promise.all([
             this.loadDiff(selected),
             checksStale || repollDue ? this.fetchChecks(selected) : Promise.resolve(),
             previewStale ? this.loadPreviewVerification(selected) : Promise.resolve(),
+            prStale || prRepollDue ? this.fetchPrStatus(selected) : Promise.resolve(),
+            this.refreshInlineApproval(selected),
         ]);
     }
 
@@ -372,12 +417,17 @@ class RecoderDiffViewModel implements ViewModel {
             this.checksWorkspaceId = "";
             globalStore.set(previewVerificationStateAtom, null);
             this.previewWorkspaceId = "";
+            globalStore.set(this.prViewAtom, null);
+            this.prViewWorkspaceId = "";
+            this.clearInlineApproval();
             return;
         }
         await Promise.all([
             this.loadDiff(workspaceId),
             this.fetchChecks(workspaceId),
             this.loadPreviewVerification(workspaceId),
+            this.fetchPrStatus(workspaceId),
+            this.refreshInlineApproval(workspaceId),
         ]);
     }
 
@@ -468,6 +518,27 @@ class RecoderDiffViewModel implements ViewModel {
                 globalStore.set(this.checksLoadingAtom, false);
             }
         }
+    }
+
+    // The workspace's live PR view (gh-backed pr-status edge): folds into the PR
+    // chip once one exists and gates the Create PR action with a truthful reason
+    // when a PR can't be opened. Like fetchChecks it's a real gh call, so the
+    // prViewWorkspaceId latch lets the 6s poll skip it and supersedes a stale
+    // in-flight resolve; an unreachable/unusable read (null) drops the latch so a
+    // later refresh retries instead of sticking on a stale null. Never throws.
+    async fetchPrStatus(workspaceId: string) {
+        this.prViewWorkspaceId = workspaceId;
+        const view = await fetchWorkspacePrStatusView(getRecoderBackendUrl(), workspaceId);
+        if (this.prViewWorkspaceId != workspaceId) {
+            return;
+        }
+        if (view == null) {
+            this.prViewWorkspaceId = "";
+            globalStore.set(this.prViewAtom, null);
+            return;
+        }
+        this.prProbedAtMs = Date.now();
+        globalStore.set(this.prViewAtom, view);
     }
 
     // Read the last persisted preview verification for the selected workspace
@@ -563,6 +634,10 @@ class RecoderDiffViewModel implements ViewModel {
             if (res.ok) {
                 const url = body?.data && typeof body.data.url == "string" ? body.data.url : "";
                 globalStore.set(this.prStatusAtom, url ? `PR created: ${url}` : "PR created.");
+                // Drop the pr-status latch so the refresh re-probes gh and the new
+                // PR's live chip appears (selection is unchanged, so it'd otherwise
+                // be skipped as not-stale).
+                this.prViewWorkspaceId = "";
                 await this.refresh();
                 return;
             }
@@ -713,6 +788,82 @@ class RecoderDiffViewModel implements ViewModel {
         } finally {
             globalStore.set(this.discardingAtom, false);
         }
+    }
+
+    // Drop the inline-approval card and its error, and release the read latch so
+    // the next awaiting_approval selection re-probes fresh.
+    clearInlineApproval() {
+        globalStore.set(this.inlineApprovalAtom, null);
+        globalStore.set(this.approvalErrorAtom, "");
+        this.approvalsWorkspaceId = "";
+    }
+
+    // Correlate the selected workspace to the ONE pending governance approval its
+    // run is blocked on, so the Review screen can bring approve/reject in-context
+    // instead of bouncing to the Approvals tab. Only reads the approvals edge when
+    // the DURABLE state says the run is waiting (awaiting_approval) — a settled run
+    // never costs a poll, and never shows a card. Degrade-truthful: an unreachable
+    // or non-2xx read clears the card (no fabricated approval) and drops the latch.
+    // The existing approvalErrorAtom (from a failed decide) is preserved across the
+    // poll so the reviewer keeps seeing why their last action failed.
+    async refreshInlineApproval(workspaceId: string) {
+        const ws = globalStore.get(this.workspacesAtom).find((w) => w.workspaceId == workspaceId);
+        const state = ws?.state ?? "";
+        if (state != "awaiting_approval") {
+            this.clearInlineApproval();
+            return;
+        }
+        this.approvalsWorkspaceId = workspaceId;
+        const current = () => this.approvalsWorkspaceId == workspaceId;
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/approvals`);
+            if (!current()) {
+                return;
+            }
+            if (!res.ok) {
+                this.approvalsWorkspaceId = "";
+                globalStore.set(this.inlineApprovalAtom, null);
+                return;
+            }
+            const body = await res.json();
+            if (!current()) {
+                return;
+            }
+            const data = body?.data;
+            const list = Array.isArray(data?.approvals) ? data.approvals : Array.isArray(data) ? data : [];
+            const match = selectWorkspaceApproval(ws!, list as RecoderApproval[]);
+            globalStore.set(this.inlineApprovalAtom, shouldShowInlineApproval(state, match) ? match : null);
+        } catch {
+            if (!current()) {
+                return;
+            }
+            this.approvalsWorkspaceId = "";
+            globalStore.set(this.inlineApprovalAtom, null);
+        }
+    }
+
+    // Resolve the inline approval through the SAME governed decide endpoint the
+    // Approvals list uses (shared decideApproval contract — the backend resolves
+    // the decider from the authenticated principal). approve → the run continues
+    // server-side; a clean decision clears the card and refreshes so the advanced
+    // state shows. A failed decide surfaces the truthful reason and KEEPS the card
+    // — never a fabricated "approved".
+    async decideInlineApproval(action: "approve" | "reject") {
+        const approval = globalStore.get(this.inlineApprovalAtom);
+        if (approval == null) {
+            return;
+        }
+        globalStore.set(this.approvalDecidingAtom, true);
+        globalStore.set(this.approvalErrorAtom, "");
+        const result = await decideApproval(approval.id, action);
+        globalStore.set(this.approvalDecidingAtom, false);
+        if (!result.ok) {
+            globalStore.set(this.approvalErrorAtom, result.error || `Could not ${action}.`);
+            return;
+        }
+        globalStore.set(this.inlineApprovalAtom, null);
+        this.approvalsWorkspaceId = "";
+        await this.refresh();
     }
 }
 

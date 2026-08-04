@@ -1367,6 +1367,17 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                                 · {cluster.detail}
                                             </span>
                                         )}
+                                        {/* Early collision heads-up: while the fan-out is
+                                            still running the detail carries only "M of N
+                                            done", so surface the overlap read BEFORE converge.
+                                            Once settled the detail itself tells the divergence
+                                            story, so this stays running-only to avoid echoing
+                                            it. Empty when the contested set isn't loaded. */}
+                                        {cluster != null &&
+                                            cluster.phase == "running" &&
+                                            cluster.overlap != "" && (
+                                                <span className={META}>· {cluster.overlap}</span>
+                                            )}
                                         <span className={`${META} font-mono`} title={taskGroup}>
                                             {shortTaskGroup(taskGroup)}
                                         </span>

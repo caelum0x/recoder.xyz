@@ -4,9 +4,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     fetchWorkspacePrStatus,
+    fetchWorkspacePrStatusView,
     parsePrStatusEnvelope,
+    parsePrStatusView,
     prChipLabel,
     prChipTone,
+    prCreateGate,
     prStatusFetchKey,
     shouldRefetchPrStatus,
     workspacePrStatusUrl,
@@ -88,6 +91,121 @@ describe("parsePrStatusEnvelope", () => {
         });
         expect(chip.state).toBe("open");
         expect(chip.checks).toBe("none");
+    });
+});
+
+describe("parsePrStatusView", () => {
+    it("preserves the full truthful view + a chip when a PR exists", () => {
+        const view = parsePrStatusView({
+            data: {
+                available: true,
+                hasPr: true,
+                number: 9,
+                state: "open",
+                url: "https://x/pull/9",
+                checks: { rollup: "passing" },
+            },
+        });
+        expect(view).toEqual({
+            available: true,
+            hasPr: true,
+            reason: "",
+            chip: { number: 9, state: "open", url: "https://x/pull/9", checks: "passing" },
+        });
+    });
+
+    it("keeps the degrade reason with a null chip when gh could not be consulted", () => {
+        expect(parsePrStatusView({ data: { available: false, hasPr: false, reason: "gh CLI not found" } })).toEqual({
+            available: false,
+            hasPr: false,
+            reason: "gh CLI not found",
+            chip: null,
+        });
+    });
+
+    it("reports a branch with no PR truthfully (available, hasPr:false, no chip)", () => {
+        expect(
+            parsePrStatusView({ data: { available: true, hasPr: false, reason: "no pull request for branch" } }),
+        ).toEqual({ available: true, hasPr: false, reason: "no pull request for branch", chip: null });
+    });
+
+    it("returns null only when the body is not a usable envelope", () => {
+        expect(parsePrStatusView(null)).toBeNull();
+        expect(parsePrStatusView("nope")).toBeNull();
+        expect(parsePrStatusView({ data: null })).toBeNull();
+    });
+});
+
+describe("prCreateGate", () => {
+    it("stays enabled while the view is undetermined (not probed / unreachable)", () => {
+        expect(prCreateGate(null)).toEqual({ canCreate: true, reason: "" });
+    });
+
+    it("enables create when gh + remote are present but the branch has no PR yet", () => {
+        expect(
+            prCreateGate({ available: true, hasPr: false, reason: "no pull request for branch", chip: null }),
+        ).toEqual({ canCreate: true, reason: "" });
+    });
+
+    it("disables create with gh's truthful reason when there is no pushable remote / no gh", () => {
+        expect(prCreateGate({ available: false, hasPr: false, reason: "gh CLI not found", chip: null })).toEqual({
+            canCreate: false,
+            reason: "gh CLI not found",
+        });
+    });
+
+    it("falls back to a truthful remote reason when the unavailable view carries none", () => {
+        expect(prCreateGate({ available: false, hasPr: false, reason: "", chip: null })).toEqual({
+            canCreate: false,
+            reason: "A pushable GitHub remote is required to open a pull request.",
+        });
+    });
+
+    it("disables create (not hidden) once a PR already exists — the chip shows it", () => {
+        const chip = { number: 4, state: "open" as const, url: "https://x/pull/4", checks: "none" as const };
+        expect(prCreateGate({ available: true, hasPr: true, reason: "", chip })).toEqual({
+            canCreate: false,
+            reason: "A pull request already exists for this branch.",
+        });
+    });
+});
+
+describe("fetchWorkspacePrStatusView", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("fetches the pr-status read and projects the full view", async () => {
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({
+                data: { available: true, hasPr: true, number: 5, state: "open", url: "https://x/pull/5" },
+            }),
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        const view = await fetchWorkspacePrStatusView("http://127.0.0.1:3100", "ws-1");
+        expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:3100/api/conductor/workspaces/ws-1/pr-status");
+        expect(view).toEqual({
+            available: true,
+            hasPr: true,
+            reason: "",
+            chip: { number: 5, state: "open", url: "https://x/pull/5", checks: "none" },
+        });
+    });
+
+    it("returns null without a request when no workspace is bound", async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+        expect(await fetchWorkspacePrStatusView("http://x", "")).toBeNull();
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("returns null on HTTP failure and thrown transport errors (undetermined, never fabricated)", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({}) }));
+        expect(await fetchWorkspacePrStatusView("http://x", "ws-1")).toBeNull();
+
+        vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("refused")));
+        expect(await fetchWorkspacePrStatusView("http://x", "ws-1")).toBeNull();
     });
 });
 
