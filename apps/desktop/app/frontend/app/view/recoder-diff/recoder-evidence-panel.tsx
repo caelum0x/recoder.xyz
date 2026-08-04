@@ -15,12 +15,14 @@ import {
     fetchEvidenceExport,
     fetchEvidenceMarkdown,
     fetchEvidenceRecord,
+    groupFrameworks,
     previewVerificationStateAtom,
     signaturePublicKeyFingerprint,
     triggerTextDownload,
     type EvidenceControlView,
     type EvidenceExportView,
     type EvidenceStatus,
+    type FrameworkAnnotationView,
     type PreviewCheckRow,
     type PreviewVerificationViewModel,
     type SignatureState,
@@ -87,6 +89,53 @@ function CoverageLine({ view }: { view: EvidenceExportView }) {
 }
 
 CoverageLine.displayName = "CoverageLine";
+
+// One framework control this run's evidence supports: the control id (the section's
+// single accent), its one-line rationale, and the evidence sections that back it.
+// No "COMPLIANT" badge — the framing is support, not certification.
+function FrameworkControlRow({ control }: { control: FrameworkAnnotationView }) {
+    return (
+        <div className="flex flex-col gap-0.5 pl-2 text-xs">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <span className="font-mono text-accent">{control.control}</span>
+                {control.rationale != "" && <span className="text-secondary">{control.rationale}</span>}
+            </div>
+            {control.satisfiedBy.length > 0 && (
+                <div className="text-secondary/70">backed by: {control.satisfiedBy.join(", ")}</div>
+            )}
+        </div>
+    );
+}
+
+FrameworkControlRow.displayName = "FrameworkControlRow";
+
+// The quiet "Compliance mapping" subsection: per framework (SOC2 / EU-AI-Act /
+// DORA), the controls this run's evidence defensibly supports. Rendered ONLY when
+// the pack carried frameworks — an absent mapping renders nothing (never a hollow
+// "no compliance" claim). Truthful framing: support this run's evidence backs, not
+// certification.
+function ComplianceMappingSection({ frameworks }: { frameworks: FrameworkAnnotationView[] }) {
+    const groups = groupFrameworks(frameworks);
+    if (groups.length == 0) {
+        return null;
+    }
+    return (
+        <div className="flex flex-col gap-1 border-t border-border/60 pt-1.5">
+            <span className="text-xs uppercase tracking-wide text-secondary">Compliance mapping</span>
+            <span className="text-xs text-secondary/70">Controls this run’s evidence supports — not a certification.</span>
+            {groups.map((group) => (
+                <div key={group.framework} className="flex flex-col gap-0.5">
+                    <span className="text-xs font-medium text-primary/80">{group.framework}</span>
+                    {group.controls.map((control) => (
+                        <FrameworkControlRow key={`${group.framework}:${control.control}`} control={control} />
+                    ))}
+                </div>
+            ))}
+        </div>
+    );
+}
+
+ComplianceMappingSection.displayName = "ComplianceMappingSection";
 
 // Truthful signature chrome: `verified` (a real Ed25519 check passed) is the ONLY
 // state that earns the accent ✓; `signed` (present + hash-matched but not verified
@@ -289,6 +338,7 @@ function CompliancePackSection({ workspaceId }: { workspaceId: string }) {
                     ))}
                 </div>
             )}
+            {view.frameworks.length > 0 && <ComplianceMappingSection frameworks={view.frameworks} />}
             {downloadStatus != "" && <div className="text-xs text-secondary">{downloadStatus}</div>}
         </div>
     );

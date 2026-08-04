@@ -25,6 +25,28 @@ type EvidenceControlView = {
 
 type EvidenceCoverage = { met: number; partial: number; notEvidenced: number; total: number };
 
+// The three external frameworks the starter catalog annotates. Kept to the
+// backend's exact vocabulary so the panel groups the pack's `frameworks[]` verbatim.
+type EvidenceFramework = "SOC2" | "EU-AI-Act" | "DORA";
+
+// A named evidence SECTION of the sealed record a mapping may cite. Every ref an
+// annotation carries is genuinely present in the record — a mapping never
+// references absent evidence (that invariant is the backend mapper's; we mirror it).
+type EvidenceSectionRef = "governance.verdict" | "approval" | "seal" | "verification" | "convergence.selections";
+
+// One framework control annotation projected for the panel + summary: the control
+// id, the record sections that back it (ALL present), and a one-line rationale.
+// Mirrors the backend export pack's `frameworks[]` entries. The truthful framing is
+// "controls this run's evidence supports" — never a certification / "COMPLIANT" claim.
+type FrameworkAnnotationView = {
+    framework: string;
+    control: string;
+    satisfiedBy: string[];
+    rationale: string;
+};
+
+type FrameworkGroup = { framework: string; controls: FrameworkAnnotationView[] };
+
 // The Ed25519 detached signature over the pack. `signature` (base64) signs the
 // UTF-8 BYTES of `signedContentHash` (the hex string) — the backend signed
 // `Buffer.from(contentHash)`, so any client verify must encode the string too.
@@ -55,6 +77,9 @@ type EvidenceExportView = {
     integrityVerified: boolean;
     coverage: EvidenceCoverage;
     controls: EvidenceControlView[];
+    // Truthfully-filtered framework annotations from the pack. Empty ([]) when the
+    // pack carries none — the panel then renders no compliance subsection at all.
+    frameworks: FrameworkAnnotationView[];
     contentHash: string;
     // Absent when the pack is unsigned (null/absent) — never a fabricated block.
     signature?: EvidenceSignatureView;
@@ -120,6 +145,55 @@ function normalizeControls(value: unknown): EvidenceControlView[] {
     return out;
 }
 
+// Project the pack's optional `frameworks[]` into views. Defensive like
+// normalizeControls: an entry missing its framework, control, or backing sections
+// is dropped — the pack's invariant is "never a mapping citing absent evidence", so
+// a mapping with no `satisfiedBy` is not a truthful annotation and never renders.
+function normalizeFrameworks(value: unknown): FrameworkAnnotationView[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    const out: FrameworkAnnotationView[] = [];
+    for (const item of value) {
+        const obj = asObject(item);
+        if (obj == null) {
+            continue;
+        }
+        const framework = stringOr(obj.framework, "");
+        const control = stringOr(obj.control, "");
+        const satisfiedBy = stringArray(obj.satisfiedBy);
+        if (framework == "" || control == "" || satisfiedBy.length == 0) {
+            continue;
+        }
+        out.push({ framework, control, satisfiedBy, rationale: stringOr(obj.rationale, "") });
+    }
+    return out;
+}
+
+const FrameworkDisplayOrder: readonly string[] = ["SOC2", "EU-AI-Act", "DORA"];
+
+// Group the flat annotation list by framework for display, in a stable
+// enterprise-legible order (SOC2 → EU-AI-Act → DORA, then any others in first-seen
+// order). PURE: builds new groups, never mutates the input; empty in → empty out.
+function groupFrameworks(frameworks: FrameworkAnnotationView[]): FrameworkGroup[] {
+    const groups: FrameworkGroup[] = [];
+    const byName: Record<string, FrameworkGroup> = {};
+    for (const ann of frameworks ?? []) {
+        let group = byName[ann.framework];
+        if (group == null) {
+            group = { framework: ann.framework, controls: [] };
+            byName[ann.framework] = group;
+            groups.push(group);
+        }
+        group.controls.push(ann);
+    }
+    const rank = (name: string) => {
+        const i = FrameworkDisplayOrder.indexOf(name);
+        return i == -1 ? FrameworkDisplayOrder.length : i;
+    };
+    return groups.sort((a, b) => rank(a.framework) - rank(b.framework));
+}
+
 function normalizeCoverage(value: unknown): EvidenceCoverage {
     const obj = asObject(value);
     if (obj == null) {
@@ -169,6 +243,7 @@ function parseEvidenceExport(data: Record<string, unknown>): EvidenceExportView 
         integrityVerified: integrity.verified === true,
         coverage: normalizeCoverage(data.coverage),
         controls: normalizeControls(data.controls),
+        frameworks: normalizeFrameworks(data.frameworks),
         contentHash: stringOr(data.contentHash, ""),
     };
     const signature = normalizeSignature(data.signature);
@@ -592,6 +667,161 @@ function summarizeVerification(verification: Record<string, unknown>): string[] 
     return [`Verification: ${verdict}${blockers.length > 0 ? ` · blockers: ${blockers.join(", ")}` : ""}`];
 }
 
+// A catalog row: emit iff every `required` section is present; `corroborating`
+// sections join `satisfiedBy` when present. A faithful port of the backend's
+// framework-mapping catalog so the DOWNLOADED summary derives the same mappings
+// the /evidence/export pack does — the sealed record carries no `frameworks`, so
+// the summary must re-derive them from the record it bundles.
+type FrameworkControlMapping = {
+    framework: EvidenceFramework;
+    control: string;
+    required: EvidenceSectionRef[];
+    corroborating?: EvidenceSectionRef[];
+    rationale: string;
+};
+
+const FrameworkControlCatalog: readonly FrameworkControlMapping[] = [
+    {
+        framework: "SOC2",
+        control: "CC8.1",
+        required: ["governance.verdict", "approval", "seal"],
+        rationale:
+            "Change management: the governed merge verdict, the recorded human approval, and the tamper-evident audit seal together evidence an authorized, tracked change.",
+    },
+    {
+        framework: "SOC2",
+        control: "CC7.2",
+        required: ["verification"],
+        rationale:
+            "System monitoring: the pre-merge readiness verification evidences the change was checked for anomalies before promotion.",
+    },
+    {
+        framework: "SOC2",
+        control: "CC4.1",
+        required: ["seal"],
+        rationale:
+            "Monitoring of controls: the hash-chained Merkle audit seal supports independent after-the-fact evaluation of the change trail.",
+    },
+    {
+        framework: "EU-AI-Act",
+        control: "Art. 14",
+        required: ["approval"],
+        corroborating: ["convergence.selections"],
+        rationale:
+            "Human oversight: a recorded human approval (corroborated by contested per-file picks when present) evidences a human overseeing the AI-produced change.",
+    },
+    {
+        framework: "EU-AI-Act",
+        control: "Art. 12",
+        required: ["seal"],
+        rationale:
+            "Record-keeping: the hash-chained audit seal evidences automatic, tamper-evident logging of the merge event.",
+    },
+    {
+        framework: "EU-AI-Act",
+        control: "Art. 9",
+        required: ["governance.verdict", "verification"],
+        rationale:
+            "Risk management: the risk-tiered governance verdict plus pre-merge verification evidence a risk-managed release step.",
+    },
+    {
+        framework: "DORA",
+        control: "Art. 9(4)(e)",
+        required: ["verification", "seal"],
+        rationale:
+            "ICT change management: pre-merge verification plus the sealed audit trail evidence a controlled, tested ICT change.",
+    },
+    {
+        framework: "DORA",
+        control: "Art. 24",
+        required: ["verification"],
+        rationale:
+            "Operational resilience testing: the pre-merge verification run is the recorded test evidence for this change.",
+    },
+    {
+        framework: "DORA",
+        control: "Art. 6",
+        required: ["governance.verdict", "verification"],
+        rationale:
+            "ICT risk management framework: the risk-tiered governance decision plus verification show the change passed the ICT risk framework.",
+    },
+];
+
+// Which sections the sealed record ACTUALLY carries — proven from the runtime value,
+// never assumed. Mirrors the backend mapper's presence rules exactly so the summary
+// can't over-claim: no recorded approvalId → no human-oversight mapping; a null/blank
+// auditEntryHash → no seal; verification only when it truly ran (`available:true`);
+// a selection counts only when a HUMAN resolved a contested path (explicit pick).
+function frameworkPresentSections(record: unknown): Set<EvidenceSectionRef> {
+    const root = asObject(record) ?? {};
+    const evidence = asObject(root.evidence) ?? {};
+    const seal = asObject(root.seal) ?? {};
+    const governance = asObject(evidence.governance) ?? {};
+    const verification = asObject(evidence.verification) ?? {};
+    const convergence = asObject(evidence.convergence) ?? {};
+    const present = new Set<EvidenceSectionRef>();
+    if (typeof governance.effect == "string") {
+        present.add("governance.verdict");
+    }
+    if (stringOr(governance.approvalId, "") != "") {
+        present.add("approval");
+    }
+    if (stringOr(seal.auditEntryHash, "") != "") {
+        present.add("seal");
+    }
+    if (verification.available === true) {
+        present.add("verification");
+    }
+    const selections = Array.isArray(convergence.selections)
+        ? convergence.selections.map(asObject).filter((s) => s != null)
+        : [];
+    if (selections.some((s) => s.contested === true && s.mode == "pick")) {
+        present.add("convergence.selections");
+    }
+    return present;
+}
+
+// Derive the record's defensible framework annotations client-side — the same PURE,
+// truthfully-filtered mapping the backend export pack emits. An annotation appears
+// iff every required section is present; corroborating refs join only when present.
+function deriveFrameworkAnnotations(record: unknown): FrameworkAnnotationView[] {
+    const present = frameworkPresentSections(record);
+    const out: FrameworkAnnotationView[] = [];
+    for (const mapping of FrameworkControlCatalog) {
+        if (!mapping.required.every((section) => present.has(section))) {
+            continue;
+        }
+        const corroborating = (mapping.corroborating ?? []).filter((section) => present.has(section));
+        out.push({
+            framework: mapping.framework,
+            control: mapping.control,
+            satisfiedBy: [...mapping.required, ...corroborating],
+            rationale: mapping.rationale,
+        });
+    }
+    return out;
+}
+
+// The compliance-mapping section of the downloaded summary: per framework, the
+// controls this run's evidence supports with the backing sections + rationale. When
+// nothing is defensibly supported it says so — a truthful gap, never a hollow claim.
+function summarizeFrameworks(record: unknown): string[] {
+    const annotations = deriveFrameworkAnnotations(record);
+    if (annotations.length == 0) {
+        return [
+            "Compliance mapping: none — this run's evidence doesn't defensibly support any catalogued control (not a certification).",
+        ];
+    }
+    const lines = [`Compliance mapping — controls this run's evidence supports (${annotations.length}, not a certification):`];
+    for (const group of groupFrameworks(annotations)) {
+        lines.push(`  ${group.framework}:`);
+        for (const c of group.controls) {
+            lines.push(`    - ${c.control}: ${c.rationale} [backed by: ${c.satisfiedBy.join(", ")}]`);
+        }
+    }
+    return lines;
+}
+
 // The human-readable section of the export file, built client-side from the sealed
 // record (the backend pack's summary covers controls, not the per-file story):
 // what ran, which agents, contested files + how each was resolved (picked vs
@@ -628,6 +858,7 @@ function buildEvidenceSummary(record: unknown): string[] {
     lines.push(...summarizeContested(evidence, candidates));
     lines.push(...summarizeGovernance(asObject(evidence.governance)));
     lines.push(...summarizeVerification(asObject(evidence.verification)));
+    lines.push(...summarizeFrameworks(root));
 
     const contentHash = stringOr(evidence.contentHash, "");
     lines.push(contentHash == "" ? "Seal: no content hash — the record is unsealed." : `Seal: content hash ${contentHash}`);
@@ -673,6 +904,7 @@ export {
     buildEvidenceSummary,
     canExportEvidence,
     cryptoVerifyEd25519,
+    deriveFrameworkAnnotations,
     deriveSignatureStatus,
     deriveVerifiedSignature,
     evidenceExportFilename,
@@ -681,6 +913,7 @@ export {
     fetchEvidenceMarkdown,
     fetchEvidenceRecord,
     fetchPreviewVerification,
+    groupFrameworks,
     normalizeStatus,
     parseEvidenceExport,
     parsePreviewVerification,
@@ -695,6 +928,8 @@ export {
     type EvidenceRecordResult,
     type EvidenceSignatureView,
     type EvidenceStatus,
+    type FrameworkAnnotationView,
+    type FrameworkGroup,
     type PreviewCheckRow,
     type PreviewVerificationFailure,
     type PreviewVerificationResult,

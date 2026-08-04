@@ -46,6 +46,7 @@ import {
     type RecoderGithubStatus,
 } from "./recoder-github-logic";
 import { buildUsagePath, summarizeUsage, type MeteringDisplay, type UsagePayloadLike } from "./recoder-metering";
+import { fetchFileVersions, fileVersionsKey, mergeFileVersions, type FileVersionsFetchResult } from "./recoder-compare-logic";
 import { RecoderConnectionModel } from "./recoder-connection-model";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
 import {
@@ -337,6 +338,12 @@ class RecoderViewModel implements ViewModel {
     // clears it whenever the compared group changes so picks never bleed across
     // groups. An absent path is deliberately unresolved, never a defaulted winner.
     convergeSelectionAtom: PrimitiveAtom<Record<string, string>>;
+    // N-up per-file version reads keyed by the clicked contested path — the base +
+    // each sibling's copy of ONE file, for the compare strip's column render. An
+    // absent path key ⇒ not yet requested (the panel then triggers the load); an
+    // { ok:false } entry is a truthful failure the panel surfaces as a quiet error
+    // row, never a fabricated empty version set. Cleared by the panel on group switch.
+    fileVersionsAtom: PrimitiveAtom<Record<string, FileVersionsFetchResult>>;
     // Merge-decision views (readiness + mergeability) keyed by workspaceId; each
     // side absent ⇒ that probe degraded, never a fabricated verdict.
     readinessAtom: PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
@@ -440,6 +447,7 @@ class RecoderViewModel implements ViewModel {
         this.pairAAtom = atom("") as PrimitiveAtom<string>;
         this.pairBAtom = atom("") as PrimitiveAtom<string>;
         this.convergeSelectionAtom = atom({}) as PrimitiveAtom<Record<string, string>>;
+        this.fileVersionsAtom = atom({}) as PrimitiveAtom<Record<string, FileVersionsFetchResult>>;
         this.readinessAtom = atom({}) as PrimitiveAtom<Record<string, RecoderWorkspaceReadiness>>;
         this.lastMergeAtom = atom({}) as PrimitiveAtom<Record<string, RecoderMergeRecord>>;
         this.selectedWorkspaceIdAtom = atom("") as PrimitiveAtom<string>;
@@ -991,6 +999,22 @@ class RecoderViewModel implements ViewModel {
         } catch {
             // degrade-safe: an unreachable/failed compare leaves the map unchanged
         }
+    }
+
+    // Load the N-up per-file versions for ONE contested path (the base + each sibling's
+    // copy), keyed by path. The fetch is degrade-safe and NEVER throws: a failure /
+    // non-2xx / unrecognized shape is stored as a truthful { ok:false, error } under the
+    // path so the panel shows a quiet error row with a retry — never a fabricated empty
+    // version set. A blank taskGroup/path is a no-op (no request shaped).
+    async loadFileVersions(taskGroup: string, path: string) {
+        const tg = (taskGroup ?? "").trim();
+        const rel = (path ?? "").trim();
+        if (tg == "" || rel == "") {
+            return;
+        }
+        const result = await fetchFileVersions(tg, rel);
+        const cur = globalStore.get(this.fileVersionsAtom);
+        globalStore.set(this.fileVersionsAtom, mergeFileVersions(cur, fileVersionsKey(tg, rel), result));
     }
 
     // Toggle the expanded compare panel for a group. Opening a group loads its

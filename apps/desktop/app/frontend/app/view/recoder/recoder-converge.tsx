@@ -5,6 +5,8 @@ import { cn } from "@/util/util";
 import { useEffect, useMemo, useState } from "react";
 import { agentLabel } from "./recoder-agent-labels";
 import {
+    ASSISTED_VALUE,
+    assistedOption,
     autoResolvableCount,
     autoResolveSynthesizable,
     composeConvergence,
@@ -60,9 +62,12 @@ ConflictSide.displayName = "ConflictSide";
 // path (from the group's contested set), the picked one lit like the A/B picker.
 // When a probe covered the path, it also offers "Synthesize" (auto 3-way merge)
 // with a truthful ✓/✗ indicator; a non-synthesizable path dims that option and
-// keeps the reason visible so the user picks a winner instead. An 'overlap' also
-// gets a collapsed "Where?" toggle showing the exact colliding line regions (or a
-// truthful "location unavailable" when the backend sent none).
+// keeps the reason visible so the user picks a winner instead. Wherever a synthesize
+// was at least attempted it ALSO offers "AI-assisted" (synthesize-first, model on
+// conflict) — enabled even for a non-synthesizable overlap (that is exactly what it
+// escalates), and merely optional for a trivially-mergeable path (the title says so).
+// An 'overlap' also gets a collapsed "Where?" toggle showing the exact colliding line
+// regions (or a truthful "location unavailable" when the backend sent none).
 function ContestedPickRow({
     path,
     candidates,
@@ -82,6 +87,7 @@ function ContestedPickRow({
 }) {
     const [showRegions, setShowRegions] = useState(false);
     const canSynth = synth != null && synth.synthesizable;
+    const assisted = assistedOption(synth);
     const regionView = synth != null ? presentConflictRegions(synth) : null;
     const hasCollision = regionView != null && (regionView.rows.length > 0 || regionView.fallback != "");
     // The fold merges sorted siblings pairwise: with exactly 2, ours/theirs map 1:1
@@ -124,6 +130,19 @@ function ContestedPickRow({
                             Synthesize
                         </button>
                     )}
+                    {assisted.offer && (
+                        <button
+                            className={picked == ASSISTED_VALUE ? PICK_BTN_ON : QUIET_BTN_XS}
+                            disabled={disabled}
+                            onClick={() => onPick(ASSISTED_VALUE)}
+                            title={
+                                "AI-assisted merge — a model resolves the conflict; you review the result before merge." +
+                                (assisted.note ? ` (${assisted.note}, so Synthesize suffices here)` : "")
+                            }
+                        >
+                            AI-assisted
+                        </button>
+                    )}
                 </div>
                 {synth != null && (
                     <span
@@ -143,7 +162,13 @@ function ContestedPickRow({
                     </button>
                 )}
                 {picked == "" && (
-                    <span className={META}>{canSynth ? "pick a winner or synthesize" : "pick a winner"}</span>
+                    <span className={META}>
+                        {assisted.offer
+                            ? canSynth
+                                ? "pick a winner, synthesize, or AI-assist"
+                                : "pick a winner or AI-assist"
+                            : "pick a winner"}
+                    </span>
                 )}
             </div>
             {showRegions && regionView != null && (
@@ -231,6 +256,7 @@ function ConvergePanel({ taskGroup, contested, siblings, selection, onSelectionC
     const [composing, setComposing] = useState(false);
     const [composeError, setComposeError] = useState("");
     const [composedId, setComposedId] = useState("");
+    const [composedAssisted, setComposedAssisted] = useState<string[]>([]);
     const [synthMap, setSynthMap] = useState<Record<string, SynthInfo>>({});
 
     const agentByWs = useMemo(() => new Map(siblings.map((s) => [s.workspaceId, s.agent])), [siblings]);
@@ -299,6 +325,7 @@ function ConvergePanel({ taskGroup, contested, siblings, selection, onSelectionC
     // for a selection it no longer matches would lie about state.
     useEffect(() => {
         setComposedId("");
+        setComposedAssisted([]);
         setComposeError("");
     }, [selectionKey]);
 
@@ -317,12 +344,14 @@ function ConvergePanel({ taskGroup, contested, siblings, selection, onSelectionC
     const onPick = (path: string, value: string) => {
         setComposeError("");
         setComposedId("");
+        setComposedAssisted([]);
         onSelectionChange(toggleSelection(selection, path, value));
     };
 
     const onAutoResolve = () => {
         setComposeError("");
         setComposedId("");
+        setComposedAssisted([]);
         onSelectionChange(autoResolveSynthesizable(selection, synthMap));
     };
 
@@ -333,6 +362,7 @@ function ConvergePanel({ taskGroup, contested, siblings, selection, onSelectionC
         setComposing(false);
         if (result.ok) {
             setComposedId(result.workspaceId);
+            setComposedAssisted(result.assisted ?? []);
             onReview(result.workspaceId);
             return;
         }
@@ -341,14 +371,23 @@ function ConvergePanel({ taskGroup, contested, siblings, selection, onSelectionC
 
     const composeReady = plan != null && plan.complete && !composing;
     const anySynth = Object.values(synthMap).some((s) => s.synthesizable);
+    // Assisted is offered wherever the probe covered a path (a synthesize was at least
+    // attempted) — a superset of the cleanly-synthesizable set.
+    const anyAssisted = Object.keys(synthMap).length > 0;
+    const affordance = anyAssisted
+        ? anySynth
+            ? "pick a winner, Synthesize, or AI-assist"
+            : "pick a winner or AI-assist"
+        : anySynth
+          ? "pick a winner or Synthesize"
+          : "pick a winner";
     const autoResolvable = autoResolvableCount(selection, synthMap);
 
     return (
         <div className="flex flex-col gap-1.5 rounded border border-accent/30 px-2 py-2">
             <div className="flex items-center justify-between gap-2">
                 <div className={FIELD_LABEL}>
-                    Converge — pick a winner{anySynth ? " or Synthesize" : ""} per contested file, then compose one
-                    reviewable workspace
+                    Converge — {affordance} per contested file, then compose one reviewable workspace
                 </div>
                 {autoResolvable > 0 ? (
                     <button
@@ -384,15 +423,35 @@ function ConvergePanel({ taskGroup, contested, siblings, selection, onSelectionC
             )}
             {composeError != "" && <RecoderErrorRow message={composeError} />}
             {composedId != "" ? (
-                <div className="flex items-center gap-2">
-                    <span className="text-xs text-accent">Convergence workspace created — opening review.</span>
-                    <button
-                        className={QUIET_BTN}
-                        onClick={() => onReview(composedId)}
-                        title="Open the convergence workspace diff"
-                    >
-                        Open review
-                    </button>
+                <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-accent">Convergence workspace created — opening review.</span>
+                        <button
+                            className={QUIET_BTN}
+                            onClick={() => onReview(composedId)}
+                            title="Open the convergence workspace diff"
+                        >
+                            Open review
+                        </button>
+                    </div>
+                    {composedAssisted.length > 0 && (
+                        <div className="flex flex-col gap-0.5 rounded border border-white/8 px-2 py-1">
+                            <div className="flex items-center gap-1.5">
+                                <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] text-accent">
+                                    AI-assisted
+                                </span>
+                                <span className={META}>
+                                    a model wrote {composedAssisted.length} file
+                                    {composedAssisted.length == 1 ? "" : "s"} — review closely before merge:
+                                </span>
+                            </div>
+                            {composedAssisted.map((p) => (
+                                <span key={p} className="truncate font-mono text-xs text-secondary" title={p}>
+                                    {p}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
             ) : (
                 <div className="flex items-center gap-2">

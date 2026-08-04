@@ -6,6 +6,7 @@ import { FIELD_LABEL, INPUT, PAGE_TITLE, PRIMARY_BTN, QUIET_BTN, STATE_CHIP } fr
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import {
+    RecallSignal,
     RecoderMemoryCandidate,
     RecoderMemoryItem,
     RecoderMemoryResult,
@@ -13,6 +14,14 @@ import {
 } from "./recoder-memory-model";
 
 const REFRESH_MS = 6000;
+
+// WHY-it-surfaced chips read as plain words; "recency" becomes "recent" so the
+// row explains the moat (repo-scoped / fresh recall) in one calm glance.
+const SIGNAL_LABEL: Record<RecallSignal, string> = {
+    "repo-match": "repo-match",
+    recency: "recent",
+    lexical: "lexical",
+};
 
 function MemoryItemRow({ item }: { item: RecoderMemoryItem }) {
     return (
@@ -29,8 +38,24 @@ function MemoryItemRow({ item }: { item: RecoderMemoryItem }) {
     );
 }
 
+function SignalChips({ signals }: { signals: readonly RecallSignal[] }) {
+    if (signals.length == 0) {
+        return null;
+    }
+    return (
+        <div className="flex flex-wrap items-center gap-1">
+            {signals.map((s) => (
+                <span key={s} className={STATE_CHIP}>
+                    {SIGNAL_LABEL[s]}
+                </span>
+            ))}
+        </div>
+    );
+}
+
 function ResultRow({ result }: { result: RecoderMemoryResult }) {
     const provenance = result.provenance;
+    const signals = provenance?.signals ?? [];
     return (
         <div className="flex flex-col gap-0.5 rounded border border-border p-2" title={result.id}>
             {result.title != null && result.title != "" && (
@@ -43,6 +68,7 @@ function ResultRow({ result }: { result: RecoderMemoryResult }) {
                     {provenance.scope != null && provenance.scope != "" ? ` · ${provenance.scope}` : ""}
                 </div>
             )}
+            <SignalChips signals={signals} />
         </div>
     );
 }
@@ -161,6 +187,10 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
                     {candidates.length > 0 && (
                         <div className="flex flex-col gap-1">
                             <div className={FIELD_LABEL}>Pending candidates ({candidates.length})</div>
+                            <div className="text-xs text-secondary">
+                                Reusable lessons shaped from completed runs — ephemeral until a reviewer promotes
+                                them.
+                            </div>
                             {candidates.map((c) => (
                                 <CandidateRow
                                     key={c.candidateId}
