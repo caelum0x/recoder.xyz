@@ -27,7 +27,7 @@ function MemoryItemRow({ item }: { item: RecoderMemoryItem }) {
     return (
         <div className="flex flex-col gap-0.5 rounded border border-border p-2" title={item.memoryId}>
             <div className="flex items-center gap-2">
-                <span className="text-sm font-medium truncate">{item.title || "Untitled memory"}</span>
+                <span className="text-sm font-medium truncate">{item.title || "Untitled lesson"}</span>
                 <span className={`${STATE_CHIP} ml-auto`}>{item.scope}</span>
             </div>
             {item.body != "" && <div className="text-xs text-secondary line-clamp-3">{item.body}</div>}
@@ -54,20 +54,15 @@ function SignalChips({ signals }: { signals: readonly RecallSignal[] }) {
 }
 
 function ResultRow({ result }: { result: RecoderMemoryResult }) {
-    const provenance = result.provenance;
-    const signals = provenance?.signals ?? [];
+    // Only the user-facing why-signals surface here. The raw source engine and
+    // score are internal recall mechanics — never leaked into the calm row.
+    const signals = result.provenance?.signals ?? [];
     return (
         <div className="flex flex-col gap-0.5 rounded border border-border p-2" title={result.id}>
             {result.title != null && result.title != "" && (
                 <div className="text-sm font-medium truncate">{result.title}</div>
             )}
             <div className="text-sm">{result.memory}</div>
-            {provenance != null && (
-                <div className="text-xs text-secondary font-mono truncate">
-                    {provenance.source} · {provenance.score.toFixed(2)}
-                    {provenance.scope != null && provenance.scope != "" ? ` · ${provenance.scope}` : ""}
-                </div>
-            )}
             <SignalChips signals={signals} />
         </div>
     );
@@ -84,8 +79,8 @@ function CandidateRow({ candidate, busy, onAccept, onReject }: CandidateRowProps
     return (
         <div className="flex flex-col gap-1 rounded border border-border p-2" title={candidate.candidateId}>
             <div className="flex items-center gap-2">
-                <span className="text-sm font-medium truncate">{candidate.title || "Untitled candidate"}</span>
-                <span className={`${STATE_CHIP} ml-auto`}>{candidate.status}</span>
+                <span className="text-sm font-medium truncate">{candidate.title || "Untitled lesson"}</span>
+                <span className={`${STATE_CHIP} ml-auto`}>ephemeral</span>
             </div>
             {candidate.body != "" && (
                 <div className="text-xs text-secondary whitespace-pre-wrap break-words">{candidate.body}</div>
@@ -172,13 +167,13 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
                 <>
                     {showEmpty && (
                         <RecoderEmpty
-                            title="No memories yet"
-                            hint="Facts and conventions are captured here as agents complete work."
+                            title="No lessons yet"
+                            hint="They accumulate as agents complete work."
                         />
                     )}
                     {items.length > 0 && (
                         <div className="flex flex-col gap-1">
-                            <div className={FIELD_LABEL}>Memory ({items.length})</div>
+                            <div className={FIELD_LABEL}>Lessons ({items.length})</div>
                             {items.map((item) => (
                                 <MemoryItemRow key={item.memoryId} item={item} />
                             ))}

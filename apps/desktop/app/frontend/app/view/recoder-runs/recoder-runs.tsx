@@ -6,7 +6,13 @@ import { FIELD_LABEL, PAGE_TITLE } from "@/app/view/recoder/recoder-styles";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
-import { activeDriftFindings, driftForRun, driftLabel, type RunsDriftFinding } from "./recoder-runs-findings";
+import {
+    activeDriftFindings,
+    driftForRun,
+    driftLabel,
+    unpinnedDriftFindings,
+    type RunsDriftFinding,
+} from "./recoder-runs-findings";
 import { RecoderRun, RecoderRunEvent, RecoderRunsViewModel, SelectedRunStatus } from "./recoder-runs-model";
 
 const REFRESH_MS = 6000;
@@ -62,6 +68,12 @@ function RunRow({ run, correlated, selected, drift, onSelect, onSession, onRevie
         e.stopPropagation();
         onReview();
     };
+    // Row actions (and the "no workspace" note) stay out of the default scan and
+    // reveal on hover or when the row is selected — keeps the list glanceable
+    // without dropping the affordance for mouse or keyboard.
+    const revealClass = selected
+        ? "opacity-100"
+        : "opacity-0 group-hover:opacity-100 focus-within:opacity-100";
     return (
         <div
             role="button"
@@ -74,7 +86,7 @@ function RunRow({ run, correlated, selected, drift, onSelect, onSession, onRevie
                 }
             }}
             className={cn(
-                "flex items-center gap-2 rounded border px-2 py-1 cursor-pointer recoder-transition",
+                "group flex items-center gap-2 rounded border px-2 py-1 cursor-pointer recoder-transition",
                 selected ? "border-accent/60 bg-accent/10" : "border-border hover:bg-white/[0.03]"
             )}
             title={`${run.runId} · ${run.taskId}`}
@@ -84,18 +96,15 @@ function RunRow({ run, correlated, selected, drift, onSelect, onSession, onRevie
             </span>
             <span className="text-sm truncate">{runLabel(run)}</span>
             {drift.length > 0 && (
-                <span
-                    className="flex items-center gap-1 text-xs text-secondary whitespace-nowrap"
-                    title={drift.map((f) => driftLabel(f.kind)).join(" · ")}
-                >
-                    <i className="fa-solid fa-triangle-exclamation" />
-                    {driftLabel(drift[0].kind)}
-                </span>
+                <i
+                    className="fa-solid fa-triangle-exclamation text-xs text-secondary"
+                    title={`Drift · ${drift.map((f) => driftLabel(f.kind)).join(" · ")}`}
+                />
             )}
             {run.assigneeAgentId && <span className="text-xs text-secondary truncate">{run.assigneeAgentId}</span>}
             <span className="text-xs text-secondary ml-auto whitespace-nowrap">{shortTime(run.updatedAt)}</span>
             {correlated ? (
-                <span className="flex items-center gap-1 whitespace-nowrap">
+                <span className={cn("flex items-center gap-1 whitespace-nowrap recoder-transition", revealClass)}>
                     <button
                         type="button"
                         onClick={openSession}
@@ -112,7 +121,9 @@ function RunRow({ run, correlated, selected, drift, onSelect, onSession, onRevie
                     </button>
                 </span>
             ) : (
-                <span className="text-xs text-meta whitespace-nowrap">no workspace</span>
+                <span className={cn("text-xs text-meta whitespace-nowrap recoder-transition", revealClass)}>
+                    no workspace
+                </span>
             )}
         </div>
     );
@@ -213,6 +224,9 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
     const showEmptyRuns = connected && !loading && runs.length == 0;
     const selectedRun = runs.find((r) => r.runId == selectedRunId);
     const drift = activeDriftFindings(findings);
+    // Each run row carries its own drift marker; the standalone section only lists
+    // findings no row can pin, so the same drift never appears twice.
+    const unpinnedDrift = unpinnedDriftFindings(drift, correlation);
 
     return (
         <div className="flex flex-col h-full overflow-auto p-3 gap-3">
@@ -227,11 +241,11 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
             {connected && findingsStatus == "unavailable" && (
                 <div className="text-xs text-meta">drift findings unavailable</div>
             )}
-            {connected && drift.length > 0 && (
+            {connected && unpinnedDrift.length > 0 && (
                 <div className="flex flex-col gap-1">
                     <div className={FIELD_LABEL}>Drift</div>
                     <div className="flex flex-col gap-0.5">
-                        {drift.map((finding) => (
+                        {unpinnedDrift.map((finding) => (
                             <DriftLine key={finding.findingId} finding={finding} />
                         ))}
                     </div>

@@ -24,6 +24,12 @@ type RecoderWorkspace = {
     runtimeId: string;
     taskId?: string;
     runId?: string;
+    // Ride on the same conductor Workspace record the list edge returns; they let
+    // the shared detail header open the workspace's raw tmux terminal without a
+    // second fetch. Absent on older backends → the Terminal segment stays disabled
+    // (truthful degrade), never a fabricated attach target.
+    sessionName?: string;
+    worktreePath?: string;
 };
 
 const WorkspaceIdMetaKey = "recoder:workspaceid";
