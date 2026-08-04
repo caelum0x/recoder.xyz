@@ -18,9 +18,13 @@ import {
   type ConvergenceEvidence,
   type ConvergenceEvidenceRecord,
 } from './convergence-evidence.js';
+import { mapFrameworkAnnotations, type FrameworkAnnotation } from './framework-mapping.js';
 
-/** Versioned schema tag for the export pack (bump on shape changes). */
-export const EVIDENCE_EXPORT_SCHEMA = 'recoder.evidence-export/v1' as const;
+/**
+ * Versioned schema tag for the export pack (bump on shape changes). v2 added the
+ * optional `frameworks` annotation section ({@link FrameworkAnnotation}).
+ */
+export const EVIDENCE_EXPORT_SCHEMA = 'recoder.evidence-export/v2' as const;
 
 /** A control's truthful, DERIVED status — never hardcoded to `met`. */
 export type ControlStatus = 'met' | 'partial' | 'not-evidenced';
@@ -90,6 +94,14 @@ export interface EvidenceExport {
   readonly subject: EvidenceExportSubject;
   readonly controls: readonly EvidenceControl[];
   readonly coverage: ControlCoverage;
+  /**
+   * OPTIONAL framework annotations — which SOC 2 / EU AI Act / DORA controls the
+   * record's PRESENT evidence sections can defensibly speak to. DERIVED metadata
+   * computed at export time from the sealed record: the sealed record and its
+   * `contentHash` are unchanged by this section (the seal's meaning is untouched);
+   * only the pack's own hash covers it. ABSENT when no mapping is defensible.
+   */
+  readonly frameworks?: readonly FrameworkAnnotation[];
   /** A human-readable (markdown) rendering for an auditor. */
   readonly summary: string;
   readonly generatedAt: string;
@@ -394,6 +406,11 @@ export function renderEvidenceExport(
 
   const summary = renderSummaryMarkdown(subject, controls, coverage, integrityVerified);
 
+  // Truthfully-filtered framework annotations (mapper emits only mappings whose
+  // referenced sections exist). Omitted entirely when nothing is defensible —
+  // an empty record must not carry a hollow `frameworks: []` claim.
+  const frameworks = mapFrameworkAnnotations(record);
+
   const unsealed: Omit<EvidenceExport, 'contentHash'> = {
     schema: EVIDENCE_EXPORT_SCHEMA,
     generatedFrom: evidence.contentHash,
@@ -401,6 +418,7 @@ export function renderEvidenceExport(
     subject,
     controls,
     coverage,
+    ...(frameworks.length > 0 ? { frameworks } : {}),
     summary,
     generatedAt: now(),
   };

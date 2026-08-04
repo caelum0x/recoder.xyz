@@ -72,7 +72,7 @@ export function NotificationCenter() {
       title: 'Welcome to Recoder!',
       message: 'Your account has been successfully created.',
       read: false,
-      link: '/dashboard',
+      link: '/account',
       createdAt: new Date().toISOString(),
     },
     {
@@ -89,7 +89,7 @@ export function NotificationCenter() {
       title: 'Usage Alert',
       message: 'You have used 80% of your monthly quota.',
       read: true,
-      link: '/dashboard/usage',
+      link: '/account',
       createdAt: new Date(Date.now() - 7200000).toISOString(),
     },
   ];

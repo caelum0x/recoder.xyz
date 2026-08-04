@@ -9,21 +9,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
-
-const ADMIN_SECRET = process.env.ADMIN_SECRET;
-if (!ADMIN_SECRET) {
-  console.warn('[admin] ADMIN_SECRET not configured - admin endpoints disabled');
-}
+import { ensureAdminAccess } from '@/lib/admin-auth';
 
 export async function GET(request: NextRequest) {
   try {
-    // Check admin authorization
-    const authHeader = request.headers.get('x-admin-secret');
-    if (!ADMIN_SECRET || !authHeader || authHeader !== ADMIN_SECRET) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized. Provide x-admin-secret header.' },
-        { status: 401 }
-      );
+    const access = await ensureAdminAccess(request);
+    if ('response' in access) {
+      return access.response;
     }
 
     const { searchParams } = new URL(request.url);
@@ -138,13 +130,9 @@ export async function GET(request: NextRequest) {
 // DELETE endpoint to clean up expired verifications
 export async function DELETE(request: NextRequest) {
   try {
-    // Check admin authorization
-    const authHeader = request.headers.get('x-admin-secret');
-    if (!ADMIN_SECRET || !authHeader || authHeader !== ADMIN_SECRET) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized. Provide x-admin-secret header.' },
-        { status: 401 }
-      );
+    const access = await ensureAdminAccess(request);
+    if ('response' in access) {
+      return access.response;
     }
 
     // Delete all expired verifications
@@ -179,13 +167,9 @@ export async function DELETE(request: NextRequest) {
 // }
 export async function POST(request: NextRequest) {
   try {
-    // Check admin authorization
-    const authHeader = request.headers.get('x-admin-secret');
-    if (!ADMIN_SECRET || !authHeader || authHeader !== ADMIN_SECRET) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized. Provide x-admin-secret header.' },
-        { status: 401 }
-      );
+    const access = await ensureAdminAccess(request);
+    if ('response' in access) {
+      return access.response;
     }
 
     const body = await request.json();

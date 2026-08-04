@@ -1,7 +1,16 @@
 /**
  * CLI Internal Device Authorization API
  * Handles device flow authorization from the web interface
- * Internal endpoint called by the device authorization page
+ *
+ * Auth model (documented because "cli-internal" is a misleading name — two of
+ * these consumers are NOT internal services):
+ * - POST is called by the browser device page (`/auth/device`); a browser can
+ *   never hold INTERNAL_SERVICE_KEY, and authorization must be tied to a
+ *   human, so the credential is the Better Auth session (401 without one).
+ * - GET is polled by `/api/auth/cli` (a same-app loopback fetch that sends no
+ *   internal headers) on behalf of the CLI. Per RFC 8628 the high-entropy
+ *   `device_code` is the bearer credential there; a signed internal-service
+ *   request is also accepted. Requests with neither credential get 401.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -10,6 +19,7 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
 
 import { 
   getDeviceFlowRequestByUserCode, 
@@ -141,6 +151,16 @@ export async function GET(request: NextRequest) {
     const deviceCode = searchParams.get('device_code');
 
     if (!deviceCode) {
+      // No device_code bearer credential: only a signed internal-service
+      // request may probe this endpoint; everything else is unauthorized.
+      const internal = verifyInternalServiceRequest(request, { rawBody: '' });
+      if (!internal.ok) {
+        return NextResponse.json({
+          success: false,
+          error: 'unauthorized',
+          error_description: 'Missing credentials'
+        }, { status: 401 });
+      }
       return NextResponse.json({
         success: false,
         error: 'invalid_request',

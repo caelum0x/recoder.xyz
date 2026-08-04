@@ -17,7 +17,7 @@ interface AppHeaderProps {
   backLabel?: string;
 }
 
-export function AppHeader({ showBackButton = false, backHref = '/dashboard', backLabel = 'Back to Dashboard' }: AppHeaderProps) {
+export function AppHeader({ showBackButton = false, backHref = '/account', backLabel = 'Back to Account' }: AppHeaderProps) {
   return (
     <header className="fixed top-0 w-full z-50 border-b border-white/10 bg-black/80 backdrop-blur-xl">
       <div className="container mx-auto px-6 h-16 flex items-center justify-between">

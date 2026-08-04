@@ -62,12 +62,12 @@ export function CommandPalette() {
       action: () => router.push('/'),
     },
     {
-      id: 'nav-dashboard',
-      title: 'Dashboard',
-      description: 'Go to dashboard',
+      id: 'nav-account',
+      title: 'Account',
+      description: 'Go to your account',
       icon: BarChart,
       category: 'Navigation',
-      action: () => router.push('/dashboard'),
+      action: () => router.push('/account'),
     },
     {
       id: 'nav-projects',
@@ -75,15 +75,15 @@ export function CommandPalette() {
       description: 'View your projects',
       icon: FileText,
       category: 'Navigation',
-      action: () => router.push('/dashboard/projects'),
+      action: () => router.push('/projects'),
     },
     {
       id: 'nav-usage',
       title: 'Usage',
-      description: 'View usage analytics',
+      description: 'View usage on your account',
       icon: BarChart,
       category: 'Navigation',
-      action: () => router.push('/dashboard/usage'),
+      action: () => router.push('/account'),
     },
     // Settings
     {

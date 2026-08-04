@@ -9,11 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getEmailProviderStatus, sendVerificationEmail, sendWelcomeEmail, sendPasswordResetEmail, sendTemporaryPasswordEmail } from '@/lib/email';
-
-const ADMIN_SECRET = process.env.ADMIN_SECRET;
-if (!ADMIN_SECRET) {
-  console.warn('[admin] ADMIN_SECRET not configured - admin endpoints disabled');
-}
+import { ensureAdminAccess } from '@/lib/admin-auth';
 
 function getProviderLabel() {
   const provider = getEmailProviderStatus().provider;
@@ -31,13 +27,9 @@ function getProviderLabel() {
 
 export async function POST(request: NextRequest) {
   try {
-    // Check admin authorization
-    const authHeader = request.headers.get('x-admin-secret');
-    if (!ADMIN_SECRET || !authHeader || authHeader !== ADMIN_SECRET) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized. Provide x-admin-secret header.' },
-        { status: 401 }
-      );
+    const access = await ensureAdminAccess(request);
+    if ('response' in access) {
+      return access.response;
     }
 
     const body = await request.json();
@@ -100,13 +92,9 @@ export async function POST(request: NextRequest) {
 
 // GET endpoint to check email configuration
 export async function GET(request: NextRequest) {
-  // Check admin authorization
-  const authHeader = request.headers.get('x-admin-secret');
-  if (authHeader !== ADMIN_SECRET) {
-    return NextResponse.json(
-      { success: false, error: 'Unauthorized. Provide x-admin-secret header.' },
-      { status: 401 }
-    );
+  const access = await ensureAdminAccess(request);
+  if ('response' in access) {
+    return access.response;
   }
 
   const providerStatus = getEmailProviderStatus();

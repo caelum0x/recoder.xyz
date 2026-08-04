@@ -3,7 +3,8 @@
  *
  * GET /api/admin/kpi
  *
- * Protected by `x-admin-secret` header matching ADMIN_SECRET env var.
+ * Protected by the shared admin gate (`ensureAdminAccess`: an `x-admin-secret`
+ * header matching ADMIN_SECRET, or an authenticated admin session).
  * Returns weekly metrics across users, engagement, revenue and email.
  *
  * The codebase has TWO logical user populations stored in a single `users`
@@ -13,12 +14,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ensureAdminAccess } from '@/lib/admin-auth';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-const ADMIN_SECRET = process.env.ADMIN_SECRET;
 
 function startOfWeek(weeksAgo = 0): Date {
   const now = new Date();
@@ -49,13 +49,9 @@ async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
-  // Auth gate
-  const secret = request.headers.get('x-admin-secret');
-  if (!ADMIN_SECRET || !secret || secret !== ADMIN_SECRET) {
-    return NextResponse.json(
-      { success: false, error: 'Unauthorized. Provide x-admin-secret header.' },
-      { status: 401 },
-    );
+  const access = await ensureAdminAccess(request);
+  if ('response' in access) {
+    return access.response;
   }
 
   const thisWeekStart = startOfWeek(0);
