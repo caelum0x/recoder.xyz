@@ -13,7 +13,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node --import tsx .claude/hooks/pre-tool-use.ts"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && node --import tsx .claude/hooks/pre-tool-use.ts"
           }
         ]
       }
@@ -24,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node --import tsx .claude/hooks/post-tool-use.ts"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && node --import tsx .claude/hooks/post-tool-use.ts"
           }
         ]
       }
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node --import tsx .claude/hooks/stop.ts"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && node --import tsx .claude/hooks/stop.ts"
           }
         ]
       }
@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node --import tsx .claude/hooks/post-tool-use.ts"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && node --import tsx .claude/hooks/post-tool-use.ts"
           }
         ]
       }
