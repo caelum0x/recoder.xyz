@@ -380,6 +380,12 @@ export interface ComposeOptions {
   substrateScan?: ConductorModuleDeps['substrateScan'];
   /** OPTIONAL dmux LAYOUT-brain grid seam (absent ⇒ no grid hint, arrange ⇒ null). */
   workspaceGrid?: ConductorModuleDeps['workspaceGrid'];
+  /**
+   * OPTIONAL degrade-safe one-shot LLM inference for ASSISTED convergence synthesis
+   * (`ctx.infer` → `ConvergeOpsDeps.inference`). Absent ⇒ every `@assisted` conflict
+   * degrades truthfully to `synthesize-conflict` (mechanical behavior, never a fake merge).
+   */
+  infer?: ConductorModuleDeps['infer'];
   /** OPTIONAL AppConfig override (e.g. `makeConfig(false, true)` for solo/desktop mode). */
   config?: AppConfig;
 }
@@ -420,6 +426,7 @@ export function composeConductor(options: ComposeOptions = {}): {
       : {}),
     ...(options.substrateScan ? { substrateScan: options.substrateScan } : {}),
     ...(options.workspaceGrid ? { workspaceGrid: options.workspaceGrid } : {}),
+    ...(options.infer ? { infer: options.infer } : {}),
   });
   return { module, gate };
 }

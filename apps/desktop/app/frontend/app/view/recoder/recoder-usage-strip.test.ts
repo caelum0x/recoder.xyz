@@ -55,6 +55,28 @@ describe("parseUsageEnvelope", () => {
         expect(display.totals.cost).toBe("$0.00");
         expect(display.recent).toHaveLength(0);
     });
+
+    it("keeps real-zero, unavailable, and errored as three distinct rendering decisions", () => {
+        // Real zero: a genuine no-spend ledger — a non-null strip the view shows.
+        const realZero = parseUsageEnvelope({ success: true, data: { totals: { calls: 0, costMicroUsd: 0 } } });
+        expect(realZero).not.toBeNull();
+        expect(realZero.totals.calls).toBe("0");
+        expect(realZero.totals.cost).toBe("$0.00");
+        // Errored (success:false) and unavailable (garbage) both collapse to null —
+        // never a faked $0.00 that reads as a successful zero.
+        expect(parseUsageEnvelope({ success: false, data: { totals: { costMicroUsd: 0 } } })).toBeNull();
+        expect(parseUsageEnvelope(null)).toBeNull();
+    });
+
+    it("carries the cost's provenance through the envelope — estimated by default, metered only when asserted", () => {
+        expect(parseUsageEnvelope({ success: true, data: { totals: { costMicroUsd: 900, calls: 1 } } }).provenance).toBe(
+            "estimated",
+        );
+        expect(
+            parseUsageEnvelope({ success: true, data: { totals: { costMicroUsd: 900, calls: 1 }, metered: true } })
+                .provenance,
+        ).toBe("metered");
+    });
 });
 
 describe("fetchWorkspaceUsage", () => {

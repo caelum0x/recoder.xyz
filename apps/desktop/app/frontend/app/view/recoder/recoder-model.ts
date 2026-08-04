@@ -39,13 +39,15 @@ import { parseAgentAuthState, type AgentAuthState } from "./recoder-agent-auth";
 import { parseArchivedPage, type ArchivedPageMeta } from "./recoder-first-run-logic";
 import { parseCheckpointList, type RecoderCheckpoint } from "./recoder-checkpoint-logic";
 import { isGitHubRepoUrl, parseCloneResponse } from "./recoder-clone-logic";
+import { nextRecentRepos, planLaunchAgents, shapeLaunchRequestBody } from "./recoder-launch-logic";
 import {
     parseGithubRepos,
     parseGithubStatus,
     type RecoderGithubRepo,
     type RecoderGithubStatus,
 } from "./recoder-github-logic";
-import { buildUsagePath, summarizeUsage, type MeteringDisplay, type UsagePayloadLike } from "./recoder-metering";
+import { type MeteringDisplay } from "./recoder-metering";
+import { fetchWorkspaceUsage } from "./recoder-usage-strip";
 import { fetchFileVersions, fileVersionsKey, mergeFileVersions, type FileVersionsFetchResult } from "./recoder-compare-logic";
 import { RecoderConnectionModel } from "./recoder-connection-model";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
@@ -164,6 +166,7 @@ function genTaskGroupId(): string {
 const RECENT_REPOS_KEY = "recoder:recent-repos";
 const RECENT_REPOS_CAP = 8;
 const LAST_AGENT_KEY = "recoder:last-agent";
+const LAST_AGENTS_KEY = "recoder:last-agents";
 const LAST_INTERACTIVE_KEY = "recoder:last-interactive";
 const NOTIFY_ATTENTION_KEY = "recoder:notify-attention";
 
@@ -187,6 +190,24 @@ function loadLastAgent(): string {
         return localStorage.getItem(LAST_AGENT_KEY) ?? "";
     } catch {
         return "";
+    }
+}
+
+// The last-used agent SELECTION (ordered, primary first) so a returning dev's
+// multi-agent fan-out is one open away. Degrade-safe: bad JSON / non-string
+// entries fall back to the single last-agent (then to zero-config all-detected).
+function loadLastAgents(): string[] {
+    try {
+        const raw = localStorage.getItem(LAST_AGENTS_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        const list = Array.isArray(arr) ? arr.filter((x): x is string => typeof x == "string" && x != "") : [];
+        if (list.length > 0) {
+            return list;
+        }
+        const single = loadLastAgent();
+        return single != "" ? [single] : [];
+    } catch {
+        return [];
     }
 }
 
@@ -433,8 +454,8 @@ class RecoderViewModel implements ViewModel {
         this.launchRepoIsGitAtom = atom(true) as PrimitiveAtom<boolean>;
         this.recentReposAtom = atom(loadRecentRepos()) as PrimitiveAtom<string[]>;
         this.launchPromptAtom = atom("") as PrimitiveAtom<string>;
-        this.launchRuntimeIdAtom = atom(loadLastAgent()) as PrimitiveAtom<string>;
-        this.launchAlsoRunAtom = atom([]) as PrimitiveAtom<string[]>;
+        this.launchRuntimeIdAtom = atom(loadLastAgents()[0] ?? "") as PrimitiveAtom<string>;
+        this.launchAlsoRunAtom = atom(loadLastAgents().slice(1)) as PrimitiveAtom<string[]>;
         this.launchBranchAtom = atom("") as PrimitiveAtom<string>;
         this.launchInteractiveAtom = atom(loadLastInteractive()) as PrimitiveAtom<boolean>;
         this.postingAtom = atom(false) as PrimitiveAtom<boolean>;
@@ -1153,24 +1174,19 @@ class RecoderViewModel implements ViewModel {
         }
     }
 
-    // GET /inference/usage?workspaceId=… (via buildUsagePath) — the workspace-
-    // scoped ledger read for the cost strip. The result is tagged with the
-    // workspaceId it was fetched FOR; any failure/non-2xx clears the display to
-    // null so the strip vanishes rather than showing stale or fabricated spend.
+    // GET /inference/usage?workspaceId=… — the workspace-scoped ledger read for
+    // the cost strip, via the SAME truthful reader the terminal strip uses so both
+    // surfaces share one envelope contract: fetchWorkspaceUsage returns null for a
+    // non-2xx, a non-JSON body, a transport fault, OR a `success !== true`
+    // envelope (an errored-but-200 body never renders as real spend). The result
+    // is tagged with the workspaceId it was fetched FOR; a null display makes the
+    // strip vanish rather than showing stale or fabricated spend.
     async loadUsage(workspaceId: string) {
         if (!workspaceId) {
             return;
         }
-        try {
-            const res = await fetch(`${getRecoderBackendUrl()}${buildUsagePath({ workspaceId })}`);
-            const data = res.ok ? (await res.json())?.data : null;
-            globalStore.set(
-                this.usageAtom,
-                data != null && typeof data == "object" ? summarizeUsage(data as UsagePayloadLike) : null
-            );
-        } catch {
-            globalStore.set(this.usageAtom, null);
-        }
+        const display = await fetchWorkspaceUsage(getRecoderBackendUrl(), workspaceId);
+        globalStore.set(this.usageAtom, display);
         globalStore.set(this.usageWorkspaceIdAtom, workspaceId);
     }
 
@@ -1187,15 +1203,16 @@ class RecoderViewModel implements ViewModel {
             globalStore.set(this.launchResultAtom, { ok: false, error: "Pick a folder and choose an agent." });
             return;
         }
-        const also = globalStore.get(this.launchAlsoRunAtom).filter((id) => id != "" && id != primary);
-        const agents = [primary, ...also];
+        const also = globalStore.get(this.launchAlsoRunAtom);
         const prompt = globalStore.get(this.launchPromptAtom).trim();
         const branch = globalStore.get(this.launchBranchAtom).trim();
         const interactive = globalStore.get(this.launchInteractiveAtom);
-        // A shared branch across siblings would collide across worktrees, so a
-        // user branch is honored only for a solo launch; parallel siblings are
-        // auto-named per agent server-side.
-        const taskGroup = agents.length > 1 ? genTaskGroupId() : "";
+        // Fold (primary, also) into the ordered fan-out list + shared taskGroup.
+        // A shared branch across siblings would collide across worktrees, so the
+        // shaping honors a user branch only for a solo launch; parallel siblings
+        // are auto-named per agent server-side.
+        const { agents, taskGroup } = planLaunchAgents(primary, also, genTaskGroupId);
+        const projectId = deriveProjectIdentity(repoPath).projectId;
         globalStore.set(this.postingAtom, true);
         globalStore.set(this.launchResultAtom, null);
         const base = getRecoderBackendUrl();
@@ -1211,19 +1228,13 @@ class RecoderViewModel implements ViewModel {
                         `Launching ${agentLabel(agent)} (${started + degraded + 1} of ${agents.length})…`
                     );
                 }
-                const reqBody = {
-                    spaceId: "default",
-                    // Real project identity from the repo path so the board can group
-                    // and filter by project (was hardcoded "default").
-                    projectId: deriveProjectIdentity(repoPath).projectId,
-                    taskId: genTaskId(),
-                    repoPath,
-                    runtimeId: agent,
-                    ...(prompt != "" ? { prompt } : {}),
-                    ...(branch != "" && agents.length == 1 ? { branch } : {}),
-                    ...(interactive ? { interactive: true } : {}),
-                    ...(taskGroup != "" ? { taskGroup } : {}),
-                };
+                // Real project identity from the repo path so the board can group
+                // and filter by project (was hardcoded "default").
+                const reqBody = shapeLaunchRequestBody(
+                    { repoPath, prompt, branch, interactive, taskGroup, agentCount: agents.length, projectId },
+                    agent,
+                    genTaskId()
+                );
                 const res = await fetch(`${base}/api/conductor/workspaces`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -1259,7 +1270,7 @@ class RecoderViewModel implements ViewModel {
                 }
             }
             this.rememberRepo(repoPath);
-            this.rememberAgent(primary, interactive);
+            this.rememberAgents(agents, interactive);
             const total = agents.length;
             if (degraded > 0) {
                 // A worktree that never came up is a real failure — keep the panel
@@ -1285,11 +1296,10 @@ class RecoderViewModel implements ViewModel {
                       }
                     : {}),
                 interactive,
-                parallelCount: also.length,
+                parallelCount: Math.max(0, agents.length - 1),
             });
             globalStore.set(this.launchOpenAtom, false);
             globalStore.set(this.launchPromptAtom, "");
-            globalStore.set(this.launchAlsoRunAtom, []);
             await this.refresh();
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
@@ -1357,7 +1367,7 @@ class RecoderViewModel implements ViewModel {
             return;
         }
         try {
-            const next = [p, ...loadRecentRepos().filter((x) => x != p)].slice(0, RECENT_REPOS_CAP);
+            const next = nextRecentRepos(loadRecentRepos(), p, RECENT_REPOS_CAP);
             localStorage.setItem(RECENT_REPOS_KEY, JSON.stringify(next));
             globalStore.set(this.recentReposAtom, next);
         } catch {
@@ -1365,13 +1375,16 @@ class RecoderViewModel implements ViewModel {
         }
     }
 
-    // Persist the last-used agent + interactive choice so the next launch panel
-    // seeds from the dev's real preference instead of re-forcing the first ready
-    // agent. Degrade-safe: a corrupt store must never break launch.
-    rememberAgent(runtimeId: string, interactive: boolean) {
+    // Persist the last-used agent SELECTION + interactive choice so the next launch
+    // panel seeds from the dev's real fan-out preference instead of re-forcing the
+    // first ready agent. Keeps LAST_AGENT_KEY in sync for older single-agent reads.
+    // Degrade-safe: a corrupt store must never break launch.
+    rememberAgents(agents: readonly string[], interactive: boolean) {
         try {
-            if (runtimeId != "") {
-                localStorage.setItem(LAST_AGENT_KEY, runtimeId);
+            const list = (agents ?? []).filter((id) => id != "");
+            if (list.length > 0) {
+                localStorage.setItem(LAST_AGENTS_KEY, JSON.stringify(list));
+                localStorage.setItem(LAST_AGENT_KEY, list[0]);
             }
             localStorage.setItem(LAST_INTERACTIVE_KEY, interactive ? "true" : "false");
         } catch {

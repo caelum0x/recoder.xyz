@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
     buildUsagePath,
+    describeUsageProvenance,
     describeUsageRow,
     describeUsageScope,
     formatCount,
@@ -11,6 +12,7 @@ import {
     formatMicroUsd,
     summarizeUsage,
     summarizeUsageTotals,
+    usageCostTitle,
 } from "./recoder-metering";
 
 describe("formatCount", () => {
@@ -165,6 +167,44 @@ describe("summarizeUsage", () => {
         });
         expect(scoped.scopeLabel).toBe("workspace ws-1");
         expect(summarizeUsage({ totals: {}, recent: [] }).scopeLabel).toBe("all usage");
+    });
+});
+
+describe("describeUsageProvenance", () => {
+    it("defaults to 'estimated' — costs are catalog-priced, never a settled bill", () => {
+        expect(describeUsageProvenance(undefined)).toBe("estimated");
+        expect(describeUsageProvenance({})).toBe("estimated");
+        expect(describeUsageProvenance({ totals: { costMicroUsd: 4200, calls: 3 } })).toBe("estimated");
+        expect(describeUsageProvenance({ metered: false })).toBe("estimated");
+    });
+
+    it("claims 'metered' ONLY on an explicit backend assertion, never by inference", () => {
+        expect(describeUsageProvenance({ metered: true })).toBe("metered");
+        // A truthy-but-not-true value must not upgrade the label.
+        expect(describeUsageProvenance({ metered: 1 as unknown as boolean })).toBe("estimated");
+    });
+});
+
+describe("usageCostTitle", () => {
+    it("flags an estimate as catalog-priced and not a bill", () => {
+        const title = usageCostTitle({ provenance: "estimated", scopeLabel: "workspace ws-1" });
+        expect(title).toContain("Estimated inference cost for workspace ws-1");
+        expect(title).toContain("not a settled bill");
+        expect(title).not.toContain("Metered");
+    });
+
+    it("uses the metered wording only when the cost is truly metered", () => {
+        expect(usageCostTitle({ provenance: "metered", scopeLabel: "all usage" })).toBe(
+            "Metered inference spend for all usage",
+        );
+    });
+});
+
+describe("summarizeUsage provenance", () => {
+    it("labels a plain payload 'estimated' and honors an explicit metered assertion", () => {
+        expect(summarizeUsage({ totals: { costMicroUsd: 900, calls: 1 } }).provenance).toBe("estimated");
+        expect(summarizeUsage(undefined).provenance).toBe("estimated");
+        expect(summarizeUsage({ totals: { costMicroUsd: 900, calls: 1 }, metered: true }).provenance).toBe("metered");
     });
 });
 
