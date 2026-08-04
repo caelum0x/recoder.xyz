@@ -9,10 +9,11 @@ import type { RecoderCommand } from "./recoder-command-palette";
 // table (no React, no store) so the palette wiring is unit-testable in isolation.
 type RecoderNavTarget = { id: string; title: string; view: string };
 
+// recoder-board (the bd-issue list) is intentionally NOT here: it names an engine
+// to users and collides with the "Board" mental model — off-product per the audit.
 const RecoderNavTargets: RecoderNavTarget[] = [
     { id: "nav-runs", title: "Open Runs", view: "recoder-runs" },
     { id: "nav-memory", title: "Open Memory", view: "recoder-memory" },
-    { id: "nav-board", title: "Open Board", view: "recoder-board" },
     { id: "nav-settings", title: "Open Settings", view: "recoder-settings" },
 ];
 
