@@ -459,10 +459,33 @@ type ClusterState = {
     detail: string;
     // "M of N done" while running; "" otherwise.
     progress: string;
+    // Early collision heads-up derived from the SAME contested set converge uses,
+    // surfaced BEFORE converge as a calm, informational read (never an error):
+    //   - "M agents overlap on K files" when siblings touch shared files,
+    //   - "no overlap — agents on separate files" when the contested set loaded clean,
+    //   - "" when the contested set is not loaded yet (never a fabricated count).
+    // divergedAgents/divergedFiles ARE the overlap signal — this only phrases them,
+    // so the board can warn about a coming collision earlier than the converge CTA.
+    overlap: string;
 };
 
 function pluralizeFiles(n: number): string {
     return n == 1 ? "1 file" : `${n} files`;
+}
+
+// Pure: phrase the early-overlap heads-up from the already-derived divergence read.
+// "" when the contested set is not loaded (divergenceKnown false) so the header
+// shows nothing rather than fabricate a count. When known, a contested file always
+// carries 2+ agents, so divergedAgents is >= 2 whenever divergedFiles > 0 — "agents"
+// is always plural here.
+function deriveOverlapSignal(divergenceKnown: boolean, divergedAgents: number, divergedFiles: number): string {
+    if (!divergenceKnown) {
+        return "";
+    }
+    if (divergedFiles == 0) {
+        return "no overlap — agents on separate files";
+    }
+    return `${divergedAgents} agents overlap on ${pluralizeFiles(divergedFiles)}`;
 }
 
 // Pure + degrade-safe: derive one parallel-run cluster's convergence phase from its
@@ -482,6 +505,7 @@ function deriveClusterState(workspaces: RecoderWorkspace[], compareView?: Compar
     const divergenceKnown = contested != null;
     const divergedFiles = divergenceKnown ? contested.length : 0;
     const divergedAgents = divergenceKnown ? new Set(contested.flatMap((c) => c.workspaceIds)).size : 0;
+    const overlap = deriveOverlapSignal(divergenceKnown, divergedAgents, divergedFiles);
 
     if (!allSettled) {
         const detail = `${settledCount} of ${agentCount} done`;
@@ -497,6 +521,7 @@ function deriveClusterState(workspaces: RecoderWorkspace[], compareView?: Compar
             summary: `${agentCount} agents · ${detail}`,
             detail,
             progress: detail,
+            overlap,
         };
     }
 
@@ -514,6 +539,7 @@ function deriveClusterState(workspaces: RecoderWorkspace[], compareView?: Compar
             summary: `${agentCount} agents · ${detail}`,
             detail,
             progress: "",
+            overlap,
         };
     }
 
@@ -532,6 +558,7 @@ function deriveClusterState(workspaces: RecoderWorkspace[], compareView?: Compar
         summary: `${agentCount} agents · ${detail}`,
         detail,
         progress: "",
+        overlap,
     };
 }
 

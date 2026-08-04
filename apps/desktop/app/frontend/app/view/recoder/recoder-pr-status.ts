@@ -53,16 +53,83 @@ function parsePrStatusEnvelope(body: unknown): RecoderPrChip {
     return { number: d.number, state, url: typeof d.url == "string" ? d.url : "", checks };
 }
 
-async function fetchWorkspacePrStatus(baseUrl: string, workspaceId: string): Promise<RecoderPrChip> {
+// The full truthful pr-status view — what the chip is derived FROM. Unlike the
+// chip (a PR that truthfully exists, else null), this preserves the degrade
+// reason so the Review surface can DISABLE "Create PR" with the real cause (no
+// gh / no pushable remote) instead of silently hiding the action.
+type RecoderPrStatus = {
+    available: boolean;
+    hasPr: boolean;
+    reason: string;
+    // Non-null only when gh was consulted AND a parseable PR exists.
+    chip: RecoderPrChip;
+};
+
+// Fold the { data: PrStatusView } envelope into the full view. null means the
+// body wasn't a usable envelope at all (never a fabricated status); a benign
+// available:false / hasPr:false lands as a truthful view carrying its reason.
+function parsePrStatusView(body: unknown): RecoderPrStatus {
+    if (body == null || typeof body != "object") return null;
+    const data = (body as { data?: unknown }).data;
+    if (data == null || typeof data != "object") return null;
+    const d = data as Record<string, unknown>;
+    return {
+        available: d.available == true,
+        hasPr: d.hasPr == true,
+        reason: typeof d.reason == "string" ? d.reason : "",
+        chip: parsePrStatusEnvelope(body),
+    };
+}
+
+async function fetchWorkspacePrStatusView(baseUrl: string, workspaceId: string): Promise<RecoderPrStatus> {
     if (workspaceId == "") return null;
     try {
         const res = await fetch(workspacePrStatusUrl(baseUrl, workspaceId));
         if (!res.ok) return null;
         const body = await res.json().catch(() => null);
-        return parsePrStatusEnvelope(body);
+        return parsePrStatusView(body);
     } catch {
         return null;
     }
+}
+
+// The board's chip-only seam, now derived from the full view so both surfaces
+// share one fetch/parse path.
+async function fetchWorkspacePrStatus(baseUrl: string, workspaceId: string): Promise<RecoderPrChip> {
+    const view = await fetchWorkspacePrStatusView(baseUrl, workspaceId);
+    return view?.chip ?? null;
+}
+
+// Can this workspace open a NEW pull request right now, and if not, the truthful
+// reason to show on the disabled action. A PR needs gh on PATH and a pushable
+// GitHub remote — exactly what pr-status already probes — so the gate is a pure
+// read of that view, never a fabricated "ready".
+type RecoderPrCreateGate = {
+    canCreate: boolean;
+    // Truthful reason the action is disabled; "" when it's enabled.
+    reason: string;
+};
+
+function prCreateGate(status: RecoderPrStatus): RecoderPrCreateGate {
+    // Undetermined (not probed yet / pr-status unreachable): don't assert the
+    // action is impossible — leave it enabled and let the create call surface any
+    // real failure itself.
+    if (status == null) return { canCreate: true, reason: "" };
+    // A PR already exists for the branch — the chip shows it; creating again would
+    // just fail, so the action is disabled with that truth (never hidden).
+    if (status.available && status.hasPr) {
+        return { canCreate: false, reason: "A pull request already exists for this branch." };
+    }
+    // gh could not be consulted: no gh on PATH, no worktree/branch, or no pushable
+    // GitHub remote. A PR can't be opened, so disable with gh's own truthful reason.
+    if (!status.available) {
+        return {
+            canCreate: false,
+            reason: status.reason || "A pushable GitHub remote is required to open a pull request.",
+        };
+    }
+    // available && !hasPr → gh + remote present, the branch simply has no PR yet.
+    return { canCreate: true, reason: "" };
 }
 
 // Same revision key the diff-summary gate uses: state + updatedAt.
@@ -98,13 +165,18 @@ function prChipTone(chip: RecoderPrChip): string {
 
 export {
     fetchWorkspacePrStatus,
+    fetchWorkspacePrStatusView,
     parsePrStatusEnvelope,
+    parsePrStatusView,
     prChipLabel,
     prChipTone,
+    prCreateGate,
     prStatusFetchKey,
     shouldRefetchPrStatus,
     workspacePrStatusUrl,
     PrStatusRefreshMs,
     type PrFetchMeta,
     type RecoderPrChip,
+    type RecoderPrCreateGate,
+    type RecoderPrStatus,
 };

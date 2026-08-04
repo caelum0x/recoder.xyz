@@ -206,6 +206,57 @@ describe("deriveClusterState — the board's converge entry point", () => {
     });
 });
 
+describe("deriveClusterState overlap — early collision heads-up", () => {
+    it("phrases M agents overlapping on K contested files while still running", () => {
+        const a = makeWs({ state: "running" });
+        const b = makeWs({ state: "awaiting_review" });
+        const c = makeWs({ state: "awaiting_review" });
+        const contested: ContestedFile[] = [
+            { path: "src/one.ts", workspaceIds: [a.workspaceId, b.workspaceId] },
+            { path: "src/two.ts", workspaceIds: [a.workspaceId, b.workspaceId, c.workspaceId] },
+        ];
+        const cluster = deriveClusterState([a, b, c], makeCompareView(contested));
+        expect(cluster?.phase).toBe("running");
+        expect(cluster?.overlap).toBe("3 agents overlap on 2 files");
+    });
+
+    it("pluralizes a single overlapping file truthfully", () => {
+        const a = makeWs({ state: "running" });
+        const b = makeWs({ state: "awaiting_review" });
+        const cluster = deriveClusterState(
+            [a, b],
+            makeCompareView([{ path: "only.ts", workspaceIds: [a.workspaceId, b.workspaceId] }])
+        );
+        expect(cluster?.overlap).toBe("2 agents overlap on 1 file");
+    });
+
+    it("says agents are on separate files when the contested set loaded clean (zero overlap)", () => {
+        const cluster = deriveClusterState(
+            [makeWs({ state: "running" }), makeWs({ state: "awaiting_review" })],
+            makeCompareView([])
+        );
+        expect(cluster?.divergenceKnown).toBe(true);
+        expect(cluster?.overlap).toBe("no overlap — agents on separate files");
+    });
+
+    it("shows nothing when the contested set is not loaded yet (never fabricates a count)", () => {
+        const cluster = deriveClusterState([makeWs({ state: "running" }), makeWs({ state: "awaiting_review" })]);
+        expect(cluster?.divergenceKnown).toBe(false);
+        expect(cluster?.overlap).toBe("");
+    });
+
+    it("carries the overlap read on the settled cluster state too (render decides where to show it)", () => {
+        const a = makeWs({ state: "awaiting_review" });
+        const b = makeWs({ state: "merged" });
+        const cluster = deriveClusterState(
+            [a, b],
+            makeCompareView([{ path: "x.ts", workspaceIds: [a.workspaceId, b.workspaceId] }])
+        );
+        expect(cluster?.phase).toBe("ready");
+        expect(cluster?.overlap).toBe("2 agents overlap on 1 file");
+    });
+});
+
 describe("shouldRefetchDiffSummary — 6s poll diff fan-out gate", () => {
     it("always refetches running rows (worktree changes without the row moving)", () => {
         const ws = makeWs({ state: "running", updatedAt: "2026-07-20T10:00:00.000Z" });

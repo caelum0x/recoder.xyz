@@ -37,7 +37,15 @@ import {
 } from "./recoder-board-logic";
 import { parseAgentAuthState, type AgentAuthState } from "./recoder-agent-auth";
 import { parseArchivedPage, type ArchivedPageMeta } from "./recoder-first-run-logic";
-import { parseCheckpointList, type RecoderCheckpoint } from "./recoder-checkpoint-logic";
+import {
+    branchErrorMessage,
+    parseCheckpointList,
+    readBranchedWorkspaceId,
+    restoreErrorMessage,
+    snapshotErrorMessage,
+    snapshotRequestBody,
+    type RecoderCheckpoint,
+} from "./recoder-checkpoint-logic";
 import { isGitHubRepoUrl, parseCloneResponse } from "./recoder-clone-logic";
 import { nextRecentRepos, planLaunchAgents, shapeLaunchRequestBody } from "./recoder-launch-logic";
 import {
@@ -1580,9 +1588,10 @@ class RecoderViewModel implements ViewModel {
     }
 
     // Snapshot the workspace's current git state (non-destructive: the backend
-    // tags HEAD plus any uncommitted edits without touching the worktree).
-    // Governed → a 403 surfaces the gate's reason truthfully, never a faked save.
-    async snapshotWorkspace(workspaceId: string) {
+    // tags HEAD plus any uncommitted edits without touching the worktree). An
+    // optional operator label rides along. Governed → a 403 surfaces the gate's
+    // reason truthfully, never a faked save.
+    async snapshotWorkspace(workspaceId: string, label?: string) {
         if (!workspaceId) {
             return;
         }
@@ -1591,7 +1600,11 @@ class RecoderViewModel implements ViewModel {
         try {
             const res = await fetch(
                 `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/checkpoints`,
-                { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(snapshotRequestBody(label)),
+                }
             );
             if (res.ok) {
                 this.setRowStatus(workspaceId, "Checkpoint saved.");
@@ -1599,12 +1612,7 @@ class RecoderViewModel implements ViewModel {
                 return;
             }
             const body = await res.json().catch(() => null);
-            const reason = readErrorReason(body);
-            if (res.status == 403) {
-                this.setRowStatus(workspaceId, reason || "Checkpoint blocked - needs approval.");
-                return;
-            }
-            this.setRowStatus(workspaceId, reason || `Checkpoint failed (${res.status}).`);
+            this.setRowStatus(workspaceId, snapshotErrorMessage(res.status, readErrorReason(body)));
         } catch {
             this.setRowStatus(workspaceId, "Checkpoint unavailable - Recoder isn’t reachable.");
         } finally {
@@ -1631,12 +1639,7 @@ class RecoderViewModel implements ViewModel {
                 return;
             }
             const body = await res.json().catch(() => null);
-            const reason = readErrorReason(body);
-            if (res.status == 403) {
-                this.setRowStatus(workspaceId, reason || "Restore blocked - needs approval.");
-                return;
-            }
-            this.setRowStatus(workspaceId, reason || `Restore failed (${res.status}).`);
+            this.setRowStatus(workspaceId, restoreErrorMessage(res.status, readErrorReason(body)));
         } catch {
             this.setRowStatus(workspaceId, "Restore unavailable - Recoder isn’t reachable.");
         } finally {
@@ -1645,10 +1648,12 @@ class RecoderViewModel implements ViewModel {
     }
 
     // Branch a NEW workspace whose fresh worktree starts from the checkpoint's
-    // snapshot tree — safe experimentation without losing the good run.
-    async branchCheckpoint(workspaceId: string, checkpointId: string) {
+    // snapshot tree — safe experimentation without losing the good run. Returns
+    // the new workspace id so the caller can hand off (open it); "" on any
+    // failure, so a blocked/failed branch never opens a phantom session.
+    async branchCheckpoint(workspaceId: string, checkpointId: string): Promise<string> {
         if (!workspaceId || !checkpointId) {
-            return;
+            return "";
         }
         globalStore.set(this.busyRowAtom, workspaceId);
         this.setRowStatus(workspaceId, "");
@@ -1657,20 +1662,18 @@ class RecoderViewModel implements ViewModel {
                 `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/checkpoints/${encodeURIComponent(checkpointId)}/branch`,
                 { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
             );
+            const body = await res.json().catch(() => null);
             if (res.ok) {
+                const newWorkspaceId = readBranchedWorkspaceId(body);
                 this.setRowStatus(workspaceId, "Branched a new workspace from the checkpoint.");
                 await this.refresh();
-                return;
+                return newWorkspaceId;
             }
-            const body = await res.json().catch(() => null);
-            const reason = readErrorReason(body);
-            if (res.status == 403) {
-                this.setRowStatus(workspaceId, reason || "Branch blocked - needs approval.");
-                return;
-            }
-            this.setRowStatus(workspaceId, reason || `Branch failed (${res.status}).`);
+            this.setRowStatus(workspaceId, branchErrorMessage(res.status, readErrorReason(body)));
+            return "";
         } catch {
             this.setRowStatus(workspaceId, "Branch unavailable - Recoder isn’t reachable.");
+            return "";
         } finally {
             globalStore.set(this.busyRowAtom, "");
         }
