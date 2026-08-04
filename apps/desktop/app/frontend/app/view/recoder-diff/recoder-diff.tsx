@@ -5,6 +5,7 @@ import { getApi } from "@/app/store/global";
 import type { RecoderApproval } from "@/app/view/recoder-approvals/recoder-approvals-model";
 import { prChipLabel, prChipTone, prCreateGate, type RecoderPrChip } from "@/app/view/recoder/recoder-pr-status";
 import { RecoderEmpty, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
+import { PAGE_TITLE, PRIMARY_BTN, QUIET_BTN } from "@/app/view/recoder/recoder-styles";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
@@ -26,11 +27,6 @@ import {
 import { EvidencePanel } from "./recoder-evidence-panel";
 
 const REFRESH_MS = 6000;
-
-const PRIMARY_BTN =
-    "bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50";
-const QUIET_BTN =
-    "border border-border text-secondary rounded px-2 py-0.5 text-sm hover:bg-border/40 transition-colors cursor-pointer disabled:opacity-50";
 
 type DiffLineKind = "add" | "del" | "hunk" | "meta" | "ctx";
 
@@ -172,7 +168,7 @@ function DiffLineRow({
                         title={`Comment on ${anchorLabel}`}
                         onClick={() => setActiveLine(activeLine == globalIndex ? -1 : globalIndex)}
                     >
-                        +💬
+                        <i className="fa-solid fa-comment-medical" />
                     </button>
                 )}
             </div>
@@ -709,7 +705,7 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     return (
         <div className="flex flex-col h-full overflow-hidden p-3 gap-2">
             <div className="flex items-center gap-2">
-                <span className="font-semibold">Recoder — Review</span>
+                <span className={PAGE_TITLE}>Review</span>
                 {workspaces.length > 0 && (
                     <select
                         className="ml-auto bg-panel text-primary border border-border rounded px-2 py-0.5 text-sm cursor-pointer"

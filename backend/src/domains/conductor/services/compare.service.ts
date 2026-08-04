@@ -256,6 +256,115 @@ export async function compareTaskGroup(
 }
 
 /**
+ * The synthetic-group-id prefix for an AD-HOC converge (PW1 #1). An F3 launch stamps
+ * `metadata.taskGroup` as an opaque id and NEVER an `adhoc:`-prefixed one, so this
+ * namespace can never collide with a real parallel-run group.
+ */
+export const AD_HOC_GROUP_PREFIX = 'adhoc:';
+
+/**
+ * A deterministic synthetic group id for an ad-hoc converge over an EXPLICIT set of
+ * separately-launched workspaces — the sorted, `+`-joined ids behind {@link
+ * AD_HOC_GROUP_PREFIX}. Carried as {@link CompareView.taskGroup} and (downstream) the
+ * convergence provenance's `fromTaskGroup`, so the composed record + its sealed
+ * evidence truthfully name WHICH workspaces were converged. Deterministic in the id
+ * set (not call order) so the plan and the compose resolve the identical id.
+ */
+export function adHocGroupId(workspaceIds: readonly string[]): string {
+  return AD_HOC_GROUP_PREFIX + [...workspaceIds].sort().join('+');
+}
+
+/**
+ * The typed outcome of an AD-HOC compare over an EXPLICIT workspace list (PW1 #1) — a
+ * converge group formed from workspaces launched SEPARATELY (each its own taskGroup,
+ * or none), not the F3 siblings of one shared group. Fail-closed + truthful:
+ *  - `too-few`      — fewer than 2 DISTINCT ids after dedupe (nothing to converge);
+ *  - `not-found`    — a requested id is missing OR the caller may not access it. The
+ *    WHOLE call fails with a no-oracle 404 at the edge (byte-identical to an unknown
+ *    workspace): an explicit list must NEVER silently drop an unowned id the way a
+ *    taskGroup aggregate does, and never confirm which named ids exist;
+ *  - `incompatible` — the workspaces do not share a repo (different space/project
+ *    binding), so a converged diff across them would be nonsense — rejected with a
+ *    truthful reason, never a fabricated cross-repo diff.
+ */
+export type AdHocCompareOutcome =
+  | { readonly ok: true; readonly view: CompareView }
+  | { readonly ok: false; readonly code: 'not-found' }
+  | { readonly ok: false; readonly code: 'too-few'; readonly reason: string }
+  | { readonly ok: false; readonly code: 'incompatible'; readonly reason: string };
+
+/**
+ * Aggregate an EXPLICIT set of workspaces (launched separately, NOT F3 siblings of a
+ * shared taskGroup) into the SAME {@link CompareView} shape {@link compareTaskGroup}
+ * returns — the ad-hoc converge group (PW1 #1). The converge math already operates on
+ * a SET of sibling rows; the `taskGroup` was only ever the DISCOVERY key, so this
+ * supplies the set from a caller-given id list and reuses the identical row +
+ * contested-overlap projection (`buildEntry`/`computeContested`) — no duplicated math.
+ *
+ * Fail-closed (see {@link AdHocCompareOutcome}): <2 distinct ids ⇒ `too-few`; any id
+ * missing OR inaccessible to the caller (recoder-kybr `deps.canAccess`) ⇒ a no-oracle
+ * `not-found` (ownership is checked BEFORE repo-compat, so a foreign id never leaks
+ * another tenant's repo); workspaces spanning different space/project ⇒ `incompatible`.
+ */
+export async function compareWorkspaces(
+  deps: CompareDeps,
+  workspaceIds: readonly string[],
+): Promise<AdHocCompareOutcome> {
+  const distinct = [
+    ...new Set(workspaceIds.map((id) => id.trim()).filter((id) => id.length > 0)),
+  ];
+  if (distinct.length < 2) {
+    return {
+      ok: false,
+      code: 'too-few',
+      reason: `ad-hoc converge needs ≥2 distinct workspace ids (got ${distinct.length})`,
+    };
+  }
+
+  // Fetch + ownership FIRST. Any missing OR inaccessible id fails the WHOLE call as a
+  // no-oracle not-found — an explicit list must not silently drop an unowned id (as a
+  // taskGroup aggregate does), and a named id the caller can't see is a 404, not a leak.
+  const workspaces: Workspace[] = [];
+  for (const id of distinct) {
+    const workspace = await deps.getWorkspace(id);
+    if (!workspace) return { ok: false, code: 'not-found' };
+    if (deps.canAccess && !deps.canAccess(workspace)) return { ok: false, code: 'not-found' };
+    workspaces.push(workspace);
+  }
+
+  // Repo compatibility: converging across repos is nonsense. The state-of-record binds
+  // a workspace to its repo via (spaceId, projectId), so a shared pair is the durable
+  // "same repo" signal — no git probe, fail-closed on any drift. (Base is inherited
+  // from the primary source at compose time, so separate launches whose base advanced
+  // between them still converge — only a genuinely different repo is rejected.)
+  const [first, ...rest] = workspaces;
+  const mismatch = rest.find(
+    (ws) => ws.spaceId !== first.spaceId || ws.projectId !== first.projectId,
+  );
+  if (mismatch) {
+    return {
+      ok: false,
+      code: 'incompatible',
+      reason:
+        'cannot converge workspaces from different repos ' +
+        `(project ${first.projectId} vs ${mismatch.projectId})`,
+    };
+  }
+
+  const siblings = await Promise.all(workspaces.map((ws) => buildEntry(deps, ws)));
+  siblings.sort(bySiblingOrder);
+  return {
+    ok: true,
+    view: {
+      taskGroup: adHocGroupId(distinct),
+      count: siblings.length,
+      siblings,
+      contested: computeContested(siblings),
+    },
+  };
+}
+
+/**
  * The compare view for the group a single workspace belongs to. An ungrouped
  * workspace (no `taskGroup`) is its OWN singleton sibling set — the truthful read
  * (never invents peers). A missing workspace returns null (the route maps to 404).

@@ -7,6 +7,9 @@
  *   GET /api/conductor/workspaces/compare/:taskGroup/pairwise       true line-level A-vs-B per-file diff (`?a=&b=&paths=`)
  *   GET /api/conductor/workspaces/compare/:taskGroup/converge-plan  step-2 per-file converge plan (read; `?probe=1` adds synthesizability)
  *   POST /api/conductor/workspaces/compare/:taskGroup/converge      step-2 compose (GATED workspace.branch)
+ *   GET /api/conductor/workspaces/compare/ad-hoc                    AD-HOC compare of an explicit `?ids=ws1,ws2` set (PW1 #1)
+ *   GET /api/conductor/workspaces/compare/ad-hoc/converge-plan      AD-HOC converge plan (`?ids=&selection=&probe=`)
+ *   POST /api/conductor/workspaces/compare/ad-hoc/converge          AD-HOC compose (GATED; body `{workspaceIds,selection,branch?}`)
  *
  * Read-only by contract: neither edge mutates, so there is NO governance gate
  * (unlike every conductor write). Both are authenticated reads that surface
@@ -32,6 +35,7 @@ import { Router } from 'express';
 import { ErrorCode, createError, sendError, sendSuccess, asyncHandler } from '../../../shared/errors.js';
 import type { AuthMiddleware } from '../../identity/middleware/authenticate.middleware.js';
 import type { ConductorModule } from '../index.js';
+import type { AdHocReject } from '../index.js';
 import type { ConductorWriteResult } from '../conductor-module.js';
 import { requireWorkspaceAccess } from './workspace-access.js';
 
@@ -48,6 +52,118 @@ export function buildCompareRoutes(deps: CompareRouterDeps): Router {
   const { module, middleware } = deps;
   // Ownership guard for the `:id`-scoped sibling read (recoder-tf68).
   const access = requireWorkspaceAccess(module, { soloMode: deps.soloMode === true });
+
+  // --- AD-HOC converge (PW1 #1): converge workspaces launched SEPARATELY -----------
+  // MUST be registered BEFORE the `:taskGroup` routes below: `POST …/compare/ad-hoc/
+  // converge` and `GET …/compare/ad-hoc/converge-plan` would otherwise match
+  // `…/compare/:taskGroup/…` with taskGroup="ad-hoc". A dev who ran Claude in one
+  // workspace and Codex in another (each its own group) had NO converge path; these
+  // form the group from an EXPLICIT `?ids=` / `{workspaceIds}` list. Same fail-closed
+  // ownership + repo-compat gate as the taskGroup edges (recoder-kybr).
+
+  // Ad-hoc compare — the SAME CompareView shape as `GET …/compare`, over an explicit
+  // set. `not-found` ⇒ no-oracle 404; `too-few`/`incompatible` ⇒ truthful 400.
+  router.get(
+    '/workspaces/compare/ad-hoc',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      const ids = parseIdsQuery(req.query.ids);
+      if (!ids) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`ids` query param is required (comma-separated workspace ids)'));
+        return;
+      }
+      const outcome = await module.compareAdHoc(ids, req.principal!);
+      if (!outcome.ok) {
+        finishAdHocReject(res, outcome);
+        return;
+      }
+      sendSuccess(res, { compare: outcome.view });
+    }),
+  );
+
+  // Ad-hoc convergence PLAN — mirror of `…/compare/:taskGroup/converge-plan` over an
+  // explicit `?ids=` set (`?selection=` JSON, `?probe=1` for the synthesizability dry-run).
+  router.get(
+    '/workspaces/compare/ad-hoc/converge-plan',
+    middleware.authenticate,
+    asyncHandler(async (req, res) => {
+      const ids = parseIdsQuery(req.query.ids);
+      if (!ids) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`ids` query param is required (comma-separated workspace ids)'));
+        return;
+      }
+      const selection = parseSelectionQuery(req.query.selection);
+      if (selection === null) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`selection` must be a JSON object of path→workspaceId'));
+        return;
+      }
+      const probe = isTruthyFlag(req.query.probe);
+      const outcome = await module.planConvergenceAdHoc(ids, selection, { probe }, req.principal!);
+      if (!outcome.ok) {
+        finishAdHocReject(res, outcome);
+        return;
+      }
+      sendSuccess(res, { plan: outcome.plan });
+    }),
+  );
+
+  // Ad-hoc convergence COMPOSE — GATED (`workspace.branch`), mirror of
+  // `…/compare/:taskGroup/converge`. Body: `{ workspaceIds:[…], selection, branch? }`.
+  // Pre-validates the plan (a bad set / unresolved path ⇒ truthful 4xx) then composes.
+  router.post(
+    '/workspaces/compare/ad-hoc/converge',
+    middleware.authenticateMutating,
+    asyncHandler(async (req, res) => {
+      const body = asObject(req.body);
+      const ids = parseIdsValue(body.workspaceIds);
+      if (!ids) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`workspaceIds` must be a non-empty array of workspace ids'));
+        return;
+      }
+      const selection = parseSelectionValue(body.selection);
+      if (selection === null) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`selection` must be an object of path→workspaceId'));
+        return;
+      }
+
+      // Pre-validate as a READ so a bad set / unresolved path is a 4xx (not a
+      // governance/service error) — same posture as the taskGroup converge route.
+      const planned = await module.planConvergenceAdHoc(ids, selection, undefined, req.principal!);
+      if (!planned.ok) {
+        finishAdHocReject(res, planned);
+        return;
+      }
+      const plan = planned.plan;
+      if (!plan.complete) {
+        sendError(
+          res,
+          createError(
+            ErrorCode.VALIDATION_ERROR,
+            plan.files.length === 0 && plan.unresolved.length === 0
+              ? 'no changed files to converge'
+              : `unresolved contested path(s): ${plan.unresolved.map((u) => u.path).join(', ')}`,
+          ),
+        );
+        return;
+      }
+
+      const branch = typeof body.branch === 'string' ? body.branch.trim() : undefined;
+      if (branch && (branch.startsWith('-') || branch.includes('..') || !/^[A-Za-z0-9._/-]+$/.test(branch))) {
+        sendError(res, createError(ErrorCode.VALIDATION_ERROR, '`branch` is not a valid branch name'));
+        return;
+      }
+      const result = await module.composeConvergenceAdHoc(
+        { workspaceIds: ids, selection, ...(branch ? { branch } : {}), createdBy: req.principal!.userId },
+        req.principal!,
+      );
+      // A typed ad-hoc reject (no `verdict`) — a set that changed between plan + compose.
+      if (!('verdict' in result)) {
+        finishAdHocReject(res, result);
+        return;
+      }
+      finishConvergeWrite(res, result);
+    }),
+  );
 
   // Aggregate every sibling of a parallel-run group the CALLER OWNS for side-by-side
   // review (recoder-kybr: the group is narrowed to the caller's own siblings). A
@@ -382,4 +498,48 @@ function parsePathsQuery(value: unknown): readonly string[] | undefined {
 function firstString(value: unknown): string | undefined {
   const raw = Array.isArray(value) ? value[0] : value;
   return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : undefined;
+}
+
+/**
+ * Map an ad-hoc converge reject onto the response envelope: `not-found` ⇒ a no-oracle
+ * 404 (byte-identical to an unknown workspace — never confirms which named ids exist);
+ * `too-few`/`incompatible` ⇒ a truthful 400 carrying the real reason.
+ */
+function finishAdHocReject(res: import('express').Response, reject: AdHocReject): void {
+  if (reject.code === 'not-found') {
+    sendError(res, createError(ErrorCode.NOT_FOUND, 'workspace not found'));
+    return;
+  }
+  sendError(res, createError(ErrorCode.VALIDATION_ERROR, reject.reason));
+}
+
+/**
+ * Parse the ad-hoc `?ids=ws1,ws2,ws3` query into a trimmed id list. Absent/blank ⇒
+ * `undefined` (the route maps to a 400); a present list keeps duplicates/whitespace
+ * for the module to dedupe + validate (`compareWorkspaces` enforces ≥2 distinct).
+ */
+function parseIdsQuery(value: unknown): readonly string[] | undefined {
+  const raw = firstString(value);
+  if (!raw) return undefined;
+  const ids = raw
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0);
+  return ids.length > 0 ? ids : undefined;
+}
+
+/**
+ * Narrow a POST body `workspaceIds` into a string id list. A non-array, or an array
+ * with any non-string / blank entry, ⇒ `undefined` (the route maps to a 400); the
+ * module enforces the ≥2-distinct rule.
+ */
+function parseIdsValue(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const ids: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string') return undefined;
+    const trimmed = entry.trim();
+    if (trimmed.length > 0) ids.push(trimmed);
+  }
+  return ids.length > 0 ? ids : undefined;
 }

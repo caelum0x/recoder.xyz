@@ -71,8 +71,8 @@ function RecoderSettingsView({ model }: ViewComponentProps<RecoderSettingsViewMo
                     Currently using: <span className="font-mono">{savedUrl}</span>
                 </div>
                 <div className="text-xs text-secondary">
-                    The conductor + engine blocks fetch this backend. Point it at a remote Recoder to drive agents on
-                    another machine.
+                    Recoder loads your workspaces and runs from this backend. Point it at a remote Recoder to drive
+                    agents on another machine.
                 </div>
             </div>
             <div className="flex items-center gap-2">

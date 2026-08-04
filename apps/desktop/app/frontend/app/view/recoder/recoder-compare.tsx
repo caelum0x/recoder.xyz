@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { agentLabel } from "./recoder-agent-labels";
 import { fileVersionsKey } from "./recoder-compare-logic";
 import type { FileVersionColumn as FileVersionEntry, FileVersionsFetchResult } from "./recoder-compare-logic";
@@ -15,13 +15,7 @@ import {
     type PairwiseView,
 } from "./recoder-compare-pairwise";
 import { ConvergePanel } from "./recoder-converge";
-import {
-    deriveCompareColumns,
-    headerPairSlot,
-    toggleSelection,
-    type CompareColumn,
-    type ConvergeSelection,
-} from "./recoder-converge-logic";
+import { deriveCompareColumns, headerPairSlot, type CompareColumn } from "./recoder-converge-logic";
 import { buildConvergenceEvidence, saveConvergenceEvidence } from "./recoder-evidence";
 import {
     computePairwise,
@@ -39,7 +33,7 @@ import {
     type SiblingCompareEntry,
 } from "./recoder-model";
 import { RecoderEmpty } from "./recoder-states";
-import { FIELD_LABEL, META, PICK_BTN_ON, QUIET_BTN_XS, SAVE_BTN } from "./recoder-styles";
+import { FIELD_LABEL, META, QUIET_BTN_XS, SAVE_BTN } from "./recoder-styles";
 
 // Explicit sign so a pairwise delta can never be mistaken for an absolute count;
 // a negative already carries its own "-".
@@ -379,87 +373,6 @@ function SiblingCompareColumn({
 }
 
 SiblingCompareColumn.displayName = "SiblingCompareColumn";
-
-// The unified contested strip: one row per path 2+ agents touched, one cell per
-// sibling column. Clicking a sibling's cell picks its version as that file's
-// winner — building EXACTLY the converge selection map the ConvergePanel composes
-// from (one shared source of truth on the model). A sibling that never touched
-// the path renders an inert "—", never a pickable fabricated candidate.
-function ContestedStrip({
-    compareView,
-    selection,
-    onPick,
-    onOpenFile,
-    openFilePath,
-}: {
-    compareView: CompareView;
-    selection: ConvergeSelection;
-    onPick: (path: string, workspaceId: string) => void;
-    onOpenFile: (path: string) => void;
-    openFilePath: string;
-}) {
-    const contested = compareView.contested ?? [];
-    const siblings = compareView.siblings;
-    if (contested.length == 0) {
-        return <div className={META}>No overlapping files across siblings — no contested set.</div>;
-    }
-    return (
-        <div className="flex flex-col gap-1 rounded border border-white/8 px-2 py-2">
-            <div className={FIELD_LABEL}>
-                Contested — {contested.length} file{contested.length == 1 ? "" : "s"} touched by 2+ agents · click a
-                path to read every version · click a cell to pick that agent's version
-            </div>
-            <div className="overflow-x-auto">
-                <div
-                    className="grid items-center gap-x-2 gap-y-1"
-                    style={{ gridTemplateColumns: `minmax(12rem, 2fr) repeat(${siblings.length}, minmax(6rem, 1fr))` }}
-                >
-                    <span className={META}>file</span>
-                    {siblings.map((s) => (
-                        <span key={s.workspaceId} className={`${META} truncate`} title={agentLabel(s.agent)}>
-                            {agentLabel(s.agent)}
-                        </span>
-                    ))}
-                    {contested.map((c) => (
-                        <Fragment key={c.path}>
-                            <button
-                                className={`justify-self-start truncate text-left font-mono text-sm cursor-pointer recoder-transition ${
-                                    openFilePath == c.path ? "text-accent" : "text-primary hover:text-accent"
-                                }`}
-                                onClick={() => onOpenFile(c.path)}
-                                title={`Read every agent's version of ${c.path} side by side`}
-                            >
-                                {c.path}
-                            </button>
-                            {siblings.map((s) => {
-                                if (!c.workspaceIds.includes(s.workspaceId)) {
-                                    return (
-                                        <span key={s.workspaceId} className={META}>
-                                            —
-                                        </span>
-                                    );
-                                }
-                                const picked = selection[c.path] == s.workspaceId;
-                                return (
-                                    <button
-                                        key={s.workspaceId}
-                                        className={`justify-self-start ${picked ? PICK_BTN_ON : QUIET_BTN_XS}`}
-                                        onClick={() => onPick(c.path, s.workspaceId)}
-                                        title={`Take ${agentLabel(s.agent)}'s version of ${c.path}`}
-                                    >
-                                        {picked ? "✓ winner" : "pick"}
-                                    </button>
-                                );
-                            })}
-                        </Fragment>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-ContestedStrip.displayName = "ContestedStrip";
 
 // One column of the N-up file view: a single sibling's (or the base's) copy of the
 // clicked path, rendered mono and line-per-row for alignment across columns. This is
@@ -817,30 +730,11 @@ function RecoderComparePanel({
         );
     }
     const columns = deriveCompareColumns(compareView.siblings);
-    const onPickWinner = (path: string, workspaceId: string) => {
-        setSelection((cur) => toggleSelection(cur, path, workspaceId));
-    };
     const onOpenFile = (path: string) => {
         setOpenFilePath((cur) => (cur == path ? "" : path));
     };
     return (
         <div className="flex flex-col gap-1.5 rounded border border-white/8 p-2">
-            <ContestedStrip
-                compareView={compareView}
-                selection={selection}
-                onPick={onPickWinner}
-                onOpenFile={onOpenFile}
-                openFilePath={openFilePath}
-            />
-            {openFilePath != "" && (
-                <FileVersionsPanel
-                    model={model}
-                    taskGroup={taskGroup}
-                    path={openFilePath}
-                    result={fileVersionsMap[fileVersionsKey(taskGroup, openFilePath)]}
-                    onClose={() => setOpenFilePath("")}
-                />
-            )}
             {compareView.siblings.length >= 2 && (
                 <ConvergePanel
                     taskGroup={taskGroup}
@@ -849,6 +743,17 @@ function RecoderComparePanel({
                     selection={selection}
                     onSelectionChange={setSelection}
                     onReview={onReview}
+                    onOpenFile={onOpenFile}
+                    openFilePath={openFilePath}
+                />
+            )}
+            {openFilePath != "" && (
+                <FileVersionsPanel
+                    model={model}
+                    taskGroup={taskGroup}
+                    path={openFilePath}
+                    result={fileVersionsMap[fileVersionsKey(taskGroup, openFilePath)]}
+                    onClose={() => setOpenFilePath("")}
                 />
             )}
             {pair != null && <PairwisePanel pair={pair} taskGroup={taskGroup} />}

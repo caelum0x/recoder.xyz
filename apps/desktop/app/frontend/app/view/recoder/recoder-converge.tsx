@@ -39,6 +39,11 @@ type ConvergePanelProps = {
     selection: ConvergeSelection;
     onSelectionChange: (next: ConvergeSelection) => void;
     onReview: (workspaceId: string) => void;
+    // Open the N-up file-versions read for one contested path. The decision row IS
+    // the only winner-picker, so the "see the actual content" affordance hangs off
+    // the row's own path label — there is no second contested list to click.
+    onOpenFile: (path: string) => void;
+    openFilePath: string;
 };
 
 // One side of a conflict region: the agent's colliding lines, font-mono. An empty
@@ -76,6 +81,8 @@ function ContestedPickRow({
     disabled,
     synth,
     onPick,
+    onOpenFile,
+    fileOpen,
 }: {
     path: string;
     candidates: string[];
@@ -84,6 +91,8 @@ function ContestedPickRow({
     disabled: boolean;
     synth: SynthInfo;
     onPick: (value: string) => void;
+    onOpenFile: (path: string) => void;
+    fileOpen: boolean;
 }) {
     const [showRegions, setShowRegions] = useState(false);
     const canSynth = synth != null && synth.synthesizable;
@@ -98,9 +107,16 @@ function ContestedPickRow({
     return (
         <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="min-w-[10rem] flex-1 truncate font-mono text-sm" title={path}>
+                <button
+                    className={cn(
+                        "min-w-[10rem] flex-1 truncate text-left font-mono text-sm cursor-pointer recoder-transition",
+                        fileOpen ? "text-accent" : "text-primary hover:text-accent"
+                    )}
+                    onClick={() => onOpenFile(path)}
+                    title={`Read every agent's version of ${path} side by side`}
+                >
                     {path}
-                </span>
+                </button>
                 <div className="flex items-center gap-1">
                     {candidates.map((id) => {
                         const label = agentLabel(agentByWs.get(id) ?? id);
@@ -249,7 +265,16 @@ ConvergePlanSummary.displayName = "ConvergePlanSummary";
 // contested path, live-preview the plan, and compose the winners into a new
 // reviewable workspace. Plan/compose state is local to this widget — it is
 // ephemeral and never survives a panel collapse, so it stays out of the model.
-function ConvergePanel({ taskGroup, contested, siblings, selection, onSelectionChange, onReview }: ConvergePanelProps) {
+function ConvergePanel({
+    taskGroup,
+    contested,
+    siblings,
+    selection,
+    onSelectionChange,
+    onReview,
+    onOpenFile,
+    openFilePath,
+}: ConvergePanelProps) {
     const [plan, setPlan] = useState<ConvergePlan>(null);
     const [planLoading, setPlanLoading] = useState(false);
     const [planError, setPlanError] = useState("");
@@ -387,7 +412,8 @@ function ConvergePanel({ taskGroup, contested, siblings, selection, onSelectionC
         <div className="flex flex-col gap-1.5 rounded border border-accent/30 px-2 py-2">
             <div className="flex items-center justify-between gap-2">
                 <div className={FIELD_LABEL}>
-                    Converge — {affordance} per contested file, then compose one reviewable workspace
+                    Converge — {affordance} per contested file · click a path to read every version · then compose one
+                    reviewable workspace
                 </div>
                 {autoResolvable > 0 ? (
                     <button
@@ -411,6 +437,8 @@ function ConvergePanel({ taskGroup, contested, siblings, selection, onSelectionC
                         disabled={composing}
                         synth={synthMap[c.path] ?? null}
                         onPick={(value) => onPick(c.path, value)}
+                        onOpenFile={onOpenFile}
+                        fileOpen={openFilePath == c.path}
                     />
                 ))}
             </div>

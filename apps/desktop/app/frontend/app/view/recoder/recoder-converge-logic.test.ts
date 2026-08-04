@@ -97,15 +97,19 @@ describe("assistedOption — offer AI-assist wherever a synthesize was attempted
     });
 });
 
-describe("contested-strip winner selection — one shared converge selection map", () => {
-    it("builds the per-file Record<path, workspaceId> from successive cell clicks", () => {
+// The winner-picker now lives in ONE place — the ConvergePanel decision row. Its
+// picks flow through the same `toggleSelection` into the single shared selection
+// map that drives the plan/compose. These assertions pin that one-source-of-truth
+// contract (there is no second contested strip building a parallel map).
+describe("single converge decision surface — one shared selection map", () => {
+    it("builds the per-file Record<path, workspaceId> from successive decision-row picks", () => {
         let sel = {};
         sel = toggleSelection(sel, "src/a.ts", "ws1");
         sel = toggleSelection(sel, "src/b.ts", "ws2");
         expect(sel).toEqual({ "src/a.ts": "ws1", "src/b.ts": "ws2" });
     });
 
-    it("clicking another sibling's cell moves the win; re-clicking the winner clears it", () => {
+    it("picking another sibling moves the win; re-picking the winner clears it", () => {
         let sel = toggleSelection({}, "src/a.ts", "ws1");
         sel = toggleSelection(sel, "src/a.ts", "ws2");
         expect(sel).toEqual({ "src/a.ts": "ws2" });
@@ -113,16 +117,28 @@ describe("contested-strip winner selection — one shared converge selection map
         expect(sel).toEqual({});
     });
 
-    it("strip picks and the ConvergePanel's @synthesize coexist in the one map", () => {
+    it("whole-file winner picks and @synthesize coexist in the one map", () => {
         let sel = toggleSelection({}, "src/a.ts", "ws1");
         sel = toggleSelection(sel, "src/b.ts", SYNTHESIZE_VALUE);
         expect(sel).toEqual({ "src/a.ts": "ws1", "src/b.ts": "@synthesize" });
-        // auto-resolve fills only unresolved paths — it never overrides a strip pick
+        // auto-resolve fills only unresolved paths — it never overrides an explicit pick
         const next = autoResolveSynthesizable(sel, {
             "src/a.ts": { synthesizable: true },
             "src/c.ts": { synthesizable: true },
         });
         expect(next).toEqual({ "src/a.ts": "ws1", "src/b.ts": "@synthesize", "src/c.ts": "@synthesize" });
+    });
+
+    it("the exact shared selection is what converge reads — same map, one request", async () => {
+        let sel = toggleSelection({}, "src/a.ts", "ws1");
+        sel = toggleSelection(sel, "src/b.ts", ASSISTED_VALUE);
+        mockFetchOnce({ data: { plan: { complete: true, files: ["src/a.ts", "src/b.ts"] } } });
+        await fetchConvergePlan("tg-1", sel);
+        const calls = vi.mocked(globalThis.fetch).mock.calls;
+        const url = (calls.at(-1)?.[0] as string) ?? "";
+        // The selection map is round-tripped verbatim into the plan request, proving
+        // the converge step consumes the SAME picks the decision row edited.
+        expect(decodeURIComponent(url)).toContain(JSON.stringify(sel));
     });
 });
 

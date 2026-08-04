@@ -20,6 +20,8 @@ import {
 } from './__fixtures__/harness.js';
 import {
   compareTaskGroup as compareTaskGroupOp,
+  compareWorkspaces as compareWorkspacesOp,
+  adHocGroupId,
   computeContested,
   parseDiffStat,
   taskGroupOf,
@@ -377,5 +379,123 @@ describe('compare service pure helpers', () => {
     expect(taskGroupOf({ ...base, metadata: { taskGroup: '  ' } })).toBeUndefined();
     expect(taskGroupOf({ ...base, metadata: {} })).toBeUndefined();
     expect(taskGroupOf(base)).toBeUndefined();
+  });
+});
+
+/**
+ * AD-HOC compare (PW1 #1) — the PURE `compareWorkspaces` op that forms a converge
+ * group from an EXPLICIT id list (workspaces launched SEPARATELY, not F3 siblings).
+ * These isolate the fail-closed validation without git: too-few / no-oracle
+ * not-found / different-repo incompatible / the happy path over an explicit set.
+ */
+describe('compareWorkspaces (ad-hoc, explicit id set)', () => {
+  /** A record with overridable repo/owner fields + a changed-file list. */
+  function ws(
+    workspaceId: string,
+    over: Partial<Pick<Workspace, 'spaceId' | 'projectId' | 'createdBy' | 'createdAt'>> = {},
+  ): Workspace {
+    return {
+      workspaceId,
+      spaceId: over.spaceId ?? 's',
+      projectId: over.projectId ?? 'p',
+      taskId: 't',
+      runtimeId: 'claude_code',
+      substrate: 'tmux_worktree',
+      branch: 'b',
+      baseRef: 'HEAD',
+      state: 'awaiting_review',
+      createdBy: over.createdBy ?? 'owner',
+      createdAt: over.createdAt ?? 'now',
+      updatedAt: over.createdAt ?? 'now',
+      metadata: {},
+    } as unknown as Workspace;
+  }
+
+  /** Deps that serve the given records + changed files, narrowed to `owner`-created ones. */
+  function deps(
+    records: readonly Workspace[],
+    changed: Record<string, readonly string[]> = {},
+  ): CompareDeps {
+    return {
+      listWorkspaces: async () => [...records],
+      getWorkspace: async (id) => records.find((r) => r.workspaceId === id) ?? null,
+      buildView: async () => {
+        throw new Error('no view in this pure test');
+      },
+      diffStat: async () => ({ reason: 'not exercised' }),
+      changedFiles: async (w) =>
+        changed[w.workspaceId] ? { files: changed[w.workspaceId] } : { reason: 'unset' },
+      // recoder-kybr: only `owner`'s records are accessible to the caller.
+      canAccess: (w) => w.createdBy === 'owner',
+    };
+  }
+
+  it('aggregates an explicit 2-workspace set + the contested overlap (synthetic group id)', async () => {
+    const records = [ws('ws_a'), ws('ws_b')];
+    const outcome = await compareWorkspacesOp(
+      deps(records, { ws_a: ['a.ts', 'shared.ts'], ws_b: ['b.ts', 'shared.ts'] }),
+      ['ws_b', 'ws_a'], // order-independent
+    );
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.view.count).toBe(2);
+    // The synthetic id is deterministic in the SET, not the call order.
+    expect(outcome.view.taskGroup).toBe(adHocGroupId(['ws_a', 'ws_b']));
+    expect(outcome.view.contested.map((c) => c.path)).toEqual(['shared.ts']);
+    expect([...outcome.view.contested[0]!.workspaceIds].sort()).toEqual(['ws_a', 'ws_b']);
+  });
+
+  it('too-few: <2 distinct ids (incl. duplicates) ⇒ code:too-few', async () => {
+    const records = [ws('ws_a')];
+    expect(await compareWorkspacesOp(deps(records), ['ws_a'])).toMatchObject({
+      ok: false,
+      code: 'too-few',
+    });
+    expect(await compareWorkspacesOp(deps(records), ['ws_a', 'ws_a', '  '])).toMatchObject({
+      ok: false,
+      code: 'too-few',
+    });
+  });
+
+  it('not-found: a missing OR unowned id fails the WHOLE call (no-oracle)', async () => {
+    const mine = ws('ws_mine');
+    const theirs = ws('ws_theirs', { createdBy: 'someone_else' });
+    // A genuinely missing id.
+    expect(
+      await compareWorkspacesOp(deps([mine]), ['ws_mine', 'ws_ghost']),
+    ).toEqual({ ok: false, code: 'not-found' });
+    // An id the caller does not own is byte-identical (never confirms it exists).
+    expect(
+      await compareWorkspacesOp(deps([mine, theirs]), ['ws_mine', 'ws_theirs']),
+    ).toEqual({ ok: false, code: 'not-found' });
+  });
+
+  it('ownership is checked BEFORE repo-compat (a foreign id never leaks repo info)', async () => {
+    // ws_theirs is BOTH unowned AND a different repo — the result must be the
+    // no-oracle not-found, never the repo-revealing `incompatible`.
+    const mine = ws('ws_mine', { projectId: 'p1' });
+    const theirs = ws('ws_theirs', { projectId: 'p2', createdBy: 'someone_else' });
+    expect(
+      await compareWorkspacesOp(deps([mine, theirs]), ['ws_mine', 'ws_theirs']),
+    ).toEqual({ ok: false, code: 'not-found' });
+  });
+
+  it('incompatible: owned workspaces from different repos ⇒ code:incompatible + truthful reason', async () => {
+    const a = ws('ws_a', { projectId: 'proj_1' });
+    const b = ws('ws_b', { projectId: 'proj_2' });
+    const outcome = await compareWorkspacesOp(deps([a, b]), ['ws_a', 'ws_b']);
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.code).toBe('incompatible');
+    expect((outcome as { reason: string }).reason).toMatch(/different repos/i);
+  });
+
+  it('incompatible: different space (tenant) is also rejected', async () => {
+    const a = ws('ws_a', { spaceId: 'space_1' });
+    const b = ws('ws_b', { spaceId: 'space_2' });
+    expect(await compareWorkspacesOp(deps([a, b]), ['ws_a', 'ws_b'])).toMatchObject({
+      ok: false,
+      code: 'incompatible',
+    });
   });
 });
