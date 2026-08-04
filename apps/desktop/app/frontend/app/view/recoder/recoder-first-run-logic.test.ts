@@ -8,6 +8,7 @@ import {
     archivedHistoryNotice,
     firstParallelPreselection,
     firstRunAgentChips,
+    firstRunSignIn,
     parseArchivedPage,
     shouldShowGettingStarted,
     showConvergeAffordance,
@@ -129,6 +130,49 @@ describe("firstRunAgentChips", () => {
         const chips = firstRunAgentChips(null, [{ runtimeId: "codex", available: true }], {}, null);
         expect(chips.map((c) => c.id)).toEqual(["codex"]);
         expect(firstRunAgentChips(null, [], {}, null)).toEqual([]);
+    });
+});
+
+describe("firstRunSignIn — the optional sign-in branch of the first-run card", () => {
+    it("rest state: the plain sign-in action, no code, no pending copy", () => {
+        expect(firstRunSignIn(false, null)).toEqual({
+            label: "Sign in with Recoder",
+            waiting: false,
+            code: "",
+            verificationUri: "",
+            showCode: false,
+        });
+    });
+
+    it("waiting with no prompt yet: the button reads pending but no blank code row is shown", () => {
+        const s = firstRunSignIn(true, null);
+        expect(s.label).toBe("Waiting for browser…");
+        expect(s.waiting).toBe(true);
+        expect(s.showCode).toBe(false);
+    });
+
+    it("waiting with a device prompt: surfaces the inline user-code + verification URL", () => {
+        const s = firstRunSignIn(true, {
+            userCode: "WXYZ-1234",
+            verificationUri: "https://recoder.xyz/device",
+            expiresIn: 900,
+        });
+        expect(s).toMatchObject({
+            waiting: true,
+            code: "WXYZ-1234",
+            verificationUri: "https://recoder.xyz/device",
+            showCode: true,
+        });
+    });
+
+    it("never shows the code once the flow settles, even if a stale prompt lingers", () => {
+        const s = firstRunSignIn(false, {
+            userCode: "WXYZ-1234",
+            verificationUri: "https://recoder.xyz/device",
+            expiresIn: 900,
+        });
+        expect(s.showCode).toBe(false);
+        expect(s.label).toBe("Sign in with Recoder");
     });
 });
 

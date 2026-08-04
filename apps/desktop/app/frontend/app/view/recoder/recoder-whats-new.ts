@@ -13,6 +13,33 @@ type WhatsNewEntry = {
     notes: string[];
 };
 
+// localStorage key holding the newest version the user has acknowledged. The
+// read/write live here (not the component) so the "remember my dismissal"
+// contract is testable without a DOM.
+const WHATS_NEW_SEEN_KEY = "recoder:whats-new-seen";
+
+// Minimal storage seam: the subset of localStorage the panel touches. Passing it
+// in keeps the bookkeeping pure + lets tests substitute a fake store; a missing
+// or throwing store degrades to "" / a no-op so a corrupt store never breaks the
+// board.
+type SeenStore = Pick<Storage, "getItem" | "setItem">;
+
+function readSeenVersion(store: SeenStore | null): string {
+    try {
+        return store?.getItem(WHATS_NEW_SEEN_KEY) ?? "";
+    } catch {
+        return "";
+    }
+}
+
+function writeSeenVersion(store: SeenStore | null, version: string): void {
+    try {
+        store?.setItem(WHATS_NEW_SEEN_KEY, version);
+    } catch {
+        // a corrupt/blocked store must never break dismiss
+    }
+}
+
 // Parse a semver-ish "1.2.3" (extra pre-release/build suffixes ignored) into a
 // numeric tuple. Non-numeric parts degrade to 0 so a malformed version never
 // throws — it just sorts low.
@@ -58,4 +85,13 @@ function selectWhatsNew(
         .sort((a, b) => compareVersions(b.version, a.version));
 }
 
-export { compareVersions, parseVersion, selectWhatsNew, type WhatsNewEntry };
+export {
+    compareVersions,
+    parseVersion,
+    readSeenVersion,
+    selectWhatsNew,
+    WHATS_NEW_SEEN_KEY,
+    writeSeenVersion,
+    type SeenStore,
+    type WhatsNewEntry,
+};
