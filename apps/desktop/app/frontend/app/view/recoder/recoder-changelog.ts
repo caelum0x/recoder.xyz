@@ -9,6 +9,16 @@ import type { WhatsNewEntry } from "./recoder-whats-new";
 // a user would notice. The public changelog rhythm lives at CHANGELOG_URL.
 const CHANGELOG_ENTRIES: readonly WhatsNewEntry[] = [
     {
+        version: "0.16.1",
+        title: "Faster, keyboard-first, and it tidies up after itself",
+        notes: [
+            "Drive the whole board from the keyboard — move, open, launch a task, and converge without the mouse (press ? for the shortcuts).",
+            "See at a glance how much your agents diverged before you open a single diff.",
+            "Once you merge a winner, clear the other agents from the board in one click.",
+            "Land review decisions faster with a keyboard shortcut for the primary action.",
+        ],
+    },
+    {
         version: "0.16.0",
         title: "Clearer, calmer, and it remembers",
         notes: [
