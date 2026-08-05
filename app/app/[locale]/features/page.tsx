@@ -19,11 +19,11 @@ import {
 export const metadata: Metadata = {
   title: 'Features — Run Every Agent in Parallel, Merge the Right One | Recoder.xyz',
   description:
-    'Recoder is the self-hosted convergence layer for coding agents. Run Claude Code, Codex, Cursor, opencode, or pi in parallel isolated git worktrees, review where they diverge, and merge the one trusted result — with verification evidence, governance approvals, and shared memory. Your keys, your infra.',
+    'Recoder is the terminal IDE for AI coding agents. Give one task to Claude Code, Codex, Cursor, opencode, or pi at once in parallel isolated git worktrees, review where they diverge, and converge the one trusted result — with verification evidence, governance approvals, and shared memory.',
   openGraph: {
     title: 'Features — Run Every Agent in Parallel, Merge the Right One | Recoder.xyz',
     description:
-      'Self-hosted convergence layer for coding agents: parallel isolated worktrees, review the divergence, merge one trusted result with verification evidence and governance. Bring your own agent and your own keys.',
+      'The terminal IDE for AI coding agents: parallel isolated worktrees, review the divergence, converge one trusted result with verification evidence and governance.',
     url: 'https://recoder.xyz/features',
     siteName: 'Recoder.xyz',
     images: [
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
         url: 'https://recoder.xyz/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Recoder Features — the convergence layer for coding agents',
+        alt: 'Recoder Features — the terminal IDE for AI coding agents',
       },
     ],
     type: 'website',
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Features — Run Every Agent in Parallel, Merge the Right One',
     description:
-      'Self-hosted convergence layer: parallel isolated worktrees, review the divergence, merge one trusted result with evidence and governance.',
+      'The terminal IDE for AI coding agents: parallel isolated worktrees, review the divergence, converge one trusted result with evidence and governance.',
     images: ['https://recoder.xyz/og-image.png'],
   },
   alternates: {
@@ -143,12 +143,12 @@ export default function FeaturesPage() {
         <div className="text-center mb-16">
           <div className="inline-flex items-center space-x-2 px-4 py-2 bg-neutral-800/50 border border-neutral-700 rounded-full mb-6">
             <Sparkles className="w-4 h-4 text-neutral-300" />
-            <span className="text-sm text-neutral-300">The convergence layer</span>
+            <span className="text-sm text-neutral-300">The terminal IDE for AI agents</span>
           </div>
           <h1 className="text-5xl font-bold mb-6">Run every agent in parallel. Merge the one that&apos;s right.</h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            Recoder turns many divergent parallel-agent runs into one trusted merge — self-hosted,
-            evidence-backed, and governed. Bring your own agent and your own keys.
+            Recoder turns many divergent parallel-agent runs into one trusted merge —
+            evidence-backed, governed, and local-first.
           </p>
         </div>
 
