@@ -7,17 +7,13 @@ import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { agentLabel } from "./recoder-agent-labels";
 import { decideApproval } from "./recoder-approval-action";
+import { deriveTranscript, type Turn, type TurnLine } from "./recoder-conversation-logic";
 import { RecoderDetailHeader, workspaceOptionLabel, type RecoderStateTone } from "./recoder-detail-header";
 import { type MeteringDisplay } from "./recoder-metering";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
 import { type RunEventSeverity } from "./recoder-run-event";
 import { PRIMARY_BTN, QUIET_BTN } from "./recoder-styles";
-import {
-    RecoderTerminalStatus,
-    RecoderTerminalViewModel,
-    type RunStreamEntry,
-    type UsageStripStatus,
-} from "./recoder-terminal-model";
+import { RecoderTerminalStatus, RecoderTerminalViewModel, type UsageStripStatus } from "./recoder-terminal-model";
 
 const UsageRefreshMs = 15_000;
 
@@ -40,19 +36,14 @@ function severityColor(severity: RunEventSeverity): string {
 
 type ApprovalUiState = { phase: "idle" | "acting" | "done"; label?: string };
 
-function RunEntryRow({ entry }: { entry: RunStreamEntry }) {
+// One salient line inside a turn: a short lifecycle label ("Verified") and/or the
+// agent's prose, rendered calmly. When the line carries a decidable approval it
+// grows inline approve/deny right where it happened in the conversation — no
+// hunting a side list. Truthful: a failed decide surfaces its reason, never a
+// silent green.
+function TurnLineRow({ line }: { line: TurnLine }) {
     const [approval, setApproval] = useState<ApprovalUiState>({ phase: "idle" });
-
-    if (entry.kind == "system") {
-        return (
-            <div className={cn("whitespace-pre-wrap break-words", entry.tone == "error" ? "text-error" : "text-secondary")}>
-                {entry.text}
-            </div>
-        );
-    }
-
-    const d = entry.descriptor;
-    const approvalId = d.approvalId;
+    const approvalId = line.approvalId;
 
     const act = async (action: "approve" | "reject") => {
         if (approvalId == null || approval.phase == "acting") return;
@@ -68,12 +59,13 @@ function RunEntryRow({ entry }: { entry: RunStreamEntry }) {
     return (
         <div className="flex flex-col gap-1 py-0.5">
             <div className="flex items-baseline gap-2 whitespace-pre-wrap break-words">
-                <span className="text-secondary shrink-0">{d.time}</span>
-                <span className={cn("shrink-0 font-semibold", severityColor(d.severity))}>{d.label}</span>
-                {d.detail != "" && <span className="min-w-0 break-words">{d.detail}</span>}
+                {line.label != "" && (
+                    <span className={cn("shrink-0 font-semibold", severityColor(line.severity))}>{line.label}</span>
+                )}
+                {line.text != "" && <span className="min-w-0 break-words">{line.text}</span>}
             </div>
             {approvalId != null && (
-                <div className="flex items-center gap-2 pl-14">
+                <div className="flex items-center gap-2">
                     {approval.phase == "done" ? (
                         <span className="text-xs text-accent">✓ {approval.label}</span>
                     ) : (
@@ -101,7 +93,41 @@ function RunEntryRow({ entry }: { entry: RunStreamEntry }) {
     );
 }
 
-RunEntryRow.displayName = "RunEntryRow";
+TurnLineRow.displayName = "TurnLineRow";
+
+// One turn of the clean conversation (design 3B): who spoke (you vs the agent —
+// never the engine name), when, the salient lines they produced, and a quiet
+// collapsed <details> holding the raw plumbing (tool frames, ANSI paint, transport
+// frames) so the reader sees what the agent DID and SAID, not a log.
+function TurnBlock({ turn }: { turn: Turn }) {
+    const who = turn.speaker == "you" ? "You" : "Agent";
+    const noiseCount = turn.noise.length;
+    return (
+        <div className="flex flex-col gap-1 py-1.5">
+            <div className="flex items-baseline gap-2">
+                <span className="shrink-0 font-semibold text-primary">{who}</span>
+                {turn.time != "" && <span className="shrink-0 text-[11px] text-meta">{turn.time}</span>}
+            </div>
+            <div className="flex flex-col gap-0.5 border-l border-border pl-3">
+                {turn.lines.map((line, i) => (
+                    <TurnLineRow key={i} line={line} />
+                ))}
+                {noiseCount > 0 && (
+                    <details className="mt-0.5">
+                        <summary className="cursor-pointer text-[11px] text-meta hover:text-secondary">
+                            {noiseCount} more line{noiseCount == 1 ? "" : "s"} of output
+                        </summary>
+                        <div className="mt-1 whitespace-pre-wrap break-words text-[11px] text-meta">
+                            {turn.noise.join("\n")}
+                        </div>
+                    </details>
+                )}
+            </div>
+        </div>
+    );
+}
+
+TurnBlock.displayName = "TurnBlock";
 
 // The per-workspace cost/token strip. Numbers come from the scoped
 // GET /inference/usage?workspaceId read folded through summarizeUsage; a failed
@@ -200,7 +226,10 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
         el.scrollTop = el.scrollHeight;
     }, [entries]);
 
-    const empty = entries.length == 0;
+    // Fold the raw run-event stream into the clean conversation transcript at
+    // render time (pure derivation) so the view shows agent turns, not a log.
+    const turns = deriveTranscript(entries);
+    const empty = turns.length == 0;
     const noWorkspace = workspaceId == "";
     const canSend = !noWorkspace && !sending && draft.trim() != "";
 
@@ -282,8 +311,8 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                 {empty && status == "error" && (
                     <div className="text-secondary">Not connected. Check that Recoder is running.</div>
                 )}
-                {entries.map((entry, i) => (
-                    <RunEntryRow key={i} entry={entry} />
+                {turns.map((turn, i) => (
+                    <TurnBlock key={i} turn={turn} />
                 ))}
             </div>
             <div className="flex flex-col gap-1 px-3 py-2 border-t border-border shrink-0">
