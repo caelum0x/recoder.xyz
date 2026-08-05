@@ -10,6 +10,9 @@ import {
     computeSiblingOverlap,
     computeSuggestedWinner,
     deriveClusterState,
+    deriveClusterNudge,
+    clusterConvergeReadyMap,
+    detectConvergeReadyTransitions,
     detectAttentionTransitions,
     detectNeedsInputTransitions,
     diffSummaryFetchKey,
@@ -263,6 +266,177 @@ describe("deriveClusterState overlap — early collision heads-up", () => {
         );
         expect(cluster?.phase).toBe("ready");
         expect(cluster?.overlap).toBe("2 agents overlap on 1 file");
+    });
+});
+
+describe("detectConvergeReadyTransitions — the converge payoff becomes available", () => {
+    const none = new Set<string>();
+
+    function group(taskGroup: string | null, ...ws: RecoderWorkspace[]): RecoderWorkspaceGroup {
+        return { taskGroup, workspaces: ws };
+    }
+
+    function diverged(...ws: RecoderWorkspace[]): CompareView {
+        return {
+            taskGroup: "grp_a",
+            count: ws.length,
+            siblings: [],
+            contested: [{ path: "src/x.ts", workspaceIds: ws.map((w) => w.workspaceId) }],
+        };
+    }
+
+    it("fires ONCE when a cluster settles with real divergence (was not ready last poll)", () => {
+        const a = makeWs({ state: "awaiting_review" });
+        const b = makeWs({ state: "awaiting_review" });
+        const groups = [group("grp_a", a, b)];
+        const compare = { grp_a: diverged(a, b) };
+        const events = detectConvergeReadyTransitions(new Map([["grp_a", false]]), groups, compare, none);
+        expect(events).toHaveLength(1);
+        expect(events[0]).toMatchObject({
+            taskGroup: "grp_a",
+            agentCount: 2,
+            divergedAgents: 2,
+            divergedFiles: 1,
+            key: "grp_a",
+        });
+    });
+
+    it("does NOT re-fire when it was already converge-ready last poll (never nags)", () => {
+        const a = makeWs({ state: "awaiting_review" });
+        const b = makeWs({ state: "awaiting_review" });
+        const groups = [group("grp_a", a, b)];
+        const compare = { grp_a: diverged(a, b) };
+        expect(detectConvergeReadyTransitions(new Map([["grp_a", true]]), groups, compare, none)).toEqual([]);
+    });
+
+    it("a group absent from prev (first poll of the session) seeds silently", () => {
+        const a = makeWs({ state: "awaiting_review" });
+        const b = makeWs({ state: "awaiting_review" });
+        const groups = [group("grp_a", a, b)];
+        const compare = { grp_a: diverged(a, b) };
+        expect(detectConvergeReadyTransitions(new Map(), groups, compare, none)).toEqual([]);
+    });
+
+    it("never fires while a sibling is still running (fan-out not finished)", () => {
+        const a = makeWs({ state: "running" });
+        const b = makeWs({ state: "awaiting_review" });
+        const groups = [group("grp_a", a, b)];
+        const compare = { grp_a: diverged(a, b) };
+        expect(detectConvergeReadyTransitions(new Map([["grp_a", false]]), groups, compare, none)).toEqual([]);
+    });
+
+    it("never fires when the settled agents AGREE (zero contested files) — no fake converge", () => {
+        const a = makeWs({ state: "awaiting_review" });
+        const b = makeWs({ state: "merged" });
+        const groups = [group("grp_a", a, b)];
+        const compare = { grp_a: { taskGroup: "grp_a", count: 2, siblings: [], contested: [] } };
+        expect(detectConvergeReadyTransitions(new Map([["grp_a", false]]), groups, compare, none)).toEqual([]);
+    });
+
+    it("does not fire when divergence is not yet known (compare unloaded) — truthful", () => {
+        const a = makeWs({ state: "awaiting_review" });
+        const b = makeWs({ state: "awaiting_review" });
+        const groups = [group("grp_a", a, b)];
+        expect(detectConvergeReadyTransitions(new Map([["grp_a", false]]), groups, {}, none)).toEqual([]);
+    });
+
+    it("an already-notified group is suppressed (fires at most once per session)", () => {
+        const a = makeWs({ state: "awaiting_review" });
+        const b = makeWs({ state: "awaiting_review" });
+        const groups = [group("grp_a", a, b)];
+        const compare = { grp_a: diverged(a, b) };
+        const notified = new Set(["grp_a"]);
+        expect(detectConvergeReadyTransitions(new Map([["grp_a", false]]), groups, compare, notified)).toEqual([]);
+    });
+
+    it("ignores solo / ungrouped rows (nothing to converge)", () => {
+        const solo = makeWs({ state: "awaiting_review" });
+        expect(detectConvergeReadyTransitions(new Map(), [group(null, solo)], {}, none)).toEqual([]);
+    });
+});
+
+describe("clusterConvergeReadyMap — the transition snapshot", () => {
+    it("marks a settled+diverged group ready, a running one not, and skips solos", () => {
+        const a = makeWs({ state: "awaiting_review" });
+        const b = makeWs({ state: "awaiting_review" });
+        const c = makeWs({ state: "running" });
+        const d = makeWs({ state: "awaiting_review" });
+        const solo = makeWs({ state: "awaiting_review" });
+        const groups: RecoderWorkspaceGroup[] = [
+            { taskGroup: "grp_ready", workspaces: [a, b] },
+            { taskGroup: "grp_running", workspaces: [c, d] },
+            { taskGroup: null, workspaces: [solo] },
+        ];
+        const compare: Record<string, CompareView> = {
+            grp_ready: { taskGroup: "grp_ready", count: 2, siblings: [], contested: [{ path: "x.ts", workspaceIds: [a.workspaceId, b.workspaceId] }] },
+            grp_running: { taskGroup: "grp_running", count: 2, siblings: [], contested: [{ path: "y.ts", workspaceIds: [c.workspaceId, d.workspaceId] }] },
+        };
+        const map = clusterConvergeReadyMap(groups, compare);
+        expect(map.get("grp_ready")).toBe(true);
+        expect(map.get("grp_running")).toBe(false);
+        expect(map.has("solo")).toBe(false);
+    });
+
+    it("a settled group with no loaded compare is NOT ready (divergence unproven)", () => {
+        const a = makeWs({ state: "awaiting_review" });
+        const b = makeWs({ state: "awaiting_review" });
+        const map = clusterConvergeReadyMap([{ taskGroup: "grp_a", workspaces: [a, b] }], {});
+        expect(map.get("grp_a")).toBe(false);
+    });
+});
+
+describe("deriveClusterNudge — the calm converge invitation copy", () => {
+    it("shows nothing while the agents are still running", () => {
+        const cluster = deriveClusterState([makeWs({ state: "running" }), makeWs({ state: "awaiting_review" })]);
+        expect(deriveClusterNudge(cluster, false)).toEqual({ kind: "", show: false, headline: "", cta: "" });
+    });
+
+    it("converge copy with real counts once settled with divergence", () => {
+        const a = makeWs({ state: "awaiting_review" });
+        const b = makeWs({ state: "awaiting_review" });
+        const cluster = deriveClusterState(
+            [a, b],
+            makeCompareView([{ path: "x.ts", workspaceIds: [a.workspaceId, b.workspaceId] }])
+        );
+        const nudge = deriveClusterNudge(cluster, false);
+        expect(nudge.kind).toBe("converge");
+        expect(nudge.show).toBe(true);
+        expect(nudge.cta).toBe("Compare & Converge");
+        expect(nudge.headline).toBe("2 agents finished — 2 diverged on 1 file. Converge the best.");
+    });
+
+    it("invites compare WITHOUT fabricating counts when divergence is not yet known", () => {
+        const cluster = deriveClusterState([makeWs({ state: "awaiting_review" }), makeWs({ state: "awaiting_review" })]);
+        const nudge = deriveClusterNudge(cluster, false);
+        expect(nudge.kind).toBe("converge");
+        expect(nudge.cta).toBe("Compare & Converge");
+        expect(nudge.headline).toBe("2 agents finished — compare and converge.");
+    });
+
+    it("agree copy — review and merge, never a fake converge prompt", () => {
+        const cluster = deriveClusterState(
+            [makeWs({ state: "awaiting_review" }), makeWs({ state: "merged" })],
+            makeCompareView([])
+        );
+        const nudge = deriveClusterNudge(cluster, false);
+        expect(nudge.kind).toBe("agree");
+        expect(nudge.show).toBe(true);
+        expect(nudge.cta).toBe("");
+        expect(nudge.headline).toBe("2 agents agree — review and merge.");
+    });
+
+    it("dismissed — the calm nudge stands down (action stays reachable in the header)", () => {
+        const a = makeWs({ state: "awaiting_review" });
+        const b = makeWs({ state: "awaiting_review" });
+        const cluster = deriveClusterState(
+            [a, b],
+            makeCompareView([{ path: "x.ts", workspaceIds: [a.workspaceId, b.workspaceId] }])
+        );
+        expect(deriveClusterNudge(cluster, true).show).toBe(false);
+    });
+
+    it("no nudge for a solo / ungrouped workspace (null cluster)", () => {
+        expect(deriveClusterNudge(null, false)).toEqual({ kind: "", show: false, headline: "", cta: "" });
     });
 });
 

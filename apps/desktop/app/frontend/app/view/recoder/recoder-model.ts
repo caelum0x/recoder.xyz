@@ -17,6 +17,9 @@ import {
     filterByProject,
     filterWorkspaces,
     groupByTaskGroup,
+    isSettledSiblingState,
+    clusterConvergeReadyMap,
+    detectConvergeReadyTransitions,
     isTerminalWorkspaceState,
     mergeArchivedHistory,
     shouldRefetchDiffSummary,
@@ -24,6 +27,7 @@ import {
     workspaceStateMap,
     type ProjectSummary,
     type CompareView,
+    type RecoderConvergeReadyEvent,
     type MergeabilityView,
     type ReadinessView,
     type RecoderAttentionEvent,
@@ -432,6 +436,14 @@ class RecoderViewModel implements ViewModel {
     prevWorkspaceAttention: Map<string, string>;
     // workspaceId:attn:<attention> keys already notified this session (de-dupe).
     notifiedNeedsInputKeys: ReadonlySet<string>;
+    // Per-taskGroup converge-readiness as of the LAST poll; null until the first
+    // poll (which seeds silently, so reopening onto an already-finished cluster
+    // never fires a stale "converge them" ping). A group flips false→true exactly
+    // once — when its fan-out settles WITH real divergence — and that transition
+    // fires the walk-away notification.
+    prevConvergeReady: Map<string, boolean>;
+    // taskGroup keys already pinged this session (de-dupe on bounce).
+    notifiedConvergeReadyKeys: ReadonlySet<string>;
     // Per-workspace diff-summary fetch key (state + updatedAt) as of the last
     // loadDiffSummaries attempt. Gates the 6s poll's diff fan-out — each fetch
     // shells host git on the backend, so idle rows whose key hasn't advanced are
@@ -510,6 +522,8 @@ class RecoderViewModel implements ViewModel {
         this.prFetchMeta = new Map();
         this.prevWorkspaceAttention = null;
         this.notifiedNeedsInputKeys = new Set();
+        this.prevConvergeReady = null;
+        this.notifiedConvergeReadyKeys = new Set();
         this.setupProbingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.boardFilterAtom = atom("") as PrimitiveAtom<string>;
         this.boardShowAtom = atom("active") as PrimitiveAtom<RecoderBoardShow>;
@@ -713,6 +727,14 @@ class RecoderViewModel implements ViewModel {
                 this.noteNeedsInputTransitions(merged);
             }
             workspaces = merged.filter((w) => !isTerminalWorkspaceState(w.state));
+            // Converge nudge (the parallel-run payoff): make sure each FINISHED
+            // cluster's compare aggregate is loaded so divergence is KNOWN, then fire
+            // ONE OS ping per cluster that just became converge-ready. Loading before
+            // the transition snapshot keeps the reopen case silent — an already-
+            // finished cluster seeds ready on the first poll and never pings.
+            const groups = groupByTaskGroup(merged);
+            await this.ensureConvergeCompareLoaded(groups);
+            this.noteConvergeReadyTransitions(groups);
             RecoderConnectionModel.getInstance().noteRefresh(true);
         } catch (e) {
             globalStore.set(this.errorAtom, e instanceof Error ? e.message : String(e));
@@ -871,6 +893,96 @@ class RecoderViewModel implements ViewModel {
         this.notifiedNeedsInputKeys = new Set([...this.notifiedNeedsInputKeys, ...events.map((e) => e.key)]);
         for (const event of events) {
             this.showAttentionNotification(event);
+        }
+    }
+
+    // Ensure the compare aggregate is loaded for every FINISHED multi-sibling
+    // cluster so the converge nudge + notification can be TRUTHFUL about divergence
+    // (and the header can show "M diverged on K files" without the user opening
+    // anything). Gated to all-settled groups missing a loaded compare — a one-time
+    // fetch per cluster, never a per-poll fan-out for still-running or already-loaded
+    // clusters. Each loadCompare is independently degrade-safe (never throws).
+    async ensureConvergeCompareLoaded(groups: RecoderWorkspaceGroup[]) {
+        const compare = globalStore.get(this.compareAtom);
+        const pending: Promise<void>[] = [];
+        for (const group of groups) {
+            const tg = group.taskGroup;
+            if (tg == null || group.workspaces.length < 2 || compare[tg] != null) {
+                continue;
+            }
+            if (!group.workspaces.every((ws) => isSettledSiblingState(ws.state))) {
+                continue;
+            }
+            pending.push(this.loadCompare(tg));
+        }
+        if (pending.length > 0) {
+            await Promise.all(pending);
+        }
+    }
+
+    // Compare this poll's converge-readiness against the last poll's and fire ONE OS
+    // notification per cluster that JUST became converge-ready — the "your agents
+    // finished, converge them" ping for a user who walked away. Only fires when
+    // divergence is PROVEN (settled + a loaded contested set with 2+ agents on 1+
+    // files), never for an all-agree cluster (no fake converge prompt). The first
+    // poll seeds silently, so reopening onto an already-finished cluster stays quiet.
+    noteConvergeReadyTransitions(groups: RecoderWorkspaceGroup[]) {
+        const compare = globalStore.get(this.compareAtom);
+        const prev = this.prevConvergeReady;
+        this.prevConvergeReady = clusterConvergeReadyMap(groups, compare);
+        if (prev == null || !globalStore.get(this.notifyOnAttentionAtom)) {
+            return;
+        }
+        const events = detectConvergeReadyTransitions(prev, groups, compare, this.notifiedConvergeReadyKeys);
+        if (events.length == 0) {
+            return;
+        }
+        this.notifiedConvergeReadyKeys = new Set([
+            ...this.notifiedConvergeReadyKeys,
+            ...events.map((e) => e.key),
+        ]);
+        for (const event of events) {
+            const group = groups.find((g) => g.taskGroup == event.taskGroup);
+            this.showConvergeReadyNotification(event, group?.workspaces ?? []);
+        }
+    }
+
+    // Fire the walk-away "your agents finished — converge them" ping through the SAME
+    // notification seam the needs-human transitions use. Native bridge first (dock
+    // badge + focus when unfocused); web Notification fallback opens the group's
+    // compare panel on click. Degrade-safe: a notification that can't show is a
+    // silent no-op — the header nudge still invites converge truthfully.
+    showConvergeReadyNotification(event: RecoderConvergeReadyEvent, siblings: RecoderWorkspace[]) {
+        const title = "Your agents finished — converge them";
+        const body =
+            event.divergedFiles == 1
+                ? `${event.divergedAgents} agents diverged on 1 file`
+                : `${event.divergedAgents} agents diverged on ${event.divergedFiles} files`;
+        try {
+            const api = getApi();
+            if (api?.showAttentionNotification != null && siblings.length > 0) {
+                api.showAttentionNotification(siblings[0].workspaceId, title, body);
+                return;
+            }
+        } catch {
+            // fall through to the web Notification path
+        }
+        if (typeof Notification == "undefined" || Notification.permission == "denied") {
+            return;
+        }
+        try {
+            const notification = new Notification(title, { body, tag: `converge:${event.key}` });
+            notification.onclick = () => {
+                window.focus();
+                if (globalStore.get(this.compareOpenAtom) != event.taskGroup) {
+                    void this.toggleCompare(
+                        event.taskGroup,
+                        siblings.map((ws) => ({ workspaceId: ws.workspaceId }))
+                    );
+                }
+            };
+        } catch {
+            // degrade-safe: a notification that can't show must never break the poll
         }
     }
 

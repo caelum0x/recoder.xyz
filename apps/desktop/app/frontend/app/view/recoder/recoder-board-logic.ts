@@ -562,6 +562,143 @@ function deriveClusterState(workspaces: RecoderWorkspace[], compareView?: Compar
     };
 }
 
+// The moment the payoff is available: a parallel-run group that JUST settled with
+// REAL divergence to reconcile. `key` de-dupes so a group pings at most once per
+// session even if it bounces. `taskGroup` opens the compare panel on the ping click.
+type RecoderConvergeReadyEvent = {
+    taskGroup: string;
+    agentCount: number;
+    divergedAgents: number;
+    divergedFiles: number;
+    key: string;
+};
+
+// The calm, dismissible converge invitation shown in the cluster header once a
+// parallel run finishes — the "your agents are done, converge them" nudge a
+// walked-away user cannot miss. `kind` discriminates the copy the header renders:
+//   - "converge": settled WITH divergence — the payoff. `cta` is "Compare & Converge".
+//   - "agree":    settled but nothing contested — `cta` "" (review and merge, never a
+//                 fabricated converge prompt).
+//   - "":         still running, or dismissed, or solo — nothing to show.
+type ClusterNudge = {
+    kind: "converge" | "agree" | "";
+    show: boolean;
+    headline: string;
+    cta: string;
+};
+
+// True only when a cluster is GENUINELY converge-ready: every sibling settled AND a
+// loaded contested set proves 2+ agents diverged on 1+ files. A settled cluster
+// whose contested set is not loaded yet is NOT ready here (we cannot prove there is
+// anything to converge, so we never fire a converge ping we can't back with real
+// divergence); an all-agree cluster is likewise not ready. This is the honest gate
+// the walk-away notification fires on.
+function isClusterConvergeReady(cluster: ClusterState | null): boolean {
+    return cluster != null && cluster.phase == "ready" && cluster.divergenceKnown && cluster.divergedFiles > 0;
+}
+
+// Snapshot every multi-sibling group's converge-readiness (keyed by taskGroup) so
+// the next poll can detect the group that JUST became ready. Mirrors
+// workspaceAttentionMap: solo/ungrouped rows are skipped (nothing to converge), and
+// a group present here — ready or not — lets a first-seen group seed silently rather
+// than fire a stale ping.
+function clusterConvergeReadyMap(
+    groups: RecoderWorkspaceGroup[],
+    compareByGroup: Record<string, CompareView>
+): Map<string, boolean> {
+    const map = new Map<string, boolean>();
+    for (const group of groups) {
+        const tg = group.taskGroup;
+        if (tg == null || group.workspaces.length < 2) {
+            continue;
+        }
+        map.set(tg, isClusterConvergeReady(deriveClusterState(group.workspaces, compareByGroup?.[tg])));
+    }
+    return map;
+}
+
+// Pure: fold the current poll's converge-readiness against the previous poll's map
+// and return only groups that JUST TRANSITIONED into converge-ready — the moment the
+// parallel-run payoff becomes available. A group absent from `prevReady` (first poll
+// of the session, or one whose siblings only just grouped) seeds silently; a group
+// already ready last poll does not re-fire (fires ONCE per group becoming ready — a
+// calm invitation, never a nag). `alreadyNotified` keys (taskGroup) suppress a repeat
+// if a group bounces out of and back into ready. Solo/ungrouped rows and agree/running
+// clusters never produce an event (see isClusterConvergeReady) — truthful by design.
+function detectConvergeReadyTransitions(
+    prevReady: ReadonlyMap<string, boolean>,
+    groups: RecoderWorkspaceGroup[],
+    compareByGroup: Record<string, CompareView>,
+    alreadyNotified: ReadonlySet<string>
+): RecoderConvergeReadyEvent[] {
+    const events: RecoderConvergeReadyEvent[] = [];
+    for (const group of groups) {
+        const tg = group.taskGroup;
+        if (tg == null || group.workspaces.length < 2) {
+            continue;
+        }
+        const cluster = deriveClusterState(group.workspaces, compareByGroup?.[tg]);
+        if (!isClusterConvergeReady(cluster)) {
+            continue;
+        }
+        const prev = prevReady.get(tg);
+        // First-seen group (seed silently) or one already ready last poll (fire once,
+        // never nag) both skip.
+        if (prev == null || prev == true) {
+            continue;
+        }
+        if (alreadyNotified.has(tg)) {
+            continue;
+        }
+        events.push({
+            taskGroup: tg,
+            agentCount: cluster.agentCount,
+            divergedAgents: cluster.divergedAgents,
+            divergedFiles: cluster.divergedFiles,
+            key: tg,
+        });
+    }
+    return events;
+}
+
+// Pure: the cluster header's calm converge invitation. Non-null clusters that have
+// finished become a clear, dismissible nudge; a still-running cluster or a dismissed
+// one shows nothing. Truthful: a diverged cluster invites "Compare & Converge" (with
+// real counts when known, no fabricated counts when the contested set is still
+// loading), while an all-agree cluster says "review and merge" — never a fake
+// converge prompt. `dismissed` folds in "user dismissed it" AND "the compare panel is
+// open" (the panel carries its own accent) so the board never shows two accents.
+function deriveClusterNudge(cluster: ClusterState | null, dismissed: boolean): ClusterNudge {
+    const hidden: ClusterNudge = { kind: "", show: false, headline: "", cta: "" };
+    if (cluster == null || cluster.phase == "running" || dismissed) {
+        return hidden;
+    }
+    if (cluster.phase == "agree") {
+        return {
+            kind: "agree",
+            show: true,
+            headline: `${cluster.agentCount} agents agree — review and merge.`,
+            cta: "",
+        };
+    }
+    if (cluster.divergenceKnown && cluster.divergedFiles > 0) {
+        return {
+            kind: "converge",
+            show: true,
+            headline: `${cluster.agentCount} agents finished — ${cluster.divergedAgents} diverged on ${pluralizeFiles(
+                cluster.divergedFiles
+            )}. Converge the best.`,
+            cta: "Compare & Converge",
+        };
+    }
+    return {
+        kind: "converge",
+        show: true,
+        headline: `${cluster.agentCount} agents finished — compare and converge.`,
+        cta: "Compare & Converge",
+    };
+}
+
 // Terminal-dead states: history, not live work. The default Active board view
 // hides them; the Archived view shows exactly them.
 function isTerminalWorkspaceState(state: string): boolean {
@@ -1280,6 +1417,10 @@ export {
     groupByTaskGroup,
     isSettledSiblingState,
     deriveClusterState,
+    isClusterConvergeReady,
+    clusterConvergeReadyMap,
+    detectConvergeReadyTransitions,
+    deriveClusterNudge,
     SETTLED_SIBLING_STATES,
     filterWorkspaces,
     mergeArchivedHistory,
@@ -1340,4 +1481,6 @@ export {
     type AdHocConvergeDecision,
     type ClusterConvergePhase,
     type ClusterState,
+    type ClusterNudge,
+    type RecoderConvergeReadyEvent,
 };

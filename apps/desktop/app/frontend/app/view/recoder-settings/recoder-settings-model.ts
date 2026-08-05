@@ -6,6 +6,7 @@ import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl, setRecoderBackendUrl } from "../recoder/recoder-endpoints";
+import { parseDetectedAgents, type DetectedAgent } from "./recoder-settings-agents";
 import { RecoderSettingsView } from "./recoder-settings";
 import { describeConductorHealth, summarizeHealthReport } from "./recoder-settings-health";
 
@@ -30,6 +31,8 @@ class RecoderSettingsViewModel implements ViewModel {
     providerKeysSetAtom: PrimitiveAtom<Record<string, boolean>>;
     providerKeyDraftsAtom: PrimitiveAtom<Record<string, string>>;
     providerKeyErrorAtom: PrimitiveAtom<string>;
+    detectedAgentsAtom: PrimitiveAtom<DetectedAgent[]>;
+    agentsLoadedAtom: PrimitiveAtom<boolean>;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -44,6 +47,8 @@ class RecoderSettingsViewModel implements ViewModel {
         this.providerKeysSetAtom = atom({}) as PrimitiveAtom<Record<string, boolean>>;
         this.providerKeyDraftsAtom = atom({}) as PrimitiveAtom<Record<string, string>>;
         this.providerKeyErrorAtom = atom("") as PrimitiveAtom<string>;
+        this.detectedAgentsAtom = atom([]) as PrimitiveAtom<DetectedAgent[]>;
+        this.agentsLoadedAtom = atom(false) as PrimitiveAtom<boolean>;
     }
 
     get viewComponent(): ViewComponent {
@@ -83,6 +88,25 @@ class RecoderSettingsViewModel implements ViewModel {
             globalStore.set(this.providerKeyErrorAtom, "");
         } catch (e) {
             globalStore.set(this.providerKeyErrorAtom, `Failed to read secret store: ${e?.message ?? e}`);
+        }
+    }
+
+    // Read-only "Agents" section backing: probe /api/conductor/runtimes for the
+    // coding agents actually detected on this machine. Degrade-safe — an
+    // unreachable backend or malformed body lands on an empty list, so the
+    // section omits truthfully rather than inventing an agent. agentsLoaded flips
+    // true once a probe has completed (empty-but-loaded ⇒ "none detected", not a
+    // spinner-forever).
+    async refreshAgents() {
+        const base = getRecoderBackendUrl();
+        try {
+            const res = await fetch(`${base}/api/conductor/runtimes`);
+            const agents = res.ok ? parseDetectedAgents(await res.json().catch(() => undefined)) : [];
+            globalStore.set(this.detectedAgentsAtom, agents);
+        } catch {
+            globalStore.set(this.detectedAgentsAtom, []);
+        } finally {
+            globalStore.set(this.agentsLoadedAtom, true);
         }
     }
 
