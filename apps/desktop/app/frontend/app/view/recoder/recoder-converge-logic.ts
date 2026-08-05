@@ -434,6 +434,25 @@ function deriveCompareColumns(siblings: SiblingCompareEntry[]): CompareColumn[] 
 // Which pairwise slot a column-header click should target: clicking a header
 // already holding a slot re-targets that slot (the model's pickPair then clears
 // it), otherwise fill A first, then B. Pure — the caller passes the current picks.
+// Pure: a one-line, at-a-glance read of a compare cluster for the panel header —
+// how many agents ran on this task and how much they diverge. Uses ONLY reliably
+// known values (the sibling count and the loaded contested set), so it never
+// fabricates an "agreement" it cannot prove. A solo run has nothing to compare, so
+// it returns "" (no header). When agents touched separate files there is nothing to
+// converge; when 2+ contest a file it names the count so the value of converging is
+// legible before the user reads a single diff. This is the in-product mirror of the
+// site's "see where they diverge → converge" promise.
+function deriveCompareSummary(siblingCount: number, contested: readonly { path: string }[]): string {
+    if (siblingCount < 2) {
+        return "";
+    }
+    const files = Array.isArray(contested) ? contested.length : 0;
+    if (files == 0) {
+        return `${siblingCount} agents · no file overlap — review and merge any one`;
+    }
+    return `${siblingCount} agents · ${files} file${files == 1 ? "" : "s"} contested — converge below`;
+}
+
 function headerPairSlot(pairA: string, pairB: string, workspaceId: string): "A" | "B" {
     if (workspaceId == pairA) {
         return "A";
@@ -550,6 +569,7 @@ export {
     composeConvergence,
     composeStatusFallback,
     deriveCompareColumns,
+    deriveCompareSummary,
     fetchConvergePlan,
     headerPairSlot,
     parseConvergePlan,

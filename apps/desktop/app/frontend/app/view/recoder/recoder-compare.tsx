@@ -15,7 +15,12 @@ import {
     type PairwiseView,
 } from "./recoder-compare-pairwise";
 import { ConvergePanel } from "./recoder-converge";
-import { deriveCompareColumns, headerPairSlot, type CompareColumn } from "./recoder-converge-logic";
+import {
+    deriveCompareColumns,
+    deriveCompareSummary,
+    headerPairSlot,
+    type CompareColumn,
+} from "./recoder-converge-logic";
 import { buildConvergenceEvidence, saveConvergenceEvidence } from "./recoder-evidence";
 import {
     computePairwise,
@@ -730,11 +735,13 @@ function RecoderComparePanel({
         );
     }
     const columns = deriveCompareColumns(compareView.siblings);
+    const summary = deriveCompareSummary(compareView.siblings.length, compareView.contested ?? []);
     const onOpenFile = (path: string) => {
         setOpenFilePath((cur) => (cur == path ? "" : path));
     };
     return (
         <div className="flex flex-col gap-1.5 rounded border border-white/8 p-2">
+            {summary != "" && <div className={META}>{summary}</div>}
             {compareView.siblings.length >= 2 && (
                 <ConvergePanel
                     taskGroup={taskGroup}
