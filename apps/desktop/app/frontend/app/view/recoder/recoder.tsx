@@ -830,7 +830,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const firstRunChips = firstRunAgentChips(environment, setup.agents, agentAuth, githubStatus);
     // The first-run HERO: with 2+ agents the parallel run is the star (preselect +
     // open ready); with one, honest "install a second"; with none, the setup panel.
-    const hero = firstRunHero(setup.agents);
+    const hero = firstRunHero(setup.agents, recentRepos);
     const signIn = firstRunSignIn(signingIn, signInPrompt);
     // The archived-history truth chip (recoder-oe8i): shown only on the history
     // Show views and only when the backend reported more history than is loaded.
@@ -1326,10 +1326,21 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                     onClick={() => {
                                         setRuntimeId(hero.primary);
                                         setAlsoRun(hero.also);
+                                        // One-click when a recent repo exists: prefill the repo +
+                                        // an editable starter prompt so launch opens ready to go.
+                                        // Truthful — never a fabricated repo (canOneClick gates it).
+                                        if (hero.firstTask.canOneClick) {
+                                            setRepoPath(hero.firstTask.repoPath);
+                                            if (prompt.trim() == "") {
+                                                setPrompt(hero.firstTask.prompt);
+                                            }
+                                        }
                                         setLaunchOpen(true);
                                     }}
                                 >
-                                    Run your first parallel task
+                                    {hero.firstTask.canOneClick
+                                        ? `Run your first task on ${hero.firstTask.repoName}`
+                                        : "Run your first parallel task"}
                                 </button>
                             </div>
                         </div>

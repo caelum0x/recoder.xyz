@@ -145,13 +145,50 @@ function firstParallelPreselection(
     return { primary: ready[0].runtimeId, also: ready.slice(1).map((a) => a.runtimeId) };
 }
 
+// The editable default a frictionless first task starts from — a neutral, generic
+// starting point (the user edits before/at launch). Kept intentionally open-ended
+// so it never presumes the repo's contents.
+const DEFAULT_FIRST_TASK_PROMPT = "Look around this repository and propose the first change you'd make.";
+
+// The first non-blank recent repo, or "" when the user has never launched here.
+// "" is the honest "no repo yet" signal — the view then opens the folder picker
+// instead of fabricating a path.
+function firstRecentRepo(recentRepos: readonly string[] | null | undefined): string {
+    for (const r of recentRepos ?? []) {
+        const t = (r ?? "").trim();
+        if (t != "") {
+            return t;
+        }
+    }
+    return "";
+}
+
+// Leaf folder name of an absolute repo path, for the one-click button copy
+// ("Run … in <name>"). Falls back to the full path when there is no separator.
+function repoBasename(repoPath: string): string {
+    return (repoPath ?? "").split(/[\\/]/).filter(Boolean).pop() ?? (repoPath ?? "");
+}
+
+// The frictionless-first-task plan attached to the parallel hero. When a recent
+// repo exists we can launch in ONE click (preselected agents + that repo + the
+// editable default prompt); when it does not, `canOneClick` is false and the view
+// falls back to the folder picker. Truthful: repoPath/repoName stay "" with no
+// recent repo, so the one-click affordance is never offered against a fake repo.
+type FirstRunFirstTask = {
+    canOneClick: boolean;
+    repoPath: string;
+    repoName: string;
+    prompt: string;
+};
+
 // The first-run card's HERO decision — the ONE thing that must make Recoder's core
 // value obvious to a brand-new dev: give one task to MULTIPLE agents and merge the
 // best. With 2+ launchable agents the parallel run IS the hero — the view preselects
-// them and opens the launch flow ready to go. With exactly one agent we say so
-// truthfully and point at installing a second (the value genuinely needs 2+, so a
-// solo launch is never dressed up as "parallel"). With none, the setup/install panel
-// owns the screen. Pure + degrade-safe: null input reads as "none".
+// them and, when a recent repo exists, can launch the first task in one click. With
+// exactly one agent we say so truthfully and point at installing a second (the value
+// genuinely needs 2+, so a solo launch is never dressed up as "parallel"). With none,
+// the setup/install panel owns the screen. Pure + degrade-safe: null input reads as
+// "none", and an absent/blank recent repo degrades to the folder-pick path.
 type FirstRunHeroParallel = {
     mode: "parallel";
     primary: string;
@@ -162,12 +199,16 @@ type FirstRunHeroParallel = {
     agentSummary: string;
     // Total launchable agents (1 + also.length) — the "all N detected agents" count.
     count: number;
+    firstTask: FirstRunFirstTask;
 };
 type FirstRunHeroInstallSecond = { mode: "install-second"; agentLabel: string };
 type FirstRunHeroNone = { mode: "none" };
 type FirstRunHeroDecision = FirstRunHeroParallel | FirstRunHeroInstallSecond | FirstRunHeroNone;
 
-function firstRunHero(setupAgents: FirstRunSetupAgent[]): FirstRunHeroDecision {
+function firstRunHero(
+    setupAgents: FirstRunSetupAgent[],
+    recentRepos: readonly string[] = []
+): FirstRunHeroDecision {
     const ready = (setupAgents ?? []).filter((a) => a.available && a.runtimeId != "");
     if (ready.length == 0) {
         return { mode: "none" };
@@ -176,6 +217,7 @@ function firstRunHero(setupAgents: FirstRunSetupAgent[]): FirstRunHeroDecision {
         return { mode: "install-second", agentLabel: agentLabel(ready[0].runtimeId) };
     }
     const agentLabels = ready.map((a) => agentLabel(a.runtimeId));
+    const repoPath = firstRecentRepo(recentRepos);
     return {
         mode: "parallel",
         primary: ready[0].runtimeId,
@@ -183,6 +225,12 @@ function firstRunHero(setupAgents: FirstRunSetupAgent[]): FirstRunHeroDecision {
         agentLabels,
         agentSummary: agentLabels.join(" + "),
         count: ready.length,
+        firstTask: {
+            canOneClick: repoPath != "",
+            repoPath,
+            repoName: repoPath != "" ? repoBasename(repoPath) : "",
+            prompt: DEFAULT_FIRST_TASK_PROMPT,
+        },
     };
 }
 
@@ -229,16 +277,20 @@ function archivedHistoryNotice(meta: ArchivedPageMeta | null, loadedCount: numbe
 
 export {
     archivedHistoryNotice,
+    DEFAULT_FIRST_TASK_PROMPT,
     firstParallelPreselection,
+    firstRecentRepo,
     firstRunAgentChips,
     firstRunHero,
     firstRunSignIn,
     parseArchivedPage,
+    repoBasename,
     shouldShowGettingStarted,
     showConvergeAffordance,
     type ArchivedPageMeta,
     type FirstRunChip,
     type FirstRunEnvironment,
+    type FirstRunFirstTask,
     type FirstRunHeroDecision,
     type FirstRunSetupAgent,
     type FirstRunSignIn,

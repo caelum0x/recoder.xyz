@@ -6,11 +6,13 @@ import { describe, expect, it } from "vitest";
 import { mergeArchivedHistory, type RecoderWorkspace } from "./recoder-board-logic";
 import {
     archivedHistoryNotice,
+    DEFAULT_FIRST_TASK_PROMPT,
     firstParallelPreselection,
     firstRunAgentChips,
     firstRunHero,
     firstRunSignIn,
     parseArchivedPage,
+    repoBasename,
     shouldShowGettingStarted,
     showConvergeAffordance,
     type FirstRunEnvironment,
@@ -219,6 +221,7 @@ describe("firstRunHero — the first-run card's core-value decision", () => {
             agentLabels: ["Claude Code", "Codex"],
             agentSummary: "Claude Code + Codex",
             count: 2,
+            firstTask: { canOneClick: false, repoPath: "", repoName: "", prompt: DEFAULT_FIRST_TASK_PROMPT },
         });
     });
 
@@ -253,6 +256,69 @@ describe("firstRunHero — the first-run card's core-value decision", () => {
         if (hero.mode == "parallel") {
             expect({ primary: hero.primary, also: hero.also }).toEqual(firstParallelPreselection(agents));
         }
+    });
+});
+
+describe("firstRunHero — the frictionless first task (one-click into a recent repo)", () => {
+    const twoAgents = [
+        { runtimeId: "claude_code", available: true },
+        { runtimeId: "codex", available: true },
+    ];
+
+    it("offers a ONE-CLICK first task when 2+ agents AND a recent repo exist", () => {
+        const hero = firstRunHero(twoAgents, ["/Users/dev/projects/acme-api"]);
+        expect(hero.mode).toBe("parallel");
+        if (hero.mode == "parallel") {
+            expect(hero.firstTask).toEqual({
+                canOneClick: true,
+                repoPath: "/Users/dev/projects/acme-api",
+                repoName: "acme-api",
+                prompt: DEFAULT_FIRST_TASK_PROMPT,
+            });
+        }
+    });
+
+    it("uses the MOST-recent repo and skips blank entries (never a fabricated path)", () => {
+        const hero = firstRunHero(twoAgents, ["  ", "/Users/dev/first", "/Users/dev/second"]);
+        if (hero.mode == "parallel") {
+            expect(hero.firstTask.repoPath).toBe("/Users/dev/first");
+            expect(hero.firstTask.repoName).toBe("first");
+        }
+    });
+
+    it("falls back to the folder pick (canOneClick false, no repo) when no recent repo exists", () => {
+        for (const recents of [[], ["   "], undefined as unknown as string[]]) {
+            const hero = firstRunHero(twoAgents, recents);
+            if (hero.mode == "parallel") {
+                expect(hero.firstTask).toEqual({
+                    canOneClick: false,
+                    repoPath: "",
+                    repoName: "",
+                    prompt: DEFAULT_FIRST_TASK_PROMPT,
+                });
+            }
+        }
+    });
+
+    it("never attaches a first-task plan to the non-parallel modes", () => {
+        expect(firstRunHero([{ runtimeId: "claude_code", available: true }], ["/repo"])).toEqual({
+            mode: "install-second",
+            agentLabel: "Claude Code",
+        });
+        expect(firstRunHero([], ["/repo"])).toEqual({ mode: "none" });
+    });
+});
+
+describe("repoBasename", () => {
+    it("returns the leaf folder for posix and windows paths", () => {
+        expect(repoBasename("/Users/dev/projects/acme-api")).toBe("acme-api");
+        expect(repoBasename("C:\\src\\acme-api")).toBe("acme-api");
+        expect(repoBasename("/Users/dev/projects/acme-api/")).toBe("acme-api");
+    });
+
+    it("degrades to the raw input when there is no separator", () => {
+        expect(repoBasename("acme-api")).toBe("acme-api");
+        expect(repoBasename("")).toBe("");
     });
 });
 
