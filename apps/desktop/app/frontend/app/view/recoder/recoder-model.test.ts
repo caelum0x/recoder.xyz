@@ -20,6 +20,7 @@ import {
     isSettledSiblingState,
     formatRelativeAge,
     groupByTaskGroup,
+    isClusterConvergeReady,
     isNeedsInputAttention,
     isTerminalWorkspaceState,
     mergeArchivedHistory,
@@ -166,7 +167,7 @@ describe("deriveClusterState — the board's converge entry point", () => {
 
     it("ready (divergence known): counts diverged agents and contested files", () => {
         const a = makeWs({ state: "awaiting_review" });
-        const b = makeWs({ state: "merged" });
+        const b = makeWs({ state: "cancelled" });
         const c = makeWs({ state: "failed" });
         const contested: ContestedFile[] = [
             { path: "src/one.ts", workspaceIds: [a.workspaceId, b.workspaceId] },
@@ -195,7 +196,7 @@ describe("deriveClusterState — the board's converge entry point", () => {
 
     it("agree: all settled with ZERO contested files never offers converge", () => {
         const cluster = deriveClusterState(
-            [makeWs({ state: "awaiting_review" }), makeWs({ state: "merged" })],
+            [makeWs({ state: "awaiting_review" }), makeWs({ state: "cancelled" })],
             makeCompareView([])
         );
         expect(cluster?.phase).toBe("agree");
@@ -259,7 +260,7 @@ describe("deriveClusterState overlap — early collision heads-up", () => {
 
     it("carries the overlap read on the settled cluster state too (render decides where to show it)", () => {
         const a = makeWs({ state: "awaiting_review" });
-        const b = makeWs({ state: "merged" });
+        const b = makeWs({ state: "awaiting_review" });
         const cluster = deriveClusterState(
             [a, b],
             makeCompareView([{ path: "x.ts", workspaceIds: [a.workspaceId, b.workspaceId] }])
@@ -327,7 +328,7 @@ describe("detectConvergeReadyTransitions — the converge payoff becomes availab
 
     it("never fires when the settled agents AGREE (zero contested files) — no fake converge", () => {
         const a = makeWs({ state: "awaiting_review" });
-        const b = makeWs({ state: "merged" });
+        const b = makeWs({ state: "awaiting_review" });
         const groups = [group("grp_a", a, b)];
         const compare = { grp_a: { taskGroup: "grp_a", count: 2, siblings: [], contested: [] } };
         expect(detectConvergeReadyTransitions(new Map([["grp_a", false]]), groups, compare, none)).toEqual([]);
@@ -415,7 +416,7 @@ describe("deriveClusterNudge — the calm converge invitation copy", () => {
 
     it("agree copy — review and merge, never a fake converge prompt", () => {
         const cluster = deriveClusterState(
-            [makeWs({ state: "awaiting_review" }), makeWs({ state: "merged" })],
+            [makeWs({ state: "awaiting_review" }), makeWs({ state: "cancelled" })],
             makeCompareView([])
         );
         const nudge = deriveClusterNudge(cluster, false);
@@ -437,6 +438,63 @@ describe("deriveClusterNudge — the calm converge invitation copy", () => {
 
     it("no nudge for a solo / ungrouped workspace (null cluster)", () => {
         expect(deriveClusterNudge(null, false)).toEqual({ kind: "", show: false, headline: "", cta: "" });
+    });
+
+    it("resolved copy — offers to clear the losers once a winner merged", () => {
+        const winner = makeWs({ state: "merged" });
+        const loser1 = makeWs({ state: "awaiting_review" });
+        const loser2 = makeWs({ state: "cancelled" });
+        const cluster = deriveClusterState([winner, loser1, loser2], makeCompareView([]));
+        const nudge = deriveClusterNudge(cluster, false);
+        expect(nudge.kind).toBe("resolved");
+        expect(nudge.show).toBe(true);
+        expect(nudge.cta).toBe("Archive the others");
+        expect(nudge.headline).toBe("A winner merged — archive the other 2 agents to clear the board.");
+    });
+
+    it("resolved nudge singularizes a single leftover and stays hidden when nothing is left to clear", () => {
+        const one = deriveClusterState([makeWs({ state: "merged" }), makeWs({ state: "awaiting_review" })]);
+        expect(deriveClusterNudge(one, false).headline).toBe(
+            "A winner merged — archive the other 1 agent to clear the board."
+        );
+        // Winner merged, the only other sibling already archived → nothing to clear → no nudge.
+        const clean = deriveClusterState([makeWs({ state: "merged" }), makeWs({ state: "archived" })]);
+        expect(deriveClusterNudge(clean, false).show).toBe(false);
+    });
+});
+
+describe("deriveClusterState — resolved (a winner merged) clears the losers, never re-offers converge", () => {
+    it("a merged winner in an all-settled group → resolved with the non-winner ids to clear", () => {
+        const winner = makeWs({ state: "merged" });
+        const loser1 = makeWs({ state: "awaiting_review" });
+        const loser2 = makeWs({ state: "failed" });
+        const cluster = deriveClusterState([winner, loser1, loser2], makeCompareView([]));
+        expect(cluster?.phase).toBe("resolved");
+        expect(cluster?.convergePrimary).toBe(false);
+        expect(cluster?.defeatedIds).toEqual([loser1.workspaceId, loser2.workspaceId]);
+        expect(cluster?.detail).toBe("merged — 2 others to clear");
+        expect(cluster?.reason).toBe("a winner already merged");
+        // Resolved is never a converge-ready ping.
+        expect(isClusterConvergeReady(cluster)).toBe(false);
+    });
+
+    it("excludes already-archived siblings from the clear set (they are already gone)", () => {
+        const cluster = deriveClusterState([
+            makeWs({ state: "merged" }),
+            makeWs({ state: "awaiting_review" }),
+            makeWs({ state: "archived" }),
+        ]);
+        expect(cluster?.phase).toBe("resolved");
+        expect(cluster?.defeatedIds).toHaveLength(1);
+    });
+
+    it("a still-running sibling outranks a merged one — the fan-out is not done yet", () => {
+        const cluster = deriveClusterState([
+            makeWs({ state: "merged" }),
+            makeWs({ state: "running" }),
+        ]);
+        expect(cluster?.phase).toBe("running");
+        expect(cluster?.defeatedIds).toBeUndefined();
     });
 });
 
