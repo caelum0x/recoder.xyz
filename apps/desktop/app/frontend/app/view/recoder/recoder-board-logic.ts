@@ -427,10 +427,12 @@ function isSettledSiblingState(state: string): boolean {
 //     contest a file) — converge is the cluster's ONE primary next step.
 //   - "agree": every sibling settled but NOTHING is contested — there is nothing to
 //     converge, so we say so and point at review (never a fabricated converge CTA).
+//   - "resolved": a winner already merged — the converge choice was made, so converge
+//     is no longer the next step; the OTHER siblings are now board clutter to clear.
 // When the compare aggregate is not loaded yet the contested set is UNKNOWN; an
 // all-settled cluster is then "ready" (offer Compare & Converge — comparing is the
 // discovery step) with file counts omitted rather than invented.
-type ClusterConvergePhase = "running" | "ready" | "agree";
+type ClusterConvergePhase = "running" | "ready" | "agree" | "resolved";
 
 type ClusterState = {
     phase: ClusterConvergePhase;
@@ -467,6 +469,10 @@ type ClusterState = {
     // divergedAgents/divergedFiles ARE the overlap signal — this only phrases them,
     // so the board can warn about a coming collision earlier than the converge CTA.
     overlap: string;
+    // Present only in the "resolved" phase: the sibling workspaceIds that are safe to
+    // clear now that a winner merged (every non-winner, non-archived sibling). "Archive
+    // the others" acts on exactly these. Absent/empty in every other phase.
+    defeatedIds?: string[];
 };
 
 function pluralizeFiles(n: number): string {
@@ -522,6 +528,37 @@ function deriveClusterState(workspaces: RecoderWorkspace[], compareView?: Compar
             detail,
             progress: detail,
             overlap,
+        };
+    }
+
+    // Every sibling has settled AND a winner already merged → the cluster is RESOLVED.
+    // Checked BEFORE agree/ready so a merged group never keeps shouting "Compare &
+    // Converge" (the choice was made); the OTHER siblings are now board clutter, so
+    // surface them as a one-click clear. A group whose siblings are all already
+    // archived yields no defeated ids and simply reads "merged".
+    const merged = workspaces.find((ws) => ws.state == "merged");
+    if (merged != null) {
+        const defeatedIds = workspaces
+            .filter((ws) => ws.workspaceId != merged.workspaceId && ws.state != "archived" && ws.state != "merged")
+            .map((ws) => ws.workspaceId);
+        const detail =
+            defeatedIds.length > 0
+                ? `merged — ${defeatedIds.length} other${defeatedIds.length == 1 ? "" : "s"} to clear`
+                : "merged";
+        return {
+            phase: "resolved",
+            agentCount,
+            settledCount,
+            divergenceKnown,
+            divergedAgents,
+            divergedFiles,
+            convergePrimary: false,
+            reason: "a winner already merged",
+            summary: `${agentCount} agents · ${detail}`,
+            detail,
+            progress: "",
+            overlap,
+            defeatedIds,
         };
     }
 
@@ -581,7 +618,7 @@ type RecoderConvergeReadyEvent = {
 //                 fabricated converge prompt).
 //   - "":         still running, or dismissed, or solo — nothing to show.
 type ClusterNudge = {
-    kind: "converge" | "agree" | "";
+    kind: "converge" | "agree" | "resolved" | "";
     show: boolean;
     headline: string;
     cta: string;
@@ -672,6 +709,20 @@ function deriveClusterNudge(cluster: ClusterState | null, dismissed: boolean): C
     const hidden: ClusterNudge = { kind: "", show: false, headline: "", cta: "" };
     if (cluster == null || cluster.phase == "running" || dismissed) {
         return hidden;
+    }
+    if (cluster.phase == "resolved") {
+        const m = cluster.defeatedIds?.length ?? 0;
+        // Nothing left to clear (a lone merged winner, or the others already archived)
+        // → no nudge; the board is already clean.
+        if (m == 0) {
+            return hidden;
+        }
+        return {
+            kind: "resolved",
+            show: true,
+            headline: `A winner merged — archive the other ${m} agent${m == 1 ? "" : "s"} to clear the board.`,
+            cta: "Archive the others",
+        };
     }
     if (cluster.phase == "agree") {
         return {

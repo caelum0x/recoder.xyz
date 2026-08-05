@@ -1712,9 +1712,15 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                                 <button
                                                     className={PRIMARY_BTN}
                                                     onClick={() =>
-                                                        model.toggleCompare(taskGroup, group.workspaces)
+                                                        nudge.kind == "resolved"
+                                                            ? model.archiveWorkspaces(cluster?.defeatedIds ?? [])
+                                                            : model.toggleCompare(taskGroup, group.workspaces)
                                                     }
-                                                    title="Compare all agents side-by-side and converge on one branch"
+                                                    title={
+                                                        nudge.kind == "resolved"
+                                                            ? "Archive the other agents from this converged run to clear the board"
+                                                            : "Compare all agents side-by-side and converge on one branch"
+                                                    }
                                                 >
                                                     {nudge.cta}
                                                 </button>

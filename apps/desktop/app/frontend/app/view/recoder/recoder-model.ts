@@ -1744,6 +1744,35 @@ class RecoderViewModel implements ViewModel {
         }
     }
 
+    // Clear several siblings in one action — the "archive the others" affordance that
+    // tidies a resolved cluster once a winner merged. Archives sequentially (no batch
+    // endpoint; sequential avoids hammering the conductor) and refreshes ONCE at the
+    // end. Per-id failures are surfaced truthfully on that row and never abort the rest.
+    async archiveWorkspaces(ids: string[]) {
+        const clean = (ids ?? []).filter((id) => !!id);
+        if (clean.length == 0) {
+            return;
+        }
+        for (const id of clean) {
+            globalStore.set(this.busyRowAtom, id);
+            this.setRowStatus(id, "");
+            try {
+                const res = await fetch(
+                    `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(id)}/archive`,
+                    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
+                );
+                if (!res.ok) {
+                    const body = await res.json().catch(() => null);
+                    this.setRowStatus(id, readErrorReason(body) || `Archive failed (${res.status}).`);
+                }
+            } catch {
+                this.setRowStatus(id, "Archive unavailable - Recoder isn’t reachable.");
+            }
+        }
+        globalStore.set(this.busyRowAtom, "");
+        await this.refresh();
+    }
+
     // Gracefully stop a running agent: the backend kills the live session, KEEPS the
     // worktree, transitions the workspace to `cancelled`, and seals an audit entry.
     // Governed → surface a gated (403) / illegal-transition (503) / unreachable
