@@ -7,27 +7,26 @@ import {
 } from '@/app/components/StructuredData';
 
 // On-page hero (page.tsx H1/¶1) and this metadata must stay in agreement:
-// the product is the self-hosted convergence workspace for coding agents —
-// run Claude Code, Codex, and any agent in parallel isolated git worktrees
-// (BYOK), compare divergent diffs, and land ONE trusted, evidence-backed
-// merge (docs/PRODUCT-THESIS.md §0/§12).
-const HOME_TITLE = 'Recoder — Claude Code, Codex & Any Agent in Parallel. One Trusted Merge.';
+// the product is the terminal IDE for AI coding agents — give one task to
+// Claude Code, Codex, and Cursor at once, watch them diverge in isolated git
+// worktrees, then converge the best into ONE trusted, evidence-backed merge.
+// Positioning: the category leads; self-host/BYOK are footnotes, not the pitch.
+const HOME_TITLE = 'Recoder — The Terminal IDE for AI Agents. One Task, Many Agents, One Merge.';
 const HOME_DESCRIPTION =
-  'Recoder is the self-hosted convergence workspace for AI coding agents. Run Claude Code, Codex, and any agent in parallel isolated git worktrees with your own API keys (BYOK), compare their divergent diffs side by side, and merge one trusted, evidence-backed change. Free to start.';
+  'Recoder is the terminal IDE for AI coding agents. Give one task to Claude Code, Codex, and Cursor at once, watch them diverge in isolated git worktrees, then converge the best into one trusted, evidence-backed merge. Free to start.';
 
 export const metadata: Metadata = {
   title: HOME_TITLE,
   description: HOME_DESCRIPTION,
   keywords: [
+    'terminal IDE for AI agents',
     'parallel AI coding agents',
     'Claude Code',
     'Codex',
+    'Cursor',
     'run coding agents in parallel',
     'merge parallel agent diffs',
     'AI agent convergence',
-    'self-hosted AI coding',
-    'BYOK AI',
-    'bring your own API key',
     'git worktree AI',
     'review and merge AI diffs',
   ],
