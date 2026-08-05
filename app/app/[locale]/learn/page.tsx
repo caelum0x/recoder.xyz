@@ -21,10 +21,10 @@ import {
 
 export const metadata: Metadata = {
   title: 'Learn - Recoder.xyz',
-  description: 'Get started with Recoder. Documentation, guides, and resources to help you build with AI-powered development tools.',
+  description: 'Get started with Recoder, the terminal IDE for AI coding agents — guides for running agents in parallel, converging the best result into one merge, and the wider platform.',
   openGraph: {
     title: 'Learn - Recoder.xyz',
-    description: 'Get started with Recoder. Documentation, guides, and resources for AI-powered development.',
+    description: 'Get started with Recoder, the terminal IDE for AI coding agents — guides for running agents in parallel and converging the best result.',
     url: 'https://recoder.xyz/learn',
     siteName: 'Recoder.xyz',
     images: [{ url: 'https://recoder.xyz/og-image.png', width: 1200, height: 630, alt: 'Recoder Learning Resources' }],
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Learn - Recoder.xyz',
-    description: 'Get started with Recoder. Documentation, guides, and resources for AI-powered development.',
+    description: 'Get started with Recoder, the terminal IDE for AI coding agents — guides for running agents in parallel and converging the best result.',
     images: ['https://recoder.xyz/og-image.png'],
   },
   alternates: {
