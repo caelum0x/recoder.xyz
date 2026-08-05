@@ -19,11 +19,11 @@ import {
 } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'About Recoder - AI-Powered Development Platform | Recoder.xyz',
-  description: 'Recoder.xyz is an AI-powered development platform that helps developers build production-ready applications using multiple AI models. Currently in beta.',
+  title: 'About Recoder - The Terminal IDE for AI Agents | Recoder.xyz',
+  description: 'Recoder is the terminal IDE for AI coding agents — run agents in parallel isolated worktrees and converge the best result into one trusted merge, alongside a wider platform for agent workflows and product planning. Currently in beta.',
   openGraph: {
-    title: 'About Recoder - AI-Powered Development Platform | Recoder.xyz',
-    description: 'Recoder.xyz is an AI-powered development platform. Build with multiple AI models, deploy anywhere. Currently in beta.',
+    title: 'About Recoder - The Terminal IDE for AI Agents | Recoder.xyz',
+    description: 'Recoder is the terminal IDE for AI coding agents: run agents in parallel, converge the best into one trusted merge. Currently in beta.',
     url: 'https://recoder.xyz/about',
     siteName: 'Recoder.xyz',
     images: [
@@ -31,15 +31,15 @@ export const metadata: Metadata = {
         url: 'https://recoder.xyz/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'About Recoder - AI-Powered Development Platform',
+        alt: 'About Recoder - The Terminal IDE for AI Agents',
       },
     ],
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'About Recoder - AI-Powered Development Platform',
-    description: 'Recoder.xyz is an AI-powered development platform. Build with multiple AI models, deploy anywhere.',
+    title: 'About Recoder - The Terminal IDE for AI Agents',
+    description: 'Recoder is the terminal IDE for AI coding agents: run agents in parallel, converge the best into one trusted merge.',
     images: ['https://recoder.xyz/og-image.png'],
   },
   alternates: {
@@ -124,17 +124,18 @@ export default function AboutPage() {
             About Recoder.xyz
           </div>
           <h1 className="text-4xl md:text-5xl font-bold mb-6">
-            AI-Powered Development <br />
+            The terminal IDE <br />
             <span className="text-white">
-              Platform
+              for AI agents
             </span>
           </h1>
           <p className="text-xl text-zinc-400 mb-8 max-w-3xl mx-auto">
-            Recoder is a unified platform for AI-powered development. Build applications, design workflows,
-            and manage products — all with your own AI keys, on your own terms.
+            Recoder is the terminal IDE for AI coding agents — give one task to several agents, watch them
+            diverge in isolated worktrees, then converge the best into one trusted merge. Around it, a wider
+            platform keeps agent workflows and product planning aligned from idea to release.
           </p>
           <p className="text-sm text-zinc-500 mb-12">
-            Currently in beta — free to use with your own API keys.
+            Currently in beta — free to use.
           </p>
         </div>
       </section>
