@@ -4,7 +4,7 @@ import { Nav, Footer, DownloadButton, SecondaryButton } from "@/components/site"
 export const metadata: Metadata = {
   title: "Features — Recoder",
   description:
-    "Run your own coding agents in parallel isolated git worktrees, then converge their work into one trusted merge. Isolation when they work, coordination when you review — with review, merge-readiness, and governance built in.",
+    "Run your coding agents in parallel isolated git worktrees, then converge their work into one trusted merge. Isolation when they work, convergence when they finish — with review, merge-readiness, and governance built in.",
 };
 
 interface Feature {
@@ -82,9 +82,9 @@ export default function Features() {
               N divergent agents. One trusted merge.
             </h1>
             <p className="text-balance mx-auto mt-4 max-w-xl text-muted">
-              Isolation while they work, coordination when you review. Recoder
-              runs your own coding agents in parallel and converges their work
-              into a merge you can actually trust — on your machine.
+              Isolation while they work, convergence when they finish. Recoder
+              runs your coding agents in parallel and converges their work into
+              a merge you can actually trust — on your machine.
             </p>
             <div className="mt-8 flex items-center justify-center gap-4">
               <DownloadButton />
