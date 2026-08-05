@@ -425,9 +425,9 @@ const FEATURES: Feature[] = [
     foot: "git worktrees · per-agent branches",
   },
   {
-    title: "Review and merge in one place",
-    body: "Each workspace shows a change summary, the full diffs, and a terminal. Approve, merge, or open a pull request without leaving the console.",
-    foot: "diffs · terminal · PR / merge",
+    title: "Compare, then converge",
+    body: "When the agents finish, Recoder shows where they agree and where they diverge, then converges the best into one change — pick a winner or synthesize a merge from the parts that agree. Review the diffs and merge without leaving the terminal.",
+    foot: "compare · converge · one change",
   },
   {
     title: "One shared brain",
@@ -435,14 +435,14 @@ const FEATURES: Feature[] = [
     foot: "repo intel · memory · history",
   },
   {
-    title: "BYOK economics",
-    body: "Bring your own agents and your own provider keys. You pay Recoder for orchestration, seats, and control — never for tokens. We don't proxy models.",
-    foot: "bring your own keys · no token resale",
+    title: "No token markup",
+    body: "Recoder orchestrates the agents and provider keys you already pay for. You pay for the terminal and coordination, never for inference — we don't proxy or resell models.",
+    foot: "no token resale",
   },
   {
     title: "Restart-survivable workspaces",
-    body: "Recoder keeps a state-of-record on top of tmux and git worktrees, so workspaces survive a restart and reconcile back to a known-good state.",
-    foot: "tmux · worktrees · state-of-record",
+    body: "Your workspaces reconcile back to a known-good state after a restart, so a long parallel run is never lost to a crash or a reboot.",
+    foot: "durable workspaces",
   },
   {
     title: "Built to govern",
@@ -459,11 +459,12 @@ function Features() {
       <div className="mx-auto max-w-6xl px-6 py-20 md:py-28">
         <div className="max-w-2xl">
           <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-4xl">
-            Isolation when they work. Coordination when you review.
+            Isolation when they work. Convergence when they finish.
           </h2>
           <p className="mt-4 text-muted">
-            Worktrees keep agents apart so they don&apos;t collide. The console
-            brings their work back together so you can ship it.
+            Worktrees keep agents apart so they don&apos;t collide. The terminal
+            brings their work back together so you can converge it into one
+            change and ship it.
           </p>
         </div>
         <div className="mt-12 grid gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-2 lg:grid-cols-3">
@@ -501,13 +502,13 @@ function KeysNote() {
     <section className="border-y border-border">
       <div className="mx-auto max-w-3xl px-6 py-16 text-center">
         <h2 className="text-balance text-2xl font-semibold tracking-tight md:text-3xl">
-          Your agents. Your keys. Your code stays local.
+          Local-first. Your code never leaves your machine.
         </h2>
         <p className="text-balance mx-auto mt-4 max-w-xl text-muted">
           Recoder is a desktop app that drives the coding agents and git repos
           already on your machine. We don&apos;t proxy models or resell tokens —
-          we&apos;re the console that lets you run them in parallel and merge the
-          results.
+          it&apos;s the terminal that lets you run them in parallel and converge
+          the results.
         </p>
       </div>
     </section>
@@ -629,30 +630,30 @@ function FinalCta() {
   return (
     <section className="mx-auto max-w-6xl px-6 py-24 text-center">
       <h2 className="text-balance mx-auto max-w-2xl text-3xl font-semibold tracking-tight md:text-5xl">
-        Run your coding agents in parallel.
+        Run every agent on one task. Merge the best result.
       </h2>
       <p className="text-balance mx-auto mt-4 max-w-xl text-muted">
-        Run them in parallel, watch them work, review the diffs, and merge — all
-        from one desktop console.
+        Give one task to several agents, watch them diverge in isolated
+        worktrees, then converge the best into one merge — all from one
+        terminal.
       </p>
       <div className="mt-8 flex flex-wrap items-center justify-center gap-5">
         <DownloadButton className="px-6 py-3 text-[15px]" />
+        <Link
+          href="/how-it-works"
+          className="text-sm text-muted transition-colors hover:text-fg"
+        >
+          How it works →
+        </Link>
         <Link
           href="/pricing"
           className="text-sm text-muted transition-colors hover:text-fg"
         >
           See pricing →
         </Link>
-        <Link
-          href="/self-host"
-          className="text-sm text-muted transition-colors hover:text-fg"
-        >
-          Self-host →
-        </Link>
       </div>
       <p className="mt-4 text-xs text-faint">
-        Desktop app · macOS (Apple Silicon) · Windows &amp; Linux planned · your
-        agents, your keys.
+        Desktop app · macOS (Apple Silicon) · Windows &amp; Linux planned.
       </p>
     </section>
   );

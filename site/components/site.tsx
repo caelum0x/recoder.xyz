@@ -79,12 +79,14 @@ export function Wordmark() {
   );
 }
 
+// Self-host is a footnote, not the pitch (positioning: terminal IDE for AI
+// agents). It stays reachable from the footer for the teams that need it, but
+// it does not lead the primary nav.
 const NAV_LINKS = [
   { href: "/features", label: "Features" },
   { href: "/how-it-works", label: "How it works" },
   { href: "/docs", label: "Docs" },
   { href: "/enterprise", label: "Enterprise" },
-  { href: "/self-host", label: "Self-host" },
   { href: "/pricing", label: "Pricing" },
   { href: "/changelog", label: "Changelog" },
 ];
@@ -124,7 +126,8 @@ export function Footer() {
         <div>
           <Wordmark />
           <p className="mt-3 max-w-xs text-sm text-muted">
-            The desktop console for coding agents. Run your own, in parallel.
+            The terminal IDE for AI agents. Give one task to several, then merge
+            the best result.
           </p>
         </div>
         <FooterCol
@@ -152,7 +155,7 @@ export function Footer() {
       <div className="border-t border-border">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5 text-xs text-muted">
           <span>© {new Date().getFullYear()} Recoder</span>
-          <span>Your agents. Your keys. Coordinated.</span>
+          <span>The terminal IDE for AI agents.</span>
         </div>
       </div>
     </footer>
