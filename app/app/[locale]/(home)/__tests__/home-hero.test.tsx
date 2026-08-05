@@ -4,11 +4,11 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // C7 contract: the home hero (page.tsx H1/¶1) and the layout metadata must both
-// describe the REAL product per the locked thesis (docs/PRODUCT-THESIS.md
-// §0/§12) — the self-hosted convergence workspace for coding agents: run
-// Claude Code, Codex, and any agent in parallel isolated git worktrees (BYOK),
-// compare divergent diffs, and land ONE trusted, evidence-backed merge.
-// Parallel fan-out is the setup; the trusted merge is the payoff.
+// describe the REAL product per the positioning directive — the terminal IDE
+// for AI coding agents: give one task to Claude Code, Codex, and Cursor at once,
+// watch them diverge in isolated git worktrees, then converge the best into ONE
+// trusted, evidence-backed merge. The category leads; self-host/BYOK are
+// footnotes, not the pitch. Parallel fan-out is the setup; the merge is the payoff.
 //
 // NOTE ON RENDER: a full @testing-library / react-dom render is intentionally
 // NOT used here. The repo is mid-migration to react@19 while
@@ -27,7 +27,7 @@ const pageSource = readFileSync(path.join(here, '..', 'page.tsx'), 'utf8');
 // assertions target the real on-page elements, not incidental prose elsewhere.
 const heroH1 = pageSource.match(/<h1[\s\S]*?<\/h1>/)?.[0] ?? '';
 const heroLead =
-  pageSource.match(/Recoder is the self-hosted convergence workspace[\s\S]*?<\/p>/)?.[0] ?? '';
+  pageSource.match(/Recoder is the terminal IDE[\s\S]*?<\/p>/)?.[0] ?? '';
 
 describe('HomePage hero copy (source lock)', () => {
   it('module loads and exports a default component', async () => {
@@ -44,13 +44,14 @@ describe('HomePage hero copy (source lock)', () => {
     expect(pageSource).not.toContain('Five products, one control plane');
   });
 
-  it('first paragraph honestly describes agents / worktrees / BYOK / compare / evidence-backed merge', () => {
+  it('first paragraph honestly describes agents / worktrees / diverge / converge / evidence-backed merge', () => {
     expect(heroLead).not.toBe('');
     expect(heroLead).toContain('Claude Code');
     expect(heroLead).toContain('Codex');
+    expect(heroLead).toContain('Cursor');
     expect(heroLead).toMatch(/isolated git worktree/i);
-    expect(heroLead).toContain('BYOK');
-    expect(heroLead).toMatch(/divergent diffs/i);
+    expect(heroLead).toMatch(/diverge/i);
+    expect(heroLead).toMatch(/converge/i);
     expect(heroLead).toMatch(/evidence record/i);
   });
 
@@ -66,22 +67,22 @@ describe('HomeLayout metadata (agrees with the hero + bid keywords)', () => {
     const title = String(metadata.title);
     const description = String(metadata.description);
 
-    expect(title).toContain('Claude Code');
-    expect(title).toContain('Codex');
-    expect(title).toContain('Parallel');
-    expect(title).toContain('One Trusted Merge');
+    expect(title).toContain('Terminal IDE');
+    expect(title).toContain('Many Agents');
+    expect(title).toContain('One Merge');
 
-    expect(description).toContain('convergence workspace for AI coding agents');
-    expect(description).toContain('BYOK');
+    expect(description).toContain('terminal IDE for AI coding agents');
+    expect(description.toLowerCase()).toContain('converge');
     expect(description.toLowerCase()).toContain('git worktree');
     expect(description.toLowerCase()).toContain('evidence-backed');
-    // No fabricated / stale claim the page no longer makes.
+    // No stale pre-pivot lead the page no longer makes, and no fabricated claim.
+    expect(description.toLowerCase()).not.toContain('self-hosted');
     expect(description.toLowerCase()).not.toContain('voice');
 
     const keywords = metadata.keywords as string[] | undefined;
     expect(keywords).toBeDefined();
+    expect(keywords).toContain('terminal IDE for AI agents');
     expect(keywords).toContain('Claude Code');
-    expect(keywords).toContain('bring your own API key');
     expect(keywords).toContain('merge parallel agent diffs');
   });
 });
