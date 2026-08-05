@@ -29,7 +29,39 @@ type DiffFileSection = {
     renamed: boolean;
 };
 
+// One row of the Review jump list: a glanceable summary of a file section — the
+// display path, its +/- counts, and whether it is the file the keyboard cursor is
+// currently on. `sectionIndex` is the index into the parsed sections so a click or a
+// j/k keypress can scroll-and-expand the right block.
+type DiffFileJumpItem = {
+    sectionIndex: number;
+    label: string;
+    adds: number;
+    dels: number;
+    current: boolean;
+};
+
 const GitHeaderPrefix = "diff --git ";
+
+// The display label for a section: its repo-relative path, or "(file)" for a section
+// with no resolvable path (kept lossless so the jump list never shows a gap).
+function fileSectionLabel(section: DiffFileSection): string {
+    return section.path != "" ? section.path : "(file)";
+}
+
+// Pure: fold parsed sections into the jump-list rows, marking the current cursor
+// row so the reviewer sees at a glance which file they are on. A `currentIndex` out
+// of range marks nothing current (the caller clamps, but this degrades safely
+// regardless), so the list is never left pointing at a file that isn't there.
+function deriveFileJumpList(sections: DiffFileSection[], currentIndex: number): DiffFileJumpItem[] {
+    return sections.map((section, i) => ({
+        sectionIndex: i,
+        label: fileSectionLabel(section),
+        adds: section.adds,
+        dels: section.dels,
+        current: i == currentIndex,
+    }));
+}
 
 // Best-effort NEW path from a "diff --git a/old b/new" header. Used only as a
 // fallback when the +++/--- headers are absent; paths with spaces are ambiguous
@@ -134,4 +166,13 @@ function computeDiffHunkAnchors(patch: string): Record<number, DiffHunkAnchor> {
     return anchors;
 }
 
-export { computeDiffHunkAnchors, parseDiffFileSections, parseGitHeaderPath, type DiffFileSection, type DiffHunkAnchor };
+export {
+    computeDiffHunkAnchors,
+    deriveFileJumpList,
+    fileSectionLabel,
+    parseDiffFileSections,
+    parseGitHeaderPath,
+    type DiffFileJumpItem,
+    type DiffFileSection,
+    type DiffHunkAnchor,
+};

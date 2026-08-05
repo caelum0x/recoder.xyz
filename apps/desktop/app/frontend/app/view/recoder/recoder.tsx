@@ -66,6 +66,7 @@ import { navigationCommands } from "./recoder-nav-commands";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
 import { prChipLabel, prChipTone, type RecoderPrChip } from "./recoder-pr-status";
 import { RecoderShortcutsOverlay } from "./recoder-shortcuts";
+import { deriveShortcutAction, type RecoderShortcutAction } from "./recoder-shortcuts-logic";
 import { usageCostTitle } from "./recoder-metering";
 import { RecoderErrorRow, RecoderSkeleton } from "./recoder-states";
 import {
@@ -573,59 +574,104 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         return () => clearInterval(id);
     }, [model]);
 
-    // Capture-phase so it beats Wave's window keyhandler; ⌘P, ⌘K, and ⌘/ are not
-    // bound in keymodel.ts globalKeyMap, so there is no conflict to arbitrate.
-    // preventDefault also suppresses the OS print dialog on ⌘P.
+    // The board's keyboard grammar lives at the document level (capture-phase so it
+    // beats Wave's window keyhandler; ⌘P/⌘K/⌘/ are not in keymodel.ts globalKeyMap,
+    // so there is nothing to arbitrate). One handler routes every key through the
+    // pure derivation, so the board is fully keyboard-drivable even before a row is
+    // focused. navStateRef carries the latest board state so the once-registered
+    // listener never reads a stale selection; it is refreshed every render below.
+    const navStateRef = useRef({
+        orderedIds: [] as string[],
+        selectedId: "",
+        selectedState: "",
+        convergeReady: false,
+        convergeGroup: null as { taskGroup: string | null; workspaces: RecoderWorkspace[] } | null,
+    });
+    const filterInputRef = useRef<HTMLInputElement>(null);
     useEffect(() => {
-        const handler = (e: KeyboardEvent) => {
-            if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) {
+        const runBoardAction = (action: RecoderShortcutAction) => {
+            const nav = navStateRef.current;
+            if (action.type == "select-next" || action.type == "select-prev") {
+                const idx = nav.orderedIds.indexOf(nav.selectedId);
+                const next =
+                    action.type == "select-next"
+                        ? nav.orderedIds[Math.min(idx + 1, nav.orderedIds.length - 1)]
+                        : nav.orderedIds[Math.max(idx - 1, 0)];
+                setSelectedId(next ?? "");
                 return;
             }
-            const key = e.key.toLowerCase();
-            if (key == "p" || key == "k") {
+            if (action.type == "new-task") {
+                setLaunchOpen(true);
+                return;
+            }
+            if (action.type == "focus-filter") {
+                filterInputRef.current?.focus();
+                return;
+            }
+            // Enter opens the selected card: its review when the run is terminal
+            // (history), otherwise its live session.
+            if (action.type == "open") {
+                if (isTerminalWorkspaceState(nav.selectedState)) {
+                    openReview(nav.selectedId);
+                } else {
+                    openSession(nav.selectedId);
+                }
+                return;
+            }
+            if (action.type == "review") {
+                openReview(nav.selectedId);
+                return;
+            }
+            if (action.type == "session") {
+                openSession(nav.selectedId);
+                return;
+            }
+            if (action.type == "converge" && nav.convergeGroup?.taskGroup != null) {
+                model.toggleCompare(nav.convergeGroup.taskGroup, nav.convergeGroup.workspaces);
+            }
+        };
+        const handler = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement;
+            const tag = target?.tagName;
+            const typing = tag == "INPUT" || tag == "TEXTAREA" || tag == "SELECT" || target?.isContentEditable;
+            const action = deriveShortcutAction(e, {
+                typing,
+                hasRows: navStateRef.current.orderedIds.length > 0,
+                hasSelection: navStateRef.current.selectedId != "",
+                convergeReady: navStateRef.current.convergeReady,
+            });
+            if (action == null) {
+                return;
+            }
+            // Palette + shortcuts are global toggles — reachable even from a focused
+            // control or with another surface open (their own Escape closes them).
+            if (action.type == "command-palette") {
                 e.preventDefault();
                 e.stopPropagation();
                 setPaletteOpen((v) => !v);
                 return;
             }
-            if (key == "/") {
+            if (action.type == "show-shortcuts") {
                 e.preventDefault();
                 e.stopPropagation();
                 setShortcutsOpen((v) => !v);
-            }
-        };
-        document.addEventListener("keydown", handler, true);
-        return () => document.removeEventListener("keydown", handler, true);
-    }, [setPaletteOpen, setShortcutsOpen]);
-
-    // Own the global "new agent" chord at the document level (same capture-phase
-    // rationale as ⌘P above) so it fires on a fresh launch when the empty board has
-    // no focused descendant — the local onBoardKeyDown never sees keys until a row
-    // is focused, which made the advertised "N" onboarding hint dead on first run.
-    useEffect(() => {
-        const handler = (e: KeyboardEvent) => {
-            if (e.key != "n" && e.key != "N") {
                 return;
             }
-            if (e.metaKey || e.ctrlKey || e.altKey) {
+            // Let a focused inner control (Merge/Archive/…) take Enter/Space itself.
+            if (tag == "BUTTON") {
                 return;
             }
-            const t = e.target as HTMLElement;
-            const tag = t?.tagName;
-            if (tag == "INPUT" || tag == "TEXTAREA" || tag == "SELECT" || t?.isContentEditable) {
-                return;
-            }
-            // Gate on open panels so N typed into the launch panel/palette does nothing
-            // global; their own Escape/typing still work.
-            if (launchOpen || paletteOpen || shortcutsOpen || cloneOpen) {
+            // Board keys stand down while another surface owns the screen.
+            if (launchOpen || paletteOpen || shortcutsOpen || cloneOpen || compareOpen != "") {
                 return;
             }
             e.preventDefault();
-            setLaunchOpen(true);
+            e.stopPropagation();
+            runBoardAction(action);
         };
         document.addEventListener("keydown", handler, true);
         return () => document.removeEventListener("keydown", handler, true);
-    }, [launchOpen, paletteOpen, shortcutsOpen, cloneOpen, setLaunchOpen]);
+    }, [launchOpen, paletteOpen, shortcutsOpen, cloneOpen, compareOpen, model, setLaunchOpen, setPaletteOpen, setSelectedId, setShortcutsOpen]);
 
     // A SINGLE interactive launch drops the user straight into the session. Guard
     // on the workspace id so a re-render / poll can never reopen it, and never
@@ -767,46 +813,26 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
         }
     }, [orderedIds.join(",")]);
 
-    const onBoardKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-        const target = e.target as HTMLElement;
-        const tag = target?.tagName;
-        // Skip when focus is on a field OR an inner row control: a bubbled Enter on a
-        // row button (Merge, Archive, ...) must activate that button, not also openSession.
-        if (tag == "INPUT" || tag == "TEXTAREA" || tag == "SELECT" || tag == "BUTTON" || target?.isContentEditable) {
-            return;
-        }
-        if (e.key == "Escape") {
-            if (launchOpen) {
-                setLaunchOpen(false);
-                e.preventDefault();
-            }
-            return;
-        }
-        if (orderedIds.length == 0) {
-            return;
-        }
-        if (e.key == "j" || e.key == "ArrowDown") {
-            const idx = orderedIds.indexOf(selectedId);
-            setSelectedId(orderedIds[Math.min(idx + 1, orderedIds.length - 1)]);
-            e.preventDefault();
-            return;
-        }
-        if (e.key == "k" || e.key == "ArrowUp") {
-            const idx = orderedIds.indexOf(selectedId);
-            setSelectedId(orderedIds[Math.max(idx - 1, 0)]);
-            e.preventDefault();
-            return;
-        }
-        if (e.key == "Enter" && selectedId != "") {
-            const selectedWs = boardRows.find((w) => w.workspaceId == selectedId);
-            if (selectedWs != null && isTerminalWorkspaceState(selectedWs.state)) {
-                openReview(selectedId);
-            } else {
-                openSession(selectedId);
-            }
-            e.preventDefault();
-            return;
-        }
+    // Refresh the keyboard grammar's view of the board every render so the document
+    // listener always acts on the live selection. convergeReady gates the `c`
+    // shortcut: true only when the SELECTED card sits in a parallel group whose
+    // siblings have settled with real divergence to reconcile — the same
+    // convergePrimary the header's "Compare & Converge" primary reads.
+    const selectedWs = boardRows.find((w) => w.workspaceId == selectedId);
+    const convergeGroup = groups.find((g) => g.workspaces.some((w) => w.workspaceId == selectedId)) ?? null;
+    const selectedCluster =
+        convergeGroup != null && convergeGroup.workspaces.length >= 2
+            ? deriveClusterState(
+                  convergeGroup.workspaces,
+                  convergeGroup.taskGroup != null ? compare[convergeGroup.taskGroup] : undefined
+              )
+            : null;
+    navStateRef.current = {
+        orderedIds,
+        selectedId,
+        selectedState: selectedWs?.state ?? "",
+        convergeReady: selectedCluster?.convergePrimary == true,
+        convergeGroup,
     };
 
     // First launch: the embedded backend on :3100 may not be up yet, so refresh()
@@ -1000,7 +1026,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     ]);
 
     return (
-        <div className="flex flex-col h-full overflow-auto p-3 gap-2" onKeyDown={onBoardKeyDown}>
+        <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
                 <span
                     className="flex h-[18px] items-center [&>svg]:h-full [&>svg]:w-auto opacity-90"
@@ -1463,6 +1489,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
             {allWorkspaces.length > 0 && (
                 <div className="flex items-center gap-2">
                     <input
+                        ref={filterInputRef}
                         className={`${INPUT} min-w-0 flex-1`}
                         placeholder="Filter by task, branch, or agent..."
                         value={boardFilter}
@@ -1546,7 +1573,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     <span className="font-mono">N</span> new · <span className="font-mono">⌘P</span>/
                     <span className="font-mono">⌘K</span> commands · <span className="font-mono">j</span>/
                     <span className="font-mono">k</span> select · <span className="font-mono">↵</span> open ·{" "}
-                    <span className="font-mono">⌘/</span> shortcuts
+                    <span className="font-mono">?</span> shortcuts
                 </div>
             )}
             {allWorkspaces.length > 0 && boardRows.length == 0 && !loading && (
