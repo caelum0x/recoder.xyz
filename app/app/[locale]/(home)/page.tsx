@@ -223,7 +223,7 @@ export default function HomePage() {
     setTimeout(() => setter(false), 2000);
   };
 
-  const SPECS = ['Any agent CLI', 'Isolated git worktrees', 'BYOK — your keys', 'Self-hosted'];
+  const SPECS = ['One task, many agents', 'Isolated git worktrees', 'Compare & converge', 'Local-first'];
 
   return (
     <div className="min-h-screen bg-black text-white antialiased">
@@ -256,7 +256,7 @@ export default function HomePage() {
             {/* Copy column */}
             <div className="rec-rise text-center lg:text-left">
               <div className="mb-6 flex justify-center lg:justify-start">
-                <Eyebrow>The convergence workspace for coding agents</Eyebrow>
+                <Eyebrow>The terminal IDE for AI agents</Eyebrow>
               </div>
 
               <h1 className="text-balance text-4xl font-bold leading-[1.05] tracking-tight text-white sm:text-5xl md:text-6xl xl:text-7xl">
@@ -266,10 +266,9 @@ export default function HomePage() {
               </h1>
 
               <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-gray-400 lg:mx-0">
-                Recoder is the self-hosted convergence workspace for AI coding
-                agents. Run Claude Code, Codex, and any agent in parallel
-                isolated git worktrees with your own API keys (BYOK), compare
-                their divergent diffs side by side, then merge the best one —
+                Recoder is the terminal IDE for AI coding agents. Give one task
+                to Claude Code, Codex, and Cursor at once, watch them diverge in
+                isolated git worktrees, then converge the best into one merge —
                 with an evidence record of what ran and who approved.
               </p>
 
@@ -277,7 +276,7 @@ export default function HomePage() {
               <ul className="mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-3 font-mono text-xs text-gray-400 lg:justify-start">
                 {SPECS.map((v) => (
                   <li key={v} className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-orange-500/70" aria-hidden="true" />
                     {v}
                   </li>
                 ))}
