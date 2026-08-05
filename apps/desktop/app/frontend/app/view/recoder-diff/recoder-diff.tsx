@@ -15,11 +15,15 @@ import { useEffect, useRef, useState } from "react";
 import { computeDiffLineAnchors, type DiffLineAnchor } from "./recoder-diff-comments";
 import {
     computeDiffHunkAnchors,
+    deriveFileJumpList,
+    fileSectionLabel,
     parseDiffFileSections,
+    type DiffFileJumpItem,
     type DiffFileSection,
     type DiffHunkAnchor,
 } from "./recoder-diff-files";
 import { reviewDetailsDefaultOpen, reviewPrimaryAction } from "./recoder-diff-layout";
+import { nextFileIndex, PRIMARY_CHORD_HINT, reviewKeyAction } from "./recoder-diff-review-keys";
 import {
     isFailedConclusion,
     RecoderDiffViewModel,
@@ -189,26 +193,30 @@ function DiffLineRow({
     );
 }
 
-function fileLabel(section: DiffFileSection): string {
-    return section.path != "" ? section.path : "(file)";
-}
-
-// The jump list above the diff: one row per file (path · +adds/-dels) that
-// scrolls to — and expands — its section. Only shown for multi-file diffs.
-function DiffFileList({ sections, onJump }: { sections: DiffFileSection[]; onJump: (i: number) => void }) {
+// The jump list above the diff: one row per file (path · +adds/-dels) that scrolls
+// to — and expands — its section, with the keyboard cursor's current file clearly
+// marked (one accent, a left bar). j/k or the arrows move the cursor; a click jumps
+// too. Only shown for multi-file diffs.
+function DiffFileList({ items, onJump }: { items: DiffFileJumpItem[]; onJump: (i: number) => void }) {
     return (
         <div className="flex flex-col gap-0.5 rounded border border-border p-2 bg-panel">
-            <div className="text-xs uppercase tracking-wide text-secondary">{sections.length} files</div>
-            {sections.map((section, i) => (
+            <div className="text-xs uppercase tracking-wide text-secondary">{items.length} files · j / k to jump</div>
+            {items.map((item) => (
                 <button
-                    key={i}
-                    className="flex items-center gap-2 text-left text-xs font-mono text-secondary hover:text-primary transition-colors cursor-pointer"
-                    title={`Jump to ${fileLabel(section)}`}
-                    onClick={() => onJump(i)}
+                    key={item.sectionIndex}
+                    className={cn(
+                        "flex items-center gap-2 rounded px-1 text-left text-xs font-mono border-l-2 recoder-transition cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-white/50",
+                        item.current
+                            ? "border-accent bg-white/[0.06] text-primary"
+                            : "border-transparent text-secondary hover:text-primary"
+                    )}
+                    aria-current={item.current ? "true" : undefined}
+                    title={`Jump to ${item.label}`}
+                    onClick={() => onJump(item.sectionIndex)}
                 >
-                    <span className="flex-1 truncate">{fileLabel(section)}</span>
-                    <span className="text-primary/70 shrink-0">+{section.adds}</span>
-                    <span className="text-error/70 shrink-0">-{section.dels}</span>
+                    <span className="flex-1 truncate">{item.label}</span>
+                    <span className="text-primary/70 shrink-0">+{item.adds}</span>
+                    <span className="text-error/70 shrink-0">-{item.dels}</span>
                 </button>
             ))}
         </div>
@@ -281,7 +289,7 @@ function DiffFileHeader({
                     onClick={onToggle}
                 >
                     <span className="select-none w-3 text-center opacity-70">{collapsed ? "▸" : "▾"}</span>
-                    <span className="flex-1 truncate text-primary/80">{fileLabel(section)}</span>
+                    <span className="flex-1 truncate text-primary/80">{fileSectionLabel(section)}</span>
                     <span className="text-primary/70 shrink-0">+{section.adds}</span>
                     <span className="text-error/70 shrink-0">-{section.dels}</span>
                 </button>
@@ -361,7 +369,17 @@ function DiffHunkHeaderRow({
     );
 }
 
-function DiffBody({ patch, model }: { patch: string; model: RecoderDiffViewModel }) {
+function DiffBody({
+    patch,
+    model,
+    onPrimary,
+    primaryAvailable,
+}: {
+    patch: string;
+    model: RecoderDiffViewModel;
+    onPrimary: () => void;
+    primaryAvailable: boolean;
+}) {
     const lines = patch.split("\n");
     const anchors = computeDiffLineAnchors(patch);
     const sections = parseDiffFileSections(patch);
@@ -370,6 +388,9 @@ function DiffBody({ patch, model }: { patch: string; model: RecoderDiffViewModel
     // Which rendered line has its comment composer open (-1 = none). Local UI
     // state: the enqueued comments themselves live on the model.
     const [activeLine, setActiveLine] = useState(-1);
+    // The keyboard file-jump cursor: which section j/k/arrows land on. Clamped to
+    // the section count so a shrunk diff never leaves it pointing past the end.
+    const [currentFile, setCurrentFile] = useState(0);
     // Which discard confirm is armed (-1 = none): a section index for a file
     // discard, a global line index for a hunk discard. Arming one disarms the
     // other — exactly one destructive confirm can be open. Pure UI state; the
@@ -404,14 +425,55 @@ function DiffBody({ patch, model }: { patch: string; model: RecoderDiffViewModel
     };
 
     const jumpTo = (i: number) => {
-        setCollapsedFor(i, false);
+        const clamped = nextFileIndex(i, sections.length, 0);
+        setCurrentFile(clamped);
+        setCollapsedFor(clamped, false);
         // Expand first, then scroll on the next frame so the section is mounted.
-        requestAnimationFrame(() => sectionRefs.current[i]?.scrollIntoView({ block: "start" }));
+        requestAnimationFrame(() => sectionRefs.current[clamped]?.scrollIntoView({ block: "start" }));
     };
 
+    // The Review keyboard grammar: the primary action's mod+Enter chord and the
+    // j/k/arrow file-jump cursor, gated so a keystroke aimed at the comment composer
+    // is never stolen (reviewKeyAction's typing-guard). Every branch maps to a REAL
+    // action — a blocked primary yields no key effect (primaryAvailable false).
+    const onDiffKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        const target = e.target as HTMLElement;
+        const tag = target?.tagName;
+        const typing =
+            tag == "INPUT" || tag == "TEXTAREA" || tag == "SELECT" || target?.isContentEditable == true;
+        const intent = reviewKeyAction(
+            {
+                key: e.key,
+                metaKey: e.metaKey,
+                ctrlKey: e.ctrlKey,
+                altKey: e.altKey,
+                shiftKey: e.shiftKey,
+                typing,
+            },
+            primaryAvailable
+        );
+        if (intent == null) {
+            return;
+        }
+        e.preventDefault();
+        if (intent == "primary") {
+            onPrimary();
+            return;
+        }
+        jumpTo(nextFileIndex(currentFile, sections.length, intent == "file-next" ? 1 : -1));
+    };
+
+    const jumpItems = deriveFileJumpList(sections, currentFile);
+
     return (
-        <div className="flex flex-col gap-2 min-h-0 overflow-hidden">
-            {sections.length > 1 && <DiffFileList sections={sections} onJump={jumpTo} />}
+        <div
+            className="flex flex-col gap-2 min-h-0 overflow-hidden focus:outline-none focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-white/40 recoder-transition"
+            tabIndex={0}
+            role="group"
+            aria-label="Review diff — j / k to jump files, ⌘⏎ for the primary action"
+            onKeyDown={onDiffKeyDown}
+        >
+            {sections.length > 1 && <DiffFileList items={jumpItems} onJump={jumpTo} />}
             <div className="text-xs leading-5 font-mono overflow-auto rounded border border-border p-2 bg-panel">
                 {sections.map((section, si) => {
                     const isCollapsed = collapsed[si] ?? false;
@@ -745,12 +807,18 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     const showMergeSecondary = primary != "merge";
     const showCreatePrSecondary = primary != "create-pr" && prChip == null;
 
-    const mergeBtn = (className: string) => (
+    // The chord hint that rides the ONE loud action's label so the accelerator is
+    // discoverable in place (never shown on the quiet secondary copies). Monochrome
+    // and muted so it reads as a hint, not a second action.
+    const chordHint = <span className="ml-1.5 font-mono opacity-60">{PRIMARY_CHORD_HINT}</span>;
+
+    const mergeBtn = (className: string, chord = false) => (
         <button className={className} disabled={merging} onClick={() => model.mergeSelected()}>
             {merging ? "Merging…" : "Merge"}
+            {chord && !merging && chordHint}
         </button>
     );
-    const createPrBtn = (className: string) => (
+    const createPrBtn = (className: string, chord = false) => (
         <button
             className={className}
             disabled={prCreating || !prGate.canCreate}
@@ -758,8 +826,25 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
             onClick={() => model.createPr()}
         >
             {prCreating ? "Creating PR…" : "Create PR"}
+            {chord && !prCreating && chordHint}
         </button>
     );
+
+    // The keyboard-fired primary: dispatch the SAME state-chosen action the loud
+    // button runs, and only report it available when that button would actually be
+    // enabled — so the ⌘⏎ chord is truthful (no effect while merging, or when Create
+    // PR is gated). A blocked state ("none") is never available: no loud key action.
+    const primaryAvailable =
+        (primary == "merge" && !merging) || (primary == "create-pr" && !prCreating && prGate.canCreate);
+    const runPrimary = () => {
+        if (primary == "merge") {
+            model.mergeSelected();
+            return;
+        }
+        if (primary == "create-pr") {
+            model.createPr();
+        }
+    };
 
     // The SHARED detail frame (identity + switcher + Session·Review·Terminal
     // segments) so Review reads as one face of the same workspace-detail Session
@@ -795,8 +880,8 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     const hasHeaderPrimary = primary == "merge" || primary == "create-pr" || (selectedId != "" && prChip != null);
     const headerPrimary = (
         <div className="flex items-center gap-2">
-            {primary == "merge" && mergeBtn(PRIMARY_BTN)}
-            {primary == "create-pr" && createPrBtn(PRIMARY_BTN)}
+            {primary == "merge" && mergeBtn(PRIMARY_BTN, true)}
+            {primary == "create-pr" && createPrBtn(PRIMARY_BTN, true)}
             {selectedId != "" && prChip != null && <ReviewPrChip chip={prChip} />}
         </div>
     );
@@ -896,7 +981,14 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                     {!diffLoading && !hasPatch && (
                         <div className="text-secondary text-sm">{diffStatus != "" ? diffStatus : "No diff — the worktree matches its base."}</div>
                     )}
-                    {!diffLoading && hasPatch && <DiffBody patch={diff.patch} model={model} />}
+                    {!diffLoading && hasPatch && (
+                        <DiffBody
+                            patch={diff.patch}
+                            model={model}
+                            onPrimary={runPrimary}
+                            primaryAvailable={primaryAvailable}
+                        />
+                    )}
                     {!diffLoading && hasPatch && <ReviewCommentQueue model={model} />}
                     {!diffLoading && diff != null && diff.untracked.length > 0 && (
                         <div className="flex flex-col gap-0.5">

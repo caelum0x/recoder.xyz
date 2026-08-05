@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from "vitest";
-import { parseDiffFileSections, parseGitHeaderPath } from "./recoder-diff-files";
+import { deriveFileJumpList, parseDiffFileSections, parseGitHeaderPath } from "./recoder-diff-files";
 
 describe("parseGitHeaderPath", () => {
     it("reads the new (b/) path from a diff --git header", () => {
@@ -149,5 +149,40 @@ describe("parseDiffFileSections", () => {
         expect(parseDiffFileSections("")).toEqual([
             { path: "", adds: 0, dels: 0, startIndex: 0, endIndex: 1, renamed: false },
         ]);
+    });
+});
+
+describe("deriveFileJumpList", () => {
+    const twoFilePatch = [
+        "diff --git a/one.ts b/one.ts",
+        "--- a/one.ts",
+        "+++ b/one.ts",
+        "@@ -1 +1,2 @@",
+        " keep",
+        "+first",
+        "diff --git a/two.ts b/two.ts",
+        "--- a/two.ts",
+        "+++ b/two.ts",
+        "@@ -1,2 +1 @@",
+        "-drop",
+        " stay",
+    ].join("\n");
+
+    it("folds sections into jump rows with path + counts, marking the current file", () => {
+        const items = deriveFileJumpList(parseDiffFileSections(twoFilePatch), 1);
+        expect(items).toHaveLength(2);
+        expect(items[0]).toEqual({ sectionIndex: 0, label: "one.ts", adds: 1, dels: 0, current: false });
+        expect(items[1]).toEqual({ sectionIndex: 1, label: "two.ts", adds: 0, dels: 1, current: true });
+    });
+
+    it("marks exactly one file current for an in-range cursor", () => {
+        const items = deriveFileJumpList(parseDiffFileSections(twoFilePatch), 0);
+        expect(items.filter((i) => i.current).map((i) => i.sectionIndex)).toEqual([0]);
+    });
+
+    it("labels a pathless section '(file)' and marks nothing current for an out-of-range cursor", () => {
+        const items = deriveFileJumpList(parseDiffFileSections(""), 5);
+        expect(items[0].label).toBe("(file)");
+        expect(items.every((i) => !i.current)).toBe(true);
     });
 });
