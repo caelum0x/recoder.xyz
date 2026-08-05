@@ -13,6 +13,7 @@ import {
     composeConvergence,
     composeStatusFallback,
     deriveCompareColumns,
+    deriveCompareSummary,
     fetchConvergePlan,
     headerPairSlot,
     parseConvergePlan,
@@ -42,6 +43,33 @@ function mockFetchOnce(bodyObj: unknown, status = 200): void {
         new Response(JSON.stringify(bodyObj), { status, headers: { "Content-Type": "application/json" } })
     );
 }
+
+describe("deriveCompareSummary — the at-a-glance cluster read", () => {
+    it("names the agent count and contested-file count when agents diverge", () => {
+        expect(deriveCompareSummary(3, [{ path: "a.ts" }, { path: "b.ts" }])).toBe(
+            "3 agents · 2 files contested — converge below"
+        );
+    });
+
+    it("singularizes a single contested file", () => {
+        expect(deriveCompareSummary(2, [{ path: "a.ts" }])).toBe("2 agents · 1 file contested — converge below");
+    });
+
+    it("says there is nothing to converge when no file overlaps", () => {
+        expect(deriveCompareSummary(2, [])).toBe("2 agents · no file overlap — review and merge any one");
+    });
+
+    it("returns no header for a solo run (nothing to compare)", () => {
+        expect(deriveCompareSummary(1, [])).toBe("");
+        expect(deriveCompareSummary(0, [])).toBe("");
+    });
+
+    it("degrades a non-array contested set to zero rather than throwing", () => {
+        expect(deriveCompareSummary(2, undefined as unknown as { path: string }[])).toBe(
+            "2 agents · no file overlap — review and merge any one"
+        );
+    });
+});
 
 describe("toggleSelection — immutable per-path winner pick", () => {
     it("sets a winner without mutating the input", () => {
