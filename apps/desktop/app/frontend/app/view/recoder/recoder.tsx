@@ -3,6 +3,7 @@
 
 import RecoderCubeLogo from "@/app/asset/logo.svg";
 import { createBlock, getApi } from "@/app/store/global";
+import { cn } from "@/util/util";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { agentAuthOptionSuffix, agentAuthPresentation } from "./recoder-agent-auth";
@@ -48,6 +49,7 @@ import {
     deriveAdHocConverge,
     deriveCardSummary,
     deriveClusterState,
+    deriveClusterNudge,
     formatRelativeAge,
     isTerminalWorkspaceState,
     RecoderViewModel,
@@ -77,6 +79,7 @@ import {
     PICK_BTN_ON,
     PRIMARY_BTN,
     QUIET_BTN,
+    QUIET_BTN_XS,
     ROW_TITLE,
     SECTION_TITLE,
     STATE_CHIP,
@@ -558,6 +561,10 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     // A dimmed first-run chip's "install" affordance opens the existing agent
     // setup panel even when some agents are already detected.
     const [agentSetupOpen, setAgentSetupOpen] = useState(false);
+    // taskGroups whose calm converge nudge the user dismissed this session. The
+    // Compare & Converge action stays reachable from the header afterward — dismiss
+    // only stands the banner down, it never hides the payoff.
+    const [dismissedNudges, setDismissedNudges] = useState<Set<string>>(() => new Set());
 
     useEffect(() => {
         model.refresh();
@@ -1578,11 +1585,19 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             // The cluster's convergence phase — the board's entry
                             // point into compare/converge. Non-null here (2+ siblings).
                             const cluster = deriveClusterState(group.workspaces, compareView);
-                            // Converge is the cluster's PRIMARY next step only when the
-                            // fan-out has finished with real divergence to reconcile —
-                            // and only while the panel (which carries its own accent) is
-                            // closed, so a cluster never shows two accents at once.
-                            const convergeReady = cluster?.convergePrimary && !isCompareOpen;
+                            // The calm, dismissible converge invitation — the payoff
+                            // nudge a walked-away user cannot miss. Hidden while the
+                            // panel is open (it carries its own accent) or once the user
+                            // dismisses it for this group.
+                            const nudge = deriveClusterNudge(
+                                cluster,
+                                isCompareOpen || dismissedNudges.has(taskGroup)
+                            );
+                            const nudgeConverge = nudge.show && nudge.kind == "converge";
+                            // The cluster's SINGLE accent lives in the nudge banner while
+                            // it's showing; otherwise the header button carries it when
+                            // converge is the primary next step. Never two accents at once.
+                            const convergeReady = cluster?.convergePrimary && !isCompareOpen && !nudgeConverge;
                             // Open-only (never a toggle): the per-card affordance
                             // must always land on the open panel.
                             const onConverge = showConvergeAffordance(taskGroup, group.workspaces.length)
@@ -1648,6 +1663,47 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                                             </button>
                                         )}
                                     </div>
+                                    {/* The converge payoff: a calm, plain-language
+                                        invitation once the fan-out finishes. One accent
+                                        (crimson left-rail + the primary CTA) for the
+                                        diverged "converge them" case; a plain rail for the
+                                        "agents agree — review and merge" case (never a fake
+                                        converge prompt). Dismissible without hiding the
+                                        Compare action in the header above. */}
+                                    {nudge.show && (
+                                        <div
+                                            className={cn(
+                                                "flex items-center gap-2 rounded border-l-2 px-2 py-1",
+                                                nudge.kind == "converge"
+                                                    ? "border-accent/60 bg-accent/[0.06]"
+                                                    : "border-white/15 bg-white/[0.03]"
+                                            )}
+                                        >
+                                            <span className="text-sm text-primary">{nudge.headline}</span>
+                                            <div className="flex-1" />
+                                            {nudge.cta != "" && (
+                                                <button
+                                                    className={PRIMARY_BTN}
+                                                    onClick={() =>
+                                                        model.toggleCompare(taskGroup, group.workspaces)
+                                                    }
+                                                    title="Compare all agents side-by-side and converge on one branch"
+                                                >
+                                                    {nudge.cta}
+                                                </button>
+                                            )}
+                                            <button
+                                                className={QUIET_BTN_XS}
+                                                onClick={() =>
+                                                    setDismissedNudges((s) => new Set(s).add(taskGroup))
+                                                }
+                                                title="Dismiss — you can still Compare from the header"
+                                                aria-label="Dismiss converge nudge"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    )}
                                     {group.workspaces.map((ws) => renderBoardRow(ws, onConverge))}
                                 </div>
                             );

@@ -1,7 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/store/global", async () => {
     const { createStore } = await import("jotai");
@@ -105,6 +105,55 @@ describe("saveProviderKey", () => {
         expect(globalStore.get(model.providerKeyErrorAtom)).toContain("OPENROUTER_API_KEY");
         expect(globalStore.get(model.providerKeyErrorAtom)).toContain("store locked");
         expect(globalStore.get(model.providerKeyDraftsAtom).OPENROUTER_API_KEY).toBe("sk-or-x");
+    });
+});
+
+describe("refreshAgents", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    function jsonResponse(status: number, body: unknown) {
+        return Promise.resolve({ ok: status >= 200 && status < 300, status, json: async () => body });
+    }
+
+    it("loads only the detected coding agents, humanized, and marks the section loaded", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockImplementation((url: string) => {
+                expect(String(url)).toContain("/api/conductor/runtimes");
+                return jsonResponse(200, {
+                    success: true,
+                    data: {
+                        runtimes: [
+                            { runtimeId: "claude_code", available: true },
+                            { runtimeId: "codex", available: false },
+                            { runtimeId: "openfang", available: true },
+                        ],
+                    },
+                });
+            })
+        );
+        const model = makeModel();
+        await model.refreshAgents();
+        expect(globalStore.get(model.detectedAgentsAtom)).toEqual([{ runtimeId: "claude_code", label: "Claude Code" }]);
+        expect(globalStore.get(model.agentsLoadedAtom)).toBe(true);
+    });
+
+    it("omits the section truthfully (empty + loaded) when the backend is unreachable", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
+        const model = makeModel();
+        await model.refreshAgents();
+        expect(globalStore.get(model.detectedAgentsAtom)).toEqual([]);
+        expect(globalStore.get(model.agentsLoadedAtom)).toBe(true);
+    });
+
+    it("stays empty (never fakes an agent) on a non-2xx runtimes response", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockImplementation(() => jsonResponse(503, {})));
+        const model = makeModel();
+        await model.refreshAgents();
+        expect(globalStore.get(model.detectedAgentsAtom)).toEqual([]);
+        expect(globalStore.get(model.agentsLoadedAtom)).toBe(true);
     });
 });
 
