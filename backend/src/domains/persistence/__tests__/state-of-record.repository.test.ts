@@ -108,12 +108,30 @@ describe('StateOfRecordRepository.appendEvent — atomic, monotonic versioning',
     // Exactly one transaction wrapped everything.
     expect(ex.maxTxDepthDuringAppend).toBe(1);
     const kinds = ex.calls.map((c) => c.kind);
-    expect(kinds).toEqual(['mutate', 'one', 'mutate']);
-    expect(ex.calls[0].sql).toContain('state_events');
-    expect(ex.calls[1].sql).toContain('max(version)');
-    expect(ex.calls[2].sql).toContain('state_snapshots');
+    // The per-aggregate advisory lock is taken first, then event insert, version
+    // read, snapshot insert — all inside the one transaction. (recoder-x5gx)
+    expect(kinds).toEqual(['one', 'mutate', 'one', 'mutate']);
+    expect(ex.calls[0].sql).toContain('pg_advisory_xact_lock');
+    expect(ex.calls[1].sql).toContain('state_events');
+    expect(ex.calls[2].sql).toContain('max(version)');
+    expect(ex.calls[3].sql).toContain('state_snapshots');
     // The snapshot is written at the newly computed version.
-    expect(ex.calls[2].params.version).toBe(1);
+    expect(ex.calls[3].params.version).toBe(1);
+  });
+
+  it('takes the per-aggregate advisory lock BEFORE reading max(version) (recoder-x5gx)', async () => {
+    const ex = new FakeExecutor();
+    ex.setOne({ version: 2 });
+    const repo = new StateOfRecordRepository(ex);
+    await repo.appendEvent({
+      aggregate: 'run', aggregateId: 'r1', eventType: 'x', payload: {}, userId: 'u1', snapshot: {},
+    });
+    const lockIdx = ex.calls.findIndex((c) => /pg_advisory_xact_lock/i.test(c.sql));
+    const versionIdx = ex.calls.findIndex((c) => /max\(version\)/i.test(c.sql));
+    expect(lockIdx).toBeGreaterThanOrEqual(0);
+    expect(lockIdx).toBeLessThan(versionIdx); // serialize the read+insert
+    // The lock key is derived from the specific aggregate + id (per-aggregate, not global).
+    expect(ex.calls[lockIdx].params.lock_key).toBe('run:r1');
   });
 
   it('serializes event payload and snapshot as JSON strings and defaults actor to null', async () => {
@@ -128,8 +146,8 @@ describe('StateOfRecordRepository.appendEvent — atomic, monotonic versioning',
       userId: 'owner-1',
       snapshot: { count: 5 },
     });
-    const eventInsert = ex.calls[0];
-    const snapshotInsert = ex.calls[2];
+    const eventInsert = ex.calls[1]; // calls[0] is the advisory lock (recoder-x5gx)
+    const snapshotInsert = ex.calls[3];
     expect(eventInsert.params.payload).toBe(JSON.stringify({ hello: 'world' }));
     expect(eventInsert.params.actor_id).toBeNull();
     expect(snapshotInsert.params.payload).toBe(JSON.stringify({ count: 5 }));
@@ -149,9 +167,9 @@ describe('StateOfRecordRepository.appendEvent — atomic, monotonic versioning',
       userId: 'u1',
       snapshot: null,
     });
-    expect(ex.calls[0].params.actor_id).toBe('agent-7');
+    expect(ex.calls[1].params.actor_id).toBe('agent-7'); // calls[0] is the advisory lock
     // A null payload is still serialized truthfully, not dropped.
-    expect(ex.calls[0].params.payload).toBe(JSON.stringify(null));
+    expect(ex.calls[1].params.payload).toBe(JSON.stringify(null));
   });
 
   it('propagates a failure from within the transaction (no version returned on partial write)', async () => {

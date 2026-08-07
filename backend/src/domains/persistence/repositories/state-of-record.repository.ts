@@ -32,6 +32,18 @@ export class StateOfRecordRepository {
    */
   async appendEvent(input: AppendEventInput): Promise<number> {
     return this.executor.withTransaction(async (tx) => {
+      // Serialize concurrent appends to the SAME aggregate (recoder-x5gx). The
+      // version is allocated as `max(version)+1`, a read-then-write that races
+      // under concurrency: two transactions read the same max, both insert that
+      // version, and the unique (aggregate, aggregate_id, version) aborts the
+      // loser — losing its event/snapshot. A transaction-scoped advisory lock
+      // keyed on the aggregate makes the read+insert atomic; different
+      // aggregates never contend, and the lock auto-releases at commit/rollback.
+      await tx.one(
+        `select pg_advisory_xact_lock(hashtextextended(:lock_key, 0)) as locked`,
+        { lock_key: `${input.aggregate}:${input.aggregateId}` },
+      );
+
       await tx.mutate(
         `insert into core.state_events (aggregate, aggregate_id, event_type, actor_id, payload)
          values (:aggregate, :aggregate_id, :event_type, :actor_id, :payload::jsonb)`,
