@@ -309,6 +309,43 @@ describe('POST /approvals/:id/decide — decider authorization (fix 1)', () => {
   });
 });
 
+describe('GET /approvals/:id — single-read owner scoping (fix 3)', () => {
+  const seed = () => ({ approvals: [appr('appr_a', 'user_a')], locks: [] });
+
+  it('tenant B is denied reading A\'s approval (404 no-oracle, no cross-tenant read)', async () => {
+    const h = await serve(seed(), { soloMode: false });
+    h.setPrincipal(B());
+    const res = await request(h.base, 'GET', '/api/agent-os/approvals/appr_a');
+    expect(res.status).toBe(404);
+    await h.close();
+  });
+
+  it('owner A may read their own approval', async () => {
+    const h = await serve(seed(), { soloMode: false });
+    h.setPrincipal(A());
+    const res = await request(h.base, 'GET', '/api/agent-os/approvals/appr_a');
+    expect(res.status).toBe(200);
+    expect(res.json.data.approval.id).toBe('appr_a');
+    await h.close();
+  });
+
+  it('admin may read any approval', async () => {
+    const h = await serve(seed(), { soloMode: false });
+    h.setPrincipal(ADMIN);
+    const res = await request(h.base, 'GET', '/api/agent-os/approvals/appr_a');
+    expect(res.status).toBe(200);
+    await h.close();
+  });
+
+  it('a genuinely absent approval is the SAME 404 (no existence oracle)', async () => {
+    const h = await serve(seed(), { soloMode: false });
+    h.setPrincipal(B());
+    const res = await request(h.base, 'GET', '/api/agent-os/approvals/nope');
+    expect(res.status).toBe(404);
+    await h.close();
+  });
+});
+
 describe('GET /approvals — list scoping (fix 2)', () => {
   const seed = () => ({
     approvals: [appr('appr_a', 'user_a'), appr('appr_b', 'user_b')],

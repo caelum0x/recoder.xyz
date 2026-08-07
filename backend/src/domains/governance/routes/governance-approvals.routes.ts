@@ -104,13 +104,15 @@ export function buildGovernanceApprovalsRouter(deps: GovernanceApprovalsRouterDe
     }),
   );
 
-  // Fetch a single approval's status.
+  // Fetch a single approval's status. Owner-scoped like decide: only the owner
+  // (requestedBy), a privileged operator, or solo mode may read it. A foreign (or
+  // absent) id is a byte-identical 404 — no cross-tenant existence/status oracle.
   router.get(
     '/approvals/:id',
     middleware.authenticate,
     asyncHandler(async (req, res) => {
       const record = await approvals.get(req.params.id);
-      if (!record) {
+      if (!record || !canDecideApproval(req.principal!, record, access)) {
         sendError(res, createError(ErrorCode.NOT_FOUND, 'approval not found'));
         return;
       }
