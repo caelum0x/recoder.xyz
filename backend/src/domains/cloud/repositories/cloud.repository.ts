@@ -11,6 +11,7 @@
  */
 import type { QueryExecutor } from '../../persistence/ports/query-executor.port.js';
 import type { QueryRow } from '../../persistence/types.js';
+import { createError, ErrorCode } from '../../../shared/errors.js';
 import type {
   CloudRepositories,
   DeploymentInsert,
@@ -513,12 +514,17 @@ function createDomainRepository(qx: QueryExecutor): DomainRepository {
     isAvailable: () => qx.isAvailable(),
     async insert(input: DomainInsert): Promise<DomainRecord> {
       const rows = await qx.execute<QueryRow>(
+        // The DO UPDATE is guarded so a conflicting hostname owned by ANOTHER
+        // tenant NO-OPS (the WHERE fails) instead of overwriting that tenant's
+        // config — closes the cross-tenant hijack/DoS race (recoder-4780). A
+        // no-op yields an empty RETURNING, handled below.
         `INSERT INTO cloud_domains (id, tenant_id, hostname, verification_status, dns_records, tls_status)
          VALUES (:id, :tenantId, :hostname, :verificationStatus, :dnsRecords, :tlsStatus)
          ON CONFLICT (hostname) DO UPDATE SET
            verification_status = excluded.verification_status,
            dns_records = excluded.dns_records,
            tls_status = excluded.tls_status
+         WHERE cloud_domains.tenant_id = excluded.tenant_id
          RETURNING *`,
         {
           id: input.id,
@@ -529,12 +535,28 @@ function createDomainRepository(qx: QueryExecutor): DomainRepository {
           tlsStatus: input.tlsStatus,
         },
       );
-      return mapDomain(rows[0]!);
+      const row = rows[0];
+      // Empty RETURNING ⇒ the hostname is held by a different tenant and the
+      // guarded upsert declined to overwrite it. Surface a truthful conflict
+      // rather than crashing on `rows[0]!`.
+      if (!row) {
+        throw createError(ErrorCode.CONFLICT, 'That hostname is already claimed by another tenant.');
+      }
+      return mapDomain(row);
     },
     async getById(id: string, tenantId: string): Promise<DomainRecord | null> {
       const row = await qx.one<QueryRow>(
         `SELECT * FROM cloud_domains WHERE id = :id AND tenant_id = :tenantId`,
         { id, tenantId },
+      );
+      return row ? mapDomain(row) : null;
+    },
+    async getByHostname(hostname: string): Promise<DomainRecord | null> {
+      // Global (cross-tenant) lookup — hostname is unique; used by the service to
+      // reject a cross-tenant claim before the guarded upsert. (recoder-4780)
+      const row = await qx.one<QueryRow>(
+        `SELECT * FROM cloud_domains WHERE hostname = :hostname`,
+        { hostname },
       );
       return row ? mapDomain(row) : null;
     },

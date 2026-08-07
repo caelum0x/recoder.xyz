@@ -147,6 +147,12 @@ export interface DomainRepository {
   isAvailable(): boolean;
   insert(input: DomainInsert): Promise<DomainRecord>;
   getById(id: string, tenantId: string): Promise<DomainRecord | null>;
+  /**
+   * Look up a domain by hostname ACROSS tenants (hostname is globally unique).
+   * Used to reject a cross-tenant claim BEFORE the upsert would overwrite the
+   * owning tenant's config (recoder-4780). Returns null when unclaimed.
+   */
+  getByHostname(hostname: string): Promise<DomainRecord | null>;
   updateVerification(id: string, status: DomainVerificationStatus, tls: TlsStatus): Promise<void>;
   listByTenant(tenantId: string): Promise<readonly DomainRecord[]>;
   /** Delete a tenant-scoped domain; returns `true` when a row was removed. */
