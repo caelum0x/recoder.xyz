@@ -331,14 +331,39 @@ describe('agent-os tenant isolation — run transition (recoder-yb5r)', () => {
     await h.close();
   });
 
-  it('owner A may transition their own run', async () => {
+  it('owner A may transition their own run (a NON-approval move)', async () => {
     const h = await buildHarness();
     await seedOwnedSpace(h, TOKEN_A, 'space-A', 'user-A');
     seedRun(h);
 
-    const res = await post(h, asUser(TOKEN_A), '/runs/run-A/transition', { to: 'approved' });
+    // A legal non-approval exit from waiting_for_approval — owner keeps control
+    // of their own run's lifecycle; only self-APPROVAL is blocked (below).
+    const res = await post(h, asUser(TOKEN_A), '/runs/run-A/transition', { to: 'cancelled' });
     expect(res.status).toBe(200);
-    expect(h.repo.listRuns().find((r) => r.runId === 'run-A')?.state).toBe('approved');
+    expect(h.repo.listRuns().find((r) => r.runId === 'run-A')?.state).toBe('cancelled');
+    await h.close();
+  });
+
+  it('owner A CANNOT self-approve their run via the raw edge — governance flow only (recoder-magq)', async () => {
+    const h = await buildHarness();
+    await seedOwnedSpace(h, TOKEN_A, 'space-A', 'user-A');
+    seedRun(h); // seeded in waiting_for_approval
+
+    // Even the OWNER cannot mint `approved` here — that would forge an approval
+    // with no record. The raw transition edge carries no governance gate, so it
+    // refuses the approval outcome (403); the run stays waiting_for_approval.
+    const res = await post(h, asUser(TOKEN_A), '/runs/run-A/transition', { to: 'approved' });
+    expect(res.status).toBe(403);
+    expect(h.repo.listRuns().find((r) => r.runId === 'run-A')?.state).toBe('waiting_for_approval');
+    await h.close();
+  });
+
+  it('an operator ALSO cannot self-approve via the raw edge (no gate here either)', async () => {
+    const h = await buildHarness();
+    await seedOwnedSpace(h, TOKEN_A, 'space-A', 'user-A');
+    seedRun(h);
+    const res = await post(h, asAdminKey, '/runs/run-A/transition', { to: 'approved' });
+    expect(res.status).toBe(403);
     await h.close();
   });
 });
