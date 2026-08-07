@@ -179,16 +179,43 @@ describe('governance_request_approval', () => {
 });
 
 describe('governance_approval_decide', () => {
-  it('happy: grants a pending approval behind an allow gate', async () => {
+  it('happy: the OWNER grants their own pending approval behind an allow gate', async () => {
     const h = buildHarness(ALLOW);
     const created = await h.approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
     const out = (await h.tool('governance_approval_decide').handler(
       { approvalId: created.id, decision: 'approved' },
-      callerFor('admin-user'),
+      callerFor('u1'),
     )) as { ok: boolean; approval: { status: string; decidedBy: string } };
     expect(out.ok).toBe(true);
     expect(out.approval.status).toBe('approved');
-    expect(out.approval.decidedBy).toBe('admin-user');
+    expect(out.approval.decidedBy).toBe('u1');
+  });
+
+  it('OWNERSHIP: a non-owner, non-privileged caller CANNOT decide another tenant’s approval (no-oracle)', async () => {
+    const h = buildHarness(ALLOW);
+    const created = await h.approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    // u2 is authenticated + passes the self-gate but does not OWN u1's approval.
+    const out = (await h.tool('governance_approval_decide').handler(
+      { approvalId: created.id, decision: 'approved' },
+      callerFor('u2'),
+    )) as { ok: boolean; error?: string };
+    // Refused indistinguishably from an absent record (no cross-tenant oracle)…
+    expect(out.ok).toBe(false);
+    expect(out.error).toMatch(/no pending approval/i);
+    // …and the victim's approval is untouched — no forged clearance, no DoS-deny.
+    expect(h.approvals.rows.get(created.id)?.status).toBe('pending');
+    expect(h.approvals.rows.get(created.id)?.decidedBy).toBeNull();
+  });
+
+  it('a privileged (admin) operator MAY decide any tenant’s approval', async () => {
+    const h = buildHarness(ALLOW);
+    const created = await h.approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const out = (await h.tool('governance_approval_decide').handler(
+      { approvalId: created.id, decision: 'approved' },
+      callerFor('ops', ['admin']),
+    )) as { ok: boolean; approval?: { status: string } };
+    expect(out.ok).toBe(true);
+    expect(out.approval?.status).toBe('approved');
   });
 
   it('gated-deny: refuses and leaves the approval pending', async () => {

@@ -44,6 +44,8 @@ export interface GovernanceModuleDeps {
 /** The public surface every other domain consumes. */
 export interface GovernanceModule {
   readonly name: 'governance';
+  /** Solo/desktop single-user mode — owner scoping fails OPEN (see `RuntimeConfig.soloMode`). */
+  readonly soloMode: boolean;
   /** THE write seam: `decide → risk → audit` for every governed mutation. */
   gate(): GovernanceGate;
   /**

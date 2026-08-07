@@ -104,7 +104,7 @@ function resolveLockHolderScope(
 export function buildGovernanceMcpTools(module: GovernanceModule): readonly McpToolRegistration[] {
   return [
     ...buildGovernanceReadTools(module),
-    ...buildGovernanceWriteTools(module),
+    ...buildGovernanceWriteTools(module, { soloMode: module.soloMode }),
   ];
 }
 
