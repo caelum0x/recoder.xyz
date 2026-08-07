@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withCLIAuth } from '@/lib/middleware/cli-auth-middleware';
+import { withCLIAuth, getPlanFeatures } from '@/lib/middleware/cli-auth-middleware';
 import { prisma } from '@/lib/prisma';
 import { resolveApiKey, ApiKeyResolverError } from '@/lib/api-key-resolver';
 
@@ -46,7 +46,12 @@ export const POST = withCLIAuth(
       }
 
       if (quota && context.plan !== 'enterprise') {
-        const sessionsRemaining = quota.sessionsPerDay - quota.sessionsUsedToday;
+        // Enforce the CURRENT plan's daily cap, not the value frozen in the row at
+        // creation. A premium→free downgrade must be capped at the free tier: the
+        // dodo webhook updates users.plan without reconciling user_quota, so the
+        // stored sessionsPerDay can be stale and would otherwise leak the old cap.
+        const dailyCap = getPlanFeatures(context.plan).sessionsPerDay;
+        const sessionsRemaining = dailyCap - quota.sessionsUsedToday;
         if (sessionsRemaining <= 0) {
           return NextResponse.json(
             {
@@ -54,7 +59,7 @@ export const POST = withCLIAuth(
               message: 'Daily session limit reached',
               quota: {
                 used: quota.sessionsUsedToday,
-                limit: quota.sessionsPerDay,
+                limit: dailyCap,
               },
             },
             { status: 429 }

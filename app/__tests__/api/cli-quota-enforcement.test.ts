@@ -205,6 +205,23 @@ describe('POST /api/cli/proxy — tier gate ENFORCES the daily session cap', () 
     });
   });
 
+  it('DOWNGRADE: enforces the CURRENT plan cap, not the stale sessionsPerDay frozen in the row', async () => {
+    // User was premium (row sessionsPerDay=50) then downgraded to free. The dodo
+    // webhook updates users.plan without touching user_quota, so the row is stale.
+    // The gate must cap at the current free tier (6), not the frozen 50. (bug-hunt)
+    state.authContext.plan = 'free';
+    state.quota = quotaFixture({ sessionsPerDay: 50, sessionsUsedToday: 6 });
+
+    const { POST } = await getProxyRoute();
+    const response = await POST(proxyRequest());
+
+    expect(response.status).toBe(429);
+    const json = await response.json();
+    expect(json.error).toBe('Quota exceeded');
+    expect(json.quota).toEqual({ used: 6, limit: 6 }); // limit derived from current plan, not 50
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('ALLOWS an enterprise (unlimited) user even when over the numeric cap', async () => {
     state.authContext.plan = 'enterprise';
     state.quota = quotaFixture({ sessionsPerDay: 6, sessionsUsedToday: 999 });
