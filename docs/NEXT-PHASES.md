@@ -8,6 +8,16 @@ locked thesis ([PRODUCT-THESIS.md](./PRODUCT-THESIS.md) §12–13),
 [DESIGN-REFERENCE.md](./DESIGN-REFERENCE.md).
 Context: v0.16.1 signed+notarized+stapled macOS-arm64 DMG is publicly downloadable as of 2026-08-07 (dl.recoder.xyz/releases + /download now a real public download, not early access; existing installs auto-update via the feed). Human end-to-end boot verification still pending.
 
+> **📌 2026-08-07 status reconciliation → see [PLAN.md](./PLAN.md) for the current
+> now-plan.** The Part II technical roadmap below is essentially **built**: re-verified
+> against code, **17 of 18 phases are DONE** (Desktop A1–A6, Backend B1–B6, Website
+> C1–C5) and only **C6 (billing unification)** is OWNER-GATED. The remaining work is no
+> longer "build these phases" — it is **(a) deepen the moat** (line-level/AST merge
+> synthesis `recoder-8ti9`, diff-review depth `recoder-p8f3`, auth-package split
+> `recoder-sxmn`, DT-7 resilience) and **(b) owner go-live gates** (canonical trunk
+> `recoder-mhyt`, prod deploy `recoder-qtac`, billing `recoder-t24j`, prod-box P0
+> `recoder-5iqy`, CI `recoder-a7ut`). Phase-level DONE evidence is inline per section.
+
 ---
 
 # PART I — PRODUCT
