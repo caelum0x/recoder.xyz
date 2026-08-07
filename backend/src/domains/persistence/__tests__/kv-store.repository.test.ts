@@ -82,6 +82,9 @@ const failingAvailableExecutor = {
   one: async () => {
     throw new Error('transient read failure');
   },
+  read: async () => {
+    throw new Error('transient read failure');
+  },
 } as unknown as QueryExecutor;
 
 describe('KvStoreRepository (available pool — surfaces DB faults, never silent write-drop)', () => {
