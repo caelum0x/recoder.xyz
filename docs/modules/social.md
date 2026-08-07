@@ -133,15 +133,12 @@ the governed HTTP edges above, **not** on the agent-callable MCP surface.
 
 ## Desktop surface
 
-The desktop shell exposes a plain read-only **Connectors** view
-(`apps/desktop/app/frontend/app/view/recoder-connectors/`,
-`RecoderConnectorsViewModel`, viewType `recoder-connectors`, icon `plug`). It
-polls `GET /api/social` and rebuilds each channel from an **explicit field
-allowlist** (no spread of the raw object) so nothing token-shaped ever reaches the
-UI, deriving `connected/available` from the truthful per-channel `status`. A
-non-OK response resolves to `not-connected` and zero channels to `empty` —
-degrade-truthful, consistent with the terminal-plain frontend rule (no infra
-dashboard, just channel presence + a gateway `active/dispatchReady` indicator).
+The read-only **Connectors** view (`recoder-connectors`) was **retired** (DT-5,
+`ec1bdbe62`) — the desktop is terminal-plain and carries no infra/connector
+dashboard. The backend `GET /api/social` surface remains (truthful per-channel
+`status`, an **explicit field allowlist** so nothing token-shaped is ever exposed,
+`not-connected` on a non-OK response, `empty` for zero channels), but there is no
+desktop view/viewModel bound to it today.
 
 **Health (`live-health.ts` `buildLiveSocialHealth`).** Config posture plus live
 `ConnectorPort` probes: no enabled channels ⇒ an inert-but-truthful `up`; any
