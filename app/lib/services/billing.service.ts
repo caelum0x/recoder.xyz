@@ -393,6 +393,7 @@ export class BillingService {
 
       switch (eventType) {
         case 'subscription.created':
+        case 'payment.succeeded': // normalizers emit the dot form (types.ts) — must match
         case 'payment_succeeded':
           await this.handlePaymentSuccess(payload);
           break;
@@ -405,6 +406,7 @@ export class BillingService {
           await this.handleSubscriptionCancelled(payload);
           break;
 
+        case 'payment.failed': // normalizers emit the dot form — was never matched (dunning bypass)
         case 'payment_failed':
           await this.handlePaymentFailed(payload);
           break;
