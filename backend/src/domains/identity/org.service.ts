@@ -132,6 +132,21 @@ export class OrgServiceImpl implements OrgService {
 
     await this.gate('member:invite', params.invitedBy, { orgId: params.orgId, invitee: params.userId, role });
 
+    // Role ceiling: an inviter may not grant a role that OUTRANKS their own effective
+    // role in this org — an admin cannot mint an owner. 'member:invite' alone does not
+    // authorize privilege escalation. (recoder-q54e)
+    const ROLE_RANK: Record<Role, number> = { viewer: 0, member: 1, admin: 2, owner: 3 };
+    const inviterRole: Role =
+      org.ownerUserId === params.invitedBy
+        ? 'owner'
+        : (await this.stores.memberships.find(params.orgId, params.invitedBy))?.role ?? 'member';
+    if (ROLE_RANK[role] > ROLE_RANK[inviterRole]) {
+      throw new AppError(
+        ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+        `cannot invite with role "${role}" above your own role "${inviterRole}"`,
+      );
+    }
+
     const already = await this.stores.memberships.find(params.orgId, params.userId);
     if (already) throw new AppError(ErrorCode.INVALID_INPUT, 'user is already a member of this org');
 

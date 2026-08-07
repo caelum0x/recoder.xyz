@@ -152,6 +152,23 @@ describe('OrgServiceImpl — lifecycle', () => {
     await expect(svc.invite({ orgId: org.id, userId: 'u2', invitedBy: 'owner1' })).rejects.toThrow(/already a member/);
   });
 
+  it('an admin CANNOT invite someone as owner — role ceiling (recoder-q54e)', async () => {
+    const { svc } = build();
+    const org = await svc.createOrg({ name: 'Acme', slug: 'acme', ownerUserId: 'owner1' });
+    await svc.invite({ orgId: org.id, userId: 'adminU', invitedBy: 'owner1', role: 'admin' });
+    // adminU (role admin) tries to mint an OWNER — must be refused (can't grant above self).
+    await expect(
+      svc.invite({ orgId: org.id, userId: 'victim', invitedBy: 'adminU', role: 'owner' }),
+    ).rejects.toThrow(/above your own role|role ceiling|not grantable/i);
+  });
+
+  it('the org owner CAN invite an admin (grant at-or-below own role)', async () => {
+    const { svc } = build();
+    const org = await svc.createOrg({ name: 'Acme', slug: 'acme', ownerUserId: 'owner1' });
+    const m = await svc.invite({ orgId: org.id, userId: 'u2', invitedBy: 'owner1', role: 'admin' });
+    expect(m.role).toBe('admin');
+  });
+
   it('acceptInvite transitions invited → active for the invited user', async () => {
     const { svc } = build();
     const org = await svc.createOrg({ name: 'Acme', slug: 'acme', ownerUserId: 'owner1' });
