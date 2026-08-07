@@ -83,8 +83,12 @@ export function createMemoryRepository(deps: MemoryRepositoryDeps): MemoryReposi
 
   return {
     // — Items + candidates (agent-os-owned) —
-    async listItems(_userId: string): Promise<readonly MemoryItem[]> {
-      return await store.listMemoryItems();
+    async listItems(userId: string, authz?: MemoryReadAuthz): Promise<readonly MemoryItem[]> {
+      const all = await store.listMemoryItems();
+      // The agent-os store is GLOBAL (all tenants). Constrain to the caller's own
+      // accepted items unless a privileged/solo read lifts the filter — else recall
+      // enumerates other tenants' durable memory (IDOR). Mirrors listCandidates. (recoder-7lxx)
+      return seesAllTenants(authz) ? all : all.filter((i) => i.acceptedBy === userId);
     },
 
     async getItem(_userId: string, memoryId: string): Promise<MemoryItem | null> {
