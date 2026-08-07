@@ -6,6 +6,7 @@ import crypto from 'crypto';
 
 import { prisma } from './prisma';
 import { getPlanLimits, canStartSession, canUseModel, isPremiumModel } from './plan-config';
+import { effectivePlanForLimits } from './entitlements';
 
 export interface Session {
   id: string;
@@ -94,19 +95,19 @@ export async function startSession(
   // Get user plan
   const user = await prisma.users.findUnique({
     where: { id: userId },
-    select: { subscriptionPlan: true }
+    select: { subscriptionPlan: true, subscriptionStatus: true }
   });
-  
+
   if (!user) {
     return {
       success: false,
       error: 'User not found'
     };
   }
-  
-  // Check if user can start a new session
+
+  // Session caps use the plan in force — a cancelled/lapsed paid plan is free. (recoder-5ypw)
   const sessionsToday = await getSessionsToday(userId);
-  const sessionCheck = canStartSession(user.subscriptionPlan, sessionsToday);
+  const sessionCheck = canStartSession(effectivePlanForLimits(user), sessionsToday);
   
   if (!sessionCheck.allowed) {
     return {
@@ -178,24 +179,26 @@ export async function trackSessionUsage(
   // Get user plan
   const user = await prisma.users.findUnique({
     where: { id: userId },
-    select: { subscriptionPlan: true }
+    select: { subscriptionPlan: true, subscriptionStatus: true }
   });
-  
+
   if (!user) {
     return {
       success: false,
       error: 'User not found'
     };
   }
-  
-  const limits = getPlanLimits(user.subscriptionPlan);
+
+  // Model/token gates use the plan in force — a cancelled/lapsed paid plan is free. (recoder-5ypw)
+  const effectivePlan = effectivePlanForLimits(user);
+  const limits = getPlanLimits(effectivePlan);
   const isPremium = isPremiumModel(usage.model);
-  
+
   // Get premium tokens used today
   const premiumTokensToday = await getPremiumTokensToday(userId);
-  
+
   // Check if user can use this model
-  const modelCheck = canUseModel(user.subscriptionPlan, usage.model, premiumTokensToday);
+  const modelCheck = canUseModel(effectivePlan, usage.model, premiumTokensToday);
   
   if (!modelCheck.allowed) {
     return {

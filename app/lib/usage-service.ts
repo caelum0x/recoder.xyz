@@ -5,6 +5,7 @@
 
 import { prisma } from './prisma';
 import { getPlanLimits, FREE_MODELS } from './plan-config';
+import { effectivePlanForLimits } from './entitlements';
 import crypto from 'crypto';
 
 export interface ApiKeyInfo {
@@ -83,6 +84,7 @@ export async function getQuotaStatus(userId: string): Promise<QuotaStatus> {
     where: { id: userId },
     select: {
       subscriptionPlan: true,
+      subscriptionStatus: true,
       quota: true,
     },
   });
@@ -98,7 +100,9 @@ export async function getQuotaStatus(userId: string): Promise<QuotaStatus> {
     };
   }
 
-  const planLimits = getPlanLimits(user.subscriptionPlan);
+  // A paid plan grants its quota ONLY while active/trialing — a cancelled/lapsed
+  // subscription falls back to free so quotas can't outlive the payment. (recoder-5ypw)
+  const planLimits = getPlanLimits(effectivePlanForLimits(user));
 
   // Get or create current quota period
   let quota = user.quota;
@@ -129,7 +133,7 @@ export async function getQuotaStatus(userId: string): Promise<QuotaStatus> {
     used: quota.requestsUsed,
     resetDate: quota.periodEnd,
     reason: allowed ? undefined : 'Monthly quota exceeded',
-    upgradeRequired: !allowed && user.subscriptionPlan === 'free',
+    upgradeRequired: !allowed && effectivePlanForLimits(user) === 'free',
   };
 }
 
@@ -242,6 +246,7 @@ export async function getUsageSummary(userId: string): Promise<{
     where: { id: userId },
     select: {
       subscriptionPlan: true,
+      subscriptionStatus: true,
       hasOwnApiKey: true,
       quota: true,
     },
@@ -251,7 +256,8 @@ export async function getUsageSummary(userId: string): Promise<{
     throw new Error('User not found');
   }
 
-  const planLimits = getPlanLimits(user.subscriptionPlan);
+  // Report the limits actually in force: a cancelled/lapsed paid plan is free. (recoder-5ypw)
+  const planLimits = getPlanLimits(effectivePlanForLimits(user));
   const quota = user.quota;
 
   if (!quota) {
