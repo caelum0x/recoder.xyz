@@ -154,6 +154,18 @@ describe('ed25519 ingress gate', () => {
     expect(result).toMatchObject({ admitted: false, status: 401, code: 'signed_envelope_expired' });
   });
 
+  it('enforce: rejects a STALE envelope with no expires_at (bounds the replay window) (recoder-9yp6)', async () => {
+    const domain = domainEnvelope();
+    const { gate } = buildGate({ mode: 'enforce' });
+    // Validly signed 15 min ago, but carries NO expires_at — beyond the max
+    // acceptance age, so it can't be replayed once the TTL guard forgets its jti.
+    const result = await gate.admit(
+      ed25519Envelope(domain, signDomain(domain), { signedAt: '2026-01-02T02:50:00.000Z' }),
+      NOW,
+    );
+    expect(result).toMatchObject({ admitted: false, status: 401, code: 'signed_envelope_stale' });
+  });
+
   it('permissive: logs-and-allows a bad signature, truthfully marked unverified', async () => {
     const domain = domainEnvelope({ v: 1 });
     const forged = { ...domain, payload: { v: 2 } };
@@ -283,7 +295,9 @@ describe('rpc-admission chain through the ed25519 gate', () => {
   it('admits an ed25519-signed envelope wrapping a JSON-RPC call and dispatches ONLY the verified payload', async () => {
     const domain = domainEnvelope(rpc);
     const { gate } = buildGate({ mode: 'enforce' });
-    const outcome = await invokeGuard(gate, ed25519Envelope(domain, signDomain(domain)));
+    // invokeGuard clocks off real time; carry an explicit expires_at so the fixed
+    // fixture signed_at isn't treated as stale by the no-expiry age bound (recoder-9yp6).
+    const outcome = await invokeGuard(gate, ed25519Envelope(domain, signDomain(domain), { expiresAt: '2099-01-01T00:00:00.000Z' }));
     expect(outcome.status).toBe(200);
     expect(outcome.nextBody).toEqual(rpc);
   });
