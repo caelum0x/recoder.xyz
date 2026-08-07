@@ -101,6 +101,38 @@ describe('GovernanceGateService — decide → risk → audit', () => {
     expect(rows[0]?.payload.clearedByApprovalId).toBe(created.id);
   });
 
+  it('does NOT clear a needs_approval verdict with an EXPIRED approval — TTL enforced (recoder-nnqx)', async () => {
+    const approvals = new InMemoryApprovalRepository();
+    const created = await approvals.create({
+      action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1',
+      expiresAt: new Date(Date.now() - 60_000).toISOString(), // already past
+    });
+    await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
+
+    const { gate } = buildGate(NEEDS, { approvals });
+    const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));
+
+    // An approved-but-expired record must NOT clear — mirrors hasApproval's
+    // `(expires_at is null or expires_at > now())`. The list() clearance path
+    // previously ignored expiry, defeating the approval TTL.
+    expect(v.effect).toBe('needs_approval');
+    expect(v.approvalId).toBeUndefined();
+  });
+
+  it('still clears with an unexpired (future-dated) approval', async () => {
+    const approvals = new InMemoryApprovalRepository();
+    const created = await approvals.create({
+      action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1',
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(), // 1h out
+    });
+    await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
+
+    const { gate } = buildGate(NEEDS, { approvals });
+    const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));
+    expect(v.effect).toBe('allow');
+    expect(v.approvalId).toBe(created.id);
+  });
+
   it('does NOT clear with an approval requested by a DIFFERENT actor (no cross-actor reuse)', async () => {
     // recoder-xiqj: clearance must bind to the acting principal, not just
     // task+action. Actor u2's approved record must never clear u1's action —

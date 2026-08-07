@@ -365,9 +365,13 @@ export class GovernanceGateService implements GovernanceGate {
         status: 'approved',
         requestedBy: principal.userId,
       });
-      // Only a record for the SAME action + this requester clears; without its id
-      // there is no auditable evidence, so the verdict stays blocking.
-      return records.find((r) => r.action === action)?.id;
+      // Only a record for the SAME action + this requester that is NOT EXPIRED
+      // clears; without its id there is no auditable evidence, so the verdict
+      // stays blocking. Enforcing expiry here mirrors hasApproval's SQL
+      // `(expires_at is null or expires_at > now())` — list() does not filter it,
+      // so an approved-but-expired record would otherwise defeat the TTL. (recoder-nnqx)
+      const nowMs = Date.now();
+      return records.find((r) => r.action === action && !isApprovalExpired(r.expiresAt, nowMs))?.id;
     } catch (err) {
       this.log?.warn(
         { err, action, taskId: ctx.taskId, actor: principal.userId },
@@ -475,4 +479,15 @@ export class GovernanceGateService implements GovernanceGate {
 /** Project the decision context onto a single resource string for the audit row. */
 function resourceOf(ctx: GateDecisionContext): string {
   return ctx.target.path ?? ctx.target.command ?? ctx.target.toolName ?? ctx.target.environment ?? '(none)';
+}
+
+/**
+ * Whether an approval record is past its TTL (recoder-nnqx). A null/blank/
+ * unparseable `expiresAt` never expires (matches `expires_at is null` in the
+ * hasApproval SQL); a parseable timestamp at/before `nowMs` is expired.
+ */
+function isApprovalExpired(expiresAt: string | null | undefined, nowMs: number): boolean {
+  if (expiresAt == null || expiresAt === '') return false;
+  const t = Date.parse(expiresAt);
+  return Number.isFinite(t) && t <= nowMs;
 }
