@@ -130,7 +130,7 @@ prod-validation, CI/secret work, billing unification, and infra hardening**.
 | Gap | Detail | ID | State |
 |---|---|---|---|
 | Solo-mode fail-open | `RECODER_SOLO_MODE` intentionally fails open on cloud write-gates for the DB-less desktop; a boot guard now refuses it on a non-loopback / shared-DB host, so it can't be reached on a shared host. | P1 #19 | **✅ Guarded** (`51c7ee66d`). |
-| Desktop signing | Signing / notarization uncommitted; unsigned arch-limited dmg. | P1 #20 · P2 | **Open — owner-gated.** |
+| Desktop signing | v0.16.1 arm64 dmg is code-signed (Developer ID Application: Umut Arhan Suba, team 947G2G2JXJ), notarized (notarytool Accepted, submission 2f48d6ec), and stapled (dmg + .app). | P1 #20 · P2 | **✅ Done** — signed + notarized + published to dl.recoder.xyz (mac arm64 only; win/linux still staged). |
 
 ---
 
@@ -164,7 +164,7 @@ Ordered by the parity audit's **critical path**. Much is now done (✅); the res
       dunning-grace / overage / overage-CTA (#29/#30). *The one XL.*
 - [ ] **Remaining hardening** — indexed `tenant_id` column (#41), distributed rate-limit /
       Redis (#26), per-actor **A2A ed25519 enforcement** (#27), run-as-non-root images (#28).
-- [ ] **Sign + notarize the desktop build** (#20) before public distribution. *Owner-gated.*
+- [x] **Sign + notarize the desktop build** (#20) — done for macOS-arm64: v0.16.1 signed (Developer ID: Umut Arhan Suba), notarized (Accepted), stapled, and published to dl.recoder.xyz/releases. *(Windows/Linux signing still staged.)*
 - [ ] **Commission a full, independent pre-launch security audit** — the internal
       sweeps were scoped and are explicitly not exhaustive.
 

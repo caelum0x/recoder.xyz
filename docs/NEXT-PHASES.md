@@ -6,8 +6,7 @@ locked thesis ([PRODUCT-THESIS.md](./PRODUCT-THESIS.md) §12–13),
 [RECODER-ARCHITECTURE.md](./RECODER-ARCHITECTURE.md),
 [RECODER-PRODUCT-DESIGN.md](./RECODER-PRODUCT-DESIGN.md),
 [DESIGN-REFERENCE.md](./DESIGN-REFERENCE.md).
-Context: v0.14.5 signed+notarized macOS-arm64 DMG went publicly downloadable
-2026-08-04 (dl.recoder.xyz/releases + /download, Gatekeeper-verified end-to-end).
+Context: v0.16.1 signed+notarized+stapled macOS-arm64 DMG is publicly downloadable as of 2026-08-07 (dl.recoder.xyz/releases + /download now a real public download, not early access; existing installs auto-update via the feed). Human end-to-end boot verification still pending.
 
 ---
 
@@ -111,9 +110,9 @@ publication (known open item: secrets in git history — must resolve first).
 
 ## 5. Release train (product milestones; ships map to Part II phases)
 
-- **v0.15 — "the update loop lives" (days):** updater default-ON, truthful
-  in-app changelog, web claim purge. *Every download before v0.15 is a
-  permanently stranded install — speed matters more than scope.*
+- **v0.15 — "the update loop lives" (SHIPPED):** updater default-ON, truthful
+  in-app changelog, web claim purge — all landed; superseded by v0.16.1 which is
+  published and auto-updates existing installs via the live feed.
 - **v0.16 — "it remembers, it welcomes" (~2 weeks):** restart-survivable
   state (SQLite), foregrounded first-run (sign-in + detection + BYOK),
   converge discoverable on the board, cursor/opencode verified launchers.
@@ -130,8 +129,8 @@ publication (known open item: secrets in git history — must resolve first).
 
 ## A. DESKTOP (`apps/desktop`)
 
-### A1. Auto-updater default-ON  [S — hours]  (v0.15, bd recoder-fjod)
-The entire mechanism is intact and inert behind one gate:
+### A1. Auto-updater default-ON  [DONE]  (shipped, bd recoder-fjod CLOSED)
+The updater is live and default-ON. Existing installs auto-update against the dl.recoder.xyz/releases feed (latest-mac.yml=0.16.1). Historical implementation notes on the gate inversion below are retained for reference:
 - `emain/updater.ts:239-242` early-returns unless `RECODER_UPDATE_FEED` is set;
   nothing sets it in packaged builds. **Invert to opt-out**: early-return only
   when `RECODER_UPDATE_FEED === "off"|"0"` (keep `isDev()` guard :231-234).
@@ -402,8 +401,7 @@ gap).
 
 ## REPRIORITIZED 2026-08-04 (owner directive): unique product over everything
 
-Status: Phase 0 + Phase 1 SHIPPED (code landed 2026-08-04; v0.15.0 signed,
-notarization in flight). Owner verdict after seeing the live app: "are we just
+Status: v0.16.1 SHIPPED (signed, notarized [Accepted, submission 2f48d6ec], stapled, published to dl.recoder.xyz/releases; /download serves it publicly; bd recoder-ahxt CLOSED). Still pending: a human end-to-end boot of the installed dmg (sign in, create workspace, run agent, merge). Owner verdict after seeing the live app: "are we just
 a bundle on Wave?" — the next epoch must make the answer unambiguous. Three
 tracks jump the original queue (bd issues filed):
 
@@ -437,8 +435,9 @@ ops (windowed):  prod Next15→16 migration (bd kj5s) · win/linux (bd di8l)
 ```
 
 ## Phase gates (each release, verified not asserted)
-- **v0.15:** fresh public download updates itself to a staged v0.15.1 test
-  release; zero pre-pivot claims greppable on the live site.
+- **v0.15 (met):** updater live and default-ON; v0.16.1 published to the feed and
+  existing installs auto-update; /download shows the real public build with no
+  pre-pivot claims. (Human end-to-end dmg boot → converge → merge remains the v0.16 gate.)
 - **v0.16:** cold machine → sign in → detect → parallel launch → **kill the
   app → relaunch → everything still there** → converge → merge.
 - **v0.17:** 3-agent task where assisted converge beats hand-merging on
