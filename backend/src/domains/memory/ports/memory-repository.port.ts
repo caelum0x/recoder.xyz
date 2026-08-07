@@ -54,7 +54,7 @@ export interface RelationInput {
  */
 export interface MemoryRepository {
   // — Items + candidates (agent-os-owned tables, tenant-filtered here) —
-  listItems(userId: string): Promise<readonly MemoryItem[]>;
+  listItems(userId: string, authz?: MemoryReadAuthz): Promise<readonly MemoryItem[]>;
   getItem(userId: string, memoryId: string): Promise<MemoryItem | null>;
   upsertItem(userId: string, item: MemoryItem): Promise<MemoryItem>;
   listCandidates(userId: string, scope?: string, authz?: MemoryReadAuthz): Promise<readonly MemoryCandidate[]>;

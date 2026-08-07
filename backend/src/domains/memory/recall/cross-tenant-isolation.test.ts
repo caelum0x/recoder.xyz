@@ -8,7 +8,7 @@
  * for user B — the `WHERE proposedBy = userId` guard in the recall path holds.
  */
 import { describe, it, expect } from 'vitest';
-import type { MemoryCandidate } from '@recoder/agent-os';
+import type { MemoryCandidate, MemoryItem } from '@recoder/agent-os';
 import { createRecallService } from './recall-fusion.js';
 import { createMemoryRepository } from '../adapters/candidate-repository.adapter.js';
 import type { MemoryCandidateItemStore } from '../ports/memory-repository.port.js';
@@ -54,10 +54,24 @@ function candidate(id: string, proposedBy: string, body: string): MemoryCandidat
   };
 }
 
-/** A shared, GLOBAL agent-os store holding BOTH tenants' harvested lessons. */
-function sharedStore(candidates: MemoryCandidate[]): MemoryCandidateItemStore {
+/** A durable, accepted MemoryItem owned by `acceptedBy`. */
+function item(memoryId: string, acceptedBy: string, body: string): MemoryItem {
   return {
-    listMemoryItems() { return []; },
+    memoryId,
+    scope: 'repo',
+    title: memoryId,
+    body,
+    status: 'active',
+    evidence: { taskId: 't1', artifactId: 'a1' },
+    createdAt: '2026-07-01T00:00:00Z',
+    acceptedBy,
+  } as MemoryItem;
+}
+
+/** A shared, GLOBAL agent-os store holding BOTH tenants' harvested lessons. */
+function sharedStore(candidates: MemoryCandidate[], items: MemoryItem[] = []): MemoryCandidateItemStore {
+  return {
+    listMemoryItems() { return items; },
     upsertMemoryItem(m) { return m; },
     listMemoryCandidates() { return candidates; },
     upsertMemoryCandidate(c) { return c; },
@@ -94,5 +108,32 @@ describe('recall cross-tenant isolation', () => {
     const refs = forA.memories.map((m) => m.provenance.ref);
     expect(refs).toContain('userA-lesson');
     expect(refs).not.toContain('userB-lesson');
+  });
+});
+
+describe('recall cross-tenant isolation — durable ITEMS (recoder-7lxx)', () => {
+  const store = sharedStore(
+    [],
+    [
+      item('userA-item', 'userA', 'On repoX, always parameterize the auth query'),
+      item('userB-item', 'userB', 'On repoX, always parameterize the auth query'),
+    ]
+  );
+  const repository = createMemoryRepository({ query: noQuery, store });
+  const recall = createRecallService({
+    mem0: downMem0,
+    beads: downBeads,
+    repository,
+    reranker: identityReranker,
+    config,
+    logger: silentLogger,
+  });
+
+  it("never surfaces user A's durable memory item for user B", async () => {
+    const forB = await recall.recall({ query: 'parameterize auth query repoX', userId: 'userB' });
+    const refs = forB.memories.map((m) => m.provenance.ref);
+    expect(refs).toContain('userB-item');
+    expect(refs).not.toContain('userA-item'); // owner-scoped — no cross-tenant item leak
+    expect(forB.memories.every((m) => m.provenance.source !== 'items' || m.provenance.ref === 'userB-item')).toBe(true);
   });
 });
