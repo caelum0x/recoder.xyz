@@ -8,9 +8,13 @@
  *
  * The snapshot model is git-native and non-destructive:
  *  - CREATE captures the committed HEAD (`headSha`) and, when the worktree is
- *    dirty, a `git stash create` commit (`snapshotSha`) whose tree is the exact
- *    edited state — WITHOUT touching the working tree or the stash list — then
- *    tags `snapshotSha` as `recoder-checkpoint/<id>` (stable + listable).
+ *    dirty, a commit (`snapshotSha`) whose tree is the exact edited state —
+ *    including UNTRACKED files — built through a THROWAWAY temp index
+ *    (`GIT_INDEX_FILE=<tmp> git add -A` → `git write-tree` → `git commit-tree`)
+ *    so the user's real index, working tree, and stash list are never touched;
+ *    then tags `snapshotSha` as `recoder-checkpoint/<id>` (stable + listable).
+ *    (`git stash create` is deliberately NOT used: it silently drops untracked
+ *    work — recoder-itjb.)
  *  - RESTORE first takes an automatic safety snapshot of the CURRENT state (so a
  *    restore never silently loses work), resets the branch to `headSha`, then
  *    re-applies the captured edits (`git checkout <snapshotSha> -- .`) as working
@@ -22,6 +26,9 @@
  * worktree" the composer maps to a truthful failure; a git failure surfaces its
  * real message — nothing is faked.
  */
+import { rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { execFileSafe } from '@recoder/substrate';
 import type { CreateWorkspaceInput } from '@recoder/substrate';
 import type { Workspace } from '@recoder/agent-os';
@@ -36,6 +43,17 @@ import type {
 const CHECKPOINT_TAG_PREFIX = 'recoder-checkpoint';
 /** The prefix the automatic pre-restore safety snapshot tag is written under. */
 const PRE_RESTORE_TAG_PREFIX = 'recoder-checkpoint-pre-restore';
+/**
+ * Identity pinned onto the snapshot's `commit-tree` so capture succeeds even in a
+ * worktree with no configured git `user.name`/`user.email`. It never touches the
+ * user's config — it is passed only as env to the one `commit-tree` invocation.
+ */
+const CHECKPOINT_COMMIT_IDENTITY: Readonly<Record<string, string>> = {
+  GIT_AUTHOR_NAME: 'Recoder Checkpoint',
+  GIT_AUTHOR_EMAIL: 'checkpoint@recoder.local',
+  GIT_COMMITTER_NAME: 'Recoder Checkpoint',
+  GIT_COMMITTER_EMAIL: 'checkpoint@recoder.local',
+};
 
 /** The injected seams a checkpoint op runs over (no module singletons, no env). */
 export interface CheckpointOpsDeps {
@@ -101,10 +119,50 @@ export interface BranchResultView {
 
 function runGit(deps: CheckpointOpsDeps) {
   const exec = deps.exec ?? execFileSafe;
-  return async (cwd: string, args: string[]): Promise<string> => {
-    const { stdout } = await exec('git', ['-C', cwd, ...args], { maxBuffer: 16 * 1024 * 1024 });
+  // The optional `env` overlay is how capture points git at a THROWAWAY index
+  // (`GIT_INDEX_FILE`) and pins a commit identity — without ever mutating the
+  // user's real index, worktree, stash, or git config. It is an OVERLAY (extra
+  // vars only); `execFileSafe` merges it onto `process.env` per the ExecOptions
+  // contract.
+  return async (cwd: string, args: string[], env?: Record<string, string>): Promise<string> => {
+    const { stdout } = await exec('git', ['-C', cwd, ...args], {
+      maxBuffer: 16 * 1024 * 1024,
+      ...(env ? { env } : {}),
+    });
     return stdout.trim();
   };
+}
+
+/**
+ * Capture the worktree's CURRENT full state (tracked edits AND untracked files)
+ * as a real commit whose tree is that state, WITHOUT touching the user's real
+ * index/worktree/stash. Uses a throwaway `GIT_INDEX_FILE` outside the worktree:
+ * `git add -A` stages everything into it, `git write-tree` freezes the tree, and
+ * `git commit-tree` (parented on `headSha`) wraps it in a GC-safe, branch-able
+ * commit — the drop-in replacement for `git stash create`, which cannot include
+ * untracked work (recoder-itjb). Returns the snapshot commit sha.
+ */
+async function captureWorktreeSnapshot(
+  git: (cwd: string, args: string[], env?: Record<string, string>) => Promise<string>,
+  cwd: string,
+  headSha: string,
+  id: string,
+): Promise<string> {
+  // The temp index lives OUTSIDE the worktree so its `.lock` sibling is never
+  // itself swept up by `git add -A` into the snapshot tree.
+  const tmpIndex = join(tmpdir(), `recoder-checkpoint-${id}.index`);
+  const indexEnv = { GIT_INDEX_FILE: tmpIndex };
+  try {
+    await git(cwd, ['add', '-A'], indexEnv);
+    const treeSha = await git(cwd, ['write-tree'], indexEnv);
+    return await git(
+      cwd,
+      ['commit-tree', treeSha, '-p', headSha, '-m', 'recoder checkpoint'],
+      { ...indexEnv, ...CHECKPOINT_COMMIT_IDENTITY },
+    );
+  } finally {
+    await rm(tmpIndex, { force: true }).catch(() => {});
+  }
 }
 
 async function requireWorktree(
@@ -136,19 +194,15 @@ export async function createCheckpoint(
   const status = await git(cwd, ['status', '--porcelain']);
   const dirty = status.length > 0;
 
-  // A dirty worktree is captured by `git stash create`: it writes a commit object
-  // (parented on HEAD) whose tree is the edited state, WITHOUT modifying the
-  // worktree or pushing onto the stash list. It emits the sha, or nothing when
-  // there is only untracked content it cannot capture — then the HEAD is the
-  // truthful snapshot and `dirty` still records that edits were present.
+  // A dirty worktree is captured into a commit whose tree is the exact edited
+  // state — INCLUDING untracked files — via a throwaway temp index, WITHOUT
+  // modifying the real worktree, index, or stash list. (`git stash create` is
+  // not used: it silently drops untracked work — recoder-itjb.)
   let snapshotSha = headSha;
   let kind: CheckpointKind = 'commit';
   if (dirty) {
-    const stashSha = await git(cwd, ['stash', 'create', 'recoder checkpoint']);
-    if (stashSha) {
-      snapshotSha = stashSha;
-      kind = 'stash';
-    }
+    snapshotSha = await captureWorktreeSnapshot(git, cwd, headSha, checkpointId);
+    kind = 'tree';
   }
 
   const ref = `${CHECKPOINT_TAG_PREFIX}/${checkpointId}`;
@@ -244,8 +298,14 @@ export async function restoreCheckpoint(
     const currentStatus = await git(cwd, ['status', '--porcelain']);
     let safetySha = currentHead;
     if (currentStatus.length > 0) {
-      const stashSha = await git(cwd, ['stash', 'create', 'recoder pre-restore safety']);
-      if (stashSha) safetySha = stashSha;
+      // Same temp-index capture as CREATE, so the pre-restore safety snapshot
+      // also preserves UNTRACKED work (a stash-create snapshot would drop it).
+      safetySha = await captureWorktreeSnapshot(
+        git,
+        cwd,
+        currentHead,
+        (deps.newId ?? defaultId)(),
+      );
     }
     const tag = `${PRE_RESTORE_TAG_PREFIX}/${(deps.newId ?? defaultId)()}`;
     await git(cwd, ['tag', tag, safetySha]);
