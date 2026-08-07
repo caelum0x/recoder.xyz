@@ -52,6 +52,13 @@ export function createFleetSupervisorService(deps: FleetSupervisorDeps): FleetSu
     return now().getTime() - seen > staleMs;
   }
 
+  // Derive `down` for a stale node so the READ paths are truthful between sweeps:
+  // a heartbeat gap must not read as healthy just because sweepStale hasn't run
+  // yet. Immutable — never mutates the stored row. (recoder-3rl4)
+  function withLiveStatus(node: FleetNode): FleetNode {
+    return node.status !== 'down' && isStale(node) ? { ...node, status: 'down' } : node;
+  }
+
   async function register(input: Omit<FleetNodeUpsert, 'lastSeen'>): Promise<FleetNode | null> {
     if (!repo.isAvailable()) return null;
     try {
@@ -87,7 +94,7 @@ export function createFleetSupervisorService(deps: FleetSupervisorDeps): FleetSu
   async function list(): Promise<readonly FleetNode[]> {
     if (!repo.isAvailable()) return [];
     try {
-      return await repo.list();
+      return (await repo.list()).map(withLiveStatus);
     } catch {
       return [];
     }
@@ -96,7 +103,7 @@ export function createFleetSupervisorService(deps: FleetSupervisorDeps): FleetSu
   async function listByKind(kind: FleetNodeKind): Promise<readonly FleetNode[]> {
     if (!repo.isAvailable()) return [];
     try {
-      return await repo.listByKind(kind);
+      return (await repo.listByKind(kind)).map(withLiveStatus);
     } catch {
       return [];
     }
