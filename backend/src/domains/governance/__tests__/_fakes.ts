@@ -177,6 +177,7 @@ export class InMemoryApprovalRepository implements ApprovalRepository {
     requestedBy: string;
     taskId?: string | null;
     runId?: string | null;
+    target?: string | null;
     reason?: string | null;
     expiresAt?: string | null;
   }): Promise<ApprovalRecord> {
@@ -186,6 +187,7 @@ export class InMemoryApprovalRepository implements ApprovalRepository {
       taskId: input.taskId ?? null,
       runId: input.runId ?? null,
       action: input.action,
+      target: input.target ?? null,
       riskTier: input.riskTier,
       status: 'pending',
       requestedBy: input.requestedBy,

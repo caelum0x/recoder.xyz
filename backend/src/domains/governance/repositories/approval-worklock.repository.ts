@@ -31,13 +31,14 @@ class SqlApprovalRepository implements ApprovalRepository {
   async create(input: ApprovalRequestInput): Promise<ApprovalRecord> {
     const row = await this.qe.one<QueryRow>(
       `insert into governance_approvals
-         (task_id, run_id, action, risk_tier, requested_by, reason, expires_at)
-       values (:task_id, :run_id, :action, :risk_tier, :requested_by, :reason, :expires_at)
+         (task_id, run_id, action, target, risk_tier, requested_by, reason, expires_at)
+       values (:task_id, :run_id, :action, :target, :risk_tier, :requested_by, :reason, :expires_at)
        returning *`,
       {
         task_id: input.taskId ?? null,
         run_id: input.runId ?? null,
         action: input.action,
+        target: input.target ?? null,
         risk_tier: input.riskTier,
         requested_by: input.requestedBy,
         reason: input.reason ?? null,
@@ -213,6 +214,7 @@ function mapApproval(row: QueryRow): ApprovalRecord {
     taskId: (row.task_id as string | null) ?? null,
     runId: (row.run_id as string | null) ?? null,
     action: String(row.action),
+    target: (row.target as string | null) ?? null,
     riskTier: row.risk_tier as RiskTier,
     status: row.status as ApprovalStatus,
     requestedBy: String(row.requested_by),
