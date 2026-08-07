@@ -1334,6 +1334,27 @@ describe("BackendSupervisor crash + stop lifecycle", () => {
         expect(spawn.mock.calls.length).toBe(spawnCallsBefore);
         expect(sup.phase).toBe(PHASE.STOPPED);
     });
+
+    it("a FAILED boot (health-check failure) stays FAILED and does NOT restart (recoder-vwyo)", async () => {
+        const child = makeFakeChild();
+        const spawn = vi.fn(() => child);
+        // Health never returns a healthy 200 ⇒ the boot health check fails and the
+        // supervisor deliberately kills the child; that kill's late 'exit' must NOT
+        // be treated as a crash and restarted.
+        const fetchImpl = vi.fn(async () => ({ status: 503, json: async () => ({}) }));
+        const sup = new BackendSupervisor(baseOptions({ spawn, fetchImpl }) as any);
+
+        const result = await sup.start();
+        expect(result.ok).toBe(false);
+        expect(sup.phase).toBe(PHASE.FAILED);
+
+        // Let the kill()'s async 'exit' fire + any (erroneous) restart timer elapse.
+        await new Promise((r) => setTimeout(r, backoffMs(1) + 50));
+
+        expect(spawn.mock.calls.length).toBe(1); // no uncoordinated respawn
+        expect(sup.restartCount).toBe(0); // restart budget untouched
+        expect(sup.phase).toBe(PHASE.FAILED); // stays terminal
+    });
 });
 
 describe("BackendSupervisor packaged spawn target", () => {

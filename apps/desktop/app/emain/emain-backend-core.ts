@@ -1569,6 +1569,13 @@ export class BackendSupervisor {
             this._appendLog("info", "backend stopped", { code, signal });
             return;
         }
+        if (this.phase === PHASE.FAILED) {
+            // The child exited because a FAILED boot (health-check failure) deliberately
+            // killed it — NOT a crash. Stay terminal: do not consume the restart budget
+            // or respawn a boot that already reported ok:false. (recoder-vwyo)
+            this._appendLog("info", "backend exited after a failed boot (not restarting)", { code, signal });
+            return;
+        }
         this.phase = PHASE.CRASHED;
         this.lastError = `backend exited (code=${code}, signal=${signal})`;
         this._appendLog("error", this.lastError, { restartCount: this.restartCount });
