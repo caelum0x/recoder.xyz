@@ -124,6 +124,7 @@ describe('refreshAccessToken identity payload', () => {
     mockPrisma.cli_sessions.findUnique.mockResolvedValue({
       id: 'cli_1',
       isActive: true,
+      createdAt: new Date(), // within the refresh window
       users: { ...baseUser },
     } as never);
     mockPrisma.cli_sessions.update.mockResolvedValue({} as never);
@@ -137,6 +138,23 @@ describe('refreshAccessToken identity payload', () => {
       plan: 'pro',
       avatarUrl: 'https://recoder.xyz/avatar.png',
     });
+  });
+
+  it('rejects a refresh token past its lifetime and deactivates the session (recoder-l8e7)', async () => {
+    // Session created 400 days ago — beyond REFRESH_TOKEN_EXPIRY_DAYS (365).
+    mockPrisma.cli_sessions.findUnique.mockResolvedValue({
+      id: 'cli_old',
+      isActive: true,
+      createdAt: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000),
+      users: { ...baseUser },
+    } as never);
+    mockPrisma.cli_sessions.update.mockResolvedValue({} as never);
+
+    await expect(CLIAuthService.refreshAccessToken('recr_old')).rejects.toThrow(/invalid refresh token/i);
+    // The dead refresh token's session is deactivated so it can't be reused.
+    expect(mockPrisma.cli_sessions.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'cli_old' }, data: expect.objectContaining({ isActive: false }) })
+    );
   });
 });
 
