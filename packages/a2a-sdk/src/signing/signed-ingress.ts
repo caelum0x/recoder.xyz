@@ -2,7 +2,7 @@ import {
   isSignedEnvelope,
   type SignedEnvelope,
 } from '../schemas/signed-envelope';
-import { verifyHmacSha256Signature } from './hmac';
+import { signedEnvelopeSigningObject, verifyHmacSha256Signature } from './hmac';
 
 export type SignedEnvelopeIngressErrorCode =
   | 'signed_envelope_required'
@@ -82,7 +82,18 @@ export function validateSignedEnvelopeIngress<TPayload = unknown>(
       : { ok: true, envelope: value as SignedEnvelope<TPayload>, payload: value.payload as TPayload };
   }
 
-  if (!verifyHmacSha256Signature(value.payload, value.signature.signature, options.secret)) {
+  // Verify the MAC over the payload AND the signature metadata (signed_at,
+  // expires_at, key_id, algorithm). Recomputing over the same object the signer
+  // built means a tampered signed_at/expires_at no longer verifies — closing the
+  // replay/expiry bypass where only the payload was signed. (recoder-i834)
+  const signingObject = signedEnvelopeSigningObject({
+    payload: value.payload,
+    algorithm: value.signature.algorithm,
+    keyId: value.signature.key_id,
+    signedAt: value.signature.signed_at,
+    expiresAt: value.signature.expires_at,
+  });
+  if (!verifyHmacSha256Signature(signingObject, value.signature.signature, options.secret)) {
     return failure<TPayload>(401, 'signed_envelope_bad_signature', 'Invalid signed A2A envelope signature.');
   }
 
