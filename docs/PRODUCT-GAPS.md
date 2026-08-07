@@ -34,11 +34,11 @@ of the (solid) logic modules.
   promised lifecycle columns; can't scan "which agent needs review."
 - **Workspace detail: C** — scattered across disconnected Wave blocks (Session /
   Review / real tmux terminal are separate `createBlock` targets); no tabbed
-  container. Inline approval is correct, but a separate Approvals tab still
-  exists.
-- **Minimal chrome: C−** — no cube logo / workspace switcher; health dot uses 3
-  colors (design wants one quiet dot); settings is palette-launched, not behind
-  the avatar.
+  container. Inline approval is correct; the standalone Approvals tab was retired
+  (approvals now surface inline on the diff/session stream).
+- **Minimal chrome: C−** — no cube logo / workspace switcher; the health dot is now
+  a single quiet graphite dot (the emerald/amber/red trio was retired); settings is
+  palette-launched, not behind the avatar.
 - **Zero-config first-run: B+** — the strongest area; detection + install-loop
   have no dead ends. Sign-in is (deliberately) reframed as optional.
 

@@ -18,7 +18,7 @@
 ## The three layers (do not confuse them)
 
 ```
-  apps/          SURFACES / products. desktop (the Wave-fork shell — the recoder-* views) · social.
+  apps/          SURFACES / products. desktop (the Wave-fork shell — the recoder-* views).
     │            They consume the backend over its edges. No capability logic lives here.
     ▼ consume
   MODULES        The capabilities. Each is a DIRECTORY, used in place:
@@ -312,7 +312,7 @@ with `packages/governance/src/audit/merkle-verifier.ts` (golden vector pinned in
 **Today:** consumed via the `@recoder/governance` TS facade → napi loader, with a **three-tier degrade
 ladder**: (1) napi in-process native kernel → (2) UDS daemon (`conductor/governance-daemon.ts`,
 `recoder-governance-daemon`) → (3) pure-TS deny-biased fallback (no behavior change when the `.node` is
-absent). `conductor/governance-gate.ts` `decideDelivery()` drives the real facade on the delivery path
+absent). `domains/governance/services/governance-gate.service.ts` `decide()` drives the real facade on the delivery path
 (covered by `governance-gate.test.ts`); also `pal-plan.ts`, `solo-mode.ts`, `coordination-integration.ts`.
 **Shipped:** the `GOVERNANCE` domain seals conductor mutations (create/merge/archive/memory-promote, plus
 cloud/billing/memory write surfaces) into the Merkle log via `decide+recordAudit`, and the governed **MCP

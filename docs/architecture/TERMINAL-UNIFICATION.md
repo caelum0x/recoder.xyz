@@ -86,9 +86,9 @@ session) remains owner-deferred.
 
 A durable workspace terminal is a tmux session named by a single, shared rule:
 
-- **Prefix:** `SESSION_PREFIX = "recoder-"` (`tmux-substrate.adapter.ts:49`).
+- **Prefix:** `SESSION_PREFIX = "recoder-"` (`conductor/session-naming.ts:21`).
 - **Producer:** `tmuxNameFor(id)` = `` `${SESSION_PREFIX}${id.replace(/[^a-zA-Z0-9_-]/g, '_')}` ``
-  (`tmux-substrate.adapter.ts:52-53`) — every character outside `[a-zA-Z0-9_-]` becomes `_`.
+  (`conductor/session-naming.ts:27-28`) — every character outside `[a-zA-Z0-9_-]` becomes `_`.
 - **Consumer / validator (wave side):** `recoder-open-terminal.ts` accepts only
   `^[A-Za-z0-9_][A-Za-z0-9_-]{0,127}$` and rejects everything else, keeping guest-supplied
   payloads from smuggling tmux flags or target syntax. `cmd` is the program the block runs,

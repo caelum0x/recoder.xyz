@@ -26,16 +26,17 @@ clear, uncrowded product are what's missing, not raw lines.
 
 | Provider | State | Where |
 |---|---|---|
-| **GitHub** | ✅ DONE | `packages/auth/src/index.ts:121`, `app/lib/auth-config.ts` — env-gated, throws on half-creds in prod |
-| **Google** | ✅ DONE | `packages/auth/src/index.ts:129`, `app/lib/auth-config.ts:64` — same gating |
-| **Apple** | ❌ MISSING | no provider wired — the concrete auth gap |
+| **GitHub** | ✅ DONE | `packages/auth/src/index.ts:135`, `app/lib/auth-config.ts` — env-gated, throws on half-creds in prod |
+| **Google** | ✅ DONE | `packages/auth/src/index.ts:143`, `app/lib/auth-config.ts:64` — same gating |
+| **Apple** | ✅ DONE | `packages/auth/src/index.ts:154`, `app/lib/auth-config.ts:184`, `apple-client-secret.ts` (ES256 client-secret minter) — env-gated, same pattern; only prod Apple Developer creds remain (open Q1) |
 | Email/password | ⚙️ gated OFF (OAuth-only, env re-enable for self-host) | wave-0 |
 
-**Apple Sign-In needs:** the `apple` social provider in BOTH auth configs +
+**Apple Sign-In — SHIPPED (gated; only prod Apple Developer creds remain, open Q1).**
+The implementation has: the `apple` social provider in BOTH auth configs +
 `https://appleid.apple.com` in trustedOrigins + a **signed-JWT client secret**
 (Apple requires a JWT, not a static string) generated from Client ID / Team ID /
-Key ID / private key via `jose`, ≤6-month expiry, using Better Auth's async
-provider config. Caveats: Apple emits `email` only on FIRST auth (persist it;
+Key ID / private key (`apple-client-secret.ts`, ES256, ≤6-month expiry), using
+Better Auth's async provider config. Caveats: Apple emits `email` only on FIRST auth (persist it;
 no user-info endpoint to fetch later); `email_verified`/`is_private_email` are
 string-serialized; no localhost in dev; native iOS uses the bundle ID as
 `clientId`. (Source: better-auth.com/docs/authentication/apple.)
@@ -68,7 +69,7 @@ The product is large and the loop works — but it's **too crowded and the "why"
 isn't obvious** (see [PRODUCT-GAPS.md](./PRODUCT-GAPS.md) +
 [positioning memory]). More lines won't fix that. The work that matters:
 
-- **Apple Sign-In** (the one concrete auth gap) — do it.
+- **Apple Sign-In** — CODE SHIPPED (gated, same pattern as GitHub/Google); only prod Apple Developer creds remain (open Q1).
 - **De-crowd** the desktop until the fan-out→converge loop is the obvious thing.
 - **Sharpen** existing features (the loop, the run screen) + add clarity-forward
   NEW features (a guided first-run that *demonstrates* the value).
