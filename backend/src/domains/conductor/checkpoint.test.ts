@@ -11,6 +11,11 @@
  *    no record) and is never faked; a missing worktree refuses truthfully; a
  *    branch through the composer creates a REAL new workspace and seals the audit.
  */
+import { execFile } from 'node:child_process';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { describe, it, expect } from 'vitest';
 import type { ExecOptions, ExecResult } from '@recoder/substrate';
 import type { Workspace } from '@recoder/agent-os';
@@ -39,12 +44,15 @@ import {
  */
 class FakeGit {
   readonly calls: string[][] = [];
+  /** The env overlay each call in `calls` was issued with (index-aligned). */
+  readonly envs: (Record<string, string> | undefined)[] = [];
   head: string;
   dirty: boolean;
   /** Paths a `diff --diff-filter=D <head> <snapshot>` reports as deleted. */
   deletedPaths: string[] = [];
   readonly tags = new Map<string, { sha: string; message: string }>();
-  #stash = 0;
+  #tree = 0;
+  #commit = 0;
 
   constructor(opts: { head?: string; dirty?: boolean } = {}) {
     this.head = opts.head ?? 'HEAD_0';
@@ -54,20 +62,28 @@ class FakeGit {
   readonly exec = async (
     _bin: string,
     args: readonly string[],
-    _options?: ExecOptions,
+    options?: ExecOptions,
   ): Promise<ExecResult> => {
     // args are ['-C', cwd, <sub>, ...rest]
     const [, , sub, ...rest] = args;
     this.calls.push([sub, ...rest]);
+    this.envs.push(options?.env);
     const out = (stdout: string): ExecResult => ({ stdout, stderr: '', code: 0 });
     switch (sub) {
       case 'rev-parse':
         return out(this.head);
       case 'status':
         return out(this.dirty ? ' M src/file.ts\n' : '');
-      case 'stash':
-        // 'stash create <msg>' → a commit sha capturing the dirty tree, or empty.
-        return out(this.dirty ? `STASH_${++this.#stash}` : '');
+      case 'add':
+        // 'add -A' — stages the whole worktree (incl. untracked) into the temp
+        // index named by GIT_INDEX_FILE; no output.
+        return out('');
+      case 'write-tree':
+        // Freezes the temp index into a tree object.
+        return out(`TREE_${++this.#tree}`);
+      case 'commit-tree':
+        // Wraps the tree in a real commit (the dirty snapshot sha).
+        return out(`COMMIT_${++this.#commit}`);
       case 'tag': {
         // 'tag -l <glob> --format=%(contents:subject)' — one line per matching
         // tag: the annotated message's first line ("" for lightweight tags).
@@ -149,13 +165,13 @@ describe('checkpoint service (git seams)', () => {
 
     const record = await createCheckpoint(deps, 'ws_1', { label: 'wip', createdBy: 'user_test' });
 
-    // Dirty ⇒ a stash-create snapshot distinct from HEAD, tagged, nothing mutated.
-    expect(record.kind).toBe('stash');
+    // Dirty ⇒ a temp-index tree snapshot distinct from HEAD, tagged, nothing mutated.
+    expect(record.kind).toBe('tree');
     expect(record.headSha).toBe('HEAD_A');
-    expect(record.snapshotSha).toBe('STASH_1');
+    expect(record.snapshotSha).toBe('COMMIT_1');
     expect(record.dirty).toBe(true);
     expect(record.ref).toBe('recoder-checkpoint/cp_1');
-    expect(git.tags.get('recoder-checkpoint/cp_1')?.sha).toBe('STASH_1');
+    expect(git.tags.get('recoder-checkpoint/cp_1')?.sha).toBe('COMMIT_1');
     // The working tree was NOT reset/checked-out during capture.
     expect(git.calls.some((c) => c[0] === 'reset' || c[0] === 'checkout')).toBe(false);
 
@@ -164,13 +180,49 @@ describe('checkpoint service (git seams)', () => {
     expect(listed[0].checkpointId).toBe('cp_1');
 
     const restore = await restoreCheckpoint(deps, 'ws_1', 'cp_1');
-    expect(restore.restoredTo).toBe('STASH_1');
+    expect(restore.restoredTo).toBe('COMMIT_1');
     // A pre-restore safety snapshot was tagged BEFORE the reset (never lose work).
     expect(restore.safetyRef).toMatch(/^recoder-checkpoint-pre-restore\//);
     expect(git.tags.get(restore.safetyRef!)).toBeDefined();
     // The restore reset to the committed base then re-applied the captured edits.
     expect(git.calls).toContainEqual(['reset', '--hard', 'HEAD_A']);
-    expect(git.calls).toContainEqual(['checkout', 'STASH_1', '--', '.']);
+    expect(git.calls).toContainEqual(['checkout', 'COMMIT_1', '--', '.']);
+  });
+
+  it('captures UNTRACKED work via a temp-index tree (GIT_INDEX_FILE), never a stash (recoder-itjb)', async () => {
+    const git = new FakeGit({ head: 'HEAD_A', dirty: true });
+    const deps = svcDeps(git);
+
+    const record = await createCheckpoint(deps, 'ws_1', { createdBy: 'user_test' });
+
+    // The dirty snapshot is a temp-index tree/commit, NOT a `git stash create`
+    // (which cannot include untracked files and silently drops them).
+    expect(record.kind).toBe('tree');
+    expect(record.snapshotSha).toBe('COMMIT_1');
+    expect(git.calls.some((c) => c[0] === 'stash')).toBe(false);
+
+    // `git add -A` and `git write-tree` ran against the SAME throwaway index,
+    // pointed there by GIT_INDEX_FILE — so the user's real index is untouched.
+    const addIdx = git.calls.findIndex((c) => c[0] === 'add' && c[1] === '-A');
+    const writeIdx = git.calls.findIndex((c) => c[0] === 'write-tree');
+    expect(addIdx).toBeGreaterThanOrEqual(0);
+    expect(writeIdx).toBeGreaterThan(addIdx);
+    const tempIndex = git.envs[addIdx]?.GIT_INDEX_FILE;
+    expect(tempIndex).toBeTruthy();
+    // The temp index is OUTSIDE the worktree (so its .lock is never captured).
+    expect(tempIndex!.startsWith(WORKSPACE.worktreePath!)).toBe(false);
+    expect(git.envs[writeIdx]?.GIT_INDEX_FILE).toBe(tempIndex);
+
+    // The snapshot is wrapped in a real commit parented on HEAD (branch-able),
+    // still on the temp index — never the user's stash/worktree/index.
+    const commit = git.calls.find((c) => c[0] === 'commit-tree');
+    expect(commit).toBeTruthy();
+    expect(commit).toContain('-p');
+    expect(commit).toContain('HEAD_A');
+    const commitIdx = git.calls.findIndex((c) => c[0] === 'commit-tree');
+    expect(git.envs[commitIdx]?.GIT_INDEX_FILE).toBe(tempIndex);
+    // Capture never resets/checks-out the real worktree.
+    expect(git.calls.some((c) => c[0] === 'reset' || c[0] === 'checkout')).toBe(false);
   });
 
   it('restore REPRODUCES file deletions captured in the snapshot (recoder-36lk)', async () => {
@@ -335,14 +387,15 @@ describe('git checkpoint store (durable across a backend restart)', () => {
     expect(listed).toHaveLength(1);
     expect(listed[0].checkpointId).toBe(record.checkpointId);
     expect(listed[0].label).toBe('before refactor');
-    expect(listed[0].snapshotSha).toBe('STASH_1');
+    expect(listed[0].snapshotSha).toBe('COMMIT_1');
+    expect(listed[0].kind).toBe('tree');
     expect(listed[0].headSha).toBe('HEAD_A');
     expect(listed[0].dirty).toBe(true);
 
     // Restore through the rebuilt store (get() misses; the workspace-scoped list
     // fallback in the service finds the rehydrated record).
     const restore = await restoreCheckpoint(gitStoreDeps(git, storeB), 'ws_1', record.checkpointId);
-    expect(restore.restoredTo).toBe('STASH_1');
+    expect(restore.restoredTo).toBe('COMMIT_1');
     expect(git.calls).toContainEqual(['reset', '--hard', 'HEAD_A']);
   });
 
@@ -459,5 +512,111 @@ describe('checkpoint composer (gate + audit + degrade)', () => {
     expect(result.verdict.effect).toBe('deny');
     expect(gate.decisions).toContain('workspace.restore');
     expect(gate.audits).toHaveLength(0);
+  });
+});
+
+/**
+ * REAL git, no fake: the data-loss guard. Capture must fold UNTRACKED work into
+ * the snapshot (the recoder-itjb bug: `git stash create` silently drops it) and
+ * must never mutate the user's real index/worktree/stash. Uses a throwaway
+ * on-disk repo and drives the actual host `git` through the exec seam.
+ */
+describe('checkpoint service (REAL git integration — recoder-itjb)', () => {
+  const pexec = promisify(execFile);
+  // A real exec seam: shape-compatible with `execFileSafe`, honoring the env
+  // overlay the service uses to point git at a throwaway index.
+  const realExec = async (
+    bin: string,
+    args: readonly string[],
+    options?: ExecOptions,
+  ): Promise<ExecResult> => {
+    const { stdout, stderr } = await pexec(bin, [...args], {
+      env: options?.env ? { ...process.env, ...options.env } : process.env,
+      maxBuffer: options?.maxBuffer ?? 32 * 1024 * 1024,
+    });
+    return { stdout: String(stdout), stderr: String(stderr), code: 0 };
+  };
+  const git = (repo: string, args: string[], env?: Record<string, string>) =>
+    realExec('git', ['-C', repo, ...args], env ? { env } : {});
+
+  async function makeRepo(): Promise<string> {
+    const repo = await mkdtemp(join(tmpdir(), 'recoder-itjb-real-'));
+    await git(repo, ['init', '-q']);
+    await git(repo, ['config', 'user.email', 'test@recoder.local']);
+    await git(repo, ['config', 'user.name', 'Recoder Test']);
+    await writeFile(join(repo, 'tracked.txt'), 'tracked v1\n');
+    await git(repo, ['add', 'tracked.txt']);
+    await git(repo, ['commit', '-qm', 'init']);
+    return repo;
+  }
+
+  function repoWorkspace(repo: string): Workspace {
+    return { ...WORKSPACE, workspaceId: 'ws_real', worktreePath: repo } as unknown as Workspace;
+  }
+
+  function realDeps(repo: string): CheckpointOpsDeps {
+    let seq = 0;
+    return {
+      getWorkspace: async () => repoWorkspace(repo),
+      store: createInMemoryCheckpointStore(),
+      logger: makeLogger(),
+      exec: realExec,
+      newId: () => `cp_real_${++seq}`,
+      now: () => '2026-07-19T00:00:00.000Z',
+    };
+  }
+
+  it('captures a staged edit AND an UNTRACKED file, leaving index/worktree/stash untouched', async () => {
+    const repo = await makeRepo();
+    try {
+      // Mixed-dirty worktree: a STAGED tracked edit + a brand-new UNTRACKED file.
+      await writeFile(join(repo, 'tracked.txt'), 'tracked v2\n');
+      await git(repo, ['add', 'tracked.txt']);
+      await writeFile(join(repo, 'untracked.txt'), 'brand new untracked work\n');
+
+      const deps = realDeps(repo);
+      const record = await createCheckpoint(deps, 'ws_real', { createdBy: 'user_test' });
+
+      // The snapshot TREE contains the untracked file (the bug dropped it) + the
+      // staged edit — and no throwaway-index artifact leaked in.
+      expect(record.kind).toBe('tree');
+      const tree = (await git(repo, ['ls-tree', '-r', '--name-only', record.snapshotSha])).stdout;
+      const files = tree.split('\n').map((f) => f.trim()).filter(Boolean);
+      expect(files).toContain('untracked.txt');
+      expect(files).toContain('tracked.txt');
+      expect(files.some((f) => f.includes('.index'))).toBe(false);
+      // The snapshot's tracked.txt is the EDITED (v2) content.
+      const snapTracked = (await git(repo, ['show', `${record.snapshotSha}:tracked.txt`])).stdout;
+      expect(snapTracked).toContain('tracked v2');
+
+      // NON-DESTRUCTIVE: the user's real state is exactly as they left it.
+      expect((await git(repo, ['stash', 'list'])).stdout.trim()).toBe(''); // stash untouched
+      expect((await git(repo, ['diff', '--cached', '--name-only'])).stdout).toContain('tracked.txt'); // still staged
+      expect((await git(repo, ['show', ':tracked.txt'])).stdout).toContain('tracked v2'); // index intact
+      await expect(access(join(repo, 'untracked.txt'))).resolves.toBeUndefined(); // untracked still on disk
+      // No temp-index file was created inside the worktree.
+      const status = (await git(repo, ['status', '--porcelain'])).stdout;
+      expect(status.includes('.index')).toBe(false);
+    } finally {
+      await rm(repo, { recursive: true, force: true });
+    }
+  });
+
+  it('restore REPRODUCES the untracked file the checkpoint captured', async () => {
+    const repo = await makeRepo();
+    try {
+      await writeFile(join(repo, 'untracked.txt'), 'brand new untracked work\n');
+      const deps = realDeps(repo);
+      const record = await createCheckpoint(deps, 'ws_real', { createdBy: 'user_test' });
+
+      // Lose the untracked work, then restore — it must come back from the snapshot.
+      await rm(join(repo, 'untracked.txt'));
+      await restoreCheckpoint(deps, 'ws_real', record.checkpointId);
+
+      const restored = await readFile(join(repo, 'untracked.txt'), 'utf8');
+      expect(restored).toContain('brand new untracked work');
+    } finally {
+      await rm(repo, { recursive: true, force: true });
+    }
   });
 });

@@ -19,7 +19,15 @@
 export type CheckpointKind =
   /** Clean worktree — the snapshot tag points straight at the committed HEAD. */
   | 'commit'
-  /** Dirty worktree — a non-mutating `git stash create` commit captured the edits. */
+  /**
+   * Dirty worktree — a non-mutating temp-index snapshot (`git add -A` →
+   * `write-tree` → `commit-tree`) captured the edits, INCLUDING untracked files.
+   */
+  | 'tree'
+  /**
+   * Legacy dirty snapshot captured via `git stash create` (dropped untracked
+   * work). No longer produced — retained so old persisted records still decode.
+   */
   | 'stash';
 
 /**
@@ -48,8 +56,9 @@ export interface CheckpointRecord {
   readonly headSha: string;
   /**
    * The snapshot commit sha whose TREE is the exact captured file state: equal to
-   * `headSha` for a clean checkpoint, or the `git stash create` commit for a
-   * dirty one. Branching a new workspace uses this as the base.
+   * `headSha` for a clean checkpoint, or a temp-index snapshot commit (tracked
+   * edits AND untracked files) for a dirty one. Branching a new workspace uses
+   * this as the base.
    */
   readonly snapshotSha: string;
   /** True when the worktree had uncommitted changes folded into the snapshot. */

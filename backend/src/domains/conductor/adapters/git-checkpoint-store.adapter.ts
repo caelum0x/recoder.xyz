@@ -129,7 +129,8 @@ function decodeRecord(line: string, workspaceId: string): CheckpointRecord | nul
   for (const key of requiredStrings) {
     if (typeof r[key] !== 'string' || r[key] === '') return null;
   }
-  const kind: CheckpointKind = r.kind === 'stash' ? 'stash' : 'commit';
+  const kind: CheckpointKind =
+    r.kind === 'stash' || r.kind === 'tree' ? r.kind : 'commit';
   const metadata =
     r.metadata !== null && typeof r.metadata === 'object' && !Array.isArray(r.metadata)
       ? (r.metadata as Record<string, unknown>)
