@@ -513,3 +513,30 @@ describe('agent-os tenant isolation — point reads resolve ownership via task (
     await h.close();
   });
 });
+
+describe('agent-os tenant isolation — unownable operator surfaces (recoder-ctoj)', () => {
+  it('a tenant sees NO agents (shared registry, no owner link) but an operator does', async () => {
+    const h = await buildHarness();
+    await seedOwnedSpace(h, TOKEN_A, 'space-A', 'user-A');
+    h.repo.upsertAgent(anyRec({ agentId: 'agent-1', kind: 'connector', lastSeenAt: '2026-07-01T00:00:00Z' }));
+    // AgentProfile has no tenant/space — fail closed: a tenant sees an empty list + 404.
+    expect(dataOf<unknown[]>(await get(h, asUser(TOKEN_A), '/agents'))).toEqual([]);
+    expect((await get(h, asUser(TOKEN_A), '/agents/agent-1')).status).toBe(404);
+    // An operator sees the shared registry.
+    expect(dataOf<unknown[]>(await get(h, asAdminKey, '/agents')).length).toBe(1);
+    expect((await get(h, asAdminKey, '/agents/agent-1')).status).toBe(200);
+    await h.close();
+  });
+
+  it('GET /summary is operator-only — a tenant is refused (403); operator + solo allowed', async () => {
+    const h = await buildHarness();
+    await seedOwnedSpace(h, TOKEN_A, 'space-A', 'user-A');
+    expect((await get(h, asUser(TOKEN_A), '/summary')).status).toBe(403);
+    expect((await get(h, asAdminKey, '/summary')).status).toBe(200);
+    await h.close();
+
+    const solo = await buildHarness({ soloMode: true });
+    expect((await get(solo, {}, '/summary')).status).toBe(200);
+    await solo.close();
+  });
+});
