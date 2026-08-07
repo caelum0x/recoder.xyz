@@ -390,10 +390,14 @@ describe('BillingRepository.reserveUsage — atomic reservation (guarded ledger 
     const res = await repo.reserveUsage(event, 50, SINCE);
     expect(res).toEqual({ reserved: true, inserted: true });
 
-    // Structural proof the reservation is race-safe by construction: the write is
-    // an INSERT guarded on the running window total against the bound :limit.
-    const write = exec.calls[0];
-    expect(write.sql).toMatch(/insert into billing_usage_events/i);
+    // Structural proof the reservation is race-safe by construction: a
+    // per-subject advisory lock is taken FIRST (serializes concurrent writers so
+    // the guard's sum() can't be raced), then an INSERT guarded on the running
+    // window total against the bound :limit. (recoder-bhs5)
+    const lock = exec.calls[0];
+    expect(lock.sql).toMatch(/pg_advisory_xact_lock/i);
+    expect(lock.params).toMatchObject({ lock_key: 'usage:u1:agent_run' });
+    const write = exec.calls.find((c) => /insert into billing_usage_events/i.test(c.sql))!;
     expect(write.sql).toMatch(/sum\(quantity\)/i);
     expect(write.sql).toMatch(/<=\s*:limit/);
     expect(write.sql).toMatch(/on conflict \(idempotency_key\) do nothing/i);
