@@ -139,6 +139,11 @@ export class GovernanceComposer implements GovernanceModule {
     });
   }
 
+  /** Solo/desktop single-user mode — owner scoping fails OPEN (see `RuntimeConfig.soloMode`). */
+  get soloMode(): boolean {
+    return this.cfg.soloMode;
+  }
+
   gate(): GovernanceGate {
     return this.gateService;
   }

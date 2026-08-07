@@ -35,6 +35,7 @@ import type { GovernanceGate } from '../ports/gate.port.js';
 import type { SecretsPort } from '../ports/secrets.port.js';
 import type { WorkLockService } from '../services/work-lock.service.js';
 import type { ApprovalService } from '../services/approval.service.js';
+import { canDecideApproval } from '../routes/governance-access.js';
 import type {
   GateDecisionContext,
   GateTarget,
@@ -182,6 +183,7 @@ function inputError(error: string): ToolInputError {
  */
 export function buildGovernanceWriteTools(
   surface: GovernanceWriteSurface,
+  opts: { readonly soloMode?: boolean } = {},
 ): readonly McpToolRegistration[] {
   const selfGate = (
     action: GovernanceAction,
@@ -254,6 +256,16 @@ export function buildGovernanceWriteTools(
         const ctx = gateContext(body, { toolName: 'governance_approval_decide' });
         const verdict = await selfGate('governance.approval.decide', principal, ctx);
         if (isGated(verdict)) return refusal(verdict);
+
+        // Ownership gate — mirror the HTTP twin: only the approval's OWNER
+        // (requestedBy), a privileged operator, or solo mode may decide. A foreign
+        // or absent id is a no-oracle ok:false (indistinguishable), so a caller
+        // can't probe other tenants' ids. Without this the self-gate alone lets any
+        // authenticated caller clear a victim's needs_approval gate or DoS-deny it.
+        const existing = await surface.approvals().get(approvalId);
+        if (!existing || !canDecideApproval(principal, existing, { soloMode: opts.soloMode === true })) {
+          return { ok: false, verdict, error: 'no pending approval with that id' };
+        }
 
         try {
           const approval = await surface.approvals().decide(approvalId, {
