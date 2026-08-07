@@ -308,3 +308,37 @@ describe('agent-os tenant isolation — solo/desktop fails open (e)', () => {
     await h.close();
   });
 });
+
+describe('agent-os tenant isolation — run transition (recoder-yb5r)', () => {
+  const seedRun = (h: Harness) =>
+    h.repo.upsertRun({
+      runId: 'run-A',
+      taskId: 'task-A',
+      spaceId: 'space-A',
+      state: 'waiting_for_approval',
+      updatedAt: '2026-07-01T00:00:00Z',
+    });
+
+  it("user B cannot transition (forge-approve) a run in user A's space (404, no oracle)", async () => {
+    const h = await buildHarness();
+    await seedOwnedSpace(h, TOKEN_A, 'space-A', 'user-A');
+    seedRun(h);
+
+    const res = await post(h, asUser(TOKEN_B), '/runs/run-A/transition', { to: 'approved' });
+    expect(res.status).toBe(404);
+    // The victim's run is untouched — no forged approval.
+    expect(h.repo.listRuns().find((r) => r.runId === 'run-A')?.state).toBe('waiting_for_approval');
+    await h.close();
+  });
+
+  it('owner A may transition their own run', async () => {
+    const h = await buildHarness();
+    await seedOwnedSpace(h, TOKEN_A, 'space-A', 'user-A');
+    seedRun(h);
+
+    const res = await post(h, asUser(TOKEN_A), '/runs/run-A/transition', { to: 'approved' });
+    expect(res.status).toBe(200);
+    expect(h.repo.listRuns().find((r) => r.runId === 'run-A')?.state).toBe('approved');
+    await h.close();
+  });
+});

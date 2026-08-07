@@ -265,6 +265,8 @@ describe('CRUD edges — tasks + runs (frozen contracts composed)', () => {
 
   it('applies a LEGAL transition and rejects an ILLEGAL one via the package table', async () => {
     const h = await buildHarness();
+    // The run's space must be owned by the caller — transition is owner-scoped (recoder-yb5r).
+    expect((await send(h, 'POST', '/spaces', spaceBody)).status).toBe(200);
     seedTask(h.repo);
     seedRun(h.repo, 'created');
 

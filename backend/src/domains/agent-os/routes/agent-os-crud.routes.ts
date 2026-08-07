@@ -326,6 +326,14 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
       const runs = await repository.listRuns();
       const run = runs.find((r) => r.runId === req.params.runId);
       if (!run) return notFound(res, 'run', req.params.runId);
+      // Owner-scope: the run's space must be accessible to the caller, else this is a
+      // cross-tenant IDOR write — forging another tenant's run lifecycle (incl.
+      // waiting_for_approval -> approved). 404 no-oracle, mirroring the space edges.
+      // (recoder-yb5r; same-tenant approval-gate depth tracked separately.)
+      const runSpace = (await repository.listSpaces()).find((s) => s.spaceId === run.spaceId);
+      if (!runSpace || !canAccessSpace(runSpace, req.principal, soloMode)) {
+        return notFound(res, 'run', req.params.runId);
+      }
       if (!isAllowedTaskRunTransition(run.state, body.to)) {
         sendError(
           res,
