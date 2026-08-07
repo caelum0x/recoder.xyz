@@ -342,6 +342,17 @@ export class SqliteAgentOsRepository implements AgentOsRepositoryPort {
       .run(event.eventId, event.taskId ?? null, event.runId ?? null, JSON.stringify(event), Date.now());
     return event;
   }
+  /**
+   * ATOMIC append of the event + its outbox record in ONE better-sqlite3
+   * transaction — both commit or the whole thing rolls back (recoder-kvb2), so a
+   * restart never re-seeds `seen` for an event whose outbox write was lost.
+   */
+  appendEventWithOutbox(event: RunEvent, outbox?: OutboxRecord): void {
+    this.db.transaction(() => {
+      this.appendEvent(event);
+      if (outbox) this.appendOutbox(outbox);
+    })();
+  }
   listEvents(): RunEvent[] {
     return this.db
       .prepare<[], JsonRow>(`select json from agentos_event_log order by seq`)

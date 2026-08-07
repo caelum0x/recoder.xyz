@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { RunEvent, TaskRun } from '@recoder/agent-os';
 import { RunEventIngestService } from '../services/run-event-ingest.service.js';
 import { InMemoryAgentOsRepository } from '../adapters/in-memory-agent-os.repository.js';
@@ -143,5 +143,59 @@ describe('RunEventIngestService — the frozen ingest invariant', () => {
     expect(results.map((r) => r.accepted)).toEqual([true, false, true]);
     expect(results[1].rejection?.reason).toBe('illegal_transition');
     expect(repo.listRuns()[0].state).toBe('routed');
+  });
+});
+
+describe('RunEventIngestService — atomic event+outbox durability (recoder-kvb2)', () => {
+  it('persists the event AND its outbox record via ONE atomic append (not two separate writes)', async () => {
+    const repo = new InMemoryAgentOsRepository();
+    seedRun(repo, 'running');
+    const atomic = vi.spyOn(repo, 'appendEventWithOutbox');
+    const svc = new RunEventIngestService({ repository: repo, gate: allowGate(), logger: silentLogger, now });
+
+    // An `artifact` event: evidence-only (no state change) but DOES project a
+    // CloudEvent — so both the log row and the outbox row must be written.
+    const res = await svc.ingest(event({ eventId: 'a1', type: 'artifact' }), 'conductor');
+
+    expect(res.accepted).toBe(true);
+    expect(res.outboxId).toBeDefined();
+    // Exactly one durable call carries BOTH the event and its outbox record.
+    expect(atomic).toHaveBeenCalledTimes(1);
+    expect(atomic.mock.calls[0]![0]!.eventId).toBe('a1');
+    expect(atomic.mock.calls[0]![1]).toBeDefined();
+    expect(repo.listEvents()).toHaveLength(1);
+    expect(repo.listOutbox()).toHaveLength(1);
+  });
+
+  it('a failed atomic write leaves the event UNSEEN — a retry re-delivers it (no dropped CloudEvent)', async () => {
+    const repo = new InMemoryAgentOsRepository();
+    seedRun(repo, 'running');
+    const svc = new RunEventIngestService({ repository: repo, gate: allowGate(), logger: silentLogger, now });
+
+    const original = repo.appendEventWithOutbox.bind(repo);
+    let failNext = true;
+    vi.spyOn(repo, 'appendEventWithOutbox').mockImplementation((ev, ob) => {
+      if (failNext) {
+        failNext = false;
+        throw new Error('outbox insert failed — tx rolled back');
+      }
+      return original(ev, ob);
+    });
+
+    const ev = event({ eventId: 'a1', type: 'artifact' });
+    // Infra fault DURING the atomic write ⇒ the ingest promise rejects...
+    await expect(svc.ingest(ev, 'conductor')).rejects.toThrow(/tx rolled back/);
+    // ...and NOTHING committed — crucially the event was NOT marked seen.
+    expect(repo.listEvents()).toHaveLength(0);
+    expect(repo.listOutbox()).toHaveLength(0);
+
+    // RETRY: the pre-fix bug marked `seen` before the outbox write, so a restart
+    // (re-seeding `seen` from the event log) skipped this forever — dropping the
+    // CloudEvent. Now `seen.add` follows the atomic write, so the retry re-delivers.
+    const retry = await svc.ingest(ev, 'conductor');
+    expect(retry.accepted).toBe(true);
+    expect(retry.duplicate).toBe(false);
+    expect(retry.outboxId).toBeDefined();
+    expect(repo.listOutbox()).toHaveLength(1);
   });
 });

@@ -202,18 +202,17 @@ export class RunEventIngestService implements RunEventBusPort {
       currentState = run.state;
     }
 
-    // 4. APPEND immutable event log.
-    await this.repository.appendEvent(valid);
-    this.seen.add(valid.eventId);
-
-    // 5. ENQUEUE CloudEvents outbox (best-effort mapping — some event types have
-    //    no CloudEvent projection and are log-only).
-    let outboxId: string | undefined;
+    // 4+5. APPEND the immutable event AND enqueue its CloudEvents outbox record
+    //      ATOMICALLY (recoder-kvb2): both commit or neither. `seen` re-seeds
+    //      from the event log on restart, so a committed event whose separate
+    //      outbox write failed would be permanently skipped (dropped CloudEvent)
+    //      — the shared transaction prevents that. `seen.add` moves AFTER the
+    //      durable write so an infra fault here rejects and stays retryable.
+    //      (Some event types have no CloudEvent projection — log-only.)
     const record = this.toOutboxRecord(valid);
-    if (record) {
-      await this.repository.appendOutbox(record);
-      outboxId = record.outboxId;
-    }
+    await this.repository.appendEventWithOutbox(valid, record ?? undefined);
+    this.seen.add(valid.eventId);
+    const outboxId: string | undefined = record?.outboxId;
 
     const result: RunEventIngestResult = {
       eventId: valid.eventId,
