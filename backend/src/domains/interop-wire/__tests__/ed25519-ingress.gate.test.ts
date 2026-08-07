@@ -166,6 +166,22 @@ describe('ed25519 ingress gate', () => {
     expect(result).toMatchObject({ admitted: false, status: 401, code: 'signed_envelope_stale' });
   });
 
+  it('enforce: rejects a STALE envelope EVEN WITH a future expires_at — expires_at cannot remove the freshness bound (recoder-6qym)', async () => {
+    const domain = domainEnvelope();
+    const { gate } = buildGate({ mode: 'enforce' });
+    // Signed 15 min ago but carrying a far-future expires_at: before the fix the
+    // present expires_at skipped the max-age bound, so this stale envelope was
+    // admitted (replayable once the jti guard forgets it).
+    const result = await gate.admit(
+      ed25519Envelope(domain, signDomain(domain), {
+        signedAt: '2026-01-02T02:50:00.000Z',
+        expiresAt: '2026-06-01T00:00:00.000Z',
+      }),
+      NOW,
+    );
+    expect(result).toMatchObject({ admitted: false, status: 401, code: 'signed_envelope_stale' });
+  });
+
   it('permissive: logs-and-allows a bad signature, truthfully marked unverified', async () => {
     const domain = domainEnvelope({ v: 1 });
     const forged = { ...domain, payload: { v: 2 } };
@@ -295,9 +311,16 @@ describe('rpc-admission chain through the ed25519 gate', () => {
   it('admits an ed25519-signed envelope wrapping a JSON-RPC call and dispatches ONLY the verified payload', async () => {
     const domain = domainEnvelope(rpc);
     const { gate } = buildGate({ mode: 'enforce' });
-    // invokeGuard clocks off real time; carry an explicit expires_at so the fixed
-    // fixture signed_at isn't treated as stale by the no-expiry age bound (recoder-9yp6).
-    const outcome = await invokeGuard(gate, ed25519Envelope(domain, signDomain(domain), { expiresAt: '2099-01-01T00:00:00.000Z' }));
+    // invokeGuard clocks off real time. The signed_at max-age bound now applies
+    // even WITH an expires_at (recoder-6qym), so use a fresh signed_at (the
+    // ed25519 signature covers only the domain payload, not the timestamp).
+    const outcome = await invokeGuard(
+      gate,
+      ed25519Envelope(domain, signDomain(domain), {
+        signedAt: new Date().toISOString(),
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      }),
+    );
     expect(outcome.status).toBe(200);
     expect(outcome.nextBody).toEqual(rpc);
   });

@@ -127,6 +127,14 @@ function checkTiming(env: SignedEnvelope, maxFutureSkewMs: number, now?: Date): 
   if (signedAtMs - nowMs > maxFutureSkewMs) {
     return { status: 401, code: 'signed_envelope_not_yet_valid', reason: 'Signed A2A envelope timestamp is too far in the future.' };
   }
+  // Bound signed_at age REGARDLESS of expires_at (recoder-6qym). A present (or
+  // attacker-attached far-future) expires_at must NOT remove the freshness
+  // bound: an over-age envelope is replayable once the TTL-bounded replay guard
+  // forgets its jti. This unconditional max-age check extends the no-expires_at
+  // bound (recoder-9yp6) to every envelope.
+  if (nowMs - signedAtMs > maxFutureSkewMs) {
+    return { status: 401, code: 'signed_envelope_stale', reason: 'Signed A2A envelope is too old.' };
+  }
   if (env.signature.expires_at !== undefined) {
     const expiresAtMs = Date.parse(env.signature.expires_at);
     if (!Number.isFinite(expiresAtMs)) {
@@ -135,11 +143,6 @@ function checkTiming(env: SignedEnvelope, maxFutureSkewMs: number, now?: Date): 
     if (expiresAtMs < nowMs) {
       return { status: 401, code: 'signed_envelope_expired', reason: 'Signed A2A envelope expired.' };
     }
-  } else if (nowMs - signedAtMs > maxFutureSkewMs) {
-    // No explicit expires_at: bound the acceptance window to the skew tolerance so
-    // an envelope can't be replayed after the TTL-bounded replay guard forgets its
-    // jti (an unbounded signed_at made no-expiry envelopes replayable). (recoder-9yp6)
-    return { status: 401, code: 'signed_envelope_stale', reason: 'Signed A2A envelope without expires_at is too old.' };
   }
   return null;
 }
