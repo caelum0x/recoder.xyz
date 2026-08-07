@@ -20,10 +20,30 @@ export const POST = withCLIAuth(
         );
       }
 
-      // Check quota
-      const quota = await prisma.user_quota.findUnique({
+      // Check quota. A non-enterprise user MUST be metered: if no row exists (an
+      // account created via a path that skipped quota provisioning — some
+      // OAuth/Better-Auth flows), lazily create a free-tier row so the cap and
+      // usage tracking apply. A missing row must never mean "uncapped". (recoder-y41k)
+      let quota = await prisma.user_quota.findUnique({
         where: { userId: context.userId },
       });
+
+      if (!quota && context.plan !== 'enterprise') {
+        const now = new Date();
+        const endOfDay = new Date(now);
+        endOfDay.setHours(23, 59, 59, 999);
+        quota = await prisma.user_quota.create({
+          data: {
+            userId: context.userId,
+            sessionsPerDay: context.isPremium ? 50 : 6,
+            sessionsUsedToday: 0,
+            tokensPerSession: context.isPremium ? 50000 : 10000,
+            periodStart: now,
+            periodEnd: endOfDay,
+            lastResetAt: now,
+          },
+        });
+      }
 
       if (quota && context.plan !== 'enterprise') {
         const sessionsRemaining = quota.sessionsPerDay - quota.sessionsUsedToday;

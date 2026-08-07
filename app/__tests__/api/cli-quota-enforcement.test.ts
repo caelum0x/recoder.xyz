@@ -247,18 +247,32 @@ describe('POST /api/cli/proxy — tier gate ENFORCES the daily session cap', () 
   });
 
   /**
-   * NARROW ENFORCEMENT GAP (truthful, corrected 2026-08-05):
-   * The proxy route only enforces `if (quota && plan !== 'enterprise')`, so a
-   * user with NO user_quota row escapes the numeric cap and usage tracking.
-   * IMPORTANT: this is NOT the normal free-user case — a quota row IS created at
-   * signup (auth/register + auth/signup-email) and by billing/usage services, so
-   * normally-registered free users ARE capped. The residual hole is limited to
-   * accounts created via a path that skips quota creation (e.g. some
-   * OAuth/Better-Auth flows). This asserts the CURRENT behavior so the gap is
-   * visible; recommended fix = default/create the row inside the proxy.
+   * FIXED 2026-08-07 (recoder-y41k): a user with NO user_quota row must NOT escape
+   * the cap. Accounts created via a path that skips quota provisioning (some
+   * OAuth/Better-Auth flows) previously proxied uncapped + untracked because the
+   * gate was `if (quota && plan !== 'enterprise')`. The proxy now lazily creates a
+   * free-tier row so the cap and usage tracking always apply to non-enterprise users.
    */
-  it('GAP: a user with NO quota row (non-signup account-creation path) is not capped', async () => {
+  it('caps a user with NO quota row by lazily creating a free-tier row (no uncapped escape)', async () => {
     state.authContext.plan = 'free';
+    state.quota = null;
+
+    const { POST } = await getProxyRoute();
+    const response = await POST(proxyRequest());
+
+    // First request lands under the freshly-created free-tier cap → allowed…
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // …but a free-tier row is CREATED and the session is TRACKED — no escape.
+    expect(createQuotaMock).toHaveBeenCalledTimes(1);
+    const created = createQuotaMock.mock.calls[0][0].data;
+    expect(created.userId).toBe('u1');
+    expect(created.sessionsPerDay).toBeGreaterThan(0);
+    expect(updateQuotaMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT fabricate a quota row for an enterprise (unlimited) user with no row', async () => {
+    state.authContext.plan = 'enterprise';
     state.quota = null;
 
     const { POST } = await getProxyRoute();
@@ -266,7 +280,8 @@ describe('POST /api/cli/proxy — tier gate ENFORCES the daily session cap', () 
 
     expect(response.status).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    // No row => no increment => usage escapes the daily cap accounting.
+    // Enterprise is unlimited — no row is fabricated, no session metering.
+    expect(createQuotaMock).not.toHaveBeenCalled();
     expect(updateQuotaMock).not.toHaveBeenCalled();
   });
 });
