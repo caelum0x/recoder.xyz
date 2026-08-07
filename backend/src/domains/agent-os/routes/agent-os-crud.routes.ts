@@ -412,6 +412,23 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
       if (!runSpace || !canAccessSpace(runSpace, req.principal, soloMode)) {
         return notFound(res, 'run', req.params.runId);
       }
+      // Governance depth (recoder-magq): `approved` is the RESULT of a governance
+      // approval decision (which mints an approval record), never a self-service
+      // transition. This raw edge — which carries NO governance gate — must never
+      // move a run INTO `approved`, or an owner could self-approve their own
+      // `waiting_for_approval` run with no approval on record. Approval flows only
+      // through the governance approval-decide path; other transitions are allowed.
+      if (body.to === 'approved') {
+        sendError(
+          res,
+          createError(
+            ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+            'Run approval must go through the governance approval flow, not a raw transition.',
+            { details: { runId: run.runId, from: run.state, to: body.to } },
+          ),
+        );
+        return;
+      }
       if (!isAllowedTaskRunTransition(run.state, body.to)) {
         sendError(
           res,
