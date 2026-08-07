@@ -47,7 +47,7 @@ const DEFAULT_SCOPES: readonly string[] = ['read', 'write'];
  * passes `requireAdmin`). They are NEVER mintable unless the minting principal
  * already holds them, so a normal session can't escalate itself to super-user.
  */
-const PRIVILEGED_SCOPES: ReadonlySet<string> = new Set(['admin', 'internal']);
+export const PRIVILEGED_SCOPES: ReadonlySet<string> = new Set(['admin', 'internal']);
 
 /**
  * The narrow governance gate the mint/revoke path consults. Kept as a local

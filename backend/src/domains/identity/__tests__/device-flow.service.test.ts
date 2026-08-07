@@ -245,3 +245,32 @@ describe('DeviceFlowService — RFC-8628 CLI device flow', () => {
     expect(approved.status === 'approved' && approved.grant.userId).toBe('first');
   });
 });
+
+describe('DeviceFlowService — privileged-scope escalation guard (recoder-kuja)', () => {
+  it('STRIPS privileged scopes (admin/internal) from a requested device grant — never persisted', async () => {
+    const { svc, store } = build();
+    const grant = await svc.requestGrant({ clientId: 'attacker', scopes: ['read', 'admin', 'internal', 'write'] });
+    const stored = await store.findByDeviceCodeHash(sha256(grant.deviceCode));
+    expect(stored?.scopes).toEqual(['read', 'write']); // admin/internal dropped at the source
+  });
+
+  it('validate() NEVER confers admin/internal to a device principal (defense in depth)', async () => {
+    const { svc, store } = build();
+    const grant = await svc.requestGrant({ clientId: 'attacker', scopes: ['read', 'admin'] });
+    const stored = await store.findByDeviceCodeHash(sha256(grant.deviceCode));
+    await svc.approve(stored!.userCode, 'attacker-user');
+    const validation = await svc.validate(grant.deviceCode);
+    expect(validation?.userId).toBe('attacker-user');
+    expect(validation?.scopes).toEqual(['read']);
+  });
+
+  it('a tampered/legacy grant row holding admin STILL cannot confer it through validate()', async () => {
+    const { svc, store } = build();
+    const grant = await svc.requestGrant({ clientId: 'x', scopes: ['read'] });
+    const stored = await store.findByDeviceCodeHash(sha256(grant.deviceCode));
+    // Simulate a row that somehow already holds privileged scopes.
+    store.rows.set(stored!.id, { ...stored!, status: 'approved', userId: 'u', scopes: ['read', 'admin', 'internal'] });
+    const validation = await svc.validate(grant.deviceCode);
+    expect(validation?.scopes).toEqual(['read']); // filtered at the validate() boundary
+  });
+});
