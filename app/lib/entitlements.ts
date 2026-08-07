@@ -116,6 +116,30 @@ export function getEntitlementFeatures(plan: PlanId): EntitlementFeatures {
 }
 
 /**
+ * True only for subscription statuses that grant paid features (`active`/
+ * `trialing`). An absent/blank/any-other status (cancelled, past_due, unpaid,
+ * expired, refunded…) is NOT active — so a stale paid plan can't keep its
+ * quotas. (recoder-5ypw / recoder-y8gb)
+ */
+export function isActiveSubscriptionStatus(status: string | null | undefined): boolean {
+  const s = typeof status === 'string' ? status.trim().toLowerCase() : '';
+  return ACTIVE_STATUSES.has(s);
+}
+
+/**
+ * The plan whose LIMITS/quotas actually apply for enforcement: the user's stored
+ * `subscriptionPlan` ONLY while their status is active/trialing, else `free`.
+ * Returns the raw stored plan string (downstream vocabulary preserved) so every
+ * enforcement gate — plan-limits, usage, sessions — degrades a cancelled/lapsed
+ * customer to free instead of trusting a stale paid plan field. (recoder-5ypw)
+ */
+export function effectivePlanForLimits(user: EntitlementUserLike | null | undefined): string {
+  return isActiveSubscriptionStatus(user?.subscriptionStatus)
+    ? user?.subscriptionPlan ?? 'free'
+    : 'free';
+}
+
+/**
  * Resolve {plan, status, features} from the user row and their (optional)
  * subscription record. The subscription record wins when present. A
  * non-active status keeps the reported plan/status truthful but degrades

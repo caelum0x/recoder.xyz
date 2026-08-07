@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { enforcedTierForPlanId } from "@/lib/config/enforced-quotas";
+import { effectivePlanForLimits } from "@/lib/entitlements";
 
 const PLAN_LIMITS: Record<string, Record<string, number>> = {
   free: {
@@ -53,7 +54,7 @@ export async function checkPlanLimit(
 ): Promise<PlanCheckResult> {
   const user = await prisma.users.findUnique({
     where: { id: userId },
-    select: { subscriptionPlan: true },
+    select: { subscriptionPlan: true, subscriptionStatus: true },
   });
 
   // The website persists `subscriptionPlan` as the CHECKOUT plan-id
@@ -61,7 +62,11 @@ export async function checkPlanLimit(
   // PLAN_LIMITS key. Route it through the same tier normalization the enforcing
   // gate uses so a paying 'pro-monthly' user resolves to PRO limits instead of
   // silently falling back to FREE (the plan-vocabulary drift, recoder-wvth).
-  const tier = enforcedTierForPlanId(user?.subscriptionPlan ?? "free");
+  //
+  // The paid tier only applies while the subscription is active/trialing — a
+  // cancelled/lapsed/refunded plan degrades to FREE so a charge reversal can't
+  // leave paid quotas standing (recoder-5ypw).
+  const tier = enforcedTierForPlanId(effectivePlanForLimits(user));
   const limits = PLAN_LIMITS[tier] ?? PLAN_LIMITS.free;
   const max = limits[limitKey] ?? 0;
 
