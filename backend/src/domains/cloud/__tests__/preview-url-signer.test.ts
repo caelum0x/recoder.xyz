@@ -2,11 +2,12 @@
  * Preview URL signer tests — the HMAC-signed, expiring preview URL seam. Proves:
  * degrade-safe (unconfigured ⇒ SERVICE_UNAVAILABLE, never a faked URL), a minted
  * token round-trips through verify, a tampered signature is rejected, an expired
- * token is rejected, and the ledger hash is sha256 of the raw token.
+ * token is rejected, a revoked token is rejected (while others still verify),
+ * and the ledger hash is sha256 of the raw token.
  */
 import { describe, it, expect } from 'vitest';
 import { createHash } from 'node:crypto';
-import { createPreviewUrlSigner } from '../services/preview-url-signer.js';
+import { createPreviewUrlSigner, createInMemoryRevocationStore } from '../services/preview-url-signer.js';
 import { sliceCloudConfig, type CloudConfigOverrides } from '../config.js';
 import { ErrorCode } from '../../../shared/errors.js';
 
@@ -78,6 +79,56 @@ describe('PreviewUrlSigner — sign / verify round-trip', () => {
     const v = s.verify(r.value.token);
     expect(v.ok).toBe(false);
     if (!v.ok) expect(v.error.code).toBe(ErrorCode.AUTH_TOKEN_EXPIRED);
+  });
+});
+
+describe('PreviewUrlSigner — revocation', () => {
+  it('rejects a token after it is revoked (leaked URL killed before its TTL)', () => {
+    const s = signer(configured);
+    const r = s.sign('dep_rev', 'tnt_rev');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Well-signed, unexpired token verifies before revocation.
+    expect(s.verify(r.value.token).ok).toBe(true);
+    s.revoke(r.value.token);
+    const v = s.verify(r.value.token);
+    expect(v.ok).toBe(false);
+    if (!v.ok) {
+      expect(v.error.code).toBe(ErrorCode.AUTH_INVALID_TOKEN);
+      expect(v.error.message).toContain('revoked');
+    }
+  });
+
+  it('leaves other, non-revoked tokens verifying', () => {
+    const s = signer(configured);
+    const a = s.sign('dep_a', 'tnt_a');
+    const b = s.sign('dep_b', 'tnt_b');
+    if (!a.ok || !b.ok) throw new Error('sign failed');
+    s.revoke(a.value.token);
+    expect(s.verify(a.value.token).ok).toBe(false);
+    expect(s.verify(b.value.token).ok).toBe(true);
+  });
+
+  it('revocation is idempotent (revoking twice stays revoked)', () => {
+    const s = signer(configured);
+    const r = s.sign('dep_idem', 'tnt_idem');
+    if (!r.ok) throw new Error('sign failed');
+    s.revoke(r.value.token);
+    s.revoke(r.value.token);
+    expect(s.verify(r.value.token).ok).toBe(false);
+  });
+
+  it('honors an injected durable revocation store (seam is swappable)', () => {
+    const store = createInMemoryRevocationStore();
+    const now = () => new Date('2026-07-15T00:00:00.000Z');
+    const s = createPreviewUrlSigner(sliceCloudConfig(appConfig, configured), now, store);
+    const r = s.sign('dep_inj', 'tnt_inj');
+    if (!r.ok) throw new Error('sign failed');
+    // Pre-revoke straight through the store by the ledger id (sha256 of token).
+    store.revoke(s.hashToken(r.value.token));
+    const v = s.verify(r.value.token);
+    expect(v.ok).toBe(false);
+    if (!v.ok) expect(v.error.code).toBe(ErrorCode.AUTH_INVALID_TOKEN);
   });
 });
 

@@ -142,7 +142,9 @@ export {
 // Preview: HMAC signer + deploy target + the deploy service (real health probe).
 export {
   createPreviewUrlSigner,
+  createInMemoryRevocationStore,
   type PreviewUrlSigner,
+  type PreviewRevocationStore,
 } from './services/preview-url-signer.js';
 export {
   createPreviewTarget,
