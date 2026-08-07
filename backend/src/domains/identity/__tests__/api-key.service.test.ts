@@ -74,6 +74,14 @@ describe('ApiKeyService — DB-backed sk_ platform keys', () => {
     expect(record.scopes).toEqual(['read', 'write']);
   });
 
+  it('empty-scopes mint from a read-only granter cannot escalate to write (recoder-k4i9)', async () => {
+    const { service } = build();
+    // A read-only minter (e.g. a ['read'] sk_ key) POSTs no scopes: the minted key
+    // must be capped to the granter's held scopes, never the default read+write.
+    const { record } = await service.mint({ userId: 'u1', name: 'k', granterScopes: ['read'] });
+    expect(record.scopes).toEqual(['read']);
+  });
+
   it('validates a minted key and resolves the owning identity + scopes', async () => {
     const { service } = build();
     const { rawKey } = await service.mint({ userId: 'owner-1', orgId: 'org-9', name: 'k', scopes: ['read'] });

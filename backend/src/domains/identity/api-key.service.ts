@@ -215,8 +215,14 @@ export class ApiKeyServiceImpl implements ApiKeyService {
     requested: readonly string[] | undefined,
     granterScopes: readonly string[] | undefined,
   ): readonly string[] {
-    if (!requested || requested.length === 0) return DEFAULT_SCOPES;
     const granter = granterScopes ? new Set(granterScopes) : null;
+    if (!requested || requested.length === 0) {
+      // A default-scopes mint on the REQUEST path (granterScopes supplied) must not
+      // exceed what the minter holds — else a read-only key mints a read+write key
+      // (privilege escalation). The trusted server path (no granter) keeps the
+      // full defaults. (recoder-k4i9)
+      return granter ? DEFAULT_SCOPES.filter((s) => granter.has(s)) : DEFAULT_SCOPES;
+    }
     for (const scope of requested) {
       const grantable = granter ? granter.has(scope) : !PRIVILEGED_SCOPES.has(scope);
       if (!grantable) {
