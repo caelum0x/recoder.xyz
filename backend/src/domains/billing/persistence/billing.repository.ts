@@ -17,6 +17,7 @@ import type {
   MeteringRepository,
   SubscriptionUpsert,
   UsageEventInput,
+  UsageReservation,
 } from '../ports/metering-repo.port.js';
 import type {
   BillingProviderName,
@@ -217,6 +218,50 @@ export function createBillingRepository(executor: QueryExecutor): MeteringReposi
         },
       );
       return { inserted: count > 0 };
+    },
+
+    async reserveUsage(event: UsageEventInput, limit: number, since: string): Promise<UsageReservation> {
+      // Atomic reservation: a SINGLE guarded INSERT that only lands while the
+      // running window total (+ this quantity) stays within the limit. The guard
+      // subquery + insert execute as one statement, so a concurrent consume cannot
+      // slip past a stale read — this is what closes the check-then-record TOCTOU
+      // that a separate usageSince() + recordUsage() leaves open. ON CONFLICT keeps
+      // it idempotent; a duplicate key is disambiguated from an over-quota refusal
+      // by a follow-up existence probe so a retry stays a truthful no-op.
+      const inserted = await executor.mutate(
+        `insert into billing_usage_events
+           (id, subject_id, kind, quantity, run_id, engine, idempotency_key, occurred_at)
+         select :id, :subjectId, :kind, :quantity, :runId, :engine, :idempotencyKey,
+                coalesce(:occurredAt::timestamptz, now())
+         where coalesce((
+                 select sum(quantity) from billing_usage_events
+                 where subject_id = :subjectId and kind = :kind
+                   and occurred_at >= :since::timestamptz
+               ), 0) + :quantity <= :limit
+         on conflict (idempotency_key) do nothing`,
+        {
+          id: event.id,
+          subjectId: event.subjectId,
+          kind: event.kind,
+          quantity: event.quantity,
+          runId: event.runId ?? null,
+          engine: event.engine ?? null,
+          idempotencyKey: event.idempotencyKey,
+          occurredAt: event.occurredAt ?? null,
+          since,
+          limit,
+        },
+      );
+      if (inserted > 0) return { reserved: true, inserted: true };
+
+      // Zero rows affected ⇒ either the guard refused (over quota) OR an idempotent
+      // replay of a key already reserved. Probe existence to tell them apart: a
+      // known key is an already-counted no-op, an unknown key is a hard refusal.
+      const dup = await executor.one<QueryRow>(
+        `select 1 as one from billing_usage_events where idempotency_key = :idempotencyKey`,
+        { idempotencyKey: event.idempotencyKey },
+      );
+      return dup ? { reserved: true, inserted: false } : { reserved: false, inserted: false };
     },
 
     async usageSince(subjectId, kind, since) {

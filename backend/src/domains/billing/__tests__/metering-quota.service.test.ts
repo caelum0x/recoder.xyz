@@ -4,17 +4,21 @@
  *
  * Proves: idempotent record (retry = no-op), degrade-safe flush (no provider /
  * unconfigured / push error never marks flushed), quota deny-first ordering
- * (repo-down, read-throw), BYOK bypass, unlimited tier, headroom exhaustion, and
- * the check→record `consume` seam.
+ * (repo-down, read-throw), BYOK bypass, unlimited tier, headroom exhaustion, the
+ * `consume` seam, and the ATOMIC RESERVATION that closes the check-then-record
+ * TOCTOU (structural guarded-write proof + consume deny-on-refusal).
  */
 import { describe, it, expect } from 'vitest';
 import { createMeteringService } from '../services/metering.service.js';
 import { createQuotaService } from '../services/quota.service.js';
 import { createPlanCatalog } from '../services/plan-catalog.service.js';
+import { createBillingRepository } from '../persistence/billing.repository.js';
 import { sliceBillingConfig } from '../config.js';
 import type { BillingProviderPort } from '../ports/billing-provider.port.js';
 import type { MeteringRepository } from '../ports/metering-repo.port.js';
 import type { UsageEventInput } from '../ports/metering-repo.port.js';
+import type { QueryExecutor, QueryParams } from '../../persistence/ports/query-executor.port.js';
+import type { QueryRow } from '../../persistence/types.js';
 import type { BillingSubject, MeterEvent, PlanTier, ProviderHealth, UsageKind, UsageRecord } from '../types.js';
 
 const appConfig = { runtime: { isProduction: false } } as unknown as Parameters<typeof sliceBillingConfig>[0];
@@ -26,7 +30,7 @@ function subject(id: string, hasOwnApiKey?: boolean): BillingSubject {
 }
 
 /** An in-memory ledger repo: dedupes on idempotencyKey, sums usage, tracks flush. */
-function memRepo(opts: { available?: boolean; throwOnUsage?: boolean } = {}): MeteringRepository & {
+function memRepo(opts: { available?: boolean; throwOnUsage?: boolean; throwOnReserve?: boolean } = {}): MeteringRepository & {
   events: UsageRecord[];
   counters: Record<string, number>;
 } {
@@ -52,6 +56,29 @@ function memRepo(opts: { available?: boolean; throwOnUsage?: boolean } = {}): Me
         flushedAt: null,
       });
       return { inserted: true };
+    },
+    async reserveUsage(e: UsageEventInput, limit: number) {
+      if (opts.throwOnReserve) throw new Error('pool down');
+      // Idempotent replay: already reserved ⇒ truthful no-op (already counted).
+      if (keys.has(e.idempotencyKey)) return { reserved: true, inserted: false };
+      // Guarded write: only lands while the running window total stays within limit.
+      const used = events
+        .filter((x) => x.subjectId === e.subjectId && x.kind === e.kind)
+        .reduce((sum, x) => sum + x.quantity, 0);
+      if (used + e.quantity > limit) return { reserved: false, inserted: false };
+      keys.add(e.idempotencyKey);
+      events.push({
+        id: e.id,
+        subjectId: e.subjectId,
+        kind: e.kind,
+        quantity: e.quantity,
+        runId: e.runId ?? null,
+        engine: e.engine ?? null,
+        idempotencyKey: e.idempotencyKey,
+        occurredAt: e.occurredAt ?? '2026-07-15T12:00:00.000Z',
+        flushedAt: null,
+      });
+      return { reserved: true, inserted: true };
     },
     async usageSince(subjectId: string, kind: UsageKind) {
       if (opts.throwOnUsage) throw new Error('pool down');
@@ -307,5 +334,142 @@ describe('QuotaService — fail-safe deny path first', () => {
     });
     const d = await svc.check(subject('u1'), 'agent_run');
     expect(d.plan).toBe('free');
+  });
+});
+
+/**
+ * A minimal {@link QueryExecutor} that records every SQL + params it is handed and
+ * lets a test drive the `mutate` / `one` return values. Proves the repository
+ * REACHES Postgres through the guarded reservation statement without a live DB.
+ */
+function mockExecutor(
+  overrides: {
+    mutate?: (sql: string, params?: QueryParams) => Promise<number> | number;
+    one?: (sql: string, params?: QueryParams) => Promise<QueryRow | null> | QueryRow | null;
+  } = {},
+): QueryExecutor & { calls: Array<{ sql: string; params?: QueryParams }> } {
+  const calls: Array<{ sql: string; params?: QueryParams }> = [];
+  const exec: QueryExecutor & { calls: typeof calls } = {
+    calls,
+    async execute<T extends QueryRow = QueryRow>() {
+      return [] as unknown as readonly T[];
+    },
+    async one<T extends QueryRow = QueryRow>(sql: string, params?: QueryParams) {
+      calls.push({ sql, params });
+      const row = overrides.one ? await overrides.one(sql, params) : null;
+      return (row ?? null) as T | null;
+    },
+    async read<T extends QueryRow = QueryRow>() {
+      return [] as unknown as readonly T[];
+    },
+    async mutate(sql: string, params?: QueryParams) {
+      calls.push({ sql, params });
+      return overrides.mutate ? await overrides.mutate(sql, params) : 0;
+    },
+    async withTransaction<T>(fn: (tx: QueryExecutor) => Promise<T>) {
+      return fn(exec);
+    },
+    isAvailable: () => true,
+  };
+  return exec;
+}
+
+describe('BillingRepository.reserveUsage — atomic reservation (guarded ledger write)', () => {
+  const event: UsageEventInput = {
+    id: 'evt-1',
+    subjectId: 'u1',
+    kind: 'agent_run',
+    quantity: 3,
+    idempotencyKey: 'idem-1',
+  };
+  const SINCE = '2026-07-01T00:00:00.000Z';
+
+  it('is a SINGLE guarded INSERT bound to :limit/:quantity (not a blind write) that lands within the ceiling', async () => {
+    const exec = mockExecutor({ mutate: () => 1 }); // guard passed → 1 row inserted
+    const repo = createBillingRepository(exec);
+    const res = await repo.reserveUsage(event, 50, SINCE);
+    expect(res).toEqual({ reserved: true, inserted: true });
+
+    // Structural proof the reservation is race-safe by construction: the write is
+    // an INSERT guarded on the running window total against the bound :limit.
+    const write = exec.calls[0];
+    expect(write.sql).toMatch(/insert into billing_usage_events/i);
+    expect(write.sql).toMatch(/sum\(quantity\)/i);
+    expect(write.sql).toMatch(/<=\s*:limit/);
+    expect(write.sql).toMatch(/on conflict \(idempotency_key\) do nothing/i);
+    expect(write.params).toMatchObject({ limit: 50, quantity: 3, since: SINCE });
+  });
+
+  it('REFUSES (reserved:false) when the guarded write affects 0 rows and the key is unseen (over quota)', async () => {
+    // 0 rows affected = the guard's `total + quantity <= limit` was false.
+    const exec = mockExecutor({ mutate: () => 0, one: () => null });
+    const repo = createBillingRepository(exec);
+    const res = await repo.reserveUsage(event, 50, SINCE);
+    expect(res).toEqual({ reserved: false, inserted: false }); // a DENY, never a silent allow
+  });
+
+  it('treats a 0-row write whose idempotency key already exists as an already-reserved replay', async () => {
+    const exec = mockExecutor({ mutate: () => 0, one: () => ({ one: 1 }) as QueryRow });
+    const repo = createBillingRepository(exec);
+    const res = await repo.reserveUsage(event, 50, SINCE);
+    expect(res).toEqual({ reserved: true, inserted: false });
+  });
+});
+
+describe('QuotaService.consume — atomic reservation closes the check→record TOCTOU', () => {
+  const resolvePlan = (plan: PlanTier) => () => plan;
+
+  it('DENIES (quota_exceeded) and records NOTHING when the atomic reservation is refused', async () => {
+    // The race made concrete: the advisory check() still sees headroom, but the
+    // guarded reservation is refused (a concurrent consume took the last unit).
+    const repo = memRepo();
+    repo.reserveUsage = async () => ({ reserved: false, inserted: false });
+    const meter = createMeteringService({ repo, now: FIXED_NOW });
+    const svc = createQuotaService({ repo, catalog, resolvePlan: resolvePlan('free'), metering: meter, now: FIXED_NOW });
+
+    // check() alone would allow — consume must honor the reservation refusal instead.
+    expect((await svc.check(subject('u1'), 'agent_run')).allowed).toBe(true);
+
+    const res = await svc.consume(subject('u1'), 'agent_run', 1, { idempotencyKey: 'race' });
+    expect(res.recorded).toBe(false);
+    expect(res.decision.allowed).toBe(false);
+    expect(res.decision.reason).toBe('quota_exceeded');
+    expect(res.decision.remaining).toBe(0);
+    expect(repo.events).toHaveLength(0); // no event leaked past the refused reservation
+  });
+
+  it('DENIES fail-safe (metering_unavailable) when the reservation write throws', async () => {
+    const repo = memRepo({ throwOnReserve: true });
+    const meter = createMeteringService({ repo, now: FIXED_NOW });
+    const svc = createQuotaService({ repo, catalog, resolvePlan: resolvePlan('free'), metering: meter, now: FIXED_NOW });
+    const res = await svc.consume(subject('u1'), 'agent_run', 1, { idempotencyKey: 'boom' });
+    expect(res.recorded).toBe(false);
+    expect(res.decision.allowed).toBe(false);
+    expect(res.decision.reason).toBe('metering_unavailable');
+  });
+
+  it('routes consume enforcement through the reservation gate, not a blind record', async () => {
+    // Spy: a landed consume must call reserveUsage (the guarded write) and must NOT
+    // fall back to the unconditional recordUsage path that caused the TOCTOU.
+    const repo = memRepo();
+    let reserveCalls = 0;
+    let recordCalls = 0;
+    const baseReserve = repo.reserveUsage.bind(repo);
+    const baseRecord = repo.recordUsage.bind(repo);
+    repo.reserveUsage = async (e, limit, since) => {
+      reserveCalls += 1;
+      return baseReserve(e, limit, since);
+    };
+    repo.recordUsage = async (e) => {
+      recordCalls += 1;
+      return baseRecord(e);
+    };
+    const meter = createMeteringService({ repo, now: FIXED_NOW });
+    const svc = createQuotaService({ repo, catalog, resolvePlan: resolvePlan('free'), metering: meter, now: FIXED_NOW });
+
+    const res = await svc.consume(subject('u1'), 'agent_run', 1, { idempotencyKey: 'ok' });
+    expect(res.recorded).toBe(true);
+    expect(reserveCalls).toBe(1);
+    expect(recordCalls).toBe(0);
   });
 });
