@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { CLIAuthService } from '../services/cli-auth.service';
 
 /**
+ * Subscription statuses in good standing for CLI access. Mirrors the entitlements
+ * resolver's ACTIVE_STATUSES so a trialing subscriber is not locked out; free
+ * accounts default to 'active'. Feature-level gating still happens downstream.
+ */
+const ENTITLED_CLI_STATUSES = new Set(['active', 'trialing']);
+
+/**
  * Middleware to validate CLI authentication
  * Supports both access tokens and API keys
  */
@@ -84,8 +91,10 @@ export function withCLIAuth(
         );
       }
 
-      // Check subscription status
-      if (context.status !== 'active') {
+      // Check subscription status. Entitled statuses match the entitlements
+      // resolver's ACTIVE_STATUSES — a trialing subscriber is in good standing and
+      // must not be locked out (free users default to 'active'). (recoder-8xmj)
+      if (!ENTITLED_CLI_STATUSES.has(context.status)) {
         return NextResponse.json(
           {
             error: 'Subscription inactive',
