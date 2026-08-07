@@ -480,7 +480,14 @@ function createFleetRepository(qx: QueryExecutor): FleetRepository {
            kind = excluded.kind,
            status = excluded.status,
            capacity = excluded.capacity,
-           manifest = excluded.manifest,
+           -- Preserve the registered manifest when a heartbeat carries none
+           -- (manifest is optional): a bare status/last_seen beat sends '{}' and
+           -- would otherwise CLOBBER the node's registration to empty every beat.
+           -- Only a real (non-empty) manifest overwrites. (recoder-l8lv)
+           manifest = CASE
+             WHEN excluded.manifest = '{}'::jsonb THEN cloud_fleet_nodes.manifest
+             ELSE excluded.manifest
+           END,
            last_seen = excluded.last_seen
          RETURNING *`,
         {
