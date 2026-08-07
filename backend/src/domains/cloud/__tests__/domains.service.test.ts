@@ -40,6 +40,7 @@ function makeRepo(over: Partial<DomainRepository> = {}): DomainRepository & {
     isAvailable: () => true,
     insert,
     getById: vi.fn(async () => record()),
+    getByHostname: vi.fn(async () => null),
     updateVerification,
     listByTenant: vi.fn(async () => [record()]),
     delete: del,
@@ -90,6 +91,30 @@ describe('DomainsService.add', () => {
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error.code).toBe(ErrorCode.SERVICE_UNAVAILABLE);
     expect(repo.insert).not.toHaveBeenCalled();
+  });
+});
+
+describe('DomainsService.add — cross-tenant hostname hijack (recoder-4780)', () => {
+  it('rejects a hostname already owned by ANOTHER tenant (CONFLICT) and never overwrites', async () => {
+    const repo = makeRepo({
+      getByHostname: vi.fn(async () => record({ tenantId: 'ten_OTHER', hostname: 'app.example.com' })),
+    });
+    const svc = createDomainsService({ repo, logger, randomToken: () => 'T' });
+    const res = await svc.add({ tenantId: 'ten_1', hostname: 'App.Example.com.' });
+    expect(res.ok).toBe(false);
+    expect((res as { ok: false; error: { code: string } }).error.code).toBe(ErrorCode.CONFLICT);
+    // The other tenant's row is NEVER touched — no ON CONFLICT overwrite/hijack.
+    expect((repo as unknown as { insert: ReturnType<typeof vi.fn> }).insert).not.toHaveBeenCalled();
+  });
+
+  it('lets the SAME tenant re-add their own hostname (idempotent, proceeds to persist)', async () => {
+    const repo = makeRepo({
+      getByHostname: vi.fn(async () => record({ tenantId: 'ten_1', hostname: 'app.example.com' })),
+    });
+    const svc = createDomainsService({ repo, logger, randomToken: () => 'T' });
+    const res = await svc.add({ tenantId: 'ten_1', hostname: 'app.example.com' });
+    expect(res.ok).toBe(true);
+    expect((repo as unknown as { insert: ReturnType<typeof vi.fn> }).insert).toHaveBeenCalled();
   });
 });
 

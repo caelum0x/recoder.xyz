@@ -100,6 +100,21 @@ export function createDomainsService(deps: DomainsServiceDeps): DomainsService {
     if (!hostname) {
       return err(createError(ErrorCode.VALIDATION_ERROR, 'Invalid hostname (expected a fully-qualified domain, no scheme/path).'));
     }
+    // Cross-tenant hijack guard (recoder-4780): the insert upserts ON CONFLICT
+    // (hostname), so without this a second tenant claiming an already-owned
+    // hostname would OVERWRITE the owner's verification/DNS/TLS config. Reject a
+    // hostname owned by a DIFFERENT tenant BEFORE the write; the same tenant may
+    // re-add their own (idempotent refresh). The adapter's tenant-guarded
+    // ON CONFLICT closes the TOCTOU residual against a concurrent claim.
+    try {
+      const claimed = await repo.getByHostname(hostname);
+      if (claimed && claimed.tenantId !== input.tenantId) {
+        return err(createError(ErrorCode.CONFLICT, 'That hostname is already claimed by another tenant.'));
+      }
+    } catch (cause) {
+      logger.warn({ err: cause, hostname }, 'domain hostname pre-check failed');
+      return err(createError(ErrorCode.SERVICE_UNAVAILABLE, 'Failed to check hostname availability.'));
+    }
     try {
       const record = await repo.insert({
         id: idFactory(),
@@ -111,6 +126,12 @@ export function createDomainsService(deps: DomainsServiceDeps): DomainsService {
       });
       return ok(record);
     } catch (cause) {
+      // The guarded upsert throws a CONFLICT when another tenant claimed the
+      // hostname between the pre-check and the insert (TOCTOU) — surface it
+      // truthfully instead of masking it as a generic store failure. (recoder-4780)
+      if ((cause as { code?: string })?.code === ErrorCode.CONFLICT) {
+        return err(cause as AppError);
+      }
       logger.warn({ err: cause, hostname }, 'domain add failed');
       return err(createError(ErrorCode.SERVICE_UNAVAILABLE, 'Failed to persist the custom domain.'));
     }
