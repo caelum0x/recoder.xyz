@@ -46,6 +46,26 @@ export const POST = withCLIAuth(
       }
 
       if (quota && context.plan !== 'enterprise') {
+        // Roll the daily counter over when the period has expired (mirror the
+        // GET /api/cli/quota route). Without this a user who hit the cap in a prior
+        // period stays 429'd into the next day whenever the CLI calls the proxy
+        // directly instead of the quota GET first. (recoder-1bzn)
+        const now = new Date();
+        if (now > quota.periodEnd) {
+          const endOfDay = new Date(now);
+          endOfDay.setHours(23, 59, 59, 999);
+          await prisma.user_quota.update({
+            where: { id: quota.id },
+            data: {
+              sessionsUsedToday: 0,
+              periodStart: now,
+              periodEnd: endOfDay,
+              lastResetAt: now,
+            },
+          });
+          quota.sessionsUsedToday = 0;
+        }
+
         // Enforce the CURRENT plan's daily cap, not the value frozen in the row at
         // creation. A premium→free downgrade must be capped at the free tier: the
         // dodo webhook updates users.plan without reconciling user_quota, so the

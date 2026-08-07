@@ -222,6 +222,32 @@ describe('POST /api/cli/proxy — tier gate ENFORCES the daily session cap', () 
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('RESETS an expired quota period instead of wrongly 429-ing on a new day', async () => {
+    // Hit the cap in a PRIOR period; the daily window has since rolled over. The
+    // GET /api/cli/quota route resets on read, but the proxy must reset too or a
+    // CLI that calls proxy directly stays blocked into the next day. (recoder-1bzn)
+    state.authContext.plan = 'free';
+    state.quota = quotaFixture({
+      id: 'qX',
+      sessionsPerDay: 6,
+      sessionsUsedToday: 6,
+      periodEnd: new Date(Date.now() - 60 * 60 * 1000), // expired an hour ago
+    });
+
+    const { POST } = await getProxyRoute();
+    const response = await POST(proxyRequest());
+
+    // New period => counter reset => the request is allowed, not 429.
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // The row was reset (sessionsUsedToday -> 0) before enforcement.
+    const resetCall = updateQuotaMock.mock.calls.find(
+      (c: any) => c[0]?.data?.sessionsUsedToday === 0
+    );
+    expect(resetCall).toBeTruthy();
+    expect(resetCall![0].where).toEqual({ id: 'qX' });
+  });
+
   it('ALLOWS an enterprise (unlimited) user even when over the numeric cap', async () => {
     state.authContext.plan = 'enterprise';
     state.quota = quotaFixture({ sessionsPerDay: 6, sessionsUsedToday: 999 });
