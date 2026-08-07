@@ -153,3 +153,33 @@ describe('validateSignedEnvelopeIngress', () => {
     if (result.ok) expect(result.payload).toEqual(payload);
   });
 });
+
+describe('validateSignedEnvelopeIngress — metadata is bound into the MAC (recoder-i834)', () => {
+  const now = new Date('2026-06-01T00:00:00.000Z');
+
+  it('REJECTS an envelope whose signed_at was tampered after signing', () => {
+    const payload = { task: 'ship' };
+    const env = signedEnvelope(payload, { signedAt: '2026-05-01T00:00:00.000Z', expiresAt: '2026-07-01T00:00:00.000Z' });
+    // Attacker refreshes signed_at (defeats freshness) — payload + signature untouched.
+    const tampered = { ...env, signature: { ...env.signature, signed_at: now.toISOString() } };
+    const result = validateSignedEnvelopeIngress(tampered, { secret: SECRET, now });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('signed_envelope_bad_signature');
+  });
+
+  it('REJECTS an envelope whose expires_at was extended after signing', () => {
+    const payload = { task: 'ship' };
+    const env = signedEnvelope(payload, { signedAt: now.toISOString(), expiresAt: '2026-06-01T00:00:10.000Z' });
+    const tampered = { ...env, signature: { ...env.signature, expires_at: '2099-01-01T00:00:00.000Z' } };
+    const result = validateSignedEnvelopeIngress(tampered, { secret: SECRET, now });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('signed_envelope_bad_signature');
+  });
+
+  it('still ACCEPTS an untampered signed envelope', () => {
+    const payload = { task: 'ship' };
+    const env = signedEnvelope(payload, { signedAt: now.toISOString(), expiresAt: '2026-07-01T00:00:00.000Z' });
+    const result = validateSignedEnvelopeIngress(env, { secret: SECRET, now });
+    expect(result.ok).toBe(true);
+  });
+});
