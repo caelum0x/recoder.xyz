@@ -214,3 +214,25 @@ describe('multi-dispatch response strategies', () => {
     }
   });
 });
+
+describe('multi-dispatch cross-tenant isolation (recoder-hdgw)', () => {
+  it('does NOT inject a message into another tenant’s task via a caller-supplied taskId', async () => {
+    const { dispatch, tasks } = buildService(['a'], senderFailing(new Set()));
+    // OWNER owns a task.
+    await tasks.create({ id: 'victim-task', userId: OWNER, state: 'submitted' });
+
+    // A different tenant dispatches reusing the victim's taskId.
+    const res = await dispatch.dispatch({
+      userId: 'attacker',
+      targets: ['a'],
+      envelope: envelope('sneaky injected message'),
+      taskId: 'victim-task',
+    });
+
+    // The attacker's inbound message must NOT be appended to the victim's task…
+    const msgs = await tasks.messages('victim-task');
+    expect(JSON.stringify(msgs)).not.toContain('sneaky injected message');
+    // …and the dispatch is a truthful no-op refusal, never a faked success.
+    expect(res.ok).toBe(false);
+  });
+});

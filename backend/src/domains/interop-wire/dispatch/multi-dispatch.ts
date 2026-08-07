@@ -158,6 +158,27 @@ export function createMultiDispatchService(deps: MultiDispatchDeps): MultiDispat
         await safe(() =>
           tasks.create({ id: taskId, userId: input.userId, state: 'submitted', correlation: input.envelope.correlationId }),
         );
+      } else {
+        // A REUSED taskId must be OWNED by the caller before we append the inbound
+        // message into it — else a signed peer can inject messages into any tenant's
+        // task by supplying its id (IDOR). A foreign/absent task is a truthful no-op
+        // refusal (no append, no transition). (recoder-hdgw)
+        const owned = await safe(() => tasks.get(taskId, input.userId));
+        if (!owned) {
+          return {
+            taskId,
+            legs: input.targets.map((targetId) => ({
+              targetId,
+              kind: 'remote_a2a' as const,
+              ok: false,
+              code: 'task_not_owned',
+              reason: 'Task not found or not owned.',
+            })),
+            ok: false,
+            strategy,
+            satisfied: { succeeded: 0, required },
+          };
+        }
       }
       await safe(() =>
         tasks.appendMessage({ taskId, role: 'user', parts: [{ kind: 'text', text: extractText(input.envelope) }] }),
