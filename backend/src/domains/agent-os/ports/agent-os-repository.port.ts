@@ -198,6 +198,15 @@ export interface AgentOsRepositoryPort {
 
   // — Immutable event log (append-only) —
   appendEvent(event: RunEvent): RepositoryResult<RunEvent>;
+  /**
+   * ATOMIC append: persist the immutable event AND (optionally) its CloudEvents
+   * outbox record in ONE transaction — both commit or neither (recoder-kvb2).
+   * The ingest idempotency index re-seeds from the event log on restart, so an
+   * event that committed while its separate outbox write failed would be
+   * permanently skipped (dropped CloudEvent). Writing both atomically closes
+   * that durable drop. `outbox` omitted ⇒ event-only (log-only event types).
+   */
+  appendEventWithOutbox(event: RunEvent, outbox?: OutboxRecord): RepositoryResult<void>;
   listEvents(): RepositoryResult<RunEvent[]>;
   /**
    * Bounded, NEWEST-FIRST page of the append-only log with driver-side

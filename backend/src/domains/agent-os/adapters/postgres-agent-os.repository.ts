@@ -270,6 +270,29 @@ export class PostgresAgentOsRepository implements AgentOsRepositoryPort {
     );
     return event;
   }
+  /**
+   * ATOMIC append of the event + its outbox record in ONE transaction — both
+   * `insert ... on conflict do nothing` commit together or roll back
+   * (recoder-kvb2). The ingest idempotency index re-seeds from the event log on
+   * restart, so a committed event with a lost separate outbox write would be
+   * skipped forever; the shared transaction closes that durable drop.
+   */
+  async appendEventWithOutbox(event: RunEvent, outbox?: OutboxRecord): Promise<void> {
+    await this.executor.withTransaction(async (tx) => {
+      await tx.mutate(
+        `insert into agentos_event_log (event_id, payload) values (:event_id, :payload::jsonb)
+         on conflict (event_id) do nothing`,
+        { event_id: event.eventId, payload: JSON.stringify(event) },
+      );
+      if (outbox) {
+        await tx.mutate(
+          `insert into agentos_outbox (outbox_id, payload) values (:outbox_id, :payload::jsonb)
+           on conflict (outbox_id) do nothing`,
+          { outbox_id: outbox.outboxId, payload: JSON.stringify(outbox) },
+        );
+      }
+    });
+  }
   async listEvents(): Promise<RunEvent[]> {
     const rows = await this.executor.read<QueryRow>(
       `select payload from agentos_event_log order by seq asc`,

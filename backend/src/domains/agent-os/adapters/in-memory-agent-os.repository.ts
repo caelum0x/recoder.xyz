@@ -270,6 +270,17 @@ export class InMemoryAgentOsRepository implements AgentOsRepositoryPort {
     this.changed();
     return event;
   }
+  /**
+   * ATOMIC (in-process) append of the event + its outbox record — both or
+   * neither (recoder-kvb2). Both underlying appends are idempotent by id, so a
+   * retry after a partial failure is safe. In this in-process store the pushes
+   * cannot fail mid-way; the atomicity guarantee is load-bearing on the durable
+   * (sqlite/postgres) drivers.
+   */
+  appendEventWithOutbox(event: RunEvent, outbox?: OutboxRecord): void {
+    this.appendEvent(event);
+    if (outbox) this.appendOutbox(outbox);
+  }
   listEvents(): RunEvent[] {
     return [...this.events];
   }
