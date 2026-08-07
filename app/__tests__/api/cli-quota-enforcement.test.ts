@@ -248,6 +248,31 @@ describe('POST /api/cli/proxy — tier gate ENFORCES the daily session cap', () 
     expect(resetCall![0].where).toEqual({ id: 'qX' });
   });
 
+  it('does NOT lock out a TRIALING subscriber (status gate allows active + trialing)', async () => {
+    // withCLIAuth previously hard-required status==='active', 403-ing trialing
+    // (and grace) subscribers who are entitled. (recoder-8xmj)
+    state.authContext.plan = 'pro';
+    state.authContext.status = 'trialing';
+    state.quota = quotaFixture({ sessionsPerDay: 100, sessionsUsedToday: 1 });
+
+    const { POST } = await getProxyRoute();
+    const response = await POST(proxyRequest());
+
+    expect(response.status).toBe(200); // not 403 'Subscription inactive'
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('still BLOCKS a canceled subscriber with 403', async () => {
+    state.authContext.plan = 'pro';
+    state.authContext.status = 'canceled';
+
+    const { POST } = await getProxyRoute();
+    const response = await POST(proxyRequest());
+
+    expect(response.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('ALLOWS an enterprise (unlimited) user even when over the numeric cap', async () => {
     state.authContext.plan = 'enterprise';
     state.quota = quotaFixture({ sessionsPerDay: 6, sessionsUsedToday: 999 });
