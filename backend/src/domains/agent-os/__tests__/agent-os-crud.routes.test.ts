@@ -248,12 +248,15 @@ describe('CRUD edges — spaces', () => {
 describe('CRUD edges — tasks + runs (frozen contracts composed)', () => {
   it('creates a task then a run in `created` via TaskService', async () => {
     const h = await buildHarness();
+    // Reads are owner-scoped by the record's space (recoder-ctoj) — own the space.
+    expect((await send(h, 'POST', '/spaces', spaceBody)).status).toBe(200);
     expect((await send(h, 'POST', '/tasks', taskBody)).status).toBe(200);
     const created = await send(h, 'POST', '/runs', { taskId: 'task-1', runId: 'run-1' });
     expect(created.status).toBe(200);
     const run = dataOf<TaskRun>(created);
     expect(run).toMatchObject({ runId: 'run-1', taskId: 'task-1', spaceId: 'space-1', state: 'created' });
-    expect((await get(h, '/runs/run-1')).status).toBe(200);
+    // Reads are owner-scoped (recoder-ctoj) — authenticate as the space owner.
+    expect((await request(h.base, '/runs/run-1', { headers: asUser })).status).toBe(200);
     await h.close();
   });
 
@@ -290,8 +293,11 @@ describe('CRUD edges — tasks + runs (frozen contracts composed)', () => {
 
   it('reads a task by id and 404s a missing one', async () => {
     const h = await buildHarness();
+    // Reads are owner-scoped by the record's space (recoder-ctoj) — own the space.
+    expect((await send(h, 'POST', '/spaces', spaceBody)).status).toBe(200);
     seedTask(h.repo);
-    expect((await get(h, '/tasks/task-1')).status).toBe(200);
+    // Reads are owner-scoped (recoder-ctoj) — authenticate as the space owner.
+    expect((await request(h.base, '/tasks/task-1', { headers: asUser })).status).toBe(200);
     expect((await get(h, '/tasks/none')).status).toBe(404);
     await h.close();
   });

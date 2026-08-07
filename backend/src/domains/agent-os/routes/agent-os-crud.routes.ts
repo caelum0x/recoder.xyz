@@ -268,6 +268,12 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
       const tasks = await repository.listTasks();
       const task = tasks.find((t) => t.taskId === req.params.taskId);
       if (!task) return notFound(res, 'task', req.params.taskId);
+      // Owner-scope by the task's space — a foreign/absent id is a 404 no-oracle,
+      // mirroring the space edges. (recoder-ctoj: single-record read IDOR)
+      const taskSpace = (await repository.listSpaces()).find((s) => s.spaceId === task.spaceId);
+      if (!taskSpace || !canAccessSpace(taskSpace, req.principal, soloMode)) {
+        return notFound(res, 'task', req.params.taskId);
+      }
       sendSuccess(res, task);
     }),
   );
@@ -292,6 +298,12 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
       const runs = await repository.listRuns();
       const run = runs.find((r) => r.runId === req.params.runId);
       if (!run) return notFound(res, 'run', req.params.runId);
+      // Owner-scope by the run's space — a foreign/absent id is a 404 no-oracle,
+      // mirroring the space + transition edges. (recoder-ctoj: single-record read IDOR)
+      const runSpace = (await repository.listSpaces()).find((s) => s.spaceId === run.spaceId);
+      if (!runSpace || !canAccessSpace(runSpace, req.principal, soloMode)) {
+        return notFound(res, 'run', req.params.runId);
+      }
       sendSuccess(res, run);
     }),
   );
