@@ -128,10 +128,12 @@ export async function getDeviceFlowRequestByUserCode(userCode: string): Promise<
 
     const flow = await prisma.deviceCode.findFirst({
       where: {
+        // EXACT match only (with/without hyphen). A substring `contains` match let
+        // a partial code resolve to another flow whose code merely contained it —
+        // a guessable/collidable device-auth lookup. (recoder-caau)
         OR: [
           { userCode: userCode },
-          { userCode: normalizedCode },
-          { userCode: { contains: normalizedCode } }
+          { userCode: normalizedCode }
         ]
       },
       include: { user: true }
