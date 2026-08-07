@@ -128,8 +128,13 @@ export class KvStoreRepository implements KvStore {
         updatedAt: r.updated_at ? new Date(r.updated_at as string).toISOString() : new Date().toISOString(),
       }));
     } catch (err) {
-      this.log.warn({ err: msg(err), namespace }, 'kv list failed; using fallback');
-      return this.fallbackList(namespace);
+      this.log.warn({ err: msg(err), namespace }, 'kv list failed');
+      // Do NOT mask a transient durable read fault with the (empty) in-memory
+      // fallback — that makes present durable keys look ABSENT and callers act on
+      // a false empty. The fallback serves ONLY the explicit isAvailable()=false
+      // degraded path above; a fault while available is surfaced, mirroring
+      // get(). (recoder-6yxg)
+      throw err;
     }
   }
 
