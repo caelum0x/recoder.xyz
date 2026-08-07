@@ -225,6 +225,12 @@ export interface ApprovalRecord {
   readonly riskTier: RiskTier;
   readonly status: ApprovalStatus;
   readonly requestedBy: string;
+  /**
+   * The action's concrete target (path/command) this approval was granted for.
+   * A stored target clears the action ONLY on that exact target; a null/absent
+   * target clears the action task-wide (backward-compatible). (recoder-adsk)
+   */
+  readonly target?: string | null;
   readonly decidedBy?: string | null;
   readonly reason?: string | null;
   readonly expiresAt?: string | null;

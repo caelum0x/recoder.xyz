@@ -149,6 +149,52 @@ describe('GovernanceGateService — decide → risk → audit', () => {
     expect(v.approvalId).toBeUndefined();
   });
 
+  it('does NOT clear when the approval TARGET differs from the action target (recoder-adsk)', async () => {
+    // recoder-adsk: an approval minted for one concrete target must NOT clear the
+    // same action on a DIFFERENT target in the same task. Otherwise a grant for
+    // '/repo/a.ts' would silently authorize a write to '/repo/b.ts'.
+    const approvals = new InMemoryApprovalRepository();
+    const created = await approvals.create({
+      action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: '/repo/a.ts',
+    });
+    await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
+
+    const { gate } = buildGate(NEEDS, { approvals });
+    const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1', target: { path: '/repo/b.ts' } }));
+
+    // Target B has no approval of its own → stays blocked, never borrows A's.
+    expect(v.effect).toBe('needs_approval');
+    expect(v.approvalId).toBeUndefined();
+  });
+
+  it('DOES clear when the approval TARGET matches the action target (recoder-adsk)', async () => {
+    const approvals = new InMemoryApprovalRepository();
+    const created = await approvals.create({
+      action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: '/repo/a.ts',
+    });
+    await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
+
+    const { gate } = buildGate(NEEDS, { approvals });
+    const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1', target: { path: '/repo/a.ts' } }));
+
+    expect(v.effect).toBe('allow');
+    expect(v.approvalId).toBe(created.id);
+  });
+
+  it('a NULL-target approval still clears the action task-wide (backward-compatible, recoder-adsk)', async () => {
+    // Approvals minted before the target column existed carry a null target and
+    // must keep clearing the action on any target (no regression for old grants).
+    const approvals = new InMemoryApprovalRepository();
+    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
+
+    const { gate } = buildGate(NEEDS, { approvals });
+    const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1', target: { path: '/some/other/path.ts' } }));
+
+    expect(v.effect).toBe('allow');
+    expect(v.approvalId).toBe(created.id);
+  });
+
   it('SOLO MODE (bootstrap-injected, never env): clears a needs_approval to allow and seals it', async () => {
     const { gate, auditRepo } = buildGate(NEEDS, { soloMode: true });
     const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));

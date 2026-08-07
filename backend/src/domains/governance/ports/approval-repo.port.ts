@@ -17,6 +17,13 @@ export interface ApprovalRequestInput {
   readonly riskTier: RiskTier;
   readonly requestedBy: string;
   readonly reason?: string | null;
+  /**
+   * The action's concrete target (a path/command, derived like `resourceOf(ctx)`).
+   * When set, the approval clears the action ONLY on this exact target; a
+   * null/absent target clears the action task-wide (backward-compatible with
+   * approvals minted before targets were recorded). (recoder-adsk)
+   */
+  readonly target?: string | null;
   /** ISO-8601 expiry; a `pending` record past this is treated as `expired`. */
   readonly expiresAt?: string | null;
 }

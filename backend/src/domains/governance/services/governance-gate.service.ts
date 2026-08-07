@@ -365,13 +365,25 @@ export class GovernanceGateService implements GovernanceGate {
         status: 'approved',
         requestedBy: principal.userId,
       });
-      // Only a record for the SAME action + this requester that is NOT EXPIRED
-      // clears; without its id there is no auditable evidence, so the verdict
-      // stays blocking. Enforcing expiry here mirrors hasApproval's SQL
-      // `(expires_at is null or expires_at > now())` — list() does not filter it,
-      // so an approved-but-expired record would otherwise defeat the TTL. (recoder-nnqx)
+      // Only a record for the SAME action + this requester + this TARGET that is
+      // NOT EXPIRED clears; without its id there is no auditable evidence, so the
+      // verdict stays blocking. Three binds compose here:
+      //  - expiry — mirrors hasApproval's `(expires_at is null or expires_at > now())`;
+      //    list() does not filter it, so an approved-but-expired record would
+      //    otherwise defeat the TTL. (recoder-nnqx)
+      //  - requester — bound to `principal.userId` in the list() query above, so a
+      //    peer sharing a taskId cannot inherit the approval. (recoder-xiqj)
+      //  - target — an approval for one concrete path/command must NOT clear the
+      //    same action on a DIFFERENT target; a null/absent stored target stays
+      //    task-wide (backward-compatible). (recoder-adsk)
       const nowMs = Date.now();
-      return records.find((r) => r.action === action && !isApprovalExpired(r.expiresAt, nowMs))?.id;
+      const ctxTarget = resourceOf(ctx);
+      return records.find(
+        (r) =>
+          r.action === action &&
+          !isApprovalExpired(r.expiresAt, nowMs) &&
+          approvalTargetMatches(r.target, ctxTarget),
+      )?.id;
     } catch (err) {
       this.log?.warn(
         { err, action, taskId: ctx.taskId, actor: principal.userId },
@@ -490,4 +502,17 @@ function isApprovalExpired(expiresAt: string | null | undefined, nowMs: number):
   if (expiresAt == null || expiresAt === '') return false;
   const t = Date.parse(expiresAt);
   return Number.isFinite(t) && t <= nowMs;
+}
+
+/**
+ * Whether a stored approval target matches the action's current target
+ * (recoder-adsk). A null/absent/blank stored target is backward-compatible: it
+ * clears the action task-wide (the pre-fix behavior), so approvals minted before
+ * the `target` column existed are not broken. A concrete stored target clears
+ * ONLY the same target — an approval for one path/command never clears the
+ * action on another. `ctxTarget` is `resourceOf(ctx)`, always a stable string.
+ */
+function approvalTargetMatches(storedTarget: string | null | undefined, ctxTarget: string): boolean {
+  if (storedTarget == null || storedTarget === '') return true;
+  return storedTarget === ctxTarget;
 }
