@@ -294,6 +294,38 @@ describe('AlertingService.acknowledgeAlert', () => {
     expect(gate.decide).not.toHaveBeenCalled();
   });
 
+  it('a RESOLVED alert cannot be acked — illegal transition, no gate, no write (recoder-hale)', async () => {
+    const gate = { decide: vi.fn(), recordAudit: vi.fn() } as unknown as GovernanceGate;
+    const repo = fakeRepo({
+      getEvent: vi.fn().mockResolvedValue(
+        firingEvent({ status: 'resolved', resolvedAt: '2026-01-01T00:09:00.000Z' }),
+      ),
+    });
+    const svc = new AlertingService({ logger, repository: repo, gate });
+
+    await expect(
+      svc.acknowledgeAlert({ eventId: 'alert-1', principal }),
+    ).rejects.toThrow(/firing state/i);
+
+    expect(gate.decide).not.toHaveBeenCalled();
+    expect(repo.updateEventStatus).not.toHaveBeenCalled();
+  });
+
+  it('acking an ALREADY-ACKED alert is idempotent — returns it, no gate, no re-write', async () => {
+    const already = firingEvent({
+      status: 'acked', ackedBy: 'user-1', ackedAt: '2026-01-01T00:05:00.000Z', auditRef: 'audit-1',
+    });
+    const gate = { decide: vi.fn(), recordAudit: vi.fn() } as unknown as GovernanceGate;
+    const repo = fakeRepo({ getEvent: vi.fn().mockResolvedValue(already) });
+    const svc = new AlertingService({ logger, repository: repo, gate });
+
+    const result = await svc.acknowledgeAlert({ eventId: 'alert-1', principal });
+
+    expect(result).toBe(already);
+    expect(gate.decide).not.toHaveBeenCalled();
+    expect(repo.updateEventStatus).not.toHaveBeenCalled();
+  });
+
   it('ALLOW records an audit entry and stores its id as auditRef on the acked event', async () => {
     const gate = {
       decide: vi.fn().mockResolvedValue(allowVerdict()),

@@ -145,6 +145,14 @@ export class AlertingService {
     const existing = await this.deps.repository.getEvent(input.eventId);
     if (!existing) throw new Error(`alert event not found: ${input.eventId}`);
 
+    // State-guarded + idempotent: only a FIRING alert can be acked. An already-acked
+    // event returns unchanged (no re-audit, no re-write); any other state (e.g.
+    // resolved) is an illegal transition. (recoder-hale)
+    if (existing.status === 'acked') return existing;
+    if (existing.status !== 'firing') {
+      throw new Error(`alert not in a firing state (status: ${existing.status})`);
+    }
+
     const verdict = await this.deps.gate.decide('alert.ack', input.principal, {
       target: { path: `alert:${input.eventId}` },
       metadata: { spaceId: existing.spaceId },
