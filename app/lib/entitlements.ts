@@ -127,11 +127,15 @@ export function resolveEntitlements(
 ): ResolvedEntitlements {
   const plan = normalizePlanId(subscription?.planId ?? user?.subscriptionPlan);
 
+  // Fail-safe: an absent/blank status must NOT be treated as active — that would
+  // grant a stale paid `subscriptionPlan` its features with no proven active
+  // subscription. Default to 'inactive' so grantedPlan degrades to free unless a
+  // real active/trialing status is present. (recoder-y8gb)
   const rawStatus = subscription?.status ?? user?.subscriptionStatus;
   const status =
     typeof rawStatus === 'string' && rawStatus.trim() !== ''
       ? rawStatus.trim().toLowerCase()
-      : 'active';
+      : 'inactive';
 
   const grantedPlan: PlanId = ACTIVE_STATUSES.has(status) ? plan : 'free';
 

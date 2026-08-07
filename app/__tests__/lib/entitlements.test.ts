@@ -109,10 +109,10 @@ describe('lib/entitlements', () => {
       expect(resolved.features.assisted_synthesize).toBe(false);
     });
 
-    it('degrades an absent user to free/active', () => {
+    it('degrades an absent user to free/inactive', () => {
       const resolved = resolveEntitlements(null);
       expect(resolved.plan).toBe('free');
-      expect(resolved.status).toBe('active');
+      expect(resolved.status).toBe('inactive'); // absent => not active (fail-safe)
       expect(resolved.features.parallel_agents).toBe(2);
     });
 
@@ -124,6 +124,21 @@ describe('lib/entitlements', () => {
       expect(resolved.plan).toBe('pro');
       expect(resolved.status).toBe('canceled');
       expect(resolved.features).toEqual(getEntitlementFeatures('free'));
+    });
+
+    it('degrades a paid plan with ABSENT status to free (no proven active subscription)', () => {
+      // Fail-safe: a stale user.subscriptionPlan='pro' with no active subscription
+      // and no status must NOT grant paid features. (recoder-y8gb)
+      const resolved = resolveEntitlements({ subscriptionPlan: 'pro', subscriptionStatus: null });
+      expect(resolved.plan).toBe('pro'); // reported plan stays truthful…
+      expect(resolved.status).toBe('inactive'); // …but absent status is NOT active…
+      expect(resolved.features).toEqual(getEntitlementFeatures('free')); // …so features degrade
+    });
+
+    it('degrades a paid plan with a blank status string to free', () => {
+      const resolved = resolveEntitlements({ subscriptionPlan: 'pro', subscriptionStatus: '   ' });
+      expect(resolved.features.assisted_synthesize).toBe(false);
+      expect(resolved.features.parallel_agents).toBe(2);
     });
 
     it('grants paid features while trialing', () => {
