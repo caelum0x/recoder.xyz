@@ -30,6 +30,7 @@ import { AppError, ErrorCode } from '../../shared/errors.js';
 import type { AppConfig } from '../../shared/app-config.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
 import type { ApiKeyService } from './ports/api-key.port.js';
+import { PRIVILEGED_SCOPES } from './api-key.service.js';
 import type {
   DeviceExchangeResult,
   DeviceFlowService,
@@ -112,7 +113,11 @@ export class DeviceFlowServiceImpl implements DeviceFlowService, DeviceTokenVali
       deviceCodeHash,
       userCode,
       clientId,
-      scopes: normalizeScopes(params.scopes),
+      // A device grant is a SELF-SERVICE credential (public /device/code, then
+      // self-approve) — it must never carry privileged scopes, or the standing
+      // device-token principal would bypass the mint-path guard and become a
+      // platform super-user. Strip them at the source. (recoder-kuja)
+      scopes: stripPrivilegedScopes(normalizeScopes(params.scopes)),
       intervalSeconds: interval,
       expiresAt,
     });
@@ -207,7 +212,9 @@ export class DeviceFlowServiceImpl implements DeviceFlowService, DeviceTokenVali
     if (this.isExpired(grant.expiresAt)) return null;
     return {
       userId: grant.userId,
-      scopes: grant.scopes,
+      // Defense in depth: even if a stored/legacy grant somehow holds a
+      // privileged scope, a device principal never receives it. (recoder-kuja)
+      scopes: stripPrivilegedScopes(grant.scopes),
     };
   }
 
@@ -285,6 +292,15 @@ export function normalizeUserCode(input: string): string {
     groups.push(cleaned.slice(g * USER_CODE_GROUP, (g + 1) * USER_CODE_GROUP));
   }
   return groups.join('-');
+}
+
+/**
+ * Remove privileged scopes (`admin`/`internal`) a self-service device grant may
+ * never confer. The single source of truth is {@link PRIVILEGED_SCOPES} in the
+ * api-key service, reused so the two credential paths can't diverge. (recoder-kuja)
+ */
+function stripPrivilegedScopes(scopes: readonly string[]): readonly string[] {
+  return scopes.filter((s) => !PRIVILEGED_SCOPES.has(s));
 }
 
 /** De-dupe + trim requested scopes; empty when none supplied. */
