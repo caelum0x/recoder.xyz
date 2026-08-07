@@ -135,6 +135,11 @@ function checkTiming(env: SignedEnvelope, maxFutureSkewMs: number, now?: Date): 
     if (expiresAtMs < nowMs) {
       return { status: 401, code: 'signed_envelope_expired', reason: 'Signed A2A envelope expired.' };
     }
+  } else if (nowMs - signedAtMs > maxFutureSkewMs) {
+    // No explicit expires_at: bound the acceptance window to the skew tolerance so
+    // an envelope can't be replayed after the TTL-bounded replay guard forgets its
+    // jti (an unbounded signed_at made no-expiry envelopes replayable). (recoder-9yp6)
+    return { status: 401, code: 'signed_envelope_stale', reason: 'Signed A2A envelope without expires_at is too old.' };
   }
   return null;
 }
