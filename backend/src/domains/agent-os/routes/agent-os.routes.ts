@@ -46,8 +46,19 @@ export function buildAgentOsRouter(deps: AgentOsRoutesDeps): Router {
   const router = Router();
 
   // — Read models (authenticated) —
-  router.get('/summary', middleware.authenticate, async (_req: Request, res: Response) => {
+  router.get('/summary', middleware.authenticate, async (req: Request, res: Response) => {
     try {
+      // snapshot() aggregates EVERY tenant's agents/tasks/runs/artifacts/events —
+      // a control-plane OPERATOR view that cannot be meaningfully tenant-scoped
+      // without rebuilding per-tenant. Fail closed: operator/solo only; a tenant
+      // caller is refused rather than shown another tenant's data. (recoder-ctoj)
+      if (!seesAllSpaces(req.principal, soloMode)) {
+        sendError(
+          res,
+          createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'The agent-os summary is an operator-only surface.'),
+        );
+        return;
+      }
       sendSuccess(res, await repository.snapshot());
     } catch (error) {
       sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, message(error)));

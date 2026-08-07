@@ -294,10 +294,15 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     }),
   );
 
-  // — Agents —
-  router.get('/agents', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
-    sendPage(res, await repository.listAgentsPage(pageQueryOf(req)));
-  }));
+  // — Agents (recoder-ctoj remainder: AgentProfile carries NO tenant/space link —
+  //   it is a shared connector registry that cannot be owner-scoped. Fail closed:
+  //   only operator/solo (`seeAll`) callers see it; a tenant caller gets an empty
+  //   list / 404 no-oracle. If per-tenant agents become a product need, add an
+  //   owner/space field to AgentProfile and scope like the other aggregates.) —
+  router.get('/agents', read, validateQuery(paginationQuerySchema), handle((req, res) =>
+    // spaceIdOf → undefined for every agent ⇒ a non-seeAll caller sees none.
+    scopedList(req, res, (p) => repository.listAgentsPage(p), () => repository.listAgents(), () => undefined),
+  ));
 
   router.get(
     '/agents/:agentId',
@@ -306,7 +311,9 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     handle(async (req, res) => {
       const agents = await repository.listAgents();
       const agent = agents.find((a) => a.agentId === req.params.agentId);
-      if (!agent) return notFound(res, 'agent', req.params.agentId);
+      if (!agent || !seesAllSpaces(req.principal, soloMode)) {
+        return notFound(res, 'agent', req.params.agentId);
+      }
       sendSuccess(res, agent);
     }),
   );
