@@ -94,4 +94,11 @@ describe('KvStoreRepository (available pool — surfaces DB faults, never silent
     const kv = new KvStoreRepository(failingAvailableExecutor, silentLog);
     await expect(kv.get('ns', 'k')).rejects.toThrow('transient read failure');
   });
+
+  it('list() rethrows when the pool is available but the read fails — never a false-empty (recoder-6yxg)', async () => {
+    const kv = new KvStoreRepository(failingAvailableExecutor, silentLog);
+    // Masking a transient fault with the empty in-memory fallback would make
+    // durable keys look ABSENT; surface it, mirroring get().
+    await expect(kv.list('ns')).rejects.toThrow('transient read failure');
+  });
 });
