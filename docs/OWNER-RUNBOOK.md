@@ -4,7 +4,7 @@ Everything in this repo that can be built and verified **without owner credentia
 
 ## Summary of what shipped (2026-07-31)
 - **Backend:** isolation-correct + all 8 IDOR domains audited/fixed; org auto-provisioning + principal.orgId landed; A2A ed25519 external ingress enforced; dunning-grace + overage CTA code-landed; tsc 0, 3,076 tests green.
-- **Desktop:** agent-install + needs-input notification wired; git-init affordance live; Preact cockpit SPA deleted (Wave-only); real name/plan identity on the device-flow; **arm64 dmg SIGNED + NOTARIZED + stapled** (clean-install, no Gatekeeper warning) — just needs hosting.
+- **Desktop:** agent-install + needs-input notification wired; git-init affordance live; Preact cockpit SPA deleted (Wave-only); real name/plan identity on the device-flow; **arm64 dmg (v0.16.1) SIGNED + NOTARIZED + stapled + PUBLISHED** (clean-install, no Gatekeeper warning) to https://dl.recoder.xyz/releases/ — the only remaining owner step is a human end-to-end boot of the installed dmg.
 - **Website:** OAuth-only signin; tsc 0, 436 tests green. Next/Payload version triangle corrected to 16.2.6/react 19. **Install/build RESOLVED** (2026-08-01): `app` is a pnpm member, npm lock removed, `@recoder/*` linked, bins present (`_linkBins` crash does not reproduce). No install blocker remains.
 - **All three suites green** (backend, website, desktop).
 - **Governance approval-clearance residual (`recoder-xiqj`) now FIXED** (2026-08-01) — clearance binds to `requestedBy === principal.userId`; no owner action needed.
@@ -18,8 +18,8 @@ Do these in order; each links to its detailed section. Steps marked **[you]** ne
 3. **[you] Auth-model prod-validation** (§5) — the multi-tenant go-live gate: run the seam green in non-prod (`sso-logout-matrix`, `auth-email-reset-e2e`, `cli-device-flow-e2e`), stamp `orgId` on the Next/Better-Auth cross-subdomain session, run the `users→user` backfill on a **backup** of `recoder_main`, verify counts. Unblocks org-tenant isolation end-to-end. (#42 desktop identity is already resolved independently — the device flow carries real name/email/plan.)
 4. **[you] Billing — cut over to Creem** (§9) — set `BILLING_PROVIDER=creem` + the Creem keys; point the website checkout/webhook at the backend projection; verify a real test purchase unlocks capability. The backend is already Creem-ready (real adapter + registry); this is config + the website proxy + your Creem product IDs.
 5. **[you] Rotate secrets** (§10) — rotate anything that ever touched git history / the compromised box before opening to users.
-6. **✅ Desktop `.dmg` signed + notarized** (§1) — a clean-install `Recoder-arm64.dmg` is built; **remaining (you):** host it at a public URL + set the download env, then a human e2e boot.
-7. **[you] Deploy** — build + PM2 restart per your manual deploy recipe (backend + website), then the growth/search submissions (§6). Verify health is truthful, not inferred.
+6. **✅ Desktop `.dmg` signed + notarized + published** (§1) — v0.16.1 is hosted at https://dl.recoder.xyz/releases/ and the /download page is live with the real download + version + sha; existing installs auto-update via latest-mac.yml. **Remaining (you):** a human end-to-end boot of the installed dmg (sign in, create workspace, run agent, merge).
+7. **[you] Deploy** — the public site /download rebuild is already live (recoder-site :3012 serving the real v0.16.1 download). Remaining: build + PM2 restart the backend (and any other website changes) per your manual deploy recipe, then the growth/search submissions (§6). Verify health is truthful, not inferred.
 
 ## What is already DONE + verified (context)
 - Backend: all 12 OSS engines fully productized (deep-module fusion), backend-src consolidation with a **permanent cross-domain-import guard** (`backend/src/shared/__tests__/domain-boundaries.test.ts`), 2,300+ tests, tsc 0, boots 15 truthful health sources.
@@ -29,8 +29,8 @@ Do these in order; each links to its detailed section. Steps marked **[you]** ne
 
 ---
 
-## 1. Sign & ship the desktop `.dmg`  (✅ SIGNED + NOTARIZED — just host it)
-**A fully signed + notarized + stapled `Recoder-arm64.dmg` (1.3G) is built** at
+## 1. Sign & ship the desktop `.dmg`  (✅ SIGNED + NOTARIZED + PUBLISHED v0.16.1 — human e2e boot pending)
+**A fully signed + notarized + stapled `Recoder-0.16.1-arm64.dmg` (~825 MiB, 865339566 bytes) is built and published** at
 `apps/desktop/app/Recoder-arm64.dmg` (2026-08-01). Verified:
 `stapler validate` → worked; `spctl -a -t open` → **"accepted, source=Notarized
 Developer ID"** — it installs cleanly on any Mac with **no Gatekeeper warning**.
@@ -92,10 +92,10 @@ xcrun notarytool submit Recoder-arm64.dmg --key ~/.appstoreconnect/private_keys/
   --key-id 98T8ZPPNGD --issuer a57e5464-0804-487d-baad-b089a6ef327f --wait
 xcrun stapler staple Recoder-arm64.dmg
 ```
-**Remaining (yours):** host `Recoder-arm64.dmg` at a public URL (server / a public
-releases repo — the source repo is private), set the site's `platformDownloadUrl`
-env so `releasesArePublic()` flips the /download CTA to a real "Download", and do
-the human e2e boot. The old electron-builder path (for reference — signing/notarize is now env-gated
+**Remaining (yours):** do the human end-to-end boot of the installed dmg. (Hosting,
+the site download env, and the /download CTA flip are already done for v0.16.1 — the
+dmg is served at https://dl.recoder.xyz/releases/ and /download shows the real
+download.) The old electron-builder path (for reference — signing/notarize is now env-gated
 in the committed `electron-builder.config.cjs`; the untracked helper configs are
 deleted):
 ```
@@ -126,6 +126,13 @@ We have no GitHub Actions release pipeline (the `desktop-release.yml` scripts ne
 CI + repo secrets we don't run). Use the local publisher instead — it makes the
 site's Download page serve the real signed DMG and wires the app auto-updater.
 
+> **✅ Executed for v0.16.1 (2026-08-07):** this exact flow ran end-to-end — v0.16.1
+> is published to `dl.recoder.xyz/releases` (latest-mac.yml=0.16.1 LIVE, dmg HTTP 200,
+> clen 865339566) and `/download` serves it publicly. The commands below are the
+> reusable template for the next release. DMG landmine seen this run: `hdiutil create
+> -srcfolder` fails EPERM under a restricted (no Full-Disk-Access) shell — use
+> `hdiutil makehybrid -hfs … | hdiutil convert -format UDZO` (no mount) instead.
+
 ```bash
 # SAFE dry-run — verifies the on-disk DMG is genuinely installable (no writes):
 scripts/publish-desktop-release-local.sh verify
@@ -147,18 +154,18 @@ Then (owner):
    ```
 2. **Wire the site env** (site deploy env) and rebuild the site:
    ```
-   NEXT_PUBLIC_DOWNLOAD_MACOS_URL=https://dl.recoder.xyz/releases/Recoder-0.14.5-arm64.dmg
+   NEXT_PUBLIC_DOWNLOAD_MACOS_URL=https://dl.recoder.xyz/releases/Recoder-0.16.1-arm64.dmg
    NEXT_PUBLIC_DOWNLOAD_MACOS_SHA256=<sha256 from SHA256SUMS>   # shows the Verify-checksum affordance
-   NEXT_PUBLIC_RELEASE_VERSION=v0.14.5
+   NEXT_PUBLIC_RELEASE_VERSION=v0.16.1
    ```
    The Download page flips from "Get early access" to a real download automatically
    (`releasesArePublic()` in `site/lib/releases.ts`) — no code change needed.
-3. **Verify live:** `curl -fsI https://dl.recoder.xyz/releases/Recoder-0.14.5-arm64.dmg`
+3. **Verify live:** `curl -fsI https://dl.recoder.xyz/releases/Recoder-0.16.1-arm64.dmg`
    (expect 200 + the exact byte size) and `curl -fs …/latest-mac.yml` (expect the version).
 
 > **Why the manifest matters:** electron-updater rejects an update whose sha512/size
 > don't match `latest-mac.yml`. The checked-in `apps/desktop/app/make/latest-mac.yml`
-> is stale (v0.14.5, 772 MB, wrong filename) vs the real 1.37 GB DMG — the publish
+> was stale (v0.14.5) before publish; the LIVE latest-mac.yml at dl.recoder.xyz is now version=0.16.1, matching the real ~825 MiB (865339566-byte) DMG — the publish
 > script regenerates a correct one. Never hand-host the DMG without regenerating it.
 
 ## 2. Build the Lance native addon  (optional — embedded vector store)
