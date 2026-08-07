@@ -18,6 +18,8 @@ import { sendSuccess, sendError, createError, ErrorCode } from '../../../shared/
 import { validateQuery } from '../../../http/middleware/validate.js';
 import { buildAgentOsCrudRouter } from './agent-os-crud.routes.js';
 import { paginationQuerySchema } from './agent-os-crud.schemas.js';
+import { seesAllSpaces, visibleSpaces } from '../services/space-authz.js';
+import { scopeAndPage } from '../services/list-scope.js';
 import type { PolicyUpdatedEvent } from '../services/policy-update.emitter.js';
 
 export interface AgentOsRoutesDeps {
@@ -52,17 +54,36 @@ export function buildAgentOsRouter(deps: AgentOsRoutesDeps): Router {
     }
   });
 
-  // Bounded list edges: `?limit=`/`?offset=` validated at the boundary, threaded
-  // as a REAL `LIMIT/OFFSET` into the repository (never a fetch-all-then-slice).
-  // Backward compatible — absent params ⇒ first page at the default cap, and
-  // `data` stays the array (pagination totals ride in `meta`).
+  // Owned-space scope for the tenant-scoped list edges: the set of spaceIds the
+  // caller owns (operator/solo `seeAll` skips the fetch). Tasks/runs carry a
+  // direct `spaceId`, so no taskId indirection is needed here. (recoder-ctoj)
+  async function ownedSpaceScope(
+    req: Request,
+  ): Promise<{ seeAll: boolean; ownedSpaceIds: ReadonlySet<string> }> {
+    const seeAll = seesAllSpaces(req.principal, soloMode);
+    if (seeAll) return { seeAll, ownedSpaceIds: new Set() };
+    const spaces = await repository.listSpaces();
+    return {
+      seeAll,
+      ownedSpaceIds: new Set(visibleSpaces(spaces, req.principal, soloMode).map((s) => s.spaceId)),
+    };
+  }
+
+  // Bounded, TENANT-SCOPED list edges (recoder-ctoj): filter to the caller's own
+  // rows FIRST, then slice (a repo-side page over unfiltered rows would leak
+  // another tenant's rows + skew totals). Backward compatible — `data` stays the
+  // array, pagination totals ride in `meta`. Operator/solo callers see all.
   router.get(
     '/tasks',
     middleware.authenticate,
     validateQuery(paginationQuerySchema),
     async (req: Request, res: Response) => {
       try {
-        const page = await repository.listTasksPage(pageQueryOf(req));
+        const scope = await ownedSpaceScope(req);
+        // Operator/solo take the efficient driver page; a tenant filter-then-pages.
+        const page = scope.seeAll
+          ? await repository.listTasksPage(pageQueryOf(req))
+          : scopeAndPage(await repository.listTasks(), (t) => t.spaceId, scope.seeAll, scope.ownedSpaceIds, pageQueryOf(req));
         sendSuccess(res, page.items, { meta: metaOf(page) });
       } catch (error) {
         sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, message(error)));
@@ -76,7 +97,10 @@ export function buildAgentOsRouter(deps: AgentOsRoutesDeps): Router {
     validateQuery(paginationQuerySchema),
     async (req: Request, res: Response) => {
       try {
-        const page = await repository.listRunsPage(pageQueryOf(req));
+        const scope = await ownedSpaceScope(req);
+        const page = scope.seeAll
+          ? await repository.listRunsPage(pageQueryOf(req))
+          : scopeAndPage(await repository.listRuns(), (r) => r.spaceId, scope.seeAll, scope.ownedSpaceIds, pageQueryOf(req));
         sendSuccess(res, page.items, { meta: metaOf(page) });
       } catch (error) {
         sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, message(error)));

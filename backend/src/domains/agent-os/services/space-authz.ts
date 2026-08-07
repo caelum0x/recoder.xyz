@@ -54,6 +54,18 @@ export function canAccessSpace(
 }
 
 /**
+ * Does this principal see EVERY space — operator bypass (`internal`/`admin`) or
+ * solo/desktop fail-open? When true, tenant list/read scoping is skipped
+ * wholesale (mirrors the head of {@link canAccessSpace} / {@link visibleSpaces}).
+ */
+export function seesAllSpaces(
+  principal: SpaceAuthzPrincipal | undefined,
+  soloMode: boolean,
+): boolean {
+  return soloMode || isPrivilegedPrincipal(principal);
+}
+
+/**
  * Tenant-scope a list of spaces to those the principal may see. Solo/operator ⇒
  * everything; anonymous non-solo ⇒ nothing; else the caller's own spaces.
  */
