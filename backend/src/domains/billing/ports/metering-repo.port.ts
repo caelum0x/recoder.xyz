@@ -52,6 +52,19 @@ export interface IdempotentWrite {
   readonly inserted: boolean;
 }
 
+/**
+ * The result of an atomic quota reservation.
+ *
+ * `reserved` is the gate outcome: `false` ⇒ the single guarded write was REFUSED
+ * because it would push the window total past the limit (over quota). `inserted`
+ * is `false` on an idempotent replay of a key that was already reserved (the
+ * units are already counted — a truthful no-op, not a fresh charge).
+ */
+export interface UsageReservation {
+  readonly reserved: boolean;
+  readonly inserted: boolean;
+}
+
 /** Counter upsert (limit + window) — used to seed/reset a counter. */
 export interface CounterUpsert {
   readonly subjectId: string;
@@ -78,6 +91,20 @@ export interface MeteringRepository {
 
   /** Record a usage event; a repeated `idempotencyKey` is a no-op (`inserted:false`). */
   recordUsage(event: UsageEventInput): Promise<IdempotentWrite>;
+  /**
+   * Atomically reserve `event.quantity` units against the window quota in a
+   * SINGLE guarded ledger write: the insert lands ONLY while the running window
+   * total (+ this quantity) stays `<= limit`. Concurrent reservations serialize
+   * at the DB, so two callers can never both exceed the ceiling — this closes
+   * the check-then-record TOCTOU that a separate read + write leaves open. A
+   * refused write (would exceed) returns `{ reserved:false }`; a repeated
+   * `idempotencyKey` already reserved returns `{ reserved:true, inserted:false }`.
+   *
+   * @param limit The window quota ceiling. Callers MUST NOT reserve on unlimited
+   *   tiers (`limit === 0`) — those never touch the ledger gate.
+   * @param since ISO window start the running total is summed from.
+   */
+  reserveUsage(event: UsageEventInput, limit: number, since: string): Promise<UsageReservation>;
   /** Sum quantity for a subject/kind since `since` (ISO) — the fail-safe headroom read. */
   usageSince(subjectId: string, kind: UsageKind, since: string): Promise<number>;
   /** Unflushed events for the meter batch loop (oldest first). */

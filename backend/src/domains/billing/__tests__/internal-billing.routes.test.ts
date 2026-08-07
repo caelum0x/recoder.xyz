@@ -68,6 +68,29 @@ function memRepo(opts: { available?: boolean } = {}): MeteringRepository & { eve
       });
       return { inserted: true };
     },
+    async reserveUsage(e: UsageEventInput, limit: number) {
+      // Mirror the real repo: degrade-safe no-op with no pool; otherwise a guarded
+      // write that only lands while the running window total stays within `limit`.
+      if (opts.available === false) return { reserved: false, inserted: false };
+      if (keys.has(e.idempotencyKey)) return { reserved: true, inserted: false };
+      const used = events
+        .filter((x) => x.subjectId === e.subjectId && x.kind === e.kind)
+        .reduce((sum, x) => sum + x.quantity, 0);
+      if (used + e.quantity > limit) return { reserved: false, inserted: false };
+      keys.add(e.idempotencyKey);
+      events.push({
+        id: e.id,
+        subjectId: e.subjectId,
+        kind: e.kind,
+        quantity: e.quantity,
+        runId: e.runId ?? null,
+        engine: e.engine ?? null,
+        idempotencyKey: e.idempotencyKey,
+        occurredAt: e.occurredAt ?? '2026-07-15T12:00:00.000Z',
+        flushedAt: null,
+      });
+      return { reserved: true, inserted: true };
+    },
     async usageSince() {
       return 0;
     },

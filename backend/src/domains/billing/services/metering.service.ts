@@ -28,7 +28,7 @@ import {
   type ComponentHealth,
 } from '../../../shared/health-types.js';
 import type { BillingProviderPort } from '../ports/billing-provider.port.js';
-import type { IdempotentWrite, MeteringRepository } from '../ports/metering-repo.port.js';
+import type { IdempotentWrite, MeteringRepository, UsageReservation } from '../ports/metering-repo.port.js';
 import type { MeterEvent, UsageKind } from '../types.js';
 
 const SERVICE_NAME = 'billing.metering';
@@ -65,6 +65,15 @@ export interface BatchRecordResult {
 export interface MeteringService {
   /** Record one usage event durably + idempotently. */
   record(input: MeterInput): Promise<IdempotentWrite>;
+  /**
+   * Atomically reserve usage against a window quota via a single guarded ledger
+   * write (see {@link MeteringRepository.reserveUsage}). Unlike {@link record},
+   * a reservation is REFUSED (`reserved:false`) when it would exceed `limit` —
+   * this is the enforcement primitive the quota `consume` gate leans on to close
+   * the check-then-record TOCTOU. A fresh reservation warms the materialized
+   * counter; `limit` MUST be a finite ceiling (unlimited tiers never reserve).
+   */
+  reserve(input: MeterInput, limit: number, since: string): Promise<UsageReservation>;
   /** Record many events; aggregates fresh inserts vs idempotent duplicates. */
   recordBatch(inputs: readonly MeterInput[]): Promise<BatchRecordResult>;
   /** Drain up to `limit` unflushed events to the provider meter feed (degrade-safe). */
@@ -140,6 +149,27 @@ export function createMeteringService(deps: MeteringServiceDeps): MeteringServic
     // Only a fresh insert moves the counter (a duplicate must not double-count).
     if (write.inserted) await bumpCounter(input, quantity);
     return write;
+  }
+
+  async function reserve(input: MeterInput, limit: number, since: string): Promise<UsageReservation> {
+    const quantity = positiveQuantity(input.quantity);
+    const result = await repo.reserveUsage(
+      {
+        id: randomUUID(),
+        subjectId: input.subjectId,
+        kind: input.kind,
+        quantity,
+        runId: input.runId ?? null,
+        engine: input.engine ?? null,
+        idempotencyKey: input.idempotencyKey ?? randomUUID(),
+        ...(input.occurredAt ? { occurredAt: input.occurredAt } : {}),
+      },
+      limit,
+      since,
+    );
+    // Only a fresh reservation moves the counter (a replay is already counted).
+    if (result.inserted) await bumpCounter(input, quantity);
+    return result;
   }
 
   async function recordBatch(inputs: readonly MeterInput[]): Promise<BatchRecordResult> {
@@ -240,5 +270,5 @@ export function createMeteringService(deps: MeteringServiceDeps): MeteringServic
     return healthy(SERVICE_NAME);
   }
 
-  return { record, recordBatch, flushOnce, startFlushLoop, stop, health };
+  return { record, reserve, recordBatch, flushOnce, startFlushLoop, stop, health };
 }

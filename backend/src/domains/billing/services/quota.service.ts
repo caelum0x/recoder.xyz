@@ -15,9 +15,12 @@
  *   5. remaining < cost                  → DENY  (`quota_exceeded`)
  *   6. otherwise                         → ALLOW
  *
- * `consume` is the enforcement primitive: it checks headroom, and ONLY on an
- * allow writes the usage through the durable {@link MeteringService} ledger
- * (idempotent) — so the read gate and the ledger write never drift apart.
+ * `consume` is the enforcement primitive. `check` is only an ADVISORY pre-filter;
+ * the authoritative gate is an ATOMIC RESERVATION — a single guarded ledger write
+ * (`metering.reserve` → `repo.reserveUsage`) that lands ONLY while the window total
+ * stays within the limit. This closes the check-then-record TOCTOU: two concurrent
+ * consumes that both pass the same advisory read can never both land — the loser is
+ * refused and `consume` returns a hard `quota_exceeded` DENY, never a silent allow.
  */
 import type { Logger } from '../../../shared/logger.js';
 import {
@@ -25,7 +28,7 @@ import {
   healthy,
   type ComponentHealth,
 } from '../../../shared/health-types.js';
-import type { MeteringRepository } from '../ports/metering-repo.port.js';
+import type { MeteringRepository, UsageReservation } from '../ports/metering-repo.port.js';
 import type { PlanCatalog } from './plan-catalog.service.js';
 import type { MeteringService } from './metering.service.js';
 import {
@@ -210,26 +213,63 @@ export function createQuotaService(deps: QuotaServiceDeps): QuotaService {
     // No ledger wired → the caller only wanted a gate, not enforcement.
     if (!deps.metering) return { decision, recorded: false };
 
-    let recorded = false;
+    // ATOMIC RESERVATION — closes the check→record TOCTOU. The `check` above is an
+    // ADVISORY fast read; it is NOT the gate. The real gate is a single guarded
+    // ledger write (metering.reserve → repo.reserveUsage) that only lands while the
+    // window total stays within the limit. Two concurrent consumes that both passed
+    // the same advisory read therefore cannot both land — at most one wins the last
+    // unit, the other is refused. A refused reservation is a hard quota_exceeded
+    // DENY (never a silent allow); a reservation error keeps the fail-safe deny.
+    const { windowStart } = monthlyWindow(clock());
+    let reservation: UsageReservation;
     try {
-      const write = await deps.metering.record({
-        subjectId: subject.subjectId,
-        kind,
-        quantity: units,
-        runId: ctx.runId ?? null,
-        engine: ctx.engine ?? null,
-        ...(ctx.idempotencyKey ? { idempotencyKey: ctx.idempotencyKey } : {}),
-        ...(ctx.occurredAt ? { occurredAt: ctx.occurredAt } : {}),
-      });
-      recorded = write.inserted;
+      reservation = await deps.metering.reserve(
+        {
+          subjectId: subject.subjectId,
+          kind,
+          quantity: units,
+          runId: ctx.runId ?? null,
+          engine: ctx.engine ?? null,
+          ...(ctx.idempotencyKey ? { idempotencyKey: ctx.idempotencyKey } : {}),
+          ...(ctx.occurredAt ? { occurredAt: ctx.occurredAt } : {}),
+        },
+        decision.limit,
+        windowStart,
+      );
     } catch (error) {
-      // A ledger write failure must NOT report a successful consume — surface an
-      // unrecorded allow so the caller can decide (retry / degrade).
-      deps.logger?.warn?.({ error, subjectId: subject.subjectId, kind }, 'quota: consume ledger write failed');
-      return { decision, recorded: false };
+      // A reservation failure must NOT report a successful consume — deny fail safe.
+      deps.logger?.warn?.({ error, subjectId: subject.subjectId, kind }, 'quota: consume reservation failed');
+      return {
+        decision: {
+          ...decision,
+          allowed: false,
+          remaining: 0,
+          reason: 'metering_unavailable',
+          message: 'metering reservation failed; quota denied (fail safe)',
+        },
+        recorded: false,
+      };
     }
 
-    // Reflect the just-consumed units in the returned headroom (truthful view).
+    // Refused: the window filled between the advisory check and the atomic
+    // reservation (a concurrent consume won the last unit) → deny, do not record.
+    if (!reservation.reserved) {
+      const suggestedTier = catalog.upgradeTierForQuota(decision.plan, kind);
+      return {
+        decision: {
+          ...decision,
+          allowed: false,
+          remaining: 0,
+          reason: 'quota_exceeded',
+          message: `quota exceeded for ${kind}: 0/${decision.limit} remaining`,
+          ...(suggestedTier ? { upgrade: { currentTier: decision.plan, suggestedTier } } : {}),
+        },
+        recorded: false,
+      };
+    }
+
+    // Reflect the just-reserved units in the returned headroom (truthful view).
+    const recorded = reservation.inserted;
     const nextRemaining = recorded ? Math.max(0, decision.remaining - units) : decision.remaining;
     return { decision: { ...decision, remaining: nextRemaining }, recorded };
   }
