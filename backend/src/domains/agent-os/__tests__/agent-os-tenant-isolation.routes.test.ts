@@ -342,3 +342,30 @@ describe('agent-os tenant isolation — run transition (recoder-yb5r)', () => {
     await h.close();
   });
 });
+
+describe('agent-os tenant isolation — single-record reads (recoder-ctoj)', () => {
+  it("user B cannot GET user A's run by id (404 no-oracle); owner A can", async () => {
+    const h = await buildHarness();
+    await seedOwnedSpace(h, TOKEN_A, 'space-A', 'user-A');
+    h.repo.upsertRun({
+      runId: 'run-A', taskId: 'task-A', spaceId: 'space-A', state: 'running',
+      updatedAt: '2026-07-01T00:00:00Z',
+    });
+    expect((await get(h, asUser(TOKEN_B), '/runs/run-A')).status).toBe(404);
+    expect((await get(h, asUser(TOKEN_A), '/runs/run-A')).status).toBe(200);
+    await h.close();
+  });
+
+  it("user B cannot GET user A's task by id (404 no-oracle); owner A can", async () => {
+    const h = await buildHarness();
+    await seedOwnedSpace(h, TOKEN_A, 'space-A', 'user-A');
+    h.repo.upsertTask({
+      taskId: 'task-A', spaceId: 'space-A', title: 't', intent: 'bugfix', goal: 'g',
+      targetPaths: [], forbiddenPaths: [], acceptanceCriteria: [],
+      verification: { commands: [] }, approvalRequired: [], artifactRequired: [],
+    } as unknown as Parameters<typeof h.repo.upsertTask>[0]);
+    expect((await get(h, asUser(TOKEN_B), '/tasks/task-A')).status).toBe(404);
+    expect((await get(h, asUser(TOKEN_A), '/tasks/task-A')).status).toBe(200);
+    await h.close();
+  });
+});
