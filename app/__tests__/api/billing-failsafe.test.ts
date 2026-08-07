@@ -136,9 +136,9 @@ describe('entitlements resolver never 500s on bad input (returns free)', () => {
     expect(resolved.features.parallel_agents).toBe(2);
   });
 
-  it('a null user resolves to free/active without throwing', () => {
+  it('a null user resolves to free/inactive without throwing', () => {
     const resolved = resolveEntitlements(null);
     expect(resolved.plan).toBe('free');
-    expect(resolved.status).toBe('active');
+    expect(resolved.status).toBe('inactive'); // fail-safe: absent status is not active
   });
 });
