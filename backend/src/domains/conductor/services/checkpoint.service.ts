@@ -259,6 +259,17 @@ export async function restoreCheckpoint(
   await git(cwd, ['reset', '--hard', record.headSha]);
   if (record.snapshotSha !== record.headSha) {
     await git(cwd, ['checkout', record.snapshotSha, '--', '.']);
+    // `checkout <sha> -- .` re-applies the snapshot's tracked files but does NOT
+    // remove files that existed at headSha and were DELETED in the snapshot — so
+    // restore would leave stale files the checkpoint had removed. Reproduce those
+    // deletions explicitly so the restored tree matches the snapshot. (recoder-36lk)
+    const deletedOut = await git(cwd, [
+      'diff', '--name-only', '--diff-filter=D', record.headSha, record.snapshotSha,
+    ]);
+    const deletedPaths = deletedOut.split('\n').map((p) => p.trim()).filter(Boolean);
+    if (deletedPaths.length > 0) {
+      await git(cwd, ['rm', '--force', '--', ...deletedPaths]);
+    }
   }
 
   deps.logger.info(

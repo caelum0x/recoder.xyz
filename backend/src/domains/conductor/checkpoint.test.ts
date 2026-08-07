@@ -41,6 +41,8 @@ class FakeGit {
   readonly calls: string[][] = [];
   head: string;
   dirty: boolean;
+  /** Paths a `diff --diff-filter=D <head> <snapshot>` reports as deleted. */
+  deletedPaths: string[] = [];
   readonly tags = new Map<string, { sha: string; message: string }>();
   #stash = 0;
 
@@ -94,6 +96,14 @@ class FakeGit {
       case 'checkout':
         // ['<sha>', '--', '.'] — re-applies captured edits as working changes
         this.dirty = true;
+        return out('');
+      case 'diff':
+        // ['--name-only', '--diff-filter=D', <head>, <snapshot>] — the paths
+        // deleted between the two trees (empty unless the scenario configures them).
+        if (rest.includes('--diff-filter=D')) return out(this.deletedPaths.join('\n'));
+        return out('');
+      case 'rm':
+        // ['--force', '--', ...paths] — models the working-tree removal (recorded).
         return out('');
       default:
         return out('');
@@ -161,6 +171,23 @@ describe('checkpoint service (git seams)', () => {
     // The restore reset to the committed base then re-applied the captured edits.
     expect(git.calls).toContainEqual(['reset', '--hard', 'HEAD_A']);
     expect(git.calls).toContainEqual(['checkout', 'STASH_1', '--', '.']);
+  });
+
+  it('restore REPRODUCES file deletions captured in the snapshot (recoder-36lk)', async () => {
+    const git = new FakeGit({ head: 'HEAD_A', dirty: true });
+    const deps = svcDeps(git);
+    const record = await createCheckpoint(deps, 'ws_1', { label: 'wip', createdBy: 'user_test' });
+    // The snapshot removed src/gone.ts relative to the committed base.
+    git.deletedPaths = ['src/gone.ts'];
+
+    await restoreCheckpoint(deps, 'ws_1', record.checkpointId);
+
+    // `checkout <snap> -- .` re-applies tracked files but never removes deletions;
+    // restore must also remove the file the checkpoint deleted, else the restored
+    // tree keeps a stale file the snapshot did not have.
+    const rm = git.calls.find((c) => c[0] === 'rm');
+    expect(rm).toBeTruthy();
+    expect(rm).toContain('src/gone.ts');
   });
 
   it('captures a CLEAN worktree as a commit checkpoint (no stash, no re-apply)', async () => {
