@@ -335,6 +335,22 @@ export class CLIAuthService {
       throw new Error('Invalid refresh token');
     }
 
+    // Bound the refresh token's lifetime: it may only be exchanged within
+    // REFRESH_TOKEN_EXPIRY_DAYS of the session's creation. Previously the refresh
+    // token never expired, so a leaked one stayed valid forever. (recoder-l8e7)
+    if (session.createdAt) {
+      const refreshDeadline = new Date(
+        new Date(session.createdAt).getTime() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000
+      );
+      if (new Date() > refreshDeadline) {
+        await prisma.cli_sessions.update({
+          where: { id: session.id },
+          data: { isActive: false, revokedAt: new Date() },
+        });
+        throw new Error('Invalid refresh token');
+      }
+    }
+
     // Generate new access token
     const newAccessToken = `reco_${nanoid(48)}`;
     const expiresAt = new Date(Date.now() + ACCESS_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
