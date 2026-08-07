@@ -69,7 +69,11 @@ function buildHarness(): Promise<Harness> {
 
   const app = express();
   app.use(express.json());
-  app.use('/api/agent-os', buildAgentOsRouter({ repository: repo, middleware }));
+  // soloMode ⇒ see-all: this suite exercises pagination + keyed-lookup mechanics,
+  // not tenant scoping (that's agent-os-tenant-isolation.routes.test.ts). Without
+  // it the anonymous harness principal owns nothing and every scoped list/read
+  // is correctly empty/404. (recoder-ctoj)
+  app.use('/api/agent-os', buildAgentOsRouter({ repository: repo, middleware, soloMode: true }));
 
   return new Promise((resolve) => {
     const server = http.createServer(app);

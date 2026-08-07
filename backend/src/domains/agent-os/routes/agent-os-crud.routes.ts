@@ -45,8 +45,10 @@ import {
 import {
   canAccessSpace,
   ownerIdForCreate,
+  seesAllSpaces,
   visibleSpaces,
 } from '../services/space-authz.js';
+import { scopeAndPage } from '../services/list-scope.js';
 import {
   agentUpsertSchema,
   artifactCreateSchema,
@@ -135,6 +137,70 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
   const write = middleware.authenticateMutating;
   // Optional Idempotency-Key replay seam (BE-10.3): absent ⇒ identity passthrough.
   const idempotency: RequestHandler = deps.idempotency ?? ((_req, _res, next) => next());
+
+  /**
+   * Per-request tenant scope for the LIST edges: the set of spaceIds the caller
+   * owns + a `taskId -> spaceId` map to resolve aggregates that carry only a
+   * taskId. Operator/solo callers `seeAll` (the fetch is skipped). (recoder-ctoj)
+   *
+   * Cost note: a scoped list read fetches the caller's spaces + all tasks (the
+   * same fetch-then-filter tradeoff the `/spaces` edge already accepts); pushing
+   * the owner predicate into the repository driver is a tracked follow-up.
+   */
+  async function scopeOf(req: Request): Promise<{
+    seeAll: boolean;
+    ownedSpaceIds: ReadonlySet<string>;
+    taskSpace: ReadonlyMap<string, string>;
+  }> {
+    const seeAll = seesAllSpaces(req.principal, soloMode);
+    if (seeAll) return { seeAll, ownedSpaceIds: new Set(), taskSpace: new Map() };
+    const [spaces, tasks] = await Promise.all([repository.listSpaces(), repository.listTasks()]);
+    const ownedSpaceIds = new Set(
+      visibleSpaces(spaces, req.principal, soloMode).map((s) => s.spaceId),
+    );
+    const taskSpace = new Map(tasks.map((t) => [t.taskId, t.spaceId] as const));
+    return { seeAll, ownedSpaceIds, taskSpace };
+  }
+
+  /**
+   * Point-read owner check for a task-linked record: resolve `taskId -> task ->
+   * space -> canAccessSpace`. Operator/solo short-circuit true; an unresolvable
+   * or foreign task is denied so the caller surfaces a 404 no-oracle. (recoder-ctoj)
+   */
+  async function canAccessViaTask(req: Request, taskId: string | undefined): Promise<boolean> {
+    if (seesAllSpaces(req.principal, soloMode)) return true;
+    if (!taskId) return false;
+    const task = (await repository.listTasks()).find((t) => t.taskId === taskId);
+    if (!task) return false;
+    const space = (await repository.listSpaces()).find((s) => s.spaceId === task.spaceId);
+    return !!space && canAccessSpace(space, req.principal, soloMode);
+  }
+
+  /**
+   * Serve a tenant-scoped list edge. Operator/solo (`seeAll`) take the efficient
+   * repository `driverPage` (real LIMIT/OFFSET); a tenant caller fetches the full
+   * list and filter-then-pages by each record's owning space (`spaceIdOf`, which
+   * may resolve indirectly via the taskId->space map). Driver-side owner scoping
+   * is a tracked perf follow-up. (recoder-ctoj)
+   */
+  async function scopedList<T>(
+    req: Request,
+    res: Response,
+    driverPage: (page: PageQuery) => Promise<ListPage<T>>,
+    fullList: () => Promise<readonly T[]>,
+    spaceIdOf: (item: T, taskSpace: ReadonlyMap<string, string>) => string | undefined,
+  ): Promise<void> {
+    const scope = await scopeOf(req);
+    if (scope.seeAll) {
+      sendPage(res, await driverPage(pageQueryOf(req)));
+      return;
+    }
+    const items = await fullList();
+    sendPage(
+      res,
+      scopeAndPage(items, (it) => spaceIdOf(it, scope.taskSpace), scope.seeAll, scope.ownedSpaceIds, pageQueryOf(req)),
+    );
+  }
 
   // — Spaces (tenant-isolated: owner-scoped, with operator + solo bypass) —
   router.get('/spaces', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
@@ -364,10 +430,11 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     }),
   );
 
-  // — Approvals (READ-ONLY mirror; authoritative lifecycle = governance domain) —
-  router.get('/approvals', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
-    sendPage(res, await repository.listApprovalsPage(pageQueryOf(req)));
-  }));
+  // — Approvals (READ-ONLY mirror; authoritative lifecycle = governance domain;
+  //   owner-scoped by the owning task's space; recoder-ctoj) —
+  router.get('/approvals', read, validateQuery(paginationQuerySchema), handle((req, res) =>
+    scopedList(req, res, (p) => repository.listApprovalsPage(p), () => repository.listApprovals(), (a, ts) => ts.get(a.taskId)),
+  ));
 
   router.get(
     '/approvals/:approvalId',
@@ -376,15 +443,17 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     handle(async (req, res) => {
       // Repo point read (keyed lookup) — never a list-then-find scan.
       const approval = await repository.getApproval(req.params.approvalId);
-      if (!approval) return notFound(res, 'approval', req.params.approvalId);
+      if (!approval || !(await canAccessViaTask(req, approval.taskId))) {
+        return notFound(res, 'approval', req.params.approvalId);
+      }
       sendSuccess(res, approval);
     }),
   );
 
-  // — Artifacts —
-  router.get('/artifacts', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
-    sendPage(res, await repository.listArtifactsPage(pageQueryOf(req)));
-  }));
+  // — Artifacts (owner-scoped by the owning task's space; recoder-ctoj) —
+  router.get('/artifacts', read, validateQuery(paginationQuerySchema), handle((req, res) =>
+    scopedList(req, res, (p) => repository.listArtifactsPage(p), () => repository.listArtifacts(), (a, ts) => ts.get(a.taskId)),
+  ));
 
   router.get(
     '/artifacts/:artifactId',
@@ -393,7 +462,10 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     handle(async (req, res) => {
       // Repo point read (keyed lookup) — never a list-then-find scan.
       const artifact = await repository.getArtifact(req.params.artifactId);
-      if (!artifact) return notFound(res, 'artifact', req.params.artifactId);
+      // Owner-scope via the artifact's task -> space; foreign/absent ⇒ 404 no-oracle.
+      if (!artifact || !(await canAccessViaTask(req, artifact.taskId))) {
+        return notFound(res, 'artifact', req.params.artifactId);
+      }
       sendSuccess(res, artifact);
     }),
   );
@@ -421,13 +493,13 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
 
   // — Memory (items read-only here; candidates are evidence-backed proposals —
   //   promotion to durable stays a reviewed action, never this edge) —
-  router.get('/memory/items', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
-    sendPage(res, await repository.listMemoryItemsPage(pageQueryOf(req)));
-  }));
+  router.get('/memory/items', read, validateQuery(paginationQuerySchema), handle((req, res) =>
+    scopedList(req, res, (p) => repository.listMemoryItemsPage(p), () => repository.listMemoryItems(), (m, ts) => ts.get(m.evidence.taskId)),
+  ));
 
-  router.get('/memory/candidates', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
-    sendPage(res, await repository.listMemoryCandidatesPage(pageQueryOf(req)));
-  }));
+  router.get('/memory/candidates', read, validateQuery(paginationQuerySchema), handle((req, res) =>
+    scopedList(req, res, (p) => repository.listMemoryCandidatesPage(p), () => repository.listMemoryCandidates(), (c, ts) => ts.get(c.evidence.taskId)),
+  ));
 
   router.post(
     '/memory/candidates',
@@ -446,10 +518,11 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     }),
   );
 
-  // — Instructions (READ-ONLY: bundles are compiler-produced artifacts) —
-  router.get('/instructions', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
-    sendPage(res, await repository.listInstructionBundlesPage(pageQueryOf(req)));
-  }));
+  // — Instructions (READ-ONLY: bundles are compiler-produced artifacts;
+  //   owner-scoped by the owning task's space; recoder-ctoj) —
+  router.get('/instructions', read, validateQuery(paginationQuerySchema), handle((req, res) =>
+    scopedList(req, res, (p) => repository.listInstructionBundlesPage(p), () => repository.listInstructionBundles(), (b, ts) => ts.get(b.taskId)),
+  ));
 
   router.get(
     '/instructions/:bundleId',
@@ -458,15 +531,19 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     handle(async (req, res) => {
       const bundles = await repository.listInstructionBundles();
       const bundle = bundles.find((b) => b.bundleId === req.params.bundleId);
-      if (!bundle) return notFound(res, 'instruction bundle', req.params.bundleId);
+      if (!bundle || !(await canAccessViaTask(req, bundle.taskId))) {
+        return notFound(res, 'instruction bundle', req.params.bundleId);
+      }
       sendSuccess(res, bundle);
     }),
   );
 
-  // — Policies (READ-ONLY: decisions are governance-gate-produced) —
-  router.get('/policies', read, validateQuery(paginationQuerySchema), handle(async (req, res) => {
-    sendPage(res, await repository.listPolicyDecisionsPage(pageQueryOf(req)));
-  }));
+  // — Policies (READ-ONLY: decisions are governance-gate-produced; owner-scoped
+  //   by the owning task's space. A decision with NO taskId is owner-less ⇒
+  //   operator/solo-only, never in a tenant list. recoder-ctoj) —
+  router.get('/policies', read, validateQuery(paginationQuerySchema), handle((req, res) =>
+    scopedList(req, res, (p) => repository.listPolicyDecisionsPage(p), () => repository.listPolicyDecisions(), (d, ts) => (d.taskId ? ts.get(d.taskId) : undefined)),
+  ));
 
   router.get(
     '/policies/:decisionId',
@@ -475,7 +552,9 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     handle(async (req, res) => {
       const decisions = await repository.listPolicyDecisions();
       const decision = decisions.find((d) => d.decisionId === req.params.decisionId);
-      if (!decision) return notFound(res, 'policy decision', req.params.decisionId);
+      if (!decision || !(await canAccessViaTask(req, decision.taskId))) {
+        return notFound(res, 'policy decision', req.params.decisionId);
+      }
       sendSuccess(res, decision);
     }),
   );
@@ -486,16 +565,40 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     read,
     validateQuery(eventsQuerySchema),
     handle(async (req, res) => {
-      // Bounded NEWEST-FIRST page; the taskId/runId filters run IN the driver
-      // (WHERE + LIMIT/OFFSET) — never the whole log filtered in JS.
       const query = req.query as unknown as z.infer<typeof eventsQuerySchema>;
+      const scope = await scopeOf(req);
+      if (scope.seeAll) {
+        // Operator/solo: keep the efficient NEWEST-FIRST driver page (WHERE +
+        // LIMIT/OFFSET) — no owner predicate needed.
+        sendPage(
+          res,
+          await repository.listEventsPage({
+            limit: query.limit,
+            offset: query.offset,
+            ...(query.taskId ? { taskId: query.taskId } : {}),
+            ...(query.runId ? { runId: query.runId } : {}),
+          }),
+        );
+        return;
+      }
+      // Tenant caller: owner-scope the append-only log by each event's task ->
+      // space. A driver page can't apply the owner predicate, so filter-then-page
+      // here; `.reverse()` keeps the newest-first parity of listEventsPage. The
+      // optional taskId/runId filters ride along. Driver-side owner scoping is a
+      // tracked perf follow-up. (recoder-ctoj)
+      const all = await repository.listEvents();
+      const filtered = all
+        .filter(
+          (e) =>
+            (!query.taskId || e.taskId === query.taskId) &&
+            (!query.runId || e.runId === query.runId),
+        )
+        .reverse();
       sendPage(
         res,
-        await repository.listEventsPage({
+        scopeAndPage(filtered, (e) => scope.taskSpace.get(e.taskId), scope.seeAll, scope.ownedSpaceIds, {
           limit: query.limit,
           offset: query.offset,
-          ...(query.taskId ? { taskId: query.taskId } : {}),
-          ...(query.runId ? { runId: query.runId } : {}),
         }),
       );
     }),

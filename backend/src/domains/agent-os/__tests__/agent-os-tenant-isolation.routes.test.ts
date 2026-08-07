@@ -369,3 +369,122 @@ describe('agent-os tenant isolation — single-record reads (recoder-ctoj)', () 
     await h.close();
   });
 });
+
+// — LIST-surface tenant scoping (recoder-ctoj) —
+// Seed a full set of A-owned aggregates under space-A/task-A; every list edge
+// must exclude them from another tenant (B), include them for owner A, and be
+// bypassed by an operator. Resolution is by the record's owning space: direct
+// (task/run) or indirect via taskId->task.spaceId (artifact/approval/instruction/
+// memory/policy/event). A policy decision with NO taskId has no owner → it is
+// visible ONLY to an operator/solo caller, never a tenant list.
+const anyRec = <T>(o: unknown): T => o as T;
+
+function seedAOwnedAggregates(h: Harness): void {
+  h.repo.upsertTask(anyRec({
+    taskId: 'task-A', spaceId: 'space-A', title: 't', intent: 'bugfix', goal: 'g',
+    targetPaths: [], forbiddenPaths: [], acceptanceCriteria: [],
+    verification: { commands: [] }, approvalRequired: [], artifactRequired: [],
+  }));
+  h.repo.upsertRun(anyRec({
+    runId: 'run-A', taskId: 'task-A', spaceId: 'space-A', state: 'running',
+    updatedAt: '2026-07-01T00:00:00Z',
+  }));
+  h.repo.upsertArtifact(anyRec({
+    artifactId: 'art-A', taskId: 'task-A', kind: 'log', uri: 'x',
+    createdAt: '2026-07-01T00:00:00Z', createdBy: 'user-A',
+  }));
+  h.repo.upsertApproval(anyRec({
+    approvalId: 'apr-A', taskId: 'task-A', state: 'pending',
+  }));
+  h.repo.upsertInstructionBundle(anyRec({
+    bundleId: 'bun-A', taskId: 'task-A', runtime: 'claude', content: '',
+  }));
+  h.repo.upsertMemoryItem(anyRec({
+    itemId: 'mem-A', scope: 'task', content: 'x',
+    evidence: { taskId: 'task-A', artifactId: 'art-A' },
+  }));
+  h.repo.upsertPolicyDecision(anyRec({
+    decisionId: 'pol-A', taskId: 'task-A', action: 'x', allowed: true,
+  }));
+  // An UNLINKED policy decision (no taskId) — owner-less; operator-only.
+  h.repo.upsertPolicyDecision(anyRec({
+    decisionId: 'pol-orphan', action: 'y', allowed: false,
+  }));
+  h.repo.appendEvent(anyRec({
+    eventId: 'evt-A', taskId: 'task-A', type: 'run.started',
+    at: '2026-07-01T00:00:00Z',
+  }));
+}
+
+// The scoped list edges and how many rows A owns in each (orphan policy excluded).
+const LIST_EDGES: Array<{ path: string; ownedByA: number }> = [
+  { path: '/tasks', ownedByA: 1 },
+  { path: '/runs', ownedByA: 1 },
+  { path: '/artifacts', ownedByA: 1 },
+  { path: '/approvals', ownedByA: 1 },
+  { path: '/instructions', ownedByA: 1 },
+  { path: '/memory/items', ownedByA: 1 },
+  { path: '/policies', ownedByA: 1 }, // the orphan is NOT owned by A
+  { path: '/events', ownedByA: 1 },
+];
+
+describe('agent-os tenant isolation — list surface excludes other tenants (recoder-ctoj)', () => {
+  it("user B sees NONE of user A's records across every scoped list edge", async () => {
+    const h = await buildHarness();
+    await seedOwnedSpace(h, TOKEN_A, 'space-A', 'user-A');
+    seedAOwnedAggregates(h);
+    for (const edge of LIST_EDGES) {
+      const res = await get(h, asUser(TOKEN_B), edge.path);
+      expect(res.status).toBe(200);
+      expect({ path: edge.path, rows: dataOf<unknown[]>(res) }).toEqual({ path: edge.path, rows: [] });
+    }
+    await h.close();
+  });
+
+  it('owner A sees exactly their own records on every scoped list edge', async () => {
+    const h = await buildHarness();
+    await seedOwnedSpace(h, TOKEN_A, 'space-A', 'user-A');
+    seedAOwnedAggregates(h);
+    for (const edge of LIST_EDGES) {
+      const res = await get(h, asUser(TOKEN_A), edge.path);
+      expect(res.status).toBe(200);
+      expect({ path: edge.path, n: dataOf<unknown[]>(res).length })
+        .toEqual({ path: edge.path, n: edge.ownedByA });
+    }
+    await h.close();
+  });
+
+  it('an operator (admin key) sees ALL records incl. the owner-less orphan policy', async () => {
+    const h = await buildHarness();
+    await seedOwnedSpace(h, TOKEN_A, 'space-A', 'user-A');
+    seedAOwnedAggregates(h);
+    // /policies has the linked + orphan decision → operator sees BOTH (2).
+    expect(dataOf<unknown[]>(await get(h, asAdminKey, '/policies')).length).toBe(2);
+    expect(dataOf<unknown[]>(await get(h, asAdminKey, '/artifacts')).length).toBe(1);
+    await h.close();
+  });
+
+  it('solo/desktop mode fails open — anonymous caller sees every list', async () => {
+    const h = await buildHarness({ soloMode: true });
+    // Solo (seeAll) needs no owner match — seed aggregates directly.
+    seedAOwnedAggregates(h);
+    expect(dataOf<unknown[]>(await get(h, {}, '/artifacts')).length).toBe(1);
+    expect(dataOf<unknown[]>(await get(h, {}, '/tasks')).length).toBe(1);
+    await h.close();
+  });
+});
+
+describe('agent-os tenant isolation — point reads resolve ownership via task (recoder-ctoj)', () => {
+  const POINT_READS = ['/artifacts/art-A', '/approvals/apr-A', '/instructions/bun-A', '/policies/pol-A'];
+
+  it("user B cannot GET any of A's task-linked records by id (404); owner A can", async () => {
+    const h = await buildHarness();
+    await seedOwnedSpace(h, TOKEN_A, 'space-A', 'user-A');
+    seedAOwnedAggregates(h);
+    for (const path of POINT_READS) {
+      expect({ path, s: (await get(h, asUser(TOKEN_B), path)).status }).toEqual({ path, s: 404 });
+      expect({ path, s: (await get(h, asUser(TOKEN_A), path)).status }).toEqual({ path, s: 200 });
+    }
+    await h.close();
+  });
+});

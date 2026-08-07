@@ -78,9 +78,12 @@ function buildHarness(repositoryOverride?: AgentOsRepositoryPort): Promise<Harne
 
   const app = express();
   app.use(express.json());
+  // soloMode ⇒ see-all: this suite exercises CRUD mechanics, not tenant scoping
+  // (covered by agent-os-tenant-isolation.routes.test.ts). Without it the harness
+  // principal owns no space, so scoped list/point reads are correctly empty/404.
   app.use(
     '/api/agent-os',
-    buildAgentOsRouter({ repository: repositoryOverride ?? repo, middleware }),
+    buildAgentOsRouter({ repository: repositoryOverride ?? repo, middleware, soloMode: true }),
   );
 
   return new Promise((resolve) => {
