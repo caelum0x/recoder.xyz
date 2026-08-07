@@ -1121,7 +1121,8 @@ export class ConductorGovernedWrites {
       // the merge (the evidence just records the parts it could truthfully gather).
       const preMerge = await this.gatherConvergenceInputs(
         workspaceId,
-        workspace
+        workspace,
+        principal
       );
 
       const deps: PublishOpsDeps = buildReviewDeps(this.ctx);
@@ -1196,13 +1197,18 @@ export class ConductorGovernedWrites {
    */
   private async gatherConvergenceInputs(
     workspaceId: string,
-    workspace: Workspace | null
+    workspace: Workspace | null,
+    principal: Principal
   ): Promise<{
     candidates: readonly EvidenceCandidateInput[];
     verification?: { view?: ReadinessView; reason?: string };
   }> {
     const [siblingsR, readinessR] = await Promise.allSettled([
-      this.ctx.workspaceSiblings(workspaceId),
+      // Owner-scope the sibling gather to the MERGING principal — else a colliding,
+      // caller-supplied taskGroup folds ANOTHER tenant's siblings (branch/diffStat/
+      // changedFiles) into this merge's sealed evidence. Matches the compare route's
+      // principal-narrowed seam. (recoder-ilnw)
+      this.ctx.workspaceSiblings(workspaceId, principal),
       this.ctx.workspaceReadiness(workspaceId),
     ]);
 
