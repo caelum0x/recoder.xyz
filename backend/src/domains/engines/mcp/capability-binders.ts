@@ -18,6 +18,7 @@
  * Every handler degrades truthfully — an unresolvable repo / unconfigured runner /
  * missing webhook yields a real degraded result, never a fabricated success.
  */
+import path from 'node:path';
 import { promisify } from 'node:util';
 import { exec as nodeExec } from 'node:child_process';
 import {
@@ -94,16 +95,35 @@ export function gitNexusEngineBinder(deps: {
 }): (router: McpToolRouter) => void {
   return (router) =>
     registerGitNexusMcpTools(router, {
-      resolveRepoRoot: ({ repo }) => {
-        const resolved = typeof repo === 'string' && repo.trim() ? repo.trim() : deps.repoRoot;
-        if (!resolved) {
-          throw new Error(
-            'git_nexus: repository root unconfigured (pass args.repo or configure engines repoRoot)',
-          );
-        }
-        return resolved;
-      },
+      resolveRepoRoot: ({ repo }) => confineRepoRoot(deps.repoRoot, repo),
     });
+}
+
+/**
+ * Resolve a git_nexus repo target, CONFINED to the configured root (recoder-wi8e).
+ * A caller-supplied `repo` previously overrode the root outright, so an MCP caller
+ * could point the on-disk indexer at ANY absolute path (/etc, other users' homes,
+ * secrets) — path traversal / arbitrary directory read. Now a caller `repo` must
+ * resolve to a path INSIDE `root`; an absolute or `..`-escaping path is rejected,
+ * and confinement requires a configured root.
+ */
+export function confineRepoRoot(root: string | null, requested: unknown): string {
+  const req = typeof requested === 'string' && requested.trim() ? requested.trim() : null;
+  if (!req) {
+    if (!root) {
+      throw new Error('git_nexus: repository root unconfigured (pass args.repo or configure engines repoRoot)');
+    }
+    return root;
+  }
+  if (!root) {
+    throw new Error('git_nexus: a caller-supplied repo requires a configured repoRoot to confine it');
+  }
+  const resolved = path.resolve(root, req);
+  const rel = path.relative(root, resolved);
+  if (rel !== '' && (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel))) {
+    throw new Error(`git_nexus: repo path escapes the allowed root: ${req}`);
+  }
+  return resolved;
 }
 
 /**

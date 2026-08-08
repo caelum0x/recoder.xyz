@@ -5,7 +5,7 @@
  * PATH-only guard the sibling `runCli` (cli-exec.ts) enforces.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { createEnginesVerifyExec } from './capability-binders';
+import { createEnginesVerifyExec, confineRepoRoot } from './capability-binders';
 
 describe('createEnginesVerifyExec — minimal env overlay', () => {
   afterEach(() => {
@@ -32,5 +32,33 @@ describe('createEnginesVerifyExec — minimal env overlay', () => {
     const exec = createEnginesVerifyExec(process.cwd());
     const res = await exec('exit 7');
     expect(res.exitCode).toBe(7);
+  });
+});
+
+describe('confineRepoRoot — git_nexus path confinement (recoder-wi8e)', () => {
+  const ROOT = '/srv/repo';
+
+  it('returns the root when no repo is requested', () => {
+    expect(confineRepoRoot(ROOT, undefined)).toBe(ROOT);
+    expect(confineRepoRoot(ROOT, '')).toBe(ROOT);
+  });
+
+  it('allows a subpath INSIDE the root', () => {
+    expect(confineRepoRoot(ROOT, 'packages/app')).toBe('/srv/repo/packages/app');
+    expect(confineRepoRoot(ROOT, '/srv/repo/sub')).toBe('/srv/repo/sub'); // absolute-but-inside
+  });
+
+  it('REJECTS an absolute path outside the root', () => {
+    expect(() => confineRepoRoot(ROOT, '/etc')).toThrow(/escapes the allowed root/);
+    expect(() => confineRepoRoot(ROOT, '/home/other/secrets')).toThrow(/escapes/);
+  });
+
+  it('REJECTS a ../ traversal that escapes the root', () => {
+    expect(() => confineRepoRoot(ROOT, '../../etc/passwd')).toThrow(/escapes/);
+  });
+
+  it('requires a configured root to confine a caller-supplied repo', () => {
+    expect(() => confineRepoRoot(null, '/etc')).toThrow(/requires a configured repoRoot/);
+    expect(() => confineRepoRoot(null, undefined)).toThrow(/unconfigured/);
   });
 });
