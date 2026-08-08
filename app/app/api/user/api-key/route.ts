@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, ensureAppUserFromAuthUser } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
+import { encryptApiKey } from '@/lib/crypto';
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,11 +34,14 @@ export async function POST(request: NextRequest) {
     // Ensure app user exists
     const appUser = await ensureAppUserFromAuthUser(user);
 
-    // Save the OpenRouter API key to the user record
+    // Save the OpenRouter API key ENCRYPTED at rest (recoder-lmtn) — mirrors
+    // /api/user/openrouter; the `apiKeyEncrypted` flag drives decryption on read.
+    // Previously this onboarding route stored the raw key in plaintext.
     await prisma.users.update({
       where: { id: appUser?.id || user.id },
       data: {
-        openRouterApiKey: apiKey,
+        openRouterApiKey: encryptApiKey(apiKey),
+        apiKeyEncrypted: 'encrypted',
         hasOwnApiKey: true,
       },
     });
