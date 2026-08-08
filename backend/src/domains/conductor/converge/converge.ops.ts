@@ -335,9 +335,14 @@ export async function composeConvergence(
         await mkdir(path.dirname(to), { recursive: true });
         // `recursive` copies a file or a (renamed-to) dir; overwrites the base copy.
         await cp(from, to, { recursive: true, force: true });
-      } catch {
-        // The winning sibling DELETED this path (not present in its worktree) —
-        // reflect the deletion in the convergence (remove the base's copy).
+      } catch (err) {
+        // ONLY a genuinely-absent source (ENOENT) means the winning sibling
+        // DELETED this path — reflect the deletion (remove the base's copy). ANY
+        // other cp fault (EACCES/ENOSPC/EIO/ENOTDIR/…) must NOT be silently read
+        // as a deletion: doing so would DROP the file from the convergence on a
+        // transient error — real data loss. Re-throw so the whole compose aborts
+        // (mapped to a 5xx) rather than shipping a lossy "trusted" branch. (recoder-ezov)
+        if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') throw err;
         await rm(to, { recursive: true, force: true });
       }
     }
