@@ -78,6 +78,21 @@ export const DefaultAuthBaseUrl = "https://recoder.xyz";
 const ClientId = "recoder-desktop";
 const DefaultPollIntervalMs = 5000;
 const MaxPollIntervalMs = 15000;
+
+/**
+ * Only http(s) URLs may be handed to the OS opener (recoder-o896). A server-
+ * supplied verification URL with any other scheme (file://, custom protocol, …)
+ * is refused so a hostile/MITM'd device-flow response can't trigger local exec.
+ */
+function isHttpUrl(raw: string | undefined | null): boolean {
+    if (!raw) return false;
+    try {
+        const u = new URL(raw);
+        return u.protocol === "https:" || u.protocol === "http:";
+    } catch {
+        return false;
+    }
+}
 /** Refresh this far before the stored token actually expires. */
 export const SessionRefreshSkewMs = 5 * 60 * 1000;
 
@@ -196,10 +211,18 @@ export class DeviceAuthManager {
             verificationUriComplete: start.verification_uri_complete,
             expiresIn,
         });
-        try {
-            await this.openExternal(start.verification_uri_complete || verificationUri);
-        } catch {
-            // The prompt still shows the URI + code for manual entry.
+        // SECURITY (recoder-o896): only auto-open an http(s) URL. The
+        // verification_uri* come from the (possibly hostile or MITM'd) device-flow
+        // server; handing an arbitrary scheme (file://, smb://, a custom protocol)
+        // to the OS opener is a local-exec / phishing vector. A non-http(s) target
+        // is skipped — the prompt still shows the code for manual entry.
+        const openTarget = start.verification_uri_complete || verificationUri;
+        if (isHttpUrl(openTarget)) {
+            try {
+                await this.openExternal(openTarget);
+            } catch {
+                // The prompt still shows the URI + code for manual entry.
+            }
         }
 
         let intervalMs =
