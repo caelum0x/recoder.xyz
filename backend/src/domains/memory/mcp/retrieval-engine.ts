@@ -147,7 +147,18 @@ export function buildRetrievalMcpTools(module: RetrievalMcpModule): readonly Mcp
       handler: async (raw: unknown, caller?: McpToolCaller) => {
         const input = (raw ?? {}) as IngestInput;
         const docs = parseDocs(input.docs);
-        const collection = resolveCollection(input.collection, caller);
+        const collection = resolveCollection(input.collection, caller); // throws AUTH_REQUIRED if no caller
+        // SECURITY (recoder-wf0c): a `path` doc reads a SERVER-side file at ingest
+        // time. Only a PRIVILEGED (internal/service) caller may do that — a
+        // tenant/agent MCP caller must supply inline `text`, or it could
+        // exfiltrate arbitrary server files (/etc/passwd, secrets, other tenants'
+        // data) into its OWN searchable retrieval index.
+        if (docs.some((d) => d.path) && !(caller && isPrivileged(caller))) {
+          throw createError(
+            ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+            'retrieval_ingest: file-path documents require a privileged caller — supply inline text instead',
+          );
+        }
         const results = await module.retrieval().ingest(docs, collection ? { collection } : undefined);
         return { results };
       },
