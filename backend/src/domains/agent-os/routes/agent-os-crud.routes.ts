@@ -177,6 +177,19 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
   }
 
   /**
+   * Direct-spaceId owner check (write edges): the caller must own the target
+   * space (operator/solo bypass). Foreign/absent → denied. Mirrors the read
+   * point-checks; used to owner-scope task/run/artifact/memory WRITES so a caller
+   * can't create/overwrite records in another tenant's space. (recoder-c8to et al)
+   */
+  async function canAccessSpaceId(req: Request, spaceId: string | undefined): Promise<boolean> {
+    if (seesAllSpaces(req.principal, soloMode)) return true;
+    if (!spaceId) return false;
+    const space = (await repository.listSpaces()).find((s) => s.spaceId === spaceId);
+    return !!space && canAccessSpace(space, req.principal, soloMode);
+  }
+
+  /**
    * Serve a tenant-scoped list edge. Operator/solo (`seeAll`) take the efficient
    * repository `driverPage` (real LIMIT/OFFSET); a tenant caller fetches the full
    * list and filter-then-pages by each record's owning space (`spaceIdOf`, which
@@ -357,6 +370,17 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     validateBody(taskUpsertSchema),
     handle(async (req, res) => {
       const task = req.body as TaskSpec;
+      // Write IDOR guard (recoder-c8to): the caller must own the TARGET space,
+      // and — when overwriting — the EXISTING task's space too, or a tenant could
+      // create tasks in / clobber another tenant's space (incl. governance fields
+      // like forbiddenPaths/approvalRequired). Foreign/absent ⇒ 404 no-oracle.
+      const existing = (await repository.listTasks()).find((t) => t.taskId === task.taskId);
+      if (existing && !(await canAccessSpaceId(req, existing.spaceId))) {
+        return notFound(res, 'task', task.taskId);
+      }
+      if (!(await canAccessSpaceId(req, task.spaceId))) {
+        return notFound(res, 'space', task.spaceId);
+      }
       sendSuccess(res, await repository.upsertTask(task));
     }),
   );
@@ -391,6 +415,12 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
       const tasks = await repository.listTasks();
       const task = tasks.find((t) => t.taskId === body.taskId);
       if (!task) return notFound(res, 'task', body.taskId);
+      // Write IDOR guard (recoder-n214): a run may be created only on a task in a
+      // space the caller owns — else a tenant could spin run lifecycle on another
+      // tenant's task. Foreign task ⇒ 404 no-oracle (mirrors the transition edge).
+      if (!(await canAccessSpaceId(req, task.spaceId))) {
+        return notFound(res, 'task', body.taskId);
+      }
       const run = taskService.createRun({
         runId: body.runId ?? randomUUID(),
         task,
@@ -500,6 +530,12 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     validateBody(artifactCreateSchema),
     handle(async (req, res) => {
       const body = req.body as z.infer<typeof artifactCreateSchema>;
+      // Write IDOR guard (recoder-ovjb): an artifact may be attached only to a
+      // task in a space the caller owns — else a tenant could plant artifacts on
+      // another tenant's task (evidence-surface pollution). Foreign ⇒ 404.
+      if (!(await canAccessViaTask(req, body.taskId))) {
+        return notFound(res, 'task', body.taskId);
+      }
       const artifact: Artifact = {
         ...body,
         artifactId: body.artifactId ?? randomUUID(),
@@ -531,6 +567,12 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
     validateBody(memoryCandidateCreateSchema),
     handle(async (req, res) => {
       const body = req.body as z.infer<typeof memoryCandidateCreateSchema>;
+      // Write IDOR guard (recoder-jisa): a memory candidate is evidence-backed by
+      // a task; the caller must own that task's space, or a tenant could plant an
+      // evidence-backed candidate on another tenant's task. Foreign ⇒ 404.
+      if (!(await canAccessViaTask(req, body.evidence?.taskId))) {
+        return notFound(res, 'task', body.evidence?.taskId ?? '(none)');
+      }
       const candidate: MemoryCandidate = {
         ...body,
         candidateId: body.candidateId ?? randomUUID(),
