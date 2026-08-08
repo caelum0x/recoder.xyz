@@ -29,6 +29,20 @@ export function evaluateFileAccess(input: PolicyInput): PolicyDecision | null {
     if (matched?.requiresApproval) {
       return decision(input, 'needs_approval', matched.reason ?? `Path requires approval: ${path}`, [{ path }]);
     }
+
+    // Deny-by-default (recoder-u2zj): honor permissions.defaultFileEffect. Under
+    // 'deny', a path that is neither explicitly ALLOWED (an allow pathRule) nor
+    // within the task's declared targetPaths is DENIED. Previously an unmatched
+    // path fell through to ALLOW, so a locked-down (deny-default) agent could
+    // read/write ANY non-forbidden path outside its whitelist. targetPaths keeps
+    // a task's own scoped files reachable (the intended in-scope surface).
+    if (input.actor.permissions.defaultFileEffect === 'deny') {
+      const allowedByRule = matched?.effect === 'allow';
+      const inTargetPaths = (input.task?.targetPaths ?? []).some((glob) => globMatch(glob, path));
+      if (!allowedByRule && !inTargetPaths) {
+        return decision(input, 'deny', `Path denied by default file effect (deny): ${path}`, [{ path }]);
+      }
+    }
   }
 
   if (input.action === 'file.write' && input.actor.permissions.writeLockRequired && !hasWriteLock(input)) {
