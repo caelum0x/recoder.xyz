@@ -569,26 +569,56 @@ export async function defaultLoadEngineLib(): Promise<EngineLib | null> {
   };
 }
 
-function spawnCapture(
+/** Wall-clock cap for a single spawned git/engine command (recoder-4ob6). */
+const SPAWN_TIMEOUT_MS = 120_000;
+/** Combined stdout+stderr cap; a runaway/huge-output command is killed. */
+const SPAWN_MAX_OUTPUT_BYTES = 32 * 1024 * 1024; // 32MB
+
+/**
+ * Spawn a command and capture its output — BOUNDED (recoder-4ob6). A
+ * caller-triggered op (e.g. `git clone` of a hostile/huge repo) previously had
+ * NO timeout and NO output cap, so it could hang forever or accumulate unbounded
+ * output in memory (DoS). This kills the child and rejects on either a wall-clock
+ * timeout or an output-size overflow.
+ */
+export function spawnCapture(
   command: string,
   args: string[],
-  cwd: string
+  cwd: string,
+  opts: { timeoutMs?: number; maxOutputBytes?: number } = {},
 ): Promise<ExecResult> {
+  const timeoutMs = opts.timeoutMs ?? SPAWN_TIMEOUT_MS;
+  const maxOutputBytes = opts.maxOutputBytes ?? SPAWN_MAX_OUTPUT_BYTES;
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', chunk => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on('data', chunk => {
-      stderr += chunk.toString();
-    });
-    child.on('error', reject);
-    child.on('close', code => resolve({ stdout, stderr, code: code ?? 0 }));
+    let bytes = 0;
+    let settled = false;
+    const finish = (fn: () => void): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish(() => reject(new Error(`command timed out after ${timeoutMs}ms: ${command} ${args.join(' ')}`)));
+    }, timeoutMs);
+    const onChunk = (chunk: Buffer, isErr: boolean): void => {
+      bytes += chunk.length;
+      if (bytes > maxOutputBytes) {
+        child.kill('SIGKILL');
+        finish(() => reject(new Error(`command output exceeded ${maxOutputBytes} bytes: ${command}`)));
+        return;
+      }
+      if (isErr) stderr += chunk.toString();
+      else stdout += chunk.toString();
+    };
+    child.stdout.on('data', (c: Buffer) => onChunk(c, false));
+    child.stderr.on('data', (c: Buffer) => onChunk(c, true));
+    child.on('error', (err) => finish(() => reject(err)));
+    child.on('close', (code) => finish(() => resolve({ stdout, stderr, code: code ?? 0 })));
   });
 }
 
