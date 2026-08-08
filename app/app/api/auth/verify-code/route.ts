@@ -14,7 +14,6 @@ import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import {
   consumeVerification,
   findValidVerificationByIdentifierAndHashedValue,
-  findValidVerificationByIdentifierPrefixAndHashedValue,
 } from '@/lib/auth/verification-store';
 
 const authRateLimiter = rateLimit(rateLimitConfigs.auth);
@@ -75,24 +74,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // SECURITY (recoder-hdu7): the code MUST be scoped to a specific email. The
+    // former no-email fallback matched a 6-digit code against EVERY pending
+    // verification by hash alone — so a submitted/guessed code verified whichever
+    // account happened to hold it (cross-account email verification). Require the
+    // email so a code only ever clears the account it was issued for.
+    if (!email || typeof email !== 'string') {
+      return NextResponse.json(
+        { success: false, error: 'Email is required to verify a code.' },
+        { status: 400 }
+      );
+    }
+
     // Hash the code to match stored hash (codes are stored as hashed values)
     const hashedCode = crypto.createHash('sha256').update(code).digest('hex');
 
-    // Find verification by code
-    // Codes are stored with identifier 'email-code:{email}'
-    let verification = null;
-
-    if (email) {
-      verification = await findValidVerificationByIdentifierAndHashedValue(
-        `email-code:${email}`,
-        hashedCode
-      );
-    } else {
-      verification = await findValidVerificationByIdentifierPrefixAndHashedValue(
-        'email-code:',
-        hashedCode
-      );
-    }
+    // Codes are stored with identifier 'email-code:{email}' — scoped to the account.
+    const verification = await findValidVerificationByIdentifierAndHashedValue(
+      `email-code:${email}`,
+      hashedCode
+    );
 
     if (!verification) {
       return NextResponse.json(
@@ -132,6 +133,7 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
+  const email = searchParams.get('email');
 
   if (!code) {
     return NextResponse.json(
@@ -139,11 +141,20 @@ export async function GET(request: NextRequest) {
       { status: 400 }
     );
   }
+  // SECURITY (recoder-hdu7): scope the status check to a specific email too — the
+  // former prefix match leaked whether a code was valid for ANY account (a
+  // cross-account existence oracle).
+  if (!email) {
+    return NextResponse.json(
+      { success: false, error: 'Email parameter required' },
+      { status: 400 }
+    );
+  }
 
   const hashedCode = crypto.createHash('sha256').update(code).digest('hex');
 
-  const verification = await findValidVerificationByIdentifierPrefixAndHashedValue(
-    'email-code:',
+  const verification = await findValidVerificationByIdentifierAndHashedValue(
+    `email-code:${email}`,
     hashedCode
   );
 
