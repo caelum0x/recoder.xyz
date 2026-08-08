@@ -91,7 +91,7 @@ export function buildRunEventPipeline(
       terminalService.publishRunEvent(workspaceId, event),
     logger: log,
   });
-  const fannedSink = composeRunEventSink(localSink, externalSink, log);
+  const fannedSink = composeRunEventSink(localSink, externalSink, log, repository);
   // Terminal-event hook (h + i): on a `completed`/`failed` RunEvent the run flow
   // HARVESTS an evidence-backed memory candidate (brain) and CLOSES/NOTES the bd
   // issue (code-intel). Both are fire-and-forget + degrade-safe — a memory/beads
@@ -182,10 +182,11 @@ export function buildRunEventPipeline(
  * `/sync` publish always run (a state-plane hiccup never stalls the terminal). When
  * no external sink is injected, the local sink is returned unchanged.
  */
-function composeRunEventSink(
+export function composeRunEventSink(
   local: RunEventSinkPort,
   external: RunEventSinkPort | undefined,
-  logger: Logger
+  logger: Logger,
+  repository: WorkspaceRepositoryPort
 ): RunEventSinkPort {
   if (!external) return local;
   return {
@@ -197,6 +198,21 @@ function composeRunEventSink(
           { err, eventId: event.eventId },
           'conductor run-event state-of-record ingest failed'
         );
+        // DURABILITY FALLBACK (recoder-iq2c): the external bus is the SOLE durable
+        // writer here (the local sink is live-only when a bus is wired), so a
+        // swallowed external failure would DROP the event from the state-of-record
+        // while it still published live — the durable log/audit trail would
+        // permanently diverge (a completed/failed run could vanish after restart).
+        // Persist it durably here instead. appendEvent is idempotent by eventId,
+        // so a later external replay is a no-op.
+        try {
+          await repository.appendEvent(event);
+        } catch (durErr) {
+          logger.error(
+            { err: durErr, eventId: event.eventId },
+            'conductor run-event durable FALLBACK append failed — event may be lost'
+          );
+        }
       }
       await local.append(event);
     },

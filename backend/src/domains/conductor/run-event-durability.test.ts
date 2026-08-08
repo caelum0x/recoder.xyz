@@ -14,7 +14,10 @@ import { describe, it, expect } from 'vitest';
 import type { RunEvent, TaskRun, TaskSpec } from '@recoder/agent-os';
 import { createWorkspaceRepository } from './adapters/workspace-repository.adapter.js';
 import type { CanonicalRunStore } from './ports/workspace-repository.port.js';
+import { composeRunEventSink } from './module/run-event-pipeline.js';
 import { makeExecutor } from './__fixtures__/harness.js';
+
+const silentLogger = { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} } as never;
 
 /**
  * A shared durable canonical store standing in for the agent-os state-of-record
@@ -131,3 +134,34 @@ describe('conductor run/event read-model durability (P1 #8)', () => {
     expect((await repository.listRuns()).map((r) => r.runId)).toContain('run_1');
   });
 });
+
+describe('run-event durable FALLBACK when the external state-of-record sink fails (recoder-iq2c)', () => {
+  it('persists the event durably (no loss) when the external sink rejects, while the live path still runs', async () => {
+    const store = makeSharedCanonicalStore();
+    const repository = createWorkspaceRepository({ executor: makeExecutor(true), canonicalStore: store });
+    let liveAppends = 0;
+    const local = { append: async () => { liveAppends += 1; } };
+    const external = { append: async () => { throw new Error('state-of-record bus down'); } };
+
+    const sink = composeRunEventSink(local, external, silentLogger, repository);
+    await sink.append(makeEvent({ eventId: 'evt_fallback', type: 'failed' }));
+
+    // A brand-new repository over the SAME durable store (a restart) still sees it.
+    const after = createWorkspaceRepository({ executor: makeExecutor(true), canonicalStore: store });
+    expect((await after.listEvents()).some((e) => e.eventId === 'evt_fallback')).toBe(true);
+    expect(liveAppends).toBe(1); // terminal stream not stalled
+  });
+
+  it('does NOT write via the fallback when the external sink succeeds (local stays live-only)', async () => {
+    const store = makeSharedCanonicalStore();
+    const repository = createWorkspaceRepository({ executor: makeExecutor(true), canonicalStore: store });
+    const external = { append: async () => {} }; // succeeds; owns the durable write itself
+    const local = { append: async () => {} };
+
+    const sink = composeRunEventSink(local, external, silentLogger, repository);
+    await sink.append(makeEvent({ eventId: 'evt_ok' }));
+
+    const after = createWorkspaceRepository({ executor: makeExecutor(true), canonicalStore: store });
+    expect((await after.listEvents()).some((e) => e.eventId === 'evt_ok')).toBe(false);
+  });
+})
