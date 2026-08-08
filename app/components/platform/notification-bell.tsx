@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { platformFetch, usePlatformApi } from "./use-platform-api";
+import { safeHref } from "@/lib/safe-href";
 
 interface Notification {
   id: string;
@@ -174,12 +175,12 @@ export function NotificationBell() {
                   key={n.id}
                   onClick={() => {
                     if (!n.read) markRead(n.id);
-                    if (n.actionUrl) window.open(n.actionUrl, "_blank");
+                    if (n.actionUrl) window.open(safeHref(n.actionUrl), "_blank", "noopener,noreferrer");
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       if (!n.read) markRead(n.id);
-                      if (n.actionUrl) window.open(n.actionUrl, "_blank");
+                      if (n.actionUrl) window.open(safeHref(n.actionUrl), "_blank", "noopener,noreferrer");
                     }
                   }}
                   role="button"
