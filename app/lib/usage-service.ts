@@ -6,6 +6,7 @@
 import { prisma } from './prisma';
 import { getPlanLimits, FREE_MODELS } from './plan-config';
 import { effectivePlanForLimits } from './entitlements';
+import { decryptApiKey } from './crypto';
 import crypto from 'crypto';
 
 export interface ApiKeyInfo {
@@ -53,6 +54,7 @@ export async function getApiKeyForUser(userId: string, model?: string): Promise<
     select: {
       subscriptionPlan: true,
       openRouterApiKey: true,
+      apiKeyEncrypted: true,
       hasOwnApiKey: true,
     },
   });
@@ -63,7 +65,9 @@ export async function getApiKeyForUser(userId: string, model?: string): Promise<
 
   if (user.hasOwnApiKey && user.openRouterApiKey) {
     return {
-      apiKey: user.openRouterApiKey,
+      // Keys are encrypted at rest (recoder-lmtn); decrypt when flagged, else it
+      // is a legacy plaintext key returned as-is.
+      apiKey: user.apiKeyEncrypted ? decryptApiKey(user.openRouterApiKey) : user.openRouterApiKey,
       source: 'user',
       tier: user.subscriptionPlan,
     };
