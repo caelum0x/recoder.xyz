@@ -149,3 +149,35 @@ describe('truthful degrade + validation', () => {
     ).rejects.toThrow(/selector/);
   });
 });
+
+describe('deep tool handlers — SSRF guard on caller URLs (recoder-qfmh)', () => {
+  const BLOCKED = [
+    'http://169.254.169.254/latest/meta-data/', // cloud metadata
+    'http://127.0.0.1:5432',                     // loopback
+    'http://10.0.0.1/',                          // private
+    'http://192.168.1.1/',                       // private
+    'file:///etc/passwd',                        // non-http scheme
+  ];
+
+  for (const url of BLOCKED) {
+    it(`extract_structured refuses an SSRF target and never forwards it: ${url}`, async () => {
+      const { port, seen } = spyPort(ok({ data: {} }));
+      await expect(call(router(port), 'browser.extract_structured', { url, fields: { t: 'h1' } })).rejects.toThrow();
+      expect(seen.extractStructured).toBeUndefined();
+    });
+  }
+
+  it('screenshot_annotate and fill_form also refuse a private/localhost URL', async () => {
+    const { port } = spyPort(ok({ data: {} }));
+    await expect(call(router(port), 'browser.screenshot_annotate', { url: 'http://192.168.0.5/' })).rejects.toThrow();
+    await expect(
+      call(router(port), 'browser.fill_form', { url: 'http://localhost/', fields: [{ selector: '#a', value: 'x' }] }),
+    ).rejects.toThrow();
+  });
+
+  it('a PUBLIC url still passes through to the port', async () => {
+    const { port, seen } = spyPort(ok({ data: { ok: true } }));
+    await call(router(port), 'browser.extract_structured', { url: 'https://example.com/', fields: { t: 'h1' } });
+    expect(seen.extractStructured?.url).toBe('https://example.com/');
+  });
+});
