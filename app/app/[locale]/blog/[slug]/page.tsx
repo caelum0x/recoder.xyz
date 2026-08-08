@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import { getBlogPostBySlug } from '@/lib/cms/blog';
+import { safeHref } from '@/lib/safe-href';
 import { fallbackBlogPosts } from '@/lib/cms/blog-content';
 
 // ---------------------------------------------------------------------------
@@ -243,7 +244,7 @@ function renderInline(text: string): React.ReactNode {
       parts.push(
         <a
           key={parts.length}
-          href={match[7]}
+          href={safeHref(match[7])}
           className="text-orange-400 hover:text-orange-300 underline underline-offset-2"
           target="_blank"
           rel="noopener noreferrer"
