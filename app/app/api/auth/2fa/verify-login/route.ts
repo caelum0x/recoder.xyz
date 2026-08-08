@@ -9,6 +9,7 @@ import { authenticator } from 'otplib';
 import crypto from 'crypto';
 import { nanoid } from 'nanoid';
 import { getApiKeyStatus } from '@/lib/api-key-resolver';
+import { verifyPassword } from '@/lib/crypto';
 import { logger } from '@/lib/logger';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 
@@ -21,11 +22,11 @@ export async function POST(request: NextRequest) {
     if (rateLimitResponse) return rateLimitResponse;
 
     const body = await request.json();
-    const { userId, code, email, password } = body;
+    const { userId, code, password } = body;
 
-    if (!userId || !code) {
+    if (!userId || !code || !password) {
       return NextResponse.json(
-        { success: false, error: 'User ID and code are required' },
+        { success: false, error: 'User ID, password, and code are required' },
         { status: 400 }
       );
     }
@@ -42,6 +43,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'User not found' },
         { status: 404 }
+      );
+    }
+
+    // SECURITY (recoder-7lhk): re-verify the FIRST factor (password) here. This
+    // endpoint mints a full session, and step 1 (POST /login) returns
+    // { requires2FA, userId } with NO server-side pending state binding the two
+    // steps — so without this check an attacker holding only a (non-secret) userId
+    // plus one valid TOTP/backup code could complete login with ZERO knowledge of
+    // the password (the second factor becomes the sole factor). Same invalid-
+    // password response as /login; never reveal which factor failed.
+    if (!user.password || !(await verifyPassword(password, user.password))) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid credentials' },
+        { status: 401 }
       );
     }
 
