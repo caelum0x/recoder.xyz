@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { userDb } from './database';
+import { getSession } from '@/lib/auth-helpers';
 import { logger } from '@/lib/logger';
 
 export interface SessionData {
@@ -275,18 +276,34 @@ export async function handleSessionSync(request: NextRequest): Promise<NextRespo
       const body = await request.json();
       const { action, sessionData, userId } = body;
 
-      if (action === 'sync_session' && sessionData) {
-        // Validate the session data
-        const user = await userDb.findById(sessionData.userId);
+      if (action === 'sync_session') {
+        // SECURITY (recoder-6lie): the synced identity is derived from the
+        // CALLER's OWN authenticated session — NEVER from client-supplied
+        // `sessionData`. Previously this signed attacker-controlled
+        // userId/email/plan into a `.recoder.xyz` identity cookie for any
+        // active-subscription userId (a NON-secret value), enabling
+        // cross-subdomain account takeover + plan/entitlement forgery. Body
+        // fields are ignored.
+        const session = await getSession(request);
+        const email = session?.user?.email;
+        if (!email) {
+          return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+        }
+        const user = await userDb.findByEmail(email);
         if (!user || user.subscription_status !== 'active') {
-          return NextResponse.json(
-            { error: 'Invalid user' },
-            { status: 401 }
-          );
+          return NextResponse.json({ error: 'Invalid user' }, { status: 401 });
         }
 
-        // Create session sync response
-        return sessionSync.createSyncResponse(sessionData);
+        // Build the token payload from the SERVER-resolved identity only.
+        const serverSessionData: SessionData = {
+          userId: user.id,
+          email: user.email,
+          name: user.name ?? '',
+          plan: user.subscription_plan ?? 'free',
+          expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30d, matches the sync cookie
+          domains: [],
+        };
+        return sessionSync.createSyncResponse(serverSessionData);
       }
 
       return NextResponse.json(
