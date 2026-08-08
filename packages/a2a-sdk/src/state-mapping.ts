@@ -89,6 +89,13 @@ const CANONICAL_TO_CODEX: Readonly<Record<TaskState, CodexNativeState>> = {
  * @returns The canonical `TaskState`, or `undefined` if the state is unknown.
  */
 export function mapCodexState(nativeState: string): TaskState | undefined {
+  // Own-property guard (recoder-n268): `nativeState` is attacker-influenced, so a
+  // bare index would surface inherited Object.prototype members (`toString`,
+  // `constructor`, `__proto__`) as truthy "states" and slip a non-state past the
+  // downstream transition guards.
+  if (!Object.prototype.hasOwnProperty.call(CODEX_TO_CANONICAL, nativeState)) {
+    return undefined;
+  }
   return CODEX_TO_CANONICAL[nativeState as CodexNativeState];
 }
 
@@ -176,6 +183,12 @@ const CANONICAL_TO_CLAUDE: Readonly<Record<TaskState, ClaudeNativeState>> = {
  * @returns The canonical `TaskState`, or `undefined` if the state is unknown.
  */
 export function mapClaudeState(nativeState: string): TaskState | undefined {
+  // Own-property guard (recoder-n268): see mapCodexState — reject inherited
+  // Object.prototype members so an attacker-controlled native state can't map to
+  // a truthy non-state value.
+  if (!Object.prototype.hasOwnProperty.call(CLAUDE_TO_CANONICAL, nativeState)) {
+    return undefined;
+  }
   return CLAUDE_TO_CANONICAL[nativeState as ClaudeNativeState];
 }
 
