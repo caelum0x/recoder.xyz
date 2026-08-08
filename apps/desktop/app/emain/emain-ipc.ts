@@ -21,6 +21,7 @@ import {
 } from "./emain-activity";
 import { getBackendAuth } from "./emain-backend";
 import { getDeviceAuthManager } from "./emain-device-auth";
+import { expandLeadingTilde } from "./emain-path-util";
 import { createBuilderWindow, getAllBuilderWindows, getBuilderWindowByWebContentsId } from "./emain-builder";
 import { callWithOriginalXdgCurrentDesktopAsync, unamePlatform } from "./emain-platform";
 import { getWaveTabViewByWebContentsId } from "./emain-tabview";
@@ -481,7 +482,7 @@ export function initIpcHandlers() {
 
     electron.ipcMain.on("open-native-path", (event, filePath: string) => {
         console.log("open-native-path", filePath);
-        filePath = filePath.replace("~", electronApp.getPath("home"));
+        filePath = expandLeadingTilde(filePath, electronApp.getPath("home"));
         fireAndForget(() =>
             callWithOriginalXdgCurrentDesktopAsync(() =>
                 electron.shell.openPath(filePath).then((excuse) => {
