@@ -10,19 +10,28 @@
 // Agent platform
 // ---------------------------------------------------------------------------
 
-export type RecoderAgentPlatform =
-  | 'recoder'
-  | 'cursor'
-  | 'windsurf'
-  | 'replit'
-  | 'codex'
-  | 'claude_code'
-  | 'recoder_app'
-  | 'recoder_pm'
-  | 'recoder_agency'
-  | 'recoder_backend'
-  | 'recoder_desktop'
-  | 'custom';
+/**
+ * The single canonical runtime allow-list of agent platforms. The
+ * `RecoderAgentPlatform` type is DERIVED from this array so the compile-time
+ * union and any runtime validation Set are pinned to one source and cannot
+ * drift (recoder-jjal).
+ */
+export const RECODER_AGENT_PLATFORMS = [
+  'recoder',
+  'cursor',
+  'windsurf',
+  'replit',
+  'codex',
+  'claude_code',
+  'recoder_app',
+  'recoder_pm',
+  'recoder_agency',
+  'recoder_backend',
+  'recoder_desktop',
+  'custom',
+] as const;
+
+export type RecoderAgentPlatform = (typeof RECODER_AGENT_PLATFORMS)[number];
 
 // ---------------------------------------------------------------------------
 // Payload types

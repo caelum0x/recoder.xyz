@@ -33,6 +33,7 @@ import {
   TASK_ENVELOPE_VERSION,
   AUDIT_EVENT_TYPES,
   AUDIT_EVENT_VERSION,
+  RECODER_AGENT_PLATFORMS,
   isA2AErrorCode,
 } from './schemas';
 import {
@@ -108,16 +109,9 @@ function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }
 
-const VALID_PLATFORMS = new Set<string>([
-  'codex',
-  'claude_code',
-  'recoder_app',
-  'recoder_pm',
-  'recoder_agency',
-  'recoder_backend',
-  'recoder_desktop',
-  'custom',
-]);
+// Pinned to the single canonical platform list (recoder-jjal) so the runtime
+// allow-list can never drift from the `RecoderAgentPlatform` type.
+const VALID_PLATFORMS = new Set<string>(RECODER_AGENT_PLATFORMS);
 
 const VALID_PROTOCOLS = new Set<string>(['a2a', 'mcp', 'jsonrpc', 'rest', 'file_git']);
 

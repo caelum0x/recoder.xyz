@@ -5,6 +5,8 @@
  * Inlined from @recoder/shared/a2a/schemas for standalone publishing.
  */
 
+export { RECODER_AGENT_PLATFORMS } from './types';
+
 // Re-export shared types
 export type {
   RecoderAgentPlatform,
