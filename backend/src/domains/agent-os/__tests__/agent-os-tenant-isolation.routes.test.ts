@@ -540,3 +540,47 @@ describe('agent-os tenant isolation — unownable operator surfaces (recoder-cto
     await solo.close();
   });
 });
+
+describe('agent-os tenant isolation — write IDOR on task-linked creates (recoder-c8to/n214/ovjb/jisa)', () => {
+  async function seedA(h: Harness): Promise<void> {
+    await seedOwnedSpace(h, TOKEN_A, 'space-A', 'user-A');
+    h.repo.upsertTask(anyRec({
+      taskId: 'task-A', spaceId: 'space-A', title: 't', intent: 'bugfix', goal: 'g',
+      targetPaths: [], forbiddenPaths: [], acceptanceCriteria: [],
+      verification: { commands: [] }, approvalRequired: [], artifactRequired: [],
+    }));
+  }
+  const taskBody = (spaceId: string, taskId = 'task-new') => ({ taskId, title: 't', intent: 'bugfix', goal: 'g', spaceId, verification: { commands: [] } });
+  const artifactBody = (taskId: string) => ({ taskId, kind: 'summary', mimeType: 'text/plain' });
+  const candidateBody = (taskId: string) => ({ scope: 'space', title: 't', body: 'b', evidence: { taskId, artifactId: 'a' } });
+
+  it('B cannot POST /tasks into A\'s space nor overwrite A\'s task (404); A\'s task untouched', async () => {
+    const h = await buildHarness();
+    await seedA(h);
+    expect((await post(h, asUser(TOKEN_B), '/tasks', taskBody('space-A'))).status).toBe(404);
+    expect((await post(h, asUser(TOKEN_B), '/tasks', taskBody('space-A', 'task-A'))).status).toBe(404);
+    expect(h.repo.listTasks().find((t) => t.taskId === 'task-A')?.title).toBe('t');
+    await h.close();
+  });
+
+  it('B cannot POST /runs, /artifacts, /memory/candidates on A\'s task (404); owner A can (200)', async () => {
+    const h = await buildHarness();
+    await seedA(h);
+    expect((await post(h, asUser(TOKEN_B), '/runs', { taskId: 'task-A', runId: 'r-b' })).status).toBe(404);
+    expect((await post(h, asUser(TOKEN_B), '/artifacts', artifactBody('task-A'))).status).toBe(404);
+    expect((await post(h, asUser(TOKEN_B), '/memory/candidates', candidateBody('task-A'))).status).toBe(404);
+
+    expect((await post(h, asUser(TOKEN_A), '/runs', { taskId: 'task-A', runId: 'r-a' })).status).toBe(200);
+    expect((await post(h, asUser(TOKEN_A), '/artifacts', artifactBody('task-A'))).status).toBe(200);
+    expect((await post(h, asUser(TOKEN_A), '/memory/candidates', candidateBody('task-A'))).status).toBe(200);
+    await h.close();
+  });
+
+  it('an operator (admin key) may write to any tenant\'s task', async () => {
+    const h = await buildHarness();
+    await seedA(h);
+    expect((await post(h, asAdminKey, '/runs', { taskId: 'task-A', runId: 'r-op' })).status).toBe(200);
+    expect((await post(h, asAdminKey, '/tasks', taskBody('space-A', 'task-op'))).status).toBe(200);
+    await h.close();
+  });
+});
