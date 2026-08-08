@@ -125,3 +125,25 @@ describe('retrieval MCP — privileged callers may target a RAW collection', () 
     expect(opts.collection).toBeUndefined();
   });
 });
+
+describe('retrieval_ingest — file-path docs require a privileged caller (recoder-wf0c)', () => {
+  it('rejects a non-privileged caller ingesting a file `path` (no arbitrary server read) and never ingests', async () => {
+    ingest.mockClear();
+    await expect(
+      tools().get('retrieval_ingest')!.handler({ docs: [{ path: '/etc/passwd' }] }, { userId: 'owner_1' }),
+    ).rejects.toMatchObject({ code: 'AUTHZ_PROJECT_ACCESS_DENIED' });
+    expect(ingest).not.toHaveBeenCalled();
+  });
+
+  it('allows a non-privileged caller ingesting inline text', async () => {
+    ingest.mockClear();
+    await tools().get('retrieval_ingest')!.handler({ docs: [{ text: 'hello' }] }, { userId: 'owner_1' });
+    expect(ingest).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows a privileged (internal) caller to ingest a file path (service-on-behalf)', async () => {
+    ingest.mockClear();
+    await tools().get('retrieval_ingest')!.handler({ docs: [{ path: '/srv/data/notes.md' }] }, { userId: 'ops_1', scopes: ['internal'] });
+    expect(ingest).toHaveBeenCalledTimes(1);
+  });
+});
