@@ -235,6 +235,7 @@ export function buildGovernanceWriteTools(
           taskId: optString(body, 'taskId') ?? null,
           runId: optString(body, 'runId') ?? null,
           reason: optString(body, 'reason') ?? null,
+          target: optString(body, 'target') ?? null,
           ...(optPositiveNumber(body, 'ttlMs') != null ? { ttlMs: optPositiveNumber(body, 'ttlMs')! } : {}),
         });
         return { ok: true, verdict, approval };
