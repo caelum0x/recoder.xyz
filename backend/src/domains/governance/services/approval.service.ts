@@ -61,6 +61,13 @@ export interface RequestApprovalParams {
   readonly taskId?: string | null;
   readonly runId?: string | null;
   readonly reason?: string | null;
+  /**
+   * The action's concrete target (path/command). When set, the resulting
+   * approval clears the action ONLY on this exact target; absent ⇒ task-wide
+   * (backward-compatible). Makes the recoder-adsk target binding effective at the
+   * creation side. (recoder-adsk follow-through)
+   */
+  readonly target?: string | null;
   /** Lease length in ms; clamped to [1m, 30d]. Ignored when `expiresAt` is given. */
   readonly ttlMs?: number;
   /** Explicit ISO-8601 expiry; overrides `ttlMs` when present. */
@@ -121,6 +128,7 @@ export class ApprovalService {
       taskId: params.taskId ?? null,
       runId: params.runId ?? null,
       reason: params.reason ?? null,
+      target: params.target ?? null,
       expiresAt,
     });
 

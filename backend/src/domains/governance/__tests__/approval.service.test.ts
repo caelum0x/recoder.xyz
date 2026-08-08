@@ -29,6 +29,21 @@ describe('ApprovalService — request → decide lifecycle', () => {
     expect(rec.requestedBy).toBe('u1');
   });
 
+  it('threads a concrete target through to the stored approval (recoder-adsk create-side)', async () => {
+    const { service, repo } = build();
+    const rec = await service.request({
+      action: 'file.write', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: '/repo/a.ts',
+    });
+    expect(rec.target).toBe('/repo/a.ts');
+    expect((await repo.findById(rec.id))?.target).toBe('/repo/a.ts');
+  });
+
+  it('defaults target to null when the requester supplies none (task-wide, backward-compatible)', async () => {
+    const { service } = build();
+    const rec = await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    expect(rec.target ?? null).toBeNull();
+  });
+
   it('seals a needs_approval entry into the audit chain on request', async () => {
     const { auditRepo, sink } = chainSink();
     const { service } = build({ audit: sink });

@@ -72,6 +72,7 @@ export function buildGovernanceApprovalsRouter(deps: GovernanceApprovalsRouterDe
         taskId: optionalString(body, 'taskId') ?? null,
         runId: optionalString(body, 'runId') ?? null,
         reason: optionalString(body, 'reason') ?? null,
+        target: optionalString(body, 'target') ?? null,
         ttlMs: optionalNumber(body, 'ttlMs'),
         expiresAt: optionalString(body, 'expiresAt') ?? null,
       });
