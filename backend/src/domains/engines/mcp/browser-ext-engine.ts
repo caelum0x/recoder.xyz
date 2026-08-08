@@ -31,6 +31,7 @@
  */
 import type { McpToolRouter, McpToolResult, McpToolCallInput } from '@recoder/agent-mcp';
 import type { McpServerRegistration } from '@recoder/interop';
+import { assertEgressAllowed } from '../../../shared/egress-guard.js';
 import type { InvokeResult } from '../types.js';
 import type {
   BrowserExtPort,
@@ -76,7 +77,7 @@ export function registerBrowserExtMcpTools(
     const engine = requirePort(port);
     const args = input.args ?? {};
     const parsed: ExtractStructuredInput = {
-      url: requireString(args.url, 'browser.extract_structured requires args.url'),
+      url: requireSafeUrl(args.url, 'browser.extract_structured requires args.url'),
       fields: requireRecord(args.fields, 'browser.extract_structured requires args.fields (a { name: selector } map)'),
     };
     return unwrap(await engine.extractStructured(parsed), 'browser.extract_structured');
@@ -98,7 +99,7 @@ export function registerBrowserExtMcpTools(
     const engine = requirePort(port);
     const args = input.args ?? {};
     const parsed: ScreenshotAnnotateInput = {
-      url: requireString(args.url, 'browser.screenshot_annotate requires args.url'),
+      url: requireSafeUrl(args.url, 'browser.screenshot_annotate requires args.url'),
       ...(typeof (args.fullPage ?? args.full_page) === 'boolean'
         ? { fullPage: Boolean(args.fullPage ?? args.full_page) }
         : {}),
@@ -113,7 +114,7 @@ export function registerBrowserExtMcpTools(
     const engine = requirePort(port);
     const args = input.args ?? {};
     const parsed: FillFormInput = {
-      url: requireString(args.url, 'browser.fill_form requires args.url'),
+      url: requireSafeUrl(args.url, 'browser.fill_form requires args.url'),
       fields: parseFields(args.fields),
       ...(optionalString(args.submit) ? { submit: optionalString(args.submit) as string } : {}),
     };
@@ -182,6 +183,19 @@ function requirePort(port: BrowserExtPort | null): BrowserExtPort {
     throw new Error('browser-use engine not bound in the engines composer — deep browser tools unavailable');
   }
   return port;
+}
+
+/**
+ * A required, SSRF-guarded URL arg (recoder-qfmh). These deep-browsing tools
+ * fetch a caller-supplied URL server-side, so validate the target against the
+ * egress guard first — rejecting non-http(s) schemes, localhost, and
+ * private/reserved/cloud-metadata IP literals. (DNS-hostname → private resolution
+ * is closed deeper, at the guarded browser driver.)
+ */
+function requireSafeUrl(value: unknown, errorMessage: string): string {
+  const url = requireString(value, errorMessage);
+  assertEgressAllowed(url); // throws EgressBlockedError on an SSRF target
+  return url;
 }
 
 function requireString(value: unknown, errorMessage: string): string {
