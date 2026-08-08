@@ -125,7 +125,13 @@ describe('mergeWorkspace — local fallback', () => {
 
     const result = await mergeWorkspace(deps, 'ws_1', { strategy: 'squash' });
     expect(result.merged).toBe(true);
-    expect(calls.some((c) => c.bin === 'gh' && c.args.join(' ').startsWith('pr merge recoder/ws_1 --squash'))).toBe(true);
+    // The agent branch is PUSHED to the remote BEFORE gh pr merge, so the merge
+    // delivers the local commits instead of the stale remote head. (recoder-cbeu)
+    const pushIdx = calls.findIndex((c) => c.bin === 'git' && c.args.join(' ') === 'push origin recoder/ws_1');
+    const mergeIdx = calls.findIndex((c) => c.bin === 'gh' && c.args.join(' ').startsWith('pr merge recoder/ws_1 --squash'));
+    expect(pushIdx).toBeGreaterThanOrEqual(0);
+    expect(mergeIdx).toBeGreaterThanOrEqual(0);
+    expect(pushIdx).toBeLessThan(mergeIdx);
     // No local checkout/merge on the GitHub path.
     expect(calls.some((c) => c.bin === 'git' && c.args[0] === 'checkout')).toBe(false);
     expect(transitions.map((t) => t.to)).toEqual(['merging', 'merged']);

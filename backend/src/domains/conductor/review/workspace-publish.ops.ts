@@ -392,6 +392,11 @@ export async function mergeWorkspace(
   const mergeMode: 'github' | 'local' = useGithub ? 'github' : 'local';
   try {
     if (useGithub) {
+      // Push the just-committed agent branch to the remote FIRST. `gh pr merge`
+      // merges the REMOTE PR head, so without this the merge lands the STALE
+      // remote branch and silently drops the local commit(s) made above
+      // (commitWorktreeChanges) — the merged PR would omit the agent's edits. (recoder-cbeu)
+      await run(cwd, 'git', ['push', remote, workspace.branch]);
       const args = ['pr', 'merge', workspace.branch, `--${strategy}`];
       if (input.deleteBranch) args.push('--delete-branch');
       await run(cwd, 'gh', args);
