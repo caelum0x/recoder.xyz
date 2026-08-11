@@ -15,7 +15,7 @@ import { RecoderCommandPalette, type RecoderCommand } from "./recoder-command-pa
 import { RecoderComparePanel } from "./recoder-compare";
 import { RecoderConnectionModel } from "./recoder-connection-model";
 import { RecoderHealthModel } from "./recoder-health-model";
-import type { HealthTone } from "./recoder-health-logic";
+import { deriveNavDot, type HealthTone } from "./recoder-health-logic";
 import { isConnectivityError } from "./recoder-errors";
 import {
     archivedHistoryNotice,
@@ -387,34 +387,15 @@ function EnvironmentImportSummary({ env }: { env: RecoderEnvironment }) {
 
 EnvironmentImportSummary.displayName = "EnvironmentImportSummary";
 
-// Honest liveness for the whole recoder surface: nothing while live, an amber
-// "Stale — reconnecting" once the last successful poll ages out or the newest
-// poll failed while old data is still shown, red "Offline" until the first
-// success. Reads the shared connection model so the Hub never presents stale
-// data as live.
-function RecoderConnectionBadge() {
-    const state = useAtomValue(RecoderConnectionModel.getInstance().connectionStateAtom);
-    if (state == "live") {
-        return null;
-    }
-    const label = state == "offline" ? "Offline" : "Stale — reconnecting";
-    const tone =
-        state == "offline"
-            ? "border-red-400/40 bg-red-400/15 text-red-300"
-            : "border-amber-400/40 bg-amber-400/15 text-amber-300";
-    return <span className={`rounded border px-1.5 py-0.5 text-xs whitespace-nowrap ${tone}`}>{label}</span>;
-}
-
-RecoderConnectionBadge.displayName = "RecoderConnectionBadge";
-
 // The single quiet health dot (DESIGN-REFERENCE §3C): ONE quiet color, not a
 // stoplight. Graphite by default — a dim neutral dot when up, the SAME neutral
 // merely emphasized (higher opacity) when degraded, and the one muted crimson
 // reserved for a real down. Never green/amber: a health signal must not borrow a
 // "go" hue it hasn't earned, and degraded is a de-emphasis of the neutral rather
-// than a second warning color. The detail lives only in the tooltip. A separate
-// axis from RecoderConnectionBadge (that one is poll freshness); this one is real
-// backend component health.
+// than a second warning color. The detail lives only in the tooltip. It folds
+// BOTH backend component health and poll freshness (via deriveNavDot) into this
+// one dot — an offline/stale poll degrades or downs it — so the Hub never needs a
+// second colored connection badge.
 const HealthDotTone: Record<HealthTone, string> = {
     up: "bg-white/25",
     degraded: "bg-white/60",
@@ -428,16 +409,18 @@ function healthDotToneClass(tone: HealthTone): string {
 function RecoderHealthDot() {
     const health = RecoderHealthModel.getInstance();
     const dot = useAtomValue(health.healthDotAtom);
+    const connection = useAtomValue(RecoderConnectionModel.getInstance().connectionStateAtom);
     useEffect(() => {
         health.refresh();
         const id = setInterval(() => health.refresh(), HealthRefreshMs);
         return () => clearInterval(id);
     }, []);
+    const nav = deriveNavDot(dot, connection);
     return (
         <span
-            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${healthDotToneClass(dot.tone)}`}
-            title={dot.label}
-            aria-label={dot.label}
+            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${healthDotToneClass(nav.tone)}`}
+            title={nav.label}
+            aria-label={nav.label}
         />
     );
 }
@@ -1037,7 +1020,6 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                 </span>
                 <span className={PAGE_TITLE}>Workspaces</span>
                 <RecoderHealthDot />
-                <RecoderConnectionBadge />
                 <div className="flex-1" />
                 <RecoderIdentityAffordance onOpenSettings={() => openView("recoder-settings")} />
                 <button className={PRIMARY_BTN} onClick={() => setLaunchOpen(!launchOpen)}>

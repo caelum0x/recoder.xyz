@@ -12,6 +12,8 @@
 // (backend/src/domains/observability — a raw HealthReport, HTTP 503 when down,
 // with a per-domain `sources` array) plus the transport outcome into three tones.
 
+import type { RecoderConnectionState } from "./recoder-connection";
+
 type HealthTone = "up" | "degraded" | "down";
 
 interface HealthDotState {
@@ -112,4 +114,37 @@ function deriveHealthDot(input: HealthInput): HealthDotState {
     return deriveFromPayload(input.body);
 }
 
-export { deriveHealthDot, type HealthDotState, type HealthInput, type HealthTone };
+const TONE_RANK: Record<HealthTone, number> = { up: 0, degraded: 1, down: 2 };
+
+// Map poll-freshness onto the health tone axis so ONE dot can carry both signals
+// (DESIGN-REFERENCE 3C: a single quiet dot, never a dot + a separate colored badge).
+function connectionTone(state: RecoderConnectionState): HealthTone {
+    if (state == "offline") {
+        return "down";
+    }
+    if (state == "stale") {
+        return "degraded";
+    }
+    return "up";
+}
+
+// Fold backend health and poll freshness into the single navbar dot: the worse of
+// the two tones wins (reachable-but-stale → degraded, offline → down), and a real
+// connection problem — the most actionable signal — claims the tooltip. A live
+// connection leaves the dot reading exactly as backend health.
+function deriveNavDot(health: HealthDotState, connection: RecoderConnectionState): HealthDotState {
+    const connTone = connectionTone(connection);
+    const tone = TONE_RANK[connTone] >= TONE_RANK[health.tone] ? connTone : health.tone;
+    if (connection == "offline") {
+        return { tone, label: "Offline — reconnecting" };
+    }
+    if (connection == "stale") {
+        return {
+            tone,
+            label: health.tone == "up" ? "Stale — reconnecting" : `Stale — reconnecting · ${health.label}`,
+        };
+    }
+    return { tone, label: health.label };
+}
+
+export { deriveHealthDot, deriveNavDot, type HealthDotState, type HealthInput, type HealthTone };
