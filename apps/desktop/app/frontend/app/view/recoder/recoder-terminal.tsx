@@ -86,14 +86,14 @@ function TurnLineRow({ line }: { line: TurnLine }) {
         <div className="flex flex-col gap-1 py-0.5">
             <div className="flex items-baseline gap-2 whitespace-pre-wrap break-words">
                 {line.label != "" && (
-                    <span className={cn("shrink-0 font-semibold", severityColor(line.severity))}>{line.label}</span>
+                    <span className={cn("shrink-0 font-medium", severityColor(line.severity))}>{line.label}</span>
                 )}
                 {line.text != "" && <span className="min-w-0 break-words">{line.text}</span>}
             </div>
             {approvalId != null && (
                 <div className="flex items-center gap-2">
                     {approval.phase == "done" ? (
-                        <span className="text-xs text-accent">✓ {approval.label}</span>
+                        <span className="text-xs text-accent">{approval.label}</span>
                     ) : (
                         <>
                             <button
@@ -131,7 +131,7 @@ function TurnBlock({ turn }: { turn: Turn }) {
     return (
         <div className="flex flex-col gap-1 py-1.5">
             <div className="flex items-baseline gap-2">
-                <span className="shrink-0 font-semibold text-primary">{who}</span>
+                <span className="shrink-0 font-medium text-primary">{who}</span>
                 {turn.time != "" && <span className="shrink-0 text-[11px] text-meta">{turn.time}</span>}
             </div>
             <div className="flex flex-col gap-0.5 border-l border-border pl-3">
@@ -177,7 +177,7 @@ function UsageStrip({ display, status }: { display: MeteringDisplay; status: Usa
                     </span>
                     <span className="text-secondary whitespace-nowrap">{display.totals.totalTokens} tokens</span>
                     <span className="text-secondary whitespace-nowrap">{display.totals.calls} calls</span>
-                    <span className="ml-auto font-semibold text-primary whitespace-nowrap">{display.totals.cost}</span>
+                    <span className="ml-auto font-medium text-primary whitespace-nowrap">{display.totals.cost}</span>
                 </>
             )}
         </div>
