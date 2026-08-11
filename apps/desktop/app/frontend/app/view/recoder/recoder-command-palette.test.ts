@@ -56,6 +56,8 @@ describe("navigationCommands", () => {
             "Teach the Repo",
             "Agent Collaboration",
             "Agent Tools",
+            "Work Locks",
+            "Audit Trail",
             "Open Settings",
         ]);
     });
@@ -73,6 +75,8 @@ describe("navigationCommands", () => {
             "recoder-ingest",
             "recoder-siblings",
             "recoder-capabilities",
+            "recoder-locks",
+            "recoder-audit",
             "recoder-settings",
         ]);
     });

@@ -43,7 +43,7 @@ function VerificationBanner({ verdict, tamperSeq, contiguous, count }: {
     const partial = contiguous ? "" : " · partial workspace view";
     return (
         <div className="rounded border border-success/40 bg-success/10 px-2 py-1 text-sm text-success">
-            Chain verified — {count} {count == 1 ? "record" : "records"} recomputed in-browser{partial}.
+            Entry integrity verified — {count} {count == 1 ? "record" : "records"} recomputed in-browser{partial}.
         </div>
     );
 }
@@ -99,7 +99,7 @@ function RecoderAuditView({ model }: ViewComponentProps<RecoderAuditViewModel>) 
         <div className="flex flex-col h-full overflow-auto p-3 gap-2">
             <div className="flex items-center gap-2">
                 <span className={PAGE_TITLE}>Audit</span>
-                <span className={META}>Tamper-evident governance trail</span>
+                <span className={META}>Per-entry integrity re-checked in your browser</span>
             </div>
             <RecoderErrorRow message={error} />
             <VerificationBanner verdict={verdict} tamperSeq={tamperSeq} contiguous={contiguous} count={records.length} />
