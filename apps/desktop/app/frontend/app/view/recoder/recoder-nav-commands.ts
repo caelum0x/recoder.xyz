@@ -18,6 +18,8 @@ const RecoderNavTargets: RecoderNavTarget[] = [
     { id: "nav-knowledge", title: "Teach the Repo", view: "recoder-ingest" },
     { id: "nav-collaboration", title: "Agent Collaboration", view: "recoder-siblings" },
     { id: "nav-tools", title: "Agent Tools", view: "recoder-capabilities" },
+    { id: "nav-locks", title: "Work Locks", view: "recoder-locks" },
+    { id: "nav-audit", title: "Audit Trail", view: "recoder-audit" },
     { id: "nav-settings", title: "Open Settings", view: "recoder-settings" },
 ];
 
