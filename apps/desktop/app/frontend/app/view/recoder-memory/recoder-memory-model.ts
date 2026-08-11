@@ -63,6 +63,8 @@ class RecoderMemoryViewModel implements ViewModel {
     viewName: Atom<string>;
     blockId: string;
     queryAtom: PrimitiveAtom<string>;
+    scopeThisRepoAtom: PrimitiveAtom<boolean>;
+    repoRefAtom: PrimitiveAtom<string>;
     itemsAtom: PrimitiveAtom<RecoderMemoryItem[]>;
     candidatesAtom: PrimitiveAtom<RecoderMemoryCandidate[]>;
     resultsAtom: PrimitiveAtom<RecoderMemoryResult[]>;
@@ -82,6 +84,8 @@ class RecoderMemoryViewModel implements ViewModel {
         this.viewIcon = atom("brain");
         this.viewName = atom("Memory");
         this.queryAtom = atom("") as PrimitiveAtom<string>;
+        this.scopeThisRepoAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.repoRefAtom = atom("") as PrimitiveAtom<string>;
         this.itemsAtom = atom([]) as PrimitiveAtom<RecoderMemoryItem[]>;
         this.candidatesAtom = atom([]) as PrimitiveAtom<RecoderMemoryCandidate[]>;
         this.resultsAtom = atom([]) as PrimitiveAtom<RecoderMemoryResult[]>;
@@ -149,6 +153,31 @@ class RecoderMemoryViewModel implements ViewModel {
         globalStore.set(this.queryAtom, value);
     }
 
+    // Toggle cross-run repo-scoped recall. When on (and a repoRef is known), the
+    // next search narrows to this repo AND passes the repoRef the fusion layer
+    // needs to rank THIS repo's prior-run lessons above generic ones (repo-match).
+    setScopeThisRepo(value: boolean) {
+        globalStore.set(this.scopeThisRepoAtom, value);
+    }
+
+    // Record the repo the "this repo" toggle scopes to (the repo path the dev is
+    // working). Empty ⇒ the toggle is a truthful no-op (no repo to fire against).
+    setRepoRef(value: string) {
+        globalStore.set(this.repoRefAtom, value);
+    }
+
+    // Build the recall POST body. When "this repo" is on AND a repoRef is known,
+    // it adds `scope: "repo"` (narrows the item/source filter) plus `scopeRef` and
+    // `repoRef` (the fusion layer's repo-match boost keys off `repoRef`). Absent a
+    // repoRef the toggle is inert, so an unscoped tenant recall goes out unchanged.
+    recallBody(query: string): Record<string, unknown> {
+        const repoRef = globalStore.get(this.repoRefAtom).trim();
+        if (!globalStore.get(this.scopeThisRepoAtom) || repoRef == "") {
+            return { query };
+        }
+        return { query, scope: "repo", scopeRef: repoRef, repoRef };
+    }
+
     // Fused recall via POST /memory/recall. Empty query clears results without a
     // request. Degrade-safe: transport failure or fully-degraded sources surface a
     // neutral, truthful notice and empty results, never a crash or a fabricated hit.
@@ -167,7 +196,7 @@ class RecoderMemoryViewModel implements ViewModel {
             const res = await fetch(`${getRecoderBackendUrl()}/api/agent-os/memory/recall`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ query }),
+                body: JSON.stringify(this.recallBody(query)),
             });
             const body = await res.json().catch(() => null);
             if (!res.ok) {
@@ -268,6 +297,48 @@ class RecoderMemoryViewModel implements ViewModel {
         }
         await this.refresh();
     }
+
+    // Forget (tombstone) a durable item via POST /items/:id/forget. The edge is
+    // GATED: only `{ forgotten:true }` means the item was removed from active
+    // recall — a `{ forgotten:false, verdict }` is a TRUTHFUL non-forget (policy
+    // denied or pending approval), surfaced verbatim and never faked. The backend
+    // requires a reason, so a blank one defaults. Refreshes ONLY when the item was
+    // actually forgotten, so the row drops without hiding a denied attempt.
+    async forgetItem(memoryId: string, reason: string) {
+        if (memoryId == "") {
+            return;
+        }
+        globalStore.set(this.actingAtom, memoryId);
+        globalStore.set(this.actionErrorAtom, "");
+        globalStore.set(this.actionNoticeAtom, "");
+        let forgotten = false;
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/agent-os/memory/items/${encodeURIComponent(memoryId)}/forget`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ reason: reason.trim() || "Forgotten by reviewer" }),
+                }
+            );
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                globalStore.set(this.actionErrorAtom, readErrorReason(body) || `Could not forget (${res.status})`);
+                return;
+            }
+            const data = body?.data;
+            globalStore.set(this.actionNoticeAtom, forgetOutcomeNotice(data));
+            forgotten = data != null && typeof data == "object" && (data as Record<string, unknown>).forgotten === true;
+        } catch (e) {
+            globalStore.set(this.actionErrorAtom, e instanceof Error ? e.message : String(e));
+            return;
+        } finally {
+            globalStore.set(this.actingAtom, "");
+        }
+        if (forgotten) {
+            await this.refresh();
+        }
+    }
 }
 
 // Project one RecalledMemory defensively. Provenance is kept only when the
@@ -348,6 +419,24 @@ function acceptOutcomeNotice(data: unknown): string {
         return reason || "Accept sent for approval — pending review.";
     }
     return reason || "Accept was not permitted by policy.";
+}
+
+// Translate the gated ForgetResult into a truthful one-line outcome. `forgotten`
+// is the ONLY signal that the durable item was tombstoned out of active recall;
+// every other verdict is a non-forget reported honestly (pending approval, or the
+// verbatim policy-deny reason).
+function forgetOutcomeNotice(data: unknown): string {
+    const d = data != null && typeof data == "object" ? (data as Record<string, unknown>) : {};
+    if (d.forgotten === true) {
+        return "Forgotten.";
+    }
+    const verdict = d.verdict != null && typeof d.verdict == "object" ? (d.verdict as Record<string, unknown>) : {};
+    const effect = typeof verdict.effect == "string" ? verdict.effect : "";
+    const reason = typeof verdict.reason == "string" ? verdict.reason : "";
+    if (effect == "needs_approval") {
+        return reason || "Forget sent for approval — pending review.";
+    }
+    return reason || "Forget was not permitted by policy.";
 }
 
 export {
