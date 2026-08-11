@@ -5,6 +5,28 @@ import type { SiblingCompareEntry } from "./recoder-board-logic";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { readErrorReason } from "./recoder-errors";
 
+// Ad-hoc converge groups (workspaces launched SEPARATELY, not same-taskGroup
+// siblings) carry a synthetic group id the backend mints — the sorted workspace
+// ids joined by "+", prefixed "adhoc:" (mirrors adHocGroupId() in
+// compare.service.ts). Such a group has NO real metadata.taskGroup, so its
+// converge-plan/compose MUST route to the dedicated /compare/ad-hoc/* edges
+// (which resolve the set from an explicit id list) instead of
+// /compare/:taskGroup/*, which would 404 with siblingCount 0.
+const AD_HOC_GROUP_PREFIX = "adhoc:";
+
+// Recover the explicit workspace-id list from a synthetic ad-hoc group id.
+// "adhoc:ws1+ws2" → ["ws1", "ws2"]; a non-ad-hoc taskGroup yields [].
+function adHocIdsFromGroup(taskGroup: string): string[] {
+    if (!taskGroup.startsWith(AD_HOC_GROUP_PREFIX)) {
+        return [];
+    }
+    return taskGroup
+        .slice(AD_HOC_GROUP_PREFIX.length)
+        .split("+")
+        .map((id) => id.trim())
+        .filter((id) => id != "");
+}
+
 // The user's convergence choice: a contested path → the sibling workspaceId whose
 // version wins. A path absent from the map is deliberately unresolved (the server
 // reports it back in `unresolved`, and we never fabricate a default winner).
@@ -483,9 +505,12 @@ async function fetchConvergePlan(
     try {
         const sel = encodeURIComponent(JSON.stringify(selection));
         const probeParam = probe ? "&probe=1" : "";
-        const res = await fetch(
-            `${getRecoderBackendUrl()}/api/conductor/workspaces/compare/${encodeURIComponent(tg)}/converge-plan?selection=${sel}${probeParam}`
-        );
+        const adHocIds = adHocIdsFromGroup(tg);
+        const url =
+            adHocIds.length > 0
+                ? `${getRecoderBackendUrl()}/api/conductor/workspaces/compare/ad-hoc/converge-plan?ids=${encodeURIComponent(adHocIds.join(","))}&selection=${sel}${probeParam}`
+                : `${getRecoderBackendUrl()}/api/conductor/workspaces/compare/${encodeURIComponent(tg)}/converge-plan?selection=${sel}${probeParam}`;
+        const res = await fetch(url);
         const body = await res.json().catch(() => null);
         if (!res.ok) {
             return { ok: false, error: readErrorReason(body) || `Converge plan unavailable (HTTP ${res.status}).` };
@@ -515,14 +540,20 @@ async function composeConvergence(
     }
     try {
         const trimmedBranch = (branch ?? "").trim();
-        const res = await fetch(
-            `${getRecoderBackendUrl()}/api/conductor/workspaces/compare/${encodeURIComponent(tg)}/converge`,
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ selection, ...(trimmedBranch != "" ? { branch: trimmedBranch } : {}) }),
-            }
-        );
+        const adHocIds = adHocIdsFromGroup(tg);
+        const url =
+            adHocIds.length > 0
+                ? `${getRecoderBackendUrl()}/api/conductor/workspaces/compare/ad-hoc/converge`
+                : `${getRecoderBackendUrl()}/api/conductor/workspaces/compare/${encodeURIComponent(tg)}/converge`;
+        const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                ...(adHocIds.length > 0 ? { workspaceIds: adHocIds } : {}),
+                selection,
+                ...(trimmedBranch != "" ? { branch: trimmedBranch } : {}),
+            }),
+        });
         const body = await res.json().catch(() => null);
         if (!res.ok) {
             return { ok: false, error: readErrorReason(body) || composeStatusFallback(res.status) };
