@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from "vitest";
-import { deriveHealthDot } from "./recoder-health-logic";
+import { deriveHealthDot, deriveNavDot, type HealthDotState } from "./recoder-health-logic";
 
 describe("deriveHealthDot", () => {
     it("maps a fully-up report to the up tone", () => {
@@ -70,5 +70,41 @@ describe("deriveHealthDot", () => {
     it("unwraps a sendSuccess-enveloped payload defensively", () => {
         const dot = deriveHealthDot({ kind: "payload", body: { data: { status: "up", sources: [] } } });
         expect(dot.tone).toBe("up");
+    });
+});
+
+describe("deriveNavDot — fold poll freshness + backend health into one dot (PW2-4)", () => {
+    const up: HealthDotState = { tone: "up", label: "Backend healthy" };
+    const degraded: HealthDotState = { tone: "degraded", label: "Degraded — qdrant (down)" };
+    const down: HealthDotState = { tone: "down", label: "Backend down" };
+
+    it("reads exactly as backend health when the connection is live", () => {
+        expect(deriveNavDot(up, "live")).toEqual(up);
+        expect(deriveNavDot(degraded, "live")).toEqual(degraded);
+        expect(deriveNavDot(down, "live")).toEqual(down);
+    });
+
+    it("a stale poll degrades a healthy dot and claims the tooltip", () => {
+        const dot = deriveNavDot(up, "stale");
+        expect(dot.tone).toBe("degraded");
+        expect(dot.label).toBe("Stale — reconnecting");
+    });
+
+    it("an offline poll drives the dot down even when backend health was up", () => {
+        const dot = deriveNavDot(up, "offline");
+        expect(dot.tone).toBe("down");
+        expect(dot.label).toBe("Offline — reconnecting");
+    });
+
+    it("keeps the worse tone: a down backend stays down under a merely-stale poll, and surfaces both", () => {
+        const dot = deriveNavDot(down, "stale");
+        expect(dot.tone).toBe("down");
+        expect(dot.label).toContain("Backend down");
+        expect(dot.label).toContain("Stale");
+    });
+
+    it("never fabricates 'up' — an offline connection is never softened to healthy", () => {
+        expect(deriveNavDot(up, "offline").tone).not.toBe("up");
+        expect(deriveNavDot(degraded, "stale").tone).not.toBe("up");
     });
 });
