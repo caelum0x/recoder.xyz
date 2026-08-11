@@ -20,6 +20,9 @@ const RecoderNavTargets: RecoderNavTarget[] = [
     { id: "nav-tools", title: "Agent Tools", view: "recoder-capabilities" },
     { id: "nav-locks", title: "Work Locks", view: "recoder-locks" },
     { id: "nav-audit", title: "Audit Trail", view: "recoder-audit" },
+    { id: "nav-workflows", title: "Workflows", view: "recoder-workflows" },
+    { id: "nav-agents", title: "Agents", view: "recoder-agents" },
+    { id: "nav-usage", title: "Inference Usage", view: "recoder-usage" },
     { id: "nav-settings", title: "Open Settings", view: "recoder-settings" },
 ];
 
