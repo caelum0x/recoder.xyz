@@ -27,6 +27,7 @@ import type { DistributionBillingAdapter } from '../adapters/distribution-billin
 import type { PlanCatalog } from './plan-catalog.service.js';
 import {
   BYOK_BYPASS_KINDS,
+  QUOTA_BYOK_REQUIRED,
   USAGE_KINDS,
   type BillingSubject,
   type BillingSubscription,
@@ -190,6 +191,24 @@ export function createEntitlementService(deps: EntitlementServiceDeps): Entitlem
     // BYOK bypass: a subject with its own key skips token-metered kinds only.
     if (BYOK_BYPASS_KINDS.includes(kind) && (await isBYOK(subject))) {
       return { ...base, allowed: true, limit, remaining: limit, byokBypass: true };
+    }
+
+    // BYOK-required DENY sentinel: this tier does not include the metered
+    // capability at all (e.g. Free platform inference / `token`). The subject
+    // must supply their OWN provider key. DISTINCT from `0` (unlimited) below —
+    // it is checked FIRST so a negative sentinel is never misread as headroom.
+    if (limit === QUOTA_BYOK_REQUIRED) {
+      const suggestedTier = catalog.upgradeTierForQuota(plan, kind);
+      return {
+        ...base,
+        allowed: false,
+        limit,
+        remaining: 0,
+        byokBypass: false,
+        reason: 'byok_required',
+        message: `platform '${kind}' is not included on the '${plan}' plan; supply your own API key (BYOK) or upgrade`,
+        ...(suggestedTier ? { upgrade: { currentTier: plan, suggestedTier } } : {}),
+      };
     }
 
     // Unlimited (0) always has headroom.

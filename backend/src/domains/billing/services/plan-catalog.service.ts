@@ -12,7 +12,7 @@
  */
 import { FEATURE_MATRIX, type Plan as DistributionPlan } from '@recoder/distribution';
 import type { BillingConfig } from '../config.js';
-import { PLAN_TIERS } from '../types.js';
+import { PLAN_TIERS, QUOTA_BYOK_REQUIRED } from '../types.js';
 import type { BillingProviderName, Feature, PlanTier, UsageKind } from '../types.js';
 
 /** Tier ordering: a higher rank satisfies any lower-rank requirement. */
@@ -40,11 +40,25 @@ export const PLAN_CAPABILITIES: Record<PlanTier, readonly Feature[]> = {
 
 /**
  * Per-tier quota limits (window = the billing period). `0` (or an absent kind)
- * means UNLIMITED — no metering. These are the token/engine capability rows the
- * doc says the catalog widens distribution with. Conservative, fail-safe floor.
+ * means UNLIMITED — no metering. `QUOTA_BYOK_REQUIRED` (a negative sentinel)
+ * means the tier does NOT include that metered capability at all and the subject
+ * must supply their own key (BYOK) — NEVER confuse it with `0`/unlimited. These
+ * are the token/engine capability rows the doc says the catalog widens
+ * distribution with. Conservative, fail-safe floor.
+ *
+ * FREE = BYOK-only platform inference: `token` is the DENY sentinel, so a Free
+ * user with no key is refused platform inference (must BYOK) rather than handed
+ * a free platform-token allowance.
  */
 export const PLAN_QUOTAS: Record<PlanTier, Partial<Record<UsageKind, number>>> = {
-  free: { cli_request: 200, agent_run: 50, token: 100_000, publish: 3, preview: 20, download: 20 },
+  free: {
+    cli_request: 200,
+    agent_run: 50,
+    token: QUOTA_BYOK_REQUIRED,
+    publish: 3,
+    preview: 20,
+    download: 20,
+  },
   pro: { cli_request: 5_000, agent_run: 2_000, token: 5_000_000, publish: 100, preview: 500 },
   team: { cli_request: 20_000, agent_run: 10_000, token: 25_000_000 },
   max: { cli_request: 100_000, agent_run: 50_000, token: 100_000_000 },
