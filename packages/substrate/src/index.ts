@@ -91,7 +91,10 @@ export {
   isSubstrateError,
   toErrorPayload,
 } from './errors/index.js';
-export type { SubstrateErrorOptions, SubstrateErrorPayload } from './errors/index.js';
+export type {
+  SubstrateErrorOptions,
+  SubstrateErrorPayload,
+} from './errors/index.js';
 
 // === Registry — pluggable substrate registry + selection ===
 export {
@@ -175,6 +178,8 @@ export type {
   SubstrateScanPort,
   SubstrateRegistryPort,
   EngineSubstrate,
+  ResumePlannerPort,
+  ResumePlan,
   DaytonaClientPort,
   DaytonaExecResult,
   DaytonaExecOptions,

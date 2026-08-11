@@ -18,6 +18,7 @@
 import type { WorkspaceSubstrate } from '@recoder/agent-os';
 import type { SubstrateLaunchInput } from '../contract/launch-input.js';
 import type { SubstrateHandle } from '../contract/handle.js';
+import type { ContinueRunInput } from '../contract/substrate.js';
 
 /** The slice of a ConductorSubstrate the engine drives (launch + completion probe). */
 export interface EngineSubstrate {
@@ -31,6 +32,16 @@ export interface EngineSubstrate {
    * is treated as a clean completion.
    */
   exitCode?(handle: SubstrateHandle): Promise<number | null | undefined>;
+  /**
+   * In-place relaunch in the SAME isolation (the prior run's worktree). Reconcile
+   * uses it to RESUME a crashed orphan's native session without re-provisioning.
+   * Optional — a substrate without an in-place relaunch omits it and the orphan
+   * stays finalized-to-failed (truthful, never re-provisioned).
+   */
+  continueRun?(
+    handle: SubstrateHandle,
+    input: ContinueRunInput
+  ): Promise<SubstrateHandle>;
 }
 
 export interface SubstrateRegistryPort {

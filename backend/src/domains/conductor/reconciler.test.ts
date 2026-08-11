@@ -131,6 +131,126 @@ describe('conductor reconciler (restart-survivable)', () => {
     expect(result.value?.checkedAt).toBeTruthy();
   });
 
+  it('RESUMES a crashed orphan carrying a native session ref instead of finalizing it', async () => {
+    const repository = createWorkspaceRepository({
+      executor: makeExecutor(false),
+    });
+    // A crashed `running` orphan whose durable state carries the agent's own native
+    // session ref (claude `--resume <id>`). Its live session is gone (empty scan).
+    await repository.upsertWorkspace(
+      runningWorkspace({
+        workspaceId: 'ws_resumable',
+        runId: 'run_ws_resumable',
+        runtimeId: 'claude_code',
+        metadata: { resume: { sessionRef: 'sess-abc-123' } },
+      })
+    );
+
+    const { module } = composeConductor({
+      substrates: [new FakeSubstrate({ id: 'tmux_worktree' })],
+      repository,
+    });
+
+    const result = await module.reconcile(makePrincipal());
+    expect(result.ok).toBe(true);
+    const report = result.value!;
+
+    // It was orphaned (session gone) but RESUMED — never finalized to failed.
+    expect(report.orphanedWorkspaces).toContain('ws_resumable');
+    expect(report.resumed).toContain('ws_resumable');
+    expect(report.finalized).not.toContain('ws_resumable');
+
+    // The record is NOT transitioned to a terminal state — the agent's run is live.
+    const ws = await repository.getWorkspace('ws_resumable');
+    expect(ws?.state).toBe('running');
+
+    // A truthful resume RunEvent is recorded (never a fabricated completion/failure).
+    const events = await repository.listEvents();
+    const resumeEvents = events.filter(
+      e => e.runId === 'run_ws_resumable' && e.type === 'log'
+    );
+    expect(resumeEvents.length).toBeGreaterThanOrEqual(1);
+    expect((resumeEvents[0]!.data as { resumedBy?: unknown }).resumedBy).toBe(
+      'reconcile'
+    );
+    // The captured buffer is NOT replayed — no completed/failed terminal event.
+    const terminal = events.filter(
+      e =>
+        e.runId === 'run_ws_resumable' &&
+        (e.type === 'completed' || e.type === 'failed')
+    );
+    expect(terminal).toHaveLength(0);
+  });
+
+  it('finalizes (does NOT resume) an orphan whose runtime has no native resume', async () => {
+    const repository = createWorkspaceRepository({
+      executor: makeExecutor(false),
+    });
+    // A native session ref IS present, but `cursor` has no native resume seam ⇒ the
+    // registry returns null and the orphan stays truthfully finalized-to-failed.
+    await repository.upsertWorkspace(
+      runningWorkspace({
+        workspaceId: 'ws_no_resume',
+        runId: 'run_ws_no_resume',
+        runtimeId: 'cursor',
+        metadata: { resume: { sessionRef: 'sess-xyz' } },
+      })
+    );
+
+    const { module } = composeConductor({
+      substrates: [new FakeSubstrate({ id: 'tmux_worktree' })],
+      repository,
+    });
+
+    const result = await module.reconcile(makePrincipal());
+    const report = result.value!;
+    expect(report.resumed).not.toContain('ws_no_resume');
+    expect(report.finalized).toContain('ws_no_resume');
+    expect((await repository.getWorkspace('ws_no_resume'))?.state).toBe(
+      'failed'
+    );
+  });
+
+  it('DEDUPE: two orphans sharing one native session resume it at most once', async () => {
+    const repository = createWorkspaceRepository({
+      executor: makeExecutor(false),
+    });
+    // Two crashed orphans point at the SAME (runtimeId, sessionRef). Only one may
+    // resume that session; the other must fall through to a truthful finalize.
+    await repository.upsertWorkspace(
+      runningWorkspace({
+        workspaceId: 'ws_dup_a',
+        runId: 'run_dup_a',
+        runtimeId: 'claude_code',
+        sessionName: 'sess_dup_a',
+        metadata: { resume: { sessionRef: 'shared-session' } },
+      })
+    );
+    await repository.upsertWorkspace(
+      runningWorkspace({
+        workspaceId: 'ws_dup_b',
+        runId: 'run_dup_b',
+        runtimeId: 'claude_code',
+        sessionName: 'sess_dup_b',
+        metadata: { resume: { sessionRef: 'shared-session' } },
+      })
+    );
+
+    const { module } = composeConductor({
+      substrates: [new FakeSubstrate({ id: 'tmux_worktree' })],
+      repository,
+    });
+
+    const result = await module.reconcile(makePrincipal());
+    const report = result.value!;
+    // Exactly one of the two resumed; the other finalized. Same session, resumed once.
+    expect(report.resumed).toHaveLength(1);
+    const [resumedId] = report.resumed;
+    const finalizedId = resumedId === 'ws_dup_a' ? 'ws_dup_b' : 'ws_dup_a';
+    expect(report.finalized).toContain(finalizedId);
+    expect(report.resumed).not.toContain(finalizedId);
+  });
+
   it('does not finalize a terminal record (never re-touches completed work)', async () => {
     const repository = createWorkspaceRepository({
       executor: makeExecutor(false),

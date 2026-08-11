@@ -81,7 +81,10 @@ export type { HeadlessMode } from './contracts/headless-mode';
 export { RuntimeEngine } from './engine/runtime-engine';
 export { CancellationRegistry } from './engine/cancellation';
 export { RunJournal } from './engine/run-journal';
-export { TerminalEventGuard, isTerminalRunEvent } from './engine/terminal-event-guard';
+export {
+  TerminalEventGuard,
+  isTerminalRunEvent,
+} from './engine/terminal-event-guard';
 
 // Events (sinks + table)
 export type { RunEventSink } from './events/run-event-sink';
@@ -110,7 +113,10 @@ export {
   assertSignedEnvelope,
 } from './policy';
 export type { RunGuards, PolicyGateInput } from './policy/policy-gate';
-export type { SignedEnvelope, EnvelopeVerifierFn } from './policy/envelope-verifier';
+export type {
+  SignedEnvelope,
+  EnvelopeVerifierFn,
+} from './policy/envelope-verifier';
 
 // Config
 export {
@@ -139,7 +145,10 @@ export {
   classifyProcessFailure,
   errorToFailedEvent,
 } from './errors';
-export type { RuntimeErrorCode, RuntimeOperationalErrorCode } from './errors/error-codes';
+export type {
+  RuntimeErrorCode,
+  RuntimeOperationalErrorCode,
+} from './errors/error-codes';
 
 // Shared driver machinery (reused by every driver)
 export {
@@ -255,6 +264,14 @@ export type {
   TensorzeroLogInput,
   TensorzeroLogRecord,
 } from './observability';
+
+// Native agent-session resume registry (crash-orphan lossless recovery)
+export {
+  resumePlan,
+  dedupeKey,
+  hasNativeResume,
+} from './resume/resume-registry';
+export type { ResumePlan } from './resume/resume-registry';
 
 // Contract re-exports (kept compatible with @recoder/agent-runtimes)
 export type {

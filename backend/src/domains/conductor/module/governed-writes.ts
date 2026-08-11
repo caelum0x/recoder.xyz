@@ -880,6 +880,7 @@ export class ConductorGovernedWrites {
       conductorAuditEntry(action, principal, verdict, {
         live: report.live.length,
         orphanedWorkspaces: report.orphanedWorkspaces.length,
+        resumed: report.resumed.length,
       })
     );
     return { ok: true, verdict, value: report };
