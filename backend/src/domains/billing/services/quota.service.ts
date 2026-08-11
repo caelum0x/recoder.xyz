@@ -33,6 +33,7 @@ import type { PlanCatalog } from './plan-catalog.service.js';
 import type { MeteringService } from './metering.service.js';
 import {
   BYOK_BYPASS_KINDS,
+  QUOTA_BYOK_REQUIRED,
   type BillingSubject,
   type PlanTier,
   type QuotaDecision,
@@ -150,6 +151,24 @@ export function createQuotaService(deps: QuotaServiceDeps): QuotaService {
     // (2) BYOK bypass — only for token-metered kinds; features still gate elsewhere.
     if (BYOK_BYPASS_KINDS.includes(kind) && (await isByok(subject))) {
       return { ...base, allowed: true, limit, remaining: limit, byokBypass: true };
+    }
+
+    // (2b) BYOK-required DENY sentinel: the tier does not include this metered
+    // capability at all (e.g. Free platform inference / `token`) — the subject
+    // must bring their OWN provider key. DISTINCT from `0` (unlimited) below;
+    // checked first so a negative sentinel is never misread as headroom.
+    if (limit === QUOTA_BYOK_REQUIRED) {
+      const suggestedTier = catalog.upgradeTierForQuota(plan, kind);
+      return {
+        ...base,
+        allowed: false,
+        limit,
+        remaining: 0,
+        byokBypass: false,
+        reason: 'byok_required',
+        message: `platform '${kind}' is not included on the '${plan}' plan; supply your own API key (BYOK) or upgrade`,
+        ...(suggestedTier ? { upgrade: { currentTier: plan, suggestedTier } } : {}),
+      };
     }
 
     // (3) Unlimited tier (0) always has headroom.

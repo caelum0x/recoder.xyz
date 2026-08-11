@@ -22,7 +22,7 @@ import {
   PLAN_QUOTAS,
 } from '../services/plan-catalog.service.js';
 import { sliceBillingConfig } from '../config.js';
-import type { PlanTier } from '../types.js';
+import { QUOTA_BYOK_REQUIRED, type PlanTier } from '../types.js';
 
 const appConfig = {
   runtime: { isProduction: false },
@@ -88,7 +88,9 @@ describe('PLAN_QUOTAS — canonical enforced quotas (single source of truth)', (
   // The values the website pricing page must advertise (advertised == enforced).
   // The app mirror (app/lib/config/enforced-quotas.ts) is pinned to these.
   const EXPECTED: Record<'free' | 'pro' | 'enterprise', { cli_request: number; token: number }> = {
-    free: { cli_request: 200, token: 100_000 },
+    // Free platform inference (`token`) is BYOK-only — the DENY sentinel, NOT a
+    // free platform-token allowance and NOT `0`/unlimited.
+    free: { cli_request: 200, token: QUOTA_BYOK_REQUIRED },
     pro: { cli_request: 5_000, token: 5_000_000 },
     enterprise: { cli_request: 0, token: 0 }, // 0 = unlimited
   };
@@ -99,6 +101,18 @@ describe('PLAN_QUOTAS — canonical enforced quotas (single source of truth)', (
       expect(cat.quotaLimit(tier as PlanTier, 'cli_request')).toBe(EXPECTED[tier].cli_request);
       expect(cat.quotaLimit(tier as PlanTier, 'token')).toBe(EXPECTED[tier].token);
     }
+  });
+
+  it('Free platform inference is the BYOK-required DENY sentinel — never 0/unlimited', () => {
+    const cat = catalog();
+    const freeToken = cat.quotaLimit('free', 'token');
+    expect(freeToken).toBe(QUOTA_BYOK_REQUIRED);
+    // The sentinel is negative and MUST NOT collide with `0` (unlimited) — a
+    // reader that only checks `=== 0` for unlimited can never see this as free.
+    expect(freeToken).toBeLessThan(0);
+    expect(freeToken).not.toBe(0);
+    // A paid tier, by contrast, carries a real positive platform allowance.
+    expect(cat.quotaLimit('pro', 'token')).toBeGreaterThan(0);
   });
 
   it('treats enterprise as unlimited (0) for every kind', () => {

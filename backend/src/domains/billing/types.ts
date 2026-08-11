@@ -48,6 +48,20 @@ export const USAGE_KINDS: readonly UsageKind[] = [
 /** Token-metered kinds a BYOK subject bypasses (they pay their own provider). */
 export const BYOK_BYPASS_KINDS: readonly UsageKind[] = ['token', 'agent_run'] as const;
 
+/**
+ * DENY SENTINEL for a per-tier quota limit: the tier does NOT include this
+ * metered capability at all — the subject must supply their OWN provider key
+ * (BYOK) to use it. DISTINCT from `0`, which in this codebase means UNLIMITED
+ * (no metering). A negative sentinel can never be misread as headroom
+ * (`remaining = max(0, limit - used)` collapses to `0`); the quota checkers
+ * handle it as an explicit `byok_required` deny, never an allow.
+ *
+ * Concretely: Free-tier PLATFORM INFERENCE (`token`) is BYOK-only — a Free user
+ * with no key is denied platform inference and must bring their own, whereas a
+ * paid tier carries a real finite (or `0`=unlimited) allowance.
+ */
+export const QUOTA_BYOK_REQUIRED = -1;
+
 // --- Plan tiers (widens distribution's 4 tiers with `max`) ---
 
 /**
@@ -245,7 +259,9 @@ export type EntitlementDenyReason =
   | 'feature_not_in_plan'
   | 'no_grant'
   | 'quota_exceeded'
-  | 'metering_unavailable';
+  | 'metering_unavailable'
+  /** The tier does not include this metered capability; the subject must BYOK. */
+  | 'byok_required';
 
 /** A feature-gate decision. */
 export interface EntitlementDecision {

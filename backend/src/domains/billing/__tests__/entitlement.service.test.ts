@@ -172,6 +172,40 @@ describe('EntitlementGate (working before any provider)', () => {
     expect(f.allowed).toBe(false);
   });
 
+  // --- Free platform inference is BYOK-only (recoder-bb1n) ---
+
+  it('DENIES Free platform inference for a NON-BYOK user (must supply BYOK — not unlimited)', async () => {
+    // A Free user with plenty of headroom on paper (used=0) is STILL denied
+    // platform inference: the Free `token` limit is the BYOK-required deny
+    // sentinel, not a free allowance and NOT `0`/unlimited.
+    const gate = makeGate(fakeRepo({ used: { token: 0 } }), /* byok */ false);
+    const q = await gate.checkQuota(subject('u1'), 'token');
+    expect(q.allowed).toBe(false);
+    expect(q.reason).toBe('byok_required');
+    // The sentinel must NEVER be misread as unlimited: an unlimited kind returns
+    // `allowed:true`; a BYOK-required kind returns `allowed:false` with a
+    // negative sentinel limit.
+    expect(q.limit).toBeLessThan(0);
+    expect(q.remaining).toBe(0);
+    // It carries the actionable upgrade CTA so the UI can offer a paid tier.
+    expect(q.upgrade).toEqual({ currentTier: 'free', suggestedTier: 'pro' });
+  });
+
+  it('ALLOWS a Free user with their OWN key (BYOK) to run platform inference', async () => {
+    const gate = makeGate(fakeRepo({ used: { token: 0 } }), /* byok */ true);
+    const q = await gate.checkQuota(subject('u1'), 'token');
+    expect(q.allowed).toBe(true);
+    expect(q.byokBypass).toBe(true);
+  });
+
+  it('ALLOWS platform inference on a PAID tier (pro) with headroom', async () => {
+    const gate = makeGate(fakeRepo({ subscription: activeSub('pro'), used: { token: 10 } }));
+    const q = await gate.checkQuota(subject('u1'), 'token');
+    expect(q.allowed).toBe(true);
+    expect(q.reason).toBeUndefined();
+    expect(q.limit).toBeGreaterThan(0);
+  });
+
   it('DENIES quota when the metering repo is unavailable (fail safe)', async () => {
     const gate = makeGate(fakeRepo({ available: false }));
     const d = await gate.checkQuota(subject('u1'), 'agent_run');

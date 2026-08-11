@@ -28,7 +28,7 @@ import type { AuthMiddleware } from '../../identity/middleware/authenticate.midd
 import type { Principal } from '../../identity/types.js';
 import type { GateVerdict, GovernanceEffect } from '../../governance/types.js';
 import type { BillingProviderPort } from '../ports/billing-provider.port.js';
-import type { BillingSubscription, CheckoutResult } from '../types.js';
+import type { BillingProviderName, BillingSubscription, CheckoutResult } from '../types.js';
 
 const silent = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as never;
 
@@ -76,10 +76,15 @@ interface Harness {
 function buildHarness(opts: {
   gate?: BillingWriteGate | undefined;
   activeSub?: BillingSubscription | null;
+  /** The active selling provider (default: the canonical Creem). */
+  activeProvider?: BillingProviderName;
 }): Promise<Harness> {
+  // Default to the canonical selling provider (Creem) — the only one enabled to
+  // originate a checkout under the Creem-only policy.
+  const active: BillingProviderName = opts.activeProvider ?? 'creem';
   const decide = vi.fn(async () => verdict('allow'));
   const createCheckout = vi.fn(
-    async (): Promise<CheckoutResult> => ({ checkoutId: 'co_1', url: 'https://pay.example/co_1', provider: 'polar' }),
+    async (): Promise<CheckoutResult> => ({ checkoutId: 'co_1', url: 'https://pay.example/co_1', provider: active }),
   );
   const cancel = vi.fn(async () => ({
     provider: 'polar' as const,
@@ -91,9 +96,9 @@ function buildHarness(opts: {
 
   const gate = opts.gate === null ? undefined : opts.gate ?? ({ decide } as BillingWriteGate);
 
-  const adapter = { name: 'polar', createCheckout, cancel } as unknown as BillingProviderPort;
+  const adapter = { name: active, createCheckout, cancel } as unknown as BillingProviderPort;
   const registry: ProviderRegistry = {
-    activeName: 'polar',
+    activeName: active,
     active: () => adapter,
     get: () => adapter,
     all: () => [adapter],
@@ -198,6 +203,28 @@ describe('billing checkout — governance gate', () => {
     expect(h.createCheckout).toHaveBeenCalledTimes(1);
     await h.close();
   });
+});
+
+describe('billing checkout — Creem-only selling policy (recoder-nn4o)', () => {
+  it('allows a checkout when the active provider is the canonical Creem', async () => {
+    const h = await buildHarness({ activeProvider: 'creem' });
+    const res = await request(h.base, '/api/billing/checkout', { method: 'POST', body: checkoutBody });
+    expect(res.status).toBe(201);
+    expect(h.createCheckout).toHaveBeenCalledTimes(1);
+    await h.close();
+  });
+
+  for (const inactive of ['paddle', 'dodo', 'polar'] as BillingProviderName[]) {
+    it(`refuses a checkout when the active provider is '${inactive}' — never fabricates a URL, provider untouched`, async () => {
+      const h = await buildHarness({ activeProvider: inactive });
+      const res = await request(h.base, '/api/billing/checkout', { method: 'POST', body: checkoutBody });
+      // Truthful degrade: a non-Creem selling provider is unavailable (503), and
+      // the provider adapter is NEVER touched (no fabricated checkout).
+      expect(res.status).toBe(503);
+      expect(h.createCheckout).not.toHaveBeenCalled();
+      await h.close();
+    });
+  }
 });
 
 describe('billing cancel — governance gate', () => {

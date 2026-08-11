@@ -25,6 +25,7 @@ import type { BillingWriteGate } from '../ports/governance-gate.port.js';
 import type { InvoiceService } from '../invoice.service.js';
 import type { PlanCatalog } from '../services/plan-catalog.service.js';
 import type { ProviderRegistry } from '../provider-registry.js';
+import { CANONICAL_SELLING_PROVIDER, isSellingProviderEnabled } from '../selling-policy.js';
 import { PLAN_TIERS, type BillingSubject, type PlanTier } from '../types.js';
 
 export interface BillingRouterDeps {
@@ -125,6 +126,20 @@ export function buildBillingRouter(deps: BillingRouterDeps): Router {
         return;
       }
       const subject = subjectOf(principal);
+      // SELLING-PROVIDER POLICY: only the canonical MoR provider (Creem) may
+      // originate a new checkout. Paddle/Dodo/Polar stay wired for webhook +
+      // cancel of pre-existing subscriptions, but they are NOT enabled to sell —
+      // fail safe with a truthful error, never a fabricated checkout URL.
+      if (!isSellingProviderEnabled(registry.activeName)) {
+        sendError(
+          res,
+          createError(
+            ErrorCode.SERVICE_UNAVAILABLE,
+            `checkout provider '${registry.activeName}' is not enabled for selling; '${CANONICAL_SELLING_PROVIDER}' is the sole active Merchant-of-Record`,
+          ),
+        );
+        return;
+      }
       // GOVERNED MUTATION: route the checkout through the governance gate for
       // policy + durable audit (no-op when the gate is not wired yet).
       const blocked = await guardMutation('billing.checkout', principal, {
