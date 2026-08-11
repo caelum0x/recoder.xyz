@@ -170,6 +170,151 @@ describe('classifyAttention — terminal-tail heuristics (running workspace)', (
   });
 });
 
+describe('classifyAttention — per-agent manifest rules', () => {
+  it('codex: a braille spinner in the OSC title → working (osc region, per-agent)', () => {
+    // Generic rules read no OSC title; only the codex manifest inspects it.
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'codex',
+      oscTitle: '⠹ codex',
+      tail: 'nothing recognizable in the body',
+    });
+    expect(result.attention).toBe('working');
+    expect(result.reason).toContain('codex_osc_title_working');
+  });
+
+  it('opencode: the "esc dismiss / enter confirm" chrome → awaiting_approval (no generic keyword)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'opencode',
+      tail: 'Apply edit to main.ts\nesc dismiss   enter confirm',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('opencode_permission_required');
+  });
+
+  it('cursor: a hexagon spinner line → working (per-agent spinner, not generic)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'cursor',
+      tail: '⬡ Searching the codebase',
+    });
+    expect(result.attention).toBe('working');
+    expect(result.reason).toContain('cursor_spinner_working');
+  });
+
+  it('grok: an OSC "Action Required" title → awaiting_approval', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'grok',
+      oscTitle: 'my-session - grok ⚠ Action Required',
+      tail: 'some body text',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('grok_osc_title_blocked');
+  });
+
+  it('runtime alias "claude-code" resolves to the claude ruleset', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'claude-code',
+      tail: 'showing detailed transcript\nctrl+o to toggle',
+    });
+    // Matches claude_transcript_viewer → a skip screen, so no tail signal.
+    expect(result.attention).toBe('unknown');
+    expect(result.reason).toContain('claude_transcript_viewer');
+  });
+
+  it('an unknown runtime falls back to the generic ruleset', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'some-future-agent',
+      tail: '⠹ Thinking...',
+    });
+    expect(result.attention).toBe('working');
+    expect(result.reason).toContain('generic_working');
+  });
+});
+
+describe('classifyAttention — manifest priority arbitration', () => {
+  it('a higher-priority approval rule wins over a lower-priority working rule on the same tail', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'claude',
+      // Both an approval prompt (900) and a working indicator (500) are present.
+      tail: 'Do you want to proceed?\n✻ Working… (esc to interrupt)',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('generic_approval_prompt');
+  });
+
+  it('grok: the blocked OSC title (1300) outranks a working spinner line (200)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'grok',
+      oscTitle: '⚠ Action Required',
+      tail: '⠋ Running tools [stop]',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('grok_osc_title_blocked');
+  });
+});
+
+describe('classifyAttention — skipStateUpdate screens (no tail signal)', () => {
+  it('claude transcript viewer → unknown (a skip screen is not a state)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'claude',
+      tail: 'showing detailed transcript\n↑↓ scroll',
+    });
+    expect(result.attention).toBe('unknown');
+    expect(result.reason).toContain('transcript/menu screen');
+  });
+
+  it('claude model picker → unknown (skip screen), never guessed as idle', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'claude',
+      tail: 'Select model\nenter to set as default   esc to cancel',
+    });
+    expect(result.attention).toBe('unknown');
+    expect(result.reason).toContain('claude_model_picker_menu');
+  });
+});
+
+describe('classifyAttention — manifest no-match is truthful, not idle', () => {
+  it('a claude tail matching NO rule → unknown (never herdr-style idle)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'claude',
+      tail: 'ordinary build log line\nanother ordinary line',
+    });
+    expect(result.attention).toBe('unknown');
+    expect(result.reason).toContain('no recognizable signal');
+  });
+});
+
+describe('classifyAttention — durable/RunEvent tiers still override the tail', () => {
+  it('durable awaiting_review beats a working tail (state of record wins)', () => {
+    const result = classifyAttention({
+      state: 'awaiting_review',
+      runtime: 'claude',
+      tail: '⠹ Thinking...',
+    });
+    expect(result.attention).toBe('review_ready');
+  });
+
+  it('a completed RunEvent beats a working tail (event tier precedes the tail)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'claude',
+      events: [ev('started'), ev('completed')],
+      tail: '⠹ Thinking...',
+    });
+    expect(result.attention).toBe('review_ready');
+  });
+});
+
 describe('classifyAttention — the no-signal invariant', () => {
   it('running with no tail and no events → unknown with a truthful reason', () => {
     const result = classifyAttention({ state: 'running' });
