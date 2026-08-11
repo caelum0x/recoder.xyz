@@ -234,6 +234,7 @@ export class ConductorReads {
 
     const attention: AttentionResult = classifyAttention({
       state: workspace.state,
+      ...(workspace.runtimeId ? { runtime: workspace.runtimeId } : {}),
       ...(events ? { events } : {}),
       ...(tail !== undefined ? { tail } : {}),
     });
