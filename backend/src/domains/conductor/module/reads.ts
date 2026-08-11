@@ -38,7 +38,10 @@ import { computeWorkspacePort } from '../services/workspace-port.js';
 import { readWorkspacePanes } from '../services/workspace-panes.js';
 import { readRepoConfigFile } from '../services/repo-config-file.js';
 import type { EnvironmentImportView } from '../services/environment-import.js';
-import type { TranscriptSearchView } from '../services/session-transcript.service.js';
+import type {
+  TranscriptSearchView,
+  WorkspaceTranscriptView,
+} from '../services/session-transcript.service.js';
 import {
   foldReadiness,
   type ReadinessView,
@@ -393,6 +396,18 @@ export class ConductorReads {
    */
   async searchTranscripts(query: string): Promise<TranscriptSearchView> {
     return this.ctx.sessionTranscriptService.search(query);
+  }
+
+  /**
+   * Hydrate ONE workspace's Claude transcript (`GET …/workspaces/:id/transcript`)
+   * so the Session view seeds prior turns before live replay. PURE read: no
+   * worktree ⇒ null (the route maps that to a truthful 404); a workspace with no
+   * session file degrades to `available:false` (never a fabricated history).
+   */
+  async workspaceTranscript(workspaceId: string): Promise<WorkspaceTranscriptView | null> {
+    const workspace = await this.ctx.engine.getWorkspace(workspaceId);
+    if (!workspace?.worktreePath) return null;
+    return this.ctx.sessionTranscriptService.getWorkspaceTranscript(workspace.worktreePath);
   }
 
   /**

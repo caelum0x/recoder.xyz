@@ -20,6 +20,7 @@
  *   GET    /api/conductor/workspaces/:id/run-config  committed scripts + RECODER_PORT + detected cmd
  *   GET    /api/conductor/environment  first-run import: git identity, agent configs, gh, shell
  *   GET    /api/conductor/transcript/search?q=  search Claude session transcripts by content
+ *   GET    /api/conductor/workspaces/:id/transcript  hydrate this workspace's Claude transcript (available:false when none)
  *   GET    /api/conductor/workspaces/:id/preview-verification  last preview verification summary (404 when unverified)
  *   GET    /api/conductor/workspaces/:id/view     attention-enriched view (truthful unknown)
  *   GET    /api/conductor/views                   attention-enriched views of every workspace
@@ -410,6 +411,25 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
     asyncHandler(async (req, res) => {
       const q = typeof req.query.q === 'string' ? req.query.q : '';
       sendSuccess(res, await module.searchTranscripts(q));
+    }),
+  );
+
+  // Hydrate this workspace's Claude transcript for the Session view (the durable
+  // per-workspace read edge). Gated identically to its siblings (authenticate +
+  // access). A missing/inaccessible workspace is a truthful 404; a real workspace
+  // with no session file yet is a 200 `{ available:false }` — never a fabricated
+  // history.
+  router.get(
+    '/workspaces/:id/transcript',
+    middleware.authenticate,
+    access,
+    asyncHandler(async (req, res) => {
+      const view = await module.workspaceTranscript(req.params.id);
+      if (view) {
+        sendSuccess(res, view);
+        return;
+      }
+      sendError(res, createError(ErrorCode.NOT_FOUND, 'workspace not found'));
     }),
   );
 

@@ -11,14 +11,22 @@
  * a truthful `available:false` (never an error); a single unreadable file is
  * skipped, not fatal. Never throws.
  */
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
 import type { Logger } from '../../../shared/logger.js';
-import { parseClaudeSessionJsonl, searchTranscript, type TranscriptMatch } from './claude-session-parser.js';
+import {
+  parseClaudeSessionJsonl,
+  searchTranscript,
+  type TranscriptMatch,
+  type TranscriptMessage,
+} from './claude-session-parser.js';
 
 const MAX_FILES = 200;
 const MAX_HITS = 100;
+/** Cap a hydrated workspace transcript to its most recent turns (bounded edge). */
+const MAX_MESSAGES = 500;
+const NO_WORKSPACE_SESSION = 'no session file for this workspace';
 
 export interface TranscriptSearchHit extends TranscriptMatch {
   /** The session id (jsonl basename) the hit came from. */
@@ -36,10 +44,25 @@ export interface TranscriptSearchView {
   readonly filesScanned: number;
 }
 
+/** The per-workspace read-model (`GET …/workspaces/:id/transcript`). */
+export interface WorkspaceTranscriptView {
+  /** False when this workspace has no Claude session file yet (a truthful, benign state). */
+  readonly available: boolean;
+  readonly reason?: string;
+  /** The hydrated turn stream (bounded to the last MAX_MESSAGES), oldest → newest. */
+  readonly messages: readonly TranscriptMessage[];
+}
+
 /** Injectable fs seam (tests pass fakes; default = real node fs under ~/.claude/projects). */
 export interface SessionTranscriptFs {
   readdir(dir: string): Promise<string[]>;
   readFile(path: string): Promise<string>;
+  /**
+   * Optional recency probe. When present, the newest session file is chosen by
+   * mtime; when absent (headless/fake fs), selection falls back to lexical-max
+   * basename so the read still resolves a single file deterministically.
+   */
+  stat?(path: string): Promise<{ mtimeMs: number }>;
 }
 
 export interface SessionTranscriptDeps {
@@ -56,7 +79,11 @@ export class SessionTranscriptService {
 
   constructor(deps: SessionTranscriptDeps) {
     this.log = deps.logger;
-    this.fs = deps.fs ?? { readdir, readFile: (p) => readFile(p, 'utf8') };
+    this.fs = deps.fs ?? {
+      readdir,
+      readFile: (p) => readFile(p, 'utf8'),
+      stat: async (p) => ({ mtimeMs: (await stat(p)).mtimeMs }),
+    };
     this.baseDir = deps.baseDir ?? join(homedir(), '.claude', 'projects');
   }
 
@@ -92,6 +119,63 @@ export class SessionTranscriptService {
       }
     }
     return { available: true, query, hits, filesScanned: scanned };
+  }
+
+  /**
+   * Hydrate ONE workspace's transcript for the Session view: derive Claude's slug
+   * from the worktree path (`/[/.]/g` → `-`, the same mangling Claude applies when
+   * it lays out `~/.claude/projects/<slug>/`), read that dir, parse the NEWEST
+   * `.jsonl`, and return the last MAX_MESSAGES turns. Degrade-truthful: no dir /
+   * no `.jsonl` / all files unreadable ⇒ `available:false`, never a throw.
+   */
+  async getWorkspaceTranscript(worktreePath: string): Promise<WorkspaceTranscriptView> {
+    const slug = worktreePath.replace(/[/.]/g, '-');
+    const dir = join(this.baseDir, slug);
+    let entries: string[];
+    try {
+      entries = await this.fs.readdir(dir);
+    } catch {
+      return { available: false, reason: NO_WORKSPACE_SESSION, messages: [] };
+    }
+    const files = entries.filter((e) => e.toLowerCase().endsWith('.jsonl'));
+    if (files.length === 0) {
+      return { available: false, reason: NO_WORKSPACE_SESSION, messages: [] };
+    }
+    const ordered = await this.orderByRecencyDesc(dir, files);
+    for (const file of ordered) {
+      let content: string;
+      try {
+        content = await this.fs.readFile(join(dir, file));
+      } catch {
+        continue; // an unreadable newest file is skipped — fall back to the next
+      }
+      const messages = parseClaudeSessionJsonl(content);
+      return { available: true, messages: messages.slice(-MAX_MESSAGES) };
+    }
+    return { available: false, reason: NO_WORKSPACE_SESSION, messages: [] };
+  }
+
+  /**
+   * Order session basenames newest-first: by mtime when the stat seam exists,
+   * else by lexical-max basename (a deterministic headless fallback). A stat
+   * failure sinks that file to the back rather than aborting the whole read.
+   */
+  private async orderByRecencyDesc(dir: string, files: readonly string[]): Promise<string[]> {
+    const statFn = this.fs.stat;
+    if (statFn == null) {
+      return [...files].sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+    }
+    const withMtime = await Promise.all(
+      files.map(async (file) => {
+        try {
+          const s = await statFn(join(dir, file));
+          return { file, mtimeMs: s.mtimeMs };
+        } catch {
+          return { file, mtimeMs: Number.NEGATIVE_INFINITY };
+        }
+      }),
+    );
+    return withMtime.sort((a, b) => b.mtimeMs - a.mtimeMs).map((x) => x.file);
   }
 
   /** List up to MAX_FILES `<slug>/<session>.jsonl` paths under the base dir. */

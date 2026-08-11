@@ -3,8 +3,19 @@
 
 import { describe, expect, it } from "vitest";
 
-import { deriveTranscript, isPlumbingLog, stripAnsi, type ConversationEntry } from "./recoder-conversation-logic";
+import {
+    deriveTranscript,
+    isPlumbingLog,
+    messagesToTurns,
+    stripAnsi,
+    type ConversationEntry,
+    type HydratedMessage,
+} from "./recoder-conversation-logic";
 import type { RunEventDescriptor, RunEventSeverity } from "./recoder-run-event";
+
+function msg(role: HydratedMessage["role"], text: string, timestamp = ""): HydratedMessage {
+    return { role, text, timestamp };
+}
 
 function ev(
     kind: string,
@@ -127,6 +138,38 @@ describe("deriveTranscript — empty and degrade-safe", () => {
     it("tolerates a null/undefined stream", () => {
         expect(deriveTranscript(null as unknown as ConversationEntry[])).toEqual([]);
         expect(deriveTranscript(undefined as unknown as ConversationEntry[])).toEqual([]);
+    });
+});
+
+describe("messagesToTurns — hydrated history projects like the live stream", () => {
+    it("attributes user to you and assistant/system to the agent", () => {
+        const turns = messagesToTurns([
+            msg("user", "add a health check", "09:00:00"),
+            msg("assistant", "on it"),
+            msg("system", "context compacted"),
+        ]);
+        expect(turns.map((t) => t.speaker)).toEqual(["you", "agent"]);
+        expect(turns[0].lines[0].text).toBe("add a health check");
+        expect(turns[0].time).toBe("09:00:00");
+        expect(turns[1].lines.map((l) => l.text)).toEqual(["on it", "context compacted"]);
+    });
+
+    it("renders each message as plain prose (empty label) so it reads identically to live", () => {
+        const turns = messagesToTurns([msg("assistant", "I edited the router")]);
+        expect(turns[0].lines[0]).toMatchObject({ label: "", text: "I edited the router" });
+        expect(turns[0].noise).toEqual([]);
+    });
+
+    it("skips blank-text messages and never fabricates a turn from empty history", () => {
+        expect(messagesToTurns([])).toEqual([]);
+        expect(messagesToTurns(null as unknown as HydratedMessage[])).toEqual([]);
+        expect(messagesToTurns([msg("assistant", "")])).toEqual([]);
+    });
+
+    it("anchors a turn's time to its first message that carries one", () => {
+        const turns = messagesToTurns([msg("assistant", "first", ""), msg("assistant", "second", "10:11:12")]);
+        expect(turns).toHaveLength(1);
+        expect(turns[0].time).toBe("10:11:12");
     });
 });
 
