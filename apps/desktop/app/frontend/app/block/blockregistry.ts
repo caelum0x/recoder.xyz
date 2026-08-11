@@ -20,6 +20,7 @@ import { RecoderViewModel } from "@/app/view/recoder/recoder-model";
 import { RecoderTerminalViewModel } from "@/app/view/recoder/recoder-terminal-model";
 import { RecoderDiffViewModel } from "@/app/view/recoder-diff/recoder-diff-model";
 import { RecoderBoardViewModel } from "@/app/view/recoder-board/recoder-board-model";
+import { RecoderCodebaseViewModel } from "@/app/view/recoder-codebase/recoder-codebase-model";
 import { RecoderMemoryViewModel } from "@/app/view/recoder-memory/recoder-memory-model";
 import { RecoderRunsViewModel } from "@/app/view/recoder-runs/recoder-runs-model";
 import { RecoderSettingsViewModel } from "@/app/view/recoder-settings/recoder-settings-model";
@@ -47,6 +48,7 @@ BlockRegistry.set("recoder-terminal", RecoderTerminalViewModel);
 BlockRegistry.set("recoder-diff", RecoderDiffViewModel);
 BlockRegistry.set("recoder-board", RecoderBoardViewModel);
 BlockRegistry.set("recoder-memory", RecoderMemoryViewModel);
+BlockRegistry.set("recoder-codebase", RecoderCodebaseViewModel);
 BlockRegistry.set("recoder-runs", RecoderRunsViewModel);
 BlockRegistry.set("recoder-settings", RecoderSettingsViewModel);
 // Retired views (recoder-tools/-hands/-openfang/-connectors/-health/-launch, and
