@@ -52,6 +52,10 @@ describe("navigationCommands", () => {
         expect(cmds.map((c) => c.title)).toEqual([
             "Open Runs",
             "Open Memory",
+            "Ask the Repo",
+            "Teach the Repo",
+            "Agent Collaboration",
+            "Agent Tools",
             "Open Settings",
         ]);
     });
@@ -65,6 +69,10 @@ describe("navigationCommands", () => {
         expect(opened).toEqual([
             "recoder-runs",
             "recoder-memory",
+            "recoder-codebase",
+            "recoder-ingest",
+            "recoder-siblings",
+            "recoder-capabilities",
             "recoder-settings",
         ]);
     });

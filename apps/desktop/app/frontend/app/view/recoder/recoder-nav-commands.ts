@@ -14,6 +14,10 @@ type RecoderNavTarget = { id: string; title: string; view: string };
 const RecoderNavTargets: RecoderNavTarget[] = [
     { id: "nav-runs", title: "Open Runs", view: "recoder-runs" },
     { id: "nav-memory", title: "Open Memory", view: "recoder-memory" },
+    { id: "nav-codebase", title: "Ask the Repo", view: "recoder-codebase" },
+    { id: "nav-knowledge", title: "Teach the Repo", view: "recoder-ingest" },
+    { id: "nav-collaboration", title: "Agent Collaboration", view: "recoder-siblings" },
+    { id: "nav-tools", title: "Agent Tools", view: "recoder-capabilities" },
     { id: "nav-settings", title: "Open Settings", view: "recoder-settings" },
 ];
 
