@@ -58,6 +58,9 @@ describe("navigationCommands", () => {
             "Agent Tools",
             "Work Locks",
             "Audit Trail",
+            "Workflows",
+            "Agents",
+            "Inference Usage",
             "Open Settings",
         ]);
     });
@@ -77,6 +80,9 @@ describe("navigationCommands", () => {
             "recoder-capabilities",
             "recoder-locks",
             "recoder-audit",
+            "recoder-workflows",
+            "recoder-agents",
+            "recoder-usage",
             "recoder-settings",
         ]);
     });

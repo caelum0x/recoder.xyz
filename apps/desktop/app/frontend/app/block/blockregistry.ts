@@ -19,6 +19,7 @@ import { HelpViewModel } from "@/view/helpview/helpview";
 import { RecoderViewModel } from "@/app/view/recoder/recoder-model";
 import { RecoderTerminalViewModel } from "@/app/view/recoder/recoder-terminal-model";
 import { RecoderDiffViewModel } from "@/app/view/recoder-diff/recoder-diff-model";
+import { RecoderAgentsViewModel } from "@/app/view/recoder-agents/recoder-agents-model";
 import { RecoderAuditViewModel } from "@/app/view/recoder-audit/recoder-audit-model";
 import { RecoderBoardViewModel } from "@/app/view/recoder-board/recoder-board-model";
 import { RecoderCapabilitiesViewModel } from "@/app/view/recoder-capabilities/recoder-capabilities-model";
@@ -29,6 +30,8 @@ import { RecoderMemoryViewModel } from "@/app/view/recoder-memory/recoder-memory
 import { RecoderSiblingsViewModel } from "@/app/view/recoder-siblings/recoder-siblings-model";
 import { RecoderRunsViewModel } from "@/app/view/recoder-runs/recoder-runs-model";
 import { RecoderSettingsViewModel } from "@/app/view/recoder-settings/recoder-settings-model";
+import { RecoderUsageViewModel } from "@/app/view/recoder-usage/recoder-usage-model";
+import { RecoderWorkflowsViewModel } from "@/app/view/recoder-workflows/recoder-workflows-model";
 import { TermViewModel } from "@/view/term/term-model";
 import { WaveAiModel } from "@/view/waveai/waveai";
 import { WebViewModel } from "@/view/webview/webview";
@@ -59,6 +62,9 @@ BlockRegistry.set("recoder-ingest", RecoderIngestViewModel);
 BlockRegistry.set("recoder-capabilities", RecoderCapabilitiesViewModel);
 BlockRegistry.set("recoder-locks", RecoderLocksViewModel);
 BlockRegistry.set("recoder-audit", RecoderAuditViewModel);
+BlockRegistry.set("recoder-workflows", RecoderWorkflowsViewModel);
+BlockRegistry.set("recoder-agents", RecoderAgentsViewModel);
+BlockRegistry.set("recoder-usage", RecoderUsageViewModel);
 BlockRegistry.set("recoder-runs", RecoderRunsViewModel);
 BlockRegistry.set("recoder-settings", RecoderSettingsViewModel);
 // Retired views (recoder-tools/-hands/-openfang/-connectors/-health/-launch, and
