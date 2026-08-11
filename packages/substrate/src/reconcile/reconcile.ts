@@ -11,6 +11,15 @@
  * It FLAGS orphans (writes truthful reconcile metadata, finalizes crashed
  * non-terminal records) for a policy/operator to resolve; it never silently
  * kills live work.
+ *
+ * RESUME (lossy→lossless): a crashed `running` orphan whose durable state carries a
+ * native session ref AND whose substrate has an in-place relaunch is RESUMED via the
+ * agent's own resume flow (built by the injected resume planner) instead of being
+ * finalized to `failed`. The AGENT owns its history on resume — Recoder never
+ * replays its captured buffer. A session is resumed at most once per pass, and two
+ * workspaces can never resume the SAME session (dedupe key). Conservative: with no
+ * resume planner, no session ref, an unresumable runtime, or a relaunch fault, the
+ * orphan stays finalized-to-failed — a real failure is never masked.
  */
 import {
   isTerminalTaskRunState,
@@ -70,6 +79,10 @@ export async function reconcile(
   const relocked: string[] = [];
   const orphanedWorkspaces: string[] = [];
   const finalized: string[] = [];
+  const resumed: string[] = [];
+  // Per-pass guard so two orphans can never resume the SAME native session and a
+  // session is resumed at most once.
+  const resumedSessions = new Set<string>();
 
   for (const ws of workspaces) {
     if (ws.sessionName) knownSessionNames.add(ws.sessionName);
@@ -82,11 +95,17 @@ export async function reconcile(
       if (await rebindLiveWorkspace(deps, ws)) rebound.push(ws.workspaceId);
       if (await relockLiveWorkspace(deps, ws)) relocked.push(ws.workspaceId);
     } else if (ws.state === 'running' || ws.state === 'awaiting_approval') {
-      // CRASHED ORPHAN: a non-terminal workspace whose session is gone. Finalize
-      // it — read the true exit code, emit a terminal RunEvent, advance the
-      // record + run to a terminal state, and free its lock — instead of leaving
-      // it dangling forever.
+      // CRASHED ORPHAN: a non-terminal workspace whose session is gone.
       orphanedWorkspaces.push(ws.workspaceId);
+      // Prefer a LOSSLESS native resume when the agent has its own durable session
+      // (the agent replays its history) over a lossy finalize-to-failed.
+      if (await maybeResumeOrphan(deps, ws, resumedSessions)) {
+        resumed.push(ws.workspaceId);
+        continue;
+      }
+      // No resumable native session (or the relaunch faulted) ⇒ finalize truthfully:
+      // read the true exit code, emit a terminal RunEvent, advance the record + run
+      // to a terminal state, and free its lock — instead of leaving it dangling.
       if (await finalizeOrphanedWorkspace(deps, ws))
         finalized.push(ws.workspaceId);
     }
@@ -106,6 +125,7 @@ export async function reconcile(
     relocked,
     orphanedWorkspaces,
     finalized,
+    resumed,
     orphanedSessions,
     orphanedWorktrees,
     checkedAt: clock.now(),
@@ -188,6 +208,135 @@ async function relockLiveWorkspace(
     });
     return false;
   }
+}
+
+/**
+ * Read a durable native session ref off a workspace's reconcile-resume metadata
+ * (`metadata.resume.sessionRef`). This is the id/path the agent's OWN CLI uses to
+ * replay its history. Absent / malformed ⇒ `undefined` (no native resume — the
+ * orphan finalizes to failed, truthful). Never fabricated.
+ */
+function readResumeSessionRef(ws: Workspace): string | undefined {
+  const raw = ws.metadata?.['resume'];
+  if (!raw || typeof raw !== 'object') return undefined;
+  const ref = (raw as Record<string, unknown>)['sessionRef'];
+  return typeof ref === 'string' && ref.length > 0 ? ref : undefined;
+}
+
+/**
+ * Shell-quote one argv element for a substrate whose relaunch takes a command
+ * STRING (tmux_worktree). The registry already carries the session ref as validated
+ * argv DATA (no control chars; paths absolute); this only defends the shell boundary
+ * so a space/quote in a path can never split or inject. Bare word-safe tokens pass
+ * through; anything else is single-quoted.
+ */
+function shellQuoteArg(arg: string): string {
+  if (/^[A-Za-z0-9_/:.,=@+-]+$/.test(arg)) return arg;
+  return `'${arg.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Attempt a LOSSLESS native resume of a crashed orphan. Returns true only when the
+ * agent's own session was genuinely relaunched in place; false ⇒ the caller
+ * finalizes to failed (truthful). CONSERVATIVE — every guard below prefers finalize
+ * over masking a real failure:
+ *  - no resume planner wired ⇒ false
+ *  - no durable session ref on the record ⇒ false
+ *  - this session already resumed this pass (dedupe) ⇒ false
+ *  - the runtime has no native resume / the ref fails validation ⇒ false
+ *  - the substrate cannot relaunch in place / no worktree to relaunch into ⇒ false
+ *  - the relaunch throws ⇒ false (and the dedupe claim is released)
+ * On success the agent OWNS its history (we never replay Recoder's captured buffer);
+ * streaming + the write-lock are rebound so the resumed run is fully live again.
+ */
+async function maybeResumeOrphan(
+  deps: WorkspaceEngineDeps,
+  ws: Workspace,
+  resumedSessions: Set<string>
+): Promise<boolean> {
+  const planner = deps.resume;
+  if (!planner) return false;
+  const sessionRef = readResumeSessionRef(ws);
+  if (!sessionRef) return false;
+  if (!ws.worktreePath) return false; // nothing to relaunch into
+
+  const runtimeId = ws.runtimeId;
+  const key = planner.dedupeKey(runtimeId, sessionRef);
+  if (resumedSessions.has(key)) return false; // resumed at most once per session
+
+  const plan = planner.plan(runtimeId, sessionRef);
+  if (!plan || plan.argv.length === 0) return false; // no native resume ⇒ finalize
+
+  let substrate;
+  try {
+    substrate = deps.registry.get(ws.substrate);
+  } catch (err) {
+    deps.logger.warn('reconcile: resume substrate resolve failed', {
+      workspaceId: ws.workspaceId,
+      err,
+    });
+    return false;
+  }
+  if (!substrate.continueRun) return false; // no in-place relaunch ⇒ finalize
+
+  // Claim the session BEFORE the async relaunch so a concurrent duplicate cannot
+  // double-launch; release the claim if the relaunch faults so finalize can run.
+  resumedSessions.add(key);
+  try {
+    const command = plan.argv.map(shellQuoteArg).join(' ');
+    await substrate.continueRun(
+      {
+        ref: ws.workspaceId,
+        sessionName: ws.sessionName,
+        worktreePath: ws.worktreePath,
+      },
+      {
+        workspaceId: ws.workspaceId,
+        worktreePath: ws.worktreePath,
+        command,
+      }
+    );
+  } catch (err) {
+    resumedSessions.delete(key);
+    deps.logger.warn('reconcile: native resume relaunch failed', {
+      workspaceId: ws.workspaceId,
+      err,
+    });
+    return false;
+  }
+
+  // The resumed run is live again: rebind streaming + re-hold the write-lock. The
+  // AGENT replays its own history — we do NOT replay Recoder's captured buffer.
+  await rebindLiveWorkspace(deps, ws);
+  await relockLiveWorkspace(deps, ws);
+
+  // Emit a truthful RunEvent recording the resume (never a fabricated completion).
+  if (ws.runId) {
+    const event: RunEvent = {
+      eventId: `event_${ws.runId}_resume_${deps.clock.nowMs()}`,
+      type: 'log',
+      taskId: ws.taskId,
+      runId: ws.runId,
+      message:
+        'Agent session relaunched via native resume after restart (agent owns its history)',
+      createdAt: deps.clock.now(),
+      data: {
+        sessionName: ws.sessionName,
+        runtimeId,
+        resumedBy: 'reconcile',
+      },
+    };
+    try {
+      await deps.repository.appendEvent(event);
+    } catch (err) {
+      deps.logger.warn('reconcile: resume event append failed', {
+        workspaceId: ws.workspaceId,
+        err,
+      });
+    }
+  }
+
+  return true;
 }
 
 /**

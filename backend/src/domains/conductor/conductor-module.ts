@@ -23,6 +23,7 @@ import {
   type ReconcileReport,
   type WorkspaceEngineDeps,
 } from '@recoder/substrate';
+import { resumePlan, dedupeKey } from '@recoder/runtime';
 import type { RunEvent, Workspace, WorkspaceState } from '@recoder/agent-os';
 import type { Logger } from '../../shared/logger.js';
 import type { ComponentHealth } from '../../shared/health-types.js';
@@ -479,6 +480,12 @@ export class ConductorComposer implements ConductorModule {
       repository: this.repository,
       runTailer: this.tailer,
       scan: createSubstrateScan(deps.substrateScan ?? {}),
+      // Native agent-session resume (crash-orphan lossless recovery): a crashed
+      // `running` orphan carrying a durable native session ref is relaunched via the
+      // agent's own resume instead of being finalized to `failed`. Injection-safe
+      // (session ref carried as argv DATA); a runtime with no native resume yields
+      // null ⇒ that orphan stays truthfully finalized-to-failed.
+      resume: { plan: resumePlan, dedupeKey },
       logger: loggerPort,
       clock: systemClock,
       id: uuidId,

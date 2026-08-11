@@ -18,6 +18,7 @@ import type { WorkLockPort } from '../ports/work-lock.port.js';
 import type { AdmissionPort } from '../ports/admission.port.js';
 import type { RunTailerPort } from '../ports/run-tailer.port.js';
 import type { SubstrateScanPort } from '../ports/substrate-scan.port.js';
+import type { ResumePlannerPort } from '../ports/resume-planner.port.js';
 
 export interface WorkspaceEngineDeps {
   /** Registry of registered substrates (selects the launch/exit-code impl by id). */
@@ -34,6 +35,13 @@ export interface WorkspaceEngineDeps {
   runTailer: RunTailerPort;
   /** Direct-substrate queries for reconcile (live sessions + worktrees on disk). */
   scan: SubstrateScanPort;
+  /**
+   * OPTIONAL native-resume planner (owned by `@recoder/runtime`). When present, a
+   * crashed `running` orphan carrying a durable native session ref is RELAUNCHED via
+   * the agent's own resume instead of being finalized to `failed` (lossy→lossless).
+   * Absent ⇒ every orphan finalizes exactly as before.
+   */
+  resume?: ResumePlannerPort;
   /** Structured logger. */
   logger: LoggerPort;
   /** Injected clock (ISO + epoch ms) for deterministic timestamps under test. */

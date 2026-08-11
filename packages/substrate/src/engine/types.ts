@@ -55,6 +55,12 @@ export interface ReconcileReport {
   orphanedWorkspaces: string[];
   /** Orphaned workspaces finalized this pass (advanced to a terminal record state). */
   finalized: string[];
+  /**
+   * Orphaned workspaces RESUMED this pass via the agent's own native session
+   * (relaunched in place, NOT finalized). The agent owns its history — Recoder does
+   * not replay its captured buffer. Present only when a resume planner is wired.
+   */
+  resumed: string[];
   /** Live tmux sessions with no matching workspace record. */
   orphanedSessions: string[];
   /** Conductor worktrees on disk with no matching workspace record. */
