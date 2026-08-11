@@ -14,6 +14,7 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { COOKIE_DOMAIN } from "./edge";
+import { createOAuthAccountLinkGuard } from "./oauth-link-guard";
 
 type EmailAndPasswordOptions = NonNullable<BetterAuthOptions["emailAndPassword"]>;
 
@@ -42,6 +43,14 @@ export const RECODER_COOKIE_ADVANCED = {
  * link into an existing account with the same email. Without this, signing in
  * with Google/GitHub when an account already exists for that email fails with
  * `account_not_linked`.
+ *
+ * SECURITY: `trustedProviders` makes Better Auth's guard skip the incoming
+ * `userInfo.emailVerified` check, and it never inspects the *existing* user's
+ * verification state — so an OAuth sign-in would auto-link into a squatted,
+ * UNVERIFIED local account (account takeover). The `databaseHooks` guard wired
+ * in `buildRecoderAuthOptions` (see ./oauth-link-guard) closes that hole by
+ * denying links into a pre-existing unverified user, so this policy stays as-is
+ * and verified-user linking UX is preserved.
  */
 export const RECODER_ACCOUNT_LINKING = {
   enabled: true,
@@ -111,6 +120,7 @@ export function buildRecoderAuthOptions(
   opts: CreateRecoderAuthOptions
 ): RecoderBuiltAuthOptions {
   const { modelNames } = opts;
+  const socialProviderIds = Object.keys(opts.socialProviders ?? {});
   return {
     database: opts.adapter,
     ...(opts.secret !== undefined ? { secret: opts.secret } : {}),
@@ -141,6 +151,13 @@ export function buildRecoderAuthOptions(
     account: {
       ...(modelNames?.account ? { modelName: modelNames.account } : {}),
       accountLinking: RECODER_ACCOUNT_LINKING,
+    },
+    databaseHooks: {
+      account: {
+        create: {
+          before: createOAuthAccountLinkGuard(socialProviderIds),
+        },
+      },
     },
     session: {
       ...(modelNames?.session ? { modelName: modelNames.session } : {}),
