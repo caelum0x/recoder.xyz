@@ -17,9 +17,19 @@
  * refuses (throws) rather than fabricate a session when the substrate is
  * unavailable; `capture()` returns `null` on a dead handle; `exitCode()` returns
  * `undefined` (unknown) while alive and NEVER a fabricated `0`.
+ *
+ * Git-hygiene safety (clean-room, design lineage: herdr's `src/worktree.rs`
+ * `run_worktree_add_command` + `leftover_worktree_checkout_matches_repo`,
+ * Apache-2.0 — design only, no code copied):
+ *  - launch NEVER uses `git worktree add -B` (which force-resets an existing
+ *    branch ref to the start point = silent commit loss); it probes `show-ref`
+ *    and checks out an existing branch as-is, else creates a fresh one with `-b`.
+ *  - restart-cleanup NEVER `rmSync`s a checkout dir until it is verified to be a
+ *    genuine git worktree checkout (a `gitdir:` pointer into `<common>/worktrees/`);
+ *    an unverifiable path is skipped + logged, never deleted.
  */
 import path from 'node:path';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import {
   execFileSafe,
   buildSubstrateDiff,
@@ -44,7 +54,7 @@ import { tmuxNameFor } from '../session-naming.js';
 export type ExecFn = (
   bin: string,
   args: readonly string[],
-  options?: ExecOptions,
+  options?: ExecOptions
 ) => Promise<ExecResult>;
 
 /**
@@ -52,7 +62,8 @@ export type ExecFn = (
  * remain-on-exit ON to read `#{pane_dead_status}` for exit-code detection, so a
  * finished pane keeps showing this banner in its capture — strip it at the source.
  */
-const PANE_DEAD_BANNER = /\n*[ \t]*Pane is dead \(status\s*-?\d+[^)]*\)[ \t]*/gi;
+const PANE_DEAD_BANNER =
+  /\n*[ \t]*Pane is dead \(status\s*-?\d+[^)]*\)[ \t]*/gi;
 
 /** A no-op logger so the substrate works even when none is injected. */
 const NOOP_LOGGER: LoggerPort = {
@@ -75,7 +86,9 @@ export interface CreateTmuxSubstrateDeps {
  * child-process seam. Register it via
  * `createSubstrateRegistry({ substrates: [createTmuxSubstrate(deps)] })`.
  */
-export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSubstrate {
+export function createTmuxSubstrate(
+  deps: CreateTmuxSubstrateDeps
+): ConductorSubstrate {
   const exec: ExecFn = deps.exec ?? execFileSafe;
   const logger = deps.logger ?? NOOP_LOGGER;
   // `null` config ⇒ resolve the system-PATH `tmux`; a pinned/vendored absolute path
@@ -134,6 +147,74 @@ export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSub
     }
   }
 
+  /**
+   * Truthful local-branch existence probe via `git show-ref --verify --quiet
+   * refs/heads/<branch>`. Resolves (exit 0) ⇒ the branch exists; ANY rejection
+   * (exit 1 = absent, or a probe error) ⇒ treated as ABSENT so the caller creates
+   * a fresh branch with `-b`. This never force-resets: if the branch somehow
+   * exists but the probe errored, `-b` fails loudly rather than silently
+   * discarding the branch's commits.
+   */
+  async function branchExists(repo: string, branch: string): Promise<boolean> {
+    try {
+      await exec('git', [
+        '-C',
+        repo,
+        'show-ref',
+        '--verify',
+        '--quiet',
+        `refs/heads/${branch}`,
+      ]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Verify a checkout dir is genuinely one of git's worktree checkouts BEFORE any
+   * recursive delete: its `.git` must be a FILE holding a `gitdir:` pointer that
+   * resolves INTO the repo's `<git-common-dir>/worktrees/` admin area. Guards the
+   * post-restart `rmSync` fallback from ever deleting an unrelated/user directory
+   * when the source-repo ref is absent. Returns `false` (skip the delete) on ANY
+   * ambiguity — never fabricate a "safe to delete" signal.
+   */
+  async function isRepoWorktreeCheckout(wtPath: string): Promise<boolean> {
+    // A worktree checkout's `.git` is a FILE (not a dir) with a `gitdir:` pointer.
+    let pointer: string;
+    try {
+      pointer = readFileSync(path.join(wtPath, '.git'), 'utf8');
+    } catch {
+      return false; // no `.git` file (plain dir / bare repo / user dir) → skip
+    }
+    const gitdirLine = pointer
+      .split('\n')
+      .map(line => line.trim())
+      .find(line => line.startsWith('gitdir:'));
+    if (!gitdirLine) return false;
+    const gitdirRaw = gitdirLine.slice('gitdir:'.length).trim();
+    if (!gitdirRaw) return false;
+    const gitdir = path.resolve(wtPath, gitdirRaw);
+    // Authoritative common dir from the checkout itself (shared with its repo).
+    let commonDir: string;
+    try {
+      const { stdout } = await exec('git', [
+        '-C',
+        wtPath,
+        'rev-parse',
+        '--git-common-dir',
+      ]);
+      const trimmed = stdout.trim();
+      if (!trimmed) return false;
+      commonDir = path.resolve(wtPath, trimmed);
+    } catch {
+      return false; // not inside a git repo at all → skip
+    }
+    // The gitdir MUST live under `<common>/worktrees/` (git's per-worktree admin).
+    const worktreesAdmin = path.join(commonDir, 'worktrees') + path.sep;
+    return (gitdir + path.sep).startsWith(worktreesAdmin);
+  }
+
   return {
     id: 'tmux_worktree',
 
@@ -167,16 +248,22 @@ export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSub
       const worktreePath = path.join(worktreeRoot, tmuxName);
 
       // Isolated worktree on its own branch — parallel agents never collide.
-      await exec('git', [
-        '-C',
-        input.repoPath,
-        'worktree',
-        'add',
-        '-B',
-        branch,
-        worktreePath,
-        input.baseRef || 'HEAD',
-      ]);
+      // NEVER `-B` (it force-resets an EXISTING branch ref to the start point =
+      // silent commit loss). Probe first: an existing branch is checked out AS-IS
+      // (no reset); a missing branch is created fresh with `-b` off the base ref.
+      const worktreeAddArgs = (await branchExists(input.repoPath, branch))
+        ? ['-C', input.repoPath, 'worktree', 'add', worktreePath, branch]
+        : [
+            '-C',
+            input.repoPath,
+            'worktree',
+            'add',
+            '-b',
+            branch,
+            worktreePath,
+            input.baseRef || 'HEAD',
+          ];
+      await exec('git', worktreeAddArgs);
 
       // Prime remain-on-exit BEFORE launch so `#{pane_dead_status}` survives a clean
       // exit-0 completion (distinguishes success from crash in exitCode()).
@@ -190,7 +277,12 @@ export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSub
       // env so agent CLIs (claude/codex) resolve; a fresh pane otherwise inherits a
       // minimal PATH and dies with "command not found". Idempotent, best-effort.
       try {
-        await exec(tmuxBin, ['set-environment', '-g', 'PATH', process.env.PATH ?? '']);
+        await exec(tmuxBin, [
+          'set-environment',
+          '-g',
+          'PATH',
+          process.env.PATH ?? '',
+        ]);
       } catch {
         /* no server yet / unsupported — the exec env below covers cold start */
       }
@@ -206,20 +298,37 @@ export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSub
       }
       await exec(
         tmuxBin,
-        ['new-session', '-d', '-s', tmuxName, '-c', worktreePath, input.command],
-        env ? { env } : {},
+        [
+          'new-session',
+          '-d',
+          '-s',
+          tmuxName,
+          '-c',
+          worktreePath,
+          input.command,
+        ],
+        env ? { env } : {}
       );
 
       // Per-session remain-on-exit is the deterministic guarantee (independent of the
       // server's inherited global). Best-effort: a failure only weakens exit-code
       // detection, it must not abort a successful launch.
       try {
-        await exec(tmuxBin, ['set-option', '-t', tmuxName, 'remain-on-exit', 'on']);
+        await exec(tmuxBin, [
+          'set-option',
+          '-t',
+          tmuxName,
+          'remain-on-exit',
+          'on',
+        ]);
       } catch (err) {
-        logger.warn('tmux per-session remain-on-exit set failed (best effort)', {
-          workspaceId: input.workspaceId,
-          err: message(err),
-        });
+        logger.warn(
+          'tmux per-session remain-on-exit set failed (best effort)',
+          {
+            workspaceId: input.workspaceId,
+            err: message(err),
+          }
+        );
       }
 
       repoByRef.set(input.workspaceId, input.repoPath);
@@ -232,10 +341,17 @@ export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSub
       return { ref: input.workspaceId, worktreePath, sessionName: tmuxName };
     },
 
-    async continueRun(handle: SubstrateHandle, input: ContinueRunInput): Promise<SubstrateHandle> {
+    async continueRun(
+      handle: SubstrateHandle,
+      input: ContinueRunInput
+    ): Promise<SubstrateHandle> {
       const worktreePath = input.worktreePath || handle.worktreePath;
-      if (!worktreePath) throw new Error('tmux_worktree continueRun requires an existing worktree');
-      if (!input.command) throw new Error('tmux_worktree continueRun requires a command');
+      if (!worktreePath)
+        throw new Error(
+          'tmux_worktree continueRun requires an existing worktree'
+        );
+      if (!input.command)
+        throw new Error('tmux_worktree continueRun requires a command');
       const tmuxName = handle.sessionName ?? tmuxNameFor(handle.ref);
       // Reuse the EXISTING worktree (the prior run's changes are intact); replace
       // the finished session with a fresh one running the new instruction in place.
@@ -249,7 +365,12 @@ export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSub
       // env so agent CLIs (claude/codex) resolve; a fresh pane otherwise inherits a
       // minimal PATH and dies with "command not found". Idempotent, best-effort.
       try {
-        await exec(tmuxBin, ['set-environment', '-g', 'PATH', process.env.PATH ?? '']);
+        await exec(tmuxBin, [
+          'set-environment',
+          '-g',
+          'PATH',
+          process.env.PATH ?? '',
+        ]);
       } catch {
         /* no server yet / unsupported — the exec env below covers cold start */
       }
@@ -265,25 +386,48 @@ export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSub
       }
       await exec(
         tmuxBin,
-        ['new-session', '-d', '-s', tmuxName, '-c', worktreePath, input.command],
-        env ? { env } : {},
+        [
+          'new-session',
+          '-d',
+          '-s',
+          tmuxName,
+          '-c',
+          worktreePath,
+          input.command,
+        ],
+        env ? { env } : {}
       );
       try {
-        await exec(tmuxBin, ['set-option', '-t', tmuxName, 'remain-on-exit', 'on']);
+        await exec(tmuxBin, [
+          'set-option',
+          '-t',
+          tmuxName,
+          'remain-on-exit',
+          'on',
+        ]);
       } catch (err) {
-        logger.warn('tmux per-session remain-on-exit set failed (best effort)', {
-          workspaceId: input.workspaceId,
-          err: message(err),
-        });
+        logger.warn(
+          'tmux per-session remain-on-exit set failed (best effort)',
+          {
+            workspaceId: input.workspaceId,
+            err: message(err),
+          }
+        );
       }
-      logger.info('tmux_worktree workspace continued (new run in same worktree)', {
-        workspaceId: input.workspaceId,
-        worktreePath,
-      });
+      logger.info(
+        'tmux_worktree workspace continued (new run in same worktree)',
+        {
+          workspaceId: input.workspaceId,
+          worktreePath,
+        }
+      );
       return { ref: handle.ref, worktreePath, sessionName: tmuxName };
     },
 
-    async capture(handle: SubstrateHandle, lines = 200): Promise<string | null> {
+    async capture(
+      handle: SubstrateHandle,
+      lines = 200
+    ): Promise<string | null> {
       const tmuxName = handle.sessionName ?? tmuxNameFor(handle.ref);
       try {
         const { stdout } = await exec(tmuxBin, [
@@ -326,7 +470,9 @@ export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSub
       }
     },
 
-    async exitCode(handle: SubstrateHandle): Promise<number | null | undefined> {
+    async exitCode(
+      handle: SubstrateHandle
+    ): Promise<number | null | undefined> {
       const tmuxName = handle.sessionName ?? tmuxNameFor(handle.ref);
       try {
         await exec(tmuxBin, ['has-session', '-t', tmuxName]);
@@ -356,7 +502,10 @@ export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSub
       }
     },
 
-    async diff(handle: SubstrateHandle, baseRef: string): Promise<SubstrateDiff> {
+    async diff(
+      handle: SubstrateHandle,
+      baseRef: string
+    ): Promise<SubstrateDiff> {
       if (!handle.worktreePath) {
         throw new Error('tmux_worktree diff requires a worktree path');
       }
@@ -377,7 +526,7 @@ export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSub
 
     async teardown(
       handle: SubstrateHandle,
-      options?: { removeIsolation?: boolean },
+      options?: { removeIsolation?: boolean }
     ): Promise<void> {
       const tmuxName = handle.sessionName ?? tmuxNameFor(handle.ref);
       try {
@@ -390,7 +539,14 @@ export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSub
         const wtPath = handle.worktreePath ?? path.join(worktreeRoot, tmuxName);
         if (repo) {
           try {
-            await exec('git', ['-C', repo, 'worktree', 'remove', '--force', wtPath]);
+            await exec('git', [
+              '-C',
+              repo,
+              'worktree',
+              'remove',
+              '--force',
+              wtPath,
+            ]);
           } catch (err) {
             logger.warn('tmux worktree remove failed (best effort)', {
               ref: handle.ref,
@@ -398,11 +554,21 @@ export function createTmuxSubstrate(deps: CreateTmuxSubstrateDeps): ConductorSub
             });
           }
         } else if (existsSync(wtPath)) {
-          // No source-repo ref (post-restart) — remove the worktree dir directly.
-          try {
-            rmSync(wtPath, { recursive: true, force: true });
-          } catch {
-            /* best effort */
+          // No source-repo ref (post-restart) — remove the worktree dir directly,
+          // but ONLY after verifying it is genuinely one of git's worktree
+          // checkouts. Never `rmSync` an unrelated/user dir: an unverifiable path
+          // is skipped + logged truthfully rather than deleted.
+          if (await isRepoWorktreeCheckout(wtPath)) {
+            try {
+              rmSync(wtPath, { recursive: true, force: true });
+            } catch {
+              /* best effort */
+            }
+          } else {
+            logger.warn(
+              'tmux worktree remove skipped — path is not a verified git worktree checkout',
+              { ref: handle.ref, wtPath }
+            );
           }
         }
       }
