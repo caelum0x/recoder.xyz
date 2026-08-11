@@ -175,7 +175,7 @@ function DiffLineRow({
                         title={`Comment on ${anchorLabel}`}
                         onClick={() => setActiveLine(activeLine == globalIndex ? -1 : globalIndex)}
                     >
-                        <i className="fa-solid fa-comment-medical" />
+                        <i className="fa-solid fa-comment" />
                     </button>
                 )}
             </div>
@@ -570,7 +570,7 @@ function ReviewCommentQueue({ model }: { model: RecoderDiffViewModel }) {
                         title="Remove"
                         onClick={() => model.removeComment(i)}
                     >
-                        ✕
+                        <i className="fa-solid fa-xmark" />
                     </button>
                 </div>
             ))}
