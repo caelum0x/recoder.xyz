@@ -1,0 +1,40 @@
+Recoder
+Copyright (c) Recoder.
+
+This product includes software developed by third parties, used under their
+respective licenses. Attribution for portions derived from or ported out of
+third-party sources is recorded below and in the affected source-file headers.
+
+================================================================================
+herdr — https://github.com/herdrdev/herdr
+Licensed under the Apache License, Version 2.0.
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Portions of Recoder's conductor attention detection are derived from herdr:
+
+  - backend/src/domains/conductor/attention/attention-manifests.ts
+  - backend/src/domains/conductor/attention/attention-manifests-core.ts
+  - backend/src/domains/conductor/attention/attention-manifests-agents.ts
+        The declarative per-agent terminal-state detection engine
+        (region/matcher/priority model) and the per-agent rule corpus are
+        ported from herdr's detection manifests (src/detect/manifest.rs and
+        src/detect/manifests/*.toml), re-expressed in Recoder's AttentionState
+        vocabulary. herdr's Idle-fallback default is deliberately dropped in
+        favour of Recoder's truthful "unknown when no signal" invariant.
+
+  - backend/src/domains/conductor/attention/attention-debounce.ts
+        The working->idle confirmation debounce is a clean-room re-expression
+        of herdr's PendingIdleConfirmation (src/pane/agent_detection.rs).
+
+  - backend/src/domains/conductor/attention/attention-priority.ts
+        The attention priority ordering is inspired by herdr's status ranking.
+
+  - backend/src/domains/conductor/adapters/tmux-substrate.adapter.ts
+        The git-worktree branch-safety and gated-cleanup design is inspired by
+        herdr's src/worktree.rs (clean-room, design only).
+
+Changes: rule sets adapted to Recoder's runtime set and AttentionState
+vocabulary; OSC-progress rules omitted (no Recoder capture surface); truthful
+unknown-default substituted for herdr's Idle fallback. See
+docs/COMPETITIVE-HERDR.md for the full analysis and attribution rationale.
+================================================================================
