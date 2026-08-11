@@ -170,6 +170,51 @@ describe("single converge decision surface — one shared selection map", () => 
     });
 });
 
+describe("ad-hoc converge routing — separately-launched workspaces reach the ad-hoc edges", () => {
+    it("routes fetchConvergePlan for an 'adhoc:' group to the ad-hoc converge-plan edge with ?ids=", async () => {
+        const sel = toggleSelection({}, "src/a.ts", "ws1");
+        mockFetchOnce({ data: { plan: { complete: true, files: ["src/a.ts"] } } });
+        const result = await fetchConvergePlan("adhoc:ws1+ws2", sel);
+        expect(result.ok).toBe(true);
+        const url = (vi.mocked(globalThis.fetch).mock.calls.at(-1)?.[0] as string) ?? "";
+        expect(url).toContain("/compare/ad-hoc/converge-plan?ids=");
+        expect(decodeURIComponent(url)).toContain("ids=ws1,ws2");
+        // the synthetic group id must NOT be sent as a real taskGroup path segment
+        expect(url).not.toContain(encodeURIComponent("adhoc:ws1+ws2"));
+    });
+
+    it("routes composeConvergence for an 'adhoc:' group to the ad-hoc compose edge with workspaceIds in the body", async () => {
+        const sel = toggleSelection({}, "src/a.ts", "ws1");
+        mockFetchOnce({ data: { convergence: { workspaceId: "conv-1", branch: "converge/x" } } });
+        const result = await composeConvergence("adhoc:ws1+ws2", sel, "converge/x");
+        expect(result.ok).toBe(true);
+        const call = vi.mocked(globalThis.fetch).mock.calls.at(-1);
+        const url = (call?.[0] as string) ?? "";
+        expect(url).toContain("/compare/ad-hoc/converge");
+        expect(url).not.toContain("/compare/ad-hoc/converge-plan");
+        const body = JSON.parse(((call?.[1] as RequestInit)?.body as string) ?? "{}");
+        expect(body.workspaceIds).toEqual(["ws1", "ws2"]);
+        expect(body.selection).toEqual(sel);
+        expect(body.branch).toBe("converge/x");
+    });
+
+    it("still routes a real taskGroup to the /compare/:taskGroup/* edges (no ad-hoc regression)", async () => {
+        const sel = toggleSelection({}, "src/a.ts", "ws1");
+        mockFetchOnce({ data: { plan: { complete: true, files: ["src/a.ts"] } } });
+        await fetchConvergePlan("tg-real", sel);
+        const planUrl = (vi.mocked(globalThis.fetch).mock.calls.at(-1)?.[0] as string) ?? "";
+        expect(planUrl).toContain("/compare/tg-real/converge-plan");
+        expect(planUrl).not.toContain("/ad-hoc/");
+        mockFetchOnce({ data: { convergence: { workspaceId: "conv-2" } } });
+        await composeConvergence("tg-real", sel);
+        const composeCall = vi.mocked(globalThis.fetch).mock.calls.at(-1);
+        expect((composeCall?.[0] as string) ?? "").toContain("/compare/tg-real/converge");
+        expect((composeCall?.[0] as string) ?? "").not.toContain("/ad-hoc/");
+        const composeBody = JSON.parse(((composeCall?.[1] as RequestInit)?.body as string) ?? "{}");
+        expect(composeBody.workspaceIds).toBeUndefined();
+    });
+});
+
 describe("deriveCompareColumns — N-up column data from the compare feed", () => {
     it("derives one column per sibling in feed order with stat and files", () => {
         const columns = deriveCompareColumns([
