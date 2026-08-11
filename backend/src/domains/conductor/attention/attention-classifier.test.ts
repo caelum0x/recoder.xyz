@@ -29,7 +29,9 @@ describe('classifyAttention — durable state authority', () => {
   });
 
   it('awaiting_review state → review_ready', () => {
-    expect(classifyAttention({ state: 'awaiting_review' }).attention).toBe('review_ready');
+    expect(classifyAttention({ state: 'awaiting_review' }).attention).toBe(
+      'review_ready'
+    );
   });
 
   it('failed state → error', () => {
@@ -108,7 +110,9 @@ describe('classifyAttention — terminal-tail heuristics (running workspace)', (
   });
 
   it('spinner + progress word → working', () => {
-    expect(classifyAttention({ state: 'running', tail: '⠹ Thinking...' }).attention).toBe('working');
+    expect(
+      classifyAttention({ state: 'running', tail: '⠹ Thinking...' }).attention
+    ).toBe('working');
   });
 
   it('approval question → awaiting_approval', () => {
@@ -144,15 +148,21 @@ describe('classifyAttention — terminal-tail heuristics (running workspace)', (
   });
 
   it('Omnara: "waiting for your input" → agent_idle_prompt', () => {
-    expect(classifyAttention({ state: 'running', tail: 'Done.\nWaiting for your input to continue' }).attention).toBe(
-      'agent_idle_prompt',
-    );
+    expect(
+      classifyAttention({
+        state: 'running',
+        tail: 'Done.\nWaiting for your input to continue',
+      }).attention
+    ).toBe('agent_idle_prompt');
   });
 
   it('Omnara: "Press Enter to continue" → agent_idle_prompt', () => {
-    expect(classifyAttention({ state: 'running', tail: 'Summary written.\nPress Enter to continue' }).attention).toBe(
-      'agent_idle_prompt',
-    );
+    expect(
+      classifyAttention({
+        state: 'running',
+        tail: 'Summary written.\nPress Enter to continue',
+      }).attention
+    ).toBe('agent_idle_prompt');
   });
 
   it('Omnara: a numbered selection menu (2+ options) → agent_idle_prompt', () => {
@@ -164,9 +174,12 @@ describe('classifyAttention — terminal-tail heuristics (running workspace)', (
   });
 
   it('a single numbered line is NOT treated as a menu (no false needs-input)', () => {
-    expect(classifyAttention({ state: 'running', tail: 'Step 1. build the thing and keep going' }).attention).toBe(
-      'unknown',
-    );
+    expect(
+      classifyAttention({
+        state: 'running',
+        tail: 'Step 1. build the thing and keep going',
+      }).attention
+    ).toBe('unknown');
   });
 });
 
@@ -187,7 +200,8 @@ describe('classifyAttention — per-agent manifest rules', () => {
     const result = classifyAttention({
       state: 'running',
       runtime: 'opencode',
-      tail: 'Apply edit to main.ts\nesc dismiss   enter confirm',
+      // herdr requires the nav hint (↑↓ select) alongside the confirm hint.
+      tail: 'Apply edit to main.ts\nesc dismiss   enter confirm   ↑↓ select',
     });
     expect(result.attention).toBe('awaiting_approval');
     expect(result.reason).toContain('opencode_permission_required');
@@ -323,15 +337,448 @@ describe('classifyAttention — the no-signal invariant', () => {
   });
 
   it('null tail (capture returned nothing) is a MISSING signal, not idle', () => {
-    expect(classifyAttention({ state: 'running', tail: null }).attention).toBe('unknown');
+    expect(classifyAttention({ state: 'running', tail: null }).attention).toBe(
+      'unknown'
+    );
   });
 
-  it.each(['created', 'setting_up', 'ready', 'merging', 'merged', 'cancelled', 'archived'] as const)(
+  it.each([
+    'created',
+    'setting_up',
+    'ready',
+    'merging',
+    'merged',
+    'cancelled',
+    'archived',
+  ] as const)(
     'non-live state %s → unknown (no live-attention semantics)',
-    (state) => {
+    state => {
       const result = classifyAttention({ state, tail: '⠹ Thinking...' });
       expect(result.attention).toBe('unknown');
       expect(result.reason).toContain(state);
-    },
+    }
   );
+});
+
+// --- deepened herdr-ported corpus: representative fixtures per agent ----------
+
+describe('classifyAttention — claude ruleset (full herdr corpus)', () => {
+  it('braille OSC title → working (osc_title_working, 1100)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'claude',
+      oscTitle: '⠋ claude',
+      tail: 'building the project',
+    });
+    expect(result.attention).toBe('working');
+    expect(result.reason).toContain('claude_osc_title_working');
+  });
+
+  it('a live blocked form under the last rule → awaiting_approval (live_blocked_form, 980)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'claude',
+      tail: '──────────\nProceed with edit?\nenter to confirm   esc to cancel',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('claude_live_blocked_form');
+  });
+
+  it('the /btw overlay → working (btw_overlay_working, 975)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'claude',
+      tail: '/btw remember to lint\nsome context\nesc to close',
+    });
+    expect(result.attention).toBe('working');
+    expect(result.reason).toContain('claude_btw_overlay_working');
+  });
+
+  it('a sparkle OSC idle title → agent_idle_prompt (osc_title_idle, 250)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'claude',
+      oscTitle: '✳ my-session',
+      tail: 'all done here',
+    });
+    expect(result.attention).toBe('agent_idle_prompt');
+    expect(result.reason).toContain('claude_osc_title_idle');
+  });
+
+  it('a claude tail matching NO rule → unknown', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'claude',
+      tail: 'compiling module foo\nlinking artifacts',
+    });
+    expect(result.attention).toBe('unknown');
+    expect(result.reason).toContain('no recognizable signal');
+  });
+});
+
+describe('classifyAttention — codex ruleset (full herdr corpus)', () => {
+  it('OSC "Action Required" title → awaiting_approval (osc_title_blocked, 1100)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'codex',
+      oscTitle: 'codex ⚠ Action Required',
+      tail: 'body text',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('codex_osc_title_blocked');
+  });
+
+  it('the transcript viewer → unknown (skip screen, transcript_viewer, 1000)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'codex',
+      tail: 'transcript\n↑/↓ to scroll · pgup/pgdn to page · home/end to jump · q to quit · esc to edit prev',
+    });
+    expect(result.attention).toBe('unknown');
+    expect(result.reason).toContain('codex_transcript_viewer');
+    expect(result.reason).toContain('transcript/menu screen');
+  });
+
+  it('the trust-directory gate → awaiting_approval (trust_directory, 950 beats generic)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'codex',
+      tail: '> You are in /Users/me/proj\nDo you trust the contents of this directory?\n  1. Yes  2. No',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('codex_trust_directory');
+  });
+
+  it('"allow command?" strong blocker beats the generic approval on a tie (900, agent-first)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'codex',
+      tail: 'Run: ls -la\nallow command?',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('codex_live_strong_blocker');
+  });
+
+  it('the "Working (… esc to interrupt)" fallback → working (screen_working_fallback, 500)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'codex',
+      tail: 'output line\n• Working (12s · esc to interrupt)',
+    });
+    expect(result.attention).toBe('working');
+    expect(result.reason).toContain('codex_screen_working_fallback');
+  });
+
+  it('a non-empty, non-spinner OSC title → agent_idle_prompt (osc_title_idle, 100)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'codex',
+      oscTitle: 'codex — ready',
+      tail: 'all done here',
+    });
+    expect(result.attention).toBe('agent_idle_prompt');
+    expect(result.reason).toContain('codex_osc_title_idle');
+  });
+});
+
+describe('classifyAttention — cursor ruleset (full herdr corpus)', () => {
+  it('write-to-file approval → awaiting_approval (write_file_approval, 320)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'cursor',
+      tail: 'Write to this file?\nproceed (y)   reject & propose changes',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('cursor_write_file_approval');
+  });
+
+  it('the "(y) (enter)" approval chrome → awaiting_approval (approval_prompt, 300)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'cursor',
+      tail: 'Proceed? (y) (enter)',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('cursor_approval_prompt');
+  });
+
+  it('a background-task count line → working (background_task_status_working, 95)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'cursor',
+      tail: 'idle\n3 background tasks',
+    });
+    expect(result.attention).toBe('working');
+    expect(result.reason).toContain('cursor_background_task_status_working');
+  });
+
+  it('a cursor tail matching NO rule → unknown', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'cursor',
+      tail: 'wrote 3 files\nnothing pending',
+    });
+    expect(result.attention).toBe('unknown');
+  });
+});
+
+describe('classifyAttention — opencode ruleset (full herdr corpus)', () => {
+  it('the "opencode … esc again to interrupt" hint → working (interrupt_hint_working, 110)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'opencode',
+      tail: 'opencode running · esc again to interrupt',
+    });
+    expect(result.attention).toBe('working');
+    expect(result.reason).toContain('opencode_interrupt_hint_working');
+  });
+
+  it('a solid progress bar → working (progress_bar_working, 100)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'opencode',
+      tail: '■■■■■■ building',
+    });
+    expect(result.attention).toBe('working');
+    expect(result.reason).toContain('opencode_progress_bar_working');
+  });
+
+  it('an opencode tail matching NO rule → unknown', () => {
+    expect(
+      classifyAttention({
+        state: 'running',
+        runtime: 'opencode',
+        tail: 'saved 2 files',
+      }).attention
+    ).toBe('unknown');
+  });
+});
+
+describe('classifyAttention — gemini ruleset (full herdr corpus)', () => {
+  it('the "Apply this change" panel → awaiting_approval (apply_or_allow_change, 300)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'gemini',
+      tail: '│ Apply this change to config.ts?',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('gemini_apply_or_allow_change');
+  });
+
+  it('the "waiting for user confirmation / yes" gate → awaiting_approval', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'gemini',
+      tail: '❯ Yes, allow once\n  No\nwaiting for user confirmation',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('gemini_apply_or_allow_change');
+  });
+
+  it('a gemini tail matching NO rule → unknown', () => {
+    expect(
+      classifyAttention({
+        state: 'running',
+        runtime: 'gemini',
+        tail: 'generated file list',
+      }).attention
+    ).toBe('unknown');
+  });
+});
+
+describe('classifyAttention — grok ruleset (full herdr corpus)', () => {
+  it('the "┃ (○)" option dialog → awaiting_approval (option_dialog_blocked, 1200)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'grok',
+      tail: 'Choose:\n┃  2 (○) Yes, proceed\n┃  z (○) Type your answer here',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('grok_option_dialog_blocked');
+  });
+
+  it('permission footer hints → awaiting_approval (permission_hints_blocked, 1190)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'grok',
+      tail: 'prompt\n1/3:select │ Ctrl+o:yolo │ Ctrl+c:cancel',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('grok_permission_hints_blocked');
+  });
+
+  it('question-dialog footer hints → awaiting_approval (question_dialog_hints_blocked, 1185)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'grok',
+      tail: 'Question\nEsc:unselect │ Tab:scrollback │ Shift+x:dismiss',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('grok_question_dialog_hints_blocked');
+  });
+
+  it('the legacy permission-scope selector → awaiting_approval (permission_scope_selector, 1180)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'grok',
+      tail: '❯ Yes, proceed   No, reject\n←/→:scope',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('grok_permission_scope_selector');
+  });
+
+  it('the background-work chip on the top row → working (background_work_chip_working, 1170)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'grok',
+      tail: '⋅ 3 │ chat\n\nbody',
+    });
+    expect(result.attention).toBe('working');
+    expect(result.reason).toContain('grok_background_work_chip_working');
+  });
+
+  it('a plain "… - grok" idle title → agent_idle_prompt (osc_title_idle, 1100)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'grok',
+      oscTitle: 'my-session - grok',
+      tail: 'body',
+    });
+    expect(result.attention).toBe('agent_idle_prompt');
+    expect(result.reason).toContain('grok_osc_title_idle');
+  });
+
+  it('any other non-empty title (no spinner, not idle) → working (osc_title_working, 1000)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'grok',
+      oscTitle: 'grok · Exploring src',
+      tail: 'body',
+    });
+    expect(result.attention).toBe('working');
+    expect(result.reason).toContain('grok_osc_title_working');
+  });
+
+  it('a spinner + [stop] status line → working (spinner_status_working, 200)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'grok',
+      tail: '⠧ Waiting on subagent… 2.8s   13s ⇣29.7k [stop]',
+    });
+    expect(result.attention).toBe('working');
+    expect(result.reason).toContain('grok_spinner_status_working');
+  });
+
+  it('an esc:cancel footer hint → working (esc_cancel_hints_working, 190)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'grok',
+      tail: 'thinking\nEsc:cancel │ Ctrl+.:shortcuts',
+    });
+    expect(result.attention).toBe('working');
+    expect(result.reason).toContain('grok_esc_cancel_hints_working');
+  });
+
+  it('a legacy "Run/Read/Search" spinner row → working (waiting_tool_working, 120)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'grok',
+      tail: '⠴ Run the test suite',
+    });
+    expect(result.attention).toBe('working');
+    expect(result.reason).toContain('grok_waiting_tool_working');
+  });
+
+  it('a settled prompt footer → agent_idle_prompt (prompt_hints_idle, 100)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'grok',
+      tail: 'Ready.\nCtrl+.:shortcuts',
+    });
+    expect(result.attention).toBe('agent_idle_prompt');
+    expect(result.reason).toContain('grok_prompt_hints_idle');
+  });
+
+  it('the blocked option dialog (1200) outranks a working [stop] line (200)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'grok',
+      tail: '┃  1 (●) Yes, proceed\n⠧ Running tools [stop]',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+    expect(result.reason).toContain('grok_option_dialog_blocked');
+  });
+
+  it('a grok tail matching NO rule → unknown', () => {
+    expect(
+      classifyAttention({
+        state: 'running',
+        runtime: 'grok',
+        tail: 'wrote output\ndone',
+      }).attention
+    ).toBe('unknown');
+  });
+});
+
+describe('classifyAttention — pi ruleset (new runtime)', () => {
+  it('the literal "Working..." → working', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'pi',
+      tail: 'Working...',
+    });
+    expect(result.attention).toBe('working');
+  });
+
+  it('a pi tail matching NO rule → unknown (never faked idle)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'pi',
+      tail: 'ordinary output line\nanother line',
+    });
+    expect(result.attention).toBe('unknown');
+    expect(result.reason).toContain('no recognizable signal');
+  });
+});
+
+describe('classifyAttention — runtime aliases for the new/underscore forms', () => {
+  it('"herdr:pi" resolves to the pi ruleset', () => {
+    expect(
+      classifyAttention({
+        state: 'running',
+        runtime: 'herdr:pi',
+        tail: 'Working...',
+      }).attention
+    ).toBe('working');
+  });
+
+  it('"herdr:opencode" resolves to the opencode ruleset', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'herdr:opencode',
+      tail: 'opencode running · esc again to interrupt',
+    });
+    expect(result.reason).toContain('opencode_interrupt_hint_working');
+  });
+
+  it('"gemini-cli" and "gemini_cli" both resolve to the gemini ruleset', () => {
+    for (const runtime of ['gemini-cli', 'gemini_cli']) {
+      const result = classifyAttention({
+        state: 'running',
+        runtime,
+        tail: '│ Apply this change to config.ts',
+      });
+      expect(result.reason).toContain('gemini_apply_or_allow_change');
+    }
+  });
+
+  it('"grok_build" (underscore) resolves to the grok ruleset', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'grok_build',
+      oscTitle: 'grok ⚠ Action Required',
+      tail: 'body',
+    });
+    expect(result.reason).toContain('grok_osc_title_blocked');
+  });
 });
