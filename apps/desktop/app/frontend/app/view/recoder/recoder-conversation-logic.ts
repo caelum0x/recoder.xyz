@@ -140,11 +140,46 @@ function deriveTranscript(entries: readonly ConversationEntry[]): Turn[] {
     return turns;
 }
 
+// A hydrated historical message from the backend transcript edge
+// (GET …/workspaces/:id/transcript). Structurally the backend's TranscriptMessage,
+// declared locally so this pure module never imports a backend package.
+type HydratedMessage = {
+    role: "user" | "assistant" | "system";
+    text: string;
+    timestamp: string;
+};
+
+// Project a hydrated transcript (durable history read on Session attach) into the
+// SAME Turn shape the live stream folds to, so seeded history and live replay
+// render identically: your turns attribute to "you", the agent's to "agent",
+// consecutive same-speaker messages collapse into one calm turn, and each message
+// is plain prose (empty label) — never a fabricated line. An empty history
+// projects to [] (the view keeps its calm waiting state).
+function messagesToTurns(messages: readonly HydratedMessage[]): Turn[] {
+    const turns: Turn[] = [];
+    let current: Turn | null = null;
+    for (const msg of messages ?? []) {
+        const text = msg.text ?? "";
+        if (text == "") continue;
+        const speaker: TurnSpeaker = msg.role == "user" ? "you" : "agent";
+        if (current == null || current.speaker != speaker) {
+            current = { speaker, time: msg.timestamp ?? "", lines: [], noise: [] };
+            turns.push(current);
+        } else if (current.time == "") {
+            current.time = msg.timestamp ?? "";
+        }
+        current.lines.push({ label: "", text, severity: "info" });
+    }
+    return turns;
+}
+
 export {
     deriveTranscript,
+    messagesToTurns,
     isPlumbingLog,
     stripAnsi,
     type ConversationEntry,
+    type HydratedMessage,
     type Turn,
     type TurnLine,
     type TurnSpeaker,

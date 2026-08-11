@@ -143,6 +143,7 @@ import {
 import {
   SessionTranscriptService,
   type TranscriptSearchView,
+  type WorkspaceTranscriptView,
 } from './services/session-transcript.service.js';
 import type { ReadinessView } from './services/readiness.service.js';
 import type { ConvergenceEvidenceRecord } from './evidence/convergence-evidence.js';
@@ -902,6 +903,12 @@ export class ConductorComposer implements ConductorModule {
 
   async searchTranscripts(query: string): Promise<TranscriptSearchView> {
     return this.reads.searchTranscripts(query);
+  }
+
+  async workspaceTranscript(
+    workspaceId: string
+  ): Promise<WorkspaceTranscriptView | null> {
+    return this.reads.workspaceTranscript(workspaceId);
   }
 
   async workspaceRunConfig(

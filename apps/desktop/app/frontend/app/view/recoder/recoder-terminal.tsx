@@ -7,8 +7,15 @@ import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { agentLabel } from "./recoder-agent-labels";
 import { decideApproval } from "./recoder-approval-action";
-import { deriveTranscript, type Turn, type TurnLine } from "./recoder-conversation-logic";
+import {
+    deriveTranscript,
+    messagesToTurns,
+    type HydratedMessage,
+    type Turn,
+    type TurnLine,
+} from "./recoder-conversation-logic";
 import { RecoderDetailHeader, workspaceOptionLabel, type RecoderStateTone } from "./recoder-detail-header";
+import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { type MeteringDisplay } from "./recoder-metering";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
 import { type RunEventSeverity } from "./recoder-run-event";
@@ -16,6 +23,25 @@ import { PRIMARY_BTN, QUIET_BTN } from "./recoder-styles";
 import { RecoderTerminalStatus, RecoderTerminalViewModel, type UsageStripStatus } from "./recoder-terminal-model";
 
 const UsageRefreshMs = 15_000;
+
+// Hydrate this workspace's prior Claude transcript (the durable per-workspace read
+// edge) so the Session seeds history before live replay. Degrade-truthful: a
+// non-2xx, an available:false, or any parse/network failure yields [] — the view
+// then shows its calm empty/live state, NEVER a fabricated history.
+async function fetchWorkspaceHistory(workspaceId: string): Promise<Turn[]> {
+    if (workspaceId == "") return [];
+    try {
+        const url = `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/transcript`;
+        const res = await fetch(url);
+        if (!res.ok) return [];
+        const body = await res.json();
+        const data = body?.data;
+        if (data?.available != true || !Array.isArray(data.messages)) return [];
+        return messagesToTurns(data.messages as HydratedMessage[]);
+    } catch {
+        return [];
+    }
+}
 
 async function openWorkspaces() {
     try {
@@ -205,12 +231,27 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
     const workspaces = useAtomValue(model.workspacesAtom);
     const scrollRef = useRef<HTMLDivElement>(null);
     const [draft, setDraft] = useState("");
+    const [history, setHistory] = useState<Turn[]>([]);
 
     useEffect(() => {
         model.connect();
         void model.refreshWorkspaces();
         return () => model.dispose();
     }, [model]);
+
+    // Seed prior turns on Session-view attach (and on every rebind, keyed on
+    // workspaceId). Clear first so a switch can't show the previous workspace's
+    // history; the live socket then replays fresh frames on top.
+    useEffect(() => {
+        let cancelled = false;
+        setHistory([]);
+        void fetchWorkspaceHistory(workspaceId).then((turns) => {
+            if (!cancelled) setHistory(turns);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [workspaceId]);
 
     // Keyed on workspaceId so a rebind refetches the strip immediately; the
     // interval keeps cost/tokens current while runs stream through the socket.
@@ -224,11 +265,13 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
         const el = scrollRef.current;
         if (el == null) return;
         el.scrollTop = el.scrollHeight;
-    }, [entries]);
+    }, [entries, history]);
 
-    // Fold the raw run-event stream into the clean conversation transcript at
-    // render time (pure derivation) so the view shows agent turns, not a log.
-    const turns = deriveTranscript(entries);
+    // Seeded history (durable per-workspace read) followed by the live stream
+    // folded to clean turns — both projected through the same Turn shape so
+    // hydrated and live turns render identically. The waiting states only show
+    // when there is truly nothing (no history AND no live output).
+    const turns = [...history, ...deriveTranscript(entries)];
     const empty = turns.length == 0;
     const noWorkspace = workspaceId == "";
     const canSend = !noWorkspace && !sending && draft.trim() != "";
