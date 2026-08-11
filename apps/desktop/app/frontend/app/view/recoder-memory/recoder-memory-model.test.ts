@@ -18,6 +18,7 @@ import { RecoderMemoryViewModel } from "./recoder-memory-model";
 const AcceptUrl = "http://127.0.0.1:3100/api/agent-os/memory/candidates/c1/accept";
 const RejectUrl = "http://127.0.0.1:3100/api/agent-os/memory/candidates/c1/reject";
 const RecallUrl = "http://127.0.0.1:3100/api/agent-os/memory/recall";
+const ForgetUrl = "http://127.0.0.1:3100/api/agent-os/memory/items/m1/forget";
 
 function makeModel(): RecoderMemoryViewModel {
     return new RecoderMemoryViewModel({ blockId: "b1" } as ViewModelInitType);
@@ -530,5 +531,170 @@ describe("RecoderMemoryViewModel.rejectCandidate", () => {
         expect(globalStore.get(model.actionErrorAtom)).toBe("Could not reject (404)");
         expect(globalStore.get(model.actingAtom)).toBe("");
         expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("RecoderMemoryViewModel.search scope", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("scopes recall to this repo when the toggle is on, firing the repo-match boost", async () => {
+        const fetchMock = vi.fn().mockImplementation(() => okJson({ memories: [], sources: [] }));
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        model.setRepoRef("/home/dev/recoder.xyz");
+        model.setScopeThisRepo(true);
+        model.setQuery("auth");
+        await model.search();
+
+        expect(fetchMock).toHaveBeenCalledWith(RecallUrl, expect.objectContaining({ method: "POST" }));
+        const init = fetchMock.mock.calls[0][1] as RequestInit;
+        expect(JSON.parse(String(init.body))).toEqual({
+            query: "auth",
+            scope: "repo",
+            scopeRef: "/home/dev/recoder.xyz",
+            repoRef: "/home/dev/recoder.xyz",
+        });
+    });
+
+    it("sends only the query when the repo toggle is off (unscoped tenant recall)", async () => {
+        const fetchMock = vi.fn().mockImplementation(() => okJson({ memories: [], sources: [] }));
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        model.setRepoRef("/home/dev/recoder.xyz");
+        model.setQuery("auth");
+        await model.search();
+
+        const init = fetchMock.mock.calls[0][1] as RequestInit;
+        expect(JSON.parse(String(init.body))).toEqual({ query: "auth" });
+    });
+
+    it("does not scope when the toggle is on but no repo is known (truthful no-op)", async () => {
+        const fetchMock = vi.fn().mockImplementation(() => okJson({ memories: [], sources: [] }));
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        model.setScopeThisRepo(true);
+        model.setQuery("auth");
+        await model.search();
+
+        const init = fetchMock.mock.calls[0][1] as RequestInit;
+        expect(JSON.parse(String(init.body))).toEqual({ query: "auth" });
+    });
+});
+
+describe("RecoderMemoryViewModel.forgetItem", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("posts a reason to /items/:id/forget, reports it forgotten, and drops the row on refresh", async () => {
+        const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+            if (init?.method === "POST") {
+                return okJson({
+                    forgotten: true,
+                    item: { memoryId: "m1", status: "expired" },
+                    verdict: { effect: "allow", reason: "ok" },
+                });
+            }
+            return okJson([]);
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        globalStore.set(model.itemsAtom, [
+            { memoryId: "m1", scope: "repo", title: "stale fact", body: "b", status: "active" },
+        ]);
+        await model.forgetItem("m1", "stale");
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            ForgetUrl,
+            expect.objectContaining({ method: "POST", body: JSON.stringify({ reason: "stale" }) })
+        );
+        expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:3100/api/agent-os/memory/items");
+        expect(globalStore.get(model.actionNoticeAtom)).toBe("Forgotten.");
+        expect(globalStore.get(model.actionErrorAtom)).toBe("");
+        expect(globalStore.get(model.actingAtom)).toBe("");
+        expect(globalStore.get(model.itemsAtom)).toEqual([]);
+    });
+
+    it("never fabricates a delete: a deny verdict surfaces the verbatim reason and does not refresh", async () => {
+        const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+            if (init?.method === "POST") {
+                return okJson({
+                    forgotten: false,
+                    item: { memoryId: "m1", status: "active" },
+                    verdict: { effect: "deny", reason: "forget requires owner approval" },
+                });
+            }
+            return okJson([]);
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        await model.forgetItem("m1", "stale");
+
+        expect(globalStore.get(model.actionNoticeAtom)).toBe("forget requires owner approval");
+        expect(globalStore.get(model.actionErrorAtom)).toBe("");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports a needs_approval forget as pending, not a success", async () => {
+        const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+            if (init?.method === "POST") {
+                return okJson({ forgotten: false, item: { memoryId: "m1" }, verdict: { effect: "needs_approval", reason: "" } });
+            }
+            return okJson([]);
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        await model.forgetItem("m1", "stale");
+
+        expect(globalStore.get(model.actionNoticeAtom)).toBe("Forget sent for approval — pending review.");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("defaults the reason when none is given (the backend requires a reason)", async () => {
+        const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+            if (init?.method === "POST") {
+                return okJson({ forgotten: true, item: { memoryId: "m1" }, verdict: { effect: "allow" } });
+            }
+            return okJson([]);
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        await model.forgetItem("m1", "   ");
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            ForgetUrl,
+            expect.objectContaining({ body: JSON.stringify({ reason: "Forgotten by reviewer" }) })
+        );
+    });
+
+    it("surfaces a truthful action error on non-2xx and does not refresh", async () => {
+        const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({}) });
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        await model.forgetItem("m1", "stale");
+
+        expect(globalStore.get(model.actionErrorAtom)).toBe("Could not forget (404)");
+        expect(globalStore.get(model.actingAtom)).toBe("");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("surfaces the transport error message on fetch failure", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
+
+        const model = makeModel();
+        await model.forgetItem("m1", "stale");
+
+        expect(globalStore.get(model.actionErrorAtom)).toBe("ECONNREFUSED");
+        expect(globalStore.get(model.actingAtom)).toBe("");
     });
 });

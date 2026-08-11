@@ -2,7 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { RecoderEmpty, RecoderErrorRow, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
-import { FIELD_LABEL, INPUT, PAGE_TITLE, PRIMARY_BTN, QUIET_BTN, STATE_CHIP } from "@/app/view/recoder/recoder-styles";
+import {
+    FIELD_LABEL,
+    INPUT,
+    PAGE_TITLE,
+    PICK_BTN_ON,
+    PRIMARY_BTN,
+    QUIET_BTN,
+    QUIET_BTN_XS,
+    STATE_CHIP,
+} from "@/app/view/recoder/recoder-styles";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import {
@@ -15,6 +24,27 @@ import {
 
 const REFRESH_MS = 6000;
 
+// The launcher seeds this store with the dev's repos, most-recent first; the head
+// entry is the repo they are actively working. Kept in sync with recoder-model's
+// RECENT_REPOS_KEY so the "this repo" recall scope points at the same target.
+const RECENT_REPOS_KEY = "recoder:recent-repos";
+
+// The repo the "this repo" toggle scopes recall to. Degrade-safe: a corrupt or
+// absent store yields "" so the toggle stays a truthful no-op instead of guessing.
+function readCurrentRepoRef(): string {
+    try {
+        const raw = globalThis.localStorage?.getItem(RECENT_REPOS_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(arr)) {
+            return "";
+        }
+        const first = arr.find((x: unknown): x is string => typeof x == "string" && x.trim() != "");
+        return first ?? "";
+    } catch {
+        return "";
+    }
+}
+
 // WHY-it-surfaced chips read as plain words; "recency" becomes "recent" so the
 // row explains the moat (repo-scoped / fresh recall) in one calm glance.
 const SIGNAL_LABEL: Record<RecallSignal, string> = {
@@ -23,7 +53,13 @@ const SIGNAL_LABEL: Record<RecallSignal, string> = {
     lexical: "lexical",
 };
 
-function MemoryItemRow({ item }: { item: RecoderMemoryItem }) {
+interface MemoryItemRowProps {
+    item: RecoderMemoryItem;
+    busy: boolean;
+    onForget: () => void;
+}
+
+function MemoryItemRow({ item, busy, onForget }: MemoryItemRowProps) {
     return (
         <div className="flex flex-col gap-0.5 rounded border border-border p-2" title={item.memoryId}>
             <div className="flex items-center gap-2">
@@ -34,6 +70,11 @@ function MemoryItemRow({ item }: { item: RecoderMemoryItem }) {
             {item.evidence?.taskId && (
                 <div className="text-xs text-secondary font-mono truncate">task {item.evidence.taskId}</div>
             )}
+            <div className="flex items-center">
+                <button disabled={busy} className={`${QUIET_BTN_XS} ml-auto`} onClick={onForget}>
+                    {busy ? "…" : "Forget"}
+                </button>
+            </div>
         </div>
     );
 }
@@ -100,6 +141,8 @@ function CandidateRow({ candidate, busy, onAccept, onReject }: CandidateRowProps
 
 function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>) {
     const query = useAtomValue(model.queryAtom);
+    const scopeThisRepo = useAtomValue(model.scopeThisRepoAtom);
+    const repoRef = useAtomValue(model.repoRefAtom);
     const items = useAtomValue(model.itemsAtom);
     const candidates = useAtomValue(model.candidatesAtom);
     const results = useAtomValue(model.resultsAtom);
@@ -118,6 +161,18 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
         const id = setInterval(() => model.refresh(), REFRESH_MS);
         return () => clearInterval(id);
     }, [model]);
+
+    useEffect(() => {
+        model.setRepoRef(readCurrentRepoRef());
+    }, [model]);
+
+    const handleForget = (item: RecoderMemoryItem) => {
+        const reason = window.prompt(`Forget "${item.title || "this lesson"}"? Optional reason:`, "");
+        if (reason == null) {
+            return;
+        }
+        model.forgetItem(item.memoryId, reason);
+    };
 
     const hasQuery = query.trim() != "";
     const showDisconnected = !connected && !loading && error == "";
@@ -140,6 +195,21 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
                         }
                     }}
                 />
+                {repoRef != "" && (
+                    <button
+                        className={scopeThisRepo ? PICK_BTN_ON : QUIET_BTN}
+                        title={`Rank this repo's prior-run lessons first — ${repoRef}`}
+                        aria-pressed={scopeThisRepo}
+                        onClick={() => {
+                            model.setScopeThisRepo(!scopeThisRepo);
+                            if (query.trim() != "") {
+                                model.search();
+                            }
+                        }}
+                    >
+                        This repo
+                    </button>
+                )}
                 <button disabled={searching} className={QUIET_BTN} onClick={() => model.search()}>
                     {searching ? "…" : "Search"}
                 </button>
@@ -175,7 +245,12 @@ function RecoderMemoryView({ model }: ViewComponentProps<RecoderMemoryViewModel>
                         <div className="flex flex-col gap-1">
                             <div className={FIELD_LABEL}>Lessons ({items.length})</div>
                             {items.map((item) => (
-                                <MemoryItemRow key={item.memoryId} item={item} />
+                                <MemoryItemRow
+                                    key={item.memoryId}
+                                    item={item}
+                                    busy={acting == item.memoryId}
+                                    onForget={() => handleForget(item)}
+                                />
                             ))}
                         </div>
                     )}

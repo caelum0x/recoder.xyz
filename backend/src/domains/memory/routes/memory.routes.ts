@@ -65,6 +65,9 @@ export function buildMemoryRouter(deps: MemoryRouterDeps): Router {
         userId: req.principal!.userId,
         ...(optionalString(body, 'scope') ? { scope: optionalString(body, 'scope')! } : {}),
         ...(optionalString(body, 'scopeRef') ? { scopeRef: optionalString(body, 'scopeRef')! } : {}),
+        // Forward the repo the run targets so the cross-RUN repo-match scope-boost
+        // can fire (recall-fusion keys the boost off `repoRef`, not `scopeRef`).
+        ...(optionalString(body, 'repoRef') ? { repoRef: optionalString(body, 'repoRef')! } : {}),
         ...(optionalNumber(body, 'limit') != null ? { limit: optionalNumber(body, 'limit')! } : {}),
       });
       sendSuccess(res, result);
