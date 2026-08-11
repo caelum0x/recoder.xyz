@@ -11,7 +11,9 @@ import type { PrReviewEvidenceView } from '../ports/pr-review.port.js';
 import {
   classifyAttention,
   type AttentionResult,
+  type AttentionSignals,
 } from '../attention/attention-classifier.js';
+import type { WaitFrameData } from '../wait/wait.service.js';
 import {
   workspaceDiff as workspaceDiffOp,
   workspaceDiffFiles as workspaceDiffFilesOp,
@@ -182,6 +184,67 @@ export class ConductorReads {
         )
       : undefined;
     return panes ? { ...view, panes } : view;
+  }
+
+  /**
+   * Snapshot the AUTHORITATIVE attention signals + current run identity for one
+   * workspace — the per-poll frame source behind the wait-until-settled primitive
+   * (`wait/wait.service.ts`). Returns `null` when the workspace no longer exists
+   * (a truthful stream end, never a fabricated frame). Mirrors the attention probe
+   * of {@link buildWorkspaceView} (durable state + run events + live terminal tail)
+   * but returns the RAW signals so the {@link WaitService} re-derives the state via
+   * `classifyAttention` itself. Every signal source is degrade-safe: a capture /
+   * event-read fault is a MISSING signal (`unknown` → keep waiting), never faked.
+   */
+  async attentionSnapshot(workspaceId: string): Promise<WaitFrameData | null> {
+    const workspace = await this.ctx.engine.getWorkspace(workspaceId);
+    if (!workspace) return null;
+
+    let tail: string | null | undefined;
+    const probeLive =
+      (workspace.state === 'running' ||
+        workspace.state === 'changes_requested') &&
+      Boolean(workspace.sessionName || workspace.worktreePath);
+    if (probeLive) {
+      try {
+        const substrate = this.ctx.registry.getFull(workspace.substrate);
+        tail = await substrate.capture(
+          {
+            ref: workspace.workspaceId,
+            sessionName: workspace.sessionName,
+            worktreePath: workspace.worktreePath,
+          },
+          ATTENTION_TAIL_LINES
+        );
+      } catch (err) {
+        this.ctx.log.warn(
+          { err, workspaceId: workspace.workspaceId },
+          'wait attention probe faulted'
+        );
+      }
+    }
+
+    let events: readonly RunEvent[] | undefined;
+    try {
+      events = await this.ctx.engine.listWorkspaceEvents(workspace.workspaceId);
+    } catch (err) {
+      this.ctx.log.warn(
+        { err, workspaceId: workspace.workspaceId },
+        'wait attention event read faulted'
+      );
+    }
+
+    const signals: AttentionSignals = {
+      state: workspace.state,
+      ...(workspace.runtimeId ? { runtime: workspace.runtimeId } : {}),
+      ...(events ? { events } : {}),
+      ...(tail !== undefined ? { tail } : {}),
+    };
+    return {
+      signals,
+      runId: workspace.runId ?? null,
+      runtimeId: workspace.runtimeId ?? null,
+    };
   }
 
   /** Attention-enriched views of every workspace (the cockpit list's badges). */
@@ -405,10 +468,14 @@ export class ConductorReads {
    * worktree ⇒ null (the route maps that to a truthful 404); a workspace with no
    * session file degrades to `available:false` (never a fabricated history).
    */
-  async workspaceTranscript(workspaceId: string): Promise<WorkspaceTranscriptView | null> {
+  async workspaceTranscript(
+    workspaceId: string
+  ): Promise<WorkspaceTranscriptView | null> {
     const workspace = await this.ctx.engine.getWorkspace(workspaceId);
     if (!workspace?.worktreePath) return null;
-    return this.ctx.sessionTranscriptService.getWorkspaceTranscript(workspace.worktreePath);
+    return this.ctx.sessionTranscriptService.getWorkspaceTranscript(
+      workspace.worktreePath
+    );
   }
 
   /**

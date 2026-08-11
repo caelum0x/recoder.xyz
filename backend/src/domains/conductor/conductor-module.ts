@@ -80,6 +80,16 @@ import {
   buildConductorWriteTools,
   buildConductorPreviewEvidenceTools,
 } from './mcp/conductor-write-tools.js';
+import { buildConductorWaitTools } from './mcp/conductor-wait-tool.js';
+import {
+  WaitService,
+  type WaitOutcome,
+  type WaitRequest,
+} from './wait/wait.service.js';
+import {
+  createPollingWaitSource,
+  createRealWaitTimer,
+} from './wait/wait-source.js';
 import type { McpInjectPort } from './ports/mcp-inject.port.js';
 import { buildConductorHealth } from './health.js';
 import type {
@@ -815,6 +825,24 @@ export class ConductorComposer implements ConductorModule {
     return this.reads.listWorkspaceViews();
   }
 
+  /**
+   * Block until the workspace settles (the `recoder_workspace_wait` primitive).
+   * Composes the pure {@link WaitService} over a POLLING source that re-probes the
+   * authoritative attention snapshot (`reads.attentionSnapshot`) and a wall-clock
+   * timer. Read-only + degrade-truthful: a gone workspace ends the stream
+   * (`stream-ended`), a timeout carries the last classified state, and a pinned
+   * run that is superseded resolves `run-superseded` — never a fabricated settle.
+   */
+  async waitForWorkspaceSettle(request: WaitRequest): Promise<WaitOutcome> {
+    const service = new WaitService({
+      source: createPollingWaitSource({
+        probe: id => this.reads.attentionSnapshot(id),
+      }),
+      timer: createRealWaitTimer(),
+    });
+    return service.waitUntilSettled(request);
+  }
+
   // --- multi-agent compare (F3 parallel-run groups): read-only ------------------
 
   async compareTaskGroup(
@@ -1177,6 +1205,8 @@ export class ConductorComposer implements ConductorModule {
       ...buildConductorMcpTools(this),
       ...buildConductorWriteTools(this),
       ...buildConductorPreviewEvidenceTools(this),
+      // The agent-invokable synchronous wait-until-settled primitive (absorb herdr #3).
+      ...buildConductorWaitTools(this),
     ];
   }
 
