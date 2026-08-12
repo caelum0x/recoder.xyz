@@ -1,0 +1,3 @@
+name: loom-agent-state
+version: "1.0"
+description: Report Hermes Agent lifecycle state to Loom panes

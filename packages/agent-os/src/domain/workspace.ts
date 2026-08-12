@@ -48,14 +48,14 @@ export const TERMINAL_WORKSPACE_STATES: readonly WorkspaceState[] = [
  * - `acp`           — local git worktree driving an Agent Client Protocol agent
  *                     (`claude-code-acp`) over JSON-RPC/stdio instead of a PTY.
  *                     Opt-in only; registered when the ACP agent binary is on PATH.
- * - `herdr`         — the vendored `herdr` engine (headless `herdr server` over an
+ * - `loom`         — the vendored `loom` engine (headless `loom server` over an
  *                     NDJSON Unix socket) driving native git worktrees + PTYs with
  *                     native agent-status detection. Opt-in only; registered when
- *                     the supervised herdr daemon is healthy (binary present +
+ *                     the supervised loom daemon is healthy (binary present +
  *                     `ping` protocol 20), else reported unavailable with a reason.
  */
 export type WorkspaceSubstrate =
-  'tmux_worktree' | 'daytona' | 'in_process' | 'ssh' | 'acp' | 'herdr';
+  'tmux_worktree' | 'daytona' | 'in_process' | 'ssh' | 'acp' | 'loom';
 
 export type Workspace = {
   workspaceId: string;

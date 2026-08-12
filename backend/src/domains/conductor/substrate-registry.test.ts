@@ -22,8 +22,8 @@ describe('conductor substrate registry', () => {
     expect(availability.map(a => a.id).sort()).toEqual([
       'acp',
       'daytona',
-      'herdr',
       'in_process',
+      'loom',
       'ssh',
       'tmux_worktree',
     ]);
@@ -94,46 +94,46 @@ describe('conductor substrate registry', () => {
     expect(byId.get('tmux_worktree')?.available).toBe(true);
   });
 
-  it('reports the herdr id unavailable with its opt-in reason when unwired', async () => {
+  it('reports the loom id unavailable with its opt-in reason when unwired', async () => {
     const registry = createConductorRegistry({ config: cfg() });
     const byId = new Map((await registry.availability()).map(a => [a.id, a]));
 
-    // `herdr` is a KNOWN substrate id: listed, truthfully down with a reason.
-    expect(byId.has('herdr')).toBe(true);
-    expect(byId.get('herdr')?.available).toBe(false);
-    expect(byId.get('herdr')?.reason).toMatch(/herdr/);
-    expect(byId.get('herdr')?.reason).toMatch(/opt-in/);
+    // `loom` is a KNOWN substrate id: listed, truthfully down with a reason.
+    expect(byId.has('loom')).toBe(true);
+    expect(byId.get('loom')?.available).toBe(false);
+    expect(byId.get('loom')?.reason).toMatch(/loom/);
+    expect(byId.get('loom')?.reason).toMatch(/opt-in/);
   });
 
-  it('reports the herdr substrate available when wired and its probe passes', async () => {
+  it('reports the loom substrate available when wired and its probe passes', async () => {
     const registry = createConductorRegistry({
       config: cfg(),
       substrates: [
-        new FakeSubstrate({ id: 'herdr', available: true }),
+        new FakeSubstrate({ id: 'loom', available: true }),
         new FakeSubstrate({ id: 'tmux_worktree', available: true }),
       ],
     });
     const byId = new Map((await registry.availability()).map(a => [a.id, a]));
 
-    expect(byId.get('herdr')?.available).toBe(true);
-    expect(byId.get('herdr')?.reason).toBeUndefined();
+    expect(byId.get('loom')?.available).toBe(true);
+    expect(byId.get('loom')?.reason).toBeUndefined();
   });
 
-  it('reports a wired-but-down herdr substrate with the probe reason (daemon absent)', async () => {
+  it('reports a wired-but-down loom substrate with the probe reason (daemon absent)', async () => {
     const registry = createConductorRegistry({
       config: cfg(),
       substrates: [
         new FakeSubstrate({
-          id: 'herdr',
+          id: 'loom',
           available: false,
-          unavailableReason: 'herdr unavailable (ECONNREFUSED)',
+          unavailableReason: 'loom unavailable (ECONNREFUSED)',
         }),
       ],
     });
     const byId = new Map((await registry.availability()).map(a => [a.id, a]));
 
-    expect(byId.get('herdr')?.available).toBe(false);
-    expect(byId.get('herdr')?.reason).toMatch(/ECONNREFUSED/);
+    expect(byId.get('loom')?.available).toBe(false);
+    expect(byId.get('loom')?.reason).toMatch(/ECONNREFUSED/);
   });
 
   it('surfaces the missing-cred reason for creds-gated substrates', async () => {

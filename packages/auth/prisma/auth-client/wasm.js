@@ -172,7 +172,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "/Users/arhansubasi/recoder.xyz/packages/auth/prisma/auth-client",
+      "value": "/Users/arhansubasi/recoder.xyz/.claude/worktrees/wf_fdea43b9-39d-1/packages/auth/prisma/auth-client",
       "fromEnvVar": null
     },
     "config": {
@@ -194,7 +194,7 @@ const config = {
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "/Users/arhansubasi/recoder.xyz/packages/auth/prisma/schema.prisma",
+    "sourceFilePath": "/Users/arhansubasi/recoder.xyz/.claude/worktrees/wf_fdea43b9-39d-1/packages/auth/prisma/schema.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {

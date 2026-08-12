@@ -1,5 +1,11 @@
 # Competitive & Absorption Analysis — herdr
 
+> NOTE (2026-08-12): "herdr" throughout this document is the upstream
+> company/product analysed here. That engine has since been vendored into Recoder
+> and rebranded as the **Loom** engine (`apps/desktop/engines/loom`); the herdr
+> name is retained in this file because it is a competitive analysis of the
+> real upstream. See `RECODER-VENDOR.md` and repo-root `NOTICE`.
+
 > Status: 2026-08-12. Source: 6-analyst graph-engineering pass over a read-only
 > shallow clone at `.scratch/upstream/herdr` (gitignored), each subsystem compared
 > to the Recoder equivalent with file:line evidence. **License verified

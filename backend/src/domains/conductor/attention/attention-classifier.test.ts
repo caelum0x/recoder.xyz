@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import type { RunEvent, RunEventType } from '@recoder/agent-os';
 import { classifyAttention } from './attention-classifier.js';
-import { mapHerdrStatus } from './herdr-state.js';
+import { mapLoomStatus } from './loom-state.js';
 
 let seq = 0;
 function ev(type: RunEventType, overrides: Partial<RunEvent> = {}): RunEvent {
@@ -784,9 +784,9 @@ describe('classifyAttention — runtime aliases for the new/underscore forms', (
   });
 });
 
-// --- herdr native-state signal (mapHerdrStatus + classifier bypass) ----------
+// --- herdr native-state signal (mapLoomStatus + classifier bypass) ----------
 
-describe('mapHerdrStatus — herdr AgentStatus → AttentionState', () => {
+describe('mapLoomStatus — herdr AgentStatus → AttentionState', () => {
   it.each([
     ['working', 'working'],
     ['blocked', 'awaiting_approval'],
@@ -794,7 +794,7 @@ describe('mapHerdrStatus — herdr AgentStatus → AttentionState', () => {
     ['done', 'review_ready'],
     ['unknown', 'unknown'],
   ] as const)('maps %s → %s', (status, expected) => {
-    expect(mapHerdrStatus(status)).toBe(expected);
+    expect(mapLoomStatus(status)).toBe(expected);
   });
 });
 
@@ -809,7 +809,7 @@ describe('classifyAttention — nativeAttention (herdr) augments the tail tier',
     (status, expected) => {
       const result = classifyAttention({
         state: 'running',
-        nativeAttention: mapHerdrStatus(status),
+        nativeAttention: mapLoomStatus(status),
       });
       expect(result.attention).toBe(expected);
       expect(result.reason).toContain('native substrate status');
@@ -820,7 +820,7 @@ describe('classifyAttention — nativeAttention (herdr) augments the tail tier',
     const result = classifyAttention({
       state: 'running',
       runtime: 'claude',
-      nativeAttention: mapHerdrStatus('done'), // review_ready
+      nativeAttention: mapLoomStatus('done'), // review_ready
       tail: '⠹ Thinking...', // the manifest would say working
     });
     expect(result.attention).toBe('review_ready');
@@ -831,7 +831,7 @@ describe('classifyAttention — nativeAttention (herdr) augments the tail tier',
     const result = classifyAttention({
       state: 'running',
       runtime: 'claude',
-      nativeAttention: mapHerdrStatus('unknown'), // unknown → no native signal
+      nativeAttention: mapLoomStatus('unknown'), // unknown → no native signal
       tail: '⠹ Thinking...',
     });
     // The tail heuristics still decide when herdr reports unknown.
@@ -850,7 +850,7 @@ describe('classifyAttention — nativeAttention (herdr) augments the tail tier',
   it('the durable state of record still OVERRIDES a native signal', () => {
     const result = classifyAttention({
       state: 'awaiting_review',
-      nativeAttention: mapHerdrStatus('working'),
+      nativeAttention: mapLoomStatus('working'),
       tail: '⠹ Thinking...',
     });
     expect(result.attention).toBe('review_ready');
@@ -861,7 +861,7 @@ describe('classifyAttention — nativeAttention (herdr) augments the tail tier',
     const result = classifyAttention({
       state: 'running',
       events: [ev('started'), ev('failed', { message: 'exit 2' })],
-      nativeAttention: mapHerdrStatus('working'),
+      nativeAttention: mapLoomStatus('working'),
     });
     expect(result.attention).toBe('error');
     expect(result.reason).toContain('exit 2');
@@ -870,7 +870,7 @@ describe('classifyAttention — nativeAttention (herdr) augments the tail tier',
   it('native signals do not apply to non-live states (no live-attention semantics)', () => {
     const result = classifyAttention({
       state: 'ready',
-      nativeAttention: mapHerdrStatus('working'),
+      nativeAttention: mapLoomStatus('working'),
     });
     expect(result.attention).toBe('unknown');
     expect(result.reason).toContain('ready');
