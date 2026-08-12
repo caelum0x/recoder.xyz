@@ -38,3 +38,21 @@ vocabulary; OSC-progress rules omitted (no Recoder capture surface); truthful
 unknown-default substituted for herdr's Idle fallback. See
 docs/COMPETITIVE-HERDR.md for the full analysis and attribution rationale.
 ================================================================================
+herdr — vendored engine (apps/desktop/engines/herdr)
+Copyright (c) herdr contributors. Licensed under the Apache License, Version 2.0.
+
+The herdr agent-aware terminal multiplexer source (github.com/herdrdev/herdr,
+v0.8.0) is vendored WHOLESALE into apps/desktop/engines/herdr as a Recoder engine
+(same absorption model as the Wave-fork desktop shell). Its LICENSE is retained
+at apps/desktop/engines/herdr/LICENSE. A full Recoder rebrand of the vendored
+source is tracked as follow-up work; this NOTICE and the retained LICENSE satisfy
+the Apache-2.0 §4 attribution + license-preservation requirement in the interim.
+
+herdr bundles two permissively-licensed vendored dependencies, retained here:
+  - apps/desktop/engines/herdr/vendor/libghostty-vt — MIT License,
+        Copyright (c) 2024 Mitchell Hashimoto, Ghostty contributors.
+  - apps/desktop/engines/herdr/vendor/portable-pty — MIT License,
+        Copyright (c) 2018 Wez Furlong (wezterm).
+No GPL/AGPL/LGPL or other copyleft content is present in the vendored tree
+(audited 2026-08-12). Marketing docs/website/workers were excluded from the vendor.
+================================================================================
