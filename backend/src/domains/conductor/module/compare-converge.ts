@@ -27,6 +27,10 @@ import {
   type ConvergencePlan,
 } from '../converge/converge-plan.service.js';
 import {
+  ConvergeCockpitService,
+  type CockpitSnapshot,
+} from '../cockpit/converge-cockpit.service.js';
+import {
   composeConvergence as composeConvergenceOp,
   probeSynthesizability as probeSynthesizabilityOp,
   gatherFileVersions as gatherFileVersionsOp,
@@ -76,12 +80,15 @@ const CONVERGE_ASSIST_FUNCTION_NAME = 'recoder_default';
 export type AdHocReject =
   | { readonly ok: false; readonly code: 'not-found' }
   | { readonly ok: false; readonly code: 'too-few'; readonly reason: string }
-  | { readonly ok: false; readonly code: 'incompatible'; readonly reason: string };
+  | {
+      readonly ok: false;
+      readonly code: 'incompatible';
+      readonly reason: string;
+    };
 
 /** The outcome of an ad-hoc convergence PLAN: the folded plan, or a typed reject. */
 export type AdHocPlanOutcome =
-  | { readonly ok: true; readonly plan: ConvergencePlan }
-  | AdHocReject;
+  { readonly ok: true; readonly plan: ConvergencePlan } | AdHocReject;
 
 export class ConductorCompareConverge {
   constructor(private readonly ctx: ConductorContext) {}
@@ -267,6 +274,56 @@ export class ConductorCompareConverge {
       siblings,
       relPath,
     });
+  }
+
+  /**
+   * The LIVE convergence cockpit snapshot (`recoder_converge_cockpit`,
+   * LOOM-ROADMAP.md §1 build-now #1) — one truthful view that makes a fan-out
+   * OBSERVABLE: each pane's live attention + native status folded with the shipped
+   * read-only convergence probe (`planConvergence(probe)`) and the N-up column view
+   * (`gatherFileVersions`). THIN COMPOSITION over {@link ConvergeCockpitService}: it
+   * reuses this class's already-narrowed reads and reimplements NO convergence math.
+   *
+   * recoder-kybr: the group is narrowed to the caller's OWN siblings via
+   * {@link rawCompare}. A group the caller owns no sibling of ⇒ `null` (the route's
+   * no-oracle 404, byte-identical to an unknown group). Degrade-truthful: a
+   * too-few/probe fault yields a DEGRADED snapshot (truthful zeros + a reason), never
+   * fabricated numbers.
+   */
+  async convergeCockpit(
+    taskGroup: string,
+    principal?: Principal
+  ): Promise<CockpitSnapshot | null> {
+    const view = await this.rawCompare(taskGroup, principal);
+    if (view.count === 0) return null; // no accessible sibling ⇒ no-oracle miss
+
+    const service = new ConvergeCockpitService({
+      logger: this.ctx.log,
+      // (a) the sibling set + each pane's live attention + agent kind (compare read).
+      loadPanes: async () => ({
+        taskGroup: view.taskGroup,
+        panes: view.siblings.map(s => ({
+          workspaceId: s.workspaceId,
+          agent: s.agent,
+          state: s.attention ?? 'unknown',
+        })),
+      }),
+      // (b) the PROBED plan — the shipped pure fold enriched with the read-only
+      // synthesizability dry-run over the contested paths (no worktree/mutation).
+      plan: () =>
+        this.planConvergence(taskGroup, {}, { probe: true }, principal),
+      // (c) the N-up column read per contested path — reuses the shipped
+      // `gatherFileVersions` seam (same narrowing, truthful null on a torn-down sibling).
+      fileVersions: async paths => {
+        const out: FileVersionsView[] = [];
+        for (const path of paths) {
+          const fv = await this.fileVersions(taskGroup, path, principal);
+          if (fv) out.push(fv);
+        }
+        return out;
+      },
+    });
+    return service.snapshot();
   }
 
   /**
@@ -620,7 +677,10 @@ export class ConductorCompareConverge {
       ...plan.files
         .filter(f => f.contested)
         .map(f => ({ path: f.path, workspaceIds: f.candidates })),
-      ...plan.unresolved.map(u => ({ path: u.path, workspaceIds: u.candidates })),
+      ...plan.unresolved.map(u => ({
+        path: u.path,
+        workspaceIds: u.candidates,
+      })),
     ];
     if (contestedInputs.length === 0) {
       return { ok: true, plan: { ...plan, contested: [] } };
