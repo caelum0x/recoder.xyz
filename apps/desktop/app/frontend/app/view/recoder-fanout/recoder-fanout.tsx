@@ -205,6 +205,112 @@ function LaunchForm({ model }: { model: RecoderFanoutViewModel }) {
 
 LaunchForm.displayName = "LaunchForm";
 
+function ReFanForm({ model }: { model: RecoderFanoutViewModel }) {
+    const taskGroup = useAtomValue(model.taskGroupAtom);
+    const narrowedTask = useAtomValue(model.refanTaskAtom);
+    const kinds = useAtomValue(model.refanKindsAtom);
+    const refanning = useAtomValue(model.refanningAtom);
+    const notice = useAtomValue(model.refanNoticeAtom);
+    const result = useAtomValue(model.refanResultAtom);
+
+    const pinned = taskGroup.trim() != "";
+
+    return (
+        <div className="flex flex-col gap-2 rounded border border-border p-2">
+            <div className={FIELD_LABEL}>Re-fan — iterate the converged branch with a narrowed task</div>
+            {!pinned ? (
+                <div className="text-secondary text-sm">
+                    Pin a round-1 task group above to re-fan its convergence into a second round.
+                </div>
+            ) : (
+                <>
+                    <div className="text-secondary text-xs">
+                        Iterating group <span className="font-mono">{taskGroup}</span> — its converged branch becomes
+                        the new base.
+                    </div>
+                    <input
+                        className={`${INPUT} w-full`}
+                        placeholder="Narrowed task — what round 2 should tighten…"
+                        value={narrowedTask}
+                        onChange={(e) => model.setRefanTask(e.target.value)}
+                    />
+                    <div className="flex flex-wrap gap-1">
+                        {model.knownKinds.map((kind) => {
+                            const on = kinds.includes(kind);
+                            return (
+                                <button
+                                    key={kind}
+                                    className={on ? `${STATE_CHIP} border-red-500/40 text-red-300` : QUIET_BTN_XS}
+                                    onClick={() => model.toggleRefanKind(kind)}
+                                >
+                                    {kind}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            disabled={refanning}
+                            className={PRIMARY_BTN}
+                            onClick={() => model.reFan(narrowedTask, kinds)}
+                        >
+                            {refanning ? "Re-fanning…" : "Re-fan"}
+                        </button>
+                        <span className="text-secondary text-xs">
+                            {kinds.length}/{model.maxAgents} agents · min {model.minAgents}
+                        </span>
+                    </div>
+                </>
+            )}
+            {notice != "" && <div className="text-secondary text-sm">{notice}</div>}
+            {result != null && !result.refused && (
+                <div className="flex flex-col gap-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className={STATE_CHIP} title={result.priorTaskGroup}>
+                            round 1 · {result.priorTaskGroup}
+                        </span>
+                        {result.newTaskGroup != null && (
+                            <span className={STATE_CHIP} title={result.newTaskGroup}>
+                                round 2 · {result.newTaskGroup}
+                            </span>
+                        )}
+                        {result.converged != null ? (
+                            <span className={CRIMSON_CHIP} title={result.converged.workspaceId}>
+                                converged → {result.converged.branch}
+                            </span>
+                        ) : (
+                            <span className={STATE_CHIP}>{result.convergeReason || "nothing converged"}</span>
+                        )}
+                    </div>
+                    {result.provenanceLink != null && (
+                        <div className="text-secondary text-xs">
+                            iterated {result.provenanceLink.fileCount} file(s) from{" "}
+                            {result.provenanceLink.sourceCount} agent(s)
+                            {result.provenanceLink.assistedPaths != null &&
+                                result.provenanceLink.assistedPaths.length > 0 &&
+                                ` · LLM-assisted: ${result.provenanceLink.assistedPaths.join(", ")}`}
+                        </div>
+                    )}
+                    {result.perAgent.map((a) => (
+                        <div
+                            key={a.kind}
+                            className="flex items-center gap-2 rounded border border-border p-1.5"
+                            title={a.reason}
+                        >
+                            <span className="text-sm font-medium truncate">{a.kind}</span>
+                            <span className={`${STATE_CHIP} ml-auto`}>{a.settled ? "settled" : "unsettled"}</span>
+                            {!a.nativeStatus && <span className={STATE_CHIP}>raw pane</span>}
+                            {a.workspaceId == null && <span className={STATE_CHIP}>not created</span>}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+ReFanForm.displayName = "ReFanForm";
+
 function RecoderFanoutView({ model }: ViewComponentProps<RecoderFanoutViewModel>) {
     const taskGroup = useAtomValue(model.taskGroupAtom);
     const snapshot = useAtomValue(model.snapshotAtom);
@@ -290,6 +396,7 @@ function RecoderFanoutView({ model }: ViewComponentProps<RecoderFanoutViewModel>
             )}
 
             <LaunchForm model={model} />
+            <ReFanForm model={model} />
         </div>
     );
 }

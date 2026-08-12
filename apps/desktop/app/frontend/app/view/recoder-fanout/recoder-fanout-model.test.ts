@@ -17,6 +17,7 @@ import { RecoderFanoutViewModel } from "./recoder-fanout-model";
 
 const CockpitUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_cockpit/call";
 const FanoutUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_fanout/call";
+const ReFanUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_refan/call";
 
 function makeModel(): RecoderFanoutViewModel {
     return new RecoderFanoutViewModel({ blockId: "b1" } as ViewModelInitType);
@@ -337,5 +338,188 @@ describe("RecoderFanoutViewModel.launch", () => {
         expect(globalStore.get(model.launchNoticeAtom)).toBe("Not connected.");
         expect(globalStore.get(model.launchResultAtom)).toBeNull();
         expect(globalStore.get(model.launchingAtom)).toBe(false);
+    });
+});
+
+describe("RecoderFanoutViewModel.reFan", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    // A completed re-fan read carrying the tool's ReFanResult straight back.
+    function completedReFan(result: unknown) {
+        return ok({ status: "completed", risk: "high", result, auditEventId: "e" });
+    }
+
+    // A pinned round-1 group + governed launch context — the preconditions the re-fan needs.
+    function primed(): RecoderFanoutViewModel {
+        const model = makeModel();
+        model.setTaskGroup("fan-round1");
+        model.setRepoPath("/repo");
+        model.setSpaceId("space1");
+        model.setProjectId("proj1");
+        return model;
+    }
+
+    it("posts the pinned group + narrowed task + kinds, then pins the new round-2 group and reloads", async () => {
+        const refanResult = {
+            refused: false,
+            priorTaskGroup: "fan-round1",
+            priorConverge: { workspaceId: "ws_r1", branch: "recoder/converge-abcd" },
+            provenanceLink: { fromTaskGroup: "fan-round1", sourceCount: 3, fileCount: 5, assistedPaths: ["src/x.ts"] },
+            taskGroup: "fan-round2",
+            workspaceIds: ["ws_c", "ws_x"],
+            converged: { workspaceId: "ws_r2", branch: "recoder/converge-r2" },
+            perAgent: [
+                { kind: "claude", nativeStatus: true, workspaceId: "ws_c", settled: true, reason: "review_ready" },
+                { kind: "codex", nativeStatus: true, workspaceId: "ws_x", settled: true, reason: "review_ready" },
+            ],
+        };
+        const fetchMock = vi.fn().mockImplementation((url: string) => {
+            if (String(url) == ReFanUrl) {
+                return Promise.resolve(completedReFan(refanResult));
+            }
+            return Promise.resolve(completedSnapshot(null));
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = primed();
+        await model.reFan("narrow it down", ["claude", "codex"]);
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            ReFanUrl,
+            expect.objectContaining({
+                method: "POST",
+                body: JSON.stringify({
+                    args: {
+                        taskGroup: "fan-round1",
+                        narrowedTask: "narrow it down",
+                        agentKinds: ["claude", "codex"],
+                        repoPath: "/repo",
+                        spaceId: "space1",
+                        projectId: "proj1",
+                    },
+                }),
+            })
+        );
+        const result = globalStore.get(model.refanResultAtom);
+        expect(result!.refused).toBe(false);
+        expect(result!.priorTaskGroup).toBe("fan-round1");
+        expect(result!.newTaskGroup).toBe("fan-round2");
+        expect(result!.converged).toEqual({ workspaceId: "ws_r2", branch: "recoder/converge-r2" });
+        expect(result!.provenanceLink).toEqual({
+            fromTaskGroup: "fan-round1",
+            sourceCount: 3,
+            fileCount: 5,
+            assistedPaths: ["src/x.ts"],
+        });
+        expect(globalStore.get(model.taskGroupAtom)).toBe("fan-round2");
+        expect(fetchMock).toHaveBeenCalledWith(CockpitUrl, expect.objectContaining({ method: "POST" }));
+        expect(globalStore.get(model.refanNoticeAtom)).toBe("");
+    });
+
+    it("surfaces a no-prior-convergence refusal VERBATIM with no fabricated branch and no re-pin", async () => {
+        const reason =
+            "no prior converged branch exists for task group 'fan-round1' — nothing to re-fan from (run recoder_converge_fanout first)";
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue(completedReFan({ refused: true, priorTaskGroup: "fan-round1", reason }))
+        );
+
+        const model = primed();
+        await model.reFan("narrow it down", ["claude", "codex"]);
+
+        const result = globalStore.get(model.refanResultAtom);
+        expect(result!.refused).toBe(true);
+        expect(result!.converged).toBeNull();
+        expect(result!.newTaskGroup).toBeNull();
+        expect(result!.reason).toBe(reason);
+        expect(globalStore.get(model.refanNoticeAtom)).toBe(reason);
+        expect(globalStore.get(model.taskGroupAtom)).toBe("fan-round1");
+    });
+
+    it("keeps a truthful converged:null + reason when the second round settles <2 done", async () => {
+        const refanResult = {
+            refused: false,
+            priorTaskGroup: "fan-round1",
+            priorConverge: { workspaceId: "ws_r1", branch: "recoder/converge-abcd" },
+            provenanceLink: null,
+            taskGroup: "fan-round2",
+            workspaceIds: ["ws_c"],
+            converged: null,
+            convergeReason: "convergence needs ≥2 panes (found 1)",
+            perAgent: [{ kind: "claude", nativeStatus: true, workspaceId: "ws_c", settled: true, reason: "review_ready" }],
+        };
+        const fetchMock = vi.fn().mockImplementation((url: string) => {
+            if (String(url) == ReFanUrl) {
+                return Promise.resolve(completedReFan(refanResult));
+            }
+            return Promise.resolve(completedSnapshot(null));
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = primed();
+        await model.reFan("narrow it down", ["claude", "codex"]);
+
+        const result = globalStore.get(model.refanResultAtom);
+        expect(result!.refused).toBe(false);
+        expect(result!.converged).toBeNull();
+        expect(result!.newTaskGroup).toBe("fan-round2");
+        expect(globalStore.get(model.refanNoticeAtom)).toBe("convergence needs ≥2 panes (found 1)");
+        expect(globalStore.get(model.taskGroupAtom)).toBe("fan-round2");
+    });
+
+    it("surfaces a truthful notice on a non-2xx (conductor MCP not registered) with no re-pin", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue({
+                ok: false,
+                status: 404,
+                json: async () => ({ error: { message: "MCP server not registered: conductor" } }),
+            })
+        );
+
+        const model = primed();
+        await model.reFan("narrow it down", ["claude", "codex"]);
+
+        expect(globalStore.get(model.refanResultAtom)).toBeNull();
+        expect(globalStore.get(model.refanNoticeAtom)).toBe("MCP server not registered: conductor");
+        expect(globalStore.get(model.taskGroupAtom)).toBe("fan-round1");
+    });
+
+    it("degrades to 'Not connected.' on a transport failure", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
+
+        const model = primed();
+        await model.reFan("narrow it down", ["claude", "codex"]);
+
+        expect(globalStore.get(model.refanNoticeAtom)).toBe("Not connected.");
+        expect(globalStore.get(model.refanResultAtom)).toBeNull();
+        expect(globalStore.get(model.refanningAtom)).toBe(false);
+    });
+
+    it("issues no request when no round-1 group is pinned", async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        model.setRepoPath("/repo");
+        model.setSpaceId("space1");
+        model.setProjectId("proj1");
+        await model.reFan("narrow it down", ["claude", "codex"]);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(globalStore.get(model.refanNoticeAtom)).toContain("round-1");
+    });
+
+    it("fails fast without a request when fewer than two agents are picked", async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = primed();
+        await model.reFan("narrow it down", ["claude"]);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(globalStore.get(model.refanNoticeAtom)).toContain("at least 2");
     });
 });
