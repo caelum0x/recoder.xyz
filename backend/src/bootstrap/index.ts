@@ -1005,6 +1005,27 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
         logger: childLogger('conductor-needs-you'),
       })
     : undefined;
+  // LIVE native status board (LOOM-ROADMAP.md build-now #5): a PULL read that folds ONE Loom
+  // `session.snapshot` into per-attention columns of ALL the caller's live panes. Reuses the
+  // EXISTING daemon socket over a dedicated one-shot CLIENT (never a second daemon). Wired ONLY
+  // when Loom is enabled; otherwise `recoder_status_board` degrades to SERVICE_UNAVAILABLE.
+  const loomStatusBoardClient = loomEnabled
+    ? new LoomSocketClient({ socketPath: loomDaemon.socketPath })
+    : undefined;
+  const statusBoardPanes = loomStatusBoardClient
+    ? async () => {
+        const res = await loomStatusBoardClient.call('session.snapshot', {});
+        if (res.type !== 'session_snapshot') return [];
+        const snapshot = (
+          res as Extract<LoomResult, { type: 'session_snapshot' }>
+        ).snapshot;
+        return snapshot.panes.map(pane => ({
+          paneId: pane.pane_id,
+          workspaceId: pane.workspace_id,
+          nativeStatus: pane.agent_status,
+        }));
+      }
+    : undefined;
   const conductor = createConductorModule({
     config,
     logger: childLogger('conductor'),
@@ -1108,6 +1129,8 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     swarmUnblock: conductorSwarmUnblock,
     // Live Needs-You queue push stream (build-now #4); absent ⇒ tool SERVICE_UNAVAILABLE.
     ...(needsYouStream ? { needsYouStream } : {}),
+    // Live native status board pull source (build-now #5); absent ⇒ tool SERVICE_UNAVAILABLE.
+    ...(statusBoardPanes ? { statusBoardPanes } : {}),
     overrides: {
       tmuxBin: config.conductor.tmuxBin,
       worktreeRoot: config.conductor.worktreeRoot,
