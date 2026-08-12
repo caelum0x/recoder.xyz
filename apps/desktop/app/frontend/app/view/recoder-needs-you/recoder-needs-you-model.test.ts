@@ -38,9 +38,9 @@ function rankedSnapshot() {
     return {
         scope: { owner: "u1" },
         entries: [
-            { workspaceId: "ws-approve", agentKind: "claude", state: "awaiting_approval", rank: 40, nativeStatus: true, needsYou: true, seen: false },
-            { workspaceId: "ws-review", agentKind: "codex", state: "review_ready", rank: 30, nativeStatus: false, needsYou: true, seen: true },
-            { workspaceId: "ws-run", agentKind: "cursor", state: "working", rank: 10, nativeStatus: true, needsYou: false, seen: false },
+            { workspaceId: "ws-approve", agentKind: "claude", state: "awaiting_approval", rank: 40, nativeStatus: "blocked", needsYou: true, seen: false },
+            { workspaceId: "ws-review", agentKind: "codex", state: "review_ready", rank: 30, nativeStatus: "done", needsYou: true, seen: true },
+            { workspaceId: "ws-run", agentKind: "cursor", state: "working", rank: 10, nativeStatus: "working", needsYou: false, seen: false },
         ],
         count: 2,
         total: 3,
@@ -71,9 +71,9 @@ describe("RecoderNeedsYouViewModel.load", () => {
         const snapshot = globalStore.get(model.snapshotAtom);
         expect(snapshot).not.toBeNull();
         expect(snapshot.entries).toEqual([
-            { workspaceId: "ws-approve", agentKind: "claude", state: "awaiting_approval", rank: 40, nativeStatus: true, needsYou: true, seen: false },
-            { workspaceId: "ws-review", agentKind: "codex", state: "review_ready", rank: 30, nativeStatus: false, needsYou: true, seen: true },
-            { workspaceId: "ws-run", agentKind: "cursor", state: "working", rank: 10, nativeStatus: true, needsYou: false, seen: false },
+            { workspaceId: "ws-approve", agentKind: "claude", state: "awaiting_approval", rank: 40, nativeStatus: "blocked", needsYou: true, seen: false },
+            { workspaceId: "ws-review", agentKind: "codex", state: "review_ready", rank: 30, nativeStatus: "done", needsYou: true, seen: true },
+            { workspaceId: "ws-run", agentKind: "cursor", state: "working", rank: 10, nativeStatus: "working", needsYou: false, seen: false },
         ]);
         expect(globalStore.get(model.noticeAtom)).toBe("");
         expect(globalStore.get(model.errorAtom)).toBe("");
@@ -98,9 +98,9 @@ describe("RecoderNeedsYouViewModel.load", () => {
         const snapshot = {
             scope: {},
             entries: [
-                { workspaceId: "ws-b", agentKind: "codex", state: "working", rank: 10, nativeStatus: true, needsYou: false, seen: false },
-                { workspaceId: "ws-a", agentKind: "claude", state: "awaiting_approval", rank: 40, nativeStatus: true, needsYou: true, seen: false },
-                { workspaceId: "ws-c", agentKind: "cursor", state: "review_ready", rank: 30, nativeStatus: true, needsYou: true, seen: false },
+                { workspaceId: "ws-b", agentKind: "codex", state: "working", rank: 10, nativeStatus: "working", needsYou: false, seen: false },
+                { workspaceId: "ws-a", agentKind: "claude", state: "awaiting_approval", rank: 40, nativeStatus: "blocked", needsYou: true, seen: false },
+                { workspaceId: "ws-c", agentKind: "cursor", state: "review_ready", rank: 30, nativeStatus: "done", needsYou: true, seen: false },
             ],
             count: 2,
             total: 3,
@@ -122,8 +122,8 @@ describe("RecoderNeedsYouViewModel.load", () => {
         const snapshot = {
             scope: {},
             entries: [
-                { workspaceId: "ws-approve", agentKind: "claude", state: "awaiting_approval", rank: 40, nativeStatus: true, needsYou: true, seen: false },
-                { workspaceId: "ws-mystery", agentKind: "pi", state: "unknown", rank: 0, nativeStatus: true, needsYou: false, seen: false },
+                { workspaceId: "ws-approve", agentKind: "claude", state: "awaiting_approval", rank: 40, nativeStatus: "blocked", needsYou: true, seen: false },
+                { workspaceId: "ws-mystery", agentKind: "pi", state: "unknown", rank: 0, nativeStatus: "unknown", needsYou: false, seen: false },
             ],
             count: 1,
             total: 2,
