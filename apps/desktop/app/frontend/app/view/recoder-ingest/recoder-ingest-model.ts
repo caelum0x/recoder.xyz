@@ -142,7 +142,7 @@ class RecoderIngestViewModel implements ViewModel {
 // result returns null so the caller degrades honestly rather than showing a
 // fabricated "ingested". `chunks`/`upserted` are read verbatim (never invented).
 function projectIngestOutcome(body: unknown): RecoderIngestOutcome | null {
-    const data = body?.data != null && typeof (body as { data?: unknown }).data === "object"
+    const data = (body as { data?: unknown })?.data != null && typeof (body as { data?: unknown }).data === "object"
         ? ((body as { data: Record<string, unknown> }).data)
         : {};
     const results = Array.isArray(data.results) ? data.results : [];

@@ -296,7 +296,7 @@ async function fetchCodeIntel(base: string, tool: string, args: Record<string, u
 // {ok:false}). A denial/approval reason is surfaced verbatim; a `failed` verdict
 // falls to the generic line (its reason may carry internal engine detail).
 function projectCodeIntelWire(body: unknown): CodeIntelOutcome {
-    const data = body?.data != null && typeof (body as { data?: unknown }).data === "object"
+    const data = (body as { data?: unknown })?.data != null && typeof (body as { data?: unknown }).data === "object"
         ? ((body as { data: Record<string, unknown> }).data)
         : {};
     const status = typeof data.status === "string" ? data.status : "";

@@ -14,7 +14,7 @@ vi.mock("./recoder-audit", () => ({
 }));
 
 import { globalStore } from "@/app/store/global";
-import { RecoderAuditViewModel, verifyAuditChain } from "./recoder-audit-model";
+import { RecoderAuditViewModel, verifyAuditChain, type AuditRecordView } from "./recoder-audit-model";
 
 const WorkspaceId = "ws-1";
 const AuditUrl = `http://127.0.0.1:3100/api/conductor/workspaces/${WorkspaceId}/audit`;
@@ -70,11 +70,11 @@ function backendSeal(prevHash: string, entry: AuditEntry): string {
 }
 
 // Build a valid genesis-anchored, contiguous audit chain of durable AuditRecords.
-function buildChain(entries: AuditEntry[]): Record<string, unknown>[] {
+function buildChain(entries: AuditEntry[]): AuditRecordView[] {
     let prev = Genesis;
     return entries.map((entry, i) => {
         const entryHash = backendSeal(prev, entry);
-        const record = {
+        const record: AuditRecordView = {
             id: `aud-${i + 1}`,
             seq: i + 1,
             prevHash: prev,
@@ -87,6 +87,8 @@ function buildChain(entries: AuditEntry[]): Record<string, unknown>[] {
             degraded: entry.degraded,
             payload: entry.payload,
             createdAt: `2026-08-11T10:0${i}:00.000Z`,
+            verified: false,
+            linked: false,
         };
         prev = entryHash;
         return record;
