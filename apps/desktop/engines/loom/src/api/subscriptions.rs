@@ -270,6 +270,7 @@ impl ActiveSubscription {
                         title: probe.title,
                         display_agent: probe.display_agent,
                         agent_rule_id: probe.agent_rule_id,
+                        agent_blocked_kind: probe.agent_blocked_kind,
                         state_labels: probe.state_labels,
                     });
 
@@ -403,6 +404,7 @@ impl ActiveAgentStatusChangedSubscription {
                 title,
                 display_agent,
                 agent_rule_id,
+                agent_blocked_kind,
                 state_labels,
             } = event.data
             else {
@@ -438,6 +440,7 @@ impl ActiveAgentStatusChangedSubscription {
                     title,
                     display_agent,
                     agent_rule_id,
+                    agent_blocked_kind,
                     state_labels,
                 }),
             }));
@@ -505,6 +508,7 @@ impl ActiveAgentStatusChangedSubscription {
                 title: pane.title,
                 display_agent: pane.display_agent,
                 agent_rule_id: pane.agent_rule_id,
+                agent_blocked_kind: pane.agent_blocked_kind,
                 state_labels: pane.state_labels,
             }),
         })
@@ -652,6 +656,7 @@ mod tests {
                 title: title.map(str::to_string),
                 display_agent: None,
                 agent_rule_id: None,
+                agent_blocked_kind: None,
                 state_labels: HashMap::new(),
             },
         }
@@ -674,6 +679,7 @@ mod tests {
             display_agent: None,
             agent_status: AgentStatus::Unknown,
             agent_rule_id: None,
+            agent_blocked_kind: None,
             state_labels: HashMap::new(),
             tokens: HashMap::new(),
             agent_session: None,
@@ -796,6 +802,7 @@ mod tests {
                 title: None,
                 display_agent: None,
                 agent_rule_id: None,
+                agent_blocked_kind: None,
                 state_labels: HashMap::new(),
             }),
             request_prefix: "test".into(),
@@ -842,6 +849,7 @@ mod tests {
                 title: Some("short lived".into()),
                 display_agent: None,
                 agent_rule_id: None,
+                agent_blocked_kind: None,
                 state_labels: HashMap::new(),
             }),
             request_prefix: "test".into(),

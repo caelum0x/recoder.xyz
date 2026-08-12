@@ -201,6 +201,11 @@ pub struct AgentInfo {
     /// when the status came from a hook authority; never fabricated.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_rule_id: Option<String>,
+    /// Declared blocker kind of the screen rule that produced `agent_status`, only
+    /// when that status is `Blocked` from live detection and the rule declared one.
+    /// `None` otherwise; never guessed or inferred from the rule id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_blocked_kind: Option<crate::detect::BlockedKind>,
     #[serde(default, skip_serializing_if = "super::is_false")]
     pub screen_detection_skipped: bool,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]

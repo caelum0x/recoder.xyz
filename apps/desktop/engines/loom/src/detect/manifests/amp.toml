@@ -23,6 +23,7 @@ regex = ['^[\x{2800}-\x{28FF}] ']
 [[rules]]
 id = "approval_footer"
 state = "blocked"
+blocked_kind = "approval"
 priority = 300
 region = "whole_recent"
 visible_blocker = true

@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 use super::{
     agent_label, manifest_update::ManifestVersion, parse_agent_label, Agent, AgentDetection,
-    AgentState,
+    AgentState, BlockedKind,
 };
 
 pub const DEFAULT_KNOWN_AGENT_IDLE_FALLBACK: &str = "default_known_agent_idle_fallback";
@@ -96,6 +96,9 @@ pub struct MatchedRule {
     pub priority: i32,
     pub region: String,
     pub state: AgentState,
+    /// Declared blocker kind carried from the winning rule, populated only when
+    /// `state` is `Blocked` and the rule declared one; never guessed.
+    pub blocked_kind: Option<BlockedKind>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -154,6 +157,12 @@ pub(crate) struct AgentManifest {
 struct ManifestRule {
     id: String,
     state: Option<ManifestState>,
+    /// DECLARED reason this rule is a blocker, meaningful only when `state` is
+    /// `blocked`. Deserialized verbatim from the manifest; when declared on a
+    /// non-blocked rule it is ignored (treated as `None`) at evaluation time so a
+    /// kind is never attributed to a non-blocked status.
+    #[serde(default)]
+    blocked_kind: Option<BlockedKind>,
     #[serde(default)]
     priority: i32,
     #[serde(default = "default_region")]
@@ -401,9 +410,14 @@ pub fn should_skip_state_update(agent: Agent, screen_content: &str) -> bool {
 
 impl DetectionExplain {
     fn into_detection(self) -> AgentDetection {
+        let blocked_kind = self
+            .matched_rule
+            .as_ref()
+            .and_then(|rule| rule.blocked_kind);
         AgentDetection {
             state: self.state,
             rule_id: self.matched_rule.map(|rule| rule.id),
+            blocked_kind,
             skip_state_update: self.skip_state_update,
             visible_idle: self.visible_idle,
             visible_blocker: self.visible_blocker,
@@ -475,6 +489,11 @@ fn evaluate_loaded_manifest(
             priority: rule.priority,
             region: region_name,
             state,
+            // A declared blocked_kind is only honored on a genuinely blocked rule;
+            // on any other state it is dropped so a kind is never mis-attributed.
+            blocked_kind: (state == AgentState::Blocked)
+                .then_some(rule.blocked_kind)
+                .flatten(),
         }),
         screen_detection_skipped: false,
         visible_idle: rule.visible_idle && state == AgentState::Idle,
@@ -804,6 +823,7 @@ pub fn explain_to_json_value(explain: &DetectionExplain) -> serde_json::Value {
             "priority": rule.priority,
             "region": rule.region,
             "state": agent_state_label(rule.state),
+            "blocked_kind": rule.blocked_kind,
         })
     });
     let evaluated_rules: Vec<_> = explain

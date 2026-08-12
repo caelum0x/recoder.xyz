@@ -12,6 +12,7 @@ updated_at = "2026-07-09T00:00:00Z"
 [[rules]]
 id = "permission_prompt"
 state = "blocked"
+blocked_kind = "approval"
 priority = 980
 region = "whole_recent"
 visible_blocker = true

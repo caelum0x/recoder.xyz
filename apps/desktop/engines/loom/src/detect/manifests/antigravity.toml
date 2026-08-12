@@ -7,6 +7,7 @@ aliases = ["antigravity", "antigravity-cli"]
 [[rules]]
 id = "permission_prompt"
 state = "blocked"
+blocked_kind = "approval"
 priority = 300
 region = "whole_recent"
 visible_blocker = true

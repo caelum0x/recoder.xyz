@@ -19,6 +19,23 @@ pub enum AgentState {
     Unknown,
 }
 
+/// Declared reason a matched `Blocked` rule is blocking, so downstream routing can
+/// send the blocker to the right handler. This is DECLARED manifest data carried
+/// verbatim from the winning rule; it is never inferred from rule-id heuristics and
+/// is only ever populated when the matched rule's state is `Blocked`.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockedKind {
+    /// Approval/permission prompt — route to governance approval.
+    Approval,
+    /// Waiting for user input/answer — route to swarm auto-answer.
+    Input,
+    /// Trust/safety confirmation (e.g. trust this directory) — route to approval.
+    Trust,
+}
+
 /// Screen-derived agent state plus confidence metadata used for source arbitration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentDetection {
@@ -27,6 +44,10 @@ pub struct AgentDetection {
     /// from a matched screen rule. `None` when no rule matched (or when the agent
     /// has no screen manifest); never fabricated.
     pub rule_id: Option<String>,
+    /// Declared `blocked_kind` of the winning rule, populated only when that rule
+    /// matched with state `Blocked` and explicitly declared a kind. `None`
+    /// otherwise; never guessed or inferred.
+    pub blocked_kind: Option<BlockedKind>,
     /// True when the current screen is an agent-owned viewer that shows
     /// transcript/history instead of the live prompt state.
     pub skip_state_update: bool,
@@ -290,6 +311,7 @@ pub fn detect_agent_with_osc(
         return AgentDetection {
             state: AgentState::Unknown,
             rule_id: None,
+            blocked_kind: None,
             skip_state_update: false,
             visible_idle: false,
             visible_blocker: false,

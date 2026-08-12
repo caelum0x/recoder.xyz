@@ -23,6 +23,7 @@ regex = ['^⏳[\u{fe0e}\u{fe0f}]?(?:\s|$)']
 [[rules]]
 id = "dangerous_command_approval"
 state = "blocked"
+blocked_kind = "approval"
 priority = 900
 region = "bottom_non_empty_lines(14)"
 visible_blocker = true
@@ -39,6 +40,7 @@ all = [
 [[rules]]
 id = "clarification_prompt"
 state = "blocked"
+blocked_kind = "input"
 priority = 900
 region = "bottom_non_empty_lines(14)"
 visible_blocker = true

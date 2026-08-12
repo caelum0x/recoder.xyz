@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 // remains only for session-only/custom hook paths and fallback detection.
 // Process-exit updates clear matching hook authority before recomputing state.
 
-use crate::detect::{Agent, AgentState};
+use crate::detect::{Agent, AgentState, BlockedKind};
 use crate::terminal::TerminalId;
 
 #[path = "metadata.rs"]
@@ -143,6 +143,10 @@ pub struct TerminalState {
     /// Id of the manifest rule that produced `fallback_state` from the live
     /// screen. `None` when no screen rule matched; never fabricated.
     fallback_rule_id: Option<String>,
+    /// Declared blocker kind of the rule that produced `fallback_state`, only
+    /// when that state is `Blocked` and the rule declared one. `None` otherwise;
+    /// never guessed.
+    fallback_blocked_kind: Option<BlockedKind>,
     pub last_agent_state_change_seq: Option<u64>,
     pub revision: u64,
     pub launch_argv: Option<Vec<String>>,
@@ -178,6 +182,7 @@ impl TerminalState {
             metadata_token_sequence_sources: std::collections::HashSet::new(),
             state: AgentState::Unknown,
             fallback_rule_id: None,
+            fallback_blocked_kind: None,
             last_agent_state_change_seq: None,
             revision: 0,
             launch_argv: None,
@@ -327,6 +332,7 @@ impl TerminalState {
             agent,
             fallback_state,
             None,
+            None,
             visible_blocker,
             visible_idle,
             visible_working,
@@ -344,6 +350,7 @@ impl TerminalState {
         agent: Option<Agent>,
         fallback_state: AgentState,
         rule_id: Option<String>,
+        blocked_kind: Option<BlockedKind>,
         visible_blocker: bool,
         _visible_idle: bool,
         _visible_working: bool,
@@ -426,6 +433,11 @@ impl TerminalState {
         }
         self.fallback_state = fallback_state;
         self.fallback_rule_id = rule_id;
+        // Only retain a declared blocker kind when the fallback state is genuinely
+        // Blocked, so a kind is never attached to a non-blocked screen status.
+        self.fallback_blocked_kind = (fallback_state == AgentState::Blocked)
+            .then_some(blocked_kind)
+            .flatten();
         self.fallback_visible_blocker = visible_blocker && fallback_state == AgentState::Blocked;
         self.fallback_observed_at = Some(now);
         if process_exited {
@@ -1794,6 +1806,7 @@ impl TerminalState {
             self.detected_agent = None;
             self.fallback_state = AgentState::Unknown;
             self.fallback_rule_id = None;
+            self.fallback_blocked_kind = None;
             self.fallback_visible_blocker = false;
             self.fallback_observed_at = None;
             self.clear_agent_name();
@@ -1866,6 +1879,28 @@ impl TerminalState {
             return None;
         }
         self.fallback_rule_id.clone()
+    }
+
+    /// Declared blocker kind that accompanies the effective agent status, when that
+    /// status came from the live screen (fallback) detection of a `Blocked` rule
+    /// that declared a kind. Gated exactly like `effective_agent_rule_id` so a
+    /// hook-decided status never carries a screen-declared kind, and `None`
+    /// otherwise. The value is always DECLARED manifest data, never inferred.
+    pub fn effective_agent_blocked_kind(&self) -> Option<BlockedKind> {
+        if self.state != self.fallback_state {
+            return None;
+        }
+        let full_lifecycle_hook_decides_state =
+            self.hook_authority.as_ref().is_some_and(|authority| {
+                crate::detect::full_lifecycle_hook_authority(
+                    &authority.source,
+                    &authority.agent_label,
+                )
+            });
+        if full_lifecycle_hook_decides_state {
+            return None;
+        }
+        self.fallback_blocked_kind
     }
 
     pub(crate) fn unchanged_effective_state_change_at(&self, now: Instant) -> EffectiveStateChange {
@@ -2105,6 +2140,7 @@ impl TerminalState {
         self.detected_agent = None;
         self.fallback_state = AgentState::Unknown;
         self.fallback_rule_id = None;
+        self.fallback_blocked_kind = None;
         self.fallback_visible_blocker = false;
         self.fallback_observed_at = None;
         self.hook_authority = None;
@@ -2335,6 +2371,7 @@ mod tests {
         let detection = AgentDetection {
             state: AgentState::Idle,
             rule_id: None,
+            blocked_kind: None,
             skip_state_update: false,
             visible_idle: false,
             visible_blocker: false,
@@ -2367,6 +2404,57 @@ mod tests {
         assert_eq!(terminal.fallback_state, AgentState::Idle);
         assert_eq!(terminal.effective_agent_label(), Some("pi"));
         assert_eq!(terminal.state, AgentState::Working);
+    }
+
+    #[test]
+    fn screen_setter_retains_blocked_kind_only_when_blocked() {
+        let mut terminal = test_terminal();
+        let now = Instant::now();
+        // A non-blocked screen state must never retain a declared kind.
+        terminal.set_detected_state_with_screen_signals_and_rule_at(
+            Some(Agent::Codex),
+            AgentState::Working,
+            Some("busy".to_string()),
+            Some(BlockedKind::Approval),
+            false,
+            false,
+            true,
+            false,
+            now,
+        );
+        assert_eq!(terminal.fallback_blocked_kind, None);
+
+        // A blocked screen state carries the declared kind verbatim.
+        terminal.set_detected_state_with_screen_signals_and_rule_at(
+            Some(Agent::Codex),
+            AgentState::Blocked,
+            Some("trust_dir".to_string()),
+            Some(BlockedKind::Trust),
+            true,
+            false,
+            false,
+            false,
+            now,
+        );
+        assert_eq!(terminal.fallback_blocked_kind, Some(BlockedKind::Trust));
+    }
+
+    #[test]
+    fn effective_agent_blocked_kind_gates_like_rule_id() {
+        let mut terminal = test_terminal();
+        terminal.fallback_state = AgentState::Blocked;
+        terminal.state = AgentState::Blocked;
+        terminal.fallback_blocked_kind = Some(BlockedKind::Approval);
+        // Screen fallback is the deciding source: the declared kind surfaces.
+        assert_eq!(
+            terminal.effective_agent_blocked_kind(),
+            Some(BlockedKind::Approval)
+        );
+
+        // Effective state diverging from the screen fallback (e.g. a hook decided
+        // it) suppresses the kind rather than mis-attributing it.
+        terminal.state = AgentState::Working;
+        assert_eq!(terminal.effective_agent_blocked_kind(), None);
     }
 
     #[test]

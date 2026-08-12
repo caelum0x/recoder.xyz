@@ -48,6 +48,7 @@ line_regex = ['^\s*┃\s+[0-9a-z]+\s+\([●○]\)\s']
 [[rules]]
 id = "permission_hints_blocked"
 state = "blocked"
+blocked_kind = "approval"
 priority = 1190
 region = "bottom_non_empty_lines(2)"
 visible_blocker = true
@@ -56,6 +57,7 @@ contains = [":select", "ctrl+o:yolo", "ctrl+c:cancel"]
 [[rules]]
 id = "question_dialog_hints_blocked"
 state = "blocked"
+blocked_kind = "input"
 priority = 1185
 region = "bottom_non_empty_lines(2)"
 visible_blocker = true
@@ -65,6 +67,7 @@ contains = ["tab:scrollback", "shift+x:dismiss"]
 [[rules]]
 id = "permission_scope_selector"
 state = "blocked"
+blocked_kind = "approval"
 priority = 1180
 region = "whole_recent"
 visible_blocker = true

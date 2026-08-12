@@ -947,6 +947,7 @@ mod tests {
             display_agent: None,
             agent_status,
             agent_rule_id: None,
+            agent_blocked_kind: None,
             state_labels: HashMap::new(),
             tokens: HashMap::new(),
             agent_session: None,

@@ -913,3 +913,96 @@ fn codex_osc_working_beats_weak_blocker_screen() {
         Some("osc_title_working")
     );
 }
+
+// --- blocked_kind taxonomy (engine tier #3b) ---
+
+// Evaluate a standalone manifest string against a screen, bypassing the cache so
+// each case is hermetic (no env, no ~/.config override leakage).
+fn detect_manifest_string(manifest_toml: &str, screen: &str) -> AgentDetection {
+    let manifest = parse_manifest(manifest_toml).expect("manifest parses");
+    let loaded = loaded_manifest(manifest, ManifestSource::Bundled, None, None, false)
+        .expect("manifest compiles");
+    evaluate_loaded_manifest(
+        Agent::Codex,
+        DetectionInput {
+            screen,
+            osc_title: "",
+            osc_progress: "",
+        },
+        loaded,
+        false,
+    )
+    .into_detection()
+}
+
+#[test]
+fn declared_blocked_kind_threads_onto_detection() {
+    let manifest = rules_manifest(
+        r#"
+[[rules]]
+id = "trust_dir"
+state = "blocked"
+blocked_kind = "trust"
+contains = ["do you trust the files in this folder"]
+"#,
+    );
+    let detection = detect_manifest_string(&manifest, "Do you trust the files in this folder?\n");
+    assert_eq!(detection.state, AgentState::Blocked);
+    assert_eq!(detection.rule_id.as_deref(), Some("trust_dir"));
+    assert_eq!(detection.blocked_kind, Some(BlockedKind::Trust));
+}
+
+#[test]
+fn blocked_rule_without_declaration_yields_no_kind() {
+    let manifest = rules_manifest(
+        r#"
+[[rules]]
+id = "plain_block"
+state = "blocked"
+contains = ["allow this command"]
+"#,
+    );
+    let detection = detect_manifest_string(&manifest, "Allow this command? [y/n]\n");
+    assert_eq!(detection.state, AgentState::Blocked);
+    assert_eq!(detection.rule_id.as_deref(), Some("plain_block"));
+    assert_eq!(detection.blocked_kind, None);
+}
+
+#[test]
+fn declared_kind_on_non_blocked_rule_is_ignored() {
+    // A kind declared on a non-blocked rule must never be attributed: the state is
+    // authoritative and the kind is dropped to None.
+    let manifest = rules_manifest(
+        r#"
+[[rules]]
+id = "busy"
+state = "working"
+blocked_kind = "approval"
+contains = ["esc to interrupt"]
+"#,
+    );
+    let detection = detect_manifest_string(&manifest, "Working (esc to interrupt)\n");
+    assert_eq!(detection.state, AgentState::Working);
+    assert_eq!(detection.blocked_kind, None);
+}
+
+#[test]
+fn blocked_kind_variants_deserialize_snake_case() {
+    for (declared, expected) in [
+        ("approval", BlockedKind::Approval),
+        ("input", BlockedKind::Input),
+        ("trust", BlockedKind::Trust),
+    ] {
+        let manifest = rules_manifest(&format!(
+            r#"
+[[rules]]
+id = "blocker"
+state = "blocked"
+blocked_kind = "{declared}"
+contains = ["needs you"]
+"#
+        ));
+        let detection = detect_manifest_string(&manifest, "needs you\n");
+        assert_eq!(detection.blocked_kind, Some(expected));
+    }
+}

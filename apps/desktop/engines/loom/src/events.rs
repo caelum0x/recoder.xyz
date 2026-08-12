@@ -5,7 +5,7 @@
 
 use std::time::Instant;
 
-use crate::detect::{Agent, AgentState};
+use crate::detect::{Agent, AgentState, BlockedKind};
 use crate::layout::PaneId;
 use crate::workspace::{GitStatusCacheEntry, WorkspaceGitStatus};
 
@@ -70,6 +70,9 @@ pub enum AppEvent {
         /// Id of the matched screen manifest rule that produced `state`, or
         /// `None` when no rule matched. Never fabricated.
         rule_id: Option<String>,
+        /// Declared blocker kind of the matched rule, only when `state` is
+        /// `Blocked` and the rule declared one. `None` otherwise; never guessed.
+        blocked_kind: Option<BlockedKind>,
         visible_blocker: bool,
         visible_working: bool,
         process_exited: bool,

@@ -216,6 +216,7 @@ pub(super) enum DetectionPublishDecision {
     Publish {
         state: AgentState,
         rule_id: Option<String>,
+        blocked_kind: Option<crate::detect::BlockedKind>,
         visible_idle: bool,
         visible_blocker: bool,
         visible_working: bool,
@@ -246,6 +247,11 @@ pub(super) fn decide_screen_detection_publish(
     let visible_blocker = detection.visible_blocker && new_state == AgentState::Blocked;
     let visible_working = detection.visible_working && new_state == AgentState::Working;
     let rule_id = detection.rule_id;
+    // Only carry a declared blocker kind when the published state is actually
+    // Blocked, so a kind is never attached to a non-blocked status.
+    let blocked_kind = (new_state == AgentState::Blocked)
+        .then_some(detection.blocked_kind)
+        .flatten();
 
     let previous_publish = DetectionPublishState {
         state: input.current_state,
@@ -281,6 +287,7 @@ pub(super) fn decide_screen_detection_publish(
         DetectionTransitionDecision::PublishNext => DetectionPublishDecision::Publish {
             state: new_state,
             rule_id,
+            blocked_kind,
             visible_idle,
             visible_blocker,
             visible_working,
@@ -309,6 +316,7 @@ pub(super) fn detection_update_for_publish_with_osc(
         return Some(crate::detect::AgentDetection {
             state: AgentState::Idle,
             rule_id: None,
+            blocked_kind: None,
             skip_state_update: false,
             visible_idle: true,
             visible_blocker: false,
@@ -347,6 +355,7 @@ mod tests {
         AgentDetection {
             state,
             rule_id: None,
+            blocked_kind: None,
             skip_state_update: false,
             visible_idle: state == AgentState::Idle,
             visible_blocker: false,
@@ -509,6 +518,7 @@ mod tests {
             DetectionPublishDecision::Publish {
                 state: AgentState::Working,
                 rule_id: None,
+                blocked_kind: None,
                 visible_idle: false,
                 visible_blocker: false,
                 visible_working: true,
@@ -530,6 +540,7 @@ mod tests {
             DetectionPublishDecision::Publish {
                 state: AgentState::Idle,
                 rule_id: None,
+                blocked_kind: None,
                 visible_idle: true,
                 visible_blocker: false,
                 visible_working: false,

@@ -462,6 +462,7 @@ impl App {
             display_agent: presentation.display_agent,
             agent_status: pane_agent_status(terminal.state, pane.seen),
             agent_rule_id: terminal.effective_agent_rule_id(),
+            agent_blocked_kind: terminal.effective_agent_blocked_kind(),
             state_labels: presentation.state_labels,
             tokens: terminal.metadata_tokens.values(),
             agent_session: terminal_agent_session_info(terminal),
