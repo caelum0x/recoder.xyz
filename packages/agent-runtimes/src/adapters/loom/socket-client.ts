@@ -29,6 +29,7 @@ import {
   isLoomSubscriptionEvent,
   isLoomSuccessResponse,
   parseAgentQueryResult,
+  parseEventSeq,
   parseWorktreeStatusResult,
   type AgentInfo,
   type AgentQueryParams,
@@ -90,10 +91,19 @@ export interface LoomSubscribeOptions {
   idleTimeoutMs?: number;
 }
 
-/** An open subscription: an async iterator of bare `{event, data}` lines. */
+/** An open subscription: an async iterator of bare `{seq?, event, data}` lines. */
 export interface LoomEventStream extends AsyncIterable<LoomSubscriptionEvent> {
   /** Stop the stream and close the underlying socket. */
   close(): void;
+  /**
+   * The current resume cursor: the highest `seq` observed so far, floored by the
+   * server's `subscription_started` cursor. Pass this as the next
+   * `events.subscribe { since_seq }` to resume without a gap. `undefined` until
+   * the stream has acknowledged (no baseline yet). Because it is the MAX of the
+   * baseline and every ring-backed `seq` seen, it never moves backwards and is
+   * unaffected by snapshot events that carry no `seq`.
+   */
+  cursor(): number | undefined;
 }
 
 /**
@@ -252,7 +262,15 @@ export class LoomSocketClient {
     let failure: unknown = null;
     let finished = false;
     let acknowledged = false;
+    let cursor: number | undefined;
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // Advance the resume cursor monotonically. Snapshot events carry no `seq`
+    // (undefined) and must not reset it; a lower value never moves it backwards.
+    const advanceCursor = (next: number | undefined): void => {
+      if (next == null) return;
+      if (cursor == null || next > cursor) cursor = next;
+    };
 
     const clearIdle = (): void => {
       if (idleTimer != null) {
@@ -341,6 +359,7 @@ export class LoomSocketClient {
             parsed.result.type === 'subscription_started'
           ) {
             acknowledged = true;
+            advanceCursor(parseEventSeq(parsed.result.cursor));
             armIdle();
             continue;
           }
@@ -354,7 +373,18 @@ export class LoomSocketClient {
         }
 
         if (isLoomSubscriptionEvent(parsed)) {
-          emit(parsed);
+          // Reconstruct only the known wire fields so a malformed `seq` is
+          // dropped (never surfaced) and a valid one is normalized to a number;
+          // then advance the resume cursor. Absent/invalid seq leaves the key
+          // off entirely rather than emitting `seq: undefined`.
+          const seq = parseEventSeq(parsed.seq);
+          advanceCursor(seq);
+          const normalized: LoomSubscriptionEvent = {
+            event: parsed.event,
+            data: parsed.data,
+          };
+          if (seq != null) normalized.seq = seq;
+          emit(normalized);
           continue;
         }
 
@@ -394,6 +424,7 @@ export class LoomSocketClient {
     return {
       [Symbol.asyncIterator]: () => iterator,
       close: () => settle(),
+      cursor: () => cursor,
     };
   }
 

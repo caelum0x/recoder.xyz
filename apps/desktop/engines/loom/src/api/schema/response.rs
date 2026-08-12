@@ -201,7 +201,15 @@ pub enum ResponseResult {
     AgentExplain {
         explain: serde_json::Value,
     },
-    SubscriptionStarted {},
+    SubscriptionStarted {
+        /// The event hub's current highest `seq` at the moment the stream
+        /// opened. A client can adopt this as the resume-cursor floor so that
+        /// even a stream that never emits an event still yields a sound
+        /// `since_seq` for the next `events.subscribe`. Defaults to `0` for
+        /// older servers that did not report it.
+        #[serde(default)]
+        cursor: u64,
+    },
     WaitMatched {
         event: EventEnvelope,
     },

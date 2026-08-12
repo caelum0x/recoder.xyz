@@ -40,6 +40,7 @@ fn protocol_schema_document() -> serde_json::Value {
             "success_response": protocol_schema_entry::<SuccessResponse>("success_response"),
             "error_response": protocol_schema_entry::<ErrorResponse>("error_response"),
             "event": protocol_schema_entry::<EventEnvelope>("event"),
+            "stream_event": protocol_schema_entry::<SequencedEventEnvelope>("stream_event"),
             "subscription_event": protocol_schema_entry::<SubscriptionEventEnvelope>("subscription_event"),
         },
     })
@@ -826,6 +827,7 @@ fn worktree_lifecycle_events_round_trip() {
                 Subscription::WorktreeOpened {},
                 Subscription::WorktreeRemoved {},
             ],
+            since_seq: None,
         }),
     };
     let json = serde_json::to_string(&subscription).unwrap();
@@ -1179,6 +1181,7 @@ fn authority_mutation_requests_round_trip() {
                 Subscription::TabMoved {},
                 Subscription::LayoutUpdated {},
             ],
+            since_seq: None,
         }),
     };
     let json = serde_json::to_string(&subscription).unwrap();

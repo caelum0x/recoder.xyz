@@ -224,6 +224,16 @@ export interface LoomSubscription {
 
 export interface EventsSubscribeParams {
   subscriptions: LoomSubscription[];
+  /**
+   * OPTIONAL incremental-refresh cursor (loom `since_seq`). When set, ring-backed
+   * event subscriptions replay only retained events whose `seq` is GREATER than
+   * this value before continuing live, so a cockpit can resume instead of
+   * re-subscribing from scratch. Omit (or `0`) for a fresh subscription. A cursor
+   * older than loom's retained window is refused with a `resume_gap`
+   * {@link LoomError} rather than a silently-truncated stream — the caller must
+   * then re-subscribe WITHOUT `since_seq` to resync.
+   */
+  since_seq?: number;
 }
 
 // --- Nested result payloads -------------------------------------------------
@@ -510,7 +520,7 @@ export type LoomResult =
   | { type: 'agent_query'; agents: AgentInfo[] }
   | { type: 'agent_prompted'; agent: AgentInfo }
   | { type: 'pane_read'; read: PaneReadResult }
-  | { type: 'subscription_started' }
+  | { type: 'subscription_started'; cursor?: number }
   | { type: 'ok' }
   | { type: string; [key: string]: unknown };
 
@@ -539,11 +549,20 @@ export interface LoomErrorResponse {
 export type LoomResponse = LoomSuccessResponse | LoomErrorResponse;
 
 /**
- * A bare subscription line: `{ event, data }`, emitted after the initial
+ * A bare subscription line: `{ seq?, event, data }`, emitted after the initial
  * `subscription_started` result until the caller closes. These have no `id` and
  * no `result` — they must never be treated as a request/response reply.
+ *
+ * Ring-backed lifecycle events (workspace/tab/pane/worktree/layout) carry the
+ * server's monotonic per-emission `seq`, letting a client dedupe, DETECT A GAP
+ * (a missing sequence between two received frames), and resume via
+ * `events.subscribe { since_seq }`. Snapshot-derived subscription events
+ * (`pane.output_matched`, `pane.agent_status_changed`, `pane.scroll_changed`)
+ * have no ring position and so carry no `seq` — it is left `undefined` rather
+ * than fabricated.
  */
 export interface LoomSubscriptionEvent {
+  seq?: number;
   event: string;
   data: unknown;
 }
@@ -571,6 +590,24 @@ export function isLoomSubscriptionEvent(
     !('result' in value) &&
     !('error' in value)
   );
+}
+
+/**
+ * Defensively read a monotonic `seq` off a value (an event frame or a
+ * `subscription_started` `cursor`). Only a finite, non-negative, integral number
+ * is accepted; anything else (missing, string, NaN, negative, fractional) yields
+ * `undefined` so the caller never advances a resume cursor from a fabricated or
+ * malformed value.
+ */
+export function parseEventSeq(value: unknown): number | undefined {
+  if (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0
+  ) {
+    return value;
+  }
+  return undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
