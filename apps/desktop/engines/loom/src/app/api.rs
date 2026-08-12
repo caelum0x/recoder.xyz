@@ -1043,6 +1043,9 @@ impl App {
                 return self.handle_workspace_close(request.id, target)
             }
             Method::WorktreeList(params) => return self.handle_worktree_list(request.id, params),
+            Method::WorktreeStatus(params) => {
+                return self.handle_worktree_status(request.id, params)
+            }
             Method::WorktreeCreate(params) => {
                 let _ = params;
                 return responses::encode_error(

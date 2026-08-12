@@ -84,6 +84,14 @@ pub enum ResponseResult {
         path: String,
         forced: bool,
     },
+    WorktreeStatus {
+        path: String,
+        dirty: bool,
+        changed_files: u32,
+        has_upstream: bool,
+        ahead: u32,
+        behind: u32,
+    },
     TabInfo {
         tab: TabInfo,
     },

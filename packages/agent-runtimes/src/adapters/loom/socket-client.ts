@@ -29,6 +29,7 @@ import {
   isLoomSubscriptionEvent,
   isLoomSuccessResponse,
   parseAgentQueryResult,
+  parseWorktreeStatusResult,
   type AgentInfo,
   type AgentQueryParams,
   type LoomMethod,
@@ -37,6 +38,8 @@ import {
   type LoomSubscriptionEvent,
   type EventsSubscribeParams,
   type PongResult,
+  type WorktreeStatus,
+  type WorktreeStatusParams,
 } from './protocol';
 
 /** Default single-shot read timeout (ms). */
@@ -202,6 +205,27 @@ export class LoomSocketClient {
   ): Promise<AgentInfo[]> {
     const result = await this.call<LoomResult>('agent.query', params, options);
     return parseAgentQueryResult(result);
+  }
+
+  /**
+   * `worktree.status`: a pure-read Git work tree status for a single workspace's
+   * checkout — `{dirty, changed_files, ahead, behind}` plus a `has_upstream`
+   * truthfulness flag. Feeds convergence planning
+   * (auto-mergeable-vs-contested + re-fan base selection). The reply is parsed
+   * defensively: an unexpected or malformed result yields `null` rather than a
+   * fabricated status (a transport/error line still rejects with a
+   * {@link LoomError}).
+   */
+  async worktreeStatus(
+    params: WorktreeStatusParams = {},
+    options?: LoomCallOptions
+  ): Promise<WorktreeStatus | null> {
+    const result = await this.call<LoomResult>(
+      'worktree.status',
+      params,
+      options
+    );
+    return parseWorktreeStatusResult(result);
   }
 
   /**

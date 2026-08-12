@@ -225,6 +225,102 @@ pub(crate) fn checkout_has_dirty_files(path: &Path) -> Result<bool, String> {
     }
 }
 
+/// A cross-platform read of a Git work tree's status, parsed from a single
+/// `git status --porcelain=v2 --branch` invocation. `changed_files` counts every
+/// tracked change plus untracked file; `dirty` is simply `changed_files > 0`.
+/// Ahead/behind are only meaningful when the checked-out branch has a configured
+/// upstream: `has_upstream` records whether Git emitted a `# branch.ab` line, so
+/// `ahead == 0 && behind == 0 && !has_upstream` means "no upstream to compare
+/// against" and is never conflated with a fabricated "in sync".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct WorktreeStatus {
+    pub dirty: bool,
+    pub changed_files: usize,
+    pub has_upstream: bool,
+    pub ahead: usize,
+    pub behind: usize,
+}
+
+/// Parse the output of `git status --porcelain=v2 --branch`. This is portable
+/// (no OS specifics) and total: any line it does not recognize is ignored rather
+/// than treated as a change, so a truthful count survives forward-compatible
+/// additions to the porcelain format.
+pub(crate) fn parse_worktree_status_porcelain_v2(output: &str) -> WorktreeStatus {
+    let mut changed_files = 0usize;
+    let mut has_upstream = false;
+    let mut ahead = 0usize;
+    let mut behind = 0usize;
+
+    for line in output.lines() {
+        if let Some(counts) = line.strip_prefix("# branch.ab ") {
+            if let Some((line_ahead, line_behind)) = parse_branch_ab_counts(counts) {
+                ahead = line_ahead;
+                behind = line_behind;
+                has_upstream = true;
+            }
+            continue;
+        }
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        // porcelain=v2 change entries start with a type token: ordinary ("1"),
+        // renamed/copied ("2"), unmerged ("u"), or untracked ("?"). Ignored
+        // ("!") entries only appear with --ignored, which we never request.
+        match line.as_bytes().first() {
+            Some(b'1' | b'2' | b'u' | b'?') => changed_files += 1,
+            _ => {}
+        }
+    }
+
+    WorktreeStatus {
+        dirty: changed_files > 0,
+        changed_files,
+        has_upstream,
+        ahead,
+        behind,
+    }
+}
+
+fn parse_branch_ab_counts(counts: &str) -> Option<(usize, usize)> {
+    let mut parts = counts.split_whitespace();
+    let ahead = parts.next()?.strip_prefix('+')?.parse().ok()?;
+    let behind = parts.next()?.strip_prefix('-')?.parse().ok()?;
+    Some((ahead, behind))
+}
+
+/// Read the Git work tree status for `path` in a single git invocation. Any path
+/// inside a work tree resolves to that work tree's status. A non-zero git exit
+/// (e.g. `path` is not inside a repository) surfaces as an `Err` carrying git's
+/// own message rather than a fabricated clean status.
+pub(crate) fn worktree_status(path: &Path) -> Result<WorktreeStatus, String> {
+    let output = crate::noninteractive_process::command("git")
+        .arg("-C")
+        .arg(path)
+        .args([
+            "status",
+            "--porcelain=v2",
+            "--branch",
+            "--untracked-files=all",
+        ])
+        .output()
+        .map_err(|err| err.to_string())?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Ok(parse_worktree_status_porcelain_v2(&stdout));
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if !stderr.is_empty() {
+        Err(stderr)
+    } else if !stdout.is_empty() {
+        Err(stdout)
+    } else {
+        Err(format!("git status failed with status {}", output.status))
+    }
+}
+
 pub(crate) fn build_worktree_add_new_branch_command(
     repo_root: &Path,
     path: &Path,
@@ -735,6 +831,78 @@ prunable stale
         let remove = build_worktree_remove_command(&repo, &checkout, true);
         run_worktree_command(&remove).unwrap();
         let _ = std::fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn parse_worktree_status_counts_changes_and_reads_ahead_behind() {
+        let output = "\
+# branch.oid 1111111111111111111111111111111111111111
+# branch.head feature
+# branch.upstream origin/feature
+# branch.ab +2 -1
+1 .M N... 100644 100644 100644 aaa bbb README.md
+1 M. N... 100644 100644 100644 ccc ddd staged.txt
+2 R. N... 100644 100644 100644 eee fff R100 new.txt\told.txt
+u UU N... 100644 100644 100644 100644 ggg hhh iii conflict.txt
+? untracked.txt
+";
+
+        let status = parse_worktree_status_porcelain_v2(output);
+        assert_eq!(status.changed_files, 5);
+        assert!(status.dirty);
+        assert!(status.has_upstream);
+        assert_eq!(status.ahead, 2);
+        assert_eq!(status.behind, 1);
+    }
+
+    #[test]
+    fn parse_worktree_status_reports_no_upstream_truthfully() {
+        let output = "\
+# branch.oid 1111111111111111111111111111111111111111
+# branch.head main
+";
+
+        let status = parse_worktree_status_porcelain_v2(output);
+        assert!(!status.dirty);
+        assert_eq!(status.changed_files, 0);
+        assert!(!status.has_upstream);
+        assert_eq!(status.ahead, 0);
+        assert_eq!(status.behind, 0);
+    }
+
+    #[test]
+    fn worktree_status_reports_clean_then_dirty_for_real_repo() {
+        let repo = create_committed_repo("worktree-status-repo");
+
+        let clean = worktree_status(&repo).unwrap();
+        assert!(!clean.dirty);
+        assert_eq!(clean.changed_files, 0);
+        // A freshly-initialized local repo has no upstream configured.
+        assert!(!clean.has_upstream);
+        assert_eq!(clean.ahead, 0);
+        assert_eq!(clean.behind, 0);
+
+        std::fs::write(repo.join("README.md"), "dirty\n").unwrap();
+        let modified = worktree_status(&repo).unwrap();
+        assert!(modified.dirty);
+        assert_eq!(modified.changed_files, 1);
+
+        std::fs::write(repo.join("new.txt"), "untracked\n").unwrap();
+        let with_untracked = worktree_status(&repo).unwrap();
+        assert!(with_untracked.dirty);
+        assert_eq!(with_untracked.changed_files, 2);
+
+        let _ = std::fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn worktree_status_errors_when_path_is_not_a_repo() {
+        let path = unique_temp_path("worktree-status-not-a-repo");
+        std::fs::create_dir_all(&path).unwrap();
+
+        assert!(worktree_status(&path).is_err());
+
+        let _ = std::fs::remove_dir_all(path);
     }
 
     #[test]

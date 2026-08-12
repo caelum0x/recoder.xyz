@@ -31,6 +31,7 @@ export type LoomMethod =
   | 'session.snapshot'
   | 'worktree.create'
   | 'worktree.remove'
+  | 'worktree.status'
   | 'agent.start'
   | 'agent.get'
   | 'agent.query'
@@ -243,6 +244,35 @@ export interface WorktreeInfo {
   label: string;
 }
 
+/**
+ * `worktree.status` params: a pure-read Git work tree status for a single
+ * workspace's checkout. Supply at most one of `workspace_id` or `cwd`; when
+ * neither is given the engine reads the active workspace.
+ */
+export interface WorktreeStatusParams {
+  workspace_id?: string;
+  cwd?: string;
+}
+
+/**
+ * The parsed result of `worktree.status` (loom's `worktree_status` result). It
+ * feeds convergence planning (auto-mergeable-vs-contested + re-fan base
+ * selection). TRUTHFULNESS: `ahead`/`behind` are only meaningful when
+ * `has_upstream` is `true` — a `0/0` with `has_upstream === false` means the
+ * branch has no configured upstream to compare against, never a fabricated
+ * "in sync".
+ */
+export interface WorktreeStatus {
+  /** Absolute path of the work tree the engine measured. */
+  path: string;
+  /** `changed_files > 0` (tracked changes and untracked files both count). */
+  dirty: boolean;
+  changed_files: number;
+  has_upstream: boolean;
+  ahead: number;
+  behind: number;
+}
+
 export interface WorkspaceInfo {
   workspace_id: string;
   number: number;
@@ -398,6 +428,30 @@ export function parseAgentQueryResult(source: unknown): AgentInfo[] {
 }
 
 /**
+ * Defensively read a `worktree.status` reply into a {@link WorktreeStatus}.
+ * Accepts either a raw `LoomResult` or the bare result record. Any shape that is
+ * not a `worktree_status` result with every field present and correctly typed
+ * yields `null` — the client never fabricates a status (e.g. a fake `0/0`
+ * "in sync") from a malformed or unexpected line. A transport/error line is
+ * still surfaced by the caller as a {@link LoomError} before this runs.
+ */
+export function parseWorktreeStatusResult(source: unknown): WorktreeStatus | null {
+  if (!isRecord(source)) return null;
+  if (source.type !== 'worktree_status') return null;
+  const { path, dirty, changed_files, has_upstream, ahead, behind } = source;
+  if (typeof path !== 'string') return null;
+  if (typeof dirty !== 'boolean' || typeof has_upstream !== 'boolean') return null;
+  if (
+    typeof changed_files !== 'number' ||
+    typeof ahead !== 'number' ||
+    typeof behind !== 'number'
+  ) {
+    return null;
+  }
+  return { path, dirty, changed_files, has_upstream, ahead, behind };
+}
+
+/**
  * loom `SessionSnapshot` is large; only the fields a substrate reads are typed
  * explicitly, with the collections left open for forward-compatibility.
  */
@@ -441,6 +495,15 @@ export type LoomResult =
       workspace_id: string;
       path: string;
       forced: boolean;
+    }
+  | {
+      type: 'worktree_status';
+      path: string;
+      dirty: boolean;
+      changed_files: number;
+      has_upstream: boolean;
+      ahead: number;
+      behind: number;
     }
   | { type: 'agent_started'; agent: AgentInfo; argv: string[] }
   | { type: 'agent_info'; agent: AgentInfo }
