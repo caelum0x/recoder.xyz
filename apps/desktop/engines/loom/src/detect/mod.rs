@@ -62,10 +62,13 @@ pub enum Agent {
     Kilo,
     Qodercli,
     Maki,
+    RecoderCode,
+    QwenCode,
+    Crush,
 }
 
 impl Agent {
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 24] = [
         Self::Pi,
         Self::Claude,
         Self::Codex,
@@ -87,8 +90,15 @@ impl Agent {
         Self::Kilo,
         Self::Qodercli,
         Self::Maki,
+        Self::RecoderCode,
+        Self::QwenCode,
+        Self::Crush,
     ];
 
+    // recoder_code/qwen_code/crush are launchable native agent kinds but have NO
+    // screen-detection manifest yet — status detection for them requires evidence
+    // captured from live panes (see engine CLAUDE.md), which we do not fabricate.
+    // They therefore stay out of SCREEN_MANIFEST_AGENTS, exactly like Omp/Mastracode.
     pub const SCREEN_MANIFEST_AGENTS: [Self; 19] = [
         Self::Pi,
         Self::Claude,
@@ -135,6 +145,9 @@ pub fn agent_label(agent: Agent) -> &'static str {
         Agent::Kilo => "kilo",
         Agent::Qodercli => "qodercli",
         Agent::Maki => "maki",
+        Agent::RecoderCode => "recoder_code",
+        Agent::QwenCode => "qwen_code",
+        Agent::Crush => "crush",
     }
 }
 
@@ -167,6 +180,9 @@ pub fn interactive_agent_executable(agent: Agent) -> &'static str {
         Agent::Kilo => "kilo",
         Agent::Qodercli => "qodercli",
         Agent::Maki => "maki",
+        Agent::RecoderCode => "recoder-code",
+        Agent::QwenCode => "qwen",
+        Agent::Crush => "crush",
     }
 }
 
@@ -203,6 +219,9 @@ fn lookup_agent(name: &str) -> Option<Agent> {
         "kilo" | "kilo-code" | "kilo code" => Some(Agent::Kilo),
         "qodercli" | "qoderclicn" | "qoder" | "qodercn" => Some(Agent::Qodercli),
         "maki" => Some(Agent::Maki),
+        "recoder_code" | "recoder-code" | "recoder" | "recodercode" => Some(Agent::RecoderCode),
+        "qwen_code" | "qwen-code" | "qwen" | "qwencode" => Some(Agent::QwenCode),
+        "crush" => Some(Agent::Crush),
         _ => None,
     }
 }
@@ -748,6 +767,31 @@ mod tests {
     }
 
     #[test]
+    fn recoder_native_agent_kinds_are_launchable_without_a_screen_manifest() {
+        // These three are accepted by agent.start (no UnsupportedKind) so the
+        // conductor fan-out launches them as managed native panes instead of raw
+        // pane input. They intentionally carry NO screen-detection manifest yet:
+        // status detection requires evidence captured from live panes, which we do
+        // not fabricate (see engine CLAUDE.md). They behave like Omp/Mastracode.
+        for (label, exec, agent) in [
+            ("recoder_code", "recoder-code", Agent::RecoderCode),
+            ("qwen_code", "qwen", Agent::QwenCode),
+            ("crush", "crush", Agent::Crush),
+        ] {
+            assert_eq!(parse_agent_label(label), Some(agent));
+            assert_eq!(parse_canonical_agent_label(label), Some(agent));
+            assert_eq!(agent_label(agent), label);
+            assert_eq!(interactive_agent_executable(agent), exec);
+            assert!(Agent::ALL.contains(&agent));
+            assert!(!Agent::SCREEN_MANIFEST_AGENTS.contains(&agent));
+        }
+        assert_eq!(parse_agent_label("recoder-code"), Some(Agent::RecoderCode));
+        assert_eq!(parse_agent_label("recoder"), Some(Agent::RecoderCode));
+        assert_eq!(parse_agent_label("qwen"), Some(Agent::QwenCode));
+        assert_eq!(parse_agent_label("qwen-code"), Some(Agent::QwenCode));
+    }
+
+    #[test]
     fn every_agent_has_a_canonical_interactive_executable() {
         let expected = [
             (Agent::Pi, "pi"),
@@ -778,6 +822,9 @@ mod tests {
             (Agent::Kilo, "kilo"),
             (Agent::Qodercli, "qodercli"),
             (Agent::Maki, "maki"),
+            (Agent::RecoderCode, "recoder-code"),
+            (Agent::QwenCode, "qwen"),
+            (Agent::Crush, "crush"),
         ];
         assert_eq!(expected.len(), Agent::ALL.len());
         for (agent, executable) in expected {
