@@ -44,8 +44,13 @@ ZIG=$PWD/zig-aarch64-macos-0.15.2/zig cargo build --release --locked   # -> targ
       `website/latest.json`) that the initial lean vendor dropped.
 - [x] **Phase 0** — NDJSON socket client + protocol types
       (`packages/agent-runtimes/src/adapters/herdr/`), 13/13 tests. See docs/HERDR-INTEGRATION.md.
-- [ ] Phase 1 — `herdr-substrate.adapter.ts` (port → socket-method mapping) vs a fake sidecar.
-- [ ] Phase 2–4 — real daemon spawn/resolver + DMG packaging (extraResources) + registry wiring.
+- [x] **Phase 1** — `herdr-substrate.adapter.ts` (ConductorSubstrate: launch=worktree.create+
+      agent.start, capture=agent.read, exitCode/alive=agent.get, diff=host-git, teardown=
+      worktree.remove, continueRun=agent.prompt) + `herdr-state.ts` native-attention bypass.
+      138 tests; **real-binary smoke PASSED** (spawned `herdr server`, ping protocol 20,
+      native worktree create+remove). Recoder now drives the real engine.
+- [ ] Phase 2–4 — real daemon spawn/resolver (`herdr-path.ts`) + DMG packaging (extraResources)
+      + register `'herdr'` in the `WorkspaceSubstrate` union + registry.
 - [ ] Phase 5 — full Recoder rebrand (LAST; blocked on the plugin-ecosystem decision).
 
 Tracked in bd (`absorb`/`herdr` labels).
