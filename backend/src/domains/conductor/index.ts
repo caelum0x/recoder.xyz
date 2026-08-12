@@ -52,6 +52,7 @@ import type { ConductorPlanPort } from './ports/plan.port.js';
 import type { ColbertSearchPort } from '../memory/ports/colbert-search.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
 import type { SwarmUnblockDeps } from './swarm/swarm-unblock.service.js';
+import type { RemoteAttachExternalDeps } from './remote-attach/remote-attach.service.js';
 import type {
   NeedsYouScheduler,
   NeedsYouScope,
@@ -456,6 +457,17 @@ export interface ConductorModuleDeps {
    */
   readonly skillRegistry?: SkillRegistry;
   readonly skillActions?: SkillActionService;
+  /**
+   * OPTIONAL GOVERNED REMOTE ATTACH seams (LOOM Bigger Bet C): the steer transport,
+   * `evaluatePolicy`, the approval gate, the audit sink, and (optionally) the
+   * taskGroup→workspace-id resolver + clock/TTL. The two READS the core needs
+   * (`getWorkspace` ownership + the `statusBoardSnapshot` monitor board) are bound by the
+   * composer from its own methods, so identity + ownership are re-verified on every call.
+   * Absent ⇒ the `recoder_remote_*` tools + `remoteAttach`/`remoteSnapshot`/`remoteSteer`
+   * refuse truthfully (`SERVICE_UNAVAILABLE`), never a faked session/snapshot/steer. See
+   * `remote-attach/`.
+   */
+  readonly remoteAttach?: RemoteAttachExternalDeps;
 }
 
 /** The public surface bootstrap registers and the edge/interop consume. */
