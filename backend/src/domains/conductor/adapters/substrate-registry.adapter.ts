@@ -30,6 +30,7 @@ const KNOWN_SUBSTRATES: readonly SubstrateKind[] = [
   'in_process',
   'ssh',
   'acp',
+  'herdr',
 ];
 
 export interface ConductorRegistry {
@@ -162,6 +163,8 @@ function reasonUnavailable(id: SubstrateKind, cfg: ConductorConfig): string {
       return 'in-process/openfang substrate not wired into the registry';
     case 'acp':
       return 'acp substrate not wired into the registry (claude-code-acp opt-in)';
+    case 'herdr':
+      return 'herdr substrate not wired into the registry (herdr daemon opt-in)';
     case 'tmux_worktree':
     default:
       return 'tmux_worktree substrate not wired into the registry';
