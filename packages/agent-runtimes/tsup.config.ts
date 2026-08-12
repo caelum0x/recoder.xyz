@@ -4,7 +4,7 @@ export default defineConfig([
   {
     entry: {
       index: 'src/index.ts',
-      herdr: 'src/adapters/herdr/index.ts',
+      loom: 'src/adapters/loom/index.ts',
     },
     format: ['cjs', 'esm'],
     dts: true,

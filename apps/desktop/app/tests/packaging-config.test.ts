@@ -66,7 +66,7 @@ describe("packaging config", () => {
             ["backend/package.json", "../../../backend/package.json"],
             ["backend/data-template", "../../../backend/data"],
             ["backend/engines/tmux/tmux", "../engines/tmux/tmux"],
-            ["backend/engines/herdr/herdr", "../engines/herdr/target/release/herdr"],
+            ["backend/engines/loom/loom", "../engines/loom/target/release/loom"],
             [
                 "native/recoder-governance-napi.node",
                 "../../../backend/engines/rust/recoder-governance/target/release/recoder-governance-napi.node",

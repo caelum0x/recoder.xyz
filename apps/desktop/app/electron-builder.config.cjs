@@ -58,7 +58,7 @@ const ARCH_SENSITIVE_EXTRA_RESOURCES = new Set([
     "../../../backend/engines/rust/openfang/target/release/openfang_napi.node",
     "../../../backend/engines/rust/tensorzero/crates/target/release/tensorzero_gateway_napi.node",
     "../server/engines/beads/bin/bd",
-    "../engines/herdr/target/release/herdr",
+    "../engines/loom/target/release/loom",
 ]);
 
 /**
@@ -125,15 +125,15 @@ const config = {
             from: "../engines/tmux/tmux",
             to: "backend/engines/tmux/tmux",
         },
-        // Vendored herdr engine binary (the agent-aware multiplexer substrate).
+        // Vendored loom engine binary (the agent-aware multiplexer substrate).
         // Host-arch cargo release build (Rust 1.96.1 + zig 0.15.2), a git-ignored
         // build artifact like the tmux/beads/.node engines — NOT in git. Build:
-        //   cd apps/desktop/engines/herdr && ZIG=<zig-0.15.2> cargo build --release --locked
-        // Backend resolves it at <resources>/backend/engines/herdr/herdr
-        // (herdr-path.ts: resourcesPath + dist-relative), before any dev/PATH herdr.
+        //   cd apps/desktop/engines/loom && ZIG=<zig-0.15.2> cargo build --release --locked
+        // Backend resolves it at <resources>/backend/engines/loom/loom
+        // (loom-path.ts: resourcesPath + dist-relative), before any dev/PATH loom.
         {
-            from: "../engines/herdr/target/release/herdr",
-            to: "backend/engines/herdr/herdr",
+            from: "../engines/loom/target/release/loom",
+            to: "backend/engines/loom/loom",
         },
         // Owned beads `bd` binary (issue-graph memory). Host-arch local build
         // like tmux/the .node addons — DELIBERATELY NOT in git (>100MB, stripped

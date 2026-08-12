@@ -59,12 +59,12 @@ import {
 import { createCliRuntimeSubstrate } from '../domains/conductor/adapters/cli-runtime.adapter.js';
 import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/openfang-runtime.adapter.js';
 import { createAcpSubstrate } from '../domains/conductor/adapters/acp-substrate.adapter.js';
-import { createHerdrSubstrate } from '../domains/conductor/adapters/herdr-substrate.adapter.js';
+import { createLoomSubstrate } from '../domains/conductor/adapters/loom-substrate.adapter.js';
 import {
-  createHerdrDaemon,
-  defaultRecoderHerdrSocketPath,
-} from '../domains/engines/herdr-daemon.js';
-import { resolveHerdrBin } from '../domains/engines/herdr-path.js';
+  createLoomDaemon,
+  defaultRecoderLoomSocketPath,
+} from '../domains/engines/loom-daemon.js';
+import { resolveLoomBin } from '../domains/engines/loom-path.js';
 import { createAcpPermissionGate } from '../domains/conductor/adapters/acp-permission-gate.adapter.js';
 import type {
   AcpPermissionContext,
@@ -802,50 +802,50 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
         ? acpPermissionGate(ctx)
         : Promise.resolve<AcpPermissionDecision>('deny'),
   });
-  // PATH (f) herdr: the `herdr` substrate drives the vendored `herdr` engine (a
-  // headless `herdr server` over an NDJSON Unix socket) as a native-worktree + PTY
-  // execution surface with native agent-status detection (docs/HERDR-INTEGRATION.md
-  // §Phase 2/4). Recoder OWNS the daemon: `herdr-daemon.ts` resolves the binary
-  // (CONDUCTOR_HERDR_BIN → packaged resources → dev `cargo build --release` →
-  // PATH), spawns it on a RECODER-OWNED socket path (NOT ~/.config/herdr) with a
+  // PATH (f) loom: the `loom` substrate drives the vendored `loom` engine (a
+  // headless `loom server` over an NDJSON Unix socket) as a native-worktree + PTY
+  // execution surface with native agent-status detection (docs/LOOM-INTEGRATION.md
+  // §Phase 2/4). Recoder OWNS the daemon: `loom-daemon.ts` resolves the binary
+  // (CONDUCTOR_LOOM_BIN → packaged resources → dev `cargo build --release` →
+  // PATH), spawns it on a RECODER-OWNED socket path (NOT ~/.config/loom) with a
   // denylist-stripped env (the prompt-injectable daemon/agents never inherit
   // backend secrets), and reports healthy ONLY after a real `ping` (protocol 20).
   // Fully OPT-IN and non-default: the substrate is always REGISTERED (so it lists
-  // in `/substrates` and is selectable with `substrate: 'herdr'`) but the selector
-  // keeps `tmux_worktree` as the CLI default, so nothing rides herdr unasked. The
+  // in `/substrates` and is selectable with `substrate: 'loom'`) but the selector
+  // keeps `tmux_worktree` as the CLI default, so nothing rides loom unasked. The
   // supervised daemon is spawned only when explicitly enabled
-  // (`CONDUCTOR_HERDR_ENABLED`), best-effort and fire-and-forget: on failure the
+  // (`CONDUCTOR_LOOM_ENABLED`), best-effort and fire-and-forget: on failure the
   // substrate's `available()` ping simply reports down with the real reason. The
   // substrate is constructed against the daemon's Recoder-owned `socketPath`
   // (injected — the adapter reads no env for it).
-  const herdrSocketPath = defaultRecoderHerdrSocketPath(bootEnv);
-  const herdrDaemon = createHerdrDaemon({
-    socketPath: herdrSocketPath,
-    resolveBin: () => resolveHerdrBin(bootEnv),
+  const loomSocketPath = defaultRecoderLoomSocketPath(bootEnv);
+  const loomDaemon = createLoomDaemon({
+    socketPath: loomSocketPath,
+    resolveBin: () => resolveLoomBin(bootEnv),
     env: bootEnv,
   });
-  const herdrSub = createHerdrSubstrate({
-    socketPath: herdrDaemon.socketPath,
-    logger: childLogger('conductor-herdr'),
+  const loomSub = createLoomSubstrate({
+    socketPath: loomDaemon.socketPath,
+    logger: childLogger('conductor-loom'),
   });
   // Opt-in supervised spawn: only when explicitly enabled. Degrade-truthful — a
   // failed/absent daemon leaves the substrate registered but `available:false`.
-  const herdrEnabled =
-    bootEnv.CONDUCTOR_HERDR_ENABLED === '1' ||
-    bootEnv.CONDUCTOR_HERDR_ENABLED === 'true';
-  if (herdrEnabled) {
-    void herdrDaemon
+  const loomEnabled =
+    bootEnv.CONDUCTOR_LOOM_ENABLED === '1' ||
+    bootEnv.CONDUCTOR_LOOM_ENABLED === 'true';
+  if (loomEnabled) {
+    void loomDaemon
       .start()
       .then(status => {
         if (status.running) {
-          childLogger('conductor-herdr-daemon').info(
+          childLogger('conductor-loom-daemon').info(
             { socketPath: status.socketPath, pid: status.pid, protocol: status.protocol },
-            'herdr daemon started (opt-in) — substrate available'
+            'loom daemon started (opt-in) — substrate available'
           );
         } else {
-          childLogger('conductor-herdr-daemon').warn(
+          childLogger('conductor-loom-daemon').warn(
             { socketPath: status.socketPath, reason: status.reason },
-            'herdr daemon did not start — substrate stays unavailable (truthful degrade)'
+            'loom daemon did not start — substrate stays unavailable (truthful degrade)'
           );
         }
       })
@@ -951,7 +951,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // history + RunEvents survive a backend restart. Same executor ⇒ degrades in
     // lockstep (isDurable ⇒ false, in-process fallback) when the DB is unavailable.
     canonicalRunStore: agentOs.repository(),
-    substrates: [cliSub, openfangSub, cloudDaytonaSub, acpSub, herdrSub],
+    substrates: [cliSub, openfangSub, cloudDaytonaSub, acpSub, loomSub],
     brain: conductorBrain,
     codeIntel: conductorCodeIntel,
     // Browsing facet (item 21): the conductor verifies a stored preview URL

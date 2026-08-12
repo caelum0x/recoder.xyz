@@ -12,10 +12,10 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
-    "./herdr": {
-      "types": "./dist/herdr.d.ts",
-      "import": "./dist/herdr.mjs",
-      "require": "./dist/herdr.js"
+    "./loom": {
+      "types": "./dist/loom.d.ts",
+      "import": "./dist/loom.mjs",
+      "require": "./dist/loom.js"
     }
   },
   "files": ["dist"],

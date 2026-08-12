@@ -7,7 +7,7 @@
       "@recoder/shared/a2a/schemas": ["./node_modules/@recoder/shared/src/a2a/schemas/index.ts"],
       "@recoder/shared/opencode-client": ["./node_modules/@recoder/shared/src/opencode-client.ts"],
       "@recoder/agent-instructions/agent-os-compiler": ["./node_modules/@recoder/agent-instructions/dist/agent-os-compiler.d.ts"],
-      "@recoder/agent-runtimes/herdr": ["./node_modules/@recoder/agent-runtimes/dist/herdr.d.ts"],
+      "@recoder/agent-runtimes/loom": ["./node_modules/@recoder/agent-runtimes/dist/loom.d.ts"],
       "@recoder/connectors/telegram": ["./node_modules/@recoder/connectors/dist/telegram.d.ts"],
       "@recoder/connectors/slack": ["./node_modules/@recoder/connectors/dist/slack.d.ts"],
       "@recoder/connectors/signal": ["./node_modules/@recoder/connectors/dist/signal.d.ts"],
