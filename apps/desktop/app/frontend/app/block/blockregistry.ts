@@ -28,6 +28,7 @@ import { RecoderFanoutViewModel } from "@/app/view/recoder-fanout/recoder-fanout
 import { RecoderIngestViewModel } from "@/app/view/recoder-ingest/recoder-ingest-model";
 import { RecoderLocksViewModel } from "@/app/view/recoder-locks/recoder-locks-model";
 import { RecoderMemoryViewModel } from "@/app/view/recoder-memory/recoder-memory-model";
+import { RecoderNeedsYouViewModel } from "@/app/view/recoder-needs-you/recoder-needs-you-model";
 import { RecoderSiblingsViewModel } from "@/app/view/recoder-siblings/recoder-siblings-model";
 import { RecoderSwarmViewModel } from "@/app/view/recoder-swarm/recoder-swarm-model";
 import { RecoderRunsViewModel } from "@/app/view/recoder-runs/recoder-runs-model";
@@ -61,6 +62,7 @@ BlockRegistry.set("recoder-memory", RecoderMemoryViewModel);
 BlockRegistry.set("recoder-codebase", RecoderCodebaseViewModel);
 BlockRegistry.set("recoder-fanout", RecoderFanoutViewModel);
 BlockRegistry.set("recoder-swarm", RecoderSwarmViewModel);
+BlockRegistry.set("recoder-needs-you", RecoderNeedsYouViewModel);
 BlockRegistry.set("recoder-siblings", RecoderSiblingsViewModel);
 BlockRegistry.set("recoder-ingest", RecoderIngestViewModel);
 BlockRegistry.set("recoder-capabilities", RecoderCapabilitiesViewModel);
