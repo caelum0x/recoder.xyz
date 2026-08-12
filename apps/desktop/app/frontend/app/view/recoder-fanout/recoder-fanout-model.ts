@@ -112,12 +112,47 @@ type FanoutOutcome = {
     notice: string;
 };
 
+// The compact, truthful link back to the round-1 provenance a re-fan iterated from —
+// mirrors the backend ReFanProvenanceLink. `assistedPaths` is present only when round 1
+// had LLM-assisted merges (never fabricated).
+type ReFanProvenanceLink = {
+    fromTaskGroup: string | null;
+    sourceCount: number;
+    fileCount: number;
+    assistedPaths?: string[];
+};
+
+// The projected outcome of a SECOND-ROUND re-fan. `refused:true` means round 1 never
+// converged — the reason is surfaced VERBATIM and `newTaskGroup`/`converged` stay null
+// (no fabricated base or branch). A resolved re-fan carries the round-1 link plus the new
+// second-round group + its own converge branch (or `converged:null` + a truthful reason).
+type ReFanView = {
+    refused: boolean;
+    priorTaskGroup: string;
+    newTaskGroup: string | null;
+    converged: { workspaceId: string; branch: string } | null;
+    convergeReason: string;
+    reason: string;
+    provenanceLink: ReFanProvenanceLink | null;
+    perAgent: FanoutAgentResult[];
+};
+
+// The normalized outcome of ONE governed re-fan.
+type ReFanOutcome = {
+    result: ReFanView | null;
+    notice: string;
+};
+
 // Truthful line when the cockpit read succeeds but resolves no group (unknown /
 // unowned / no siblings yet) — a miss, never a fabricated cockpit.
 const NoGroupNotice = "No convergence group found — fan a task out to N agents to open the cockpit.";
 
 // Truthful line when the launch form is missing the governed context the tool requires.
 const MissingContextNotice = "Repo path, space, and project are required to fan out.";
+
+// Truthful line when a re-fan is attempted with no round-1 group pinned — a re-fan
+// iterates a PRIOR convergence, so it has nothing to iterate from without one.
+const NoPinnedGroupNotice = "Pin a round-1 task group first — re-fan iterates a prior convergence.";
 
 class RecoderFanoutViewModel implements ViewModel {
     viewType: string;
@@ -139,6 +174,12 @@ class RecoderFanoutViewModel implements ViewModel {
     launchingAtom: PrimitiveAtom<boolean>;
     launchNoticeAtom: PrimitiveAtom<string>;
     launchResultAtom: PrimitiveAtom<FanoutView | null>;
+
+    refanTaskAtom: PrimitiveAtom<string>;
+    refanKindsAtom: PrimitiveAtom<string[]>;
+    refanningAtom: PrimitiveAtom<boolean>;
+    refanNoticeAtom: PrimitiveAtom<string>;
+    refanResultAtom: PrimitiveAtom<ReFanView | null>;
 
     knownKinds: readonly string[];
     minAgents: number;
@@ -164,6 +205,12 @@ class RecoderFanoutViewModel implements ViewModel {
         this.launchingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.launchNoticeAtom = atom("") as PrimitiveAtom<string>;
         this.launchResultAtom = atom(null) as PrimitiveAtom<FanoutView | null>;
+
+        this.refanTaskAtom = atom("") as PrimitiveAtom<string>;
+        this.refanKindsAtom = atom([]) as PrimitiveAtom<string[]>;
+        this.refanningAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.refanNoticeAtom = atom("") as PrimitiveAtom<string>;
+        this.refanResultAtom = atom(null) as PrimitiveAtom<ReFanView | null>;
 
         this.knownKinds = KnownAgentKinds;
         this.minAgents = MinFanoutAgents;
@@ -289,6 +336,89 @@ class RecoderFanoutViewModel implements ViewModel {
             globalStore.set(this.connectedAtom, false);
         } finally {
             globalStore.set(this.launchingAtom, false);
+        }
+    }
+
+    setRefanTask(value: string) {
+        globalStore.set(this.refanTaskAtom, value);
+    }
+
+    // Toggle one agent kind in the re-fan set (kept ≤ maxAgents; unknown kinds ignored).
+    toggleRefanKind(kind: string) {
+        if (!this.knownKinds.includes(kind)) {
+            return;
+        }
+        const current = globalStore.get(this.refanKindsAtom);
+        if (current.includes(kind)) {
+            globalStore.set(this.refanKindsAtom, current.filter((k) => k != kind));
+            return;
+        }
+        if (current.length >= this.maxAgents) {
+            return;
+        }
+        globalStore.set(this.refanKindsAtom, [...current, kind]);
+    }
+
+    // Re-fan the CURRENTLY PINNED round-1 group: take its converged branch as the new base
+    // and fan a NARROWED task to N fresh agents over the governed MCP edge. Fail-fast +
+    // truthful, mirroring launch(): no pinned group / empty task / too-small kind set /
+    // missing context each set a notice and post NOTHING; a no-prior-convergence refusal
+    // surfaces the reason VERBATIM (never a fabricated branch); a denied gate / non-2xx /
+    // validation refusal surfaces its reason; a transport throw shows "Not connected.". On
+    // a resolved re-fan the NEW second-round group is pinned so the cockpit follows round 2.
+    async reFan(narrowedTask: string, agentKinds: string[]) {
+        const priorTaskGroup = globalStore.get(this.taskGroupAtom).trim();
+        const trimmedTask = narrowedTask.trim();
+        const kinds = dedupeKinds(agentKinds, this.knownKinds);
+        globalStore.set(this.refanNoticeAtom, "");
+        globalStore.set(this.refanResultAtom, null);
+        if (priorTaskGroup == "") {
+            globalStore.set(this.refanNoticeAtom, NoPinnedGroupNotice);
+            return;
+        }
+        if (trimmedTask == "") {
+            globalStore.set(this.refanNoticeAtom, "A narrowed task is required to re-fan.");
+            return;
+        }
+        if (kinds.length < this.minAgents) {
+            globalStore.set(this.refanNoticeAtom, `Pick at least ${this.minAgents} distinct agents to re-fan.`);
+            return;
+        }
+        const repoPath = globalStore.get(this.repoPathAtom).trim();
+        const spaceId = globalStore.get(this.spaceIdAtom).trim();
+        const projectId = globalStore.get(this.projectIdAtom).trim();
+        if (repoPath == "" || spaceId == "" || projectId == "") {
+            globalStore.set(this.refanNoticeAtom, MissingContextNotice);
+            return;
+        }
+        globalStore.set(this.refanningAtom, true);
+        try {
+            const outcome = await fetchReFan(getRecoderBackendUrl(), {
+                taskGroup: priorTaskGroup,
+                narrowedTask: trimmedTask,
+                agentKinds: kinds.slice(0, this.maxAgents),
+                repoPath,
+                spaceId,
+                projectId,
+            });
+            globalStore.set(this.refanResultAtom, outcome.result);
+            globalStore.set(this.refanNoticeAtom, outcome.notice);
+            globalStore.set(this.connectedAtom, true);
+            if (
+                outcome.result != null &&
+                !outcome.result.refused &&
+                outcome.result.newTaskGroup != null &&
+                outcome.result.newTaskGroup != ""
+            ) {
+                globalStore.set(this.taskGroupAtom, outcome.result.newTaskGroup);
+                await this.loadCockpit(outcome.result.newTaskGroup);
+            }
+        } catch {
+            globalStore.set(this.refanResultAtom, null);
+            globalStore.set(this.refanNoticeAtom, "Not connected.");
+            globalStore.set(this.connectedAtom, false);
+        } finally {
+            globalStore.set(this.refanningAtom, false);
         }
     }
 }
@@ -538,6 +668,107 @@ function projectPerAgent(value: unknown): FanoutAgentResult[] {
     return out;
 }
 
+// --- re-fan projection -------------------------------------------------------
+
+// Run ONE governed re-fan. A non-2xx yields a truthful notice; otherwise the wire is
+// branched by gate status and by the tool's own truthful shapes ({ error } input refusal,
+// { refused:true } no-prior-convergence refusal, or a resolved ReFanResult). Throws only
+// on transport failure so the caller renders "Not connected.".
+async function fetchReFan(
+    base: string,
+    args: {
+        taskGroup: string;
+        narrowedTask: string;
+        agentKinds: string[];
+        repoPath: string;
+        spaceId: string;
+        projectId: string;
+    }
+): Promise<ReFanOutcome> {
+    const res = await fetch(`${base}/api/mcp/tools/conductor/recoder_converge_refan/call`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ args }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+        return { result: null, notice: readErrorReason(body) || `Re-fan unavailable (${res.status})` };
+    }
+    return projectReFanWire(body);
+}
+
+function projectReFanWire(body: unknown): ReFanOutcome {
+    const data = asRecord((body as { data?: unknown } | null)?.data);
+    const status = typeof data.status == "string" ? data.status : "";
+    if (status != "completed") {
+        return { result: null, notice: gateDegradeNotice(status, data.reason) };
+    }
+    const result = asRecord(data.result);
+    // The tool fails input validation with a bare { error } (no re-fan started).
+    if (typeof result.error == "string" && result.error != "") {
+        return { result: null, notice: result.error };
+    }
+    // A group with NO prior convergence is a truthful refusal — surface the reason
+    // VERBATIM and NEVER fabricate a base/branch.
+    if (result.refused === true) {
+        const reason = typeof result.reason == "string" ? result.reason : "";
+        const priorTaskGroup = typeof result.priorTaskGroup == "string" ? result.priorTaskGroup : "";
+        return {
+            result: {
+                refused: true,
+                priorTaskGroup,
+                newTaskGroup: null,
+                converged: null,
+                convergeReason: "",
+                reason,
+                provenanceLink: null,
+                perAgent: [],
+            },
+            notice: reason || "Re-fan refused: no prior convergence.",
+        };
+    }
+    if (typeof result.taskGroup != "string" || result.taskGroup == "") {
+        return { result: null, notice: "Re-fan returned no task group." };
+    }
+    const view = projectReFan(result);
+    const notice = view.converged == null ? view.convergeReason || "Nothing was converged." : "";
+    return { result: view, notice };
+}
+
+function projectReFan(result: Record<string, unknown>): ReFanView {
+    const converged = asRecord(result.converged);
+    const convergedView =
+        typeof converged.workspaceId == "string" && typeof converged.branch == "string"
+            ? { workspaceId: converged.workspaceId, branch: converged.branch }
+            : null;
+    return {
+        refused: false,
+        priorTaskGroup: typeof result.priorTaskGroup == "string" ? result.priorTaskGroup : "",
+        newTaskGroup: String(result.taskGroup),
+        converged: convergedView,
+        convergeReason: typeof result.convergeReason == "string" ? result.convergeReason : "",
+        reason: "",
+        provenanceLink: projectProvenanceLink(result.provenanceLink),
+        perAgent: projectPerAgent(result.perAgent),
+    };
+}
+
+function projectProvenanceLink(value: unknown): ReFanProvenanceLink | null {
+    if (value == null || typeof value != "object") {
+        return null;
+    }
+    const p = asRecord(value);
+    const assisted = Array.isArray(p.assistedPaths)
+        ? p.assistedPaths.filter((x): x is string => typeof x == "string")
+        : [];
+    return {
+        fromTaskGroup: typeof p.fromTaskGroup == "string" ? p.fromTaskGroup : null,
+        sourceCount: num(p.sourceCount),
+        fileCount: num(p.fileCount),
+        ...(assisted.length > 0 ? { assistedPaths: assisted } : {}),
+    };
+}
+
 // --- helpers -----------------------------------------------------------------
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -578,4 +809,6 @@ export {
     type FanoutView,
     type FileVersionEntry,
     type FileVersionsView,
+    type ReFanProvenanceLink,
+    type ReFanView,
 };
