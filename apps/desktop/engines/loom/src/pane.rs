@@ -183,6 +183,10 @@ fn active_pending_release(
     }
 }
 
+// A pane status-change event carries the full detection provenance in one message:
+// the pane, its agent, the new state, the winning rule id, and the visible-chrome
+// signals — threaded as flat args to avoid allocating an intermediate struct on this
+// hot detection path.
 #[allow(clippy::too_many_arguments)]
 async fn publish_state_changed_event(
     state_events: mpsc::Sender<AppEvent>,
