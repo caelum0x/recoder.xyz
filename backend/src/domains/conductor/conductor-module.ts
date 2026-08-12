@@ -230,6 +230,17 @@ import {
 } from './attention/status-board.service.js';
 import { buildConductorStatusBoardTools } from './mcp/conductor-status-board-tool.js';
 import {
+  RemoteAttachService,
+  type RemoteAttachExternalDeps,
+} from './remote-attach/remote-attach.service.js';
+import type {
+  RemoteAttachCapability,
+  RemoteAttachScope,
+  RemoteAttachSession,
+  RemoteSteerResult,
+} from './remote-attach/remote-attach.types.js';
+import { buildConductorRemoteAttachTools } from './mcp/conductor-remote-attach-tool.js';
+import {
   ReFanService,
   type PriorConvergence,
   type ReFanInput,
@@ -306,6 +317,15 @@ export class ConductorComposer implements ConductorModule {
    * (`SERVICE_UNAVAILABLE`), never a faked empty board.
    */
   private readonly statusBoard?: StatusBoardService;
+  /**
+   * OPTIONAL GOVERNED REMOTE ATTACH (LOOM Bigger Bet C): mints short-lived, owner-scoped
+   * sessions for an authenticated remote/mobile client to MONITOR (reuses the status board)
+   * and opt-in STEER (evaluatePolicy → approval/deliver → audit) the caller's OWN live
+   * agents. Constructed ONLY when bootstrap wires the steer/policy/approval/audit seams;
+   * absent ⇒ `remoteAttach`/`remoteSnapshot`/`remoteSteer` (and the `recoder_remote_*`
+   * tools) refuse truthfully (`SERVICE_UNAVAILABLE`), never a faked session/snapshot/steer.
+   */
+  private readonly remoteAttachService?: RemoteAttachService;
   /**
    * OPTIONAL governed SKILL MODEL (LOOM Bigger Bet A): a registry that exposes ONLY
    * signature+pinning-VERIFIED manifests, and the invoke service that runs
@@ -616,6 +636,22 @@ export class ConductorComposer implements ConductorModule {
           loadPanes: deps.statusBoardPanes,
           getWorkspace: id => this.getWorkspace(id),
           logger: loggerPort,
+        })
+      : undefined;
+
+    // Governed remote attach (Bigger Bet C): constructed ONLY when bootstrap wires the
+    // external seams (steer transport + policy + approval + audit). The two READS it needs
+    // — ownership (`getWorkspace`) and the live monitor board (`statusBoardSnapshot`, which
+    // itself refuses SERVICE_UNAVAILABLE when the board is unwired) — are bound from THIS
+    // composer, so identity + ownership are re-verified on every call. Absent ⇒ the tools +
+    // methods refuse truthfully (SERVICE_UNAVAILABLE), never a faked session/snapshot/steer.
+    this.remoteAttachService = deps.remoteAttach
+      ? new RemoteAttachService({
+          getWorkspace: id => this.getWorkspace(id),
+          readStatusBoard: (scope, principal) =>
+            this.statusBoardSnapshot(scope, principal),
+          logger: loggerPort,
+          ...deps.remoteAttach,
         })
       : undefined;
   }
@@ -1094,6 +1130,71 @@ export class ConductorComposer implements ConductorModule {
       ? scope
       : { ...scope, owner: principal.userId };
     return this.statusBoard.snapshot(effective);
+  }
+
+  /**
+   * GOVERNED REMOTE ATTACH — mint (`recoder_remote_attach`, LOOM Bigger Bet C). Verifies
+   * the principal OWNS every workspace/taskGroup in scope (else 403) and mints a
+   * short-lived, scoped session; `steer` is opt-in. Unwired ⇒ `SERVICE_UNAVAILABLE`
+   * (truthful), never a faked session.
+   */
+  async remoteAttach(input: {
+    readonly principal: Principal;
+    readonly scope: RemoteAttachScope;
+    readonly capabilities: readonly RemoteAttachCapability[];
+  }): Promise<RemoteAttachSession> {
+    if (!this.remoteAttachService) {
+      throw createError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        'conductor: governed remote attach is not configured on this deployment'
+      );
+    }
+    return this.remoteAttachService.attach({
+      principal: input.principal,
+      scope: input.scope,
+      capabilities: input.capabilities,
+    });
+  }
+
+  /**
+   * GOVERNED REMOTE ATTACH — monitor (`recoder_remote_snapshot`). Re-derives identity +
+   * re-verifies ownership, then returns an owner-scoped live snapshot filtered to the
+   * session's minted scope. A wrong-principal / expired / out-of-scope session is refused
+   * truthfully. Unwired ⇒ `SERVICE_UNAVAILABLE`, never a faked snapshot.
+   */
+  async remoteSnapshot(input: {
+    readonly sessionId: string;
+    readonly principal: Principal;
+  }): Promise<StatusBoardSnapshot> {
+    if (!this.remoteAttachService) {
+      throw createError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        'conductor: governed remote attach is not configured on this deployment'
+      );
+    }
+    return this.remoteAttachService.snapshot(input);
+  }
+
+  /**
+   * GOVERNED REMOTE ATTACH — steer (`recoder_remote_steer`). Re-derives identity, requires
+   * the `steer` capability + the workspace to be IN scope + live ownership, then runs
+   * `evaluatePolicy` FIRST (deny ⇒ refuse; needs_approval ⇒ approval, not executed; allow ⇒
+   * deliver via the loom `agent.prompt` seam + write an audit record). Unwired transport ⇒
+   * `SERVICE_UNAVAILABLE`, never a faked delivery.
+   */
+  async remoteSteer(input: {
+    readonly sessionId: string;
+    readonly principal: Principal;
+    readonly workspaceId: string;
+    readonly input: string;
+  }): Promise<RemoteSteerResult> {
+    if (!this.remoteAttachService) {
+      throw createError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        'conductor: governed remote attach is not configured on this deployment'
+      );
+    }
+    return this.remoteAttachService.steer(input);
   }
 
   /**
@@ -1665,6 +1766,9 @@ export class ConductorComposer implements ConductorModule {
       ...buildConductorNeedsYouTools(this),
       // LIVE native status board — a kanban of ALL the caller's live panes (§1 build-now #5).
       ...buildConductorStatusBoardTools(this),
+      // GOVERNED REMOTE ATTACH (Bigger Bet C) — an authenticated, policy-gated remote/mobile
+      // client monitors + opt-in steers the caller's OWN live agents (mint/monitor/steer).
+      ...buildConductorRemoteAttachTools(this),
       // GOVERNED SKILL MODEL — typed, signed, policy-gated actions (Bigger Bet A): the
       // safe replacement for Loom's free-argv plugin RCE surface.
       ...buildConductorSkillTools(this),
