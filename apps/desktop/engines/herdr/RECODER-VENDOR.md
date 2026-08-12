@@ -49,8 +49,13 @@ ZIG=$PWD/zig-aarch64-macos-0.15.2/zig cargo build --release --locked   # -> targ
       worktree.remove, continueRun=agent.prompt) + `herdr-state.ts` native-attention bypass.
       138 tests; **real-binary smoke PASSED** (spawned `herdr server`, ping protocol 20,
       native worktree create+remove). Recoder now drives the real engine.
-- [ ] Phase 2–4 — real daemon spawn/resolver (`herdr-path.ts`) + DMG packaging (extraResources)
-      + register `'herdr'` in the `WorkspaceSubstrate` union + registry.
+- [x] **Phase 2 + 4** — `herdr-path.ts` resolver (env → packaged → dev → PATH) +
+      `herdr-daemon.ts` supervisor (Recoder-owned socket, denylist-stripped env,
+      real ping-20 health, process-group reap) + `'herdr'` registered as an
+      **opt-in/non-default** `WorkspaceSubstrate` (tmux stays default). 1000 tests;
+      daemon smoke PASSED via the supervisor. Activate with
+      `CONDUCTOR_HERDR_ENABLED=1` + `substrate:'herdr'`.
+- [ ] Phase 3 — DMG packaging (electron-builder extraResources + arm64 gate + packaging test).
 - [ ] Phase 5 — full Recoder rebrand (LAST; blocked on the plugin-ecosystem decision).
 
 Tracked in bd (`absorb`/`herdr` labels).
