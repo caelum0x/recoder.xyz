@@ -235,6 +235,12 @@ import {
   type SwarmUnblockResult,
 } from './swarm/swarm-unblock.service.js';
 import { buildConductorSwarmUnblockTools } from './swarm/swarm-unblock-tool.js';
+import { PlaybookService } from './playbook/playbook.service.js';
+import type {
+  PlaybookRunInput,
+  PlaybookRunResult,
+} from './playbook/playbook.types.js';
+import { buildConductorPlaybookTools } from './mcp/conductor-playbook-tool.js';
 import { createError, ErrorCode } from '../../shared/errors.js';
 
 // The public result/read-model types + the advance-target whitelist moved to
@@ -1439,6 +1445,28 @@ export class ConductorComposer implements ConductorModule {
     return service.reFan(input);
   }
 
+  /**
+   * Run a BUILT-IN multi-agent playbook (`recoder_playbook_run`, LOOM-ROADMAP.md Bigger
+   * Bet B): sequence the shipped fusion verbs ({@link fanout} → {@link resolveSwarmUnblock}
+   * → {@link reFan}) into ONE governed run over one shared taskGroup. Composes the pure
+   * {@link PlaybookService} over this composer's OWN already-gated methods — it never
+   * reimplements launch/wait/converge/unblock/re-fan. Each step self-gates under the
+   * caller; a step whose primitive refuses/degrades (e.g. an unblock step on a deployment
+   * with the swarm seams unwired ⇒ `SERVICE_UNAVAILABLE`) is surfaced truthfully, never a
+   * fabricated step success or convergence.
+   */
+  async runPlaybook(input: PlaybookRunInput): Promise<PlaybookRunResult> {
+    const service = new PlaybookService({
+      logger: toLoggerPort(this.log),
+      fanout: { fanout: fanoutInput => this.fanout(fanoutInput) },
+      swarmUnblock: {
+        resolveBlocked: unblockInput => this.resolveSwarmUnblock(unblockInput),
+      },
+      reFan: { reFan: reFanInput => this.reFan(reFanInput) },
+    });
+    return service.run(input);
+  }
+
   async recordRunInferenceId(
     workspaceId: string,
     inferenceId: string
@@ -1555,6 +1583,9 @@ export class ConductorComposer implements ConductorModule {
       ...buildConductorCockpitTools(this),
       // Swarm auto-unblock — resolve a Blocked pane, escalate by default (§1 build-now #3).
       ...buildConductorSwarmUnblockTools(this),
+      // Multi-agent orchestration PLAYBOOKS — saved recipes over the shipped fusion verbs
+      // (list the built-ins + run one governed choreography; Bigger Bet B).
+      ...buildConductorPlaybookTools(this),
       // LIVE Needs-You queue — push-driven ranked panes needing the human (§1 build-now #4).
       ...buildConductorNeedsYouTools(this),
       // LIVE native status board — a kanban of ALL the caller's live panes (§1 build-now #5).
