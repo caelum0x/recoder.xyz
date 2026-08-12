@@ -240,6 +240,8 @@ export class PlaybookService {
     const policy = input.unblockPolicy ?? DEFAULT_UNBLOCK_POLICY;
     const taskGroup = state.taskGroup;
     const outcomes: PlaybookUnblockPaneOutcome[] = [];
+    let faults = 0;
+    let lastFaultReason = '';
     for (const workspaceId of blocked) {
       const resolveInput: ResolveBlockedInput = {
         workspaceId,
@@ -247,24 +249,29 @@ export class PlaybookService {
         policy,
         actor: input.actor,
       };
-      let result: SwarmUnblockResult;
       try {
-        result = await this.deps.swarmUnblock.resolveBlocked(resolveInput);
+        const result = await this.deps.swarmUnblock.resolveBlocked(resolveInput);
+        outcomes.push({ workspaceId, result });
       } catch (err) {
-        // A per-pane swarm-unblock fault is surfaced truthfully as an escalation-miss;
-        // it never fabricates an answer and never aborts the other blocked panes.
+        // A per-pane swarm-unblock fault (e.g. the seam is unwired ⇒ SERVICE_UNAVAILABLE)
+        // is surfaced TRUTHFULLY as a fault — never a fabricated escalation — and never
+        // aborts the other blocked panes. Any fault degrades the whole step.
+        const reason = `swarm-unblock faulted: ${message(err)}`;
         this.logger.warn('playbook unblock step: pane resolve faulted', {
           workspaceId,
           err: message(err),
         });
-        result = {
-          action: 'escalated',
-          requestId: '',
-          question: null,
-          reason: `swarm-unblock faulted: ${message(err)}`,
-        };
+        outcomes.push({ workspaceId, faultReason: reason });
+        faults += 1;
+        lastFaultReason = reason;
       }
-      outcomes.push({ workspaceId, result });
+    }
+    if (faults > 0) {
+      const reason =
+        faults === 1
+          ? lastFaultReason
+          : `${faults} blocked pane(s) faulted (last: ${lastFaultReason})`;
+      return { kind: 'unblock_blocked', status: 'degraded', reason, unblock: outcomes };
     }
     return { kind: 'unblock_blocked', status: 'ok', unblock: outcomes };
   }

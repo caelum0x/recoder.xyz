@@ -158,10 +158,14 @@ export interface PlaybookRunInput {
 /** How a single step resolved — never fabricated. */
 export type PlaybookStepStatus = 'ok' | 'degraded' | 'skipped';
 
-/** One BLOCKED pane an `unblock_blocked` step acted on, with the real swarm-unblock result. */
+/** One BLOCKED pane an `unblock_blocked` step acted on. Either the real swarm-unblock
+ * `result`, or — when the swarm primitive FAULTED for this pane (e.g. unwired ⇒
+ * SERVICE_UNAVAILABLE) — a truthful `faultReason` with NO result. A fault is never
+ * dressed up as a fabricated escalation. */
 export interface PlaybookUnblockPaneOutcome {
   readonly workspaceId: string;
-  readonly result: SwarmUnblockResult;
+  readonly result?: SwarmUnblockResult;
+  readonly faultReason?: string;
 }
 
 /** The truthful outcome of one executed (or skipped) step. */
