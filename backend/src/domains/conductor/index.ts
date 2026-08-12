@@ -68,6 +68,17 @@ export type {
   NeedsYouSubscription,
   NeedsYouScheduler,
 } from './attention/needs-you-queue.service.js';
+import type {
+  StatusBoardPane,
+  StatusBoardScope,
+  StatusBoardSnapshot,
+} from './attention/status-board.service.js';
+export type {
+  StatusBoardPane,
+  StatusBoardCell,
+  StatusBoardScope,
+  StatusBoardSnapshot,
+} from './attention/status-board.service.js';
 import type { SubstrateScanDeps } from './adapters/substrate-scan.adapter.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type {
@@ -420,6 +431,16 @@ export interface ConductorModuleDeps {
   readonly needsYouStream?: NeedsYouStreamSource;
   /** OPTIONAL injected timer for the Needs-You re-subscribe backoff (test-injectable; real `setTimeout` default). */
   readonly needsYouScheduler?: NeedsYouScheduler;
+  /**
+   * OPTIONAL pull source for the LIVE native STATUS BOARD (LOOM-ROADMAP.md build-now #5):
+   * read ONE Loom `session.snapshot` → every live pane's `{ paneId, workspaceId, nativeStatus }`.
+   * Bootstrap binds it to the EXISTING Loom daemon socket (a second CLIENT, never a second
+   * daemon). When wired, the conductor serves `recoder_status_board` by attributing each pane
+   * to its durable Recoder record and bucketing it into attention columns. Absent ⇒ the tool +
+   * `statusBoardSnapshot` refuse truthfully (`SERVICE_UNAVAILABLE`), never a faked empty board.
+   * See `attention/status-board.service.ts`.
+   */
+  readonly statusBoardPanes?: () => Promise<readonly StatusBoardPane[]>;
 }
 
 /** The public surface bootstrap registers and the edge/interop consume. */
@@ -890,6 +911,17 @@ export interface ConductorModule {
     scope: NeedsYouScope,
     principal: Principal,
   ): Promise<NeedsYouSnapshot>;
+  /**
+   * The LIVE native status board (`recoder_status_board`, LOOM-ROADMAP.md build-now #5) — a
+   * kanban of ALL the caller's live Loom panes from ONE `session.snapshot`, bucketed into
+   * columns keyed by attention state, with a truthful count per column. Owner-narrowed: a
+   * non-privileged principal is pinned to its OWN panes. Throws `SERVICE_UNAVAILABLE` when the
+   * snapshot source is not wired — never a fabricated empty board.
+   */
+  statusBoardSnapshot(
+    scope: StatusBoardScope,
+    principal: Principal,
+  ): Promise<StatusBoardSnapshot>;
   /** The terminal WS surface (edge registers `terminalBackends()`). */
   terminal(): TerminalStreamPort;
   /** The `/api/conductor` router. */

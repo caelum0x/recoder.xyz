@@ -215,6 +215,12 @@ import {
 } from './attention/needs-you-queue.service.js';
 import { buildConductorNeedsYouTools } from './mcp/conductor-needs-you-tool.js';
 import {
+  StatusBoardService,
+  type StatusBoardScope,
+  type StatusBoardSnapshot,
+} from './attention/status-board.service.js';
+import { buildConductorStatusBoardTools } from './mcp/conductor-status-board-tool.js';
+import {
   ReFanService,
   type PriorConvergence,
   type ReFanInput,
@@ -278,6 +284,13 @@ export class ConductorComposer implements ConductorModule {
    * (`SERVICE_UNAVAILABLE`), never a faked empty queue.
    */
   private readonly needsYouQueue?: NeedsYouQueueService;
+  /**
+   * OPTIONAL live native STATUS BOARD (LOOM-ROADMAP.md build-now #5): a PULL read that folds ONE
+   * Loom `session.snapshot` into per-attention columns of ALL the caller's live panes. Absent ⇒
+   * `statusBoardSnapshot` + the `recoder_status_board` tool refuse truthfully
+   * (`SERVICE_UNAVAILABLE`), never a faked empty board.
+   */
+  private readonly statusBoard?: StatusBoardService;
   /** OPTIONAL code-intel seam (recodergit index + beads issue-graph track/close). */
   private readonly codeIntel?: CodeIntelPort;
   /**
@@ -563,6 +576,19 @@ export class ConductorComposer implements ConductorModule {
           ...(deps.needsYouScheduler
             ? { scheduler: deps.needsYouScheduler }
             : {}),
+          logger: loggerPort,
+        })
+      : undefined;
+
+    // Live native status board (build-now #5): constructed ONLY when bootstrap wires the
+    // `session.snapshot` pull source (a second CLIENT over the EXISTING Loom daemon socket —
+    // never a second daemon). Attribution is authoritative-record-first: the injected pane
+    // source maps pane→workspace, and THIS composer's own durable `getWorkspace` supplies
+    // kind/owner/taskGroup. Absent ⇒ the read/tool refuse truthfully (SERVICE_UNAVAILABLE).
+    this.statusBoard = deps.statusBoardPanes
+      ? new StatusBoardService({
+          loadPanes: deps.statusBoardPanes,
+          getWorkspace: id => this.getWorkspace(id),
           logger: loggerPort,
         })
       : undefined;
@@ -1017,6 +1043,31 @@ export class ConductorComposer implements ConductorModule {
       ? scope
       : { ...scope, owner: principal.userId };
     return this.needsYouQueue.snapshot(effective);
+  }
+
+  /**
+   * The LIVE native status board projection (`recoder_status_board`, LOOM-ROADMAP.md build-now
+   * #5). Reads ONE Loom `session.snapshot` and buckets ALL the caller's live panes into
+   * attention columns. A non-privileged principal is PINNED to its OWN panes (defense-in-depth
+   * alongside the tool's owner scope), so it can never read another tenant's board. Unwired ⇒
+   * `SERVICE_UNAVAILABLE` (truthful), never a fabricated empty board.
+   */
+  async statusBoardSnapshot(
+    scope: StatusBoardScope,
+    principal: Principal
+  ): Promise<StatusBoardSnapshot> {
+    if (!this.statusBoard) {
+      throw createError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        'conductor: the live status board is not configured on this deployment'
+      );
+    }
+    const scopes = principal.scopes ?? [];
+    const privileged = scopes.includes('admin') || scopes.includes('internal');
+    const effective: StatusBoardScope = privileged
+      ? scope
+      : { ...scope, owner: principal.userId };
+    return this.statusBoard.snapshot(effective);
   }
 
   async workspaceDiff(workspaceId: string): Promise<WorkspaceDiffView> {
@@ -1506,6 +1557,8 @@ export class ConductorComposer implements ConductorModule {
       ...buildConductorSwarmUnblockTools(this),
       // LIVE Needs-You queue — push-driven ranked panes needing the human (§1 build-now #4).
       ...buildConductorNeedsYouTools(this),
+      // LIVE native status board — a kanban of ALL the caller's live panes (§1 build-now #5).
+      ...buildConductorStatusBoardTools(this),
     ];
   }
 
