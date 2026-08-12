@@ -1015,7 +1015,12 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   const statusBoardPanes = loomStatusBoardClient
     ? async () => {
         const res = await loomStatusBoardClient.call('session.snapshot', {});
-        if (res.type !== 'session_snapshot') return [];
+        // A non-snapshot success is a protocol violation, not an empty board —
+        // throw so StatusBoardService degrades truthfully instead of rendering
+        // a live "all clear" from an unexpected result.
+        if (res.type !== 'session_snapshot') {
+          throw new Error(`loom session.snapshot returned unexpected result type: ${res.type}`);
+        }
         const snapshot = (
           res as Extract<LoomResult, { type: 'session_snapshot' }>
         ).snapshot;
