@@ -75,3 +75,10 @@ server/engines/**/bin/*.bak
 # ...but never local Claude settings (normally caught by the user-global ignore,
 # which the re-include above would otherwise override):
 engines/**/.claude/settings.local.json
+
+# The vendored Loom engine ships its agent-detection manifests + libghostty-vt
+# source as build-embedded SOURCE; the broad rules above (manifests/, dist/) must
+# NOT hide them. Only build outputs under the engine stay ignored.
+!engines/loom/src/detect/manifests/
+!engines/loom/src/detect/manifests/**
+engines/loom/target/
