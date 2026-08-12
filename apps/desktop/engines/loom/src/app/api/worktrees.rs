@@ -90,10 +90,10 @@ impl App {
             ResponseResult::WorktreeStatus {
                 path: path.display().to_string(),
                 dirty: status.dirty,
-                changed_files: status.changed_files as u32,
+                changed_files: u32::try_from(status.changed_files).unwrap_or(u32::MAX),
                 has_upstream: status.has_upstream,
-                ahead: status.ahead as u32,
-                behind: status.behind as u32,
+                ahead: u32::try_from(status.ahead).unwrap_or(u32::MAX),
+                behind: u32::try_from(status.behind).unwrap_or(u32::MAX),
             },
         )
     }

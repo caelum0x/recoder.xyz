@@ -266,9 +266,8 @@ pub(crate) fn parse_worktree_status_porcelain_v2(output: &str) -> WorktreeStatus
         // porcelain=v2 change entries start with a type token: ordinary ("1"),
         // renamed/copied ("2"), unmerged ("u"), or untracked ("?"). Ignored
         // ("!") entries only appear with --ignored, which we never request.
-        match line.as_bytes().first() {
-            Some(b'1' | b'2' | b'u' | b'?') => changed_files += 1,
-            _ => {}
+        if let Some(b'1' | b'2' | b'u' | b'?') = line.as_bytes().first() {
+            changed_files += 1;
         }
     }
 
