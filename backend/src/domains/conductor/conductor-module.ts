@@ -209,6 +209,15 @@ import {
 } from './fanout/converge-fanout.service.js';
 import { buildConductorFanoutTools } from './mcp/conductor-fanout-tool.js';
 import {
+  buildConductorSkillTools,
+  type VerifiedSkillView,
+} from './mcp/conductor-skill-tools.js';
+import type { SkillRegistry } from './skill/skill-registry.js';
+import type {
+  InvokeSkillActionResult,
+  SkillActionService,
+} from './skill/skill-action.service.js';
+import {
   NeedsYouQueueService,
   type NeedsYouScope,
   type NeedsYouSnapshot,
@@ -297,6 +306,15 @@ export class ConductorComposer implements ConductorModule {
    * (`SERVICE_UNAVAILABLE`), never a faked empty board.
    */
   private readonly statusBoard?: StatusBoardService;
+  /**
+   * OPTIONAL governed SKILL MODEL (LOOM Bigger Bet A): a registry that exposes ONLY
+   * signature+pinning-VERIFIED manifests, and the invoke service that runs
+   * `evaluatePolicy` BEFORE any execution. Absent ⇒ `listVerifiedSkills` +
+   * `invokeSkillAction` (and the `recoder_skill_*` tools) refuse truthfully
+   * (`SERVICE_UNAVAILABLE`), never a faked list/execution.
+   */
+  private readonly skillRegistry?: SkillRegistry;
+  private readonly skillActions?: SkillActionService;
   /** OPTIONAL code-intel seam (recodergit index + beads issue-graph track/close). */
   private readonly codeIntel?: CodeIntelPort;
   /**
@@ -410,6 +428,8 @@ export class ConductorComposer implements ConductorModule {
     this.middleware = deps.middleware;
     this.idempotency = deps.idempotency;
     this.brain = deps.brain;
+    this.skillRegistry = deps.skillRegistry;
+    this.skillActions = deps.skillActions;
     this.swarmUnblock = deps.swarmUnblock;
     this.codeIntel = deps.codeIntel;
     this.previewVerify = deps.previewVerify;
@@ -1076,6 +1096,61 @@ export class ConductorComposer implements ConductorModule {
     return this.statusBoard.snapshot(effective);
   }
 
+  /**
+   * List the VERIFIED skills (`recoder_skill_list`, LOOM Bigger Bet A). Reads the
+   * registry that has ALREADY verified signature + pinned version at load, so only
+   * trustworthy skills are ever projected. Unwired ⇒ `SERVICE_UNAVAILABLE`
+   * (truthful), never a fabricated empty list.
+   */
+  async listVerifiedSkills(): Promise<readonly VerifiedSkillView[]> {
+    if (!this.skillRegistry) {
+      throw createError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        'conductor: the governed skill model is not configured on this deployment'
+      );
+    }
+    return this.skillRegistry.list().map(({ manifest }) => ({
+      id: manifest.id,
+      version: manifest.version,
+      publisherKeyId: manifest.publisherKeyId,
+      actions: manifest.actions.map(action => ({
+        id: action.id,
+        title: action.title,
+        requiredCapabilities: [...action.requiredCapabilities],
+        params: Object.entries(action.paramsSchema).map(([name, spec]) => ({
+          name,
+          type: spec.type,
+          required: spec.required === true,
+          ...(spec.enum ? { enum: [...spec.enum] } : {}),
+        })),
+      })),
+    }));
+  }
+
+  /**
+   * Invoke ONE typed action of a VERIFIED skill (`recoder_skill_invoke`, LOOM Bigger
+   * Bet A). Delegates to the {@link SkillActionService}, which runs `evaluatePolicy`
+   * BEFORE any execution (deny ⇒ refuse; needs_approval ⇒ approval gate, not
+   * executed; allow ⇒ the injected capability-scoped executor). An unknown/unsigned/
+   * unpinned skill or params failing the typed schema ⇒ refused (never executed).
+   * Unwired ⇒ `SERVICE_UNAVAILABLE` (truthful), never a faked execution.
+   */
+  async invokeSkillAction(input: {
+    readonly skillId: string;
+    readonly actionId: string;
+    readonly params: unknown;
+    readonly actorId: string;
+    readonly workspace: string;
+  }): Promise<InvokeSkillActionResult> {
+    if (!this.skillActions) {
+      throw createError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        'conductor: the governed skill model is not configured on this deployment'
+      );
+    }
+    return this.skillActions.invoke(input);
+  }
+
   async workspaceDiff(workspaceId: string): Promise<WorkspaceDiffView> {
     return this.reads.workspaceDiff(workspaceId);
   }
@@ -1590,6 +1665,9 @@ export class ConductorComposer implements ConductorModule {
       ...buildConductorNeedsYouTools(this),
       // LIVE native status board — a kanban of ALL the caller's live panes (§1 build-now #5).
       ...buildConductorStatusBoardTools(this),
+      // GOVERNED SKILL MODEL — typed, signed, policy-gated actions (Bigger Bet A): the
+      // safe replacement for Loom's free-argv plugin RCE surface.
+      ...buildConductorSkillTools(this),
     ];
   }
 

@@ -80,6 +80,8 @@ export type {
   StatusBoardSnapshot,
 } from './attention/status-board.service.js';
 import type { SubstrateScanDeps } from './adapters/substrate-scan.adapter.js';
+import type { SkillRegistry } from './skill/skill-registry.js';
+import type { SkillActionService } from './skill/skill-action.service.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type {
   CanonicalRunStore,
@@ -441,6 +443,19 @@ export interface ConductorModuleDeps {
    * See `attention/status-board.service.ts`.
    */
   readonly statusBoardPanes?: () => Promise<readonly StatusBoardPane[]>;
+  /**
+   * OPTIONAL governed SKILL MODEL (LOOM Bigger Bet A) — the typed, signed,
+   * policy-gated replacement for Loom's free-argv plugin surface. When wired,
+   * bootstrap supplies a {@link SkillRegistry} that has ALREADY verified +
+   * pinned every admitted manifest, and a {@link SkillActionService} whose invoke
+   * path runs `evaluatePolicy` BEFORE any execution (deny ⇒ refuse; needs_approval
+   * ⇒ approval gate; allow ⇒ the injected executor). Absent ⇒ the
+   * `recoder_skill_list`/`recoder_skill_invoke` tools + `listVerifiedSkills`/
+   * `invokeSkillAction` refuse truthfully (`SERVICE_UNAVAILABLE`), never a faked
+   * list/execution. See `skill/`.
+   */
+  readonly skillRegistry?: SkillRegistry;
+  readonly skillActions?: SkillActionService;
 }
 
 /** The public surface bootstrap registers and the edge/interop consume. */
