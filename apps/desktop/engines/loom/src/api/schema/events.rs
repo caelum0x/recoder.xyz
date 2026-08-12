@@ -406,6 +406,11 @@ pub struct PaneAgentStatusChangedEvent {
     pub title: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_agent: Option<String>,
+    /// Id of the screen manifest rule that produced `agent_status`, when the
+    /// status came from live screen detection. `None` when no rule matched or
+    /// when the status came from a hook authority; never fabricated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_rule_id: Option<String>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub state_labels: HashMap<String, String>,
 }
@@ -547,6 +552,8 @@ pub enum EventData {
         title: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         display_agent: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        agent_rule_id: Option<String>,
         #[serde(default, skip_serializing_if = "HashMap::is_empty")]
         state_labels: HashMap<String, String>,
     },

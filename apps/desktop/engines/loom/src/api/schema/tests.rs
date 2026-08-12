@@ -155,8 +155,8 @@ fn generated_protocol_schema_artifact_is_current() {
         "{}\n",
         serde_json::to_string_pretty(&protocol_schema_document()).unwrap()
     );
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("docs/next/api/loom-api.schema.json");
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("docs/next/api/loom-api.schema.json");
 
     if std::env::var_os("LOOM_UPDATE_API_SCHEMA").is_some() {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -744,6 +744,7 @@ fn worktree_request_and_response_round_trip() {
                 terminal_title_stripped: None,
                 display_agent: None,
                 agent_status: AgentStatus::Unknown,
+                agent_rule_id: None,
                 state_labels: HashMap::new(),
                 tokens: HashMap::new(),
                 agent_session: None,
@@ -1172,6 +1173,7 @@ fn create_response_round_trips_with_root_pane() {
                 terminal_title_stripped: None,
                 display_agent: None,
                 agent_status: AgentStatus::Unknown,
+                agent_rule_id: None,
                 state_labels: HashMap::new(),
                 tokens: HashMap::new(),
                 agent_session: None,

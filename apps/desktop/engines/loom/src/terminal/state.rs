@@ -140,6 +140,9 @@ pub struct TerminalState {
     metadata_report_agents: HashMap<String, Agent>,
     metadata_token_sequence_sources: std::collections::HashSet<String>,
     pub state: AgentState,
+    /// Id of the manifest rule that produced `fallback_state` from the live
+    /// screen. `None` when no screen rule matched; never fabricated.
+    fallback_rule_id: Option<String>,
     pub last_agent_state_change_seq: Option<u64>,
     pub revision: u64,
     pub launch_argv: Option<Vec<String>>,
@@ -174,6 +177,7 @@ impl TerminalState {
             metadata_report_agents: HashMap::new(),
             metadata_token_sequence_sources: std::collections::HashSet::new(),
             state: AgentState::Unknown,
+            fallback_rule_id: None,
             last_agent_state_change_seq: None,
             revision: 0,
             launch_argv: None,
@@ -314,6 +318,30 @@ impl TerminalState {
         agent: Option<Agent>,
         fallback_state: AgentState,
         visible_blocker: bool,
+        visible_idle: bool,
+        visible_working: bool,
+        process_exited: bool,
+        now: Instant,
+    ) -> TerminalStateMutation {
+        self.set_detected_state_with_screen_signals_and_rule_at(
+            agent,
+            fallback_state,
+            None,
+            visible_blocker,
+            visible_idle,
+            visible_working,
+            process_exited,
+            now,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn set_detected_state_with_screen_signals_and_rule_at(
+        &mut self,
+        agent: Option<Agent>,
+        fallback_state: AgentState,
+        rule_id: Option<String>,
+        visible_blocker: bool,
         _visible_idle: bool,
         _visible_working: bool,
         process_exited: bool,
@@ -394,6 +422,7 @@ impl TerminalState {
             );
         }
         self.fallback_state = fallback_state;
+        self.fallback_rule_id = rule_id;
         self.fallback_visible_blocker = visible_blocker && fallback_state == AgentState::Blocked;
         self.fallback_observed_at = Some(now);
         if process_exited {
@@ -1761,6 +1790,7 @@ impl TerminalState {
         if !process_owns_agent {
             self.detected_agent = None;
             self.fallback_state = AgentState::Unknown;
+            self.fallback_rule_id = None;
             self.fallback_visible_blocker = false;
             self.fallback_observed_at = None;
             self.clear_agent_name();
@@ -1806,6 +1836,18 @@ impl TerminalState {
     pub fn effective_known_agent(&self) -> Option<Agent> {
         self.effective_agent_label()
             .and_then(crate::detect::parse_agent_label)
+    }
+
+    /// Id of the manifest rule that produced the effective agent status, when
+    /// that status came from the live screen (fallback) detection. Returns
+    /// `None` when the effective status was decided by a hook authority or when
+    /// no screen rule matched, so the id is never mis-attributed or fabricated.
+    pub fn effective_agent_rule_id(&self) -> Option<String> {
+        if self.state == self.fallback_state {
+            self.fallback_rule_id.clone()
+        } else {
+            None
+        }
     }
 
     pub(crate) fn unchanged_effective_state_change_at(&self, now: Instant) -> EffectiveStateChange {
@@ -2044,6 +2086,7 @@ impl TerminalState {
     pub fn clear_agent_runtime_identity_after_respawn(&mut self) {
         self.detected_agent = None;
         self.fallback_state = AgentState::Unknown;
+        self.fallback_rule_id = None;
         self.fallback_visible_blocker = false;
         self.fallback_observed_at = None;
         self.hook_authority = None;
@@ -2161,7 +2204,7 @@ impl TerminalState {
     }
 }
 
-pub(crate) fn stabilize_agent_detection(detection: crate::detect::AgentDetection) -> AgentState {
+pub(crate) fn stabilize_agent_detection(detection: &crate::detect::AgentDetection) -> AgentState {
     detection.state
 }
 
@@ -2273,13 +2316,14 @@ mod tests {
     fn stabilization_uses_raw_policy_state() {
         let detection = AgentDetection {
             state: AgentState::Idle,
+            rule_id: None,
             skip_state_update: false,
             visible_idle: false,
             visible_blocker: false,
             visible_working: false,
         };
 
-        assert_eq!(stabilize_agent_detection(detection), AgentState::Idle);
+        assert_eq!(stabilize_agent_detection(&detection), AgentState::Idle);
     }
 
     #[test]
@@ -4434,10 +4478,7 @@ mod tests {
         );
 
         assert!(mutation.is_none());
-        assert_eq!(
-            terminal.hook_report_sequences.get("loom:claude"),
-            Some(&21)
-        );
+        assert_eq!(terminal.hook_report_sequences.get("loom:claude"), Some(&21));
         assert_eq!(
             terminal
                 .persisted_agent_session
@@ -4679,9 +4720,7 @@ mod tests {
                 .map(|session| session.session_ref.value.as_str()),
             Some("opencode-reselected")
         );
-        assert!(!terminal
-            .hook_report_sequences
-            .contains_key("loom:opencode"));
+        assert!(!terminal.hook_report_sequences.contains_key("loom:opencode"));
     }
 
     #[test]

@@ -210,11 +210,12 @@ pub(super) fn decide_detection_transition(
     DetectionTransitionDecision::NoPublish
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum DetectionPublishDecision {
     NoPublish,
     Publish {
         state: AgentState,
+        rule_id: Option<String>,
         visible_idle: bool,
         visible_blocker: bool,
         visible_working: bool,
@@ -222,7 +223,7 @@ pub(super) enum DetectionPublishDecision {
     },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(super) struct ScreenDetectionPublishInput {
     pub(super) current_state: AgentState,
     pub(super) last_visible_idle: bool,
@@ -240,10 +241,11 @@ pub(super) fn decide_screen_detection_publish(
     pending_idle: &mut PendingIdleConfirmation,
 ) -> DetectionPublishDecision {
     let detection = input.screen_detection;
-    let new_state = crate::terminal::state::stabilize_agent_detection(detection);
+    let new_state = crate::terminal::state::stabilize_agent_detection(&detection);
     let visible_idle = detection.visible_idle && new_state == AgentState::Idle;
     let visible_blocker = detection.visible_blocker && new_state == AgentState::Blocked;
     let visible_working = detection.visible_working && new_state == AgentState::Working;
+    let rule_id = detection.rule_id;
 
     let previous_publish = DetectionPublishState {
         state: input.current_state,
@@ -278,6 +280,7 @@ pub(super) fn decide_screen_detection_publish(
         DetectionTransitionDecision::NoPublish => DetectionPublishDecision::NoPublish,
         DetectionTransitionDecision::PublishNext => DetectionPublishDecision::Publish {
             state: new_state,
+            rule_id,
             visible_idle,
             visible_blocker,
             visible_working,
@@ -305,6 +308,7 @@ pub(super) fn detection_update_for_publish_with_osc(
     if process_exited {
         return Some(crate::detect::AgentDetection {
             state: AgentState::Idle,
+            rule_id: None,
             skip_state_update: false,
             visible_idle: true,
             visible_blocker: false,
@@ -342,6 +346,7 @@ mod tests {
     fn screen_detection(state: AgentState) -> AgentDetection {
         AgentDetection {
             state,
+            rule_id: None,
             skip_state_update: false,
             visible_idle: state == AgentState::Idle,
             visible_blocker: false,
@@ -503,6 +508,7 @@ mod tests {
             ),
             DetectionPublishDecision::Publish {
                 state: AgentState::Working,
+                rule_id: None,
                 visible_idle: false,
                 visible_blocker: false,
                 visible_working: true,
@@ -523,6 +529,7 @@ mod tests {
             ),
             DetectionPublishDecision::Publish {
                 state: AgentState::Idle,
+                rule_id: None,
                 visible_idle: true,
                 visible_blocker: false,
                 visible_working: false,
