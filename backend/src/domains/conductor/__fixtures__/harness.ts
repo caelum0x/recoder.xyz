@@ -386,6 +386,8 @@ export interface ComposeOptions {
    * degrades truthfully to `synthesize-conflict` (mechanical behavior, never a fake merge).
    */
   infer?: ConductorModuleDeps['infer'];
+  /** OPTIONAL swarm auto-unblock seams (LOOM #3); absent ⇒ the tool is SERVICE_UNAVAILABLE. */
+  swarmUnblock?: ConductorModuleDeps['swarmUnblock'];
   /** OPTIONAL AppConfig override (e.g. `makeConfig(false, true)` for solo/desktop mode). */
   config?: AppConfig;
 }
@@ -427,6 +429,7 @@ export function composeConductor(options: ComposeOptions = {}): {
     ...(options.substrateScan ? { substrateScan: options.substrateScan } : {}),
     ...(options.workspaceGrid ? { workspaceGrid: options.workspaceGrid } : {}),
     ...(options.infer ? { infer: options.infer } : {}),
+    ...(options.swarmUnblock ? { swarmUnblock: options.swarmUnblock } : {}),
   });
   return { module, gate };
 }

@@ -60,6 +60,8 @@ import { createCliRuntimeSubstrate } from '../domains/conductor/adapters/cli-run
 import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/openfang-runtime.adapter.js';
 import { createAcpSubstrate } from '../domains/conductor/adapters/acp-substrate.adapter.js';
 import { createLoomSubstrate } from '../domains/conductor/adapters/loom-substrate.adapter.js';
+import { createSwarmUnblockDeps } from '../domains/conductor/adapters/swarm-unblock-wiring.js';
+import { LoomSocketClient } from '@recoder/agent-runtimes/loom';
 import {
   createLoomDaemon,
   defaultRecoderLoomSocketPath,
@@ -937,6 +939,30 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     },
     logger: childLogger('conductor-mcp-inject'),
   });
+  // Swarm auto-unblock (LOOM-ROADMAP.md #3): bind the seven seams of the pure
+  // SwarmUnblockService to real systems so `recoder_swarm_unblock` stops
+  // returning SERVICE_UNAVAILABLE and instead runs the escalate-by-default loop.
+  // agentRead/agentPrompt drive the SAME loom daemon over a second socket CLIENT
+  // (not a second daemon — reusing `loomDaemon.socketPath`); memory/policy/
+  // approval/candidate seams reuse the already-composed modules; getWorkspace +
+  // compareGroup are LATE-BOUND to the conductor built just below (the seam
+  // closures only run at request time, long after `conductorRef` is assigned).
+  const loomSwarmClient = new LoomSocketClient({
+    socketPath: loomDaemon.socketPath,
+  });
+  let conductorRef: ReturnType<typeof createConductorModule> | undefined;
+  const conductorSwarmUnblock = createSwarmUnblockDeps({
+    loom: loomSwarmClient,
+    getWorkspace: id =>
+      conductorRef ? conductorRef.getWorkspace(id) : Promise.resolve(null),
+    compareGroup: (taskGroup, principal) =>
+      conductorRef
+        ? conductorRef.compareTaskGroup(taskGroup, principal)
+        : Promise.reject(new Error('conductor not yet composed')),
+    recall: memory.recall(),
+    approvals: governance.approvals(),
+    candidates: memory.candidates(),
+  });
   const conductor = createConductorModule({
     config,
     logger: childLogger('conductor'),
@@ -1034,6 +1060,10 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // no gateway is up ⇒ the assisted path degrades truthfully to
     // synthesize-conflict (mechanical behavior, never a fabricated merge).
     infer: postInference,
+    // Swarm auto-unblock seams (LOOM #3): the real agent-read/prompt (loom) +
+    // memory-search + sibling-decision + policy + approval + remember wiring the
+    // `recoder_swarm_unblock` tool composes through the pure SwarmUnblockService.
+    swarmUnblock: conductorSwarmUnblock,
     overrides: {
       tmuxBin: config.conductor.tmuxBin,
       worktreeRoot: config.conductor.worktreeRoot,
@@ -1048,6 +1078,10 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   });
   container.registerValue(DOMAIN_TOKENS.conductor, conductor);
   healthRegistry.register(conductor);
+  // Late-bind the swarm-unblock seams' workspace/compare reads to the composed
+  // conductor (the closures above run only at request time, so binding here is
+  // safe and avoids a construction cycle).
+  conductorRef = conductor;
 
   // Engine-source RunEvents → the live workspace `/stream` (recoder-uivh): the
   // agent-os bus is where every NON-conductor emitter lands (cloud sandbox
