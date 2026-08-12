@@ -335,6 +335,9 @@ impl TerminalState {
         )
     }
 
+    // Screen detection threads the agent, its fallback state, the winning rule id, and
+    // the three visible-chrome signals (idle/blocker/working) plus the observation
+    // instant through one core so every caller records the same provenance atomically.
     #[allow(clippy::too_many_arguments)]
     pub fn set_detected_state_with_screen_signals_and_rule_at(
         &mut self,
@@ -1843,11 +1846,26 @@ impl TerminalState {
     /// `None` when the effective status was decided by a hook authority or when
     /// no screen rule matched, so the id is never mis-attributed or fabricated.
     pub fn effective_agent_rule_id(&self) -> Option<String> {
-        if self.state == self.fallback_state {
-            self.fallback_rule_id.clone()
-        } else {
-            None
+        // Only attribute a screen rule id when the screen fallback is genuinely the
+        // deciding source: the effective state must match the screen fallback AND no
+        // FULL-LIFECYCLE hook authority may be overriding state. Identity-only hook
+        // integrations (e.g. hermes/antigravity) leave state to screen detection, so
+        // they keep the rule id; a full-lifecycle hook (which ignores screen state)
+        // suppresses it to None rather than mis-attributing a hook-decided status.
+        if self.state != self.fallback_state {
+            return None;
         }
+        let full_lifecycle_hook_decides_state =
+            self.hook_authority.as_ref().is_some_and(|authority| {
+                crate::detect::full_lifecycle_hook_authority(
+                    &authority.source,
+                    &authority.agent_label,
+                )
+            });
+        if full_lifecycle_hook_decides_state {
+            return None;
+        }
+        self.fallback_rule_id.clone()
     }
 
     pub(crate) fn unchanged_effective_state_change_at(&self, now: Instant) -> EffectiveStateChange {
