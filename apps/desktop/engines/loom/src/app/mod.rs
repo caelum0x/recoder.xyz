@@ -5083,6 +5083,7 @@ mod tests {
             .attached_terminal_id
             .clone();
         app.handle_internal_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Working,
@@ -5107,6 +5108,7 @@ mod tests {
 
         let tx = app.event_tx.clone();
         let send = tx.send(AppEvent::StateChanged {
+            rule_id: None,
             pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Idle,

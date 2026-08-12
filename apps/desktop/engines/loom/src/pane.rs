@@ -183,11 +183,13 @@ fn active_pending_release(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn publish_state_changed_event(
     state_events: mpsc::Sender<AppEvent>,
     pane_id: PaneId,
     agent: Option<Agent>,
     state: AgentState,
+    rule_id: Option<String>,
     visible_blocker: bool,
     visible_working: bool,
     process_exited: bool,
@@ -201,6 +203,7 @@ async fn publish_state_changed_event(
             pane_id,
             agent,
             state,
+            rule_id,
             visible_blocker,
             visible_working,
             process_exited,
@@ -238,9 +241,10 @@ async fn publish_agent_process_detected_event(
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct AgentDetectionPublishUpdate {
     state: AgentState,
+    rule_id: Option<String>,
     visible_idle: bool,
     visible_blocker: bool,
     visible_working: bool,
@@ -277,6 +281,7 @@ async fn apply_agent_detection_publish_update(
         pane_id,
         agent,
         update.state,
+        update.rule_id,
         update.visible_blocker,
         update.visible_working,
         update.process_exited,
@@ -942,6 +947,7 @@ fn spawn_basic_detection_task(
                 DetectionPublishDecision::NoPublish => {}
                 DetectionPublishDecision::Publish {
                     state: new_state,
+                    rule_id,
                     visible_idle,
                     visible_blocker,
                     visible_working,
@@ -953,6 +959,7 @@ fn spawn_basic_detection_task(
                         agent,
                         AgentDetectionPublishUpdate {
                             state: new_state,
+                            rule_id,
                             visible_idle,
                             visible_blocker,
                             visible_working,
@@ -2498,6 +2505,7 @@ impl PaneRuntime {
                         DetectionPublishDecision::NoPublish => {}
                         DetectionPublishDecision::Publish {
                             state: new_state,
+                            rule_id,
                             visible_idle,
                             visible_blocker,
                             visible_working,
@@ -2509,6 +2517,7 @@ impl PaneRuntime {
                                 agent,
                                 AgentDetectionPublishUpdate {
                                     state: new_state,
+                                    rule_id,
                                     visible_idle,
                                     visible_blocker,
                                     visible_working,
@@ -4437,6 +4446,7 @@ mod tests {
             pane_id,
             Some(Agent::Pi),
             AgentState::Idle,
+            None,
             false,
             false,
             false,
@@ -4475,6 +4485,7 @@ mod tests {
                 pane_id: delivered_pane,
                 agent: Some(Agent::Pi),
                 state: AgentState::Idle,
+                rule_id: _,
                 visible_blocker: false,
                 visible_working: false,
                 process_exited: false,

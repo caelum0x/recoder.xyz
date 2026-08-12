@@ -5205,9 +5205,7 @@ fn print_ready_message(api_socket: &Path, client_socket: &Path) {
     eprintln!("client socket: {}", client_socket.display());
     eprintln!(
         "logs: {}",
-        crate::session::data_dir()
-            .join("loom-server.log")
-            .display()
+        crate::session::data_dir().join("loom-server.log").display()
     );
     eprintln!("did you mean to open the Loom TUI? run `loom`; you do not need `loom server`.");
 }
@@ -11255,6 +11253,7 @@ next_tab = ""
 
         assert!(
             server.handle_internal_event_with_forwarding(AppEvent::StateChanged {
+                rule_id: None,
                 pane_id,
                 agent: Some(crate::detect::Agent::Pi),
                 state: crate::detect::AgentState::Idle,
@@ -11303,6 +11302,7 @@ next_tab = ""
         server.sync_foreground_client_state();
 
         let changed = server.handle_internal_event_with_forwarding(AppEvent::StateChanged {
+            rule_id: None,
             pane_id,
             agent: Some(crate::detect::Agent::Pi),
             state: crate::detect::AgentState::Blocked,
@@ -11392,6 +11392,7 @@ next_tab = ""
 
         assert!(
             server.handle_internal_event_with_forwarding(AppEvent::StateChanged {
+                rule_id: None,
                 pane_id,
                 agent: Some(crate::detect::Agent::Pi),
                 state: crate::detect::AgentState::Blocked,

@@ -2823,6 +2823,7 @@ mod tests {
 
         app.state
             .handle_app_event(crate::events::AppEvent::StateChanged {
+                rule_id: None,
                 pane_id: target_pane,
                 agent: Some(Agent::Pi),
                 state: AgentState::Idle,

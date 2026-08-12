@@ -269,6 +269,7 @@ impl ActiveSubscription {
                         agent: probe.agent,
                         title: probe.title,
                         display_agent: probe.display_agent,
+                        agent_rule_id: probe.agent_rule_id,
                         state_labels: probe.state_labels,
                     });
 
@@ -401,6 +402,7 @@ impl ActiveAgentStatusChangedSubscription {
                 agent,
                 title,
                 display_agent,
+                agent_rule_id,
                 state_labels,
             } = event.data
             else {
@@ -435,6 +437,7 @@ impl ActiveAgentStatusChangedSubscription {
                     agent,
                     title,
                     display_agent,
+                    agent_rule_id,
                     state_labels,
                 }),
             }));
@@ -501,6 +504,7 @@ impl ActiveAgentStatusChangedSubscription {
                 agent: pane.agent,
                 title: pane.title,
                 display_agent: pane.display_agent,
+                agent_rule_id: pane.agent_rule_id,
                 state_labels: pane.state_labels,
             }),
         })
@@ -647,6 +651,7 @@ mod tests {
                 agent: Some("pi".into()),
                 title: title.map(str::to_string),
                 display_agent: None,
+                agent_rule_id: None,
                 state_labels: HashMap::new(),
             },
         }
@@ -668,6 +673,7 @@ mod tests {
             terminal_title_stripped: None,
             display_agent: None,
             agent_status: AgentStatus::Unknown,
+            agent_rule_id: None,
             state_labels: HashMap::new(),
             tokens: HashMap::new(),
             agent_session: None,
@@ -789,6 +795,7 @@ mod tests {
                 agent: Some("pi".into()),
                 title: None,
                 display_agent: None,
+                agent_rule_id: None,
                 state_labels: HashMap::new(),
             }),
             request_prefix: "test".into(),
@@ -834,6 +841,7 @@ mod tests {
                 agent: Some("pi".into()),
                 title: Some("short lived".into()),
                 display_agent: None,
+                agent_rule_id: None,
                 state_labels: HashMap::new(),
             }),
             request_prefix: "test".into(),

@@ -403,6 +403,7 @@ impl DetectionExplain {
     fn into_detection(self) -> AgentDetection {
         AgentDetection {
             state: self.state,
+            rule_id: self.matched_rule.map(|rule| rule.id),
             skip_state_update: self.skip_state_update,
             visible_idle: self.visible_idle,
             visible_blocker: self.visible_blocker,

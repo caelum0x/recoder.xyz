@@ -20,9 +20,13 @@ pub enum AgentState {
 }
 
 /// Screen-derived agent state plus confidence metadata used for source arbitration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentDetection {
     pub state: AgentState,
+    /// Id of the winning manifest rule that produced `state`, when the state came
+    /// from a matched screen rule. `None` when no rule matched (or when the agent
+    /// has no screen manifest); never fabricated.
+    pub rule_id: Option<String>,
     /// True when the current screen is an agent-owned viewer that shows
     /// transcript/history instead of the live prompt state.
     pub skip_state_update: bool,
@@ -285,6 +289,7 @@ pub fn detect_agent_with_osc(
     let Some(agent) = agent else {
         return AgentDetection {
             state: AgentState::Unknown,
+            rule_id: None,
             skip_state_update: false,
             visible_idle: false,
             visible_blocker: false,

@@ -2790,15 +2790,17 @@ impl AppState {
                 pane_id,
                 agent,
                 state,
+                rule_id,
                 visible_blocker,
                 visible_working,
                 process_exited,
                 observed_at,
             } => self
                 .update_terminal_state(pane_id, |terminal| {
-                    Some(terminal.set_detected_state_with_screen_signals_at(
+                    Some(terminal.set_detected_state_with_screen_signals_and_rule_at(
                         agent,
                         state,
+                        rule_id,
                         visible_blocker,
                         false,
                         visible_working,
@@ -4862,6 +4864,7 @@ mod tests {
         let pane_id = *state.workspaces[0].panes.keys().next().unwrap();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Working,
@@ -4900,6 +4903,7 @@ mod tests {
 
         // Now transition to Idle while in background
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Idle,
@@ -4933,6 +4937,7 @@ mod tests {
         state.workspaces[0].panes.get_mut(&pane_id).unwrap().seen = false;
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Idle,
@@ -4955,6 +4960,7 @@ mod tests {
         let bg_pane_id = *state.workspaces[1].panes.keys().next().unwrap();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Idle,
@@ -4976,6 +4982,7 @@ mod tests {
         let bg_pane_id = *state.workspaces[1].panes.keys().next().unwrap();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Unknown,
@@ -4985,6 +4992,7 @@ mod tests {
             observed_at: std::time::Instant::now(),
         });
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Idle,
@@ -5012,6 +5020,7 @@ mod tests {
         });
         let direct_idle = state
             .handle_app_event(AppEvent::StateChanged {
+                rule_id: None,
                 pane_id,
                 agent: Some(Agent::Pi),
                 state: AgentState::Idle,
@@ -5031,6 +5040,7 @@ mod tests {
         });
         for agent_state in [AgentState::Working, AgentState::Blocked] {
             state.handle_app_event(AppEvent::StateChanged {
+                rule_id: None,
                 pane_id,
                 agent: Some(Agent::Pi),
                 state: agent_state,
@@ -5042,6 +5052,7 @@ mod tests {
         }
         let update = state
             .handle_app_event(AppEvent::StateChanged {
+                rule_id: None,
                 pane_id,
                 agent: Some(Agent::Pi),
                 state: AgentState::Idle,
@@ -5066,6 +5077,7 @@ mod tests {
             observed_at: Instant::now(),
         });
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id,
             agent: Some(Agent::Codex),
             state: AgentState::Working,
@@ -5076,6 +5088,7 @@ mod tests {
         });
         let exit_update = state
             .handle_app_event(AppEvent::StateChanged {
+                rule_id: None,
                 pane_id,
                 agent: Some(Agent::Codex),
                 state: AgentState::Idle,
@@ -5121,6 +5134,7 @@ mod tests {
         let bg_pane_id = *state.workspaces[1].panes.keys().next().unwrap();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5145,6 +5159,7 @@ mod tests {
         let bg_pane_id = *state.workspaces[1].panes.keys().next().unwrap();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5177,6 +5192,7 @@ mod tests {
         let bg_pane_id = *state.workspaces[1].panes.keys().next().unwrap();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5188,6 +5204,7 @@ mod tests {
         let deadline = state.next_pending_agent_notification_deadline().unwrap();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Working,
@@ -5211,6 +5228,7 @@ mod tests {
         let bg_pane_id = *state.workspaces[1].panes.keys().next().unwrap();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5236,6 +5254,7 @@ mod tests {
         let pane_id = *state.workspaces[0].panes.keys().next().unwrap();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5263,6 +5282,7 @@ mod tests {
         let bg_pane_id = *state.workspaces[1].panes.keys().next().unwrap();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5318,6 +5338,7 @@ mod tests {
             .clone();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Codex),
             state: AgentState::Idle,
@@ -5336,6 +5357,7 @@ mod tests {
             session_ref: None,
         });
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Codex),
             state: AgentState::Blocked,
@@ -5366,6 +5388,7 @@ mod tests {
             .clone();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id,
             agent: Some(Agent::Claude),
             state: AgentState::Working,
@@ -5389,6 +5412,7 @@ mod tests {
         assert!(terminal.persisted_agent_session.is_some());
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id,
             agent: Some(Agent::Claude),
             state: AgentState::Idle,
@@ -5415,6 +5439,7 @@ mod tests {
             .clone();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Working,
@@ -5475,6 +5500,7 @@ mod tests {
             .clone();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id,
             agent: Some(Agent::Devin),
             state: AgentState::Idle,
@@ -5576,8 +5602,7 @@ mod tests {
             .unwrap()
             .attached_terminal_id
             .clone();
-        let cwd =
-            std::env::temp_dir().join(format!("loom-cwd-report-test-{}", std::process::id()));
+        let cwd = std::env::temp_dir().join(format!("loom-cwd-report-test-{}", std::process::id()));
         std::fs::create_dir_all(&cwd).unwrap();
         state.session_dirty = false;
 
@@ -5607,6 +5632,7 @@ mod tests {
         state.terminals.get_mut(&bg_terminal_id).unwrap().state = AgentState::Working;
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Droid),
             state: AgentState::Idle,
@@ -5636,6 +5662,7 @@ mod tests {
         let bg_pane_id = state.workspaces[1].tabs[second_tab].root_pane;
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5662,6 +5689,7 @@ mod tests {
         let bg_pane_id = state.workspaces[0].tabs[second_tab].root_pane;
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5685,6 +5713,7 @@ mod tests {
         let pane_id = *state.workspaces[0].panes.keys().next().unwrap();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5706,6 +5735,7 @@ mod tests {
         let pane_id = *state.workspaces[0].panes.keys().next().unwrap();
 
         state.handle_app_event(AppEvent::StateChanged {
+            rule_id: None,
             pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,

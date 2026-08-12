@@ -67,6 +67,9 @@ pub enum AppEvent {
         pane_id: PaneId,
         agent: Option<Agent>,
         state: AgentState,
+        /// Id of the matched screen manifest rule that produced `state`, or
+        /// `None` when no rule matched. Never fabricated.
+        rule_id: Option<String>,
         visible_blocker: bool,
         visible_working: bool,
         process_exited: bool,
