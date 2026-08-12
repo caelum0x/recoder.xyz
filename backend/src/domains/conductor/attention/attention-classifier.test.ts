@@ -7,6 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import type { RunEvent, RunEventType } from '@recoder/agent-os';
 import { classifyAttention } from './attention-classifier.js';
+import { mapHerdrStatus } from './herdr-state.js';
 
 let seq = 0;
 function ev(type: RunEventType, overrides: Partial<RunEvent> = {}): RunEvent {
@@ -780,5 +781,98 @@ describe('classifyAttention — runtime aliases for the new/underscore forms', (
       tail: 'body',
     });
     expect(result.reason).toContain('grok_osc_title_blocked');
+  });
+});
+
+// --- herdr native-state signal (mapHerdrStatus + classifier bypass) ----------
+
+describe('mapHerdrStatus — herdr AgentStatus → AttentionState', () => {
+  it.each([
+    ['working', 'working'],
+    ['blocked', 'awaiting_approval'],
+    ['idle', 'agent_idle_prompt'],
+    ['done', 'review_ready'],
+    ['unknown', 'unknown'],
+  ] as const)('maps %s → %s', (status, expected) => {
+    expect(mapHerdrStatus(status)).toBe(expected);
+  });
+});
+
+describe('classifyAttention — nativeAttention (herdr) augments the tail tier', () => {
+  it.each([
+    ['working', 'working'],
+    ['blocked', 'awaiting_approval'],
+    ['idle', 'agent_idle_prompt'],
+    ['done', 'review_ready'],
+  ] as const)(
+    'herdr status %s → nativeAttention %s is honoured (running)',
+    (status, expected) => {
+      const result = classifyAttention({
+        state: 'running',
+        nativeAttention: mapHerdrStatus(status),
+      });
+      expect(result.attention).toBe(expected);
+      expect(result.reason).toContain('native substrate status');
+    }
+  );
+
+  it('a definite native signal WINS over a contradicting tail (bypasses the manifest)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'claude',
+      nativeAttention: mapHerdrStatus('done'), // review_ready
+      tail: '⠹ Thinking...', // the manifest would say working
+    });
+    expect(result.attention).toBe('review_ready');
+    expect(result.reason).toContain('native substrate status');
+  });
+
+  it('a native "unknown" (herdr had no signal) FALLS THROUGH to the tail — never deletes the tail path', () => {
+    const result = classifyAttention({
+      state: 'running',
+      runtime: 'claude',
+      nativeAttention: mapHerdrStatus('unknown'), // unknown → no native signal
+      tail: '⠹ Thinking...',
+    });
+    // The tail heuristics still decide when herdr reports unknown.
+    expect(result.attention).toBe('working');
+    expect(result.reason).toContain('generic_working');
+  });
+
+  it('an absent nativeAttention leaves the tail path unchanged (82 existing tests stay green)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      tail: 'Do you want to make this edit?\n❯ 1. Yes\n  2. No',
+    });
+    expect(result.attention).toBe('awaiting_approval');
+  });
+
+  it('the durable state of record still OVERRIDES a native signal', () => {
+    const result = classifyAttention({
+      state: 'awaiting_review',
+      nativeAttention: mapHerdrStatus('working'),
+      tail: '⠹ Thinking...',
+    });
+    expect(result.attention).toBe('review_ready');
+    expect(result.reason).toContain('workspace state: awaiting_review');
+  });
+
+  it('a terminal RunEvent still OVERRIDES a native signal (event tier precedes native)', () => {
+    const result = classifyAttention({
+      state: 'running',
+      events: [ev('started'), ev('failed', { message: 'exit 2' })],
+      nativeAttention: mapHerdrStatus('working'),
+    });
+    expect(result.attention).toBe('error');
+    expect(result.reason).toContain('exit 2');
+  });
+
+  it('native signals do not apply to non-live states (no live-attention semantics)', () => {
+    const result = classifyAttention({
+      state: 'ready',
+      nativeAttention: mapHerdrStatus('working'),
+    });
+    expect(result.attention).toBe('unknown');
+    expect(result.reason).toContain('ready');
   });
 });

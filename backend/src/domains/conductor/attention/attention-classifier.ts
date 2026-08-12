@@ -34,6 +34,16 @@ export interface AttentionSignals {
   readonly runtime?: string | null;
   /** The captured OSC window title, when the substrate exposed one. */
   readonly oscTitle?: string | null;
+  /**
+   * A pre-mapped attention signal from a substrate that detects agent state
+   * NATIVELY (herdr's `AgentStatus`, mapped via `herdr-state.ts#mapHerdrStatus`).
+   * When present and definite (anything but `'unknown'`) it AUGMENTS the tail
+   * tier: honoured after the durable-state and RunEvent tiers but before the
+   * terminal-tail heuristics, so a native-state substrate bypasses the manifest
+   * guesswork. `'unknown'`/absent = no native signal → the tail path still runs
+   * (this never deletes the tail path).
+   */
+  readonly nativeAttention?: AttentionState | null;
 }
 
 /** The classification + the truthful signal that produced it. */
@@ -99,6 +109,17 @@ export function classifyAttention(signals: AttentionSignals): AttentionResult {
   if (LIVE_STATES.includes(state)) {
     const fromEvents = signals.events?.length ? eventSignal(signals.events) : null;
     if (fromEvents) return fromEvents;
+
+    // A native substrate status (herdr) AUGMENTS the tail tier: a definite signal
+    // wins over the tail heuristics; an `'unknown'` native (herdr had no signal)
+    // falls through so the tail path still runs. The durable + RunEvent tiers
+    // above already override it, so native never usurps the state of record.
+    if (signals.nativeAttention != null && signals.nativeAttention !== 'unknown') {
+      return {
+        attention: signals.nativeAttention,
+        reason: `native substrate status: ${signals.nativeAttention}`,
+      };
+    }
 
     if (typeof signals.tail === 'string' && signals.tail.trim().length > 0) {
       const outcome = evaluateTailManifest({
