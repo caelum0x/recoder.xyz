@@ -227,16 +227,19 @@ describe('recoder_playbook_run tool', () => {
     expect(surface.inputs).toHaveLength(0);
   });
 
-  it('propagates a truthful SERVICE_UNAVAILABLE from the unwired run seam', async () => {
+  it('propagates a truthful SERVICE_UNAVAILABLE when the whole playbook run seam is unwired', async () => {
+    // NOTE: this is the WHOLE run seam being unavailable (the composer cannot build a
+    // PlaybookService at all), not a per-step fault. A per-step swarm-unblock fault does
+    // NOT surface here — it degrades that step truthfully (see the service test).
     const surface = new FakeSurface(
       createError(
         ErrorCode.SERVICE_UNAVAILABLE,
-        'conductor: swarm auto-unblock is not configured on this deployment'
+        'conductor: playbook orchestration is not configured on this deployment'
       )
     );
     const { run } = tools(surface);
     await expect(
-      run.handler(validArgs({ playbookId: 'fan-unblock-converge' }), OWNER)
+      run.handler(validArgs({ playbookId: 'fan-converge' }), OWNER)
     ).rejects.toBeInstanceOf(AppError);
   });
 });

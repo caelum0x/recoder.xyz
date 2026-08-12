@@ -371,7 +371,7 @@ describe('PlaybookService', () => {
     });
   });
 
-  it('a per-pane swarm-unblock fault is surfaced truthfully and never fabricates an answer', async () => {
+  it('a per-pane swarm-unblock fault DEGRADES the step and never fabricates an escalation', async () => {
     const fanout = new FakeFanout(
       fanoutResult({
         perAgent: [
@@ -391,9 +391,13 @@ describe('PlaybookService', () => {
       baseInput({ playbookId: 'fan-unblock-converge' })
     );
 
+    // The step is DEGRADED with the real reason — not a fake `ok` with a synthetic escalation.
+    expect(result.steps[1]).toMatchObject({ kind: 'unblock_blocked', status: 'degraded' });
+    expect(result.steps[1].reason).toMatch(/gate down/i);
     const pane = result.steps[1].unblock?.[0];
-    expect(pane?.result.action).toBe('escalated');
-    expect(pane?.result).toMatchObject({ reason: expect.stringMatching(/gate down/i) });
+    // The faulted pane carries a truthful faultReason and NO fabricated result.
+    expect(pane?.result).toBeUndefined();
+    expect(pane?.faultReason).toMatch(/gate down/i);
   });
 
   it('throws NOT_FOUND for an unknown playbook id (a bad recipe launches nothing)', async () => {
