@@ -24,7 +24,7 @@ function NeedsYouRow({ model, entry }: { model: RecoderNeedsYouViewModel; entry:
         <button className={ROW} title={entry.workspaceId} onClick={() => model.focusWorkspace(entry.workspaceId)}>
             <span className="text-sm font-medium truncate">{entry.agentKind || entry.workspaceId}</span>
             <span className={`${topPriority ? CRIMSON_CHIP : STATE_CHIP} ml-auto`}>{entry.state}</span>
-            {!entry.nativeStatus && <span className={STATE_CHIP}>raw pane</span>}
+            {entry.nativeStatus == "unknown" && <span className={STATE_CHIP}>no native status</span>}
         </button>
     );
 }

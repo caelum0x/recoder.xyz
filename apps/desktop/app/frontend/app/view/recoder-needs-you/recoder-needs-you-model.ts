@@ -15,15 +15,16 @@ const TopPriorityState = "awaiting_approval";
 
 // One projected Needs-You queue entry — the caller's pane that needs a human, RANKED by
 // the backend (awaiting_approval highest). Projected defensively from the untrusted
-// snapshot wire: `state` falls to "unknown" (shown, never counted), `needsYou`/`nativeStatus`
-// are truthful booleans (a raw-pane fallback forfeits native status, reported false, never
-// faked). The order is PRESERVED from the wire — the backend ranks, the panel never re-sorts.
+// snapshot wire: `state` (the classified AttentionState) falls to "unknown" (shown, never
+// counted); `nativeStatus` is the raw Loom AgentStatus STRING (idle/working/blocked/done/
+// unknown) — "unknown" means Loom gave no native signal for the pane, never faked. The
+// order is PRESERVED from the wire — the backend ranks, the panel never re-sorts.
 type NeedsYouEntry = {
     workspaceId: string;
     agentKind: string;
     state: string;
     rank: number;
-    nativeStatus: boolean;
+    nativeStatus: string;
     needsYou: boolean;
     seen: boolean;
 };
@@ -208,7 +209,7 @@ function projectEntries(value: unknown): NeedsYouEntry[] {
             agentKind,
             state: typeof a.state == "string" ? a.state : "unknown",
             rank: num(a.rank),
-            nativeStatus: a.nativeStatus === true,
+            nativeStatus: typeof a.nativeStatus == "string" ? a.nativeStatus : "unknown",
             needsYou: a.needsYou === true,
             seen: a.seen === true,
         });
