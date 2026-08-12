@@ -197,6 +197,15 @@ import {
 import { ConductorReads } from './module/reads.js';
 import { ConductorGovernedWrites } from './module/governed-writes.js';
 import { buildRunEventPipeline } from './module/run-event-pipeline.js';
+import {
+  ConvergeFanoutService,
+  type FanoutComposeOutcome,
+  type FanoutInput,
+  type FanoutResult,
+  type FanoutWorkspaceCreateOutcome,
+  type FanoutWorkspaceCreateRequest,
+} from './fanout/converge-fanout.service.js';
+import { buildConductorFanoutTools } from './mcp/conductor-fanout-tool.js';
 
 // The public result/read-model types + the advance-target whitelist moved to
 // `module/shared.ts` with the collaborator split; re-exported here so every
@@ -1106,6 +1115,108 @@ export class ConductorComposer implements ConductorModule {
     return this.compareConverge.composeConvergenceAdHoc(input, principal);
   }
 
+  /**
+   * THE fusion verb (`recoder_converge_fanout`, LOOM-ROADMAP.md §0): fan ONE task to
+   * N agents in Loom panes, wait for all to settle, then auto-converge the sibling
+   * diffs into ONE governed branch. Composes the shipped pieces via the pure
+   * {@link ConvergeFanoutService}:
+   *  - CREATE each governed loom workspace through this composer's already-gated
+   *    `createWorkspace` (SoR + governance + evidence), stamping `substrate:'loom'`,
+   *    a `recoder/fan-<kind>-<short>` branch, and `metadata.taskGroup=<shared>`; the
+   *    task rides the loom pane's initial args (the adapter's documented delivery),
+   *    so the separate delivery seam is a truthful no-op.
+   *  - WAIT via this composer's `waitForWorkspaceSettle` (the shipped WaitService).
+   *  - CONVERGE via the shipped AD-HOC plan/compose over the EXPLICIT settled set
+   *    (excludes any pane that never settled — never a fabricated done).
+   * Every downstream method self-gates under the caller; a blocked verdict surfaces
+   * as a truthful per-agent failure, never a faked launch/merge.
+   */
+  async fanout(input: FanoutInput): Promise<FanoutResult> {
+    const actor = input.actor;
+    const service = new ConvergeFanoutService({
+      logger: this.log,
+      creator: {
+        create: async (
+          request: FanoutWorkspaceCreateRequest
+        ): Promise<FanoutWorkspaceCreateOutcome> => {
+          const created: CreateConductorWorkspaceInput = {
+            spaceId: request.spaceId,
+            projectId: request.projectId,
+            taskId: request.taskId,
+            repoPath: request.repoPath,
+            // Loom drives the agent MACHINE via RECODER_LOOM_KIND; the runtimeId is
+            // just the SoR label for the run (the loom adapter reads the env, not it).
+            runtimeId: request.kind,
+            substrate: request.substrate,
+            branch: request.branch,
+            ...(request.base ? { baseRef: request.base } : {}),
+            // The task rides the loom pane's initial args (adapter: "initial
+            // instruction rides args") — one delivery, no double-prompt.
+            command: request.task,
+            env: { RECODER_LOOM_KIND: request.kind },
+            metadata: { taskGroup: request.taskGroup },
+          };
+          const result = await this.createWorkspace(created, actor);
+          if (result.ok && result.value) {
+            return { ok: true, workspaceId: result.value.workspaceId };
+          }
+          return {
+            ok: false,
+            reason: result.reason ?? 'workspace create refused',
+          };
+        },
+      },
+      delivery: {
+        // The task was delivered as the loom pane's initial args at launch, so there
+        // is no separate prompt to send — a truthful no-op (never a fake re-delivery).
+        deliver: async () => {},
+      },
+      wait: {
+        waitUntilSettled: request => this.waitForWorkspaceSettle(request),
+      },
+      converge: {
+        plan: async request => {
+          const outcome = await this.planConvergenceAdHoc(
+            request.workspaceIds,
+            {},
+            { probe: request.probe },
+            actor
+          );
+          if (outcome.ok) return outcome.plan;
+          throw new Error(
+            'reason' in outcome && outcome.reason
+              ? outcome.reason
+              : `convergence plan rejected (${outcome.code})`
+          );
+        },
+        compose: async (request): Promise<FanoutComposeOutcome> => {
+          const result = await this.composeConvergenceAdHoc(
+            {
+              workspaceIds: request.workspaceIds,
+              selection: request.selection,
+              createdBy: actor.userId,
+            },
+            actor
+          );
+          if (result.ok && 'value' in result && result.value) {
+            return {
+              ok: true,
+              workspaceId: result.value.workspaceId,
+              branch: result.value.branch,
+            };
+          }
+          return {
+            ok: false,
+            reason:
+              ('reason' in result && result.reason) ||
+              'convergence not composed',
+          };
+        },
+      },
+    });
+    return service.fanout(input);
+  }
+
   async recordRunInferenceId(
     workspaceId: string,
     inferenceId: string
@@ -1214,6 +1325,8 @@ export class ConductorComposer implements ConductorModule {
       ...buildConductorPreviewEvidenceTools(this),
       // The agent-invokable synchronous wait-until-settled primitive (absorb herdr #3).
       ...buildConductorWaitTools(this),
+      // THE fusion verb: fan a task to N agents in Loom panes -> auto-converge (§0).
+      ...buildConductorFanoutTools(this),
     ];
   }
 
