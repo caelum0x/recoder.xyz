@@ -209,6 +209,14 @@ import {
 } from './fanout/converge-fanout.service.js';
 import { buildConductorFanoutTools } from './mcp/conductor-fanout-tool.js';
 import {
+  ReFanService,
+  type PriorConvergence,
+  type ReFanInput,
+  type ReFanResult,
+} from './fanout/re-fan.service.js';
+import { buildConductorReFanTools } from './mcp/conductor-refan-tool.js';
+import type { ConvergenceProvenance } from './converge/converge.ops.js';
+import {
   SwarmUnblockService,
   type ResolveBlockedInput,
   type SwarmUnblockDeps,
@@ -1271,6 +1279,64 @@ export class ConductorComposer implements ConductorModule {
     return service.fanout(input);
   }
 
+  /**
+   * Resolve the composed convergence workspace for a first-round `taskGroup` — the
+   * record whose `metadata.convergedFromTaskGroup` equals the group (its `branch` is
+   * the `recoder/converge-<id>` a re-fan branches from). Returns the most-recently
+   * updated match, or `null` when the group has no prior convergence (⇒ a re-fan
+   * refuses truthfully). Read-only; ownership is enforced at the tool boundary.
+   */
+  async resolvePriorConvergence(taskGroup: string): Promise<Workspace | null> {
+    if (!taskGroup) return null;
+    const workspaces = await this.listWorkspaces();
+    let best: Workspace | null = null;
+    for (const ws of workspaces) {
+      const meta = ws.metadata as Record<string, unknown> | undefined;
+      if (meta?.convergedFromTaskGroup !== taskGroup) continue;
+      if (!best || (ws.updatedAt ?? '') > (best.updatedAt ?? '')) best = ws;
+    }
+    return best;
+  }
+
+  /**
+   * The SECOND-ROUND re-fan (`recoder_converge_refan`, LOOM-ROADMAP.md build-now #6):
+   * take a prior fan-out's converged `recoder/converge-<id>` branch as the NEW base and
+   * fan a NARROWED task to N fresh agents again, auto-converging into a new reviewable
+   * branch linked to round 1. Composes the shipped pieces via the pure
+   * {@link ReFanService}: it RESOLVES the prior convergence (branch + recorded
+   * provenance) over {@link resolvePriorConvergence}, carries that provenance into each
+   * pane's task text, then delegates to this composer's own {@link fanout} with
+   * `base = recoder/converge-<id>`. No prior convergence ⇒ a truthful refusal (never a
+   * fabricated base); the second round's convergence is whatever the shipped fan-out
+   * truthfully reports.
+   */
+  async reFan(input: ReFanInput): Promise<ReFanResult> {
+    const service = new ReFanService({
+      logger: this.log,
+      resolver: {
+        resolve: async (
+          taskGroup: string
+        ): Promise<PriorConvergence | null> => {
+          const ws = await this.resolvePriorConvergence(taskGroup);
+          if (!ws) return null;
+          const meta = ws.metadata as Record<string, unknown> | undefined;
+          const rawProvenance = meta?.convergence;
+          const provenance =
+            rawProvenance && typeof rawProvenance === 'object'
+              ? (rawProvenance as ConvergenceProvenance)
+              : null;
+          return {
+            workspaceId: ws.workspaceId,
+            branch: ws.branch,
+            provenance,
+          };
+        },
+      },
+      fanout: { fanout: fanoutInput => this.fanout(fanoutInput) },
+    });
+    return service.reFan(input);
+  }
+
   async recordRunInferenceId(
     workspaceId: string,
     inferenceId: string
@@ -1381,6 +1447,8 @@ export class ConductorComposer implements ConductorModule {
       ...buildConductorWaitTools(this),
       // THE fusion verb: fan a task to N agents in Loom panes -> auto-converge (§0).
       ...buildConductorFanoutTools(this),
+      // SECOND-ROUND re-fan: iterate a prior convergence as the new base (§1 build-now #6).
+      ...buildConductorReFanTools(this),
       // The LIVE convergence cockpit read — makes a fan-out observable (§1 build-now #1).
       ...buildConductorCockpitTools(this),
       // Swarm auto-unblock — resolve a Blocked pane, escalate by default (§1 build-now #3).
