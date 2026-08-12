@@ -134,7 +134,11 @@ export class SkillRegistry {
 
     // PINNING first — an unpinned/unknown or wrong-version skill never even
     // reaches signature verification.
-    const pinnedVersion = this.pinned[manifest.id];
+    // Own-property lookup only — an exotic manifest id like 'constructor' must
+    // resolve to not_pinned, never an inherited prototype value.
+    const pinnedVersion = Object.prototype.hasOwnProperty.call(this.pinned, manifest.id)
+      ? this.pinned[manifest.id]
+      : undefined;
     if (pinnedVersion === undefined) {
       return this.reject(manifest.id, 'not_pinned');
     }

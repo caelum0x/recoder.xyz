@@ -152,7 +152,13 @@ export class SkillActionService {
       return { status: 'needs_approval', requestId: record.id, reason: decision.reason || 'approval required' };
     }
 
-    // 4) ALLOW — execute over the capability-scoped context (NO ambient env/secrets).
+    // 4) ALLOW — and ONLY allow. A security-critical execution path must never be
+    // reached by exclusion: any effect that is not an explicit 'allow' refuses.
+    if (decision.effect !== 'allow') {
+      return refuse(decision.reason || `refused by policy (${decision.effect})`);
+    }
+
+    // Execute over the capability-scoped context (NO ambient env/secrets).
     if (!this.executor) {
       throw createError(
         ErrorCode.SERVICE_UNAVAILABLE,
