@@ -23,10 +23,17 @@ Bundled permissive sub-deps retained under `vendor/`: `libghostty-vt` (MIT),
 
 ## Build
 
-Toolchain pinned by `rust-toolchain.toml` (Rust 1.96.1). Binary: `herdr` v0.8.0.
+Toolchain: Rust 1.96.1 (pinned by `rust-toolchain.toml`) **plus `zig` EXACTLY
+0.15.2** — `build.rs` compiles the vendored `libghostty-vt` (Ghostty's VT parser, a
+Zig project) via `zig build`, and its `requireZig` check **rejects 0.16+** (breaking
+`std.Io` changes). brew ships 0.16.0 (too new); fetch the official 0.15.2 binary and
+point `ZIG` at it. Without zig the Rust side compiles but the build fails at the
+libghostty-vt step. Binary: `herdr` v0.8.0.
 
 ```bash
-cargo build --release --locked   # -> target/release/herdr
+# zig 0.16 is REJECTED — get exactly 0.15.2:
+curl -fsSL https://ziglang.org/download/0.15.2/zig-aarch64-macos-0.15.2.tar.xz | tar xJ
+ZIG=$PWD/zig-aarch64-macos-0.15.2/zig cargo build --release --locked   # -> target/release/herdr
 ```
 
 ## Integration status (Recoder engine)
