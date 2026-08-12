@@ -79,6 +79,26 @@
           ],
           "type": "string"
         },
+        "BlockedKind": {
+          "description": "Declared reason a matched `Blocked` rule is blocking, so downstream routing can\nsend the blocker to the right handler. This is DECLARED manifest data carried\nverbatim from the winning rule; it is never inferred from rule-id heuristics and\nis only ever populated when the matched rule's state is `Blocked`.",
+          "oneOf": [
+            {
+              "const": "approval",
+              "description": "Approval/permission prompt — route to governance approval.",
+              "type": "string"
+            },
+            {
+              "const": "input",
+              "description": "Waiting for user input/answer — route to swarm auto-answer.",
+              "type": "string"
+            },
+            {
+              "const": "trust",
+              "description": "Trust/safety confirmation (e.g. trust this directory) — route to approval.",
+              "type": "string"
+            }
+          ]
+        },
         "EventData": {
           "oneOf": [
             {
@@ -668,6 +688,16 @@
                     "null"
                   ]
                 },
+                "agent_blocked_kind": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/schemas/event/$defs/BlockedKind"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "agent_rule_id": {
                   "type": [
                     "string",
@@ -770,6 +800,17 @@
                 "string",
                 "null"
               ]
+            },
+            "agent_blocked_kind": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/event/$defs/BlockedKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Declared blocker kind of the screen rule that produced `agent_status`, only\nwhen that status is `Blocked` from live detection and the rule declared one.\n`None` otherwise; never guessed or inferred from the rule id."
             },
             "agent_rule_id": {
               "description": "Id of the screen manifest rule that produced `agent_status`, when the\nstatus came from live screen detection. `None` when no rule matched or\nwhen the status came from a hook authority; never fabricated.",
@@ -5919,6 +5960,26 @@
           ],
           "type": "string"
         },
+        "BlockedKind": {
+          "description": "Declared reason a matched `Blocked` rule is blocking, so downstream routing can\nsend the blocker to the right handler. This is DECLARED manifest data carried\nverbatim from the winning rule; it is never inferred from rule-id heuristics and\nis only ever populated when the matched rule's state is `Blocked`.",
+          "oneOf": [
+            {
+              "const": "approval",
+              "description": "Approval/permission prompt — route to governance approval.",
+              "type": "string"
+            },
+            {
+              "const": "input",
+              "description": "Waiting for user input/answer — route to swarm auto-answer.",
+              "type": "string"
+            },
+            {
+              "const": "trust",
+              "description": "Trust/safety confirmation (e.g. trust this directory) — route to approval.",
+              "type": "string"
+            }
+          ]
+        },
         "PaneAgentStatusChangedEvent": {
           "properties": {
             "agent": {
@@ -5926,6 +5987,17 @@
                 "string",
                 "null"
               ]
+            },
+            "agent_blocked_kind": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/subscription_event/$defs/BlockedKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Declared blocker kind of the screen rule that produced `agent_status`, only\nwhen that status is `Blocked` from live detection and the rule declared one.\n`None` otherwise; never guessed or inferred from the rule id."
             },
             "agent_rule_id": {
               "description": "Id of the screen manifest rule that produced `agent_status`, when the\nstatus came from live screen detection. `None` when no rule matched or\nwhen the status came from a hook authority; never fabricated.",
@@ -6136,6 +6208,17 @@
                 "string",
                 "null"
               ]
+            },
+            "agent_blocked_kind": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/success_response/$defs/BlockedKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Declared blocker kind of the screen rule that produced `agent_status`, only\nwhen that status is `Blocked` from live detection and the rule declared one.\n`None` otherwise; never guessed or inferred from the rule id."
             },
             "agent_rule_id": {
               "description": "Id of the screen manifest rule that produced `agent_status`, when the\nstatus came from live screen detection. `None` when no rule matched or\nwhen the status came from a hook authority; never fabricated.",
@@ -6362,6 +6445,26 @@
             "unknown"
           ],
           "type": "string"
+        },
+        "BlockedKind": {
+          "description": "Declared reason a matched `Blocked` rule is blocking, so downstream routing can\nsend the blocker to the right handler. This is DECLARED manifest data carried\nverbatim from the winning rule; it is never inferred from rule-id heuristics and\nis only ever populated when the matched rule's state is `Blocked`.",
+          "oneOf": [
+            {
+              "const": "approval",
+              "description": "Approval/permission prompt — route to governance approval.",
+              "type": "string"
+            },
+            {
+              "const": "input",
+              "description": "Waiting for user input/answer — route to swarm auto-answer.",
+              "type": "string"
+            },
+            {
+              "const": "trust",
+              "description": "Trust/safety confirmation (e.g. trust this directory) — route to approval.",
+              "type": "string"
+            }
+          ]
         },
         "ClientWindowTitleReason": {
           "enum": [
@@ -6968,6 +7071,16 @@
                     "null"
                   ]
                 },
+                "agent_blocked_kind": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/schemas/success_response/$defs/BlockedKind"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "agent_rule_id": {
                   "type": [
                     "string",
@@ -7429,6 +7542,17 @@
                 "string",
                 "null"
               ]
+            },
+            "agent_blocked_kind": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/success_response/$defs/BlockedKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Declared blocker kind of the screen rule that produced `agent_status`, only\nwhen that status is `Blocked` from live detection and the rule declared one.\n`None` otherwise; never guessed or inferred from the rule id."
             },
             "agent_rule_id": {
               "description": "Id of the screen manifest rule that produced `agent_status`, when the\nstatus came from live screen detection. `None` when no rule matched or\nwhen the status came from a hook authority; never fabricated.",

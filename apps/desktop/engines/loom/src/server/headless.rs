@@ -11254,6 +11254,7 @@ next_tab = ""
         assert!(
             server.handle_internal_event_with_forwarding(AppEvent::StateChanged {
                 rule_id: None,
+                blocked_kind: None,
                 pane_id,
                 agent: Some(crate::detect::Agent::Pi),
                 state: crate::detect::AgentState::Idle,
@@ -11303,6 +11304,7 @@ next_tab = ""
 
         let changed = server.handle_internal_event_with_forwarding(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id,
             agent: Some(crate::detect::Agent::Pi),
             state: crate::detect::AgentState::Blocked,
@@ -11393,6 +11395,7 @@ next_tab = ""
         assert!(
             server.handle_internal_event_with_forwarding(AppEvent::StateChanged {
                 rule_id: None,
+                blocked_kind: None,
                 pane_id,
                 agent: Some(crate::detect::Agent::Pi),
                 state: crate::detect::AgentState::Blocked,

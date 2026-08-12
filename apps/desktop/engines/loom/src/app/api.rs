@@ -644,6 +644,9 @@ impl App {
         let agent_rule_id = pane_state
             .and_then(|pane| self.state.terminals.get(&pane.attached_terminal_id))
             .and_then(|terminal| terminal.effective_agent_rule_id());
+        let agent_blocked_kind = pane_state
+            .and_then(|pane| self.state.terminals.get(&pane.attached_terminal_id))
+            .and_then(|terminal| terminal.effective_agent_blocked_kind());
 
         if previous_agent_status != agent_status
             || update.previous_presentation != update.presentation
@@ -659,6 +662,7 @@ impl App {
                     title: presentation.title,
                     display_agent: presentation.display_agent,
                     agent_rule_id,
+                    agent_blocked_kind,
                     state_labels: presentation.state_labels,
                 },
             });
@@ -1774,6 +1778,7 @@ mod tests {
 
         app.handle_internal_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: root,
             agent: Some(Agent::Codex),
             state: AgentState::Working,
@@ -1784,6 +1789,7 @@ mod tests {
         });
         app.handle_internal_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: root,
             agent: Some(Agent::Codex),
             state: AgentState::Idle,
@@ -1869,6 +1875,7 @@ mod tests {
 
         app.handle_internal_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: root,
             agent: Some(Agent::Codex),
             state: AgentState::Working,
@@ -1879,6 +1886,7 @@ mod tests {
         });
         app.handle_internal_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: root,
             agent: Some(Agent::Codex),
             state: AgentState::Idle,
@@ -1986,6 +1994,7 @@ mod tests {
 
             app.handle_internal_event(AppEvent::StateChanged {
                 rule_id: None,
+                blocked_kind: None,
                 pane_id,
                 agent: Some(Agent::Pi),
                 state: AgentState::Idle,
@@ -2041,6 +2050,7 @@ mod tests {
 
         app.handle_internal_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id,
             agent: Some(Agent::Codex),
             state: AgentState::Idle,
@@ -2215,6 +2225,7 @@ mod tests {
 
         app.handle_internal_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id,
             agent: Some(crate::detect::Agent::OpenCode),
             state: AgentState::Idle,
@@ -2282,6 +2293,7 @@ mod tests {
 
         app.handle_internal_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: root,
             agent: Some(Agent::Codex),
             state: AgentState::Working,
@@ -2303,6 +2315,7 @@ mod tests {
 
         app.handle_internal_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: root,
             agent: Some(Agent::Codex),
             state: AgentState::Idle,

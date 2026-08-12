@@ -7,6 +7,7 @@ aliases = ["cursor-agent"]
 [[rules]]
 id = "write_file_approval"
 state = "blocked"
+blocked_kind = "approval"
 priority = 320
 region = "bottom_non_empty_lines(8)"
 visible_blocker = true
@@ -20,6 +21,7 @@ any = [
 [[rules]]
 id = "approval_prompt"
 state = "blocked"
+blocked_kind = "approval"
 priority = 300
 region = "whole_recent"
 visible_blocker = true

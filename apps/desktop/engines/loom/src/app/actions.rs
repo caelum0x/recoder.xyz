@@ -2791,6 +2791,7 @@ impl AppState {
                 agent,
                 state,
                 rule_id,
+                blocked_kind,
                 visible_blocker,
                 visible_working,
                 process_exited,
@@ -2801,6 +2802,7 @@ impl AppState {
                         agent,
                         state,
                         rule_id,
+                        blocked_kind,
                         visible_blocker,
                         false,
                         visible_working,
@@ -4865,6 +4867,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Working,
@@ -4904,6 +4907,7 @@ mod tests {
         // Now transition to Idle while in background
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Idle,
@@ -4938,6 +4942,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Idle,
@@ -4961,6 +4966,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Idle,
@@ -4983,6 +4989,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Unknown,
@@ -4993,6 +5000,7 @@ mod tests {
         });
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Idle,
@@ -5021,6 +5029,7 @@ mod tests {
         let direct_idle = state
             .handle_app_event(AppEvent::StateChanged {
                 rule_id: None,
+                blocked_kind: None,
                 pane_id,
                 agent: Some(Agent::Pi),
                 state: AgentState::Idle,
@@ -5041,6 +5050,7 @@ mod tests {
         for agent_state in [AgentState::Working, AgentState::Blocked] {
             state.handle_app_event(AppEvent::StateChanged {
                 rule_id: None,
+                blocked_kind: None,
                 pane_id,
                 agent: Some(Agent::Pi),
                 state: agent_state,
@@ -5053,6 +5063,7 @@ mod tests {
         let update = state
             .handle_app_event(AppEvent::StateChanged {
                 rule_id: None,
+                blocked_kind: None,
                 pane_id,
                 agent: Some(Agent::Pi),
                 state: AgentState::Idle,
@@ -5078,6 +5089,7 @@ mod tests {
         });
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id,
             agent: Some(Agent::Codex),
             state: AgentState::Working,
@@ -5089,6 +5101,7 @@ mod tests {
         let exit_update = state
             .handle_app_event(AppEvent::StateChanged {
                 rule_id: None,
+                blocked_kind: None,
                 pane_id,
                 agent: Some(Agent::Codex),
                 state: AgentState::Idle,
@@ -5135,6 +5148,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5160,6 +5174,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5193,6 +5208,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5205,6 +5221,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Working,
@@ -5229,6 +5246,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5255,6 +5273,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5283,6 +5302,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5339,6 +5359,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Codex),
             state: AgentState::Idle,
@@ -5358,6 +5379,7 @@ mod tests {
         });
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Codex),
             state: AgentState::Blocked,
@@ -5389,6 +5411,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id,
             agent: Some(Agent::Claude),
             state: AgentState::Working,
@@ -5413,6 +5436,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id,
             agent: Some(Agent::Claude),
             state: AgentState::Idle,
@@ -5440,6 +5464,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Working,
@@ -5501,6 +5526,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id,
             agent: Some(Agent::Devin),
             state: AgentState::Idle,
@@ -5633,6 +5659,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Droid),
             state: AgentState::Idle,
@@ -5663,6 +5690,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5690,6 +5718,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id: bg_pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5714,6 +5743,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,
@@ -5736,6 +5766,7 @@ mod tests {
 
         state.handle_app_event(AppEvent::StateChanged {
             rule_id: None,
+            blocked_kind: None,
             pane_id,
             agent: Some(Agent::Pi),
             state: AgentState::Blocked,

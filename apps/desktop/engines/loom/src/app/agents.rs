@@ -379,6 +379,7 @@ impl App {
             display_agent: pane.display_agent,
             agent_status: pane.agent_status,
             agent_rule_id: terminal.effective_agent_rule_id(),
+            agent_blocked_kind: terminal.effective_agent_blocked_kind(),
             screen_detection_skipped: terminal.full_lifecycle_hook_authority_active(),
             state_labels: pane.state_labels,
             tokens: pane.tokens,

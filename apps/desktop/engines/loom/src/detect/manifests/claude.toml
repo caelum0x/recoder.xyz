@@ -94,6 +94,7 @@ not = [
 [[rules]]
 id = "bash_permission_prompt"
 state = "blocked"
+blocked_kind = "approval"
 priority = 850
 region = "whole_recent"
 visible_blocker = true
@@ -112,6 +113,7 @@ all = [
 [[rules]]
 id = "generic_permission_prompt"
 state = "blocked"
+blocked_kind = "approval"
 priority = 840
 region = "after_last_horizontal_rule"
 visible_blocker = true

@@ -7,6 +7,7 @@ aliases = ["kimi-code", "kimi code"]
 [[rules]]
 id = "current_approval_panel"
 state = "blocked"
+blocked_kind = "approval"
 priority = 400
 region = "whole_recent"
 visible_blocker = true
@@ -41,6 +42,7 @@ any = [
 [[rules]]
 id = "legacy_approval_panel"
 state = "blocked"
+blocked_kind = "approval"
 priority = 300
 region = "whole_recent"
 contains = ["requesting approval", "reject"]

@@ -7,6 +7,7 @@ aliases = ["devin-cli", "devin cli"]
 [[rules]]
 id = "workspace_trust_prompt"
 state = "blocked"
+blocked_kind = "trust"
 priority = 300
 region = "bottom_non_empty_lines(8)"
 visible_blocker = true
@@ -19,6 +20,7 @@ contains = [
 [[rules]]
 id = "permission_prompt"
 state = "blocked"
+blocked_kind = "approval"
 priority = 290
 region = "bottom_non_empty_lines(8)"
 visible_blocker = true
