@@ -9,6 +9,7 @@ import { describe, test } from 'node:test';
 import {
   parseAgentQueryResult,
   parseBlockedProvenance,
+  parseWorktreeStatusResult,
   type AgentInfo,
   type BlockedProvenance,
 } from './protocol';
@@ -182,5 +183,98 @@ describe('parseAgentQueryResult', () => {
     assert.deepEqual(parseAgentQueryResult(null), []);
     assert.deepEqual(parseAgentQueryResult(undefined), []);
     assert.deepEqual(parseAgentQueryResult('agent_query'), []);
+  });
+});
+
+// `parseWorktreeStatusResult` -- the DEFENSIVE reader of a `worktree.status`
+// reply. TRUTHFULNESS invariant: only a well-formed `worktree_status` result
+// with every field present and correctly typed yields a status; anything else is
+// `null`, never a fabricated `0/0` "in sync". `has_upstream` disambiguates a
+// real `0/0` (in sync) from "no upstream to compare against".
+describe('parseWorktreeStatusResult', () => {
+  test('parses a dirty status with an upstream ahead/behind', () => {
+    const status = parseWorktreeStatusResult({
+      type: 'worktree_status',
+      path: '/tmp/wt',
+      dirty: true,
+      changed_files: 3,
+      has_upstream: true,
+      ahead: 2,
+      behind: 1,
+    });
+
+    assert.deepEqual(status, {
+      path: '/tmp/wt',
+      dirty: true,
+      changed_files: 3,
+      has_upstream: true,
+      ahead: 2,
+      behind: 1,
+    });
+  });
+
+  test('preserves a truthful no-upstream 0/0 (not conflated with in-sync)', () => {
+    const status = parseWorktreeStatusResult({
+      type: 'worktree_status',
+      path: '/tmp/clean',
+      dirty: false,
+      changed_files: 0,
+      has_upstream: false,
+      ahead: 0,
+      behind: 0,
+    });
+
+    assert.ok(status);
+    assert.equal(status.has_upstream, false);
+    assert.equal(status.ahead, 0);
+    assert.equal(status.behind, 0);
+  });
+
+  test('a non-worktree_status result yields null (never fabricated)', () => {
+    assert.equal(parseWorktreeStatusResult({ type: 'ok' }), null);
+    assert.equal(
+      parseWorktreeStatusResult({ type: 'worktree_removed', path: '/tmp/wt' }),
+      null
+    );
+  });
+
+  test('a malformed or partial status yields null', () => {
+    // Missing fields.
+    assert.equal(
+      parseWorktreeStatusResult({ type: 'worktree_status', path: '/tmp/wt' }),
+      null
+    );
+    // Wrong types: counts arriving as strings must not be coerced.
+    assert.equal(
+      parseWorktreeStatusResult({
+        type: 'worktree_status',
+        path: '/tmp/wt',
+        dirty: true,
+        changed_files: '3',
+        has_upstream: true,
+        ahead: 2,
+        behind: 1,
+      }),
+      null
+    );
+    // Non-string path.
+    assert.equal(
+      parseWorktreeStatusResult({
+        type: 'worktree_status',
+        path: 42,
+        dirty: false,
+        changed_files: 0,
+        has_upstream: false,
+        ahead: 0,
+        behind: 0,
+      }),
+      null
+    );
+  });
+
+  test('a non-record source yields null (defensive)', () => {
+    assert.equal(parseWorktreeStatusResult(null), null);
+    assert.equal(parseWorktreeStatusResult(undefined), null);
+    assert.equal(parseWorktreeStatusResult('worktree_status'), null);
   });
 });

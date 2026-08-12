@@ -362,6 +362,69 @@ describe('LoomSocketClient', () => {
     );
   });
 
+  test('worktreeStatus serializes the request and parses the status', async () => {
+    let seenRequest: unknown = null;
+    const client = await withServer((request, socket) => {
+      seenRequest = request;
+      socket.end(
+        successLine(requestId(request), {
+          type: 'worktree_status',
+          path: '/tmp/wt',
+          dirty: true,
+          changed_files: 4,
+          has_upstream: true,
+          ahead: 2,
+          behind: 1,
+        })
+      );
+    });
+
+    const status = await client.worktreeStatus({ workspace_id: 'ws_1' });
+
+    assert.equal((seenRequest as { method: string }).method, 'worktree.status');
+    assert.deepEqual((seenRequest as { params: unknown }).params, {
+      workspace_id: 'ws_1',
+    });
+    assert.deepEqual(status, {
+      path: '/tmp/wt',
+      dirty: true,
+      changed_files: 4,
+      has_upstream: true,
+      ahead: 2,
+      behind: 1,
+    });
+  });
+
+  test('worktreeStatus returns null on an unexpected result type (never fabricated)', async () => {
+    const client = await withServer((request, socket) => {
+      socket.end(successLine(requestId(request), { type: 'ok' }));
+    });
+
+    const status = await client.worktreeStatus();
+    assert.equal(status, null);
+  });
+
+  test('worktreeStatus rejects with the engine error on a non-git path', async () => {
+    const client = await withServer((request, socket) => {
+      socket.end(
+        errorLine(
+          requestId(request),
+          'not_git_worktree',
+          'Loom worktree actions require a path inside a Git work tree'
+        )
+      );
+    });
+
+    await assert.rejects(
+      () => client.worktreeStatus({ cwd: '/tmp/not-a-repo' }),
+      (err: unknown) => {
+        assert.ok(err instanceof LoomError);
+        assert.equal(err.code, 'not_git_worktree');
+        return true;
+      }
+    );
+  });
+
   test('ping rejects when the protocol version is not 20', async () => {
     const client = await withServer((request, socket) => {
       socket.end(

@@ -4507,6 +4507,24 @@
             "workspace_id"
           ],
           "type": "object"
+        },
+        "WorktreeStatusParams": {
+          "description": "Parameters for the pure-read `worktree.status` verb: a one-shot Git work tree\nstatus for a single workspace's checkout. Supply at most one of `workspace_id`\nor `cwd`; when neither is given the active workspace is used. It never mutates\nstate.",
+          "properties": {
+            "cwd": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "workspace_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
         }
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -4871,6 +4889,22 @@
             },
             "params": {
               "$ref": "#/schemas/request/$defs/WorktreeRemoveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "worktree.status",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/WorktreeStatusParams"
             }
           },
           "required": [
@@ -9044,6 +9078,48 @@
                 "workspace_id",
                 "path",
                 "forced"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "ahead": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "behind": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "changed_files": {
+                  "format": "uint32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "dirty": {
+                  "type": "boolean"
+                },
+                "has_upstream": {
+                  "type": "boolean"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "const": "worktree_status",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "path",
+                "dirty",
+                "changed_files",
+                "has_upstream",
+                "ahead",
+                "behind"
               ],
               "type": "object"
             },
