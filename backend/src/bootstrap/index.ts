@@ -62,6 +62,12 @@ import { createAcpSubstrate } from '../domains/conductor/adapters/acp-substrate.
 import { createLoomSubstrate } from '../domains/conductor/adapters/loom-substrate.adapter.js';
 import { createSwarmUnblockDeps } from '../domains/conductor/adapters/swarm-unblock-wiring.js';
 import { LoomSocketClient } from '@recoder/agent-runtimes/loom';
+import type { LoomResult } from '@recoder/agent-runtimes/loom';
+import {
+  createNeedsYouLoomStreamSource,
+  NEEDS_YOU_SUBSCRIPTION,
+} from '../domains/conductor/attention/needs-you-loom-stream.js';
+import { createNeedsYouLoomResolver } from '../domains/conductor/attention/needs-you-loom-resolver.js';
 import {
   createLoomDaemon,
   defaultRecoderLoomSocketPath,
@@ -963,6 +969,42 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     approvals: governance.approvals(),
     candidates: memory.candidates(),
   });
+  // LIVE Needs-You queue (LOOM-ROADMAP.md build-now #4): subscribe ONCE to the Loom
+  // `pane.agent_status_changed` stream over the SAME daemon socket (a dedicated CLIENT,
+  // NOT a second daemon) and drive a push-not-poll ranked queue of panes needing the
+  // human. Attribution is authoritative-record-first: `session.snapshot` maps pane→
+  // workspace, the Recoder record supplies kind/owner/taskGroup, and an unmappable pane
+  // is dropped (never guessed). Wired ONLY when Loom is enabled; otherwise the
+  // `recoder_needs_you` tool degrades truthfully to SERVICE_UNAVAILABLE. Late-bound
+  // `getWorkspace` (the seam runs long after `conductorRef` is assigned below).
+  const loomNeedsYouClient = new LoomSocketClient({
+    socketPath: loomDaemon.socketPath,
+  });
+  const needsYouStream = loomEnabled
+    ? createNeedsYouLoomStreamSource({
+        openStream: () =>
+          loomNeedsYouClient.subscribe({
+            subscriptions: [NEEDS_YOU_SUBSCRIPTION],
+          }),
+        resolver: createNeedsYouLoomResolver({
+          loadPanes: async () => {
+            const res = await loomNeedsYouClient.call('session.snapshot', {});
+            if (res.type !== 'session_snapshot') return [];
+            const snapshot = (
+              res as Extract<LoomResult, { type: 'session_snapshot' }>
+            ).snapshot;
+            return snapshot.panes.map(pane => ({
+              paneId: pane.pane_id,
+              workspaceId: pane.workspace_id,
+            }));
+          },
+          getWorkspace: id =>
+            conductorRef ? conductorRef.getWorkspace(id) : Promise.resolve(null),
+          logger: childLogger('conductor-needs-you'),
+        }),
+        logger: childLogger('conductor-needs-you'),
+      })
+    : undefined;
   const conductor = createConductorModule({
     config,
     logger: childLogger('conductor'),
@@ -1064,6 +1106,8 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // memory-search + sibling-decision + policy + approval + remember wiring the
     // `recoder_swarm_unblock` tool composes through the pure SwarmUnblockService.
     swarmUnblock: conductorSwarmUnblock,
+    // Live Needs-You queue push stream (build-now #4); absent ⇒ tool SERVICE_UNAVAILABLE.
+    ...(needsYouStream ? { needsYouStream } : {}),
     overrides: {
       tmuxBin: config.conductor.tmuxBin,
       worktreeRoot: config.conductor.worktreeRoot,

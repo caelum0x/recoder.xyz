@@ -52,6 +52,22 @@ import type { ConductorPlanPort } from './ports/plan.port.js';
 import type { ColbertSearchPort } from '../memory/ports/colbert-search.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
 import type { SwarmUnblockDeps } from './swarm/swarm-unblock.service.js';
+import type {
+  NeedsYouScheduler,
+  NeedsYouScope,
+  NeedsYouSnapshot,
+  NeedsYouStreamSource,
+} from './attention/needs-you-queue.service.js';
+export type {
+  NeedsYouEntry,
+  NeedsYouEvent,
+  NeedsYouScope,
+  NeedsYouSnapshot,
+  NeedsYouStreamSource,
+  NeedsYouStreamHandlers,
+  NeedsYouSubscription,
+  NeedsYouScheduler,
+} from './attention/needs-you-queue.service.js';
 import type { SubstrateScanDeps } from './adapters/substrate-scan.adapter.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type {
@@ -392,6 +408,18 @@ export interface ConductorModuleDeps {
    * mechanical behavior, never a fabricated merge). See `module/compare-converge.ts`.
    */
   readonly infer?: ConvergeInferenceFn;
+  /**
+   * OPTIONAL push-stream source for the LIVE Needs-You queue (LOOM-ROADMAP.md
+   * build-now #4). Bootstrap bridges the Loom `events.subscribe` stream (reusing the
+   * EXISTING daemon socket — never a second daemon) into push callbacks. When wired,
+   * the conductor subscribes ONCE, maps each pane status edge to a truthful attention
+   * state, and serves `recoder_needs_you` off the in-memory ranked queue. Absent ⇒ the
+   * tool + `needsYouSnapshot` refuse truthfully (`SERVICE_UNAVAILABLE`), never a faked
+   * empty queue. See `attention/needs-you-queue.service.ts`.
+   */
+  readonly needsYouStream?: NeedsYouStreamSource;
+  /** OPTIONAL injected timer for the Needs-You re-subscribe backoff (test-injectable; real `setTimeout` default). */
+  readonly needsYouScheduler?: NeedsYouScheduler;
 }
 
 /** The public surface bootstrap registers and the edge/interop consume. */
@@ -844,6 +872,17 @@ export interface ConductorModule {
     },
     principal: Principal,
   ): Promise<ConductorWriteResult<ComposeConvergenceResult> | AdHocReject>;
+  /**
+   * The LIVE Needs-You queue projection (`recoder_needs_you`, LOOM-ROADMAP.md build-now
+   * #4) — the ranked, push-driven set of panes that NEED THE HUMAN for a scope, with a
+   * truthful `count` and a `degraded` flag when the stream is not live. Owner-narrowed:
+   * a non-privileged principal is pinned to its OWN panes. Throws `SERVICE_UNAVAILABLE`
+   * when the push stream is not wired — never a fabricated empty queue.
+   */
+  needsYouSnapshot(
+    scope: NeedsYouScope,
+    principal: Principal,
+  ): Promise<NeedsYouSnapshot>;
   /** The terminal WS surface (edge registers `terminalBackends()`). */
   terminal(): TerminalStreamPort;
   /** The `/api/conductor` router. */

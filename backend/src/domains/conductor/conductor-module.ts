@@ -209,6 +209,12 @@ import {
 } from './fanout/converge-fanout.service.js';
 import { buildConductorFanoutTools } from './mcp/conductor-fanout-tool.js';
 import {
+  NeedsYouQueueService,
+  type NeedsYouScope,
+  type NeedsYouSnapshot,
+} from './attention/needs-you-queue.service.js';
+import { buildConductorNeedsYouTools } from './mcp/conductor-needs-you-tool.js';
+import {
   ReFanService,
   type PriorConvergence,
   type ReFanInput,
@@ -265,6 +271,13 @@ export class ConductorComposer implements ConductorModule {
    * (`SERVICE_UNAVAILABLE`) rather than fabricating an escalation/answer.
    */
   private readonly swarmUnblock?: SwarmUnblockDeps;
+  /**
+   * OPTIONAL live Needs-You queue (LOOM-ROADMAP.md build-now #4): a PUSH-driven ranked
+   * queue of panes needing the human, fed by ONE Loom `events.subscribe` stream. Absent
+   * ⇒ `needsYouSnapshot` + the `recoder_needs_you` tool refuse truthfully
+   * (`SERVICE_UNAVAILABLE`), never a faked empty queue.
+   */
+  private readonly needsYouQueue?: NeedsYouQueueService;
   /** OPTIONAL code-intel seam (recodergit index + beads issue-graph track/close). */
   private readonly codeIntel?: CodeIntelPort;
   /**
@@ -540,6 +553,19 @@ export class ConductorComposer implements ConductorModule {
     this.compareConverge = new ConductorCompareConverge(this.ctx);
     this.reads = new ConductorReads(this.ctx);
     this.writes = new ConductorGovernedWrites(this.ctx);
+
+    // Live Needs-You queue (build-now #4): constructed ONLY when bootstrap wires the
+    // push-stream source (the bridge over the EXISTING Loom daemon socket). Started in
+    // `start()`, torn down in `stop()`. Absent ⇒ the read/tool refuse truthfully.
+    this.needsYouQueue = deps.needsYouStream
+      ? new NeedsYouQueueService({
+          source: deps.needsYouStream,
+          ...(deps.needsYouScheduler
+            ? { scheduler: deps.needsYouScheduler }
+            : {}),
+          logger: loggerPort,
+        })
+      : undefined;
   }
 
   private buildContext(): ConductorContext {
@@ -966,6 +992,31 @@ export class ConductorComposer implements ConductorModule {
       logger: this.swarmUnblock.logger ?? toLoggerPort(this.log),
     });
     return service.resolveBlocked(input);
+  }
+
+  /**
+   * The LIVE Needs-You queue projection (`recoder_needs_you`, LOOM-ROADMAP.md build-now
+   * #4). Reads the push-driven ranked queue for a scope; a non-privileged principal is
+   * PINNED to its OWN panes (defense-in-depth alongside the tool's owner scope), so it
+   * can never read another tenant's queue. Unwired ⇒ `SERVICE_UNAVAILABLE` (truthful),
+   * never a fabricated empty queue.
+   */
+  async needsYouSnapshot(
+    scope: NeedsYouScope,
+    principal: Principal
+  ): Promise<NeedsYouSnapshot> {
+    if (!this.needsYouQueue) {
+      throw createError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        'conductor: the live Needs-You queue is not configured on this deployment'
+      );
+    }
+    const scopes = principal.scopes ?? [];
+    const privileged = scopes.includes('admin') || scopes.includes('internal');
+    const effective: NeedsYouScope = privileged
+      ? scope
+      : { ...scope, owner: principal.userId };
+    return this.needsYouQueue.snapshot(effective);
   }
 
   async workspaceDiff(workspaceId: string): Promise<WorkspaceDiffView> {
@@ -1453,6 +1504,8 @@ export class ConductorComposer implements ConductorModule {
       ...buildConductorCockpitTools(this),
       // Swarm auto-unblock — resolve a Blocked pane, escalate by default (§1 build-now #3).
       ...buildConductorSwarmUnblockTools(this),
+      // LIVE Needs-You queue — push-driven ranked panes needing the human (§1 build-now #4).
+      ...buildConductorNeedsYouTools(this),
     ];
   }
 
@@ -1468,6 +1521,8 @@ export class ConductorComposer implements ConductorModule {
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
+    // Open the ONE long-lived Needs-You subscription (build-now #4) when wired.
+    this.needsYouQueue?.start();
     this.log.info(
       {
         substrates: (await this.registry.availability())
@@ -1481,5 +1536,7 @@ export class ConductorComposer implements ConductorModule {
 
   async stop(): Promise<void> {
     // Idempotent, degrade-safe: live sessions are substrate-owned and survive.
+    // Tear down the Needs-You subscription + any pending re-subscribe (build-now #4).
+    this.needsYouQueue?.stop();
   }
 }
