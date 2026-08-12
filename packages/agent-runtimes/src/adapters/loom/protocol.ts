@@ -57,6 +57,18 @@ export type ReadSource =
 /** loom `ReadFormat` (serde snake_case). */
 export type ReadFormat = 'text' | 'ansi';
 
+/**
+ * loom `BlockedKind` -- the DECLARED reason a blocked agent is waiting (serde
+ * snake_case). Emitted only when a screen rule wins with a declared kind; agents
+ * without a screen manifest (recoder_code / qwen_code / crush) and non-blocked /
+ * hook-decided states carry none. Recoder never fabricates a kind -- an
+ * undeclared or unrecognised value is surfaced as `undefined`.
+ *  - `approval` = waiting for the human to APPROVE an action.
+ *  - `trust`    = waiting for a TRUST / permission decision.
+ *  - `input`    = a plain question that needs input.
+ */
+export type BlockedKind = 'approval' | 'input' | 'trust';
+
 // --- Method params ----------------------------------------------------------
 
 export type PingParams = Record<string, never>;
@@ -230,7 +242,59 @@ export interface AgentInfo {
   state_change_seq?: number;
   cwd?: string;
   foreground_cwd?: string;
+  /**
+   * OPTIONAL screen-rule provenance (loom detect): the id of the winning screen
+   * rule for the current state. `undefined` for hook-decided / manifest-less
+   * agents. Purely informational -- never a fabricated id.
+   */
+  agent_rule_id?: string;
+  /**
+   * OPTIONAL declared block taxonomy (see {@link BlockedKind}). `undefined` when
+   * the agent is not blocked, has no screen manifest, or the state was
+   * hook-decided. Never fabricated.
+   */
+  agent_blocked_kind?: BlockedKind;
   revision: number;
+}
+
+/**
+ * The OPTIONAL screen-rule provenance parsed off an {@link AgentInfo} or a
+ * `pane.agent_status_changed` event `data` payload, normalised from the
+ * snake_case wire to camelCase. Both fields are absent unless loom DECLARED
+ * them; an unrecognised `agent_blocked_kind` is dropped (never coerced into a
+ * fabricated kind).
+ */
+export interface BlockedProvenance {
+  agentRuleId?: string;
+  agentBlockedKind?: BlockedKind;
+}
+
+const BLOCKED_KINDS: readonly BlockedKind[] = ['approval', 'input', 'trust'];
+
+function isBlockedKind(value: unknown): value is BlockedKind {
+  return (
+    typeof value === 'string' &&
+    (BLOCKED_KINDS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Defensively read the OPTIONAL `agent_rule_id` + `agent_blocked_kind` off any
+ * loom shape that may carry them (an `AgentInfo`, or a status-changed event
+ * `data`). Missing / blank / unrecognised fields yield `undefined` so the caller
+ * degrades to its existing manifest-less behaviour rather than guessing.
+ */
+export function parseBlockedProvenance(source: unknown): BlockedProvenance {
+  if (!isRecord(source)) return {};
+  const out: BlockedProvenance = {};
+  const ruleId = source.agent_rule_id;
+  if (typeof ruleId === 'string' && ruleId.trim().length > 0) {
+    out.agentRuleId = ruleId;
+  }
+  if (isBlockedKind(source.agent_blocked_kind)) {
+    out.agentBlockedKind = source.agent_blocked_kind;
+  }
+  return out;
 }
 
 /**

@@ -35,7 +35,16 @@
  *    AND it carries real evidence -- an unevidenced answer is not deliverable.
  */
 import type { LoggerPort } from '@recoder/substrate';
+import type { BlockedKind } from '@recoder/agent-runtimes/loom';
 import type { Principal } from '../../identity/types.js';
+
+/**
+ * Re-export the loom DECLARED block taxonomy so the swarm domain (and its tests)
+ * share ONE vocabulary with the wire contract. `'approval'` / `'trust'` are a
+ * human's decision by nature (always escalated); `'input'` is answerable under
+ * the existing gates; `undefined` = no provenance (existing behaviour preserved).
+ */
+export type { BlockedKind };
 
 /** The risk classes a candidate answer may carry -- only `low` is auto-answerable. */
 export type UnblockRisk = 'low' | 'medium' | 'high';
@@ -66,6 +75,16 @@ export interface UnblockCandidate {
 /** Reads the blocked pane's recent output (`agent.read` recent) -- `null` when unreadable. */
 export interface SwarmUnblockAgentRead {
   readRecent(workspaceId: string, actor: Principal): Promise<string | null>;
+}
+
+/**
+ * Reads the DECLARED {@link BlockedKind} off the blocked pane's live `AgentInfo`
+ * (`agent.get` -> `agent_blocked_kind`). `undefined` when the pane is unreachable,
+ * the agent is manifest-less, or the state was hook-decided -- the router then
+ * falls back to its existing (kind-absent) behaviour. Never a fabricated kind.
+ */
+export interface SwarmUnblockBlockedKindRead {
+  read(workspaceId: string, actor: Principal): Promise<BlockedKind | undefined>;
 }
 
 /** Searches cross-runtime memory for candidate answers to the question. */
@@ -108,6 +127,8 @@ export interface SwarmUnblockApprovalGate {
     readonly candidate: UnblockCandidate | null;
     readonly reason: string;
     readonly taskGroup: string | undefined;
+    /** The DECLARED block taxonomy driving this decision, when loom emitted one. */
+    readonly blockedKind?: BlockedKind;
     readonly actor: Principal;
   }): Promise<{ readonly requestId: string }>;
 }
@@ -130,6 +151,8 @@ export interface SwarmUnblockRememberCandidate {
     readonly answer: string;
     readonly source: string;
     readonly evidence: string;
+    /** The DECLARED block taxonomy this answer resolved, when loom emitted one. */
+    readonly blockedKind?: BlockedKind;
     readonly actor: Principal;
   }): Promise<void>;
 }
@@ -143,6 +166,12 @@ export interface SwarmUnblockDeps {
   readonly approvalGate: SwarmUnblockApprovalGate;
   readonly agentPrompt: SwarmUnblockAgentPrompt;
   readonly rememberCandidate: SwarmUnblockRememberCandidate;
+  /**
+   * OPTIONAL: source the DECLARED {@link BlockedKind} from the blocked pane's
+   * live `AgentInfo` when the caller did not already supply it. Absent seam ⇒
+   * the router relies solely on {@link ResolveBlockedInput.blockedKind}.
+   */
+  readonly blockedKindRead?: SwarmUnblockBlockedKindRead;
   /** Structured logger; defaults to a no-op. */
   readonly logger?: LoggerPort;
 }
@@ -163,6 +192,13 @@ export interface ResolveBlockedInput {
   /** The shared fan-out group id (enables the sibling-decision source). */
   readonly taskGroup?: string;
   readonly policy: SwarmUnblockPolicy;
+  /**
+   * OPTIONAL DECLARED block taxonomy for this pane (see {@link BlockedKind}).
+   * When absent the service sources it from the live pane via
+   * {@link SwarmUnblockDeps.blockedKindRead} (also optional); still absent ⇒ the
+   * kind-agnostic escalate-by-default behaviour is unchanged. Never fabricated.
+   */
+  readonly blockedKind?: BlockedKind;
   readonly actor: Principal;
 }
 
@@ -173,12 +209,16 @@ export type SwarmUnblockResult =
       readonly answer: string;
       readonly source: string;
       readonly question: string;
+      /** The DECLARED block taxonomy this answer resolved, when present. */
+      readonly blockedKind?: BlockedKind;
     }
   | {
       readonly action: 'escalated';
       readonly requestId: string;
       readonly question: string | null;
       readonly reason: string;
+      /** The DECLARED block taxonomy that drove the escalation, when present. */
+      readonly blockedKind?: BlockedKind;
     };
 
 const NOOP_LOGGER: LoggerPort = { info() {}, warn() {}, error() {} };
@@ -252,6 +292,10 @@ export class SwarmUnblockService {
   ): Promise<SwarmUnblockResult> {
     const { workspaceId, taskGroup, actor } = input;
 
+    // (0) SOURCE the DECLARED block taxonomy -- the caller's value, else the live
+    // pane's `AgentInfo` (optional seam). Absent ⇒ `undefined` ⇒ kind-agnostic path.
+    const blockedKind = await this.resolveBlockedKind(input);
+
     // (1) READ the blocking question from the pane tail (strip-ANSI). A pane with no
     // readable question cannot be auto-answered -- escalate truthfully.
     const rawTail = await this.deps.agentRead.readRecent(workspaceId, actor);
@@ -261,7 +305,8 @@ export class SwarmUnblockService {
         input,
         null,
         null,
-        'could not read the blocking question from the pane'
+        'could not read the blocking question from the pane',
+        blockedKind
       );
     }
 
@@ -269,14 +314,31 @@ export class SwarmUnblockService {
     const candidates = await this.gatherCandidates(input, question);
     const best = chooseBest(candidates);
 
-    // (3) DECIDE -- default = ESCALATE. Auto-answer is a narrow, gated exception.
+    // (3a) HARD GATE on the DECLARED kind (security-tightening): an approval or
+    // trust decision is the human's by nature. It ALWAYS escalates -- even with
+    // `autoAnswer` opted in AND a strong low-risk sibling candidate -- and the
+    // answer policy gate is never consulted. The best candidate still rides the
+    // escalation as a human-reviewable proposal.
+    if (blockedKind === 'approval' || blockedKind === 'trust') {
+      return this.escalate(
+        input,
+        question,
+        best,
+        `blocked kind '${blockedKind}' requires a human decision (never auto-answered)`,
+        blockedKind
+      );
+    }
+
+    // (3b) DECIDE -- default = ESCALATE. Auto-answer is a narrow, gated exception
+    // (applies to `input` kinds and to kind-absent panes alike).
     const minConfidence = input.policy.minConfidence ?? DEFAULT_MIN_CONFIDENCE;
     if (input.policy.autoAnswer !== true) {
       return this.escalate(
         input,
         question,
         best,
-        'auto-answer disabled by policy (escalate by default)'
+        'auto-answer disabled by policy (escalate by default)',
+        blockedKind
       );
     }
     if (best == null) {
@@ -284,7 +346,8 @@ export class SwarmUnblockService {
         input,
         question,
         null,
-        'no candidate answer found in memory or sibling panes'
+        'no candidate answer found in memory or sibling panes',
+        blockedKind
       );
     }
     if (!isAutoAnswerable(best, minConfidence)) {
@@ -292,7 +355,8 @@ export class SwarmUnblockService {
         input,
         question,
         best,
-        'no high-confidence, low-risk, evidenced answer available'
+        'no high-confidence, low-risk, evidenced answer available',
+        blockedKind
       );
     }
 
@@ -309,7 +373,8 @@ export class SwarmUnblockService {
         input,
         question,
         best,
-        `policy verdict '${decision.effect}' -- not auto-answering`
+        `policy verdict '${decision.effect}' -- not auto-answering`,
+        blockedKind
       );
     }
 
@@ -320,18 +385,43 @@ export class SwarmUnblockService {
       text: best.answer,
       actor,
     });
-    await this.recordCandidate(input, question, best);
+    await this.recordCandidate(input, question, best, blockedKind);
     this.logger.info('swarm unblock auto-answered a blocked pane', {
       workspaceId,
       taskGroup,
       source: best.source,
+      blockedKind,
     });
     return {
       action: 'answered',
       answer: best.answer,
       source: best.source,
       question,
+      ...(blockedKind ? { blockedKind } : {}),
     };
+  }
+
+  /**
+   * Resolve the DECLARED block taxonomy: the caller-supplied kind takes
+   * precedence; otherwise source it from the live pane's `AgentInfo` via the
+   * optional seam. A missing seam or a read fault yields `undefined` (never a
+   * fabricated kind) so the router preserves its kind-agnostic behaviour.
+   */
+  private async resolveBlockedKind(
+    input: ResolveBlockedInput
+  ): Promise<BlockedKind | undefined> {
+    if (input.blockedKind != null) return input.blockedKind;
+    const seam = this.deps.blockedKindRead;
+    if (seam == null) return undefined;
+    try {
+      return (await seam.read(input.workspaceId, input.actor)) ?? undefined;
+    } catch (err) {
+      this.logger.warn('swarm unblock blocked-kind read faulted', {
+        workspaceId: input.workspaceId,
+        err: message(err),
+      });
+      return undefined;
+    }
   }
 
   /** Gather candidates from memory + (when grouped) a sibling that already decided. */
@@ -376,7 +466,8 @@ export class SwarmUnblockService {
   private async recordCandidate(
     input: ResolveBlockedInput,
     question: string,
-    candidate: UnblockCandidate
+    candidate: UnblockCandidate,
+    blockedKind: BlockedKind | undefined
   ): Promise<void> {
     try {
       await this.deps.rememberCandidate.remember({
@@ -386,6 +477,7 @@ export class SwarmUnblockService {
         answer: candidate.answer,
         source: candidate.source,
         evidence: candidate.evidence,
+        ...(blockedKind ? { blockedKind } : {}),
         actor: input.actor,
       });
     } catch (err) {
@@ -403,7 +495,8 @@ export class SwarmUnblockService {
     input: ResolveBlockedInput,
     question: string | null,
     candidate: UnblockCandidate | null,
-    reason: string
+    reason: string,
+    blockedKind: BlockedKind | undefined
   ): Promise<SwarmUnblockResult> {
     const { requestId } = await this.deps.approvalGate.request({
       workspaceId: input.workspaceId,
@@ -411,6 +504,7 @@ export class SwarmUnblockService {
       candidate,
       reason,
       taskGroup: input.taskGroup,
+      ...(blockedKind ? { blockedKind } : {}),
       actor: input.actor,
     });
     this.logger.info('swarm unblock escalated a blocked pane', {
@@ -418,8 +512,15 @@ export class SwarmUnblockService {
       taskGroup: input.taskGroup,
       requestId,
       reason,
+      blockedKind,
     });
-    return { action: 'escalated', requestId, question, reason };
+    return {
+      action: 'escalated',
+      requestId,
+      question,
+      reason,
+      ...(blockedKind ? { blockedKind } : {}),
+    };
   }
 }
 

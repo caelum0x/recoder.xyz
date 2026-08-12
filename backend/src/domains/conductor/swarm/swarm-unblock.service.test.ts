@@ -16,10 +16,12 @@ import { describe, it, expect } from 'vitest';
 import type { Principal } from '../../identity/types.js';
 import {
   SwarmUnblockService,
+  type BlockedKind,
   type ResolveBlockedInput,
   type SwarmUnblockAgentPrompt,
   type SwarmUnblockAgentRead,
   type SwarmUnblockApprovalGate,
+  type SwarmUnblockBlockedKindRead,
   type SwarmUnblockDeps,
   type SwarmUnblockMemorySearch,
   type SwarmUnblockPolicyGate,
@@ -96,18 +98,35 @@ class FakeApprovalGate implements SwarmUnblockApprovalGate {
     question: string | null;
     candidate: UnblockCandidate | null;
     reason: string;
+    blockedKind?: BlockedKind;
   }[] = [];
   async request(input: {
     question: string | null;
     candidate: UnblockCandidate | null;
     reason: string;
+    blockedKind?: BlockedKind;
   }): Promise<{ requestId: string }> {
     this.requests.push({
       question: input.question,
       candidate: input.candidate,
       reason: input.reason,
+      blockedKind: input.blockedKind,
     });
     return { requestId: `appr_${this.requests.length}` };
+  }
+}
+
+/** Sources the DECLARED blocked kind from the (fake) live AgentInfo seam. */
+class FakeBlockedKindRead implements SwarmUnblockBlockedKindRead {
+  readonly seen: string[] = [];
+  constructor(
+    private readonly kind: BlockedKind | undefined = undefined,
+    private readonly fault = false
+  ) {}
+  async read(workspaceId: string): Promise<BlockedKind | undefined> {
+    this.seen.push(workspaceId);
+    if (this.fault) throw new Error('agent.get faulted');
+    return this.kind;
   }
 }
 
@@ -124,18 +143,21 @@ class FakeRemember implements SwarmUnblockRememberCandidate {
     answer: string;
     source: string;
     evidence: string;
+    blockedKind?: BlockedKind;
   }[] = [];
   async remember(input: {
     question: string;
     answer: string;
     source: string;
     evidence: string;
+    blockedKind?: BlockedKind;
   }): Promise<void> {
     this.recorded.push({
       question: input.question,
       answer: input.answer,
       source: input.source,
       evidence: input.evidence,
+      blockedKind: input.blockedKind,
     });
   }
 }
@@ -175,6 +197,9 @@ function build(overrides: Partial<SwarmUnblockDeps> = {}): Harness {
     approvalGate: approval,
     agentPrompt: prompt,
     rememberCandidate: remember,
+    ...(overrides.blockedKindRead
+      ? { blockedKindRead: overrides.blockedKindRead }
+      : {}),
   });
   return {
     service,
@@ -190,11 +215,13 @@ function build(overrides: Partial<SwarmUnblockDeps> = {}): Harness {
 
 function resolve(
   policy: { autoAnswer: boolean; minConfidence?: number },
-  taskGroup?: string
+  taskGroup?: string,
+  blockedKind?: BlockedKind
 ): ResolveBlockedInput {
   return {
     workspaceId: 'ws-1',
     ...(taskGroup ? { taskGroup } : {}),
+    ...(blockedKind ? { blockedKind } : {}),
     policy,
     actor: ACTOR,
   };
@@ -381,5 +408,165 @@ describe('SwarmUnblockService', () => {
     expect(result.question).toBeNull();
     expect(h.memory.queries).toHaveLength(0); // never searched on a missing question
     expect(h.prompt.delivered).toHaveLength(0);
+  });
+
+  // --- routing on the DECLARED blocked kind (approval | trust | input) ---------
+
+  it("blockedKind 'approval' ALWAYS escalates -- even autoAnswer=true + a strong low-risk candidate; the policy gate is never consulted", async () => {
+    const strongSibling: UnblockCandidate = {
+      answer: 'use base recoder/main',
+      source: 'sibling',
+      confidence: 0.99,
+      risk: 'low',
+      evidence: 'sibling ws-2 already answered the same prompt',
+    };
+    const h = build({
+      siblingDecision: new FakeSibling(strongSibling),
+      memorySearch: new FakeMemorySearch([STRONG]),
+      policyGate: new FakePolicyGate('allow'),
+    });
+    const result = await h.service.resolveBlocked(
+      resolve({ autoAnswer: true }, 'fan-1', 'approval')
+    );
+    expect(result.action).toBe('escalated');
+    if (result.action !== 'escalated') throw new Error('expected escalated');
+    // The kind is recorded truthfully on the result AND the approval request.
+    expect(result.blockedKind).toBe('approval');
+    expect(h.approval.requests[0].blockedKind).toBe('approval');
+    // NEVER auto-answered: no delivery, no memory candidate.
+    expect(h.prompt.delivered).toHaveLength(0);
+    expect(h.remember.recorded).toHaveLength(0);
+    // The answer policy gate is NOT consulted for an approval decision.
+    expect(h.policy.calls).toHaveLength(0);
+    // The strong candidate still rides the escalation as a human-reviewable proposal.
+    expect(h.approval.requests[0].candidate).toEqual(strongSibling);
+  });
+
+  it("blockedKind 'trust' ALWAYS escalates -- even autoAnswer=true + a strong low-risk candidate; the gate is never consulted", async () => {
+    const h = build({
+      siblingDecision: new FakeSibling({
+        answer: 'grant the tool',
+        source: 'sibling',
+        confidence: 0.98,
+        risk: 'low',
+        evidence: 'sibling ws-2 already granted the same trust prompt',
+      }),
+      policyGate: new FakePolicyGate('allow'),
+    });
+    const result = await h.service.resolveBlocked(
+      resolve({ autoAnswer: true }, 'fan-1', 'trust')
+    );
+    expect(result.action).toBe('escalated');
+    if (result.action !== 'escalated') throw new Error('expected escalated');
+    expect(result.blockedKind).toBe('trust');
+    expect(h.prompt.delivered).toHaveLength(0);
+    expect(h.remember.recorded).toHaveLength(0);
+    expect(h.policy.calls).toHaveLength(0);
+  });
+
+  it("blockedKind 'input' still AUTO-ANSWERS under the existing gates (autoAnswer=true + allow + strong candidate)", async () => {
+    const h = build({
+      memorySearch: new FakeMemorySearch([STRONG]),
+      policyGate: new FakePolicyGate('allow'),
+    });
+    const result = await h.service.resolveBlocked(
+      resolve({ autoAnswer: true }, undefined, 'input')
+    );
+    expect(result.action).toBe('answered');
+    if (result.action !== 'answered') throw new Error('expected answered');
+    expect(result.answer).toBe(STRONG.answer);
+    // The kind is recorded truthfully on the answer + the memory candidate.
+    expect(result.blockedKind).toBe('input');
+    expect(h.policy.calls).toHaveLength(1); // the gate WAS consulted, and allowed
+    expect(h.prompt.delivered).toEqual([
+      { workspaceId: 'ws-1', text: STRONG.answer },
+    ]);
+    expect(h.remember.recorded[0].blockedKind).toBe('input');
+  });
+
+  it("blockedKind 'input' with autoAnswer=false still ESCALATES BY DEFAULT (existing gate unchanged)", async () => {
+    const h = build({ memorySearch: new FakeMemorySearch([STRONG]) });
+    const result = await h.service.resolveBlocked(
+      resolve({ autoAnswer: false }, undefined, 'input')
+    );
+    expect(result.action).toBe('escalated');
+    if (result.action !== 'escalated') throw new Error('expected escalated');
+    expect(result.blockedKind).toBe('input');
+    expect(h.policy.calls).toHaveLength(0);
+    expect(h.prompt.delivered).toHaveLength(0);
+  });
+
+  it('blockedKind undefined preserves the EXACT current behaviour (escalate-by-default; existing auto-answer sub-gates)', async () => {
+    // (a) autoAnswer=false escalates even with a strong candidate; no kind recorded.
+    const off = build({ memorySearch: new FakeMemorySearch([STRONG]) });
+    const escalated = await off.service.resolveBlocked(
+      resolve({ autoAnswer: false })
+    );
+    expect(escalated.action).toBe('escalated');
+    if (escalated.action !== 'escalated') throw new Error('expected escalated');
+    expect(escalated.blockedKind).toBeUndefined();
+    expect(off.approval.requests[0].blockedKind).toBeUndefined();
+
+    // (b) autoAnswer=true + allow + strong candidate STILL answers (sub-gates intact).
+    const on = build({
+      memorySearch: new FakeMemorySearch([STRONG]),
+      policyGate: new FakePolicyGate('allow'),
+    });
+    const answered = await on.service.resolveBlocked(
+      resolve({ autoAnswer: true })
+    );
+    expect(answered.action).toBe('answered');
+    if (answered.action !== 'answered') throw new Error('expected answered');
+    expect(answered.blockedKind).toBeUndefined();
+    expect(on.remember.recorded[0].blockedKind).toBeUndefined();
+  });
+
+  it('sources the DECLARED kind from the live-AgentInfo seam when the caller omits it', async () => {
+    const seam = new FakeBlockedKindRead('approval');
+    const h = build({
+      blockedKindRead: seam,
+      siblingDecision: new FakeSibling(STRONG),
+      memorySearch: new FakeMemorySearch([STRONG]),
+      policyGate: new FakePolicyGate('allow'),
+    });
+    const result = await h.service.resolveBlocked(
+      resolve({ autoAnswer: true }, 'fan-1')
+    );
+    expect(seam.seen).toEqual(['ws-1']); // the seam WAS consulted for the kind
+    expect(result.action).toBe('escalated'); // approval ⇒ escalate, never answer
+    if (result.action !== 'escalated') throw new Error('expected escalated');
+    expect(result.blockedKind).toBe('approval');
+    expect(h.policy.calls).toHaveLength(0);
+    expect(h.prompt.delivered).toHaveLength(0);
+  });
+
+  it('the caller-supplied kind takes precedence over the seam (seam not consulted)', async () => {
+    const seam = new FakeBlockedKindRead('approval');
+    const h = build({
+      blockedKindRead: seam,
+      memorySearch: new FakeMemorySearch([STRONG]),
+      policyGate: new FakePolicyGate('allow'),
+    });
+    const result = await h.service.resolveBlocked(
+      resolve({ autoAnswer: true }, undefined, 'input')
+    );
+    expect(seam.seen).toHaveLength(0); // input.blockedKind wins; seam not read
+    expect(result.action).toBe('answered'); // 'input' ⇒ existing auto-answer path
+  });
+
+  it('a faulting blocked-kind seam degrades to undefined (existing behaviour, never fabricated)', async () => {
+    const seam = new FakeBlockedKindRead(undefined, true);
+    const h = build({
+      blockedKindRead: seam,
+      memorySearch: new FakeMemorySearch([STRONG]),
+      policyGate: new FakePolicyGate('allow'),
+    });
+    const result = await h.service.resolveBlocked(
+      resolve({ autoAnswer: true })
+    );
+    // Seam faulted ⇒ kind undefined ⇒ the existing auto-answer sub-gates still apply.
+    expect(result.action).toBe('answered');
+    if (result.action !== 'answered') throw new Error('expected answered');
+    expect(result.blockedKind).toBeUndefined();
   });
 });

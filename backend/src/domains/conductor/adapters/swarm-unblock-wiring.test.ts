@@ -60,6 +60,7 @@ function paneRead(text: string): LoomResult {
 function fakeLoom(handlers: {
   read?: (params: Record<string, unknown>) => LoomResult;
   prompt?: (params: Record<string, unknown>) => LoomResult;
+  get?: (params: Record<string, unknown>) => LoomResult;
   calls?: Array<{ method: string; params: Record<string, unknown> }>;
 }): LoomClientPort {
   const record = handlers.calls ?? [];
@@ -80,12 +81,33 @@ function fakeLoom(handlers: {
         return handlers.read(p) as Result;
       if (method === 'agent.prompt' && handlers.prompt)
         return handlers.prompt(p) as Result;
+      if (method === 'agent.get' && handlers.get)
+        return handlers.get(p) as Result;
       return { type: 'ok' } as Result;
     },
     async callAndWait<Result extends LoomResult = LoomResult>(): Promise<Result> {
       return { type: 'ok' } as Result;
     },
   };
+}
+
+/** An `agent_info` loom result carrying optional declared provenance. */
+function agentInfoResult(
+  extra: Record<string, unknown> = {}
+): LoomResult {
+  return {
+    type: 'agent_info',
+    agent: {
+      terminal_id: 'term-1',
+      agent_status: 'blocked',
+      workspace_id: 'w',
+      tab_id: 't',
+      pane_id: 'p',
+      focused: false,
+      revision: 1,
+      ...extra,
+    },
+  } as LoomResult;
 }
 
 function workspace(overrides: Partial<Workspace> = {}): Workspace {
@@ -174,6 +196,47 @@ describe('createSwarmUnblockDeps — real seam mapping', () => {
       getWorkspace: async () => workspace({ sessionName: undefined }),
     });
     expect(await deps.agentRead.readRecent('ws-1', ACTOR)).toBeNull();
+  });
+
+  it('blockedKindRead reads the DECLARED kind off the live AgentInfo (agent.get)', async () => {
+    const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
+    const { deps } = makeWiring({
+      loom: fakeLoom({
+        get: () => agentInfoResult({ agent_blocked_kind: 'approval', agent_rule_id: 'r-1' }),
+        calls,
+      }),
+    });
+    expect(await deps.blockedKindRead?.read('ws-1', ACTOR)).toBe('approval');
+    const get = calls.find(c => c.method === 'agent.get');
+    expect(get?.params).toMatchObject({ target: 'term-1' });
+  });
+
+  it('blockedKindRead is undefined when the AgentInfo declares no kind (manifest-less)', async () => {
+    const { deps } = makeWiring({
+      loom: fakeLoom({ get: () => agentInfoResult() }),
+    });
+    expect(await deps.blockedKindRead?.read('ws-1', ACTOR)).toBeUndefined();
+  });
+
+  it('blockedKindRead drops an unrecognised kind (never fabricated)', async () => {
+    const { deps } = makeWiring({
+      loom: fakeLoom({ get: () => agentInfoResult({ agent_blocked_kind: 'bogus' }) }),
+    });
+    expect(await deps.blockedKindRead?.read('ws-1', ACTOR)).toBeUndefined();
+  });
+
+  it('blockedKindRead is undefined when there is no live session', async () => {
+    const { deps } = makeWiring({
+      getWorkspace: async () => workspace({ sessionName: undefined }),
+    });
+    expect(await deps.blockedKindRead?.read('ws-1', ACTOR)).toBeUndefined();
+  });
+
+  it('blockedKindRead degrades to undefined when agent.get is not agent_info', async () => {
+    const { deps } = makeWiring({
+      loom: fakeLoom({ get: () => ({ type: 'ok' }) as LoomResult }),
+    });
+    expect(await deps.blockedKindRead?.read('ws-1', ACTOR)).toBeUndefined();
   });
 
   it('agentPrompt delivers into the live pane; a bad reply throws (never faked)', async () => {
