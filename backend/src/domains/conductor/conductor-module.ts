@@ -208,6 +208,14 @@ import {
   type FanoutWorkspaceCreateRequest,
 } from './fanout/converge-fanout.service.js';
 import { buildConductorFanoutTools } from './mcp/conductor-fanout-tool.js';
+import {
+  SwarmUnblockService,
+  type ResolveBlockedInput,
+  type SwarmUnblockDeps,
+  type SwarmUnblockResult,
+} from './swarm/swarm-unblock.service.js';
+import { buildConductorSwarmUnblockTools } from './swarm/swarm-unblock-tool.js';
+import { createError, ErrorCode } from '../../shared/errors.js';
 
 // The public result/read-model types + the advance-target whitelist moved to
 // `module/shared.ts` with the collaborator split; re-exported here so every
@@ -242,6 +250,13 @@ export class ConductorComposer implements ConductorModule {
   private readonly engineDeps: WorkspaceEngineDeps;
   /** OPTIONAL memory-backed brain (recall on launch + harvest on completion). */
   private readonly brain?: ConductorBrainMemory;
+  /**
+   * OPTIONAL swarm auto-unblock seams (LOOM-ROADMAP.md #3): the injected read /
+   * memory-search / sibling-decision / policy / approval / prompt / remember wiring
+   * the `recoder_swarm_unblock` tool drives. Absent ⇒ the tool refuses truthfully
+   * (`SERVICE_UNAVAILABLE`) rather than fabricating an escalation/answer.
+   */
+  private readonly swarmUnblock?: SwarmUnblockDeps;
   /** OPTIONAL code-intel seam (recodergit index + beads issue-graph track/close). */
   private readonly codeIntel?: CodeIntelPort;
   /**
@@ -355,6 +370,7 @@ export class ConductorComposer implements ConductorModule {
     this.middleware = deps.middleware;
     this.idempotency = deps.idempotency;
     this.brain = deps.brain;
+    this.swarmUnblock = deps.swarmUnblock;
     this.codeIntel = deps.codeIntel;
     this.previewVerify = deps.previewVerify;
     this.plan = deps.plan;
@@ -921,6 +937,29 @@ export class ConductorComposer implements ConductorModule {
     return this.compareConverge.arrangeCompareGrid(taskGroup, principal);
   }
 
+  /**
+   * Swarm auto-unblock (`recoder_swarm_unblock`, LOOM-ROADMAP.md #3): resolve a
+   * BLOCKED fan-out pane from Recoder-only sources (memory + a sibling that already
+   * decided) and ESCALATE BY DEFAULT via the approval gate. Composes the injected
+   * seams through the pure {@link SwarmUnblockService}; when the seams are not wired
+   * the tool refuses truthfully rather than fabricating an escalation/answer.
+   */
+  async resolveSwarmUnblock(
+    input: ResolveBlockedInput
+  ): Promise<SwarmUnblockResult> {
+    if (!this.swarmUnblock) {
+      throw createError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        'conductor: swarm auto-unblock is not configured on this deployment'
+      );
+    }
+    const service = new SwarmUnblockService({
+      ...this.swarmUnblock,
+      logger: this.swarmUnblock.logger ?? toLoggerPort(this.log),
+    });
+    return service.resolveBlocked(input);
+  }
+
   async workspaceDiff(workspaceId: string): Promise<WorkspaceDiffView> {
     return this.reads.workspaceDiff(workspaceId);
   }
@@ -1344,6 +1383,8 @@ export class ConductorComposer implements ConductorModule {
       ...buildConductorFanoutTools(this),
       // The LIVE convergence cockpit read — makes a fan-out observable (§1 build-now #1).
       ...buildConductorCockpitTools(this),
+      // Swarm auto-unblock — resolve a Blocked pane, escalate by default (§1 build-now #3).
+      ...buildConductorSwarmUnblockTools(this),
     ];
   }
 

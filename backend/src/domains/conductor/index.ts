@@ -51,6 +51,7 @@ export type { PreviewVerificationView } from './ports/preview-verify.port.js';
 import type { ConductorPlanPort } from './ports/plan.port.js';
 import type { ColbertSearchPort } from '../memory/ports/colbert-search.port.js';
 import type { ConductorBrainMemory } from './adapters/brain-memory.adapter.js';
+import type { SwarmUnblockDeps } from './swarm/swarm-unblock.service.js';
 import type { SubstrateScanDeps } from './adapters/substrate-scan.adapter.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type {
@@ -218,6 +219,14 @@ export interface ConductorModuleDeps {
    * harvest runs (truthful skip). See `adapters/brain-memory.adapter.ts`.
    */
   readonly brain?: ConductorBrainMemory;
+  /**
+   * OPTIONAL swarm auto-unblock seams (LOOM-ROADMAP.md #3): the injected
+   * agent-read / memory-search / sibling-decision / policy / approval / prompt /
+   * remember wiring the `recoder_swarm_unblock` tool composes through the pure
+   * `SwarmUnblockService`. Absent ⇒ the tool refuses truthfully
+   * (`SERVICE_UNAVAILABLE`) instead of fabricating an escalation/answer.
+   */
+  readonly swarmUnblock?: SwarmUnblockDeps;
   /**
    * Optional code-intel seam: recodergit repo index + beads issue-graph tracking.
    * On create the run flow indexes the repo (`indexRepo`) and claims the bd issue
