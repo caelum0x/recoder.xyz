@@ -1,0 +1,299 @@
+// Copyright 2026, Command Line Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import { RecoderEmpty, RecoderErrorRow, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
+import { FIELD_LABEL, INPUT, PAGE_TITLE, PRIMARY_BTN, QUIET_BTN_XS, STATE_CHIP } from "@/app/view/recoder/recoder-styles";
+import { useAtomValue } from "jotai";
+import { useEffect } from "react";
+import {
+    CockpitAgent,
+    CockpitContested,
+    FileVersionsView,
+    RecoderFanoutViewModel,
+} from "./recoder-fanout-model";
+
+const REFRESH_MS = 6000;
+
+// One crimson accent, reserved for the single load-bearing "ready to converge" signal;
+// everything else stays graphite so the strip reads as a terminal, not a stoplight.
+const CRIMSON_CHIP = "rounded border border-red-500/40 bg-red-500/10 text-red-300 px-1.5 py-0.5 text-xs whitespace-nowrap";
+
+function SettleStrip({ model }: { model: RecoderFanoutViewModel }) {
+    const snapshot = useAtomValue(model.snapshotAtom);
+    if (snapshot == null) {
+        return null;
+    }
+    return (
+        <div className="flex flex-wrap items-center gap-2">
+            <span className={STATE_CHIP}>
+                {snapshot.settledCount}/{snapshot.totalCount} settled
+            </span>
+            <span className={STATE_CHIP}>{snapshot.contested.length} contested</span>
+            <span className={STATE_CHIP}>{snapshot.autoMergeableCount} auto-mergeable</span>
+            <span className={STATE_CHIP}>{snapshot.needsPickCount} needs a pick</span>
+            <span className={STATE_CHIP}>{snapshot.cleanCount} clean</span>
+            {snapshot.convergeReady && <span className={CRIMSON_CHIP}>ready to converge</span>}
+        </div>
+    );
+}
+
+SettleStrip.displayName = "SettleStrip";
+
+function AgentRow({ agent }: { agent: CockpitAgent }) {
+    return (
+        <div className="flex items-center gap-2 rounded border border-border p-2" title={agent.workspaceId}>
+            <span className="text-sm font-medium truncate">{agent.kind || agent.workspaceId}</span>
+            <span className={`${STATE_CHIP} ml-auto`}>{agent.state}</span>
+            <span className={STATE_CHIP}>{agent.settled ? "settled" : "working"}</span>
+            {!agent.nativeStatus && <span className={STATE_CHIP}>raw pane</span>}
+        </div>
+    );
+}
+
+AgentRow.displayName = "AgentRow";
+
+function ContestedRow({ file }: { file: CockpitContested }) {
+    return (
+        <div className="flex flex-col gap-1 rounded border border-border p-2" title={file.path}>
+            <div className="flex items-center gap-2">
+                <span className="text-sm font-mono truncate">{file.path}</span>
+                <span className={`${STATE_CHIP} ml-auto`}>
+                    {file.synthesizable ? "auto-mergeable" : file.reason || "needs a pick"}
+                </span>
+            </div>
+            {file.agents.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                    {file.agents.map((a) => (
+                        <span key={a} className={`${STATE_CHIP} font-mono`}>
+                            {a}
+                        </span>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+ContestedRow.displayName = "ContestedRow";
+
+function FileColumns({ file }: { file: FileVersionsView }) {
+    return (
+        <div className="flex flex-col gap-1 rounded border border-border p-2">
+            <div className="text-sm font-mono truncate" title={file.path}>
+                {file.path}
+            </div>
+            <div className="flex gap-2 overflow-x-auto">
+                {file.versions.map((v) => (
+                    <div key={v.workspaceId} className="flex min-w-[14rem] flex-1 flex-col gap-0.5">
+                        <div className="flex items-center gap-1">
+                            <span className="text-xs font-medium truncate">{v.agent || v.workspaceId}</span>
+                            {v.truncated && <span className={`${STATE_CHIP} ml-auto`}>truncated</span>}
+                        </div>
+                        {v.content == null ? (
+                            <div className="text-secondary text-xs">{v.reason || "no version"}</div>
+                        ) : (
+                            <pre className="text-xs whitespace-pre-wrap break-words font-mono max-h-48 overflow-auto">
+                                {v.content}
+                            </pre>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+FileColumns.displayName = "FileColumns";
+
+function LaunchForm({ model }: { model: RecoderFanoutViewModel }) {
+    const task = useAtomValue(model.launchTaskAtom);
+    const kinds = useAtomValue(model.launchKindsAtom);
+    const repoPath = useAtomValue(model.repoPathAtom);
+    const spaceId = useAtomValue(model.spaceIdAtom);
+    const projectId = useAtomValue(model.projectIdAtom);
+    const launching = useAtomValue(model.launchingAtom);
+    const launchNotice = useAtomValue(model.launchNoticeAtom);
+    const result = useAtomValue(model.launchResultAtom);
+
+    return (
+        <div className="flex flex-col gap-2 rounded border border-border p-2">
+            <div className={FIELD_LABEL}>Fan a task out to N agents</div>
+            <input
+                className={`${INPUT} w-full`}
+                placeholder="Task — one prompt, N parallel runs…"
+                value={task}
+                onChange={(e) => model.setLaunchTask(e.target.value)}
+            />
+            <div className="flex flex-wrap gap-1">
+                {model.knownKinds.map((kind) => {
+                    const on = kinds.includes(kind);
+                    return (
+                        <button
+                            key={kind}
+                            className={on ? `${STATE_CHIP} border-red-500/40 text-red-300` : QUIET_BTN_XS}
+                            onClick={() => model.toggleKind(kind)}
+                        >
+                            {kind}
+                        </button>
+                    );
+                })}
+            </div>
+            <div className="flex flex-wrap gap-2">
+                <input
+                    className={`${INPUT} flex-1`}
+                    placeholder="repo path"
+                    value={repoPath}
+                    onChange={(e) => model.setRepoPath(e.target.value)}
+                />
+                <input
+                    className={`${INPUT} flex-1`}
+                    placeholder="space id"
+                    value={spaceId}
+                    onChange={(e) => model.setSpaceId(e.target.value)}
+                />
+                <input
+                    className={`${INPUT} flex-1`}
+                    placeholder="project id"
+                    value={projectId}
+                    onChange={(e) => model.setProjectId(e.target.value)}
+                />
+            </div>
+            <div className="flex items-center gap-2">
+                <button
+                    disabled={launching}
+                    className={PRIMARY_BTN}
+                    onClick={() => model.launch(task, kinds)}
+                >
+                    {launching ? "Fanning out…" : "Fan out"}
+                </button>
+                <span className="text-secondary text-xs">
+                    {kinds.length}/{model.maxAgents} agents · min {model.minAgents}
+                </span>
+            </div>
+            {launchNotice != "" && <div className="text-secondary text-sm">{launchNotice}</div>}
+            {result != null && (
+                <div className="flex flex-col gap-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className={STATE_CHIP} title={result.taskGroup}>
+                            group {result.taskGroup}
+                        </span>
+                        {result.converged != null ? (
+                            <span className={CRIMSON_CHIP} title={result.converged.workspaceId}>
+                                converged → {result.converged.branch}
+                            </span>
+                        ) : (
+                            <span className={STATE_CHIP}>{result.convergeReason || "nothing converged"}</span>
+                        )}
+                    </div>
+                    {result.perAgent.map((a) => (
+                        <div
+                            key={a.kind}
+                            className="flex items-center gap-2 rounded border border-border p-1.5"
+                            title={a.reason}
+                        >
+                            <span className="text-sm font-medium truncate">{a.kind}</span>
+                            <span className={`${STATE_CHIP} ml-auto`}>{a.settled ? "settled" : "unsettled"}</span>
+                            {!a.nativeStatus && <span className={STATE_CHIP}>raw pane</span>}
+                            {a.workspaceId == null && <span className={STATE_CHIP}>not created</span>}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+LaunchForm.displayName = "LaunchForm";
+
+function RecoderFanoutView({ model }: ViewComponentProps<RecoderFanoutViewModel>) {
+    const taskGroup = useAtomValue(model.taskGroupAtom);
+    const snapshot = useAtomValue(model.snapshotAtom);
+    const notice = useAtomValue(model.noticeAtom);
+    const error = useAtomValue(model.errorAtom);
+    const loading = useAtomValue(model.loadingAtom);
+    const connected = useAtomValue(model.connectedAtom);
+
+    useEffect(() => {
+        model.loadCockpit();
+        const id = setInterval(() => model.loadCockpit(), REFRESH_MS);
+        return () => clearInterval(id);
+    }, [model]);
+
+    const hasGroup = taskGroup.trim() != "";
+    const showDisconnected = !connected && !loading && error == "";
+
+    return (
+        <div className="flex flex-col h-full overflow-auto p-3 gap-2">
+            <div className="flex items-center gap-2">
+                <span className={PAGE_TITLE}>Converge Fan-out</span>
+                {snapshot != null && snapshot.summaryLine != "" && (
+                    <span className="text-secondary text-xs ml-auto truncate" title={snapshot.summaryLine}>
+                        {snapshot.summaryLine}
+                    </span>
+                )}
+            </div>
+
+            <div className="flex items-center gap-2">
+                <input
+                    className={`${INPUT} flex-1`}
+                    placeholder="taskGroup — open a live cockpit…"
+                    value={taskGroup}
+                    onChange={(e) => model.setTaskGroup(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key == "Enter") {
+                            model.loadCockpit();
+                        }
+                    }}
+                />
+                <button disabled={loading} className={QUIET_BTN_XS} onClick={() => model.loadCockpit()}>
+                    {loading ? "…" : "Open"}
+                </button>
+            </div>
+
+            <RecoderErrorRow message={error} />
+            {loading && snapshot == null && <RecoderSkeleton rows={3} />}
+            {showDisconnected && (
+                <RecoderEmpty title="Recoder is still starting…" hint="The cockpit loads once the backend is ready." />
+            )}
+
+            {hasGroup && notice != "" && <div className="text-secondary text-sm">{notice}</div>}
+
+            {snapshot != null && (
+                <>
+                    <SettleStrip model={model} />
+
+                    <div className="flex flex-col gap-1">
+                        <div className={FIELD_LABEL}>Agents</div>
+                        {snapshot.agents.map((a) => (
+                            <AgentRow key={a.workspaceId || a.kind} agent={a} />
+                        ))}
+                    </div>
+
+                    {snapshot.contested.length > 0 && (
+                        <div className="flex flex-col gap-1">
+                            <div className={FIELD_LABEL}>Contested</div>
+                            {snapshot.contested.map((c) => (
+                                <ContestedRow key={c.path} file={c} />
+                            ))}
+                        </div>
+                    )}
+
+                    {snapshot.fileVersions.length > 0 && (
+                        <div className="flex flex-col gap-1">
+                            <div className={FIELD_LABEL}>N-up columns</div>
+                            {snapshot.fileVersions.map((f) => (
+                                <FileColumns key={f.path} file={f} />
+                            ))}
+                        </div>
+                    )}
+                </>
+            )}
+
+            <LaunchForm model={model} />
+        </div>
+    );
+}
+
+RecoderFanoutView.displayName = "RecoderFanoutView";
+
+export { RecoderFanoutView };
