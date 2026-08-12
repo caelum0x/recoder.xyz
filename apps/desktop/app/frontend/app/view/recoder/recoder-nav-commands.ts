@@ -17,6 +17,7 @@ const RecoderNavTargets: RecoderNavTarget[] = [
     { id: "nav-codebase", title: "Ask the Repo", view: "recoder-codebase" },
     { id: "nav-knowledge", title: "Teach the Repo", view: "recoder-ingest" },
     { id: "nav-collaboration", title: "Agent Collaboration", view: "recoder-siblings" },
+    { id: "nav-fanout", title: "Converge Fan-out", view: "recoder-fanout" },
     { id: "nav-tools", title: "Agent Tools", view: "recoder-capabilities" },
     { id: "nav-locks", title: "Work Locks", view: "recoder-locks" },
     { id: "nav-audit", title: "Audit Trail", view: "recoder-audit" },

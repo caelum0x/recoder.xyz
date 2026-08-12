@@ -24,6 +24,7 @@ import { RecoderAuditViewModel } from "@/app/view/recoder-audit/recoder-audit-mo
 import { RecoderBoardViewModel } from "@/app/view/recoder-board/recoder-board-model";
 import { RecoderCapabilitiesViewModel } from "@/app/view/recoder-capabilities/recoder-capabilities-model";
 import { RecoderCodebaseViewModel } from "@/app/view/recoder-codebase/recoder-codebase-model";
+import { RecoderFanoutViewModel } from "@/app/view/recoder-fanout/recoder-fanout-model";
 import { RecoderIngestViewModel } from "@/app/view/recoder-ingest/recoder-ingest-model";
 import { RecoderLocksViewModel } from "@/app/view/recoder-locks/recoder-locks-model";
 import { RecoderMemoryViewModel } from "@/app/view/recoder-memory/recoder-memory-model";
@@ -57,6 +58,7 @@ BlockRegistry.set("recoder-diff", RecoderDiffViewModel);
 BlockRegistry.set("recoder-board", RecoderBoardViewModel);
 BlockRegistry.set("recoder-memory", RecoderMemoryViewModel);
 BlockRegistry.set("recoder-codebase", RecoderCodebaseViewModel);
+BlockRegistry.set("recoder-fanout", RecoderFanoutViewModel);
 BlockRegistry.set("recoder-siblings", RecoderSiblingsViewModel);
 BlockRegistry.set("recoder-ingest", RecoderIngestViewModel);
 BlockRegistry.set("recoder-capabilities", RecoderCapabilitiesViewModel);
