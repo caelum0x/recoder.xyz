@@ -55,7 +55,12 @@ ZIG=$PWD/zig-aarch64-macos-0.15.2/zig cargo build --release --locked   # -> targ
       **opt-in/non-default** `WorkspaceSubstrate` (tmux stays default). 1000 tests;
       daemon smoke PASSED via the supervisor. Activate with
       `CONDUCTOR_HERDR_ENABLED=1` + `substrate:'herdr'`.
-- [ ] Phase 3 — DMG packaging (electron-builder extraResources + arm64 gate + packaging test).
-- [ ] Phase 5 — full Recoder rebrand (LAST; blocked on the plugin-ecosystem decision).
+- [x] **Phase 3** — DMG packaging: electron-builder `extraResources`
+      (`../engines/herdr/target/release/herdr` → `backend/engines/herdr/herdr`) + added to
+      `ARCH_SENSITIVE_EXTRA_RESOURCES` (Mach-O arm64 gate) + packaging-config test (11/11).
+      The Phase-2 resolver lands on the packaged `<resources>/backend/engines/herdr/herdr`.
+- [ ] Phase 5 — **full Recoder rebrand** (owner decision 2026-08-12: rebrand, forgo the
+      592-plugin ecosystem). Rename binary/env/`herdr-plugin.toml` across the vendored
+      source; keep LICENSE + NOTICE (Apache-2 requires attribution even after rebrand). Large.
 
 Tracked in bd (`absorb`/`herdr` labels).
