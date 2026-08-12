@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
+  parseAgentQueryResult,
   parseBlockedProvenance,
   type AgentInfo,
   type BlockedProvenance,
@@ -91,5 +92,95 @@ describe('parseBlockedProvenance', () => {
       revision: 3,
     };
     assert.deepEqual(parseBlockedProvenance(agent), {});
+  });
+});
+
+// `parseAgentQueryResult` -- the DEFENSIVE reader of an `agent.query` reply's
+// `agents` list. TRUTHFULNESS invariant: only a well-formed `agent_query` result
+// with an array of object entries yields agents; anything else is `[]`, never a
+// fabricated agent. Entries pass through with their OPTIONAL screen-rule
+// provenance (`agent_rule_id`, `agent_blocked_kind`) intact.
+describe('parseAgentQueryResult', () => {
+  test('parses the agents list in order, preserving provenance passthrough', () => {
+    const agents = parseAgentQueryResult({
+      type: 'agent_query',
+      agents: [
+        {
+          terminal_id: 't-blocked',
+          agent_status: 'blocked',
+          workspace_id: 'w2',
+          tab_id: 'w2:1',
+          pane_id: 'w2-1',
+          focused: false,
+          revision: 7,
+          agent_rule_id: 'rule-approval-3',
+          agent_blocked_kind: 'approval',
+        },
+        {
+          terminal_id: 't-done',
+          agent_status: 'done',
+          workspace_id: 'w1',
+          tab_id: 'w1:1',
+          pane_id: 'w1-1',
+          focused: false,
+          revision: 4,
+        },
+      ],
+    });
+
+    assert.equal(agents.length, 2);
+    assert.equal(agents[0].terminal_id, 't-blocked');
+    assert.equal(agents[0].agent_status, 'blocked');
+    assert.equal(agents[0].agent_rule_id, 'rule-approval-3');
+    assert.equal(agents[0].agent_blocked_kind, 'approval');
+    assert.equal(agents[1].terminal_id, 't-done');
+    // A manifest-less agent carries no provenance and is passed through as-is.
+    assert.equal(agents[1].agent_rule_id, undefined);
+    assert.equal(agents[1].agent_blocked_kind, undefined);
+  });
+
+  test('an empty match yields an empty list', () => {
+    assert.deepEqual(parseAgentQueryResult({ type: 'agent_query', agents: [] }), []);
+  });
+
+  test('a non-agent_query result yields an empty list (never fabricated)', () => {
+    assert.deepEqual(parseAgentQueryResult({ type: 'ok' }), []);
+    assert.deepEqual(parseAgentQueryResult({ type: 'agent_info', agent: {} }), []);
+  });
+
+  test('a malformed agents field yields an empty list', () => {
+    assert.deepEqual(
+      parseAgentQueryResult({ type: 'agent_query', agents: 'nope' }),
+      []
+    );
+    assert.deepEqual(parseAgentQueryResult({ type: 'agent_query' }), []);
+  });
+
+  test('non-object entries are dropped rather than coerced', () => {
+    const agents = parseAgentQueryResult({
+      type: 'agent_query',
+      agents: [
+        null,
+        'not-an-agent',
+        42,
+        {
+          terminal_id: 't-ok',
+          agent_status: 'idle',
+          workspace_id: 'w1',
+          tab_id: 'w1:1',
+          pane_id: 'w1-1',
+          focused: true,
+          revision: 1,
+        },
+      ],
+    });
+    assert.equal(agents.length, 1);
+    assert.equal(agents[0].terminal_id, 't-ok');
+  });
+
+  test('a non-record source yields an empty list (defensive)', () => {
+    assert.deepEqual(parseAgentQueryResult(null), []);
+    assert.deepEqual(parseAgentQueryResult(undefined), []);
+    assert.deepEqual(parseAgentQueryResult('agent_query'), []);
   });
 });

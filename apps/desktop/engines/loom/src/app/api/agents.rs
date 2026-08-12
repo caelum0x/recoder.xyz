@@ -3,8 +3,8 @@ use std::time::Duration;
 use bytes::Bytes;
 
 use crate::api::schema::{
-    AgentPromptParams, AgentRenameParams, AgentSendKeysParams, AgentStartParams, AgentTarget,
-    PaneReadResult, ResponseResult,
+    AgentInfo, AgentPromptParams, AgentQueryParams, AgentRenameParams, AgentSendKeysParams,
+    AgentStartParams, AgentTarget, PaneReadResult, ResponseResult,
 };
 use crate::app::App;
 
@@ -20,6 +20,38 @@ impl App {
                 agents: self.collect_agent_infos(),
             },
         )
+    }
+
+    pub(super) fn handle_agent_query(&self, id: String, params: AgentQueryParams) -> String {
+        if let Err(message) =
+            crate::app::agent_view::validate_agent_query(params.filter.as_ref(), &params.sort)
+        {
+            return encode_error(id, "invalid_agent_view", message);
+        }
+        encode_success(
+            id,
+            ResponseResult::AgentQuery {
+                agents: self.query_agent_infos(&params),
+            },
+        )
+    }
+
+    fn query_agent_infos(&self, params: &AgentQueryParams) -> Vec<AgentInfo> {
+        let mut entries = crate::ui::all_agent_panel_entries(&self.state);
+        crate::app::agent_view::filter_and_sort_entries(
+            &self.state,
+            &mut entries,
+            params.filter.as_ref(),
+            &params.sort,
+        );
+        let mut agents: Vec<AgentInfo> = entries
+            .into_iter()
+            .filter_map(|entry| self.agent_info(entry.ws_idx, entry.pane_id))
+            .collect();
+        if let Some(limit) = params.limit {
+            agents.truncate(limit as usize);
+        }
+        agents
     }
 
     pub(super) fn handle_agent_get(&mut self, id: String, target: AgentTarget) -> String {
@@ -310,6 +342,209 @@ mod tests {
         app.state.selected = 0;
         app.state.mode = Mode::Terminal;
         app
+    }
+
+    fn app_with_query_agents() -> App {
+        let (_api_tx, api_rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut app = App::new(
+            &Config::default(),
+            true,
+            None,
+            api_rx,
+            crate::api::EventHub::default(),
+        );
+        app.state.workspaces = vec![
+            Workspace::test_new("one"),
+            Workspace::test_new("two"),
+            Workspace::test_new("three"),
+        ];
+        app.state.ensure_test_terminals();
+        app.state.active = Some(0);
+        app.state.selected = 0;
+        app.state.mode = Mode::Terminal;
+
+        // ws0: idle + unseen -> "done", taskGroup=alpha
+        // ws1: blocked      -> "blocked", taskGroup=alpha
+        // ws2: working      -> "working", taskGroup=beta
+        for (ws_idx, agent_state, seen, task_group) in [
+            (0, AgentState::Idle, false, "alpha"),
+            (1, AgentState::Blocked, true, "alpha"),
+            (2, AgentState::Working, true, "beta"),
+        ] {
+            let pane_id = app.state.workspaces[ws_idx].tabs[0].root_pane;
+            let terminal_id = app.state.workspaces[ws_idx].tabs[0].panes[&pane_id]
+                .attached_terminal_id
+                .clone();
+            let terminal = app.state.terminals.get_mut(&terminal_id).unwrap();
+            terminal.set_detected_state(Some(Agent::Claude), agent_state);
+            terminal.metadata_tokens.patch(
+                std::collections::HashMap::from([(
+                    "taskGroup".to_string(),
+                    Some(task_group.to_string()),
+                )]),
+                None,
+                std::time::Instant::now(),
+            );
+            app.state.workspaces[ws_idx].tabs[0]
+                .panes
+                .get_mut(&pane_id)
+                .unwrap()
+                .seen = seen;
+        }
+        app
+    }
+
+    fn status_task_group_filter() -> crate::api::schema::AgentViewFilter {
+        use crate::api::schema::{
+            AgentViewBuiltinField, AgentViewField, AgentViewFilter, AgentViewValue,
+        };
+        AgentViewFilter::All {
+            filters: vec![
+                AgentViewFilter::In {
+                    field: AgentViewField::Builtin(AgentViewBuiltinField::Status),
+                    values: vec![
+                        AgentViewValue::String("done".to_string()),
+                        AgentViewValue::String("blocked".to_string()),
+                    ],
+                },
+                AgentViewFilter::Eq {
+                    field: AgentViewField::Token {
+                        token: "taskGroup".to_string(),
+                    },
+                    value: AgentViewValue::String("alpha".to_string()),
+                },
+            ],
+        }
+    }
+
+    fn workspace_order_desc_sort() -> crate::api::schema::AgentViewSort {
+        use crate::api::schema::{
+            AgentViewBuiltinSortField, AgentViewSort, AgentViewSortField, AgentViewSortOrder,
+        };
+        AgentViewSort {
+            field: AgentViewSortField::Builtin(AgentViewBuiltinSortField::WorkspaceOrder),
+            order: AgentViewSortOrder::Desc,
+        }
+    }
+
+    fn query_agents(response: &str) -> Vec<crate::api::schema::AgentInfo> {
+        let success: SuccessResponse = serde_json::from_str(response).unwrap();
+        let ResponseResult::AgentQuery { agents } = success.result else {
+            panic!("expected agent_query response");
+        };
+        agents
+    }
+
+    #[test]
+    fn agent_query_returns_matching_panes_in_requested_order() {
+        let app = app_with_query_agents();
+        let params = AgentQueryParams {
+            filter: Some(status_task_group_filter()),
+            sort: vec![workspace_order_desc_sort()],
+            limit: None,
+        };
+
+        let agents = query_agents(&app.handle_agent_query("req".into(), params));
+
+        // Only ws1 (blocked, alpha) and ws0 (done, alpha) match; ws2 is working+beta.
+        // WorkspaceOrder desc puts ws1 before ws0.
+        let statuses: Vec<crate::api::schema::AgentStatus> =
+            agents.iter().map(|agent| agent.agent_status).collect();
+        assert_eq!(
+            statuses,
+            vec![
+                crate::api::schema::AgentStatus::Blocked,
+                crate::api::schema::AgentStatus::Done,
+            ]
+        );
+        assert_eq!(agents[0].workspace_id, app.public_workspace_id(1));
+        assert_eq!(agents[1].workspace_id, app.public_workspace_id(0));
+    }
+
+    #[test]
+    fn agent_query_empty_match_returns_no_agents() {
+        use crate::api::schema::{
+            AgentViewBuiltinField, AgentViewField, AgentViewFilter, AgentViewValue,
+        };
+        let app = app_with_query_agents();
+        let params = AgentQueryParams {
+            filter: Some(AgentViewFilter::Eq {
+                field: AgentViewField::Builtin(AgentViewBuiltinField::Status),
+                value: AgentViewValue::String("unknown".to_string()),
+            }),
+            sort: Vec::new(),
+            limit: None,
+        };
+
+        let agents = query_agents(&app.handle_agent_query("req".into(), params));
+        assert!(agents.is_empty());
+    }
+
+    #[test]
+    fn agent_query_limit_caps_after_sort() {
+        let app = app_with_query_agents();
+        let params = AgentQueryParams {
+            filter: Some(status_task_group_filter()),
+            sort: vec![workspace_order_desc_sort()],
+            limit: Some(1),
+        };
+
+        let agents = query_agents(&app.handle_agent_query("req".into(), params));
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].workspace_id, app.public_workspace_id(1));
+    }
+
+    #[test]
+    fn agent_query_matches_apply_agent_view_ordering() {
+        use crate::api::schema::AgentViewSetParams;
+        let mut app = app_with_query_agents();
+        let filter = status_task_group_filter();
+        let sort = vec![workspace_order_desc_sort()];
+
+        let params = AgentQueryParams {
+            filter: Some(filter.clone()),
+            sort: sort.clone(),
+            limit: None,
+        };
+        let queried = query_agents(&app.handle_agent_query("req".into(), params));
+
+        // Drive the SAME predicate engine through the stored TUI view path and
+        // assert the query verb selects the identical panes in the identical
+        // order (parity with a direct apply_agent_view call).
+        app.state.agent_view_override = Some(AgentViewSetParams {
+            source: "test.parity".to_string(),
+            label: None,
+            filter: Some(filter),
+            sort,
+        });
+        let view_workspaces: Vec<String> = crate::ui::agent_panel_entries(&app.state)
+            .into_iter()
+            .map(|entry| app.public_workspace_id(entry.ws_idx))
+            .collect();
+        let queried_workspaces: Vec<String> = queried
+            .iter()
+            .map(|agent| agent.workspace_id.clone())
+            .collect();
+        assert_eq!(queried_workspaces, view_workspaces);
+    }
+
+    #[test]
+    fn agent_query_rejects_invalid_filter() {
+        use crate::api::schema::{AgentViewField, AgentViewFilter};
+        let app = app_with_query_agents();
+        let params = AgentQueryParams {
+            filter: Some(AgentViewFilter::Exists {
+                field: AgentViewField::Token {
+                    token: "not a valid token!".to_string(),
+                },
+            }),
+            sort: Vec::new(),
+            limit: None,
+        };
+
+        let response = app.handle_agent_query("req".into(), params);
+        let error: crate::api::schema::ErrorResponse = serde_json::from_str(&response).unwrap();
+        assert_eq!(error.error.code, "invalid_agent_view");
     }
 
     #[tokio::test]

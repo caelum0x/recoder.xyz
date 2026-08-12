@@ -258,6 +258,110 @@ describe('LoomSocketClient', () => {
     });
   });
 
+  test('agentQuery serializes the filter/sort/limit request and parses the agent list', async () => {
+    let seenRequest: unknown = null;
+    const client = await withServer((request, socket) => {
+      seenRequest = request;
+      socket.end(
+        successLine(requestId(request), {
+          type: 'agent_query',
+          agents: [
+            {
+              terminal_id: 't-blocked',
+              agent_status: 'blocked',
+              workspace_id: 'w2',
+              tab_id: 'w2:1',
+              pane_id: 'w2-1',
+              focused: false,
+              revision: 9,
+              agent_rule_id: 'rule-approval-3',
+              agent_blocked_kind: 'approval',
+            },
+            {
+              terminal_id: 't-done',
+              agent_status: 'done',
+              workspace_id: 'w1',
+              tab_id: 'w1:1',
+              pane_id: 'w1-1',
+              focused: false,
+              revision: 4,
+            },
+          ],
+        })
+      );
+    });
+
+    const agents = await client.agentQuery({
+      filter: {
+        op: 'all',
+        filters: [
+          {
+            op: 'in',
+            field: 'status',
+            values: ['blocked', 'done'],
+          },
+          {
+            op: 'eq',
+            field: { token: 'taskGroup' },
+            value: 'alpha',
+          },
+        ],
+      },
+      sort: [{ field: 'workspace_order', order: 'desc' }],
+      limit: 5,
+    });
+
+    assert.deepEqual((seenRequest as { method: string }).method, 'agent.query');
+    assert.deepEqual((seenRequest as { params: unknown }).params, {
+      filter: {
+        op: 'all',
+        filters: [
+          { op: 'in', field: 'status', values: ['blocked', 'done'] },
+          { op: 'eq', field: { token: 'taskGroup' }, value: 'alpha' },
+        ],
+      },
+      sort: [{ field: 'workspace_order', order: 'desc' }],
+      limit: 5,
+    });
+
+    assert.equal(agents.length, 2);
+    assert.equal(agents[0].terminal_id, 't-blocked');
+    assert.equal(agents[0].agent_rule_id, 'rule-approval-3');
+    assert.equal(agents[0].agent_blocked_kind, 'approval');
+    assert.equal(agents[1].terminal_id, 't-done');
+    assert.equal(agents[1].agent_rule_id, undefined);
+  });
+
+  test('agentQuery returns an empty list on an unexpected result type (never fabricated)', async () => {
+    const client = await withServer((request, socket) => {
+      socket.end(successLine(requestId(request), { type: 'ok' }));
+    });
+
+    const agents = await client.agentQuery({});
+    assert.deepEqual(agents, []);
+  });
+
+  test('agentQuery rejects with the engine error on an invalid filter', async () => {
+    const client = await withServer((request, socket) => {
+      socket.end(
+        errorLine(
+          requestId(request),
+          'invalid_agent_view',
+          'invalid agent view token `bad token`'
+        )
+      );
+    });
+
+    await assert.rejects(
+      () => client.agentQuery({ filter: { op: 'exists', field: { token: 'bad token' } } }),
+      (err: unknown) => {
+        assert.ok(err instanceof LoomError);
+        assert.equal(err.code, 'invalid_agent_view');
+        return true;
+      }
+    );
+  });
+
   test('ping rejects when the protocol version is not 20', async () => {
     const client = await withServer((request, socket) => {
       socket.end(

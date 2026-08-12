@@ -33,6 +33,7 @@ export type LoomMethod =
   | 'worktree.remove'
   | 'agent.start'
   | 'agent.get'
+  | 'agent.query'
   | 'agent.read'
   | 'agent.prompt'
   | 'agent.wait'
@@ -127,6 +128,86 @@ export interface AgentWaitParams {
   target: string;
   until?: AgentStatus[];
   timeout_ms?: number;
+}
+
+// --- agent.query filter/sort vocabulary -------------------------------------
+//
+// Mirrors loom's `agent.view.set` predicate language (serde shapes in
+// `src/api/schema/agents.rs`): `agent.query` is a stored view applied inline as
+// a one-shot, pure read. The engine authors and validates this vocabulary; these
+// types exist so a caller can build a well-formed request, but the engine is the
+// source of truth and rejects anything it considers invalid.
+
+/** loom `AgentViewBuiltinField` (serde snake_case). */
+export type AgentViewBuiltinField =
+  | 'status'
+  | 'workspace_id'
+  | 'tab_id'
+  | 'pane_id'
+  | 'agent'
+  | 'seen'
+  | 'state_change_seq';
+
+/**
+ * A filterable field: either a builtin (above) or a custom metadata token
+ * (`{ token }`), mirroring loom's untagged `AgentViewField`.
+ */
+export type AgentViewField = AgentViewBuiltinField | { token: string };
+
+/** loom `AgentViewContext` (serde snake_case). */
+export type AgentViewContext = 'current_workspace_id' | 'current_tab_id';
+
+/**
+ * A filter operand: a literal (string/bool/number) or a `{ context }` reference
+ * resolved server-side against the presented session (untagged `AgentViewValue`).
+ */
+export type AgentViewValue =
+  | string
+  | boolean
+  | number
+  | { context: AgentViewContext };
+
+/** loom `AgentViewFilter` (serde `tag = "op"`, snake_case). */
+export type AgentViewFilter =
+  | { op: 'all'; filters: AgentViewFilter[] }
+  | { op: 'any'; filters: AgentViewFilter[] }
+  | { op: 'not'; filter: AgentViewFilter }
+  | { op: 'eq'; field: AgentViewField; value: AgentViewValue }
+  | { op: 'in'; field: AgentViewField; values: AgentViewValue[] }
+  | { op: 'exists'; field: AgentViewField };
+
+/** loom `AgentViewSortOrder` (serde snake_case, defaults to `asc`). */
+export type AgentViewSortOrder = 'asc' | 'desc';
+
+/** loom `AgentViewBuiltinSortField` (serde snake_case). */
+export type AgentViewBuiltinSortField =
+  | 'workspace_order'
+  | 'tab_order'
+  | 'pane_order'
+  | 'attention'
+  | 'status'
+  | 'agent'
+  | 'seen'
+  | 'state_change_seq';
+
+/** A sortable field: a builtin (above) or a custom metadata token. */
+export type AgentViewSortField = AgentViewBuiltinSortField | { token: string };
+
+export interface AgentViewSort {
+  field: AgentViewSortField;
+  order?: AgentViewSortOrder;
+}
+
+/**
+ * `agent.query` params: a server-side filtered + sorted read over the current
+ * session's agent panes in ONE call. `limit` caps the result AFTER sort (top-N);
+ * there is no field projection — the reply carries the full canonical
+ * {@link AgentInfo} shape, same as `agent.get` / `session.snapshot`.
+ */
+export interface AgentQueryParams {
+  filter?: AgentViewFilter;
+  sort?: AgentViewSort[];
+  limit?: number;
 }
 
 /**
@@ -298,6 +379,25 @@ export function parseBlockedProvenance(source: unknown): BlockedProvenance {
 }
 
 /**
+ * Defensively read the `agents` list off an `agent.query` reply. Accepts either
+ * a raw `LoomResult` or the bare result record. Any shape that is not an
+ * `agent_query` result with an array of object entries yields `[]` — the client
+ * never fabricates agents from a malformed or unexpected line. Each entry is
+ * passed through unchanged (it already carries the canonical {@link AgentInfo}
+ * shape, including the OPTIONAL `agent_rule_id` / `agent_blocked_kind`
+ * provenance); non-object entries are dropped rather than coerced.
+ */
+export function parseAgentQueryResult(source: unknown): AgentInfo[] {
+  if (!isRecord(source)) return [];
+  if (source.type !== 'agent_query') return [];
+  const agents = source.agents;
+  if (!Array.isArray(agents)) return [];
+  // Structurally validated to records only; the wire objects already carry the
+  // AgentInfo shape, so surface them as such without re-checking every field.
+  return agents.filter(isRecord) as unknown as AgentInfo[];
+}
+
+/**
  * loom `SessionSnapshot` is large; only the fields a substrate reads are typed
  * explicitly, with the collections left open for forward-compatibility.
  */
@@ -344,6 +444,7 @@ export type LoomResult =
     }
   | { type: 'agent_started'; agent: AgentInfo; argv: string[] }
   | { type: 'agent_info'; agent: AgentInfo }
+  | { type: 'agent_query'; agents: AgentInfo[] }
   | { type: 'agent_prompted'; agent: AgentInfo }
   | { type: 'pane_read'; read: PaneReadResult }
   | { type: 'subscription_started' }

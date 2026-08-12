@@ -28,6 +28,9 @@ import {
   isLoomErrorResponse,
   isLoomSubscriptionEvent,
   isLoomSuccessResponse,
+  parseAgentQueryResult,
+  type AgentInfo,
+  type AgentQueryParams,
   type LoomMethod,
   type LoomRequest,
   type LoomResult,
@@ -183,6 +186,22 @@ export class LoomSocketClient {
       );
     }
     return pong;
+  }
+
+  /**
+   * `agent.query`: a single-shot, server-side filtered + sorted agent read.
+   * Sends the filter/sort/limit spec and returns the matching {@link AgentInfo}
+   * list in the requested order — one round trip instead of N per-pane
+   * `agent.get` calls. The reply is parsed defensively: an unexpected or
+   * malformed result surfaces as an empty list rather than a fabricated agent
+   * (a transport/error line still rejects with a {@link LoomError}).
+   */
+  async agentQuery(
+    params: AgentQueryParams,
+    options?: LoomCallOptions
+  ): Promise<AgentInfo[]> {
+    const result = await this.call<LoomResult>('agent.query', params, options);
+    return parseAgentQueryResult(result);
   }
 
   /**

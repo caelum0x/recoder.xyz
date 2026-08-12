@@ -63,6 +63,25 @@ pub struct AgentViewClearParams {
     pub source: Option<String>,
 }
 
+/// Parameters for the pure-read `agent.query` verb: a server-side filtered and
+/// sorted read over the current session's agent panes, reusing the same filter
+/// and sort vocabulary as `agent.view.set`. It never mutates state and never
+/// installs a stored view; each call is a one-shot query.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema, Default)]
+pub struct AgentQueryParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter: Option<AgentViewFilter>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sort: Vec<AgentViewSort>,
+    /// Optional cap on the number of returned agents, applied after filtering
+    /// and sorting (top-N). When omitted, every matching agent is returned.
+    /// Field-level projection is intentionally not supported: `agent.query`
+    /// returns the same canonical `AgentInfo` shape as `agent.get` and
+    /// `session.snapshot`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum AgentViewFilter {
