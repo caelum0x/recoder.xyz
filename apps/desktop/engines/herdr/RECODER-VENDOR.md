@@ -39,10 +39,13 @@ ZIG=$PWD/zig-aarch64-macos-0.15.2/zig cargo build --release --locked   # -> targ
 ## Integration status (Recoder engine)
 
 - [x] Source vendored + license/NOTICE compliance.
-- [ ] Rust binary built + packaged into the desktop DMG (like the openfang sidecar).
-- [ ] `herdr-substrate.adapter.ts` — drive herdr's JSON socket API (`agent.*`,
-      `pane.*`, `worktree.*`, `events.*`) to implement Recoder's `EngineSubstrate`
-      port as a third substrate beside tmux and acp.
-- [ ] Full Recoder rebrand of the vendored source.
+- [x] Rust binary **builds** (`target/release/herdr`, arm64, v0.8.0) with Rust 1.96.1
+      + zig 0.15.2. Restored 2 build-embedded files (`docs/next/api/herdr-api.schema.json`,
+      `website/latest.json`) that the initial lean vendor dropped.
+- [x] **Phase 0** — NDJSON socket client + protocol types
+      (`packages/agent-runtimes/src/adapters/herdr/`), 13/13 tests. See docs/HERDR-INTEGRATION.md.
+- [ ] Phase 1 — `herdr-substrate.adapter.ts` (port → socket-method mapping) vs a fake sidecar.
+- [ ] Phase 2–4 — real daemon spawn/resolver + DMG packaging (extraResources) + registry wiring.
+- [ ] Phase 5 — full Recoder rebrand (LAST; blocked on the plugin-ecosystem decision).
 
 Tracked in bd (`absorb`/`herdr` labels).
