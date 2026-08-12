@@ -178,6 +178,25 @@ describe('SkillActionService', () => {
     expect(executor.calls).toHaveLength(0);
   });
 
+  it('REFUSES on an unexpected (non-allow) policy effect and never executes', async () => {
+    // The allow path must be reached only by an EXPLICIT allow, never by exclusion:
+    // an unknown/future effect must refuse rather than fall through to the executor.
+    const registry = await loadedRegistry();
+    const policy = new FakePolicy('mystery' as never, 'unrecognized verdict');
+    const executor = new FakeExecutor();
+    const service = createSkillActionService({
+      registry,
+      evaluatePolicy: policy.evaluate,
+      approval: new FakeApproval(),
+      executor,
+      logger: silentLogger,
+    });
+
+    const out = await service.invoke(BASE_INPUT);
+    expect(out).toMatchObject({ status: 'refused', refused: true });
+    expect(executor.calls).toHaveLength(0);
+  });
+
   it('opens an approval gate on needs_approval and does NOT execute', async () => {
     const registry = await loadedRegistry();
     const policy = new FakePolicy('needs_approval', 'high-risk action');

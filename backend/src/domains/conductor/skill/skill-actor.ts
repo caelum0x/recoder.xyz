@@ -31,8 +31,8 @@ export function buildSkillActor(
 ): AgentProfile {
   const now = new Date().toISOString();
   return {
-    agentId: actorId || 'anonymous',
-    displayName: `Skill actor ${actorId || 'anonymous'}`,
+    agentId: actorId,
+    displayName: `Skill actor ${actorId}`,
     vendorSurface: 'custom',
     connectorId: 'skill-model',
     runtimeKind: 'local',
