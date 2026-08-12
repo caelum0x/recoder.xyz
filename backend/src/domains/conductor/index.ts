@@ -88,7 +88,7 @@ import type {
 } from './conductor-module.js';
 import type { ReviewComment } from './review/review-comments.js';
 import type { EnvironmentImportView } from './services/environment-import.js';
-import type { TranscriptSearchView } from './services/session-transcript.service.js';
+import type { TranscriptSearchView, WorkspaceTranscriptView } from './services/session-transcript.service.js';
 import type {
   WorkspaceDiffView,
   WorkspaceDiffFilesView,
@@ -589,6 +589,13 @@ export interface ConductorModule {
   environmentImport(): Promise<EnvironmentImportView>;
   /** Bounded search over Claude session transcripts (~/.claude/projects) by message content. */
   searchTranscripts(query: string): Promise<TranscriptSearchView>;
+  /**
+   * Hydrate a workspace's Claude session transcript for the Session view
+   * (`GET …/workspaces/:id/transcript`). A workspace with no session file yet
+   * returns `{ available: false }` — never fabricated. Null when the workspace
+   * does not exist.
+   */
+  workspaceTranscript(workspaceId: string): Promise<WorkspaceTranscriptView | null>;
   /** Persist a sniffed loopback preview URL — GATED (`workspace.preview_url`). */
   setPreviewUrl(
     workspaceId: string,

@@ -37,6 +37,7 @@ import type {
   AgentOsRepositoryPort,
   ListPage,
   PageQuery,
+  RepositoryResult,
 } from '../ports/agent-os-repository.port.js';
 import {
   spacePolicyToKernelConfigJson,
@@ -199,8 +200,8 @@ export function buildAgentOsCrudRouter(deps: AgentOsCrudRoutesDeps): Router {
   async function scopedList<T>(
     req: Request,
     res: Response,
-    driverPage: (page: PageQuery) => Promise<ListPage<T>>,
-    fullList: () => Promise<readonly T[]>,
+    driverPage: (page: PageQuery) => RepositoryResult<ListPage<T>>,
+    fullList: () => RepositoryResult<readonly T[]>,
     spaceIdOf: (item: T, taskSpace: ReadonlyMap<string, string>) => string | undefined,
   ): Promise<void> {
     const scope = await scopeOf(req);
