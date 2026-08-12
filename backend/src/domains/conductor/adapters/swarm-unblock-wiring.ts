@@ -44,7 +44,12 @@ import type { RecallService } from '../../memory/recall/recall-fusion.js';
 import type { CandidateService } from '../../memory/lifecycle/candidate-service.js';
 import type { CompareView } from '../services/compare.service.js';
 import type { LoomClientPort } from './loom-substrate.adapter.js';
-import type { LoomResult } from '@recoder/agent-runtimes/loom';
+import {
+  parseBlockedProvenance,
+  type AgentInfo,
+  type BlockedKind,
+  type LoomResult,
+} from '@recoder/agent-runtimes/loom';
 import type {
   SwarmUnblockDeps,
   UnblockCandidate,
@@ -87,6 +92,12 @@ export interface SwarmUnblockWiringDeps {
 function paneText(res: LoomResult): string | null {
   if (res.type !== 'pane_read') return null;
   return (res as Extract<LoomResult, { type: 'pane_read' }>).read.text;
+}
+
+/** Narrow a loom result to its `agent_info` `AgentInfo`, or `null` for anything else. */
+function agentInfo(res: LoomResult): AgentInfo | null {
+  if (res.type !== 'agent_info') return null;
+  return (res as Extract<LoomResult, { type: 'agent_info' }>).agent;
 }
 
 /** Map the candidate's coarse risk to a governance approval tier (never fabricated). */
@@ -220,6 +231,23 @@ export function createSwarmUnblockDeps(
       },
     },
 
+    blockedKindRead: {
+      async read(workspaceId: string): Promise<BlockedKind | undefined> {
+        const target = await loomTarget(workspaceId);
+        if (target == null) return undefined;
+        try {
+          const res = await deps.loom.call('agent.get', { target });
+          const agent = agentInfo(res);
+          if (agent == null) return undefined;
+          // Only the DECLARED taxonomy off the live AgentInfo -- manifest-less /
+          // hook-decided panes carry none ⇒ undefined (never fabricated).
+          return parseBlockedProvenance(agent).agentBlockedKind;
+        } catch {
+          return undefined; // dead handle / unreachable daemon ⇒ no provenance
+        }
+      },
+    },
+
     agentPrompt: {
       async deliver(input: {
         readonly workspaceId: string;
@@ -329,9 +357,12 @@ export function createSwarmUnblockDeps(
         readonly candidate: UnblockCandidate | null;
         readonly reason: string;
         readonly taskGroup: string | undefined;
+        readonly blockedKind?: BlockedKind;
         readonly actor: Principal;
       }): Promise<{ readonly requestId: string }> {
         const reasonParts = [input.reason];
+        if (input.blockedKind)
+          reasonParts.push(`blocked kind: ${input.blockedKind}`);
         if (input.question) reasonParts.push(`question: ${input.question}`);
         if (input.candidate) {
           reasonParts.push(
@@ -358,13 +389,17 @@ export function createSwarmUnblockDeps(
         readonly answer: string;
         readonly source: string;
         readonly evidence: string;
+        readonly blockedKind?: BlockedKind;
         readonly actor: Principal;
       }): Promise<void> {
+        const kindLine = input.blockedKind
+          ? `\nblocked kind: ${input.blockedKind}`
+          : '';
         await deps.candidates.propose({
           userId: input.actor.userId,
           scope: 'repo',
           title: truncate(input.question, 120),
-          body: `Q: ${input.question}\nA: ${input.answer}\nsource: ${input.source}\nevidence: ${input.evidence}`,
+          body: `Q: ${input.question}\nA: ${input.answer}\nsource: ${input.source}\nevidence: ${input.evidence}${kindLine}`,
           proposedBy: input.actor.userId,
           evidence: {
             taskId: input.taskGroup ?? input.workspaceId,
