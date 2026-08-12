@@ -8,6 +8,14 @@
 > ranked by moat depth + first-timer leverage. Every item is grounded in shipped
 > socket/adapter/native-state/converge primitives.
 
+## SHIPPED STATUS (updated 2026-08-13, branch feat/enterprise-s0-p0)
+
+**§0 killer feature `recoder_converge_fanout`** — ✅ SHIPPED (backend service + tool).
+**§1 build-now wave:** #1 live convergence cockpit ✅ (`recoder_converge_cockpit` + desktop `recoder-fanout` view) · #2 instant converge-ready ⏳ (cockpit exposes `convergeReady`; push-driven signal pending) · #3 swarm auto-unblock ✅ (service + tool + **live seam-wiring** + desktop `recoder-swarm` view; now **decidable** via engine `blocked_kind` routing — approval/trust always escalate) · #4 live Needs-You push-queue ✅ (`recoder_needs_you` + desktop `recoder-needs-you` view) · #5 native status columns ✅ (`recoder_status_board` MCP tool; desktop KANBAN deliberately NOT shipped as a user nav dashboard per the "plain-as-a-terminal" audit — bd recoder-3zwy) · #6 second-round re-fan ✅ (`recoder_converge_refan` + desktop re-fan affordance).
+**§2 bigger bets:** A governed skill model — backend ✅ SHIPPED (signed ed25519, capability-typed, policy-gated `skill.action.invoke`, `backend/src/domains/conductor/skill/`; engine #9 plugin-gate half pending; bootstrap wiring + workspace-path validation = bd recoder-ubyg) · B orchestration playbooks ✅ SHIPPED (3 recipes + `recoder_playbook_run/list` + desktop `recoder-playbooks` view) · C governed remote/mobile attach — backend ⏳ in progress.
+
+Engine tiers backing the above (see `docs/LOOM-ENGINE-CHANGES.md`): keystone native kinds ✅, `agent.query` ✅, rule-id ✅, blocked_kind ✅, worktree.status ✅; #4/#6/#7/#8/#9 pending. Both `tsc` gates green.
+
 ## 0. THE KILLER FEATURE — the fusion moat
 
 ### `recoder_converge_fanout` — one verb: fan a task to N agents, auto-converge to one governed branch

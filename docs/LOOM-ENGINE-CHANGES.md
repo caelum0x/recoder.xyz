@@ -6,6 +6,23 @@
 > test` in the loom crate (Rust 1.96.1 + zig 0.15.2). CI is off — local verify is
 > the gate.
 
+## SHIPPED STATUS (updated 2026-08-13)
+
+| # | Item | State |
+|---|------|-------|
+| 1 | native `recoder_code`/`qwen_code`/`crush` agent kinds | ✅ SHIPPED — **without** bundled manifests. The plan called for 3 TOMLs, but we do NOT have live panes to capture evidence-based rules, and a manifest with invented rules ships a constant-idle lie. So the 3 kinds are LAUNCHABLE (enum/label/executable/lookup; agent.start accepts them) but kept OUT of `SCREEN_MANIFEST_AGENTS` (like Omp/Mastracode) — no fabricated status. Native STATUS detection (evidence manifests or hook authority for recoder_code) is a tracked follow-up. |
+| 2 | `agent.query` filtered/sorted read + TS client | ✅ SHIPPED — reuses `apply_agent_view` via a shared `filter_and_sort_entries` helper; additive verb, no protocol bump. Backend consumer = follow-up. |
+| 3a | rule-id on the live status path (`agent_rule_id`) | ✅ SHIPPED — additive optional field, gated so a full-lifecycle hook never mis-attributes. |
+| 3b | `blocked_kind` taxonomy (`agent_blocked_kind`) | ✅ SHIPPED — DECLARED approval/input/trust on manifest blocked rules (23 unambiguous rules annotated), threaded like rule-id. **Consumed** by swarm-unblock routing (approval/trust always escalate, only input auto-answers). |
+| 5 | `worktree.status` cross-platform read + TS client | ✅ SHIPPED — portable `git status --porcelain=v2 --branch` parse; truthful `has_upstream`; additive verb. planConvergence consumer = follow-up. |
+| 4 | `workspace.agent_status_changed` aggregate event | ⏳ pending (investigate aggregate). |
+| 6 | delta cursor `since_seq` | ⏳ in progress (investigate-first; scope to real seq/ring infra). |
+| 7 | Recoder skill + managed-pane env handshake | ⏳ pending (pairs with Bigger Bet A engine half). |
+| 8 | `agent.start` env passthrough (denylist) | ⏳ pending. |
+| 9 | engine action policy gate in `start_plugin_command` | ⏳ pending — the ENGINE half of Bigger Bet A; the BACKEND skill model (signed, policy-gated `skill.action.invoke`) is ✅ SHIPPED (`backend/src/domains/conductor/skill/`). |
+
+**ENV GOTCHA (bd recoder-ny0w):** a manifest-override test leaks `codex.toml` into the REAL `~/.config/loom/agent-detection/`, poisoning ALL codex detect tests (Idle vs Blocked) even single-threaded. `rm -f ~/.config/loom/agent-detection/codex.toml` before suspecting code.
+
 ## THE keystone — #1: native agent kinds for `recoder_code`/`qwen_code`/`crush`
 Today `agent.start{kind}` **rejects** these three at the socket boundary
 (`src/app/agents.rs:151` → `UnsupportedKind`), which is the whole reason
