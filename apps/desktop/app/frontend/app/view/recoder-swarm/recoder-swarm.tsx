@@ -67,11 +67,6 @@ function BlockedRow({ model, agent }: { model: RecoderSwarmViewModel; agent: Blo
                     {busy ? "…" : autoAnswer ? "Auto-answer" : "Escalate"}
                 </button>
             </div>
-            {agent.question != null && agent.question != "" && (
-                <div className="text-secondary text-xs truncate" title={agent.question}>
-                    {agent.question}
-                </div>
-            )}
             {outcome != null && <OutcomeRow outcome={outcome} />}
         </div>
     );

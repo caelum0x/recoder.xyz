@@ -49,7 +49,6 @@ function mixedSnapshot() {
                 state: "agent_idle_prompt",
                 settled: false,
                 nativeStatus: true,
-                question: "Which auth provider should I wire?",
             },
             { workspaceId: "ws-working", kind: "codex", state: "working", settled: false, nativeStatus: true },
             { workspaceId: "ws-done", kind: "cursor", state: "review_ready", settled: true, nativeStatus: true },
@@ -101,7 +100,6 @@ describe("RecoderSwarmViewModel.loadBlocked", () => {
                 workspaceId: "ws-blocked",
                 agentKind: "claude",
                 status: "agent_idle_prompt",
-                question: "Which auth provider should I wire?",
                 nativeStatus: true,
             },
             {

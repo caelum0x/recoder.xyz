@@ -27,15 +27,15 @@ const NoBlockedNotice = "No blocked panes — every agent is running or settled.
 const WorkspaceMissNotice = "Workspace not found.";
 
 // One blocked pane the operator can act on — its owning workspace, the agent kind
-// that ran it, its live blocking status, the blocking question when the wire carries
-// one, and whether Loom drove it with NATIVE status (raw-pane fallbacks forfeit it,
-// reported nativeStatus:false, never faked). Projected defensively from the untrusted
-// cockpit wire — a pane with no readable question simply omits it (never fabricated).
+// that ran it, its live blocking status, and whether Loom drove it with NATIVE status
+// (raw-pane fallbacks forfeit it, reported nativeStatus:false, never faked). Projected
+// defensively from the untrusted cockpit wire. The blocking QUESTION is not carried by
+// the cockpit snapshot (reading each pane's tail per tick is too costly) — it surfaces
+// only in the governed unblock outcome, which reads it via agent.read on demand.
 type BlockedAgent = {
     workspaceId: string;
     agentKind: string;
     status: string;
-    question?: string;
     nativeStatus: boolean;
 };
 
@@ -221,9 +221,7 @@ function projectCockpitBlocked(body: unknown): BlockedOutcome {
 }
 
 // Project the (untrusted) cockpit agents into the blocked list. Only panes whose live
-// state is a blocked attention state are kept; the question is projected from the wire
-// when present (never fabricated), preferring an explicit `question` over the truthful
-// `attentionReason` signal.
+// state is a blocked attention state are kept.
 function projectBlockedAgents(value: unknown): BlockedAgent[] {
     if (!Array.isArray(value)) {
         return [];
@@ -240,12 +238,10 @@ function projectBlockedAgents(value: unknown): BlockedAgent[] {
         if (workspaceId == "" && kind == "") {
             continue;
         }
-        const question = firstNonEmptyString(a.question, a.attentionReason);
         out.push({
             workspaceId,
             agentKind: kind,
             status: state,
-            ...(question == "" ? {} : { question }),
             nativeStatus: a.nativeStatus === true,
         });
     }
@@ -351,15 +347,6 @@ function gateDegradeNotice(status: string, reason: unknown): string {
 
 function asRecord(value: unknown): Record<string, unknown> {
     return value != null && typeof value == "object" ? (value as Record<string, unknown>) : {};
-}
-
-function firstNonEmptyString(...values: unknown[]): string {
-    for (const value of values) {
-        if (typeof value == "string" && value.trim() != "") {
-            return value;
-        }
-    }
-    return "";
 }
 
 export {
