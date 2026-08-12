@@ -82,6 +82,7 @@ import {
   buildConductorPreviewEvidenceTools,
 } from './mcp/conductor-write-tools.js';
 import { buildConductorWaitTools } from './mcp/conductor-wait-tool.js';
+import { buildConductorCockpitTools } from './mcp/conductor-cockpit-tool.js';
 import {
   WaitService,
   type WaitOutcome,
@@ -194,6 +195,7 @@ import {
   type AdHocReject,
   type AdHocPlanOutcome,
 } from './module/compare-converge.js';
+import type { CockpitSnapshot } from './cockpit/converge-cockpit.service.js';
 import { ConductorReads } from './module/reads.js';
 import { ConductorGovernedWrites } from './module/governed-writes.js';
 import { buildRunEventPipeline } from './module/run-event-pipeline.js';
@@ -899,6 +901,19 @@ export class ConductorComposer implements ConductorModule {
     return this.compareConverge.fileVersions(taskGroup, relPath, principal);
   }
 
+  /**
+   * The LIVE convergence cockpit snapshot (`recoder_converge_cockpit`,
+   * LOOM-ROADMAP.md §1 build-now #1) — makes a fan-out OBSERVABLE by folding each
+   * pane's live status with the shipped read-only convergence probe + N-up columns.
+   * Ownership-narrowed (recoder-kybr): an unknown/unowned group ⇒ `null` (truthful miss).
+   */
+  async convergeCockpit(
+    taskGroup: string,
+    principal?: Principal
+  ): Promise<CockpitSnapshot | null> {
+    return this.compareConverge.convergeCockpit(taskGroup, principal);
+  }
+
   async arrangeCompareGrid(
     taskGroup: string,
     principal: Principal
@@ -1327,6 +1342,8 @@ export class ConductorComposer implements ConductorModule {
       ...buildConductorWaitTools(this),
       // THE fusion verb: fan a task to N agents in Loom panes -> auto-converge (§0).
       ...buildConductorFanoutTools(this),
+      // The LIVE convergence cockpit read — makes a fan-out observable (§1 build-now #1).
+      ...buildConductorCockpitTools(this),
     ];
   }
 
