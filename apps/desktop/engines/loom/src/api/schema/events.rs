@@ -11,6 +11,15 @@ use super::worktrees::WorktreeInfo;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct EventsSubscribeParams {
     pub subscriptions: Vec<Subscription>,
+    /// Optional incremental-refresh cursor. When present, ring-backed event
+    /// subscriptions replay only retained events whose `seq` is greater than
+    /// this value before continuing live, letting a client resume a cockpit
+    /// stream instead of re-subscribing from scratch. `None` (or `0`) means a
+    /// fresh subscription that replays whatever the ring currently holds. A
+    /// cursor older than the retained window is refused with a `resume_gap`
+    /// error rather than silently dropping the evicted events.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub since_seq: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -362,6 +371,19 @@ mod known_event_name_tests {
 pub struct EventEnvelope {
     pub event: EventKind,
     pub data: EventData,
+}
+
+/// A ring-backed event as it is emitted on an `events.subscribe` stream: the
+/// plain {@link EventEnvelope} plus the monotonic per-emission `seq` assigned by
+/// the server's event hub. The `seq` lets a client dedupe, detect a gap (a
+/// missing sequence between two received frames), and resume with
+/// `events.subscribe { since_seq }`. It is a strictly additive field; a client
+/// that ignores it still sees the same `{event, data}` shape.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct SequencedEventEnvelope {
+    pub seq: u64,
+    #[serde(flatten)]
+    pub envelope: EventEnvelope,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]

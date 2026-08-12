@@ -258,6 +258,118 @@ describe('LoomSocketClient', () => {
     });
   });
 
+  test('subscribe parses seq off ring events and tracks a monotonic resume cursor', async () => {
+    const client = await withServer((request, socket) => {
+      const id = requestId(request);
+      socket.write(successLine(id, { type: 'subscription_started', cursor: 40 }));
+      socket.write(
+        `${JSON.stringify({ seq: 41, event: 'pane_updated', data: { pane_id: 'p1' } })}\n`
+      );
+      socket.write(
+        `${JSON.stringify({ seq: 43, event: 'pane_focused', data: { pane_id: 'p1' } })}\n`
+      );
+    });
+
+    const stream = client.subscribe({
+      subscriptions: [{ type: 'pane.updated' }, { type: 'pane.focused' }],
+    });
+
+    const seen: unknown[] = [];
+    for await (const event of stream) {
+      seen.push(event);
+      if (seen.length === 2) {
+        stream.close();
+        break;
+      }
+    }
+
+    assert.deepEqual(seen, [
+      { seq: 41, event: 'pane_updated', data: { pane_id: 'p1' } },
+      { seq: 43, event: 'pane_focused', data: { pane_id: 'p1' } },
+    ]);
+    // The cursor is the max seq seen (43), floored by the ack cursor (40).
+    assert.equal(stream.cursor(), 43);
+  });
+
+  test('subscribe forwards since_seq in the request params', async () => {
+    let seenRequest: unknown = null;
+    const client = await withServer((request, socket) => {
+      seenRequest = request;
+      socket.write(successLine(requestId(request), { type: 'subscription_started', cursor: 7 }));
+    });
+
+    const stream = client.subscribe({
+      subscriptions: [{ type: 'pane.updated' }],
+      since_seq: 7,
+    });
+    // Give the ack a tick to arrive, then assert the wire request carried since_seq.
+    await new Promise(resolve => setTimeout(resolve, 20));
+    stream.close();
+
+    assert.deepEqual((seenRequest as { params: unknown }).params, {
+      subscriptions: [{ type: 'pane.updated' }],
+      since_seq: 7,
+    });
+    // With only the ack (no events), the cursor floors at the ack baseline.
+    assert.equal(stream.cursor(), 7);
+  });
+
+  test('subscribe surfaces a resume_gap error as a LoomError', async () => {
+    const client = await withServer((request, socket) => {
+      socket.write(
+        errorLine(
+          requestId(request),
+          'resume_gap',
+          'since_seq 3 predates the retained event window'
+        )
+      );
+    });
+
+    const stream = client.subscribe({
+      subscriptions: [{ type: 'pane.updated' }],
+      since_seq: 3,
+    });
+
+    await assert.rejects(
+      async () => {
+        for await (const _event of stream) {
+          // resume_gap arrives before any event; the loop must throw.
+        }
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof LoomError);
+        assert.equal(err.code, 'resume_gap');
+        return true;
+      }
+    );
+  });
+
+  test('subscribe drops a malformed seq and floors the cursor at the ack baseline', async () => {
+    const client = await withServer((request, socket) => {
+      const id = requestId(request);
+      socket.write(successLine(id, { type: 'subscription_started', cursor: 12 }));
+      socket.write(
+        `${JSON.stringify({ seq: 'not-a-number', event: 'pane_updated', data: { pane_id: 'p1' } })}\n`
+      );
+    });
+
+    const stream = client.subscribe({
+      subscriptions: [{ type: 'pane.updated' }],
+    });
+    const iterator = stream[Symbol.asyncIterator]();
+    const first = await iterator.next();
+    stream.close();
+
+    assert.equal(first.done, false);
+    // The malformed seq is stripped, never surfaced as a fabricated number.
+    assert.deepEqual(first.value, {
+      event: 'pane_updated',
+      data: { pane_id: 'p1' },
+    });
+    // Cursor stays at the ack baseline since no valid event seq advanced it.
+    assert.equal(stream.cursor(), 12);
+  });
+
   test('agentQuery serializes the filter/sort/limit request and parses the agent list', async () => {
     let seenRequest: unknown = null;
     const client = await withServer((request, socket) => {

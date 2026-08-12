@@ -693,21 +693,52 @@ fn stream_subscriptions(
     event_hub: &EventHub,
     running: &Arc<AtomicBool>,
 ) -> std::io::Result<()> {
+    // Incremental-refresh cursor. A positive `since_seq` means the client is
+    // resuming and only wants ring-backed events newer than the cursor. Refuse
+    // a cursor that predates the retained window instead of silently dropping
+    // the evicted events, so the client can fall back to a full re-subscribe.
+    let since_seq = params.since_seq.unwrap_or(0);
+    if since_seq > 0 && !event_hub.can_resume_from(since_seq) {
+        let response = ErrorResponse {
+            id: request_id,
+            error: ErrorBody {
+                code: "resume_gap".into(),
+                message: format!(
+                    "since_seq {since_seq} predates the retained event window (earliest {}); re-subscribe without since_seq",
+                    event_hub.earliest_sequence().unwrap_or(0)
+                ),
+            },
+        };
+        if let Err(err) = write_json_line(&mut stream, &response) {
+            if is_connection_closed_error(&err) {
+                return Ok(());
+            }
+            return Err(err);
+        }
+        return Ok(());
+    }
+
     let mut subscriptions = Vec::with_capacity(params.subscriptions.len());
     for (index, subscription) in params.subscriptions.into_iter().enumerate() {
-        let active =
-            match ActiveSubscription::new(subscription, &request_id, index, api_tx, event_hub) {
-                Ok(active) => active,
-                Err(response) => {
-                    if let Err(err) = write_json_line(&mut stream, &response) {
-                        if is_connection_closed_error(&err) {
-                            return Ok(());
-                        }
-                        return Err(err);
+        let active = match ActiveSubscription::new(
+            subscription,
+            &request_id,
+            index,
+            since_seq,
+            api_tx,
+            event_hub,
+        ) {
+            Ok(active) => active,
+            Err(response) => {
+                if let Err(err) = write_json_line(&mut stream, &response) {
+                    if is_connection_closed_error(&err) {
+                        return Ok(());
                     }
-                    return Ok(());
+                    return Err(err);
                 }
-            };
+                return Ok(());
+            }
+        };
         subscriptions.push(active);
     }
 
@@ -715,7 +746,9 @@ fn stream_subscriptions(
         &mut stream,
         &SuccessResponse {
             id: request_id,
-            result: ResponseResult::SubscriptionStarted {},
+            result: ResponseResult::SubscriptionStarted {
+                cursor: event_hub.current_sequence(),
+            },
         },
     ) {
         if is_connection_closed_error(&err) {
