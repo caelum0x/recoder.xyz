@@ -151,13 +151,6 @@ function ownsWorkspace(principal: Principal, workspace: Workspace): boolean {
   return Boolean(principal.orgId && workspace.tenant?.orgId === principal.orgId);
 }
 
-/** Read the shared parallel-run group off a workspace record, or `null` when ungrouped. */
-function readTaskGroup(workspace: Workspace): string | null {
-  const meta = workspace.metadata as Record<string, unknown> | undefined;
-  const group = meta?.taskGroup;
-  return typeof group === 'string' && group.length > 0 ? group : null;
-}
-
 /**
  * A deny-biased actor for a remote steer, carrying NO standing high-risk rights — so
  * the gate's verdict is driven by the ACTION rules alone (mirrors the skill actor). A
