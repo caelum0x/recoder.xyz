@@ -31,16 +31,26 @@ pub(crate) fn validate_agent_view(spec: &mut AgentViewSetParams) -> Result<(), S
         .map(|label| normalize_label(&label))
         .transpose()?;
 
+    validate_agent_query(spec.filter.as_ref(), &spec.sort)
+}
+
+/// Validate a filter/sort pair against the shared predicate limits. Reused by
+/// both the stored `agent.view.set` spec and the one-shot `agent.query` verb so
+/// the query surface enforces the exact same depth, node, and sort caps.
+pub(crate) fn validate_agent_query(
+    filter: Option<&AgentViewFilter>,
+    sort: &[AgentViewSort],
+) -> Result<(), String> {
     let mut nodes = 0;
-    if let Some(filter) = &spec.filter {
+    if let Some(filter) = filter {
         validate_filter(filter, 1, &mut nodes)?;
     }
-    if spec.sort.len() > MAX_SORT_FIELDS {
+    if sort.len() > MAX_SORT_FIELDS {
         return Err(format!(
             "agent view sort may contain at most {MAX_SORT_FIELDS} fields"
         ));
     }
-    for sort in &spec.sort {
+    for sort in sort {
         validate_sort_field(&sort.field)?;
     }
     Ok(())
@@ -50,13 +60,29 @@ pub(crate) fn validate_agent_view_source(source: &str) -> Result<String, String>
     normalize_source(source)
 }
 
+/// Apply a filter/sort pair to a set of agent panel entries in place. This is
+/// the shared predicate/view engine: `apply_agent_view` drives it from the
+/// stored TUI override, and the `agent.query` API verb drives it from an
+/// explicit one-shot spec. It is a pure read over `app` — it never mutates
+/// runtime state and never fabricates entries.
+pub(crate) fn filter_and_sort_entries(
+    app: &AppState,
+    entries: &mut Vec<AgentPanelEntry>,
+    filter: Option<&AgentViewFilter>,
+    sort: &[AgentViewSort],
+) {
+    if let Some(filter) = filter {
+        entries.retain(|entry| matches_filter(app, entry, filter));
+    }
+    if !sort.is_empty() {
+        entries.sort_by(|left, right| compare_entries(app, left, right, sort));
+    }
+}
+
 pub(crate) fn apply_agent_view(app: &AppState, entries: &mut Vec<AgentPanelEntry>) {
     if let Some(spec) = app.agent_view_override.as_ref() {
-        if let Some(filter) = &spec.filter {
-            entries.retain(|entry| matches_filter(app, entry, filter));
-        }
+        filter_and_sort_entries(app, entries, spec.filter.as_ref(), &spec.sort);
         if !spec.sort.is_empty() {
-            entries.sort_by(|left, right| compare_entries(app, left, right, &spec.sort));
             return;
         }
     }

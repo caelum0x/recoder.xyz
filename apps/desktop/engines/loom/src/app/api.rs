@@ -1069,6 +1069,7 @@ impl App {
             Method::TabClose(target) => return self.handle_tab_close(request.id, target),
             Method::AgentList(_) => return self.handle_agent_list(request.id),
             Method::AgentGet(target) => return self.handle_agent_get(request.id, target),
+            Method::AgentQuery(params) => return self.handle_agent_query(request.id, params),
             Method::AgentFocus(target) => return self.handle_agent_focus(request.id, target),
             Method::AgentRename(params) => return self.handle_agent_rename(request.id, params),
             Method::AgentViewSet(params) => return self.handle_agent_view_set(request.id, params),

@@ -339,6 +339,51 @@ fn agent_view_requests_round_trip() {
 }
 
 #[test]
+fn agent_query_request_and_response_round_trip() {
+    let request_json = serde_json::json!({
+        "id": "query-1",
+        "method": "agent.query",
+        "params": {
+            "filter": {
+                "op": "all",
+                "filters": [
+                    {"op": "in", "field": "status", "values": ["blocked", "done"]},
+                    {"op": "eq", "field": {"token": "taskGroup"}, "value": "alpha"}
+                ]
+            },
+            "sort": [{"field": "workspace_order", "order": "desc"}],
+            "limit": 5
+        }
+    });
+    let request: Request = serde_json::from_value(request_json.clone()).unwrap();
+    assert!(matches!(request.method, Method::AgentQuery(_)));
+    assert_eq!(serde_json::to_value(&request).unwrap(), request_json);
+
+    // Empty params are valid: an unfiltered, unsorted, uncapped read.
+    let bare: Request = serde_json::from_value(serde_json::json!({
+        "id": "query-2",
+        "method": "agent.query",
+        "params": {}
+    }))
+    .unwrap();
+    let Method::AgentQuery(params) = bare.method else {
+        panic!("wrong method parsed");
+    };
+    assert!(params.filter.is_none());
+    assert!(params.sort.is_empty());
+    assert!(params.limit.is_none());
+
+    let response = SuccessResponse {
+        id: "query-1".into(),
+        result: ResponseResult::AgentQuery { agents: Vec::new() },
+    };
+    let json = serde_json::to_string(&response).unwrap();
+    assert!(json.contains("\"type\":\"agent_query\""));
+    let restored: SuccessResponse = serde_json::from_str(&json).unwrap();
+    assert_eq!(restored, response);
+}
+
+#[test]
 fn unknown_method_is_rejected() {
     let json = r#"{"id":"req_1","method":"nope","params":{}}"#;
     let err = serde_json::from_str::<Request>(json)

@@ -1320,6 +1320,37 @@
           },
           "type": "object"
         },
+        "AgentQueryParams": {
+          "description": "Parameters for the pure-read `agent.query` verb: a server-side filtered and\nsorted read over the current session's agent panes, reusing the same filter\nand sort vocabulary as `agent.view.set`. It never mutates state and never\ninstalls a stored view; each call is a one-shot query.",
+          "properties": {
+            "filter": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/request/$defs/AgentViewFilter"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "limit": {
+              "description": "Optional cap on the number of returned agents, applied after filtering\nand sorting (top-N). When omitted, every matching agent is returned.\nField-level projection is intentionally not supported: `agent.query`\nreturns the same canonical `AgentInfo` shape as `agent.get` and\n`session.snapshot`.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "sort": {
+              "items": {
+                "$ref": "#/schemas/request/$defs/AgentViewSort"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
         "AgentReadParams": {
           "properties": {
             "format": {
@@ -4984,6 +5015,22 @@
             },
             "params": {
               "$ref": "#/schemas/request/$defs/AgentTarget"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "agent.query",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/AgentQueryParams"
             }
           },
           "required": [
@@ -9120,6 +9167,25 @@
                 },
                 "type": {
                   "const": "agent_list",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "agents"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "agents": {
+                  "items": {
+                    "$ref": "#/schemas/success_response/$defs/AgentInfo"
+                  },
+                  "type": "array"
+                },
+                "type": {
+                  "const": "agent_query",
                   "type": "string"
                 }
               },
