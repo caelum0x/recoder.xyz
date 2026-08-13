@@ -115,6 +115,33 @@ describe("normalizeFeishuEvent", () => {
     expect(result?.text).toBe("do the thing");
   });
 
+  it("does NOT treat a mention as the bot when only user_id/union_id equals the bot open_id", () => {
+    // open_id, user_id, and union_id are DISTINCT Feishu id namespaces. A member
+    // whose user_id (or union_id) string coincides with the bot's open_id must
+    // NOT be mistaken for the bot — only mention.id.open_id is a valid match.
+    const event = {
+      message: {
+        chat_id: "oc_group_1",
+        chat_type: "group",
+        message_type: "text",
+        message_id: "om_2c",
+        create_time: 1700000001000,
+        content: JSON.stringify({ text: "@_user_1 do the thing" }),
+        mentions: [
+          {
+            key: "@_user_1",
+            name: "Not The Bot",
+            id: { open_id: "ou_other", user_id: "ou_bot", union_id: "ou_bot" },
+          },
+        ],
+      },
+      sender: { sender_id: { open_id: "ou_user_2" } },
+    };
+    const result = normalizeFeishuEvent(event, "default", "ou_bot");
+    expect(result?.wasMentioned).toBe(false);
+    expect(result?.text).toBe("do the thing");
+  });
+
   it("returns undefined for unsupported message types", () => {
     const event = {
       message: {
