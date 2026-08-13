@@ -61,6 +61,7 @@ import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/op
 import { createAcpSubstrate } from '../domains/conductor/adapters/acp-substrate.adapter.js';
 import { createLoomSubstrate } from '../domains/conductor/adapters/loom-substrate.adapter.js';
 import { createSwarmUnblockDeps } from '../domains/conductor/adapters/swarm-unblock-wiring.js';
+import { createRemoteAttachDeps } from '../domains/conductor/adapters/remote-attach-wiring.js';
 import { LoomSocketClient } from '@recoder/agent-runtimes/loom';
 import type { LoomResult } from '@recoder/agent-runtimes/loom';
 import {
@@ -969,6 +970,32 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     approvals: governance.approvals(),
     candidates: memory.candidates(),
   });
+  // GOVERNED REMOTE ATTACH (LOOM Bigger Bet C): bind the external seams of the pure
+  // RemoteAttachService — the REAL `@recoder/agent-policy` `evaluatePolicy` (the
+  // service builds the deny-biased `remote.steer` actor itself), the governance
+  // approval gate, the durable audit chain, the loom `agent.prompt` steer transport
+  // (a second CLIENT over the SAME daemon socket — never a second daemon), and the
+  // taskGroup→sibling-ids resolver. getWorkspace/compareGroup are LATE-BOUND to the
+  // conductor built just below (the closures only run at request time, long after
+  // `conductorRef` is assigned). The two READS the core needs (ownership +
+  // statusBoardSnapshot) are bound by the composer itself, so identity + ownership
+  // are re-verified on every call. Absent seams degrade truthfully to
+  // SERVICE_UNAVAILABLE — this wiring binds every one to the concrete system.
+  const loomRemoteAttachClient = new LoomSocketClient({
+    socketPath: loomDaemon.socketPath,
+  });
+  const conductorRemoteAttach = createRemoteAttachDeps({
+    loom: loomRemoteAttachClient,
+    getWorkspace: id =>
+      conductorRef ? conductorRef.getWorkspace(id) : Promise.resolve(null),
+    compareGroup: (taskGroup, principal) =>
+      conductorRef
+        ? conductorRef.compareTaskGroup(taskGroup, principal)
+        : Promise.reject(new Error('conductor not yet composed')),
+    approvals: governance.approvals(),
+    audit: governance.audit(),
+    logger: childLogger('conductor-remote-attach'),
+  });
   // LIVE Needs-You queue (LOOM-ROADMAP.md build-now #4): subscribe ONCE to the Loom
   // `pane.agent_status_changed` stream over the SAME daemon socket (a dedicated CLIENT,
   // NOT a second daemon) and drive a push-not-poll ranked queue of panes needing the
@@ -1132,6 +1159,13 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     // memory-search + sibling-decision + policy + approval + remember wiring the
     // `recoder_swarm_unblock` tool composes through the pure SwarmUnblockService.
     swarmUnblock: conductorSwarmUnblock,
+    // Governed remote attach seams (LOOM Bigger Bet C): the real policy/approval/
+    // audit + loom `agent.prompt` steer transport + taskGroup resolver the
+    // `recoder_remote_*` tools compose through the pure RemoteAttachService. Absent
+    // ⇒ the tools + methods refuse SERVICE_UNAVAILABLE; wired here to the concrete
+    // system so an authenticated remote/mobile client can monitor + govern-steer
+    // its OWN live agents.
+    remoteAttach: conductorRemoteAttach,
     // Live Needs-You queue push stream (build-now #4); absent ⇒ tool SERVICE_UNAVAILABLE.
     ...(needsYouStream ? { needsYouStream } : {}),
     // Live native status board pull source (build-now #5); absent ⇒ tool SERVICE_UNAVAILABLE.

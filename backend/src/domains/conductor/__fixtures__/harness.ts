@@ -388,6 +388,8 @@ export interface ComposeOptions {
   infer?: ConductorModuleDeps['infer'];
   /** OPTIONAL swarm auto-unblock seams (LOOM #3); absent ⇒ the tool is SERVICE_UNAVAILABLE. */
   swarmUnblock?: ConductorModuleDeps['swarmUnblock'];
+  /** OPTIONAL governed remote-attach seams (LOOM Bigger Bet C); absent ⇒ the tools are SERVICE_UNAVAILABLE. */
+  remoteAttach?: ConductorModuleDeps['remoteAttach'];
   /** OPTIONAL AppConfig override (e.g. `makeConfig(false, true)` for solo/desktop mode). */
   config?: AppConfig;
 }
@@ -430,6 +432,7 @@ export function composeConductor(options: ComposeOptions = {}): {
     ...(options.workspaceGrid ? { workspaceGrid: options.workspaceGrid } : {}),
     ...(options.infer ? { infer: options.infer } : {}),
     ...(options.swarmUnblock ? { swarmUnblock: options.swarmUnblock } : {}),
+    ...(options.remoteAttach ? { remoteAttach: options.remoteAttach } : {}),
   });
   return { module, gate };
 }
