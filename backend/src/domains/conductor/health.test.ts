@@ -68,4 +68,30 @@ describe('conductor health', () => {
     });
     expect(health.status).toBe('degraded');
   });
+
+  it('keys the verdict on the CONFIGURED default (loom): loom down + tmux up ⇒ degraded, never a faked up', () => {
+    const loomCfg = sliceConductorConfig(makeConfig(), { defaultSubstrate: 'loom' });
+    const health = buildConductorHealth({
+      config: loomCfg,
+      // tmux happens to be up, but the DEFAULT runtime an unqualified launch rides
+      // (loom) is down — an unqualified launch would fail, so health must not be `up`.
+      substrates: [up('tmux_worktree'), down('loom', 'daemon did not start')],
+      repositoryAvailable: true,
+      liveConnections: 0,
+    });
+    expect(health.status).toBe('degraded');
+    expect(health.degraded).toBe(true);
+  });
+
+  it('is up when the configured default (loom) is available', () => {
+    const loomCfg = sliceConductorConfig(makeConfig(), { defaultSubstrate: 'loom' });
+    const health = buildConductorHealth({
+      config: loomCfg,
+      substrates: [up('loom'), down('tmux_worktree', 'not wired')],
+      repositoryAvailable: true,
+      liveConnections: 0,
+    });
+    expect(health.status).toBe('up');
+    expect(health.degraded).toBe(false);
+  });
 });
