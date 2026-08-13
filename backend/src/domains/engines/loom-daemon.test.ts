@@ -16,6 +16,7 @@ import {
   createLoomDaemon,
   isSecretLoomEnvKey,
   defaultRecoderLoomSocketPath,
+  type LoomChild,
   type LoomDaemon,
 } from './loom-daemon.js';
 
@@ -222,6 +223,150 @@ describe('createLoomDaemon — real lifecycle against a fake loom server', () =>
     const status = await daemon.start();
     expect(status.running).toBe(false);
     expect(status.reason).toMatch(/did not become healthy/);
+  });
+});
+
+describe('createLoomDaemon — adopt an existing healthy server (durability/reattach)', () => {
+  // A minimal injected child so spawn-path tests never touch a real process; the
+  // huge pid keeps killTracked's signals harmless no-ops (ESRCH, caught).
+  function fakeChild(): LoomChild {
+    return {
+      pid: 2_147_480_000,
+      stderr: { on: () => {} },
+      on: () => {},
+      kill: () => true,
+      unref: () => {},
+    };
+  }
+
+  it('adopts an already-healthy protocol-20 server without spawning', async () => {
+    const socketPath = socketFor();
+    writeFileSync(socketPath, ''); // an existing socket that must NOT be rm-ed
+    let spawnCalls = 0;
+    const daemon = createLoomDaemon({
+      socketPath,
+      resolveBin: () => ({ bin: '/does/not/matter/loom' }),
+      exists: () => true,
+      makeClient: () => ({ ping: async () => ({ protocol: 20, version: 'live' }) }),
+      spawn: () => {
+        spawnCalls += 1;
+        throw new Error('spawn must not be called when adopting a healthy server');
+      },
+    });
+    daemons.push(daemon);
+
+    const status = await daemon.start();
+    expect(spawnCalls).toBe(0);
+    expect(status.running).toBe(true);
+    expect(status.adopted).toBe(true);
+    expect(status.protocol).toBe(20);
+    expect(status.pid).toBeUndefined();
+    // The adopted server's socket is left intact (never reclaimed).
+    expect(existsSync(socketPath)).toBe(true);
+  });
+
+  it('does NOT adopt on a protocol mismatch — reclaims the socket and spawns', async () => {
+    const socketPath = socketFor();
+    writeFileSync(socketPath, 'stale');
+    let spawnCalls = 0;
+    const daemon = createLoomDaemon({
+      socketPath,
+      resolveBin: () => ({ bin: '/fake/loom' }),
+      exists: existsSync,
+      makeClient: () => ({ ping: async () => ({ protocol: 19 }) }),
+      spawn: () => {
+        spawnCalls += 1;
+        return fakeChild();
+      },
+      healthTimeoutMs: 150,
+      pollIntervalMs: 20,
+    });
+    daemons.push(daemon);
+
+    const status = await daemon.start();
+    expect(spawnCalls).toBe(1);
+    expect(status.adopted).toBeUndefined();
+    expect(status.running).toBe(false);
+    // The stale socket was reclaimed (rm-ed) before spawning, as before.
+    expect(existsSync(socketPath)).toBe(false);
+  });
+
+  it('does NOT adopt when the ping throws (stale socket, no listener) — spawns', async () => {
+    const socketPath = socketFor();
+    writeFileSync(socketPath, 'stale');
+    let spawnCalls = 0;
+    const daemon = createLoomDaemon({
+      socketPath,
+      resolveBin: () => ({ bin: '/fake/loom' }),
+      exists: existsSync,
+      makeClient: () => ({
+        ping: async () => {
+          throw Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
+        },
+      }),
+      spawn: () => {
+        spawnCalls += 1;
+        return fakeChild();
+      },
+      healthTimeoutMs: 150,
+      pollIntervalMs: 20,
+    });
+    daemons.push(daemon);
+
+    const status = await daemon.start();
+    expect(spawnCalls).toBe(1);
+    expect(status.adopted).toBeUndefined();
+    expect(status.running).toBe(false);
+    expect(existsSync(socketPath)).toBe(false);
+  });
+
+  it('adopts even when resolveBin() cannot find a local binary', async () => {
+    const socketPath = socketFor();
+    let spawnCalls = 0;
+    const daemon = createLoomDaemon({
+      socketPath,
+      resolveBin: () => ({ bin: null, reason: 'loom binary not found' }),
+      exists: () => true,
+      makeClient: () => ({ ping: async () => ({ protocol: 20 }) }),
+      spawn: () => {
+        spawnCalls += 1;
+        throw new Error('must not spawn — a healthy server is already up');
+      },
+    });
+    daemons.push(daemon);
+
+    const status = await daemon.start();
+    expect(spawnCalls).toBe(0);
+    expect(status.running).toBe(true);
+    expect(status.adopted).toBe(true);
+  });
+
+  it('stop() on an ADOPTED server detaches — no kill, socket left running', async () => {
+    const socketPath = socketFor();
+    writeFileSync(socketPath, '');
+    let spawnCalls = 0;
+    const daemon = createLoomDaemon({
+      socketPath,
+      resolveBin: () => ({ bin: null, reason: 'no local binary' }),
+      exists: () => true,
+      makeClient: () => ({ ping: async () => ({ protocol: 20 }) }),
+      spawn: () => {
+        spawnCalls += 1;
+        throw new Error('adopt path must not spawn');
+      },
+    });
+    daemons.push(daemon);
+
+    const started = await daemon.start();
+    expect(started.adopted).toBe(true);
+
+    await daemon.stop();
+    const stopped = daemon.status();
+    expect(spawnCalls).toBe(0);
+    expect(stopped.running).toBe(false);
+    expect(stopped.reason).toMatch(/detached/);
+    // The adopted herd's socket is left intact — never removed on detach.
+    expect(existsSync(socketPath)).toBe(true);
   });
 });
 

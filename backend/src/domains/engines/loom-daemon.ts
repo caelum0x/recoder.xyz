@@ -128,6 +128,13 @@ export interface LoomDaemonStatus {
   readonly bin?: string;
   /** The handshaked protocol version (present when running). */
   readonly protocol?: number;
+  /**
+   * True ONLY when `start()` REATTACHED to an already-healthy server it did NOT
+   * spawn (durability/reattach path). Recoder does not own that process, so
+   * `pid` is absent and `stop()` DETACHES (leaves the herd running) instead of
+   * killing it or removing its socket.
+   */
+  readonly adopted?: boolean;
   /** Present when `running` is false: why the daemon is not up. */
   readonly reason?: string;
 }
@@ -307,6 +314,35 @@ export function createLoomDaemon(deps: CreateLoomDaemonDeps): LoomDaemon {
   }
 
   async function doStart(): Promise<LoomDaemonStatus> {
+    // DURABILITY / REATTACH: if a healthy server is already listening on our socket
+    // (e.g. a detached one that kept the herd alive across a backend restart), ADOPT
+    // it rather than deleting its socket and spawning a fresh server that orphans the
+    // herd. Adoption demands a REAL protocol-20 ping — a stale socket file that refuses
+    // (ECONNREFUSED) or mishandshakes is NOT adopted and falls through to reclaim below.
+    // Probed BEFORE resolveBin so a genuinely live server is reattached even when the
+    // local binary cannot be resolved; the probe is a single bounded ping, not a poll.
+    if (exists(socketPath)) {
+      try {
+        const pong = await makeClient(socketPath).ping();
+        if (pong.protocol === LOOM_PROTOCOL_VERSION) {
+          child = null;
+          current = {
+            running: true,
+            socketPath,
+            protocol: pong.protocol,
+            adopted: true,
+          };
+          logger.info(
+            { socketPath, protocol: pong.protocol },
+            'loom daemon adopted existing healthy server (reattached)'
+          );
+          return current;
+        }
+      } catch {
+        // Not adoptable (no listener / stale socket / mishandshake) — reclaim below.
+      }
+    }
+
     const resolved = deps.resolveBin();
     if (resolved.bin == null) {
       current = {
@@ -390,8 +426,9 @@ export function createLoomDaemon(deps: CreateLoomDaemonDeps): LoomDaemon {
     socketPath,
 
     async start(): Promise<LoomDaemonStatus> {
-      // Idempotent while healthy; a prior failure is retryable.
-      if (current.running && child) return current;
+      // Idempotent while healthy; a prior failure is retryable. An adopted server
+      // is up without a tracked child, so it counts as running too.
+      if (current.running && (child || current.adopted)) return current;
       if (starting) return starting;
       starting = doStart().finally(() => {
         starting = null;
@@ -400,7 +437,19 @@ export function createLoomDaemon(deps: CreateLoomDaemonDeps): LoomDaemon {
     },
 
     async stop(): Promise<void> {
+      // Durability: an ADOPTED server is not ours to end — killTracked is already a
+      // no-op (no child) and we must NOT delete its socket. Detach and leave the
+      // herd running so a backend restart can reattach to it.
+      const wasAdopted = current.adopted === true;
       killTracked();
+      if (wasAdopted) {
+        current = {
+          running: false,
+          socketPath,
+          reason: 'loom daemon detached (adopted server left running)',
+        };
+        return;
+      }
       try {
         rmSync(socketPath, { force: true });
       } catch {
