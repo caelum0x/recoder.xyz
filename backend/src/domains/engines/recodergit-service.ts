@@ -263,9 +263,12 @@ function emptyCodeContext(repoId: string, reason: string): CodeContext {
 /**
  * Truthful supervision state of the `recodergit mcp --http` process.
  * - 'disabled'    : flag off — nothing is (or should be) running.
- * - 'starting'    : a spawn is in flight (transient).
- * - 'ready'       : a live child holds a pid and has not exited/errored.
- * - 'unavailable' : flag on but bin missing / spawn failed / process exited.
+ * - 'starting'    : a child has a pid but the readiness probe has NOT yet
+ *                   confirmed its loopback HTTP server is listening (transient).
+ * - 'ready'       : a live child holds a pid AND the readiness probe confirmed
+ *                   the loopback MCP server is actually accepting connections.
+ * - 'unavailable' : flag on but bin missing / spawn failed / no pid / process
+ *                   exited / readiness probe timed out (never claimed ready).
  */
 export type ServerHealthStatus =
   'disabled' | 'starting' | 'ready' | 'unavailable';
@@ -276,6 +279,12 @@ export interface ServerHealth {
   baseUrl: string | null;
   port: number | null;
   pid: number | null;
+  /**
+   * Truthful reason the server is not 'ready' (bin missing / spawn failure /
+   * readiness-probe timeout / child exit). Present only for a non-ready,
+   * non-disabled reading; omitted when ready or disabled.
+   */
+  reason?: string;
 }
 
 /**
@@ -294,6 +303,16 @@ export type ServerSpawner = (
   bin: string,
   args: string[]
 ) => ServerProcessHandle;
+
+/**
+ * Probes whether the spawned MCP HTTP server's loopback endpoint is ACTUALLY
+ * listening (a bare pid proves nothing — the child may not have bound its socket
+ * yet, so a consumer POSTing to `baseUrl` would race ECONNREFUSED). Resolves
+ * `true` once the server answers, `false` while the connection is still refused.
+ * Injected in tests so no real socket is opened. Mirrors colbert-daemon's
+ * `waitForHealth` gate: readiness is CONFIRMED, never assumed.
+ */
+export type ServerReadinessProbe = (baseUrl: string) => Promise<boolean>;
 
 /** Result envelope: `{ enabled:false }` when the flag is off (no-op). */
 export type DisabledResult = { enabled: false };
@@ -368,6 +387,15 @@ export interface RecoderGitServiceDeps {
   spawnServer?: ServerSpawner;
   /** Resolves the HTTP port for the MCP server. Defaults to env or 7337. */
   serverPort?: () => number;
+  /**
+   * Probes the spawned server's loopback readiness. Injected in tests so no
+   * real socket is opened. Defaults to an HTTP GET against the MCP endpoint.
+   */
+  readinessProbe?: ServerReadinessProbe;
+  /** Bounded wall-clock cap on the readiness poll (ms). Defaults to 15_000. */
+  serverReadyTimeoutMs?: number;
+  /** Interval between readiness probes (ms). Defaults to 200. */
+  serverReadyIntervalMs?: number;
 }
 
 /** Explicit opt-out tokens; anything else (including unset) is the default-on ON. */
@@ -673,6 +701,38 @@ function makeDefaultServerSpawner(): ServerSpawner {
   };
 }
 
+/** Bounded wall-clock cap on the readiness poll before degrading (ms). */
+const SERVER_READY_TIMEOUT_MS = 15_000;
+/** Interval between readiness probes while the server is 'starting' (ms). */
+const SERVER_READY_INTERVAL_MS = 200;
+/** Per-probe request timeout so a single probe never hangs the poll (ms). */
+const SERVER_PROBE_TIMEOUT_MS = 1_000;
+
+/**
+ * Default readiness probe: GET the loopback MCP endpoint. ANY HTTP response
+ * means the child's socket is LISTENING (the Streamable-HTTP MCP endpoint
+ * answers a bare GET with 4xx/405/406 — still "up"); a connection error
+ * (ECONNREFUSED, DNS, abort/timeout) means it is not accepting connections yet
+ * and the caller keeps polling. Bounded by a per-probe AbortSignal timeout so it
+ * cannot hang. Rejections are caught by the caller and treated as "not ready".
+ */
+function makeDefaultReadinessProbe(): ServerReadinessProbe {
+  return async baseUrl => {
+    const resp = await (globalThis.fetch as typeof fetch)(baseUrl, {
+      method: 'GET',
+      signal: AbortSignal.timeout(SERVER_PROBE_TIMEOUT_MS),
+    });
+    // Release the socket promptly; the status code itself is irrelevant — a
+    // response at all proves the loopback server is listening.
+    try {
+      await resp.body?.cancel();
+    } catch {
+      // best-effort drain
+    }
+    return true;
+  };
+}
+
 /** Default git provider: shells `git` via the injected engine-less spawn. */
 function makeDefaultGit(): GitProvider {
   const run = async (args: string[], cwd: string): Promise<string | null> => {
@@ -816,12 +876,19 @@ export class RecoderGitService {
   private readonly resolveBin: () => string | null;
   private readonly spawnServer: ServerSpawner;
   private readonly serverPortFn: () => number;
+  private readonly readinessProbe: ServerReadinessProbe;
+  private readonly serverReadyTimeoutMs: number;
+  private readonly serverReadyIntervalMs: number;
 
   // Supervision state for the `recodergit mcp --http` process. Mutated only by
   // ensureServer()/stopServer() and the child's exit/error callbacks.
   private serverHandle: ServerProcessHandle | null = null;
   private serverStatus: Exclude<ServerHealthStatus, 'disabled'> = 'unavailable';
   private serverPortValue: number | null = null;
+  /** Truthful reason for a non-ready status (surfaced via ServerHealth.reason). */
+  private serverReason: string | null = null;
+  /** In-flight ensureServer() promise — dedupes concurrent bring-up + probing. */
+  private ensureServerInFlight: Promise<ServerHealth> | null = null;
 
   constructor(deps: RecoderGitServiceDeps = {}) {
     this.isEnabledFn = deps.isEnabled ?? readFlagFromEnv;
@@ -841,6 +908,11 @@ export class RecoderGitService {
     this.workdirRoot = deps.workdirRoot ?? defaultWorkdirRoot;
     this.spawnServer = deps.spawnServer ?? makeDefaultServerSpawner();
     this.serverPortFn = deps.serverPort ?? defaultServerPort;
+    this.readinessProbe = deps.readinessProbe ?? makeDefaultReadinessProbe();
+    this.serverReadyTimeoutMs =
+      deps.serverReadyTimeoutMs ?? SERVER_READY_TIMEOUT_MS;
+    this.serverReadyIntervalMs =
+      deps.serverReadyIntervalMs ?? SERVER_READY_INTERVAL_MS;
   }
 
   /** True unless the gate env var is an explicit falsy token. Default ON. */
@@ -850,26 +922,57 @@ export class RecoderGitService {
 
   /**
    * Bring up (or confirm) the supervised `recodergit mcp --http` server and
-   * return its truthful health. Idempotent — a live child is NOT re-spawned.
+   * return its truthful health. Idempotent — a live, probed-ready child is NOT
+   * re-spawned, and concurrent callers share one in-flight bring-up.
    *
-   * Fail-safe: flag off -> 'disabled' (no spawn); bin missing or spawn failure
-   * -> 'unavailable' (logged, never thrown). This NEVER throws into a request
-   * path and NEVER claims 'ready' without a live pid.
+   * TRUTHFUL READINESS (recoder — health must reflect real listening state): a
+   * bare pid is NOT 'ready'. After spawn the status stays 'starting' and we POLL
+   * the child's loopback endpoint until it actually answers (bounded by
+   * `serverReadyTimeoutMs`). Only a successful probe flips to 'ready'; a timeout
+   * degrades to 'unavailable' (with a reason) and stops the unresponsive child —
+   * mirroring colbert-daemon's wait-for-health gate.
+   *
+   * Fail-safe: flag off -> 'disabled' (no spawn); bin missing / spawn failure /
+   * no pid / probe timeout / child exit -> 'unavailable' (logged, never thrown).
+   * This NEVER throws into a request path and NEVER claims 'ready' on a server
+   * that is not confirmed listening.
    */
   async ensureServer(): Promise<ServerHealth> {
     if (!this.isEnabled()) {
       return this.healthSnapshot('disabled');
     }
 
-    // Idempotent: a live, ready child is reused — do not double-spawn.
+    // Idempotent: a live, probed-ready child is reused — do not double-spawn.
     if (this.serverHandle && this.serverStatus === 'ready') {
       return this.healthSnapshot();
     }
 
+    // Dedupe concurrent bring-up: a second caller during 'starting' must NOT
+    // spawn a second child — it awaits the in-flight probe instead.
+    if (this.ensureServerInFlight) {
+      return this.ensureServerInFlight;
+    }
+
+    const run = this.startAndProbeServer();
+    this.ensureServerInFlight = run;
+    try {
+      return await run;
+    } finally {
+      this.ensureServerInFlight = null;
+    }
+  }
+
+  /**
+   * Spawn the MCP server child, mark it 'starting', and poll its loopback
+   * readiness until confirmed listening or the bounded deadline passes. Only a
+   * successful probe sets 'ready'; every failure path degrades truthfully.
+   */
+  private async startAndProbeServer(): Promise<ServerHealth> {
     const bin = this.resolveBin();
     if (!bin) {
-      this.serverHandle = null;
-      this.serverStatus = 'unavailable';
+      this.markServerUnavailable(
+        'engine bin not found (set RECODERGIT_BIN or build the vendored engine)'
+      );
       this.logger.error(
         '[recodergit-service] ensureServer: engine bin not found (set RECODERGIT_BIN or build the vendored engine)',
         null
@@ -878,9 +981,9 @@ export class RecoderGitService {
     }
 
     const port = this.serverPortFn();
-    this.serverStatus = 'starting';
+    let handle: ServerProcessHandle;
     try {
-      const handle = this.spawnServer(bin, [
+      handle = this.spawnServer(bin, [
         'mcp',
         '--http',
         '--port',
@@ -888,51 +991,105 @@ export class RecoderGitService {
         '--host',
         MCP_HOST,
       ]);
-      if (!handle || handle.pid === null || handle.pid === undefined) {
-        this.serverHandle = null;
-        this.serverStatus = 'unavailable';
-        this.logger.error(
-          '[recodergit-service] ensureServer: spawn returned no pid (degrading to unavailable)',
-          null
-        );
-        return this.healthSnapshot();
-      }
-
-      handle.onExit(code => {
-        // Only react if this is still the tracked child.
-        if (this.serverHandle === handle) {
-          this.serverHandle = null;
-          this.serverStatus = 'unavailable';
-          this.logger.error(
-            `[recodergit-service] mcp server exited (code=${code ?? 'null'})`,
-            null
-          );
-        }
-      });
-      handle.onError(error => {
-        if (this.serverHandle === handle) {
-          this.serverHandle = null;
-          this.serverStatus = 'unavailable';
-        }
-        this.logger.error(
-          '[recodergit-service] mcp server process error',
-          error
-        );
-      });
-
-      this.serverHandle = handle;
-      this.serverPortValue = port;
-      this.serverStatus = 'ready';
-      return this.healthSnapshot();
     } catch (error: unknown) {
-      this.serverHandle = null;
-      this.serverStatus = 'unavailable';
+      this.markServerUnavailable('spawn failed');
       this.logger.error(
         '[recodergit-service] ensureServer spawn failed (degrading to unavailable)',
         error
       );
       return this.healthSnapshot();
     }
+
+    if (!handle || handle.pid === null || handle.pid === undefined) {
+      this.markServerUnavailable('spawn returned no pid');
+      this.logger.error(
+        '[recodergit-service] ensureServer: spawn returned no pid (degrading to unavailable)',
+        null
+      );
+      return this.healthSnapshot();
+    }
+
+    // Child has a pid but is NOT yet confirmed listening: 'starting', observable
+    // via serverHealth() (baseUrl/port/pid stay null until a probe succeeds).
+    this.serverHandle = handle;
+    this.serverPortValue = port;
+    this.serverReason = null;
+    this.serverStatus = 'starting';
+
+    // A child that exits/errors mid-probe flips us to unavailable and the poll
+    // loop below observes `serverHandle !== handle` and stops (never claims ready).
+    handle.onExit(code => {
+      if (this.serverHandle === handle) {
+        this.serverHandle = null;
+        this.serverStatus = 'unavailable';
+        this.serverReason = `mcp server exited (code=${code ?? 'null'})`;
+        this.logger.error(
+          `[recodergit-service] mcp server exited (code=${code ?? 'null'})`,
+          null
+        );
+      }
+    });
+    handle.onError(error => {
+      if (this.serverHandle === handle) {
+        this.serverHandle = null;
+        this.serverStatus = 'unavailable';
+        this.serverReason = 'mcp server process error';
+      }
+      this.logger.error('[recodergit-service] mcp server process error', error);
+    });
+
+    const baseUrl = `http://${MCP_HOST}:${port}/mcp`;
+    const deadline = Date.now() + this.serverReadyTimeoutMs;
+    for (;;) {
+      // Child died (exit/error handler already set unavailable + reason).
+      if (this.serverHandle !== handle) {
+        return this.healthSnapshot();
+      }
+
+      const ready = await this.readinessProbe(baseUrl).catch(() => false);
+      // Re-check liveness AFTER the await: the child may have exited while we
+      // probed. Only claim 'ready' for the still-tracked, live child.
+      if (ready && this.serverHandle === handle) {
+        this.serverStatus = 'ready';
+        this.serverReason = null;
+        return this.healthSnapshot();
+      }
+      if (this.serverHandle !== handle) {
+        return this.healthSnapshot();
+      }
+
+      if (Date.now() >= deadline) {
+        // Never claim ready on a server that never answered. Stop the child and
+        // degrade truthfully so /health does not advertise a dead baseUrl.
+        this.serverHandle = null;
+        this.serverStatus = 'unavailable';
+        this.serverReason = `mcp server did not become ready within ${this.serverReadyTimeoutMs}ms`;
+        this.logger.error(
+          `[recodergit-service] ensureServer: mcp server did not pass the readiness probe within ${this.serverReadyTimeoutMs}ms (stopping child, degrading to unavailable)`,
+          null
+        );
+        try {
+          handle.kill();
+        } catch (error: unknown) {
+          this.logger.error(
+            '[recodergit-service] ensureServer: kill of unresponsive server failed',
+            error
+          );
+        }
+        return this.healthSnapshot();
+      }
+
+      await new Promise<void>(resolve =>
+        setTimeout(resolve, this.serverReadyIntervalMs)
+      );
+    }
+  }
+
+  /** Clear the handle and record a truthful non-ready status + reason. */
+  private markServerUnavailable(reason: string): void {
+    this.serverHandle = null;
+    this.serverStatus = 'unavailable';
+    this.serverReason = reason;
   }
 
   /** Current truthful server health WITHOUT spawning. 'disabled' when flag off. */
@@ -948,6 +1105,7 @@ export class RecoderGitService {
     const handle = this.serverHandle;
     this.serverHandle = null;
     this.serverStatus = 'unavailable';
+    this.serverReason = 'stopped';
     if (handle) {
       try {
         handle.kill();
@@ -961,11 +1119,17 @@ export class RecoderGitService {
     const status = override ?? this.serverStatus;
     const ready = status === 'ready' && this.serverHandle !== null;
     const port = ready ? this.serverPortValue : null;
+    // Surface a truthful reason only for a non-ready, non-disabled reading.
+    const reason =
+      !ready && status !== 'disabled' && this.serverReason
+        ? this.serverReason
+        : undefined;
     return {
       status,
       baseUrl: ready && port !== null ? `http://${MCP_HOST}:${port}/mcp` : null,
       port,
       pid: ready ? (this.serverHandle?.pid ?? null) : null,
+      ...(reason ? { reason } : {}),
     };
   }
 
