@@ -78,9 +78,22 @@ export function createRateLimitMiddleware(deps: RateLimitMiddlewareDeps): Reques
       return;
     }
 
-    // Track concurrent request lifecycle so `maxConcurrent` is enforced.
+    // Track concurrent request lifecycle so `maxConcurrent` is enforced. Release on
+    // BOTH 'finish' (normal completion) and 'close' (client abort / socket error) —
+    // a connection that closes without 'finish' would otherwise leak the concurrent
+    // counter forever: the key is never evicted (evictIdle only drops concurrent===0)
+    // and, once the leak reaches maxConcurrent, every later request for that key is
+    // denied 429 (self-DoS on a security control). A once-guard makes endRequest run
+    // exactly once so the counter can never underflow.
     limiter.startRequest(key);
-    res.on('finish', () => limiter.endRequest(key));
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      limiter.endRequest(key);
+    };
+    res.on('finish', release);
+    res.on('close', release);
     next();
   };
 }
