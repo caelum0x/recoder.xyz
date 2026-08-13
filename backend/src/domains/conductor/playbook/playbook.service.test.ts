@@ -316,6 +316,32 @@ describe('PlaybookService', () => {
     });
   });
 
+  it('a non-refused re-fan that did NOT converge is DEGRADED (not ok), consistent with the fanout step', async () => {
+    const fanout = new FakeFanout(fanoutResult());
+    const reFan = new FakeReFan({
+      refused: false,
+      priorTaskGroup: 'fan-abc123',
+      priorConverge: { workspaceId: 'ws_conv', branch: 'recoder/converge-deadbeef' },
+      provenanceLink: null,
+      taskGroup: 'fan-round2',
+      workspaceIds: ['ws_r2a', 'ws_r2b'],
+      converged: null,
+      convergeReason: 'round 2: only 1 settled',
+      perAgent: [],
+    });
+    const svc = new PlaybookService({ fanout, swarmUnblock: new FakeSwarmUnblock(), reFan });
+
+    const result = await svc.run(
+      baseInput({ playbookId: 'fan-converge-refan', followupTask: 'now add tests' })
+    );
+
+    // The re_fan step degrades truthfully — NOT a fabricated 'ok' for a null convergence.
+    expect(result.steps.map(s => `${s.kind}:${s.status}`)).toEqual(['fanout:ok', 're_fan:degraded']);
+    expect(result.steps[1].reason).toMatch(/only 1 settled/i);
+    // Round-1's real converged branch still stands (the failed round-2 never erased it).
+    expect(result.converged).toEqual({ workspaceId: 'ws_conv', branch: 'recoder/converge-deadbeef' });
+  });
+
   it('a REFUSED re-fan (no prior convergence) is reported truthfully and does NOT fabricate a downstream success', async () => {
     // Round 1 did NOT converge, so the shipped re-fan refuses.
     const fanout = new FakeFanout(
