@@ -52,11 +52,32 @@ export class WhatsAppConnector implements ConnectorPort {
    *  Trust anchor for group-mention gating (never the config account label). */
   readonly #selfJidByAccount = new Map<string, string>();
 
-  /** Probe the bridge and cache the linked account's real self JID, if any. */
-  async #bindSelfIdentity(account: ResolvedWhatsAppAccount): Promise<void> {
+  /**
+   * Resolve the self JID for `account` if it is not already bound, retrying on
+   * every (re)connect until it succeeds. Called before each SSE (re)connect so a
+   * bind that failed while the bridge was unreachable at monitor() startup is
+   * recovered instead of being lost for the monitor's whole lifetime. Once bound
+   * it is a cheap no-op (no redundant probe). When it stays unresolved after an
+   * attempt, group-mention gating is fail-CLOSED (all group messages drop) — we
+   * surface an observable warning so that window is never silent, and let the
+   * next reconnect retry.
+   */
+  async #ensureSelfIdentity(account: ResolvedWhatsAppAccount): Promise<void> {
     if (this.#selfJidByAccount.has(account.accountId)) {
       return;
     }
+    await this.#bindSelfIdentity(account);
+    if (!this.#selfJidByAccount.has(account.accountId)) {
+      console.warn(
+        `whatsapp: self identity unresolved for account "${account.accountId}" — ` +
+          "group-mention gating is fail-closed (group messages are dropped) until " +
+          "the bridge is reachable; will retry on the next SSE reconnect",
+      );
+    }
+  }
+
+  /** Probe the bridge and cache the linked account's real self JID, if any. */
+  async #bindSelfIdentity(account: ResolvedWhatsAppAccount): Promise<void> {
     try {
       const check = await whatsappCheck({ baseUrl: account.baseUrl, token: account.token });
       if (check.ok && check.selfJid) {
@@ -88,9 +109,6 @@ export class WhatsAppConnector implements ConnectorPort {
     if (!account.enabled) {
       throw new Error(`WhatsApp account "${account.accountId}" is disabled`);
     }
-    // Learn the real self JID up front so group-mention gating in normalize() has
-    // its trust anchor on the very first inbound frame.
-    await this.#bindSelfIdentity(account);
     const controller = new AbortController();
 
     const handleSseEvent = (event: WhatsAppSseEvent): void => {
@@ -121,6 +139,11 @@ export class WhatsAppConnector implements ConnectorPort {
       baseUrl: account.baseUrl,
       token: account.token,
       abortSignal: controller.signal,
+      // Bind (or re-attempt binding) the real self JID before every connect so
+      // group-mention gating has its trust anchor on the first inbound frame,
+      // and a bind that failed because the bridge was unreachable at startup is
+      // retried on the next reconnect instead of dropping groups forever.
+      onBeforeConnect: () => this.#ensureSelfIdentity(account),
       onEvent: handleSseEvent,
     });
     // Surface unexpected loop termination without unhandled-rejection noise.

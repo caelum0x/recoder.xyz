@@ -182,6 +182,52 @@ describe("feishu GROUP dispatch under requireMentionInGroups (real bot-open_id g
     expect(double.callsMatching("/im/v1/messages")).toHaveLength(1);
   });
 
+  it("DROPS a group message whose mention only matches the bot open_id on the WRONG id namespace", async () => {
+    // open_id / user_id / union_id are DISTINCT Feishu id namespaces. A member
+    // whose user_id or union_id string coincides with the bot's open_id must NOT
+    // be treated as the bot — only mention.id.open_id is a valid self-match.
+    const connector = new FeishuConnector({ registry: registryWith("app-dispatch-grp-3") });
+    const double = makeFetchDouble(feishuRoutes());
+    const registry = new ConnectorRegistry().register(connector);
+
+    const namespaceConfusedEvent = {
+      sender: { sender_id: { open_id: "ou_alice", user_id: "alice" } },
+      message: {
+        chat_id: "oc_group_1",
+        message_id: "om_grp_in_3",
+        message_type: "text",
+        chat_type: "group",
+        create_time: "1700000000000",
+        content: JSON.stringify({ text: "@_user_1 rotate the keys" }),
+        mentions: [
+          {
+            key: "@_user_1",
+            name: "Not The Bot",
+            id: { open_id: "ou_other", user_id: "ou_bot", union_id: "ou_bot" },
+          },
+        ],
+      },
+    };
+
+    const outcome = await withGlobalFetch(double, async () => {
+      await connector.probe("default");
+      const normalized = connector.normalize(namespaceConfusedEvent, "default");
+      expect(normalized?.chatType).toBe("group");
+      // user_id/union_id equal the bot open_id, but open_id does not: NOT a mention.
+      expect(normalized?.wasMentioned).toBe(false);
+
+      return dispatchInbound(normalized!, {
+        registry,
+        runner: replyingRunner("should never send"),
+        gatePolicy: makeAllowlistGatePolicy({ allowlist: ["ou_alice"] }),
+        agentRouter: () => ({ agentId: "sec-bot", sessionId: "fs-grp-3" }),
+      });
+    });
+
+    expect(outcome.status).toBe("blocked");
+    expect(double.callsMatching("/im/v1/messages")).toHaveLength(0);
+  });
+
   it("DROPS a group message whose @mention targets someone other than the bot", async () => {
     const connector = new FeishuConnector({ registry: registryWith("app-dispatch-grp-2") });
     const double = makeFetchDouble(feishuRoutes());

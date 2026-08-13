@@ -94,17 +94,20 @@ function parseTextContent(content?: string): string {
 
 /**
  * True when a single mention resolves to the bound bot's open_id. Feishu carries
- * the mentioned principal's ids on `mention.id` (open_id / user_id / union_id);
- * we match the bot's open_id against any of them so a mention of ANOTHER member
- * never counts as addressing the bot. The mention `key` (e.g. `@_user_1`) is only
- * a body placeholder and is deliberately NOT trusted as an identity.
+ * the mentioned principal's ids on `mention.id`, but `open_id`, `user_id`, and
+ * `union_id` are DISTINCT id namespaces — a bot's open_id (`ou_…`) is only ever
+ * comparable against another `open_id`. We therefore match the bot's open_id
+ * ONLY against `mention.id.open_id`; comparing it against `user_id` / `union_id`
+ * would be a namespace-confusion match. A mention of ANOTHER member never counts
+ * as addressing the bot, and the mention `key` (e.g. `@_user_1`) is only a body
+ * placeholder and is deliberately NOT trusted as an identity.
  */
 function mentionIsBot(mention: FeishuMention, botOpenId: string): boolean {
   const id = mention.id;
   if (!id) {
     return false;
   }
-  return id.open_id === botOpenId || id.user_id === botOpenId || id.union_id === botOpenId;
+  return id.open_id === botOpenId;
 }
 
 /** Strip Feishu @mention placeholder keys (e.g. `@_user_1`) from the body. */

@@ -54,6 +54,14 @@ export interface WhatsAppSseLoopParams {
   readonly abortSignal?: AbortSignal;
   readonly onEvent: (event: WhatsAppSseEvent) => void;
   readonly onError?: (error: unknown) => void;
+  /**
+   * Invoked once before EVERY connect attempt (initial connect and every
+   * reconnect), awaited before the SSE stream opens. Lets the caller (re)resolve
+   * per-connection state — e.g. rebinding the linked account's self identity for
+   * mention gating — so a bind that failed on the first connect is retried on the
+   * next reconnect instead of being lost for the monitor's whole lifetime.
+   */
+  readonly onBeforeConnect?: () => void | Promise<void>;
   readonly policy?: Partial<BackoffPolicy>;
 }
 
@@ -63,12 +71,15 @@ export interface WhatsAppSseLoopParams {
  * healthy stream never accrues backoff.
  */
 export async function runWhatsAppSseLoop(params: WhatsAppSseLoopParams): Promise<void> {
-  const { baseUrl, token, abortSignal, onEvent, onError } = params;
+  const { baseUrl, token, abortSignal, onEvent, onError, onBeforeConnect } = params;
   const reconnectPolicy: BackoffPolicy = { ...DEFAULT_RECONNECT_POLICY, ...params.policy };
   let reconnectAttempts = 0;
 
   while (!abortSignal?.aborted) {
     try {
+      if (onBeforeConnect) {
+        await onBeforeConnect();
+      }
       await streamWhatsAppEvents({
         baseUrl,
         token,
