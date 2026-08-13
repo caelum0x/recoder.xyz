@@ -93,3 +93,108 @@ describe("whatsapp dispatch (real adapter, global fetch seam)", () => {
     expect(double.callsMatching("/api/v1/send")).toHaveLength(0);
   });
 });
+
+/**
+ * A real WhatsApp Web group `message` frame (a WAMessage on a `@g.us` chat). The
+ * bot is `@mentioned` by putting its REAL self phone in the contextInfo mentions
+ * (mentioned as "15559999999@s.whatsapp.net"; the bound self JID from the bridge
+ * is the device-suffixed "15559999999:11@s.whatsapp.net" — the phone match is
+ * what resolves it). Toggle `mentionBot` to mention someone else instead.
+ */
+function whatsappGroupFrame(opts: { mentionBot: boolean }): unknown {
+  const botMentionJid = "15559999999@s.whatsapp.net";
+  const otherJid = "15550002222@s.whatsapp.net";
+  return {
+    key: {
+      remoteJid: "120363000000000000@g.us",
+      participant: "15550001111@s.whatsapp.net",
+      id: opts.mentionBot ? "WAMSG-GRP-1" : "WAMSG-GRP-2",
+      fromMe: false,
+    },
+    message: {
+      extendedTextMessage: {
+        text: opts.mentionBot ? "@bot deploy please" : "just chatting here",
+        contextInfo: {
+          mentionedJid: opts.mentionBot ? [botMentionJid] : [otherJid],
+        },
+      },
+    },
+    messageTimestamp: 1_700_000_100,
+    pushName: "Alice",
+  };
+}
+
+/** Bridge routes: status reports the REAL linked self JID; send echoes an id. */
+function whatsappGroupRoutes() {
+  return [
+    (call: RecordedFetch) =>
+      call.url.includes("/api/v1/status")
+        ? { json: { linked: true, connected: true, me: "15559999999:11@s.whatsapp.net" } }
+        : undefined,
+    (call: RecordedFetch) =>
+      call.url.includes("/api/v1/send")
+        ? { json: { id: "WAMSG-OUT-GRP" } }
+        : undefined,
+  ];
+}
+
+describe("whatsapp GROUP dispatch under requireMentionInGroups (real self-identity gate)", () => {
+  it("delivers a group message that @mentions the bot's REAL self identity", async () => {
+    const connector = createWhatsAppConnector();
+    const double = makeFetchDouble(whatsappGroupRoutes());
+    const registry = new ConnectorRegistry().register(connector);
+
+    const outcome = await withGlobalFetch(double, async () => {
+      // Bind the live self JID (Baileys sock.user.id) via the real probe first —
+      // exactly what the monitor loop does before ingress.
+      const probe = await connector.probe("default");
+      expect(probe.ready).toBe(true);
+
+      const normalized = connector.normalize(whatsappGroupFrame({ mentionBot: true }), "default");
+      expect(normalized?.chatType).toBe("group");
+      // Proven off the REAL bound identity, not the "default" account label.
+      expect(normalized?.wasMentioned).toBe(true);
+
+      return dispatchInbound(normalized!, {
+        registry,
+        runner: replyingRunner("Deploying now."),
+        // requireMentionInGroups defaults TRUE — delivery here proves the mention
+        // was detected against the bot's real self identity.
+        gatePolicy: makeAllowlistGatePolicy({ allowlist: ["+15550001111"] }),
+        agentRouter: () => ({ agentId: "ops-bot", sessionId: "wa-grp-1" }),
+      });
+    });
+
+    expect(outcome.status).toBe("delivered");
+    if (outcome.status === "delivered") {
+      expect(outcome.reply).toBe("Deploying now.");
+    }
+    const sends = double.callsMatching("/api/v1/send");
+    expect(sends).toHaveLength(1);
+    expect((sends[0]?.body as { to?: unknown }).to).toContain("120363000000000000@g.us");
+  });
+
+  it("DROPS a group message that does NOT mention the bot (no false-positive self-match)", async () => {
+    const connector = createWhatsAppConnector();
+    const double = makeFetchDouble(whatsappGroupRoutes());
+    const registry = new ConnectorRegistry().register(connector);
+
+    const outcome = await withGlobalFetch(double, async () => {
+      await connector.probe("default");
+      const normalized = connector.normalize(whatsappGroupFrame({ mentionBot: false }), "default");
+      expect(normalized?.chatType).toBe("group");
+      expect(normalized?.wasMentioned).toBe(false);
+
+      return dispatchInbound(normalized!, {
+        registry,
+        // Sender IS allowlisted; only the missing mention must block it.
+        runner: replyingRunner("should never send"),
+        gatePolicy: makeAllowlistGatePolicy({ allowlist: ["+15550001111"] }),
+        agentRouter: () => ({ agentId: "ops-bot", sessionId: "wa-grp-2" }),
+      });
+    });
+
+    expect(outcome.status).toBe("blocked");
+    expect(double.callsMatching("/api/v1/send")).toHaveLength(0);
+  });
+});

@@ -22,6 +22,7 @@ import type {
 } from "../../../src/connector/outbound-message.js";
 
 import {
+  normalizeAccountId,
   resolveWhatsAppAccount,
   type ResolvedWhatsAppAccount,
 } from "./accounts.js";
@@ -47,6 +48,25 @@ function brandIdentity(account: ResolvedWhatsAppAccount, who?: string): string {
 export class WhatsAppConnector implements ConnectorPort {
   public readonly kind: ConnectorKind = "whatsapp";
 
+  /** Real linked-account self JID per account, from the bridge status endpoint.
+   *  Trust anchor for group-mention gating (never the config account label). */
+  readonly #selfJidByAccount = new Map<string, string>();
+
+  /** Probe the bridge and cache the linked account's real self JID, if any. */
+  async #bindSelfIdentity(account: ResolvedWhatsAppAccount): Promise<void> {
+    if (this.#selfJidByAccount.has(account.accountId)) {
+      return;
+    }
+    try {
+      const check = await whatsappCheck({ baseUrl: account.baseUrl, token: account.token });
+      if (check.ok && check.selfJid) {
+        this.#selfJidByAccount.set(account.accountId, check.selfJid);
+      }
+    } catch {
+      // Identity unresolved; mention gating stays hostile-by-default for groups.
+    }
+  }
+
   /** Resolve per-account bridge connection context from auth profiles. */
   private resolveSendContext(accountId: string): WhatsAppSendContext & {
     account: ResolvedWhatsAppAccount;
@@ -68,6 +88,9 @@ export class WhatsAppConnector implements ConnectorPort {
     if (!account.enabled) {
       throw new Error(`WhatsApp account "${account.accountId}" is disabled`);
     }
+    // Learn the real self JID up front so group-mention gating in normalize() has
+    // its trust anchor on the very first inbound frame.
+    await this.#bindSelfIdentity(account);
     const controller = new AbortController();
 
     const handleSseEvent = (event: WhatsAppSseEvent): void => {
@@ -207,6 +230,11 @@ export class WhatsAppConnector implements ConnectorPort {
       };
     }
 
+    // Bind the real self JID for mention gating now that the session is live.
+    if (check.selfJid) {
+      this.#selfJidByAccount.set(account.accountId, check.selfJid);
+    }
+
     return {
       channel: "whatsapp",
       accountId: account.accountId,
@@ -220,7 +248,8 @@ export class WhatsAppConnector implements ConnectorPort {
     rawEvent: unknown,
     accountId: string,
   ): NormalizedInboundMessage | undefined {
-    return normalizeWhatsAppEvent(rawEvent, accountId);
+    const selfJid = this.#selfJidByAccount.get(normalizeAccountId(accountId));
+    return normalizeWhatsAppEvent(rawEvent, accountId, selfJid);
   }
 
   public async react(request: ReactionRequest): Promise<boolean> {

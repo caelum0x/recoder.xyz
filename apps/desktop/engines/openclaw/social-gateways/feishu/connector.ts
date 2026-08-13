@@ -71,6 +71,8 @@ export class FeishuConnector implements ConnectorPort {
 
   readonly #registry: FeishuAccountRegistry;
   readonly #textChunkLimit: number;
+  /** Real bot open_id per account, learned from bot-info. Trust anchor for mention gating. */
+  readonly #botOpenIdByAccount = new Map<string, string>();
 
   constructor(options: FeishuConnectorOptions = {}) {
     this.#registry = options.registry ?? registryFromEnv();
@@ -101,9 +103,10 @@ export class FeishuConnector implements ConnectorPort {
     return new FeishuRestClient(account.credentials);
   }
 
-  /** Pure event -> domain conversion (no I/O). */
+  /** Pure event -> domain conversion (no I/O). Mention gating binds to the real bot open_id. */
   normalize(rawEvent: unknown, accountId: string): NormalizedInboundMessage | undefined {
-    return normalizeFeishuEvent(rawEvent, normalizeAccountId(accountId));
+    const id = normalizeAccountId(accountId);
+    return normalizeFeishuEvent(rawEvent, id, this.#botOpenIdByAccount.get(id));
   }
 
   /**
@@ -134,6 +137,9 @@ export class FeishuConnector implements ConnectorPort {
     }
     try {
       const bot = await this.#clientFor(account).botInfo();
+      if (bot.openId) {
+        this.#botOpenIdByAccount.set(id, bot.openId);
+      }
       return {
         channel: this.kind,
         accountId: id,
@@ -210,6 +216,21 @@ export class FeishuConnector implements ConnectorPort {
 
     const sdk = await loadLarkSdk();
     const abort = new AbortController();
+
+    // Learn the real bot open_id up front so group-mention gating in normalize()
+    // has its trust anchor on the very first inbound event. Best-effort: a failure
+    // to resolve identity must not block DM ingress — mention gating then stays
+    // fail-closed (unmentioned group traffic is dropped) rather than fail-open.
+    if (!this.#botOpenIdByAccount.has(id)) {
+      try {
+        const bot = await this.#clientFor(account).botInfo();
+        if (bot.openId) {
+          this.#botOpenIdByAccount.set(id, bot.openId);
+        }
+      } catch {
+        // Identity unresolved; gating stays hostile-by-default for groups.
+      }
+    }
 
     const eventDispatcher = new sdk.EventDispatcher({}).register({
       "im.message.receive_v1": async (data: unknown) => {

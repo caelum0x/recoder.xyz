@@ -92,6 +92,21 @@ function parseTextContent(content?: string): string {
   }
 }
 
+/**
+ * True when a single mention resolves to the bound bot's open_id. Feishu carries
+ * the mentioned principal's ids on `mention.id` (open_id / user_id / union_id);
+ * we match the bot's open_id against any of them so a mention of ANOTHER member
+ * never counts as addressing the bot. The mention `key` (e.g. `@_user_1`) is only
+ * a body placeholder and is deliberately NOT trusted as an identity.
+ */
+function mentionIsBot(mention: FeishuMention, botOpenId: string): boolean {
+  const id = mention.id;
+  if (!id) {
+    return false;
+  }
+  return id.open_id === botOpenId || id.user_id === botOpenId || id.union_id === botOpenId;
+}
+
 /** Strip Feishu @mention placeholder keys (e.g. `@_user_1`) from the body. */
 function stripMentionKeys(text: string, mentions: readonly FeishuMention[]): string {
   let stripped = text;
@@ -126,10 +141,17 @@ function buildAttachments(message: FeishuMessage): InboundAttachment[] {
  * Normalize one Feishu message-receive event for `accountId`. Returns undefined
  * when the event has no message, no chat id, an unsupported type, or no body
  * after mention-stripping (matching the real `message.ts` skip conditions).
+ *
+ * `botOpenId` is the bound bot's real open_id (resolved from the Feishu bot-info
+ * endpoint). It is the trust anchor for `wasMentioned`: the bot is "mentioned"
+ * only when a mention's id matches THIS open_id — never merely because the
+ * message carries some @mention. When it is unknown the message is treated as
+ * not-mentioned (the gating layer then decides, hostile-by-default).
  */
 export function normalizeFeishuEvent(
   rawEvent: unknown,
   accountId: string,
+  botOpenId?: string,
 ): NormalizedInboundMessage | undefined {
   if (typeof rawEvent !== "object" || rawEvent === null) {
     return undefined;
@@ -155,7 +177,9 @@ export function normalizeFeishuEvent(
 
   const chatType = mapChatType(message.chat_type);
   const mentions = message.mentions ?? payload.mentions ?? [];
-  const wasMentioned = mentions.length > 0;
+  const wasMentioned = botOpenId
+    ? mentions.some((mention) => mentionIsBot(mention, botOpenId))
+    : false;
 
   const rawText = msgType === "text" ? parseTextContent(message.content) : "";
   const text = stripMentionKeys(rawText, mentions);
