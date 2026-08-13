@@ -1,6 +1,6 @@
 mod context;
 mod env;
-mod gate;
+pub(crate) mod gate;
 mod manifest;
 mod panes;
 mod runtime;
@@ -1548,10 +1548,7 @@ command = ["sh", "-c", "printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \"$PWD\" \
                         "LOOM_PLUGIN_CONTEXT_JSON".to_string(),
                         "{\"spoofed\":true}".to_string(),
                     ),
-                    (
-                        "LOOM_BIN_PATH".to_string(),
-                        "/tmp/spoofed-loom".to_string(),
-                    ),
+                    ("LOOM_BIN_PATH".to_string(), "/tmp/spoofed-loom".to_string()),
                 ]),
             }),
         });

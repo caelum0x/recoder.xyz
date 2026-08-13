@@ -8,7 +8,7 @@ pub(crate) mod actions;
 mod agent_resume;
 pub(crate) mod agent_view;
 mod agents;
-mod api;
+pub(crate) mod api;
 mod api_helpers;
 pub(crate) use api_helpers::limit_snapshot_lines;
 mod config_io;
