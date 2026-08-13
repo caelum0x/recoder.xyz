@@ -1733,6 +1733,10 @@ mod tests {
             error: None,
             creating: true,
         });
+        // This test installs an event plugin to assert the worktree.created
+        // command is dispatched, which the host must opt into. Production
+        // defaults to deny.
+        app.state.plugin_spawn_allowed = true;
         let plugin_root = unique_temp_path("app-worktree-create-plugin");
         std::fs::create_dir_all(&plugin_root).unwrap();
         let manifest_path = plugin_root.join("loom-plugin.toml");

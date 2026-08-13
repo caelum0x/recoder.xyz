@@ -1496,6 +1496,10 @@ pub struct AppState {
     pub(crate) plugin_command_logs: Vec<crate::api::schema::PluginCommandLogInfo>,
     pub(crate) next_plugin_command_log_id: u64,
     pub(crate) plugin_commands_in_flight: usize,
+    /// Host-owned capability that permits plugin command spawns. Defaults to
+    /// false so the free-argv plugin RCE surface is closed unless a host
+    /// operator explicitly opts in. Never set from plugin-supplied data.
+    pub(crate) plugin_spawn_allowed: bool,
     /// Highlight state for the bottom-right global launcher menu.
     pub global_menu: MenuListState,
     /// Resolved host terminal default colors for theming embedded panes.
@@ -1856,6 +1860,7 @@ impl AppState {
             plugin_command_logs: Vec::new(),
             next_plugin_command_log_id: 1,
             plugin_commands_in_flight: 0,
+            plugin_spawn_allowed: false,
             global_menu: MenuListState::new(0),
             host_terminal_theme: TerminalTheme::default(),
             host_cell_size: crate::kitty_graphics::HostCellSize::default(),

@@ -912,6 +912,9 @@ mod tests {
     }
 
     fn install_event_plugin(app: &mut App, name: &str, event: &str) -> PathBuf {
+        // This test installs an event plugin to exercise the spawn/dispatch
+        // path, which the host must opt into. Production defaults to deny.
+        app.state.plugin_spawn_allowed = true;
         let plugin_root = unique_temp_path(name);
         std::fs::create_dir_all(&plugin_root).unwrap();
         let manifest_path = plugin_root.join("loom-plugin.toml");
