@@ -86,9 +86,7 @@ fn agent_explain(args: &[String]) -> std::io::Result<i32> {
             }
             "help" | "--help" | "-h" => {
                 eprintln!("usage: loom agent explain <target> [--json|--verbose]");
-                eprintln!(
-                    "usage: loom agent explain --file PATH --agent LABEL [--json|--verbose]"
-                );
+                eprintln!("usage: loom agent explain --file PATH --agent LABEL [--json|--verbose]");
                 return Ok(0);
             }
             value if value.starts_with('-') => {
