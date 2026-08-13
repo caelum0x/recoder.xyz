@@ -15,7 +15,7 @@ vi.mock("./recoder-fanout", () => ({
 }));
 
 import { globalStore } from "@/app/store/global";
-import { RecoderFanoutViewModel } from "./recoder-fanout-model";
+import { RecoderFanoutViewModel, resolveConvergeSelection } from "./recoder-fanout-model";
 
 const CockpitUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_cockpit/call";
 const FanoutUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_fanout/call";
@@ -679,5 +679,112 @@ describe("RecoderFanoutViewModel.converge", () => {
         model.openConvergedReview("   ");
 
         expect(createBlockMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("resolveConvergeSelection (contested-file picks)", () => {
+    it("auto-synthesizes a synthesizable path and marks a non-synthesizable one unresolved", () => {
+        const { selection, unresolved } = resolveConvergeSelection(
+            [
+                { path: "src/auto.ts", agents: ["ws1", "ws2"], synthesizable: true },
+                { path: "src/pick.ts", agents: ["ws1", "ws2"], synthesizable: false },
+            ],
+            {},
+        );
+        expect(selection).toEqual({ "src/auto.ts": "@synthesize" });
+        expect(unresolved).toEqual(["src/pick.ts"]);
+    });
+
+    it("honors the dev's pick (a sibling workspaceId) over the auto default", () => {
+        const { selection, unresolved } = resolveConvergeSelection(
+            [
+                { path: "src/auto.ts", agents: ["ws1", "ws2"], synthesizable: true },
+                { path: "src/pick.ts", agents: ["ws1", "ws2"], synthesizable: false },
+            ],
+            { "src/auto.ts": "ws2", "src/pick.ts": "ws1" },
+        );
+        expect(selection).toEqual({ "src/auto.ts": "ws2", "src/pick.ts": "ws1" });
+        expect(unresolved).toEqual([]);
+    });
+});
+
+describe("RecoderFanoutViewModel contested-file picker", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        createBlockMock.mockClear();
+    });
+
+    // A convergeReady snapshot carrying ONE non-synthesizable contested path that
+    // requires a human pick before converge can resolve it.
+    function needsPickSnapshot() {
+        return {
+            taskGroup: "grp-ready",
+            agents: [
+                { workspaceId: "ws1", kind: "claude", state: "review_ready", settled: true, nativeStatus: true },
+                { workspaceId: "ws2", kind: "codex", state: "review_ready", settled: true, nativeStatus: true },
+            ],
+            settledCount: 2,
+            totalCount: 2,
+            contested: [{ path: "src/pick.ts", agents: ["ws1", "ws2"], synthesizable: false }],
+            autoMergeableCount: 0,
+            needsPickCount: 1,
+            cleanCount: 0,
+            fileVersions: [],
+            convergeReady: true,
+            summaryLine: "2/2 settled · 0 auto-mergeable · 1 needs a pick",
+            degraded: false,
+        };
+    }
+
+    async function primeNeedsPick(model: RecoderFanoutViewModel) {
+        const fetchMock = vi.fn().mockResolvedValue(completedSnapshot(needsPickSnapshot()));
+        vi.stubGlobal("fetch", fetchMock);
+        model.setTaskGroup("grp-ready");
+        await model.loadCockpit();
+        return fetchMock;
+    }
+
+    it("blocks converge with a truthful 'needs a pick' notice and never posts", async () => {
+        const model = makeModel();
+        const fetchMock = await primeNeedsPick(model);
+        fetchMock.mockClear();
+
+        await model.converge();
+
+        expect(fetchMock.mock.calls.filter((c) => String(c[0]) == ComposeUrl)).toHaveLength(0);
+        expect(globalStore.get(model.convergeNoticeAtom)).toContain("need a pick");
+        expect(globalStore.get(model.convergeNoticeAtom)).toContain("src/pick.ts");
+        expect(globalStore.get(model.convergedAtom)).toBeNull();
+    });
+
+    it("posts the dev's pick once selected, then pins the converged branch", async () => {
+        const model = makeModel();
+        await primeNeedsPick(model);
+
+        model.setContestedSelection("src/pick.ts", "ws1");
+
+        const composeMock = vi.fn().mockImplementation((url: string) => {
+            if (String(url) == ComposeUrl) {
+                return Promise.resolve(ok({ convergence: { workspaceId: "ws-c", branch: "recoder/converge-ready" } }));
+            }
+            return Promise.resolve(completedSnapshot(needsPickSnapshot()));
+        });
+        vi.stubGlobal("fetch", composeMock);
+
+        await model.converge();
+
+        expect(composeMock).toHaveBeenCalledWith(
+            ComposeUrl,
+            expect.objectContaining({ body: JSON.stringify({ selection: { "src/pick.ts": "ws1" } }) }),
+        );
+        expect(globalStore.get(model.convergedAtom)).toEqual({ workspaceId: "ws-c", branch: "recoder/converge-ready" });
+    });
+
+    it("setContestedSelection updates immutably and an empty value clears the pick", () => {
+        const model = makeModel();
+        model.setContestedSelection("src/pick.ts", "ws1");
+        expect(globalStore.get(model.contestedSelectionAtom)).toEqual({ "src/pick.ts": "ws1" });
+        model.setContestedSelection("src/pick.ts", "");
+        expect(globalStore.get(model.contestedSelectionAtom)).toEqual({});
     });
 });

@@ -192,6 +192,10 @@ class RecoderFanoutViewModel implements ViewModel {
     convergingAtom: PrimitiveAtom<boolean>;
     convergeNoticeAtom: PrimitiveAtom<string>;
     convergedAtom: PrimitiveAtom<ConvergedBranch | null>;
+    // The dev's per-contested-path pick: path → a sibling workspaceId (that whole
+    // file wins), or the @synthesize / @assisted sentinel. Non-synthesizable
+    // contested paths REQUIRE an entry here before converge can resolve them.
+    contestedSelectionAtom: PrimitiveAtom<Record<string, string>>;
 
     knownKinds: readonly string[];
     minAgents: number;
@@ -227,6 +231,7 @@ class RecoderFanoutViewModel implements ViewModel {
         this.convergingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.convergeNoticeAtom = atom("") as PrimitiveAtom<string>;
         this.convergedAtom = atom(null) as PrimitiveAtom<ConvergedBranch | null>;
+        this.contestedSelectionAtom = atom({}) as PrimitiveAtom<Record<string, string>>;
 
         this.knownKinds = KnownAgentKinds;
         this.minAgents = MinFanoutAgents;
@@ -248,6 +253,27 @@ class RecoderFanoutViewModel implements ViewModel {
         globalStore.set(this.convergedAtom, null);
         globalStore.set(this.convergeNoticeAtom, "");
         globalStore.set(this.convergingAtom, false);
+        globalStore.set(this.contestedSelectionAtom, {});
+    }
+
+    // Record the dev's pick for ONE contested path — a sibling workspaceId (that
+    // whole file wins), or the @synthesize / @assisted sentinel. An empty value
+    // CLEARS the pick (back to "needs a decision"). Immutable update; an unknown
+    // value is still stored (the server validates the selection), but the picker
+    // only ever offers real sibling ids + the sentinels.
+    setContestedSelection(path: string, value: string) {
+        const key = typeof path == "string" ? path.trim() : "";
+        if (key == "") {
+            return;
+        }
+        const current = globalStore.get(this.contestedSelectionAtom);
+        const next = { ...current };
+        if (typeof value == "string" && value.trim() != "") {
+            next[key] = value.trim();
+        } else {
+            delete next[key];
+        }
+        globalStore.set(this.contestedSelectionAtom, next);
     }
 
     setLaunchTask(value: string) {
@@ -467,11 +493,19 @@ class RecoderFanoutViewModel implements ViewModel {
         if (globalStore.get(this.convergedAtom) != null || globalStore.get(this.convergingAtom)) {
             return;
         }
-        const selection: Record<string, string> = {};
-        for (const c of snapshot.contested) {
-            if (c.synthesizable) {
-                selection[c.path] = SYNTHESIZE_VALUE;
-            }
+        const userSelection = globalStore.get(this.contestedSelectionAtom);
+        const { selection, unresolved } = resolveConvergeSelection(snapshot.contested, userSelection);
+        if (unresolved.length > 0) {
+            // Truthful: never invent a winner. Tell the dev exactly which contested
+            // files still need a pick instead of firing a converge that the server
+            // would reject as UNRESOLVED.
+            const shown = unresolved.slice(0, 3).join(", ");
+            const more = unresolved.length > 3 ? ` (+${unresolved.length - 3} more)` : "";
+            globalStore.set(
+                this.convergeNoticeAtom,
+                `${unresolved.length} contested file${unresolved.length == 1 ? "" : "s"} need a pick: ${shown}${more}`,
+            );
+            return;
         }
         globalStore.set(this.convergingAtom, true);
         globalStore.set(this.convergeNoticeAtom, "");
@@ -504,6 +538,30 @@ class RecoderFanoutViewModel implements ViewModel {
         const meta: Record<string, unknown> = { view: "recoder-diff", "recoder:workspaceid": id };
         void createBlock({ meta }).catch(() => {});
     }
+}
+
+// Resolve the converge selection from the dev's per-path picks. A contested path
+// resolves when the dev picked a winner/sentinel for it; else a SYNTHESIZABLE path
+// falls back to an automatic 3-way merge (@synthesize); else it is UNRESOLVED — a
+// truthful "you must decide", never an invented winner. Pure + order-stable so the
+// caller can both post the selection and tell the dev what still needs a pick.
+export function resolveConvergeSelection(
+    contested: readonly CockpitContested[],
+    userSelection: Record<string, string>,
+): { selection: Record<string, string>; unresolved: string[] } {
+    const selection: Record<string, string> = {};
+    const unresolved: string[] = [];
+    for (const c of contested) {
+        const picked = userSelection[c.path];
+        if (typeof picked == "string" && picked.trim() != "") {
+            selection[c.path] = picked.trim();
+        } else if (c.synthesizable) {
+            selection[c.path] = SYNTHESIZE_VALUE;
+        } else {
+            unresolved.push(c.path);
+        }
+    }
+    return { selection, unresolved };
 }
 
 // --- cockpit projection ------------------------------------------------------
