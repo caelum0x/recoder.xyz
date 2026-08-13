@@ -87,9 +87,8 @@ function scanForWorktrees(
         }
       }
     }
-  } catch (error) {
+  } catch {
     // Permission denied or other errors - skip this directory
-    console.error(`[worktreeDiscovery] Error scanning ${dirPath}: ${error}`);
   }
 }
 
@@ -106,7 +105,6 @@ function getWorktreeInfo(
     // Get the parent repo path using git rev-parse
     const parentRepoPath = getWorktreeParentPath(worktreePath);
     if (!parentRepoPath) {
-      console.error(`[worktreeDiscovery] Could not determine parent for ${worktreePath}`);
       return null;
     }
 
@@ -132,8 +130,7 @@ function getWorktreeInfo(
       relativePath,
       depth,
     };
-  } catch (error) {
-    console.error(`[worktreeDiscovery] Error getting info for ${worktreePath}: ${error}`);
+  } catch {
     return null;
   }
 }
@@ -177,8 +174,7 @@ export function getWorktreeParentPath(worktreePath: string): string | null {
     }).trim();
 
     return topLevel;
-  } catch (error) {
-    console.error(`[worktreeDiscovery] Error getting parent path for ${worktreePath}: ${error}`);
+  } catch {
     return null;
   }
 }

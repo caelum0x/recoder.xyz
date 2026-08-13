@@ -219,13 +219,9 @@ export async function executeMerge(
   }
 
   // Trigger post_merge hook after successful merge
-  console.error(
-    `[mergeExecution] About to trigger post_merge hook for ${pane.slug}`
-  )
   await triggerHook("post_merge", mainRepoPath, pane, {
     DMUX_TARGET_BRANCH: mainBranch,
   })
-  console.error(`[mergeExecution] post_merge hook completed for ${pane.slug}`)
 
   // Merge successful! Show cleanup options using the existing closePane dialog
   // This reuses the CLOSE action which handles everything properly:
@@ -233,20 +229,7 @@ export async function executeMerge(
   // - Layout recalculation after pane removal
   // - Last pane handling (recreates welcome pane)
   // - Terminal clearing to prevent artifacts
-  console.error(
-    `[mergeExecution] Merge complete for ${pane.slug}, showing cleanup options via closePane`
-  )
-  console.error(
-    `[mergeExecution] Context has ${context.panes.length} panes: ${context.panes.map(p => p.id).join(', ')}`
-  )
-  console.error(
-    `[mergeExecution] Pane to close: ${pane.id} (slug: ${pane.slug})`
-  )
-
   const { closePane } = await import("../implementations/closeAction.js")
   const closeResult = await closePane(pane, context)
-  console.error(
-    `[mergeExecution] closePane returned result type: ${closeResult.type}`
-  )
   return closeResult
 }

@@ -41,8 +41,6 @@ export async function buildMergeQueue(
     const hasNothingToMerge = validation.issues.some(i => i.type === 'nothing_to_merge');
     const hasOnlyNothingToMerge = validation.issues.length === 1 && hasNothingToMerge;
 
-    console.error(`[buildMergeQueue] ${worktree.repoName}: canMerge=${validation.canMerge}, issues=[${validation.issues.map(i => i.type).join(', ')}], included=${!hasOnlyNothingToMerge}`);
-
     if (!hasOnlyNothingToMerge) {
       queue.push({
         worktree,
@@ -52,7 +50,6 @@ export async function buildMergeQueue(
     }
   }
 
-  console.error(`[buildMergeQueue] Final queue: ${queue.map(q => q.worktree.repoName).join(', ')}`);
   return queue;
 }
 
@@ -129,10 +126,6 @@ async function processNextInQueue(
   }
 
   const item = queue[currentIndex];
-  const worktreeLabel = getWorktreeDisplayLabel(item.worktree);
-
-  // Show progress
-  console.error(`[multiMerge] Processing ${currentIndex + 1}/${queue.length}: ${worktreeLabel}`);
 
   // Update status
   item.status = 'in_progress';
@@ -321,8 +314,6 @@ async function handleMainDirtyForWorktree(
   const issue = validation.issues.find(i => i.type === 'main_dirty')!;
   const files = issue.files || [];
 
-  console.error(`[multiMerge] handleMainDirtyForWorktree - parentRepoPath: ${worktree.parentRepoPath}, worktreePath: ${worktree.worktreePath}`);
-
   return {
     type: 'choice',
     title: `${progressPrefix}: Main Branch Has Changes`,
@@ -394,8 +385,6 @@ async function handleUncommittedForWorktree(
   const issue = validation.issues.find(i => i.type === 'worktree_uncommitted')!;
   const files = issue.files || [];
 
-  console.error(`[multiMerge] handleUncommittedForWorktree - worktreePath: ${worktree.worktreePath}, parentRepoPath: ${worktree.parentRepoPath}`);
-
   return {
     type: 'choice',
     title: `${progressPrefix}: Uncommitted Changes`,
@@ -440,7 +429,6 @@ async function handleUncommittedForWorktree(
         optionId === 'commit_ai_editable' ||
         optionId === 'commit_manual'
       ) {
-        console.error(`[multiMerge] Committing to worktree path: ${worktree.worktreePath}`);
         const { handleCommitWithOptions } = await import('./commitMessageHandler.js');
         return handleCommitWithOptions(
           worktree.worktreePath,
@@ -654,7 +642,6 @@ async function createAndMonitorConflictPane(
       onResolved: async () => {
         // Conflicts resolved! Clean up and continue with multi-merge
         try {
-          console.error(`[multiMerge] Conflicts resolved for ${worktree.repoName}, cleaning up conflict pane`);
           const tmuxService = TmuxService.getInstance();
 
           // Kill the conflict pane
@@ -682,7 +669,6 @@ async function createAndMonitorConflictPane(
           const mergeResult = mergeWorktreeIntoMain(worktree.parentRepoPath, worktree.branch);
 
           if (!mergeResult.success) {
-            console.error(`[multiMerge] Failed to merge ${worktree.branch} into ${mainBranch}: ${mergeResult.error}`);
             // Update status to failed
             item.status = 'failed';
             item.error = mergeResult.error;
@@ -844,7 +830,6 @@ async function performWorktreeMerge(
     DMUX_REPO_NAME: worktree.repoName,
   });
 
-  console.error(`[multiMerge] Successfully merged ${worktree.repoName}`);
   return onComplete(true);
 }
 

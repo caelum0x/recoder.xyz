@@ -109,7 +109,7 @@
     "@types/node": "^20.10.5",
     "@types/react": "^18.2.45",
     "@vitejs/plugin-vue": "^5.2.1",
-    "@vitest/coverage-v8": "^1.0.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "bumpp": "^10.2.3",
     "ink-testing-library": "^4.0.0",
     "npm-run-all2": "^8.0.4",
@@ -118,6 +118,6 @@
     "tsx": "^4.7.0",
     "typescript": "^5.9.2",
     "vite": "^6.0.7",
-    "vitest": "^1.6.1"
+    "vitest": "^2.1.9"
   }
 }

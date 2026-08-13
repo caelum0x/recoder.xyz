@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { TMUX_BIN, TMUX_IS_VENDORED, tmuxBinFile, tmuxCommand } from '../src/utils/tmuxBin.js';
+import { afterEach, describe, expect, it } from 'vitest';
+import { TMUX_BIN, TMUX_IS_VENDORED, resolveTmuxBin, tmuxBinFile, tmuxCommand } from '../src/utils/tmuxBin.js';
 
 describe('tmuxBin resolver', () => {
   it('exposes a resolved binary that tmuxBinFile() returns verbatim', () => {
@@ -44,5 +44,44 @@ describe('tmuxBin resolver', () => {
       // No bare "tmux " command word should remain at a command boundary.
       expect(/(^|[\n;&|(]\s*)tmux(?=\s)/.test(out)).toBe(false);
     }
+  });
+});
+
+describe('resolveTmuxBin resolution contract (backend parity)', () => {
+  const saved = {
+    DMUX_TMUX_BIN: process.env.DMUX_TMUX_BIN,
+    CONDUCTOR_TMUX_BIN: process.env.CONDUCTOR_TMUX_BIN,
+  };
+
+  afterEach(() => {
+    for (const key of Object.keys(saved) as (keyof typeof saved)[]) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+  });
+
+  it('honors CONDUCTOR_TMUX_BIN unconditionally, matching backend/src/domains/engines/tmux-path.ts', () => {
+    // The Conductor may pin a binary that is not present on THIS host at import time
+    // (e.g. a container path). dmux must still return it verbatim so both halves target
+    // the same tmux server, exactly like the backend's unconditional read.
+    delete process.env.DMUX_TMUX_BIN;
+    process.env.CONDUCTOR_TMUX_BIN = '/nonexistent/pinned/tmux';
+    expect(resolveTmuxBin()).toBe('/nonexistent/pinned/tmux');
+  });
+
+  it('prefers the dmux-only DMUX_TMUX_BIN console override over CONDUCTOR_TMUX_BIN', () => {
+    process.env.DMUX_TMUX_BIN = '/opt/dmux/tmux';
+    process.env.CONDUCTOR_TMUX_BIN = '/opt/conductor/tmux';
+    expect(resolveTmuxBin()).toBe('/opt/dmux/tmux');
+  });
+
+  it('falls through to vendored/system resolution when no override is set', () => {
+    delete process.env.DMUX_TMUX_BIN;
+    delete process.env.CONDUCTOR_TMUX_BIN;
+    const resolved = resolveTmuxBin();
+    expect(typeof resolved).toBe('string');
+    expect(resolved.length).toBeGreaterThan(0);
+    // No override present, so it never returns a leftover override value.
+    expect(resolved).not.toBe('/nonexistent/pinned/tmux');
   });
 });

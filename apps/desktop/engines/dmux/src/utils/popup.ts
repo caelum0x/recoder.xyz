@@ -375,7 +375,6 @@ export function launchPopupNonBlocking(
           }
         } else {
           // No result file = cancelled
-          console.error(`[popup] Result file not found: ${resultFile}`);
           resolve({
             success: false,
             cancelled: true,
@@ -586,7 +585,6 @@ export function launchNodePopupNonBlocking<T = any>(
           }
         } else {
           // No result file = cancelled
-          console.error(`[popup] Result file not found: ${resultFile}`);
           resolve({
             success: false,
             cancelled: true,
