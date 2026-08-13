@@ -1,9 +1,10 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { globalStore } from "@/app/store/global";
+import { createBlock, globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
+import { composeConvergence, SYNTHESIZE_VALUE } from "../recoder/recoder-converge-logic";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readErrorReason } from "../recoder/recoder-errors";
 import { RecoderFanoutView } from "./recoder-fanout";
@@ -98,6 +99,13 @@ type FanoutView = {
     perAgent: FanoutAgentResult[];
 };
 
+// A truthfully-composed converged branch, surfaced ONLY after a real post-launch-settle
+// compose succeeds (workspaceId from the governed compose edge — never fabricated).
+type ConvergedBranch = {
+    workspaceId: string;
+    branch: string;
+};
+
 // The normalized outcome of ONE governed cockpit read, decoupled from the wire so the
 // caller sets snapshot + notice atomically. A null snapshot with a notice = a truthful
 // miss/degrade; a snapshot with a notice = a degraded-but-truthful-counts snapshot.
@@ -181,6 +189,10 @@ class RecoderFanoutViewModel implements ViewModel {
     refanNoticeAtom: PrimitiveAtom<string>;
     refanResultAtom: PrimitiveAtom<ReFanView | null>;
 
+    convergingAtom: PrimitiveAtom<boolean>;
+    convergeNoticeAtom: PrimitiveAtom<string>;
+    convergedAtom: PrimitiveAtom<ConvergedBranch | null>;
+
     knownKinds: readonly string[];
     minAgents: number;
     maxAgents: number;
@@ -212,6 +224,10 @@ class RecoderFanoutViewModel implements ViewModel {
         this.refanNoticeAtom = atom("") as PrimitiveAtom<string>;
         this.refanResultAtom = atom(null) as PrimitiveAtom<ReFanView | null>;
 
+        this.convergingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.convergeNoticeAtom = atom("") as PrimitiveAtom<string>;
+        this.convergedAtom = atom(null) as PrimitiveAtom<ConvergedBranch | null>;
+
         this.knownKinds = KnownAgentKinds;
         this.minAgents = MinFanoutAgents;
         this.maxAgents = MaxFanoutAgents;
@@ -223,6 +239,15 @@ class RecoderFanoutViewModel implements ViewModel {
 
     setTaskGroup(value: string) {
         globalStore.set(this.taskGroupAtom, value);
+        this.resetConverge();
+    }
+
+    // Drop any post-launch-settle compose state — a new/switched group has NOT been
+    // composed here, so the review affordance and pending/notice state must not carry over.
+    resetConverge() {
+        globalStore.set(this.convergedAtom, null);
+        globalStore.set(this.convergeNoticeAtom, "");
+        globalStore.set(this.convergingAtom, false);
     }
 
     setLaunchTask(value: string) {
@@ -299,6 +324,7 @@ class RecoderFanoutViewModel implements ViewModel {
         const kinds = dedupeKinds(agentKinds, this.knownKinds);
         globalStore.set(this.launchNoticeAtom, "");
         globalStore.set(this.launchResultAtom, null);
+        this.resetConverge();
         if (trimmedTask == "") {
             globalStore.set(this.launchNoticeAtom, "A task description is required to fan out.");
             return;
@@ -372,6 +398,7 @@ class RecoderFanoutViewModel implements ViewModel {
         const kinds = dedupeKinds(agentKinds, this.knownKinds);
         globalStore.set(this.refanNoticeAtom, "");
         globalStore.set(this.refanResultAtom, null);
+        this.resetConverge();
         if (priorTaskGroup == "") {
             globalStore.set(this.refanNoticeAtom, NoPinnedGroupNotice);
             return;
@@ -420,6 +447,62 @@ class RecoderFanoutViewModel implements ViewModel {
         } finally {
             globalStore.set(this.refanningAtom, false);
         }
+    }
+
+    // Compose the PINNED group's settled siblings into a reviewable converged branch —
+    // the post-launch-settle case where agents settled AFTER the launch-time converge
+    // window, so the cockpit flips to `convergeReady` but nothing has been composed yet.
+    // No-op unless the live snapshot is `convergeReady` AND nothing has been composed here
+    // (an already-converged group / a not-ready group posts NOTHING). The selection mirrors
+    // the converge panel's auto-resolve: every synthesizable contested path is SYNTHESIZEd
+    // (a convergeReady snapshot never carries a needs-pick path). Truthful: a real compose
+    // pins the converged branch + review affordance; a refusal/denial/transport failure
+    // surfaces the backend's verbatim reason and NEVER fabricates a branch.
+    async converge() {
+        const snapshot = globalStore.get(this.snapshotAtom);
+        const taskGroup = globalStore.get(this.taskGroupAtom).trim();
+        if (snapshot == null || !snapshot.convergeReady || taskGroup == "") {
+            return;
+        }
+        if (globalStore.get(this.convergedAtom) != null || globalStore.get(this.convergingAtom)) {
+            return;
+        }
+        const selection: Record<string, string> = {};
+        for (const c of snapshot.contested) {
+            if (c.synthesizable) {
+                selection[c.path] = SYNTHESIZE_VALUE;
+            }
+        }
+        globalStore.set(this.convergingAtom, true);
+        globalStore.set(this.convergeNoticeAtom, "");
+        try {
+            const result = await composeConvergence(taskGroup, selection);
+            if (result.ok && typeof result.workspaceId == "string" && result.workspaceId != "") {
+                globalStore.set(this.convergedAtom, {
+                    workspaceId: result.workspaceId,
+                    branch: typeof result.branch == "string" ? result.branch : "",
+                });
+                globalStore.set(this.convergeNoticeAtom, "");
+                globalStore.set(this.connectedAtom, true);
+                return;
+            }
+            globalStore.set(this.convergeNoticeAtom, result.error || "Nothing was converged.");
+        } finally {
+            globalStore.set(this.convergingAtom, false);
+        }
+    }
+
+    // Open the recoder-diff Review surface for a converged workspace — the SAME
+    // createBlock affordance the hub's openReview uses, so the composed branch stops
+    // dead-ending and flows into review + createPr. Fire-and-forget + degrade-safe:
+    // an empty id opens nothing, a failed open never crashes the cockpit.
+    openConvergedReview(workspaceId: string) {
+        const id = typeof workspaceId == "string" ? workspaceId.trim() : "";
+        if (id == "") {
+            return;
+        }
+        const meta: Record<string, unknown> = { view: "recoder-diff", "recoder:workspaceid": id };
+        void createBlock({ meta }).catch(() => {});
     }
 }
 
@@ -805,6 +888,7 @@ export {
     type CockpitAgent,
     type CockpitContested,
     type CockpitView,
+    type ConvergedBranch,
     type FanoutAgentResult,
     type FanoutView,
     type FileVersionEntry,
