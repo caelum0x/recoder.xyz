@@ -538,6 +538,12 @@ class RecoderFanoutViewModel implements ViewModel {
         const meta: Record<string, unknown> = { view: "recoder-diff", "recoder:workspaceid": id };
         void createBlock({ meta }).catch(() => {});
     }
+
+    // The delay (ms) until the next cockpit poll, from the CURRENT snapshot/converged
+    // state — fast while panes work, normal once settled, 0 (stop) once converged.
+    nextCockpitPollDelay(): number {
+        return cockpitPollDelayMs(globalStore.get(this.snapshotAtom), globalStore.get(this.convergedAtom));
+    }
 }
 
 // Resolve the converge selection from the dev's per-path picks. A contested path
@@ -562,6 +568,25 @@ export function resolveConvergeSelection(
         }
     }
     return { selection, unresolved };
+}
+
+// Poll cadence for the live cockpit. FAST while any pane is still working — a
+// Blocked→Done flip is imminent, so the "never hunt for the stuck one" surface must
+// feel live; NORMAL once every pane has settled; and STOP once the group converged
+// (the composed branch is terminal — nothing changes after it, so we quit polling).
+const COCKPIT_POLL_FAST_MS = 2500;
+const COCKPIT_POLL_NORMAL_MS = 6000;
+
+// Pure poll-delay decision so the cadence is unit-proven without React/timers. A
+// delay of 0 means "stop polling".
+export function cockpitPollDelayMs(snapshot: CockpitView | null, converged: ConvergedBranch | null): number {
+    if (converged != null) {
+        return 0;
+    }
+    if (snapshot != null && snapshot.settledCount < snapshot.totalCount) {
+        return COCKPIT_POLL_FAST_MS;
+    }
+    return COCKPIT_POLL_NORMAL_MS;
 }
 
 // --- cockpit projection ------------------------------------------------------
