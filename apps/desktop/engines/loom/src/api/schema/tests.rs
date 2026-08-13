@@ -71,12 +71,14 @@ fn agent_start_and_prompt_requests_round_trip() {
             kind: "pi".into(),
             pane_id: "w1:p2".into(),
             args: vec!["--no-session".into()],
+            env: std::collections::BTreeMap::from([("PROJECT_MODE".into(), "ci".into())]),
             timeout_ms: Some(30_000),
         }),
     };
     let start_json = serde_json::to_value(&start).unwrap();
     assert_eq!(start_json["method"], "agent.start");
     assert_eq!(start_json["params"]["pane_id"], "w1:p2");
+    assert_eq!(start_json["params"]["env"]["PROJECT_MODE"], "ci");
     assert_eq!(
         serde_json::from_value::<Request>(start_json).unwrap(),
         start

@@ -97,6 +97,13 @@ export interface AgentStartParams {
   kind: string;
   pane_id: string;
   args?: string[];
+  /**
+   * Optional per-agent environment applied to the spawned agent. loom filters
+   * entries through its managed-pane denylist: reserved loom/Recoder runtime
+   * variables and host-secret patterns are dropped and can never override a
+   * protected runtime variable. Only honored for POSIX shells.
+   */
+  env?: Record<string, string>;
   /** Startup timeout in ms. loom requires `> 3000 && <= 300000`. */
   timeout_ms?: number;
 }

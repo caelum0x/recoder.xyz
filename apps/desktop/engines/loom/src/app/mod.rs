@@ -4720,6 +4720,7 @@ mod tests {
                 kind: "pi".into(),
                 pane_id,
                 args: Vec::new(),
+                env: Default::default(),
                 timeout_ms: Some(1_000),
             }),
         });
@@ -4762,6 +4763,7 @@ mod tests {
                 kind: "pi".into(),
                 pane_id: pane_id.clone(),
                 args: Vec::new(),
+                env: Default::default(),
                 timeout_ms: Some(4_000),
             }),
         };
@@ -4799,6 +4801,71 @@ mod tests {
         assert_eq!(
             app.state.terminals[&terminal_id].agent_name.as_deref(),
             Some("worker")
+        );
+    }
+
+    #[tokio::test]
+    async fn agent_start_applies_allowed_env_and_drops_denylisted_env() {
+        let mut app = test_app();
+        let workspace = Workspace::test_new("agent-start-env");
+        let root = workspace.tabs[0].root_pane;
+        app.state.workspaces = vec![workspace];
+        app.state.ensure_test_terminals();
+        app.state.active = Some(0);
+        app.state.selected = 0;
+        let pane_id = app.pane_info(0, root).unwrap().pane_id;
+        let terminal_id = app.state.workspaces[0].tabs[0].panes[&root]
+            .attached_terminal_id
+            .clone();
+        app.state
+            .terminals
+            .get_mut(&terminal_id)
+            .unwrap()
+            .set_manual_label("shell".into());
+        let (runtime, mut receiver) =
+            crate::terminal::TerminalRuntime::test_with_channel_capacity(80, 24, 4);
+        app.terminal_runtimes.insert(terminal_id.clone(), runtime);
+
+        let env = std::collections::BTreeMap::from([
+            ("ALLOWED".to_string(), "1".to_string()),
+            // Host-secret pattern must be dropped.
+            (
+                "GITHUB_TOKEN".to_string(),
+                "ghp_should_not_leak".to_string(),
+            ),
+            // Protected Loom runtime var must not be overridable by the caller.
+            ("LOOM_PANE_ID".to_string(), "forged".to_string()),
+        ]);
+        let response = app.handle_api_request(crate::api::schema::Request {
+            id: "req_agent_start_env".into(),
+            method: crate::api::schema::Method::AgentStart(crate::api::schema::AgentStartParams {
+                name: "worker".into(),
+                kind: "pi".into(),
+                pane_id,
+                args: Vec::new(),
+                env,
+                timeout_ms: Some(4_000),
+            }),
+        });
+        let response: serde_json::Value = serde_json::from_str(&response).unwrap();
+        assert_eq!(response["result"]["type"], "agent_started");
+
+        let mut submitted = Vec::new();
+        while let Ok(chunk) = receiver.try_recv() {
+            submitted.extend_from_slice(&chunk);
+        }
+        let submitted = String::from_utf8_lossy(&submitted);
+        assert!(
+            submitted.contains("env ALLOWED=1"),
+            "allowed env must be applied: {submitted:?}"
+        );
+        assert!(
+            !submitted.contains("GITHUB_TOKEN"),
+            "denylisted secret must be dropped: {submitted:?}"
+        );
+        assert!(
+            !submitted.contains("forged") && !submitted.contains("LOOM_PANE_ID=forged"),
+            "protected Loom runtime var must not be overridable: {submitted:?}"
         );
     }
 

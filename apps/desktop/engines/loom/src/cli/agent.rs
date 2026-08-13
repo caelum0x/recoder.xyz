@@ -341,6 +341,7 @@ fn agent_start(args: &[String]) -> std::io::Result<i32> {
             } else {
                 Vec::new()
             },
+            env: Default::default(),
             timeout_ms,
         }),
     })?;

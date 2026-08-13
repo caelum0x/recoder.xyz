@@ -142,6 +142,7 @@ fn apply_pane_launch_env(cmd: &mut CommandBuilder, launch_env: &PaneLaunchEnv) {
             cmd.env(crate::integration::LOOM_WORKSPACE_ID_ENV_VAR, workspace_id);
             cmd.env(crate::integration::LOOM_TAB_ID_ENV_VAR, tab_id);
             cmd.env(crate::integration::LOOM_PANE_ID_ENV_VAR, pane_id);
+            crate::integration::apply_managed_pane_handshake_env(cmd);
         }
         PaneLaunchIdentity::OmitPane => {
             cmd.env_remove(crate::integration::LOOM_PANE_ID_ENV_VAR);
@@ -3091,6 +3092,49 @@ mod tests {
         apply_pane_launch_env(&mut cmd, &PaneLaunchEnv::default());
 
         assert!(cmd.get_env("CODEX_THREAD_ID").is_none());
+    }
+
+    #[test]
+    fn managed_pane_launch_env_injects_capability_handshake_only_for_managed_panes() {
+        let _guard = crate::integration::integration_env_lock();
+        let previous = std::env::var_os("RECODER_MCP_SOCKET");
+        std::env::set_var("RECODER_MCP_SOCKET", "/run/recoder/mcp.sock");
+
+        let managed = PaneLaunchEnv::from_extra(Vec::new()).with_identity(
+            "w1".to_string(),
+            "w1:t1".to_string(),
+            "w1:p1".to_string(),
+        );
+        let mut managed_cmd = CommandBuilder::new("shell");
+        apply_pane_launch_env(&mut managed_cmd, &managed);
+        let managed_env: std::collections::HashMap<String, String> = managed_cmd
+            .iter_extra_env_as_str()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect();
+        assert_eq!(
+            managed_env.get("RECODER_MCP_SOCKET").map(String::as_str),
+            Some("/run/recoder/mcp.sock"),
+        );
+        let token = managed_env
+            .get("RECODER_PANE_TOKEN")
+            .expect("managed pane receives a capability token");
+        assert_eq!(token.len(), 64);
+
+        // A plain (non-managed) pane must never receive the handshake, even when
+        // the host exported the MCP socket into Loom's own environment.
+        let mut plain_cmd = CommandBuilder::new("shell");
+        apply_pane_launch_env(&mut plain_cmd, &PaneLaunchEnv::default());
+        let plain_env: std::collections::HashMap<String, String> = plain_cmd
+            .iter_extra_env_as_str()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect();
+        assert!(!plain_env.contains_key("RECODER_MCP_SOCKET"));
+        assert!(!plain_env.contains_key("RECODER_PANE_TOKEN"));
+
+        match previous {
+            Some(value) => std::env::set_var("RECODER_MCP_SOCKET", value),
+            None => std::env::remove_var("RECODER_MCP_SOCKET"),
+        }
     }
 
     #[tokio::test]
