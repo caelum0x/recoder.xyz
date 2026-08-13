@@ -9,6 +9,7 @@ import { describe, test } from 'node:test';
 import {
   parseAgentQueryResult,
   parseBlockedProvenance,
+  parseWorkspaceAgentStatusChangedEvent,
   parseWorktreeStatusResult,
   type AgentInfo,
   type BlockedProvenance,
@@ -276,5 +277,71 @@ describe('parseWorktreeStatusResult', () => {
     assert.equal(parseWorktreeStatusResult(null), null);
     assert.equal(parseWorktreeStatusResult(undefined), null);
     assert.equal(parseWorktreeStatusResult('worktree_status'), null);
+  });
+});
+
+// `parseWorkspaceAgentStatusChangedEvent` -- the DEFENSIVE reader of the
+// workspace-scoped AGGREGATE agent-status event `data`. TRUTHFULNESS invariant:
+// a malformed / unrecognised payload yields `null` -- the client never
+// fabricates an aggregate status the panes do not support.
+describe('parseWorkspaceAgentStatusChangedEvent', () => {
+  test('parses a well-formed aggregate payload into camelCase', () => {
+    assert.deepEqual(
+      parseWorkspaceAgentStatusChangedEvent({
+        type: 'workspace_agent_status_changed',
+        workspace_id: 'ws-1',
+        agent_status: 'blocked',
+      }),
+      { workspaceId: 'ws-1', agentStatus: 'blocked' }
+    );
+  });
+
+  test('accepts every known aggregate status, including unknown', () => {
+    for (const status of ['idle', 'working', 'blocked', 'done', 'unknown']) {
+      assert.deepEqual(
+        parseWorkspaceAgentStatusChangedEvent({
+          type: 'workspace_agent_status_changed',
+          workspace_id: 'ws-1',
+          agent_status: status,
+        }),
+        { workspaceId: 'ws-1', agentStatus: status }
+      );
+    }
+  });
+
+  test('rejects a wrong type tag, empty id, or unrecognised status', () => {
+    assert.equal(
+      parseWorkspaceAgentStatusChangedEvent({
+        type: 'pane_agent_status_changed',
+        workspace_id: 'ws-1',
+        agent_status: 'blocked',
+      }),
+      null
+    );
+    assert.equal(
+      parseWorkspaceAgentStatusChangedEvent({
+        type: 'workspace_agent_status_changed',
+        workspace_id: '   ',
+        agent_status: 'blocked',
+      }),
+      null
+    );
+    assert.equal(
+      parseWorkspaceAgentStatusChangedEvent({
+        type: 'workspace_agent_status_changed',
+        workspace_id: 'ws-1',
+        agent_status: 'ready',
+      }),
+      null
+    );
+  });
+
+  test('a non-record source yields null (defensive)', () => {
+    assert.equal(parseWorkspaceAgentStatusChangedEvent(null), null);
+    assert.equal(parseWorkspaceAgentStatusChangedEvent(undefined), null);
+    assert.equal(
+      parseWorkspaceAgentStatusChangedEvent('workspace_agent_status_changed'),
+      null
+    );
   });
 });

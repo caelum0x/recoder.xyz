@@ -145,6 +145,12 @@ impl ActiveSubscription {
                 event_kind: crate::api::schema::EventKind::WorkspaceFocused,
                 last_sequence: since_seq,
             })),
+            Subscription::WorkspaceAgentStatusChanged {} => {
+                Ok(Self::Event(ActiveEventSubscription {
+                    event_kind: crate::api::schema::EventKind::WorkspaceAgentStatusChanged,
+                    last_sequence: since_seq,
+                }))
+            }
             Subscription::WorktreeCreated {} => Ok(Self::Event(ActiveEventSubscription {
                 event_kind: crate::api::schema::EventKind::WorktreeCreated,
                 last_sequence: since_seq,
