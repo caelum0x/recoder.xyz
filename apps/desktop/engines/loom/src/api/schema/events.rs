@@ -41,6 +41,8 @@ pub enum Subscription {
     WorkspaceClosed {},
     #[serde(rename = "workspace.focused")]
     WorkspaceFocused {},
+    #[serde(rename = "workspace.agent_status_changed")]
+    WorkspaceAgentStatusChanged {},
     #[serde(rename = "worktree.created")]
     WorktreeCreated {},
     #[serde(rename = "worktree.opened")]
@@ -209,6 +211,7 @@ pub enum EventKind {
     WorkspaceMoved,
     WorkspaceReordered,
     WorkspaceFocused,
+    WorkspaceAgentStatusChanged,
     WorktreeCreated,
     WorktreeOpened,
     WorktreeRemoved,
@@ -240,6 +243,7 @@ impl EventKind {
             EventKind::WorkspaceMoved => "workspace.moved",
             EventKind::WorkspaceReordered => "workspace.reordered",
             EventKind::WorkspaceFocused => "workspace.focused",
+            EventKind::WorkspaceAgentStatusChanged => "workspace.agent_status_changed",
             EventKind::WorktreeCreated => "worktree.created",
             EventKind::WorktreeOpened => "worktree.opened",
             EventKind::WorktreeRemoved => "worktree.removed",
@@ -272,6 +276,7 @@ pub const KNOWN_EVENT_KINDS: &[EventKind] = &[
     EventKind::WorkspaceMoved,
     EventKind::WorkspaceReordered,
     EventKind::WorkspaceFocused,
+    EventKind::WorkspaceAgentStatusChanged,
     EventKind::WorktreeCreated,
     EventKind::WorktreeOpened,
     EventKind::WorktreeRemoved,
@@ -483,6 +488,14 @@ pub enum EventData {
     },
     WorkspaceFocused {
         workspace_id: String,
+    },
+    /// Workspace-scoped aggregate agent status: the fold over the workspace's
+    /// panes (blocked beats done beats working beats idle beats unknown),
+    /// emitted once when that folded status changes. A client subscribing to
+    /// this gets one aggregate edge per workspace instead of one event per pane.
+    WorkspaceAgentStatusChanged {
+        workspace_id: String,
+        agent_status: AgentStatus,
     },
     WorktreeCreated {
         workspace: WorkspaceInfo,

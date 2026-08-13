@@ -418,6 +418,54 @@ export function parseBlockedProvenance(source: unknown): BlockedProvenance {
   return out;
 }
 
+const AGENT_STATUSES: readonly AgentStatus[] = [
+  'idle',
+  'working',
+  'blocked',
+  'done',
+  'unknown',
+];
+
+function isAgentStatus(value: unknown): value is AgentStatus {
+  return (
+    typeof value === 'string' &&
+    (AGENT_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * The `workspace.agent_status_changed` event `data` payload, normalised to
+ * camelCase. This is a workspace-scoped AGGREGATE agent status — the fold over
+ * the workspace's panes (blocked > done > working > idle > unknown, matching
+ * `WorkspaceInfo.agent_status`) — emitted once when that folded status changes.
+ * A client gets one aggregate edge per workspace instead of one event per pane,
+ * powering an "instant converge-ready" signal on a single edge.
+ */
+export interface WorkspaceAgentStatusChanged {
+  workspaceId: string;
+  agentStatus: AgentStatus;
+}
+
+/**
+ * Defensively read a `workspace.agent_status_changed` event `data` payload.
+ * Any shape that is not that variant with a non-empty `workspace_id` and a
+ * recognised `agent_status` yields `null` — the client never fabricates an
+ * aggregate status (never invents a "ready"/"done" the panes do not support)
+ * from a malformed or unexpected line.
+ */
+export function parseWorkspaceAgentStatusChangedEvent(
+  source: unknown
+): WorkspaceAgentStatusChanged | null {
+  if (!isRecord(source)) return null;
+  if (source.type !== 'workspace_agent_status_changed') return null;
+  const workspaceId = source.workspace_id;
+  if (typeof workspaceId !== 'string' || workspaceId.trim().length === 0) {
+    return null;
+  }
+  if (!isAgentStatus(source.agent_status)) return null;
+  return { workspaceId, agentStatus: source.agent_status };
+}
+
 /**
  * Defensively read the `agents` list off an `agent.query` reply. Accepts either
  * a raw `LoomResult` or the bare result record. Any shape that is not an

@@ -273,6 +273,27 @@
               "type": "object"
             },
             {
+              "description": "Workspace-scoped aggregate agent status: the fold over the workspace's\npanes (blocked beats done beats working beats idle beats unknown),\nemitted once when that folded status changes. A client subscribing to\nthis gets one aggregate edge per workspace instead of one event per pane.",
+              "properties": {
+                "agent_status": {
+                  "$ref": "#/schemas/event/$defs/AgentStatus"
+                },
+                "type": {
+                  "const": "workspace_agent_status_changed",
+                  "type": "string"
+                },
+                "workspace_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "workspace_id",
+                "agent_status"
+              ],
+              "type": "object"
+            },
+            {
               "properties": {
                 "type": {
                   "const": "worktree_created",
@@ -772,6 +793,7 @@
             "workspace_moved",
             "workspace_reordered",
             "workspace_focused",
+            "workspace_agent_status_changed",
             "worktree_created",
             "worktree_opened",
             "worktree_removed",
@@ -3873,6 +3895,18 @@
             {
               "properties": {
                 "type": {
+                  "const": "workspace.agent_status_changed",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
                   "const": "worktree.created",
                   "type": "string"
                 }
@@ -6274,6 +6308,27 @@
               "type": "object"
             },
             {
+              "description": "Workspace-scoped aggregate agent status: the fold over the workspace's\npanes (blocked beats done beats working beats idle beats unknown),\nemitted once when that folded status changes. A client subscribing to\nthis gets one aggregate edge per workspace instead of one event per pane.",
+              "properties": {
+                "agent_status": {
+                  "$ref": "#/schemas/stream_event/$defs/AgentStatus"
+                },
+                "type": {
+                  "const": "workspace_agent_status_changed",
+                  "type": "string"
+                },
+                "workspace_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "workspace_id",
+                "agent_status"
+              ],
+              "type": "object"
+            },
+            {
               "properties": {
                 "type": {
                   "const": "worktree_created",
@@ -6773,6 +6828,7 @@
             "workspace_moved",
             "workspace_reordered",
             "workspace_focused",
+            "workspace_agent_status_changed",
             "worktree_created",
             "worktree_opened",
             "worktree_removed",
@@ -7990,6 +8046,27 @@
               "type": "object"
             },
             {
+              "description": "Workspace-scoped aggregate agent status: the fold over the workspace's\npanes (blocked beats done beats working beats idle beats unknown),\nemitted once when that folded status changes. A client subscribing to\nthis gets one aggregate edge per workspace instead of one event per pane.",
+              "properties": {
+                "agent_status": {
+                  "$ref": "#/schemas/success_response/$defs/AgentStatus"
+                },
+                "type": {
+                  "const": "workspace_agent_status_changed",
+                  "type": "string"
+                },
+                "workspace_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "workspace_id",
+                "agent_status"
+              ],
+              "type": "object"
+            },
+            {
               "properties": {
                 "type": {
                   "const": "worktree_created",
@@ -8504,6 +8581,7 @@
             "workspace_moved",
             "workspace_reordered",
             "workspace_focused",
+            "workspace_agent_status_changed",
             "worktree_created",
             "worktree_opened",
             "worktree_removed",

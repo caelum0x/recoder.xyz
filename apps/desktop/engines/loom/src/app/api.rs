@@ -667,6 +667,36 @@ impl App {
                 },
             });
         }
+
+        self.emit_workspace_agent_status_if_changed(update.ws_idx);
+    }
+
+    /// Emit a workspace-scoped aggregate `workspace.agent_status_changed` event
+    /// when the workspace's folded agent status changes. The aggregate is the
+    /// same priority fold the sidebar uses (blocked > done > working > idle >
+    /// unknown); `unknown` stays `unknown`. Deduped against the last-emitted
+    /// status per workspace so it fires on the folded-status edge, not on every
+    /// per-pane tick. Cost is one fold over the workspace's panes, incurred only
+    /// on a genuine per-pane status edge.
+    pub(crate) fn emit_workspace_agent_status_if_changed(&mut self, ws_idx: usize) {
+        let Some(workspace) = self.state.workspaces.get(ws_idx) else {
+            return;
+        };
+        let (state, seen) = workspace.aggregate_state(&self.state.terminals);
+        let agent_status = pane_agent_status(state, seen);
+        let workspace_id = workspace.id.clone();
+        if self.last_workspace_agent_status.get(&workspace_id) == Some(&agent_status) {
+            return;
+        }
+        self.last_workspace_agent_status
+            .insert(workspace_id.clone(), agent_status);
+        self.emit_event(crate::api::schema::EventEnvelope {
+            event: crate::api::schema::EventKind::WorkspaceAgentStatusChanged,
+            data: crate::api::schema::EventData::WorkspaceAgentStatusChanged {
+                workspace_id,
+                agent_status,
+            },
+        });
     }
 
     fn emit_terminal_or_system_agent_notifications(
@@ -824,6 +854,9 @@ impl App {
     }
 
     pub(super) fn emit_event(&mut self, event: crate::api::schema::EventEnvelope) {
+        if let crate::api::schema::EventData::WorkspaceClosed { workspace_id, .. } = &event.data {
+            self.last_workspace_agent_status.remove(workspace_id);
+        }
         self.run_plugin_event_hooks(&event);
         self.event_hub.push(event);
     }
@@ -1971,6 +2004,153 @@ mod tests {
             crate::api::schema::EventData::LayoutUpdated { layout }
                 if layout.tab_id == tab_id && layout.panes.len() == 1
         ));
+    }
+
+    fn app_with_two_pane_workspace() -> (
+        App,
+        crate::api::EventHub,
+        crate::layout::PaneId,
+        crate::layout::PaneId,
+    ) {
+        let event_hub = crate::api::EventHub::default();
+        let (_api_tx, api_rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut app = App::new(
+            &crate::config::Config::default(),
+            true,
+            None,
+            api_rx,
+            event_hub.clone(),
+        );
+        let mut workspace = crate::workspace::Workspace::test_new("aggregate");
+        let second = workspace.test_split(ratatui::layout::Direction::Horizontal);
+        let first = workspace.tabs[0]
+            .panes
+            .keys()
+            .copied()
+            .find(|id| *id != second)
+            .unwrap();
+        app.state.workspaces = vec![workspace];
+        app.state.ensure_test_terminals();
+        (app, event_hub, first, second)
+    }
+
+    fn set_pane_state(app: &mut App, pane_id: crate::layout::PaneId, state: AgentState) {
+        let terminal_id = app.state.workspaces[0]
+            .terminal_id(pane_id)
+            .cloned()
+            .unwrap();
+        app.state
+            .terminals
+            .get_mut(&terminal_id)
+            .unwrap()
+            .set_detected_state(Some(Agent::Pi), state);
+    }
+
+    fn workspace_agent_status_frames(
+        event_hub: &crate::api::EventHub,
+    ) -> Vec<crate::api::schema::AgentStatus> {
+        event_hub
+            .events_after(0)
+            .into_iter()
+            .filter_map(|(_, event)| match event.data {
+                crate::api::schema::EventData::WorkspaceAgentStatusChanged {
+                    agent_status, ..
+                } => Some(agent_status),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn workspace_aggregate_status_folds_blocked_over_working_and_matches_snapshot() {
+        let (mut app, event_hub, first, second) = app_with_two_pane_workspace();
+        set_pane_state(&mut app, first, AgentState::Working);
+        set_pane_state(&mut app, second, AgentState::Blocked);
+
+        app.emit_workspace_agent_status_if_changed(0);
+
+        assert_eq!(
+            workspace_agent_status_frames(&event_hub),
+            vec![crate::api::schema::AgentStatus::Blocked]
+        );
+        // The aggregate event must equal the workspace snapshot field, which is
+        // folded with the same priority function; a client can never see them
+        // disagree.
+        assert_eq!(
+            app.workspace_info(0).agent_status,
+            crate::api::schema::AgentStatus::Blocked
+        );
+    }
+
+    #[test]
+    fn workspace_aggregate_status_fires_once_on_the_edge_and_dedups_across_a_batch() {
+        let (mut app, event_hub, first, second) = app_with_two_pane_workspace();
+        set_pane_state(&mut app, first, AgentState::Working);
+        set_pane_state(&mut app, second, AgentState::Working);
+
+        // A batch that changes two panes calls the per-workspace helper once per
+        // pane; the folded-status edge must fire exactly once, not per pane.
+        app.emit_workspace_agent_status_if_changed(0);
+        app.emit_workspace_agent_status_if_changed(0);
+
+        assert_eq!(
+            workspace_agent_status_frames(&event_hub),
+            vec![crate::api::schema::AgentStatus::Working]
+        );
+
+        // A genuine fold change emits one more edge; a change that does not move
+        // the fold (second pane already blocked) stays silent.
+        set_pane_state(&mut app, second, AgentState::Blocked);
+        app.emit_workspace_agent_status_if_changed(0);
+        set_pane_state(&mut app, first, AgentState::Blocked);
+        app.emit_workspace_agent_status_if_changed(0);
+
+        assert_eq!(
+            workspace_agent_status_frames(&event_hub),
+            vec![
+                crate::api::schema::AgentStatus::Working,
+                crate::api::schema::AgentStatus::Blocked,
+            ]
+        );
+    }
+
+    #[test]
+    fn workspace_aggregate_status_keeps_unknown_truthful() {
+        let (mut app, event_hub, _first, _second) = app_with_two_pane_workspace();
+
+        // Every pane is still Unknown; the aggregate must report Unknown rather
+        // than fabricate a done/ready the panes do not support.
+        app.emit_workspace_agent_status_if_changed(0);
+
+        assert_eq!(
+            workspace_agent_status_frames(&event_hub),
+            vec![crate::api::schema::AgentStatus::Unknown]
+        );
+    }
+
+    #[test]
+    fn workspace_aggregate_status_emitted_from_the_per_pane_status_path() {
+        let (mut app, event_hub, first, _second) = app_with_two_pane_workspace();
+        set_pane_state(&mut app, first, AgentState::Idle);
+
+        // Drive the real detection path: a per-pane status edge must also emit
+        // the workspace-scoped aggregate edge without any direct helper call.
+        app.handle_internal_event(AppEvent::StateChanged {
+            rule_id: None,
+            blocked_kind: None,
+            pane_id: first,
+            agent: Some(Agent::Pi),
+            state: AgentState::Blocked,
+            visible_blocker: true,
+            visible_working: false,
+            process_exited: false,
+            observed_at: std::time::Instant::now(),
+        });
+
+        assert_eq!(
+            workspace_agent_status_frames(&event_hub),
+            vec![crate::api::schema::AgentStatus::Blocked]
+        );
     }
 
     #[test]

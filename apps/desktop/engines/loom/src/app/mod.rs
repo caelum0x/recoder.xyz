@@ -160,6 +160,11 @@ pub struct App {
     /// even when an App-internal drain consumes the event before the forwarding drain.
     pub(crate) local_input_source_switch: bool,
     pub(crate) config_reloaded_from_disk: bool,
+    /// Last-emitted workspace-scoped aggregate agent status, keyed by public
+    /// workspace id. Used to fire `workspace.agent_status_changed` only on the
+    /// folded-status edge, not on every per-pane tick. Pruned when a workspace
+    /// closes.
+    pub(crate) last_workspace_agent_status: HashMap<String, crate::api::schema::AgentStatus>,
     prefix_input_source: Box<dyn crate::platform::PrefixInputSource>,
 }
 
@@ -796,6 +801,7 @@ impl App {
             local_terminal_notifications: true,
             local_input_source_switch: true,
             config_reloaded_from_disk: false,
+            last_workspace_agent_status: HashMap::new(),
             prefix_input_source: Box::new(crate::platform::RealPrefixInputSource::default()),
         };
         app.configure_tab_bar_status(&config.ui.tab_bar_right, &config.ui.tab_bar_right_separator);
