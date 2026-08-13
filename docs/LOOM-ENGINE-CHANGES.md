@@ -17,9 +17,9 @@
 | 5 | `worktree.status` cross-platform read + TS client | ✅ SHIPPED — portable `git status --porcelain=v2 --branch` parse; truthful `has_upstream`; additive verb. planConvergence consumer = follow-up. |
 | 6 | delta cursor `since_seq` | ✅ SHIPPED — the seq/bounded-ring infra already existed; exposed monotonic `seq` per event + optional `since_seq` replay that returns exactly seq>cursor then live, with an explicit `resume_gap` error (never a silent drop). `exit_code` kept ABSENT. TS client mirrors it. |
 | 9 | engine plugin-spawn policy gate | ✅ SHIPPED — the ENGINE half of Bigger Bet A. Default-DENY, unbypassable, host-only opt-in (`LOOM_PLUGIN_SPAWN_ALLOW`); plugin data can never flip it. Closes **both** spawn surfaces: runtime `start_plugin_command` AND install-time `run_plugin_build_command` (the second path was caught by security review). Breaking by design — the governed skill model replaces plugins. |
-| 4 | `workspace.agent_status_changed` aggregate event | ⏳ in progress (investigate-first — the "aggregate already computed" premise is being validated). |
-| 7 | Recoder skill + managed-pane env handshake | ⏳ pending (optional — the shipped skill model already provides the governed path). |
-| 8 | `agent.start` env passthrough (denylist) | ⏳ pending (optional). |
+| 4 | `workspace.agent_status_changed` aggregate event | ✅ SHIPPED — reuses the EXISTING `Workspace::aggregate_state` fold (the same one backing `WorkspaceInfo.agent_status`), so the event can never disagree with the snapshot; emitted once on the folded-status EDGE (deduped, not per-pane, not hot-path); unknown stays truthful; additive, no protocol bump. TS client parses it defensively. |
+| 7 | Recoder skill + managed-pane env handshake | ⏳ optional — the shipped skill model already provides the governed path. |
+| 8 | `agent.start` env passthrough (denylist) | ⏳ optional. |
 
 **ENV GOTCHA (bd recoder-ny0w):** a manifest-override test leaks `codex.toml` into the REAL `~/.config/loom/agent-detection/`, poisoning ALL codex detect tests (Idle vs Blocked) even single-threaded. `rm -f ~/.config/loom/agent-detection/codex.toml` before suspecting code.
 
