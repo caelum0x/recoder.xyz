@@ -39,6 +39,14 @@ var RecoderKnownServers = []string{
 	"recoder.memory", "recoder.beads", "recoder.repo", "recoder.approvals",
 	"recoder.artifacts", "recoder.github", "recoder.browser", "recoder.browser-use",
 	"recoder.preview", "recoder.deploy", "recoder.billing", "recoder.workflow",
+	// The conductor control-plane server (registered unprefixed as "conductor",
+	// reachable at /api/mcp/tools/conductor/<tool>/call — the same gated route the
+	// desktop cockpit uses) hosts the convergence suite: recoder_converge_fanout,
+	// recoder_converge_cockpit, recoder_swarm_unblock, recoder_needs_you,
+	// recoder_converge_refan, recoder_playbook_run/list, recoder_status_board,
+	// recoder_remote_attach/snapshot/steer, recoder_workspace_*. Without this a
+	// terminal agent could not drive the merge-button flow from the shell.
+	"conductor",
 }
 
 var errRecoderServersEndpointMissing = errors.New("recoder servers endpoint not found")

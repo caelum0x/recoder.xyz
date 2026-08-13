@@ -28,6 +28,7 @@ func TestRecoderIsKnownServer(t *testing.T) {
 		{"known deploy", "recoder.deploy", true},
 		{"known billing", "recoder.billing", true},
 		{"known workflow", "recoder.workflow", true},
+		{"known conductor (convergence suite)", "conductor", true},
 		{"unknown empty", "", false},
 		{"unknown arbitrary", "recoder.notaserver", false},
 		{"unknown prefix only", "recoder.", false},
