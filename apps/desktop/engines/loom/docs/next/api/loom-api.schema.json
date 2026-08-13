@@ -1447,6 +1447,13 @@
               },
               "type": "array"
             },
+            "env": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Optional per-agent environment applied to the spawned agent. Entries are\nfiltered through Loom's managed-pane denylist: reserved Loom/Recoder\nruntime variables and host-secret patterns are dropped and can never\noverride a protected runtime variable. Only honored for POSIX shells.",
+              "type": "object"
+            },
             "kind": {
               "type": "string"
             },

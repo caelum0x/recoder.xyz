@@ -14,7 +14,8 @@ pub(crate) use actions::{install_target, uninstall_target};
 #[cfg(test)]
 pub(crate) use env::integration_env_lock;
 pub(crate) use env::{
-    apply_pane_base_env, LOOM_PANE_ID_ENV_VAR, LOOM_TAB_ID_ENV_VAR, LOOM_WORKSPACE_ID_ENV_VAR,
+    apply_managed_pane_handshake_env, apply_pane_base_env, sanitize_caller_pane_env,
+    LOOM_PANE_ID_ENV_VAR, LOOM_TAB_ID_ENV_VAR, LOOM_WORKSPACE_ID_ENV_VAR,
 };
 pub(crate) use registry::{
     installed_integration_statuses, integration_recommendations, integration_target_label,

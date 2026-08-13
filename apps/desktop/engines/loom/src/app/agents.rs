@@ -17,6 +17,30 @@ fn valid_agent_name(name: &str) -> bool {
         && chars.all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || matches!(ch, '-' | '_'))
 }
 
+fn agent_start_argv(kind: crate::detect::Agent, args: Vec<String>) -> Vec<String> {
+    let mut argv = vec![crate::detect::interactive_agent_executable(kind).to_string()];
+    argv.extend(args);
+    argv
+}
+
+/// Builds the shell command argv for an interactive agent launch, prepending a
+/// POSIX `env NAME=VALUE ...` prefix when the caller supplied a sanitized env
+/// map. Keys are already validated identifiers, so no assignment can start with
+/// `-` and be mistaken for an `env` option; the platform shell layer quotes
+/// each token so values cannot break out of the typed command.
+fn agent_start_command_argv(extra_env: &[(String, String)], agent_argv: &[String]) -> Vec<String> {
+    if extra_env.is_empty() {
+        return agent_argv.to_vec();
+    }
+    let mut command_argv = Vec::with_capacity(agent_argv.len() + extra_env.len() + 1);
+    command_argv.push("env".to_string());
+    for (key, value) in extra_env {
+        command_argv.push(format!("{key}={value}"));
+    }
+    command_argv.extend(agent_argv.iter().cloned());
+    command_argv
+}
+
 impl App {
     pub(super) fn collect_agent_infos(&self) -> Vec<crate::api::schema::AgentInfo> {
         self.state
@@ -158,6 +182,11 @@ impl App {
         {
             return Err(AgentStartError::InvalidArgument);
         }
+        if params.env.iter().any(|(key, value)| {
+            key.chars().any(char::is_control) || value.chars().any(char::is_control)
+        }) {
+            return Err(AgentStartError::InvalidArgument);
+        }
         let conflicts = self.agent_name_conflicts(&name, "");
         if !conflicts.is_empty() {
             return Err(AgentStartError::DuplicateName {
@@ -190,9 +219,14 @@ impl App {
         let shell_name = available_shell_name(runtime)
             .ok_or_else(|| AgentStartError::TargetBusy(params.pane_id.clone()))?;
 
-        let mut argv = vec![crate::detect::interactive_agent_executable(kind).to_string()];
-        argv.extend(params.args);
-        let command = crate::platform::interactive_shell_command(&argv, &shell_name)
+        let extra_env = crate::integration::sanitize_caller_pane_env(params.env);
+        if !extra_env.is_empty() && crate::platform::is_powershell_process_name(&shell_name) {
+            return Err(AgentStartError::EnvUnsupportedForShell);
+        }
+
+        let argv = agent_start_argv(kind, params.args);
+        let command_argv = agent_start_command_argv(&extra_env, &argv);
+        let command = crate::platform::interactive_shell_command(&command_argv, &shell_name)
             .ok_or(AgentStartError::InvalidArgument)?;
         let bytes = crate::app::api_helpers::encode_api_submission(runtime, &command);
         let timeout = Duration::from_millis(
@@ -240,6 +274,10 @@ impl App {
             AgentStartError::InvalidArgument => crate::api::schema::ErrorBody {
                 code: "invalid_agent_argument".into(),
                 message: "agent arguments cannot be encoded safely for the target shell".into(),
+            },
+            AgentStartError::EnvUnsupportedForShell => crate::api::schema::ErrorBody {
+                code: "agent_env_unsupported_shell".into(),
+                message: "per-agent env is only supported for POSIX shells".into(),
             },
             AgentStartError::InvalidTimeout => crate::api::schema::ErrorBody {
                 code: "invalid_agent_timeout".into(),
@@ -445,6 +483,7 @@ pub(super) enum AgentStartError {
     InvalidName,
     UnsupportedKind(String),
     InvalidArgument,
+    EnvUnsupportedForShell,
     InvalidTimeout,
     TargetNotFound(String),
     TargetBusy(String),
@@ -469,7 +508,7 @@ pub(super) enum AgentRenameError {
 
 #[cfg(test)]
 mod tests {
-    use super::valid_agent_name;
+    use super::{agent_start_command_argv, valid_agent_name};
 
     #[test]
     fn agent_names_use_a_small_cli_safe_grammar() {
@@ -488,5 +527,32 @@ mod tests {
         ] {
             assert!(!valid_agent_name(name), "expected {name:?} to be invalid");
         }
+    }
+
+    #[test]
+    fn command_argv_has_no_env_prefix_without_caller_env() {
+        let agent_argv = vec!["pi".to_string(), "--no-session".to_string()];
+        assert_eq!(
+            agent_start_command_argv(&[], &agent_argv),
+            vec!["pi".to_string(), "--no-session".to_string()]
+        );
+    }
+
+    #[test]
+    fn command_argv_prepends_env_assignments_in_order() {
+        let agent_argv = vec!["pi".to_string()];
+        let extra_env = vec![
+            ("ALPHA".to_string(), "1".to_string()),
+            ("BETA".to_string(), "two words".to_string()),
+        ];
+        assert_eq!(
+            agent_start_command_argv(&extra_env, &agent_argv),
+            vec![
+                "env".to_string(),
+                "ALPHA=1".to_string(),
+                "BETA=two words".to_string(),
+                "pi".to_string(),
+            ]
+        );
     }
 }
