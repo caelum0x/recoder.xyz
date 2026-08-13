@@ -65,6 +65,23 @@ export const conductorConfigSchema = z.object({
   sshCredsPresent: z.boolean(),
   /** Solo/desktop mode — degrade the audit-trail read to empty on a DB fault (see `RuntimeConfig.soloMode`). */
   soloMode: z.boolean(),
+  /**
+   * The substrate a CLI launch uses when the caller pins none. Loom is THE
+   * default runtime in production (bootstrap injects `'loom'`), so the durable
+   * always-on herd — not a throwaway tmux session — backs every unqualified
+   * launch. A launch against a Loom that cannot come up fails LOUD (the loom
+   * substrate surfaces the real error); there is deliberately NO silent tmux
+   * fallback. Unset -> the degrade-safe `'tmux_worktree'` for dev/test that run
+   * no loom daemon; a caller's explicit `input.substrate` always wins over this.
+   */
+  defaultSubstrate: z.enum([
+    'tmux_worktree',
+    'daytona',
+    'in_process',
+    'ssh',
+    'acp',
+    'loom',
+  ]),
   isProduction: z.boolean(),
   /**
    * The Ed25519 evidence-signing SECRET (was `EVIDENCE_SIGNING_KEY`): a PKCS8 PEM or
@@ -78,6 +95,9 @@ export const conductorConfigSchema = z.object({
 });
 
 export type ConductorConfig = z.infer<typeof conductorConfigSchema>;
+
+/** The substrate id a CLI launch defaults to when the caller pins none. */
+export type ConductorDefaultSubstrate = ConductorConfig['defaultSubstrate'];
 
 /** Default admission caps (mirror the legacy `resource-governor.DEFAULT_LIMITS`). */
 export const DEFAULT_CONDUCTOR_CAPS: ConductorConfig['caps'] = {
@@ -105,6 +125,8 @@ export interface ConductorConfigOverrides {
   readonly sshCredsPresent?: boolean;
   /** The Ed25519 evidence-signing secret (PKCS8 PEM or base64-DER); `null`/absent -> unsigned. */
   readonly evidenceSigningKey?: string | null;
+  /** The CLI-launch default substrate; production injects `'loom'`, unset -> `'tmux_worktree'`. */
+  readonly defaultSubstrate?: ConductorDefaultSubstrate;
 }
 
 /**
@@ -126,6 +148,7 @@ export function sliceConductorConfig(
     daytonaCredsPresent: overrides.daytonaCredsPresent ?? false,
     sshCredsPresent: overrides.sshCredsPresent ?? false,
     soloMode: app.runtime.soloMode === true,
+    defaultSubstrate: overrides.defaultSubstrate ?? 'tmux_worktree',
     isProduction: app.runtime.isProduction,
     evidenceSigningKey: overrides.evidenceSigningKey ?? null,
   });
