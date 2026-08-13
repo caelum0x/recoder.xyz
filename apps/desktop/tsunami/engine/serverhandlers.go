@@ -5,6 +5,7 @@ package engine
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -82,6 +83,8 @@ func (h *httpHandlers) registerHandlers(mux *http.ServeMux, opts handlerOpts) {
 	mux.HandleFunc("/api/data", h.handleData)
 	mux.HandleFunc("/api/config", h.handleConfig)
 	mux.HandleFunc("/api/schemas", h.handleSchemas)
+	mux.HandleFunc("/api/action", h.handleAction)
+	mux.HandleFunc("/api/actions", h.handleActions)
 	mux.HandleFunc("/api/manifest", h.handleManifest(opts.ManifestFile))
 	mux.HandleFunc("/api/modalresult", h.handleModalResult)
 	mux.HandleFunc("/api/terminput", h.handleTermInput)
@@ -349,13 +352,105 @@ func (h *httpHandlers) handleSchemas(w http.ResponseWriter, r *http.Request) {
 	dataSchema := GenerateDataSchema(h.Client.Root)
 
 	result := map[string]any{
-		"config": configSchema,
-		"data":   dataSchema,
+		"config":  configSchema,
+		"data":    dataSchema,
+		"actions": h.Client.GetActionMetas(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(result); err != nil {
 		log.Printf("failed to encode schemas response: %v", err)
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// handleActions lists the named actions the widget exposes so a caller can
+// enumerate what it supports without guessing element/handler ids.
+func (h *httpHandlers) handleActions(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		panicErr := util.PanicHandler("handleActions", recover())
+		if panicErr != nil {
+			http.Error(w, fmt.Sprintf("internal server error: %v", panicErr), http.StatusInternalServerError)
+		}
+	}()
+
+	setCORSHeaders(w, r)
+	setNoCacheHeaders(w)
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(h.Client.GetActionMetas()); err != nil {
+		log.Printf("failed to encode actions response: %v", err)
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+// handleAction invokes a named action by {name, args}. Unknown action names get a
+// truthful 404 and invalid requests a 400 - a failing action is never reported as
+// success.
+func (h *httpHandlers) handleAction(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		panicErr := util.PanicHandler("handleAction", recover())
+		if panicErr != nil {
+			http.Error(w, fmt.Sprintf("internal server error: %v", panicErr), http.StatusInternalServerError)
+		}
+	}()
+
+	setCORSHeaders(w, r)
+	setNoCacheHeaders(w)
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to read request body: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	var req ActionRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		http.Error(w, fmt.Sprintf("failed to parse JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		http.Error(w, "action name is required", http.StatusBadRequest)
+		return
+	}
+
+	result, err := h.Client.InvokeAction(req.Name, req.Args)
+	if err != nil {
+		var notFound *ActionNotFoundError
+		if errors.As(err, &notFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf("action error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"name":   req.Name,
+		"result": result,
+	}); err != nil {
+		log.Printf("failed to encode action response: %v", err)
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }

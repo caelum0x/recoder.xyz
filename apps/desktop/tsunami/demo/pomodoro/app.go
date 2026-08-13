@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/recoder/recoder-terminal/tsunami/app"
@@ -29,7 +31,105 @@ var (
 		Min:   app.Ptr(0.0),
 		Max:   app.Ptr(3600.0),
 	})
+
+	// Timer state is held in package-level shared atoms (rather than component-local
+	// UseLocal state) so the same start/pause/reset handlers can be driven by both
+	// the UI buttons AND named actions invoked over /api/action by an agent.
+	isRunningAtom  = app.SharedAtom("isRunning", false)
+	isCompleteAtom = app.SharedAtom("isComplete", false)
+	modeAtom       = app.SharedAtom("mode", WorkMode.Name)
 )
+
+// pomodoroClock tracks the wall-clock start and total duration of the running
+// timer. It is guarded by a mutex because the UI ticker goroutine and action HTTP
+// goroutines can touch it concurrently.
+type pomodoroClock struct {
+	mu            sync.Mutex
+	startTime     time.Time
+	totalDuration time.Duration
+}
+
+var clock = &pomodoroClock{}
+
+func (c *pomodoroClock) begin(total time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.startTime = time.Now()
+	c.totalDuration = total
+}
+
+func (c *pomodoroClock) remaining() time.Duration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.totalDuration - time.Since(c.startTime)
+}
+
+func startTimer() {
+	if isRunningAtom.Get() {
+		return
+	}
+	isCompleteAtom.Set(false)
+	clock.begin(time.Duration(remainingSecondsAtom.Get()) * time.Second)
+	isRunningAtom.Set(true)
+}
+
+func pauseTimer() {
+	if !isRunningAtom.Get() {
+		return
+	}
+	remaining := clock.remaining()
+	if remaining > 0 {
+		remainingSecondsAtom.Set(int(remaining.Seconds()))
+	}
+	isRunningAtom.Set(false)
+}
+
+func resetTimer() {
+	isRunningAtom.Set(false)
+	isCompleteAtom.Set(false)
+	if modeAtom.Get() == WorkMode.Name {
+		remainingSecondsAtom.Set(WorkMode.Duration * 60)
+	} else {
+		remainingSecondsAtom.Set(BreakMode.Duration * 60)
+	}
+}
+
+func changeMode(duration int) {
+	isRunningAtom.Set(false)
+	isCompleteAtom.Set(false)
+	remainingSecondsAtom.Set(duration * 60)
+	if duration == WorkMode.Duration {
+		modeAtom.Set(WorkMode.Name)
+	} else {
+		modeAtom.Set(BreakMode.Name)
+	}
+}
+
+func timerStatus() any {
+	return map[string]any{
+		"running":          isRunningAtom.Get(),
+		"mode":             modeAtom.Get(),
+		"remainingSeconds": remainingSecondsAtom.Get(),
+	}
+}
+
+func init() {
+	app.RegisterActionWithMeta("start", &app.ActionMeta{Desc: "Start (or resume) the pomodoro timer"},
+		func(_ json.RawMessage) (any, error) {
+			startTimer()
+			return timerStatus(), nil
+		})
+	app.RegisterActionWithMeta("pause", &app.ActionMeta{Desc: "Pause the running pomodoro timer"},
+		func(_ json.RawMessage) (any, error) {
+			pauseTimer()
+			return timerStatus(), nil
+		})
+	app.RegisterActionWithMeta("reset", &app.ActionMeta{Desc: "Reset the pomodoro timer to the start of the current mode"},
+		func(_ json.RawMessage) (any, error) {
+			resetTimer()
+			return timerStatus(), nil
+		})
+}
 
 type TimerDisplayProps struct {
 	RemainingSeconds int    `json:"remainingSeconds"`
@@ -113,26 +213,19 @@ var ControlButtons = app.DefineComponent("ControlButtons",
 var App = app.DefineComponent("App",
 	func(_ struct{}) any {
 
-		isRunning := app.UseLocal(false)
-		mode := app.UseLocal(WorkMode.Name)
-		isComplete := app.UseLocal(false)
-		startTime := app.UseRef(time.Time{})
-		totalDuration := app.UseRef(time.Duration(0))
-
 		// Timer that updates every second using the new pattern
 		app.UseTicker(time.Second, func() {
-			if !isRunning.Get() {
+			if !isRunningAtom.Get() {
 				return
 			}
 
-			elapsed := time.Since(startTime.Current)
-			remaining := totalDuration.Current - elapsed
+			remaining := clock.remaining()
 
 			if remaining <= 0 {
 				// Timer completed
-				isRunning.Set(false)
+				isRunningAtom.Set(false)
 				remainingSecondsAtom.Set(0)
-				isComplete.Set(true)
+				isCompleteAtom.Set(true)
 				return
 			}
 
@@ -142,53 +235,7 @@ var App = app.DefineComponent("App",
 			if newSeconds != remainingSecondsAtom.Get() {
 				remainingSecondsAtom.Set(newSeconds)
 			}
-		}, []any{isRunning.Get()})
-
-		startTimer := func() {
-			if isRunning.Get() {
-				return // Timer already running
-			}
-
-			isComplete.Set(false)
-			startTime.Current = time.Now()
-			totalDuration.Current = time.Duration(remainingSecondsAtom.Get()) * time.Second
-			isRunning.Set(true)
-		}
-
-		pauseTimer := func() {
-			if !isRunning.Get() {
-				return
-			}
-
-			// Calculate remaining time and update remainingSeconds
-			elapsed := time.Since(startTime.Current)
-			remaining := totalDuration.Current - elapsed
-			if remaining > 0 {
-				remainingSecondsAtom.Set(int(remaining.Seconds()))
-			}
-			isRunning.Set(false)
-		}
-
-		resetTimer := func() {
-			isRunning.Set(false)
-			isComplete.Set(false)
-			if mode.Get() == WorkMode.Name {
-				remainingSecondsAtom.Set(WorkMode.Duration * 60)
-			} else {
-				remainingSecondsAtom.Set(BreakMode.Duration * 60)
-			}
-		}
-
-		changeMode := func(duration int) {
-			isRunning.Set(false)
-			isComplete.Set(false)
-			remainingSecondsAtom.Set(duration * 60)
-			if duration == WorkMode.Duration {
-				mode.Set(WorkMode.Name)
-			} else {
-				mode.Set(BreakMode.Name)
-			}
-		}
+		}, []any{isRunningAtom.Get()})
 
 		return vdom.H("div",
 			map[string]any{"className": "max-w-sm mx-auto my-8 p-8 bg-slate-800 rounded-xl text-slate-100 font-sans"},
@@ -198,10 +245,10 @@ var App = app.DefineComponent("App",
 			),
 			TimerDisplay(TimerDisplayProps{
 				RemainingSeconds: remainingSecondsAtom.Get(),
-				Mode:             mode.Get(),
+				Mode:             modeAtom.Get(),
 			}),
 			ControlButtons(ControlButtonsProps{
-				IsRunning: isRunning.Get(),
+				IsRunning: isRunningAtom.Get(),
 				OnStart:   startTimer,
 				OnPause:   pauseTimer,
 				OnReset:   resetTimer,

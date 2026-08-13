@@ -87,6 +87,10 @@ type ClientImpl struct {
 	Secrets     map[string]SecretMeta // map of secret name to metadata
 	SecretsLock *sync.Mutex
 
+	// for named actions (agent-invokable operations)
+	Actions     map[string]*ActionImpl // map of action name to registered action
+	ActionsLock *sync.Mutex
+
 	// for notification
 	// Atomics so we never drop "last event" timing info even if wakeCh is full.
 	// 0 means "no pending batch".
@@ -106,6 +110,8 @@ func makeClient() *ClientImpl {
 		OpenModalsLock:  &sync.Mutex{},
 		Secrets:         make(map[string]SecretMeta),
 		SecretsLock:     &sync.Mutex{},
+		Actions:         make(map[string]*ActionImpl),
+		ActionsLock:     &sync.Mutex{},
 		UrlHandlerMux:   http.NewServeMux(),
 		ServerId:        uuid.New().String(),
 		RootElem:        vdom.H(DefaultComponentName, nil),

@@ -257,6 +257,9 @@ func generateToolsForTsunamiBlock(block *waveobj.Block) []uctypes.ToolDefinition
 	if tool := GetTsunamiSetConfigToolDefinition(block, rtInfo, status); tool != nil {
 		tools = append(tools, *tool)
 	}
+	if tool := GetTsunamiActionToolDefinition(block, rtInfo, status); tool != nil {
+		tools = append(tools, *tool)
+	}
 
 	return tools
 }
