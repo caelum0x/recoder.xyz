@@ -83,6 +83,16 @@ export type {
 import type { SubstrateScanDeps } from './adapters/substrate-scan.adapter.js';
 import type { SkillRegistry } from './skill/skill-registry.js';
 import type { SkillActionService } from './skill/skill-action.service.js';
+// SECURITY re-export — the workspace-resolution seam bootstrap binds to the
+// conductor workspace store (`createOwnedWorkspaceResolver({ getWorkspace })`) when it
+// constructs the `SkillActionService`, so the governed skill invoke path only ever
+// executes in a KNOWN, OWNED worktree's real checkout path (never a raw client string).
+export {
+  createOwnedWorkspaceResolver,
+  type SkillWorkspaceResolver,
+  type SkillWorkspaceResolution,
+  type OwnedWorkspaceLookup,
+} from './skill/skill-workspace-resolver.js';
 import type { RunEventSinkPort } from './ports/run-event-sink.port.js';
 import type {
   CanonicalRunStore,

@@ -9,15 +9,22 @@
  *     execution flows only from a resolved, verified action.
  *  2. VALIDATE — the params must satisfy the action's typed schema (no free-argv).
  *     Any mismatch ⇒ refuse BEFORE policy is even consulted.
- *  3. POLICY   — build the canonical capability-typed {@link PolicyInput} and run
- *     `evaluatePolicy` FIRST, ALWAYS, before any execution:
+ *  3. WORKSPACE — resolve the UNTRUSTED, caller-supplied `workspace` to a KNOWN,
+ *     OWNED worktree and its REAL server-side checkout path (the injected
+ *     {@link SkillWorkspaceResolver}). A traversal / absolute-outside / unknown /
+ *     non-owned value ⇒ refuse BEFORE policy and BEFORE the executor (the raw client
+ *     string is NEVER trusted as a filesystem path). Unwired ⇒ refuse truthfully
+ *     rather than fall back to trusting the raw path. Downstream, ONLY the resolved
+ *     trusted path is used — for both the policy input and the executor context.
+ *  4. POLICY   — build the canonical capability-typed {@link PolicyInput} (over the
+ *     resolved path) and run `evaluatePolicy` FIRST, ALWAYS, before any execution:
  *       - `deny`          ⇒ refuse (no execute);
  *       - `needs_approval`⇒ open an approval request and return
  *         `{ status:'needs_approval', requestId }` (NO execute);
  *       - `allow`         ⇒ proceed to execution.
- *  4. EXECUTE  — hand the injected executor ONLY the typed params + granted
- *     capabilities + workspace (no ambient env / inherited secrets). An unwired
- *     executor ⇒ `SERVICE_UNAVAILABLE` (thrown), never a faked success.
+ *  5. EXECUTE  — hand the injected executor ONLY the typed params + granted
+ *     capabilities + the RESOLVED workspace (no ambient env / inherited secrets). An
+ *     unwired executor ⇒ `SERVICE_UNAVAILABLE` (thrown), never a faked success.
  *
  * Every refusal carries the REAL reason; a `needs_approval` NEVER executes; policy
  * is consulted BEFORE execution on every path.
@@ -29,6 +36,7 @@ import type { PolicyInput } from '@recoder/agent-policy';
 import { buildSkillPolicyInput, qualifiedSkillToolName } from './skill-actor.js';
 import { validateSkillParams } from './skill-params.js';
 import type { SkillRegistry } from './skill-registry.js';
+import type { SkillWorkspaceResolver } from './skill-workspace-resolver.js';
 import type { SkillActionExecutor, SkillActionOutcome } from './skill.types.js';
 
 /** The pure policy-evaluation seam (bound to `@recoder/agent-policy`'s `evaluatePolicy`). */
@@ -53,6 +61,15 @@ export interface SkillActionServiceDeps {
   readonly registry: SkillRegistry;
   readonly evaluatePolicy: SkillPolicyEvaluator;
   readonly approval: SkillApprovalPort;
+  /**
+   * SECURITY — the workspace-resolution seam. Maps the caller-supplied `workspace`
+   * (UNTRUSTED model/client output) to a KNOWN, OWNED worktree and returns its REAL
+   * server-side checkout path, or REFUSES. The raw client string is NEVER trusted as
+   * a filesystem path, so a traversal / absolute-outside / unknown / non-owned value
+   * is refused BEFORE policy and BEFORE the executor. Absent (unwired) ⇒ every invoke
+   * refuses truthfully rather than fall back to trusting the raw path.
+   */
+  readonly resolveWorkspace?: SkillWorkspaceResolver;
   /** Absent ⇒ every ALLOW-ed invoke refuses `SERVICE_UNAVAILABLE` (never faked). */
   readonly executor?: SkillActionExecutor;
   readonly logger: Logger;
@@ -83,6 +100,7 @@ export class SkillActionService {
   private readonly registry: SkillRegistry;
   private readonly evaluate: SkillPolicyEvaluator;
   private readonly approval: SkillApprovalPort;
+  private readonly resolveWorkspace?: SkillWorkspaceResolver;
   private readonly executor?: SkillActionExecutor;
   private readonly log: Logger;
   private readonly now: () => string;
@@ -91,6 +109,7 @@ export class SkillActionService {
     this.registry = deps.registry;
     this.evaluate = deps.evaluatePolicy;
     this.approval = deps.approval;
+    if (deps.resolveWorkspace) this.resolveWorkspace = deps.resolveWorkspace;
     if (deps.executor) this.executor = deps.executor;
     this.log = deps.logger;
     this.now = deps.now ?? (() => new Date().toISOString());
@@ -125,12 +144,33 @@ export class SkillActionService {
       return refuse(`invalid params: ${validation.reason}`);
     }
 
-    // 3) POLICY — build the canonical capability-typed input and evaluate FIRST.
+    // 3) WORKSPACE (SECURITY) — resolve the UNTRUSTED, caller-supplied `workspace` to a
+    // KNOWN, OWNED worktree and its REAL server-side checkout path, or REFUSE. This is
+    // a gate BEFORE policy and BEFORE the executor: a traversal / absolute-outside /
+    // unknown / non-owned value is refused here (never executed, never policy-allowed).
+    // Unwired ⇒ refuse truthfully rather than fall back to trusting the raw path.
+    if (!this.resolveWorkspace) {
+      this.log.warn({ skillId, actionId, actorId }, 'skill invoke refused: workspace resolution not configured');
+      return refuse('workspace resolution is not configured on this deployment');
+    }
+    const resolvedWorkspace = await this.resolveWorkspace.resolve({ workspace, actorId });
+    if (!resolvedWorkspace.ok) {
+      this.log.warn(
+        { skillId, actionId, actorId, reason: resolvedWorkspace.reason },
+        'skill invoke refused: workspace not resolvable to an owned worktree',
+      );
+      return refuse(resolvedWorkspace.reason || 'workspace could not be resolved to an owned worktree');
+    }
+    // The ONLY path that flows downstream — the trusted, server-side checkout path.
+    const trustedWorkspace = resolvedWorkspace.path;
+
+    // 4) POLICY — build the canonical capability-typed input (over the RESOLVED,
+    // trusted path — never the raw client string) and evaluate FIRST.
     const policyInput = buildSkillPolicyInput({
       actorId,
       skillId,
       action,
-      workspace,
+      workspace: trustedWorkspace,
       now: this.now(),
     });
     const decision = this.evaluate(policyInput);
@@ -152,13 +192,14 @@ export class SkillActionService {
       return { status: 'needs_approval', requestId: record.id, reason: decision.reason || 'approval required' };
     }
 
-    // 4) ALLOW — and ONLY allow. A security-critical execution path must never be
+    // 5) ALLOW — and ONLY allow. A security-critical execution path must never be
     // reached by exclusion: any effect that is not an explicit 'allow' refuses.
     if (decision.effect !== 'allow') {
       return refuse(decision.reason || `refused by policy (${decision.effect})`);
     }
 
-    // Execute over the capability-scoped context (NO ambient env/secrets).
+    // Execute over the capability-scoped context (NO ambient env/secrets), in the
+    // RESOLVED trusted worktree — never the raw client-supplied workspace string.
     if (!this.executor) {
       throw createError(
         ErrorCode.SERVICE_UNAVAILABLE,
@@ -171,7 +212,7 @@ export class SkillActionService {
       // A fresh, typed copy — exactly the validated params, nothing ambient.
       params: { ...validation.value },
       capabilities: [...action.requiredCapabilities],
-      workspace,
+      workspace: trustedWorkspace,
     });
     this.log.info({ skillId, actionId, actorId, ok: result.ok }, 'skill action executed');
     return { status: 'executed', result };
