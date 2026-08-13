@@ -63,12 +63,15 @@ function detectMention(message: TelegramMessage, botUsername?: string): boolean 
     return false;
   }
   const handle = `@${botUsername.toLowerCase()}`;
-  const text = (message.text ?? message.caption ?? "").toLowerCase();
-  if (text.includes(handle)) {
+  const source = message.text ?? message.caption ?? "";
+  // Word-boundary anchored so `@bot` matches `@bot`/`@bot ...` but NOT the longer
+  // handle `@bottega` — the same `\b` anchor the strip path (below) uses, so
+  // mention detection and mention stripping never disagree.
+  const handleRe = new RegExp(`@${escapeRegExp(botUsername)}\\b`, "i");
+  if (handleRe.test(source)) {
     return true;
   }
   const entities = message.entities ?? message.caption_entities ?? [];
-  const source = message.text ?? message.caption ?? "";
   return entities.some((ent) => {
     if (ent.type !== "mention") {
       return false;

@@ -45,6 +45,12 @@ export interface WhatsAppCheckResult {
   readonly connected?: boolean;
   /** Bridge-reported identity (the linked account's phone / pushname). */
   readonly identity?: string;
+  /**
+   * The linked account's REAL self JID (Baileys `sock.user.id`), e.g.
+   * "15551234567:12@s.whatsapp.net". This is the trust anchor for group-mention
+   * gating — NOT the human-readable `identity` string.
+   */
+  readonly selfJid?: string;
 }
 
 /** Normalize a daemon base URL to an origin without a trailing slash. */
@@ -113,12 +119,28 @@ interface WhatsAppStatusBody {
   readonly connected?: unknown;
   readonly identity?: unknown;
   readonly me?: unknown;
+  readonly jid?: unknown;
   readonly pushname?: unknown;
 }
 
 function readStatusIdentity(body: WhatsAppStatusBody): string | undefined {
   for (const candidate of [body.identity, body.me, body.pushname]) {
     if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Extract the linked account's self JID (Baileys `sock.user.id`) from the status
+ * body. Prefers an explicit `jid`, then a JID-shaped `me`. A bare display name /
+ * pushname is deliberately ignored — only an addressable JID is a valid mention
+ * trust anchor.
+ */
+function readSelfJid(body: WhatsAppStatusBody): string | undefined {
+  for (const candidate of [body.jid, body.me]) {
+    if (typeof candidate === "string" && candidate.includes("@")) {
       return candidate.trim();
     }
   }
@@ -149,6 +171,7 @@ export async function whatsappCheck(
       linked: body.linked === true,
       connected: body.connected === true,
       identity: readStatusIdentity(body),
+      selfJid: readSelfJid(body),
     };
   } catch (err) {
     return {

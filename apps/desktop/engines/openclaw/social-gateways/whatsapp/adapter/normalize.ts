@@ -8,10 +8,16 @@
 //                        || "<media:kind>" placeholder
 //   - messageId        = key.id
 //   - timestamp        = messageTimestamp (seconds) → ms
-//   - wasMentioned     = DM, or self in extendedTextMessage.contextInfo.mentionedJid
+//   - wasMentioned     = DM, or the bot's REAL self JID/phone in
+//                        extendedTextMessage.contextInfo.mentionedJid
 // Own (fromMe) messages, protocol/reaction/edit-only frames, and empty-body
 // frames carry no actionable message and return undefined — exactly as the real
 // gateway short-circuits them.
+//
+// The self identity is the linked account's live JID (Baileys `sock.user.id`,
+// surfaced by the bridge status endpoint), NOT the connector's config account
+// label — comparing mentions against the label would make `wasMentioned` always
+// false and silently drop every group message under mention gating.
 
 import type {
   InboundAttachment,
@@ -180,16 +186,47 @@ function unwrapInbound(rawEvent: unknown): WhatsAppInboundMessage | undefined {
 }
 
 /**
+ * True when the bot's own JID (or its E.164 phone) appears in a group message's
+ * mention list. The comparison is anchored to the linked account's REAL self JID
+ * (`sock.user.id`), matched both by exact JID and by normalized phone so a
+ * device-suffixed / LID-form mention still resolves. Never matches on a config
+ * label — an unaddressable/unknown self yields no match (fail-closed).
+ */
+function mentionsSelfJid(mentionedJids: readonly string[], selfJid: string): boolean {
+  const trimmedSelf = selfJid.trim();
+  if (!trimmedSelf) {
+    return false;
+  }
+  const selfPhone = extractUserJidPhone(trimmedSelf);
+  const selfE164 = selfPhone ? normalizeE164(selfPhone) : "";
+  return mentionedJids.some((jid) => {
+    const trimmed = jid.trim();
+    if (!trimmed) {
+      return false;
+    }
+    if (trimmed === trimmedSelf) {
+      return true;
+    }
+    const phone = extractUserJidPhone(trimmed);
+    return phone && selfE164.length > 1 ? normalizeE164(phone) === selfE164 : false;
+  });
+}
+
+/**
  * Convert a WhatsApp Web `message` SSE frame into a NormalizedInboundMessage, or
  * `undefined` for non-actionable frames (own messages / protocol / reaction /
  * empty body / missing addressing).
  *
  * @param rawEvent  the parsed `message` SSE frame (a WAMessage or { message })
  * @param accountId the connector account the frame arrived on
+ * @param selfJid   the linked account's REAL self JID (`sock.user.id`) — the
+ *                  mention trust anchor. When absent, group messages are never
+ *                  self-mentioned (mention gating stays hostile-by-default).
  */
 export function normalizeWhatsAppEvent(
   rawEvent: unknown,
   accountId: string,
+  selfJid?: string,
 ): NormalizedInboundMessage | undefined {
   const inbound = unwrapInbound(rawEvent);
   const key = inbound?.key;
@@ -225,12 +262,10 @@ export function normalizeWhatsAppEvent(
   }
 
   // `wasMentioned`: every DM is addressed to the bot; in a group, the bot is
-  // mentioned when its account JID appears in the extendedTextMessage mentions.
+  // mentioned when its REAL self JID/phone appears in the extendedTextMessage
+  // mentions. `selfJid` is the live linked identity, never the account label.
   const mentionedJids = content.extendedTextMessage?.contextInfo?.mentionedJid ?? [];
-  const selfMentioned = mentionedJids.some((jid) => {
-    const phone = extractUserJidPhone(jid);
-    return phone ? normalizeE164(phone) === accountId || jid.trim() === accountId : false;
-  });
+  const selfMentioned = selfJid ? mentionsSelfJid(mentionedJids, selfJid) : false;
   const wasMentioned = chatType === "direct" || selfMentioned;
 
   const attachments: InboundAttachment[] = media ? [toInboundAttachment(media.content)] : [];

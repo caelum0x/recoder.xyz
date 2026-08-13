@@ -76,7 +76,7 @@ describe("normalizeFeishuEvent", () => {
     expect(result?.timestamp).toBe(1700000000000);
   });
 
-  it("strips @mention keys and marks group messages as mentioned", () => {
+  it("strips @mention keys and marks a group message mentioned only when the bot's open_id matches", () => {
     const event = {
       message: {
         chat_id: "oc_group_1",
@@ -85,13 +85,33 @@ describe("normalizeFeishuEvent", () => {
         message_id: "om_2",
         create_time: 1700000001000,
         content: JSON.stringify({ text: "@_user_1 do the thing" }),
-        mentions: [{ key: "@_user_1", name: "Bot" }],
+        mentions: [{ key: "@_user_1", name: "Bot", id: { open_id: "ou_bot" } }],
       },
       sender: { sender_id: { open_id: "ou_user_2" } },
     };
-    const result = normalizeFeishuEvent(event, "default");
+    const result = normalizeFeishuEvent(event, "default", "ou_bot");
     expect(result?.chatType).toBe("group");
     expect(result?.wasMentioned).toBe(true);
+    expect(result?.text).toBe("do the thing");
+  });
+
+  it("does NOT mark a group message mentioned when the @mention targets someone else", () => {
+    const event = {
+      message: {
+        chat_id: "oc_group_1",
+        chat_type: "group",
+        message_type: "text",
+        message_id: "om_2b",
+        create_time: 1700000001000,
+        content: JSON.stringify({ text: "@_user_1 do the thing" }),
+        mentions: [{ key: "@_user_1", name: "Someone", id: { open_id: "ou_other" } }],
+      },
+      sender: { sender_id: { open_id: "ou_user_2" } },
+    };
+    // A mention exists, but it is NOT the bound bot: wasMentioned must be false.
+    const result = normalizeFeishuEvent(event, "default", "ou_bot");
+    expect(result?.wasMentioned).toBe(false);
+    // Stripping still runs off the mention key regardless of identity match.
     expect(result?.text).toBe("do the thing");
   });
 
@@ -298,6 +318,13 @@ describe("FeishuConnector.monitor", () => {
       LoggerLevel: { info: 1 },
     };
     setLarkSdkLoader(async () => fakeSdk);
+    // monitor() learns the bot open_id up front (token + bot-info) before the
+    // socket starts; answer that best-effort probe off the fetch double so the
+    // test never touches the network.
+    globalThis.fetch = fetchReturning(
+      { code: 0, msg: "ok", tenant_access_token: "t_1", expire: 7200 },
+      { code: 0, msg: "ok", bot: { app_name: "Recoder Bot", open_id: "ou_bot" } },
+    );
 
     const connector = new FeishuConnector({ registry: buildRegistry() });
     const handle = await connector.monitor("default", (msg) => {

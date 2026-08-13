@@ -50,11 +50,42 @@ function feishuRoutes() {
       call.url.includes("/auth/v3/tenant_access_token/internal")
         ? { json: { code: 0, tenant_access_token: "t-token", expire: 7200 } }
         : undefined,
+    // bot-info binds the REAL bot open_id (the mention trust anchor).
+    (call: RecordedFetch) =>
+      call.url.includes("/bot/v3/info")
+        ? { json: { code: 0, bot: { app_name: "Recoder Bot", open_id: "ou_bot" } } }
+        : undefined,
     (call: RecordedFetch) =>
       call.url.includes("/im/v1/messages")
         ? { json: { code: 0, data: { message_id: "om_msg_out_1" } } }
         : undefined,
   ];
+}
+
+/**
+ * A real Feishu group `im.message.receive_v1` event. The `@mention` carries the
+ * mentioned principal's open_id on `mention.id` — the bound bot ("ou_bot") when
+ * `mentionBot`, some other member ("ou_other") otherwise.
+ */
+function feishuGroupEvent(opts: { mentionBot: boolean }): unknown {
+  return {
+    sender: { sender_id: { open_id: "ou_alice", user_id: "alice" } },
+    message: {
+      chat_id: "oc_group_1",
+      message_id: opts.mentionBot ? "om_grp_in_1" : "om_grp_in_2",
+      message_type: "text",
+      chat_type: "group",
+      create_time: "1700000000000",
+      content: JSON.stringify({ text: "@_user_1 rotate the keys" }),
+      mentions: [
+        {
+          key: "@_user_1",
+          name: opts.mentionBot ? "Recoder Bot" : "Someone Else",
+          id: { open_id: opts.mentionBot ? "ou_bot" : "ou_other" },
+        },
+      ],
+    },
+  };
 }
 
 describe("feishu dispatch (real adapter, global fetch seam)", () => {
@@ -111,6 +142,66 @@ describe("feishu dispatch (real adapter, global fetch seam)", () => {
         agentRouter: () => ({ agentId: "a", sessionId: "s" }),
       }),
     );
+
+    expect(outcome.status).toBe("blocked");
+    expect(double.callsMatching("/im/v1/messages")).toHaveLength(0);
+  });
+});
+
+describe("feishu GROUP dispatch under requireMentionInGroups (real bot-open_id gate)", () => {
+  it("delivers a group message that @mentions the bound bot open_id", async () => {
+    const connector = new FeishuConnector({ registry: registryWith("app-dispatch-grp-1") });
+    const double = makeFetchDouble(feishuRoutes());
+    const registry = new ConnectorRegistry().register(connector);
+
+    const outcome = await withGlobalFetch(double, async () => {
+      // probe() drives the real token + bot-info exchange and binds the bot
+      // open_id, so the next normalize() can detect a mention of the bot.
+      const probe = await connector.probe("default");
+      expect(probe.ready).toBe(true);
+
+      const normalized = connector.normalize(feishuGroupEvent({ mentionBot: true }), "default");
+      expect(normalized?.chatType).toBe("group");
+      expect(normalized?.wasMentioned).toBe(true);
+      expect(normalized?.text).toBe("rotate the keys");
+
+      return dispatchInbound(normalized!, {
+        registry,
+        runner: replyingRunner("Keys rotated."),
+        // requireMentionInGroups defaults TRUE — delivery proves the mention was
+        // matched against the bound bot open_id.
+        gatePolicy: makeAllowlistGatePolicy({ allowlist: ["ou_alice"] }),
+        agentRouter: () => ({ agentId: "sec-bot", sessionId: "fs-grp-1" }),
+      });
+    });
+
+    expect(outcome.status).toBe("delivered");
+    if (outcome.status === "delivered") {
+      expect(outcome.reply).toBe("Keys rotated.");
+    }
+    expect(double.callsMatching("/im/v1/messages")).toHaveLength(1);
+  });
+
+  it("DROPS a group message whose @mention targets someone other than the bot", async () => {
+    const connector = new FeishuConnector({ registry: registryWith("app-dispatch-grp-2") });
+    const double = makeFetchDouble(feishuRoutes());
+    const registry = new ConnectorRegistry().register(connector);
+
+    const outcome = await withGlobalFetch(double, async () => {
+      await connector.probe("default");
+      const normalized = connector.normalize(feishuGroupEvent({ mentionBot: false }), "default");
+      expect(normalized?.chatType).toBe("group");
+      // A mention exists, but not of the bot: must NOT be treated as addressed.
+      expect(normalized?.wasMentioned).toBe(false);
+
+      return dispatchInbound(normalized!, {
+        registry,
+        runner: replyingRunner("should never send"),
+        // Sender IS allowlisted; only the missing bot-mention blocks it.
+        gatePolicy: makeAllowlistGatePolicy({ allowlist: ["ou_alice"] }),
+        agentRouter: () => ({ agentId: "sec-bot", sessionId: "fs-grp-2" }),
+      });
+    });
 
     expect(outcome.status).toBe("blocked");
     expect(double.callsMatching("/im/v1/messages")).toHaveLength(0);
