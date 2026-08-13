@@ -1303,6 +1303,20 @@ fn run_plugin_build_command(
     command: &[String],
 ) -> Result<(), Box<PluginBuildFailure>> {
     let context = plugin_build_context(plugin_id, build_index, build_total, cwd, command);
+    // Close the free-argv RCE surface on the install-time [[build]] path too: the
+    // App runtime spawn path is gated in start_plugin_command, but `loom plugin
+    // install` runs build commands here. Default-deny unless the host operator has
+    // affirmatively opted in (LOOM_PLUGIN_SPAWN_ALLOW); plugin data can never flip it.
+    if let Err(message) = crate::app::api::plugins::gate::authorize_plugin_spawn(
+        crate::app::api::plugins::gate::host_capability_from_env(),
+    ) {
+        return Err(Box::new(PluginBuildFailure {
+            context,
+            kind: PluginBuildFailureKind::Start {
+                error: io::Error::new(io::ErrorKind::PermissionDenied, message),
+            },
+        }));
+    }
     let Some(program) = command.first() else {
         return Err(Box::new(PluginBuildFailure {
             context,
@@ -1671,6 +1685,32 @@ fn print_plugin_pane_help() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn build_command_is_denied_without_host_capability() {
+        // The install-time [[build]] spawn path must be gated too. Setting the flag
+        // to a NON-affirmative value is equivalent to the unset default, so this does
+        // not affect other tests. The gate denies BEFORE spawn, so the error is
+        // PermissionDenied (from the gate) rather than NotFound (a real spawn attempt
+        // of the fake program) — that distinction proves no spawn occurred.
+        let env_key = crate::app::api::plugins::gate::PLUGIN_SPAWN_ALLOW_ENV;
+        let prev = std::env::var(env_key).ok();
+        std::env::set_var(env_key, "0");
+        let dir = std::env::temp_dir();
+        let command = vec!["loom-plugin-gate-should-never-spawn-this".to_string()];
+        let result = run_plugin_build_command("test.gate", 0, 1, &dir, &command);
+        match prev {
+            Some(value) => std::env::set_var(env_key, value),
+            None => std::env::remove_var(env_key),
+        }
+        let failure = result.expect_err("a denied build command must error");
+        match failure.kind {
+            PluginBuildFailureKind::Start { ref error } => {
+                assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+            }
+            other => panic!("expected a gate Start/PermissionDenied error, got {other:?}"),
+        }
+    }
 
     fn unique_plugin_id(label: &str) -> String {
         let nanos = SystemTime::now()

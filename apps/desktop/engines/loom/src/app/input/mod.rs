@@ -818,6 +818,9 @@ fn app_for_mouse_test() -> App {
         crate::api::EventHub::default(),
     );
     app.state.mode = Mode::Terminal;
+    // Link-handler / keybind mouse tests exercise the real plugin-invoke spawn path,
+    // so opt into the host capability; the default-deny gate is proven separately.
+    app.state.plugin_spawn_allowed = true;
     app.state.update_available = None;
     app.state.latest_release_notes_available = false;
     app.state.view.sidebar_rect = ratatui::layout::Rect::new(0, 0, 26, 20);
