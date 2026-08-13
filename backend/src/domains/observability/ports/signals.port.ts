@@ -10,6 +10,7 @@
  * `backend/engines/py/ops-recorder/work-signals` HTTP surface.
  */
 import type { HealthStatus } from '../../../shared/health-types.js';
+import type { OpsRecorderSyncResult } from './ops-recorder-push.port.js';
 
 /** The raw signal shape the Python sidecar returns (before RunEvent normalization). */
 export interface RawWorkSignal {
@@ -50,4 +51,11 @@ export interface WorkSignalsPort {
    * `/health/full` shows the signals engine truthfully, not green.
    */
   availability(): Promise<SignalsAvailability>;
+  /**
+   * Trigger the sidecar's on-demand GitHub detector (re-scan stuck PRs/issues NOW).
+   * `triggered:false` + `degraded:true` when the sidecar is down — never a faked scan.
+   */
+  syncGithub(): Promise<OpsRecorderSyncResult>;
+  /** Trigger the sidecar's on-demand Linear detector — mirrors {@link syncGithub}. */
+  syncLinear(): Promise<OpsRecorderSyncResult>;
 }

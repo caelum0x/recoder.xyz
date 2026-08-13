@@ -15,6 +15,7 @@ import type { Logger } from '../../../shared/logger.js';
 import type { GovernanceGate } from '../../governance/ports/gate.port.js';
 import type { Principal } from '../../identity/types.js';
 import type { RawWorkSignal, WorkSignalsPort } from '../ports/signals.port.js';
+import type { OpsRecorderSyncResult } from '../ports/ops-recorder-push.port.js';
 import type { SignalDispositionRepository } from '../ports/observability.repository.js';
 import type {
   DispositionState,
@@ -105,6 +106,14 @@ export interface RefreshResult {
   readonly reason?: string;
 }
 
+export interface ScanResult extends RefreshResult {
+  /** Per-detector trigger outcome — a down sidecar reports `triggered:false`. */
+  readonly triggered: {
+    readonly github: OpsRecorderSyncResult;
+    readonly linear: OpsRecorderSyncResult;
+  };
+}
+
 export class WorkSignalsService {
   constructor(private readonly deps: WorkSignalsServiceDeps) {}
 
@@ -134,6 +143,26 @@ export class WorkSignalsService {
     }
 
     return { signals, degraded: availability.status === 'degraded' };
+  }
+
+  /**
+   * On-demand SCAN: trigger the sidecar's GitHub + Linear detectors NOW (in
+   * parallel) so an agent can proactively surface stuck/blocked/needs-you work
+   * instead of waiting for the sidecar's own cadence, then return the refreshed
+   * signals. Truthful: a down/unreachable sidecar yields `triggered:false` per
+   * source and an empty, `degraded:true` refresh — never a faked scan.
+   */
+  async scan(): Promise<ScanResult> {
+    const [github, linear] = await Promise.all([
+      this.deps.port.syncGithub(),
+      this.deps.port.syncLinear(),
+    ]);
+    const refresh = await this.refresh();
+    return {
+      ...refresh,
+      degraded: refresh.degraded || github.degraded || linear.degraded,
+      triggered: { github, linear },
+    };
   }
 
   /** List the recorded dispositions (space-scoped). */

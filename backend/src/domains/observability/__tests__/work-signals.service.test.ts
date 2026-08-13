@@ -58,6 +58,8 @@ describe('WorkSignalsService.refresh', () => {
       availability: vi.fn().mockResolvedValue({ status: 'down', reason: 'sidecar absent' }),
       fetchSignals: vi.fn().mockResolvedValue([]),
       fetchSignal: vi.fn().mockResolvedValue(null),
+      syncGithub: vi.fn().mockResolvedValue({ triggered: false, degraded: true }),
+      syncLinear: vi.fn().mockResolvedValue({ triggered: false, degraded: true }),
     };
     const svc = new WorkSignalsService({ logger, port, gate, repository: repo, defaultSpaceId: 'default' });
     const result = await svc.refresh();
@@ -74,6 +76,8 @@ describe('WorkSignalsService.refresh', () => {
       availability: vi.fn().mockResolvedValue({ status: 'up' }),
       fetchSignals: vi.fn().mockResolvedValue([rawSignal]),
       fetchSignal: vi.fn(),
+      syncGithub: vi.fn().mockResolvedValue({ triggered: true, degraded: false }),
+      syncLinear: vi.fn().mockResolvedValue({ triggered: true, degraded: false }),
     };
     const svc = new WorkSignalsService({
       logger,
@@ -87,5 +91,42 @@ describe('WorkSignalsService.refresh', () => {
     expect(result.signals).toHaveLength(1);
     expect(result.degraded).toBe(false);
     expect(ingest).toHaveBeenCalledOnce();
+  });
+});
+
+describe('WorkSignalsService.scan', () => {
+  it('triggers BOTH detectors on demand, then returns the refreshed signals', async () => {
+    const port: WorkSignalsPort = {
+      availability: vi.fn().mockResolvedValue({ status: 'up' }),
+      fetchSignals: vi.fn().mockResolvedValue([rawSignal]),
+      fetchSignal: vi.fn(),
+      syncGithub: vi.fn().mockResolvedValue({ triggered: true, degraded: false }),
+      syncLinear: vi.fn().mockResolvedValue({ triggered: true, degraded: false }),
+    };
+    const svc = new WorkSignalsService({ logger, port, gate, repository: repo, defaultSpaceId: 'default' });
+
+    const result = await svc.scan();
+
+    expect(port.syncGithub).toHaveBeenCalledOnce();
+    expect(port.syncLinear).toHaveBeenCalledOnce();
+    expect(result.triggered.github.triggered).toBe(true);
+    expect(result.signals).toHaveLength(1);
+    expect(result.degraded).toBe(false);
+  });
+
+  it('is degraded when a detector reports the sidecar down — never a faked scan', async () => {
+    const port: WorkSignalsPort = {
+      availability: vi.fn().mockResolvedValue({ status: 'up' }),
+      fetchSignals: vi.fn().mockResolvedValue([]),
+      fetchSignal: vi.fn(),
+      syncGithub: vi.fn().mockResolvedValue({ triggered: false, degraded: true, reason: 'sidecar down' }),
+      syncLinear: vi.fn().mockResolvedValue({ triggered: false, degraded: true }),
+    };
+    const svc = new WorkSignalsService({ logger, port, gate, repository: repo, defaultSpaceId: 'default' });
+
+    const result = await svc.scan();
+
+    expect(result.degraded).toBe(true);
+    expect(result.triggered.github.triggered).toBe(false);
   });
 });
