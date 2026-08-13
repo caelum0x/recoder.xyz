@@ -431,9 +431,13 @@ export class ConductorGovernedWrites {
       const registered = this.ctx.registry.registry.list();
       const runtimeId = input.runtimeId ?? plan?.runtimeId;
       const openfang = isOpenfangRuntime(runtimeId);
+      // Loom is THE default runtime (bootstrap injects `defaultSubstrate: 'loom'`);
+      // an unqualified CLI launch rides the durable always-on herd, not a throwaway
+      // tmux session. A caller's explicit `input.substrate` always wins; if Loom
+      // cannot come up the launch fails LOUD — no silent tmux fallback.
       const substrate: SubstrateKind = openfang
         ? selectSubstrateForRuntime(runtimeId, { registered })
-        : (input.substrate ?? 'tmux_worktree');
+        : (input.substrate ?? this.ctx.cfg.defaultSubstrate);
 
       // Path (b): the in-process substrate runs `command` as the agent turn, so the
       // integrator enriches the prompt HERE (memory recall) and passes it as command

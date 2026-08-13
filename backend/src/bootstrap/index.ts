@@ -837,11 +837,18 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     socketPath: loomDaemon.socketPath,
     logger: childLogger('conductor-loom'),
   });
-  // Opt-in supervised spawn: only when explicitly enabled. Degrade-truthful — a
-  // failed/absent daemon leaves the substrate registered but `available:false`.
-  const loomEnabled =
-    bootEnv.CONDUCTOR_LOOM_ENABLED === '1' ||
-    bootEnv.CONDUCTOR_LOOM_ENABLED === 'true';
+  // Loom is THE default runtime — spawn the supervised daemon by DEFAULT so the
+  // durable always-on herd backs every unqualified launch. An operator can opt OUT
+  // (`CONDUCTOR_LOOM_DISABLED`) to pin the legacy tmux default; that flag ALSO
+  // flips the conductor's `defaultSubstrate` to `tmux_worktree` below (they toggle
+  // as one unit). With loom enabled there is NO silent fallback: a daemon that
+  // cannot come up leaves the substrate `available:false` and a loom-default launch
+  // fails LOUD rather than quietly degrading to tmux. WF1 adopt-existing makes the
+  // spawn robust — a healthy detached survivor is reattached, not re-spawned.
+  const loomDisabled =
+    bootEnv.CONDUCTOR_LOOM_DISABLED === '1' ||
+    bootEnv.CONDUCTOR_LOOM_DISABLED === 'true';
+  const loomEnabled = !loomDisabled;
   if (loomEnabled) {
     void loomDaemon
       .start()
@@ -849,12 +856,12 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
         if (status.running) {
           childLogger('conductor-loom-daemon').info(
             { socketPath: status.socketPath, pid: status.pid, protocol: status.protocol },
-            'loom daemon started (opt-in) — substrate available'
+            'loom daemon started (default runtime) — substrate available'
           );
         } else {
           childLogger('conductor-loom-daemon').warn(
             { socketPath: status.socketPath, reason: status.reason },
-            'loom daemon did not start — substrate stays unavailable (truthful degrade)'
+            'loom daemon did not start — loom-default launches will fail loud (no silent fallback)'
           );
         }
       })
@@ -1173,6 +1180,10 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     overrides: {
       tmuxBin: config.conductor.tmuxBin,
       worktreeRoot: config.conductor.worktreeRoot,
+      // Loom is THE default runtime; an unqualified CLI launch rides the durable
+      // herd. Opting out (`CONDUCTOR_LOOM_DISABLED`) pins the legacy tmux default
+      // in lock-step with skipping the daemon spawn above — no silent fallback.
+      defaultSubstrate: loomEnabled ? 'loom' : 'tmux_worktree',
       // Control-mode flag plumbed through; the conductor module now DRIVES its own
       // degrade-safe live tailer (`startRunTail` + `selectControlModeTail`) from its
       // internal registry+config when this is true — no bootstrap seam is required

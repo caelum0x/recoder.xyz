@@ -392,6 +392,8 @@ export interface ComposeOptions {
   remoteAttach?: ConductorModuleDeps['remoteAttach'];
   /** OPTIONAL AppConfig override (e.g. `makeConfig(false, true)` for solo/desktop mode). */
   config?: AppConfig;
+  /** OPTIONAL conductor config overrides (e.g. `{ defaultSubstrate: 'loom' }` for the prod default). */
+  overrides?: ConductorModuleDeps['overrides'];
 }
 
 /** Compose a conductor module over the in-memory harness. Returns the module + its gate. */
@@ -433,6 +435,7 @@ export function composeConductor(options: ComposeOptions = {}): {
     ...(options.infer ? { infer: options.infer } : {}),
     ...(options.swarmUnblock ? { swarmUnblock: options.swarmUnblock } : {}),
     ...(options.remoteAttach ? { remoteAttach: options.remoteAttach } : {}),
+    ...(options.overrides ? { overrides: options.overrides } : {}),
   });
   return { module, gate };
 }
