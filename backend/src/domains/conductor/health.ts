@@ -53,7 +53,13 @@ export function buildConductorHealth(deps: ConductorHealthDeps): ComponentHealth
   const engines: readonly EngineStatus[] = [...substrateEngines, workspaceDb];
 
   const anySubstrate = substrates.some((s) => s.available);
-  const defaultSubstrate = substrates.find((s) => s.id === 'tmux_worktree');
+  // Truthful health keys on the ACTUAL configured default substrate (Loom in
+  // production, tmux_worktree in dev/test) — never a hardcoded one. If the default
+  // runtime an unqualified launch rides is down, health degrades even when some
+  // opt-in substrate is up, so we never report `up` while default launches fail.
+  const defaultSubstrate = substrates.find(
+    (s) => s.id === deps.config.defaultSubstrate,
+  );
   const defaultUp = defaultSubstrate?.available === true;
 
   let status: HealthStatus;
