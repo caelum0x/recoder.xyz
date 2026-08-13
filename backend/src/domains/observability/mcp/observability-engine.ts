@@ -10,6 +10,7 @@
  *  - `obs_metrics_query` — the current Prometheus scrape text (RED/USE snapshot).
  *  - `obs_audit_search`  — the XDR query, Merkle re-verified (tamper → verified:false).
  *  - `obs_signals`       — current ops-recorder work-signals (empty when sidecar down).
+ *  - `obs_scan`          — trigger an on-demand GitHub+Linear stuck-work scan, then refresh.
  *
  * It composes the SAME services the routes use — it does NOT duplicate log
  * read/search (that stays in `agent-os/mcp/logs-engine.ts`), it only surfaces the
@@ -117,6 +118,20 @@ export function buildObservabilityMcpTools(deps: ObservabilityMcpDeps): readonly
           signals: refresh.signals,
           degraded: refresh.degraded,
           reason: refresh.reason ?? null,
+        };
+      },
+    },
+    {
+      name: 'obs_scan',
+      description:
+        'Trigger an on-demand scan for stuck/blocked/needs-you work NOW (ops-recorder GitHub + Linear detectors), then return the refreshed signals. Per-detector triggered:false + degraded when the sidecar is down — never a faked scan.',
+      handler: async () => {
+        const scan = await deps.workSignals.scan();
+        return {
+          signals: scan.signals,
+          triggered: scan.triggered,
+          degraded: scan.degraded,
+          reason: scan.reason ?? null,
         };
       },
     },
