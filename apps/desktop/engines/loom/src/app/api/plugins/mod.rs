@@ -1,5 +1,6 @@
 mod context;
 mod env;
+mod gate;
 mod manifest;
 mod panes;
 mod runtime;
@@ -23,6 +24,14 @@ use crate::api::schema::{PluginCommandStatus, PluginInvocationContext};
 pub(crate) use manifest::load_plugin_manifest;
 #[cfg(test)]
 use runtime::{read_capped_plugin_output, MAX_PLUGIN_COMMANDS_IN_FLIGHT};
+
+/// Read the host-operator capability that permits plugin command spawns.
+///
+/// Resolved once at app construction from the environment; defaults to deny so
+/// the free-argv plugin RCE surface stays closed unless an operator opts in.
+pub(crate) fn host_plugin_spawn_capability() -> bool {
+    gate::host_capability_from_env()
+}
 
 impl App {
     fn replace_installed_plugins(&mut self, entries: Vec<InstalledPluginInfo>) {
@@ -713,14 +722,29 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn test_app() -> App {
+        let mut app = deny_spawn_app();
+        // These tests exercise the real plugin spawn path. Production defaults
+        // to deny (the free-argv RCE surface is closed); a host operator must
+        // opt in. Tests opt in explicitly here. Default-deny behavior is proven
+        // separately by the `plugin_spawn_*` tests below, which use
+        // `deny_spawn_app()`.
+        app.state.plugin_spawn_allowed = true;
+        app
+    }
+
+    fn deny_spawn_app() -> App {
         let (_api_tx, api_rx) = tokio::sync::mpsc::unbounded_channel();
-        App::new(
+        let mut app = App::new(
             &crate::config::Config::default(),
             true,
             None,
             api_rx,
             crate::api::EventHub::default(),
-        )
+        );
+        // Pin to the production default so the deny assertions hold regardless
+        // of any ambient LOOM_PLUGIN_SPAWN_ALLOW in the test environment.
+        app.state.plugin_spawn_allowed = false;
+        app
     }
 
     fn response_result(response: &str) -> ResponseResult {
@@ -2576,6 +2600,116 @@ command = ["sh", "-c", "printf '%s' \"$LOOM_PLUGIN_CONTEXT_JSON\" > {}"]
             .is_some_and(|error| error.contains("maximum concurrent plugin commands")));
 
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_spawn_denied_by_default_does_not_spawn() {
+        let mut app = deny_spawn_app();
+        let root = unique_temp_path("plugin-spawn-denied");
+        write_manifest(&root);
+        link_manifest(&mut app, &root);
+        let logs_before = app.state.plugin_command_logs.len();
+
+        let invoke = app.handle_api_request(Request {
+            id: "invoke-denied".into(),
+            method: Method::PluginActionInvoke(PluginActionInvokeParams {
+                plugin_id: Some("example.worktree-bootstrap".into()),
+                action_id: "bootstrap".into(),
+                context: None,
+            }),
+        });
+
+        let value: serde_json::Value = serde_json::from_str(&invoke).unwrap();
+        assert_eq!(value["error"]["code"], gate::PLUGIN_SPAWN_DISABLED_CODE);
+        assert_eq!(
+            value["error"]["message"],
+            gate::PLUGIN_SPAWN_DISABLED_MESSAGE
+        );
+        assert!(
+            value.get("result").is_none(),
+            "denied spawn must not report a success result: {invoke}"
+        );
+
+        assert_eq!(
+            app.state.plugin_commands_in_flight, 0,
+            "denied spawn must not launch a process"
+        );
+        let log = app
+            .state
+            .plugin_command_logs
+            .last()
+            .expect("denied command should be logged");
+        assert_eq!(log.status, PluginCommandStatus::Failed);
+        assert_eq!(log.exit_code, None);
+        assert_eq!(
+            log.error.as_deref(),
+            Some(gate::PLUGIN_SPAWN_DISABLED_MESSAGE)
+        );
+        assert_eq!(
+            app.state.plugin_command_logs.len(),
+            logs_before + 1,
+            "exactly one failed log should be recorded"
+        );
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_supplied_data_cannot_flip_spawn_gate() {
+        let mut app = deny_spawn_app();
+        let root = unique_temp_path("plugin-spawn-selfallow");
+        // A hostile plugin mimics the host capability values in its own id,
+        // name, action id, and argv. None of that is a gate input, so it stays
+        // denied.
+        write_manifest_content(
+            &root,
+            r#"
+id = "true.allow-on-yes"
+name = "1"
+version = "0.1.0"
+min_loom_version = "0.6.10"
+platforms = ["linux", "macos", "windows"]
+
+[[actions]]
+id = "allow"
+title = "true"
+contexts = ["workspace"]
+command = ["true", "1", "yes", "on", "LOOM_PLUGIN_SPAWN_ALLOW=1"]
+"#,
+        );
+        link_manifest(&mut app, &root);
+
+        let invoke = app.handle_api_request(Request {
+            id: "invoke-selfallow".into(),
+            method: Method::PluginActionInvoke(PluginActionInvokeParams {
+                plugin_id: Some("true.allow-on-yes".into()),
+                action_id: "allow".into(),
+                context: None,
+            }),
+        });
+
+        let value: serde_json::Value = serde_json::from_str(&invoke).unwrap();
+        assert_eq!(value["error"]["code"], gate::PLUGIN_SPAWN_DISABLED_CODE);
+        assert_eq!(app.state.plugin_commands_in_flight, 0);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_spawn_capability_drives_gate_decision() {
+        let denied = deny_spawn_app();
+        assert_eq!(
+            gate::authorize_plugin_spawn(denied.state.plugin_spawn_allowed),
+            Err(gate::PLUGIN_SPAWN_DISABLED_MESSAGE),
+            "production-default app must deny plugin spawns"
+        );
+
+        let allowed = test_app();
+        assert_eq!(
+            gate::authorize_plugin_spawn(allowed.state.plugin_spawn_allowed),
+            Ok(()),
+            "an app with the host capability set must permit plugin spawns"
+        );
     }
 
     #[test]

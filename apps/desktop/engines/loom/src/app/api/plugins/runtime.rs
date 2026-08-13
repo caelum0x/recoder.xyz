@@ -29,6 +29,33 @@ impl App {
             ));
         };
         let args = command.iter().skip(1).cloned().collect::<Vec<_>>();
+        // Pre-spawn policy gate. The governed skill model replaces free-argv
+        // plugins in the Recoder fork, so spawning is denied unless the host
+        // operator has opted in. The decision reads only the host-owned
+        // capability, never plugin-supplied data, so a plugin cannot allow
+        // itself. A denied spawn is recorded as a failed log and returned as an
+        // error; it never silently no-ops as if it ran.
+        if let Err(message) = super::gate::authorize_plugin_spawn(self.state.plugin_spawn_allowed) {
+            let started_unix_ms = current_unix_ms();
+            let log_id = format!("plugin-log-{}", self.state.next_plugin_command_log_id);
+            self.state.next_plugin_command_log_id += 1;
+            let log = PluginCommandLogInfo {
+                log_id,
+                plugin_id: plugin.plugin_id.clone(),
+                action_id: action_id.clone(),
+                event: event.clone(),
+                command: command.clone(),
+                status: PluginCommandStatus::Failed,
+                started_unix_ms,
+                finished_unix_ms: Some(started_unix_ms),
+                exit_code: None,
+                stdout: Some(String::new()),
+                stderr: Some(String::new()),
+                error: Some(message.to_string()),
+            };
+            self.push_plugin_command_log(log);
+            return Err((super::gate::PLUGIN_SPAWN_DISABLED_CODE, message.to_string()));
+        }
         let context_json = serde_json::to_string(context)
             .map_err(|err| ("invalid_plugin_context", err.to_string()))?;
         super::env::ensure_plugin_user_dirs(plugin)
