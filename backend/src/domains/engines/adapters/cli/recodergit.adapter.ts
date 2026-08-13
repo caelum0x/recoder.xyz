@@ -249,13 +249,16 @@ export class RecodergitAdapter extends EngineClientBase<unknown, unknown> {
     }
     // Enabled but the loopback MCP server is not up. The engine can still index
     // in-process/CLI, so this is a truthful "server unavailable" rather than a
-    // hard down of the whole engine — but health reports the server truth.
+    // hard down of the whole engine — but health reports the server truth,
+    // including the service's real reason (bin missing / probe timeout / exit).
     return down(
       'recodergit',
       'cli',
       server.status === 'disabled'
         ? 'recodergit disabled'
-        : 'recodergit mcp server unavailable (bin missing/unbuilt)'
+        : `recodergit mcp server unavailable${
+            server.reason ? ` (${server.reason})` : ' (bin missing/unbuilt)'
+          }`
     );
   }
 }
