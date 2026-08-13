@@ -124,11 +124,9 @@ async function createAndLaunchConflictPane(
       onResolved: async () => {
         // Conflicts resolved! Close the conflict pane and trigger cleanup
         try {
-          console.error(`[conflictResolution] Conflicts resolved for ${pane.slug}, cleaning up conflict pane ${conflictPane.id}`);
           const tmuxService = TmuxService.getInstance();
 
           // Kill the conflict pane first
-          console.error(`[conflictResolution] Killing conflict pane ${conflictPane.paneId}`);
           await tmuxService.killPane(conflictPane.paneId);
 
           // CRITICAL: Read FRESH panes from StateManager, not stale context.panes
@@ -136,11 +134,9 @@ async function createAndLaunchConflictPane(
           const { StateManager } = await import('../../shared/StateManager.js');
           const stateManager = StateManager.getInstance();
           const currentPanes = stateManager.getPanes();
-          console.error(`[conflictResolution] Current panes: ${currentPanes.map(p => p.id).join(', ')}`);
 
           // Remove conflict pane from state
           const panesWithoutConflictPane = currentPanes.filter((p: DmuxPane) => p.id !== conflictPane.id);
-          console.error(`[conflictResolution] Removing conflict pane ${conflictPane.id}, remaining: ${panesWithoutConflictPane.map(p => p.id).join(', ')}`);
           await context.savePanes(panesWithoutConflictPane);
 
           // Now trigger the cleanup flow for the original pane
@@ -156,12 +152,10 @@ async function createAndLaunchConflictPane(
           // Re-run executeMerge which will now succeed (conflicts are resolved)
           // This will return the cleanup confirmation dialog
           // IMPORTANT: Pass skipWorktreeMerge=true because agent already resolved conflicts
-          console.error(`[conflictResolution] Executing merge for original pane ${pane.id} (${pane.slug})`);
           const result = await executeMerge(pane, updatedContext, targetBranch, targetRepoPath, true);
 
           // If we have the onActionResult callback, use it to show the dialog
           if (context.onActionResult) {
-            console.error(`[conflictResolution] Showing merge result dialog to user`);
             await context.onActionResult(result);
           }
         } catch (error) {

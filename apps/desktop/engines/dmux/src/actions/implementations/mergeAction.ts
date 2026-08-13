@@ -67,16 +67,9 @@ export async function mergePane(
       : worktree
   );
 
-  console.error(`[mergeAction] Detected ${worktrees.length} worktree(s) in ${pane.worktreePath}`);
-  for (const wt of worktrees) {
-    console.error(`[mergeAction]   - ${wt.repoName} (${wt.branch}) at ${wt.relativePath} [depth=${wt.depth}, isRoot=${wt.isRoot}]`);
-  }
-
   // 3. Build merge queue (only worktrees with changes)
   const { buildMergeQueue, executeMultiMerge } = await import('../merge/multiMergeOrchestrator.js');
   const queue = await buildMergeQueue(worktrees);
-
-  console.error(`[mergeAction] Merge queue has ${queue.length} item(s)`);
 
   // 4. Handle based on queue size
   // No changes anywhere
@@ -91,12 +84,10 @@ export async function mergePane(
   const continueMerge = async (): Promise<ActionResult> => {
     // Single root worktree = use existing flow (backwards compatible)
     if (queue.length === 1 && queue[0].worktree.isRoot) {
-      console.error('[mergeAction] Single root worktree - using existing flow');
       return executeSingleRootMerge(pane, context, params, mergeTarget);
     }
 
     // Multiple worktrees or only sub-worktrees = use multi-merge flow
-    console.error('[mergeAction] Multiple worktrees or sub-worktrees - using multi-merge flow');
     return executeMultiMerge(pane, context, queue);
   };
 

@@ -6,11 +6,17 @@
  * its CLI — never `tmux` from a random PATH. dmux MUST use the same binary so the
  * operator console and the headless conductor sessions share one tmux server.
  *
- * This mirrors `backend/src/conductor/tmux-path.ts` exactly so both halves agree.
+ * This mirrors the resolution CONTRACT of `backend/src/domains/engines/tmux-path.ts`
+ * (CONDUCTOR_TMUX_BIN → vendored build → system PATH). CONDUCTOR_TMUX_BIN is honored
+ * unconditionally in both halves, so whenever the Conductor pins a binary both the
+ * operator console and the headless conductor resolve the SAME path and share one
+ * tmux server. It is NOT a byte-for-byte copy: dmux layers one documented, dmux-only
+ * addition on top — a higher-priority DMUX_TMUX_BIN console-local override — and walks
+ * a couple extra parent directories because this module sits deeper in the tree.
  *
  * Resolution order (first hit wins):
- *   1. DMUX_TMUX_BIN          — dmux-specific override (absolute path).
- *   2. CONDUCTOR_TMUX_BIN     — Conductor's pinned-binary override (absolute path).
+ *   1. DMUX_TMUX_BIN          — dmux-only console override (absolute path). Not read by the backend.
+ *   2. CONDUCTOR_TMUX_BIN     — Conductor's pinned-binary override (absolute path); the shared contract.
  *   3. RECODER_TMUX_BUILD_PATH — the built vendored binary path.
  *   4. <repo>/apps/desktop/engines/tmux/tmux     — vendored build discovered by walking up to repo root.
  *   5. 'tmux'                 — system PATH (last resort, never assumed present).
@@ -64,12 +70,21 @@ function resolveVendoredTmux(): string | undefined {
   return undefined;
 }
 
-function resolveTmuxBin(): string {
-  return (
-    firstExistingEnv('DMUX_TMUX_BIN', 'CONDUCTOR_TMUX_BIN') ||
-    resolveVendoredTmux() ||
-    'tmux'
-  );
+export function resolveTmuxBin(): string {
+  // dmux-only console override (highest priority). Honored as-is when set so an
+  // operator can force a specific binary for the operator console without touching the
+  // Conductor. The backend does not read this variable.
+  const dmuxOverride = process.env.DMUX_TMUX_BIN;
+  if (dmuxOverride) return dmuxOverride;
+
+  // Conductor's pinned-binary override. Honored UNCONDITIONALLY (never existence-gated)
+  // to match backend/src/domains/engines/tmux-path.ts: when the Conductor pins a binary,
+  // both halves must resolve the exact same path so they share one tmux server. A bad
+  // path fails fast at exec rather than silently diverging to a different binary.
+  const conductorOverride = process.env.CONDUCTOR_TMUX_BIN;
+  if (conductorOverride) return conductorOverride;
+
+  return resolveVendoredTmux() || 'tmux';
 }
 
 /**
