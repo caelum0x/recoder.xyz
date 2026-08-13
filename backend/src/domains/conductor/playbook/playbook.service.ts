@@ -341,10 +341,19 @@ export class PlaybookService {
     if (reFan.converged) {
       state.converged = reFan.converged;
       state.convergeReason = undefined;
-    } else if (state.converged == null) {
+      return { kind: 're_fan', status: 'ok', reFan };
+    }
+    // A non-refused re-fan that produced NO converged branch is DEGRADED, not 'ok' —
+    // consistent with the fanout step's status for a null convergence (truthfulness).
+    if (state.converged == null) {
       state.convergeReason = reFan.convergeReason;
     }
-    return { kind: 're_fan', status: 'ok', reFan };
+    return {
+      kind: 're_fan',
+      status: 'degraded',
+      ...(reFan.convergeReason ? { reason: reFan.convergeReason } : {}),
+      reFan,
+    };
   }
 
   /** Record a `re_fan` skip/degrade truthfully, honouring the step's stop flag. */
