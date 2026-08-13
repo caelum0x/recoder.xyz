@@ -371,7 +371,7 @@ func recoderCallRun(cmd *cobra.Command, args []string) (rtnErr error) {
 	defer func() {
 		sendActivity("recoder:call", rtnErr == nil)
 	}()
-	serverId := args[0]
+	serverId := strings.TrimSpace(args[0])
 	toolName := strings.TrimSpace(args[1])
 	if !recoderIsKnownServer(serverId) {
 		return fmt.Errorf("unknown server %q; run 'wsh recoder tools' to see known capability servers", serverId)
