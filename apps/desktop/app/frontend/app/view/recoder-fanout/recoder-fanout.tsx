@@ -96,28 +96,53 @@ function ContestedRow({ file }: { file: CockpitContested }) {
 
 ContestedRow.displayName = "ContestedRow";
 
-function FileColumns({ file }: { file: FileVersionsView }) {
+function FileColumns({ model, file }: { model: RecoderFanoutViewModel; file: FileVersionsView }) {
+    const selection = useAtomValue(model.contestedSelectionAtom);
+    const picked = selection[file.path];
     return (
         <div className="flex flex-col gap-1 rounded border border-border p-2">
-            <div className="text-sm font-mono truncate" title={file.path}>
-                {file.path}
+            <div className="flex items-center gap-2">
+                <div className="text-sm font-mono truncate" title={file.path}>
+                    {file.path}
+                </div>
+                {picked != null && picked != "" && (
+                    <button
+                        className={`${STATE_CHIP} ml-auto cursor-pointer`}
+                        onClick={() => model.setContestedSelection(file.path, "")}
+                    >
+                        clear pick
+                    </button>
+                )}
             </div>
             <div className="flex gap-2 overflow-x-auto">
-                {file.versions.map((v) => (
-                    <div key={v.workspaceId} className="flex min-w-[14rem] flex-1 flex-col gap-0.5">
-                        <div className="flex items-center gap-1">
-                            <span className="text-xs font-medium truncate">{v.agent || v.workspaceId}</span>
-                            {v.truncated && <span className={`${STATE_CHIP} ml-auto`}>truncated</span>}
+                {file.versions.map((v) => {
+                    const isPicked = picked === v.workspaceId;
+                    return (
+                        <div
+                            key={v.workspaceId}
+                            className={`flex min-w-[14rem] flex-1 flex-col gap-0.5 rounded p-1 ${isPicked ? "ring-1 ring-accent" : ""}`}
+                        >
+                            <div className="flex items-center gap-1">
+                                <span className="text-xs font-medium truncate">{v.agent || v.workspaceId}</span>
+                                {v.truncated && <span className={STATE_CHIP}>truncated</span>}
+                                <button
+                                    className={`ml-auto rounded px-1.5 text-xs cursor-pointer transition-colors ${isPicked ? "bg-accent/80 text-primary" : "border border-border hover:bg-accent/20"}`}
+                                    title={`use ${v.agent || v.workspaceId}'s version of this file`}
+                                    onClick={() => model.setContestedSelection(file.path, v.workspaceId)}
+                                >
+                                    {isPicked ? "picked" : "pick"}
+                                </button>
+                            </div>
+                            {v.content == null ? (
+                                <div className="text-secondary text-xs">{v.reason || "no version"}</div>
+                            ) : (
+                                <pre className="text-xs whitespace-pre-wrap break-words font-mono max-h-48 overflow-auto">
+                                    {v.content}
+                                </pre>
+                            )}
                         </div>
-                        {v.content == null ? (
-                            <div className="text-secondary text-xs">{v.reason || "no version"}</div>
-                        ) : (
-                            <pre className="text-xs whitespace-pre-wrap break-words font-mono max-h-48 overflow-auto">
-                                {v.content}
-                            </pre>
-                        )}
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );
@@ -416,7 +441,7 @@ function RecoderFanoutView({ model }: ViewComponentProps<RecoderFanoutViewModel>
                         <div className="flex flex-col gap-1">
                             <div className={FIELD_LABEL}>N-up columns</div>
                             {snapshot.fileVersions.map((f) => (
-                                <FileColumns key={f.path} file={f} />
+                                <FileColumns key={f.path} model={model} file={f} />
                             ))}
                         </div>
                     )}
