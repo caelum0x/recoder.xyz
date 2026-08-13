@@ -15,7 +15,7 @@ vi.mock("./recoder-fanout", () => ({
 }));
 
 import { globalStore } from "@/app/store/global";
-import { RecoderFanoutViewModel, resolveConvergeSelection } from "./recoder-fanout-model";
+import { RecoderFanoutViewModel, cockpitPollDelayMs, resolveConvergeSelection } from "./recoder-fanout-model";
 
 const CockpitUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_cockpit/call";
 const FanoutUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_fanout/call";
@@ -679,6 +679,24 @@ describe("RecoderFanoutViewModel.converge", () => {
         model.openConvergedReview("   ");
 
         expect(createBlockMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("cockpitPollDelayMs (adaptive live cadence)", () => {
+    const settled = { settledCount: 2, totalCount: 2 } as never;
+    const working = { settledCount: 1, totalCount: 2 } as never;
+
+    it("polls FAST (2.5s) while any pane is still working", () => {
+        expect(cockpitPollDelayMs(working, null)).toBe(2500);
+    });
+
+    it("polls NORMAL (6s) once every pane has settled", () => {
+        expect(cockpitPollDelayMs(settled, null)).toBe(6000);
+        expect(cockpitPollDelayMs(null, null)).toBe(6000);
+    });
+
+    it("STOPS (0) once the group has converged — the branch is terminal", () => {
+        expect(cockpitPollDelayMs(working, { workspaceId: "ws-c", branch: "b" })).toBe(0);
     });
 });
 

@@ -13,8 +13,6 @@ import {
     RecoderFanoutViewModel,
 } from "./recoder-fanout-model";
 
-const REFRESH_MS = 6000;
-
 // One crimson accent, reserved for the single load-bearing convergence signal (the merge
 // button + the review affordance) — everything else stays graphite so the strip reads as a
 // terminal, not a stoplight. Both surfaces share the SAME accent (never a second color).
@@ -381,9 +379,25 @@ function RecoderFanoutView({ model }: ViewComponentProps<RecoderFanoutViewModel>
     const connected = useAtomValue(model.connectedAtom);
 
     useEffect(() => {
-        model.loadCockpit();
-        const id = setInterval(() => model.loadCockpit(), REFRESH_MS);
-        return () => clearInterval(id);
+        let cancelled = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const tick = async () => {
+            await model.loadCockpit();
+            if (cancelled) {
+                return;
+            }
+            const delay = model.nextCockpitPollDelay();
+            if (delay > 0) {
+                timer = setTimeout(tick, delay);
+            }
+        };
+        void tick();
+        return () => {
+            cancelled = true;
+            if (timer != null) {
+                clearTimeout(timer);
+            }
+        };
     }, [model]);
 
     const hasGroup = taskGroup.trim() != "";
