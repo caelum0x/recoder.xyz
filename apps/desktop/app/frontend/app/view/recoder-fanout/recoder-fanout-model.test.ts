@@ -787,4 +787,26 @@ describe("RecoderFanoutViewModel contested-file picker", () => {
         model.setContestedSelection("src/pick.ts", "");
         expect(globalStore.get(model.contestedSelectionAtom)).toEqual({});
     });
+
+    it("flows an @assisted (AI-merge) choice through converge as the file's selection", async () => {
+        const model = makeModel();
+        await primeNeedsPick(model);
+
+        model.setContestedSelection("src/pick.ts", "@assisted");
+
+        const composeMock = vi.fn().mockImplementation((url: string) => {
+            if (String(url) == ComposeUrl) {
+                return Promise.resolve(ok({ convergence: { workspaceId: "ws-c", branch: "recoder/converge-ready" } }));
+            }
+            return Promise.resolve(completedSnapshot(needsPickSnapshot()));
+        });
+        vi.stubGlobal("fetch", composeMock);
+
+        await model.converge();
+
+        expect(composeMock).toHaveBeenCalledWith(
+            ComposeUrl,
+            expect.objectContaining({ body: JSON.stringify({ selection: { "src/pick.ts": "@assisted" } }) }),
+        );
+    });
 });

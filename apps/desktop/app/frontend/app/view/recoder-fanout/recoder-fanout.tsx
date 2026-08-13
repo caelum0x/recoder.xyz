@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ASSISTED_VALUE } from "@/app/view/recoder/recoder-converge-logic";
 import { RecoderEmpty, RecoderErrorRow, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
 import { FIELD_LABEL, INPUT, PAGE_TITLE, PRIMARY_BTN, QUIET_BTN_XS, STATE_CHIP } from "@/app/view/recoder/recoder-styles";
 import { useAtomValue } from "jotai";
@@ -105,12 +106,19 @@ function FileColumns({ model, file }: { model: RecoderFanoutViewModel; file: Fil
                 <div className="text-sm font-mono truncate" title={file.path}>
                     {file.path}
                 </div>
+                <button
+                    className={`ml-auto rounded px-1.5 text-xs cursor-pointer transition-colors ${picked === ASSISTED_VALUE ? "bg-accent/80 text-primary" : "border border-border hover:bg-accent/20"}`}
+                    title="merge all versions with a 3-way merge, escalating conflicts to an AI-assisted synthesis"
+                    onClick={() => model.setContestedSelection(file.path, ASSISTED_VALUE)}
+                >
+                    {picked === ASSISTED_VALUE ? "AI-merging" : "AI-merge"}
+                </button>
                 {picked != null && picked != "" && (
                     <button
-                        className={`${STATE_CHIP} ml-auto cursor-pointer`}
+                        className={`${STATE_CHIP} cursor-pointer`}
                         onClick={() => model.setContestedSelection(file.path, "")}
                     >
-                        clear pick
+                        clear
                     </button>
                 )}
             </div>
