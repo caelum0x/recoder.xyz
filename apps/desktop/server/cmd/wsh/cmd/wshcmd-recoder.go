@@ -48,6 +48,7 @@ var (
 	recoderLockHolder    string
 	recoderLockTTL       int
 	recoderPalScope      string
+	recoderCallArgsFlag  string
 )
 
 var recoderCmd = &cobra.Command{
@@ -107,6 +108,28 @@ var recoderToolsCmd = &cobra.Command{
 	RunE:  recoderToolsRun,
 }
 
+var recoderCallCmd = &cobra.Command{
+	Use:   "call <serverId> <toolName> [jsonArgs]",
+	Short: "call any governed capability tool by server and tool name",
+	Long: `Generic escape hatch to invoke any Recoder governed capability tool.
+
+<serverId>  must be one of the known capability servers (see 'wsh recoder tools').
+<toolName>  the tool name as registered on that server.
+[jsonArgs]  optional JSON object of tool arguments; use - to read from stdin.
+
+The --args flag is an alternative to the positional [jsonArgs] argument.
+
+The gate outcome is always surfaced truthfully: allowed results are printed,
+denied calls show the policy reason, needs_approval calls surface the
+approval requirement — never faked as success.`,
+	Example: "  wsh recoder call recoder.memory memory.store '{\"key\":\"foo\",\"value\":\"bar\"}'" + "\n" +
+		"  wsh recoder call recoder.github github.create_pr --args '{\"title\":\"fix\",\"base\":\"main\"}'" + "\n" +
+		"  echo '{\"query\":\"foo\"}' | wsh recoder call recoder.retrieval retrieval.search -",
+	Args:                  cobra.RangeArgs(2, 3),
+	RunE:                  recoderCallRun,
+	DisableFlagsInUseLine: true,
+}
+
 func init() {
 	rootCmd.AddCommand(recoderCmd)
 
@@ -124,6 +147,9 @@ func init() {
 	recoderPalPlanCmd.Flags().StringVar(&recoderPalScope, "scope", "", "optional scope/constraints for the task")
 
 	recoderCmd.AddCommand(recoderToolsCmd)
+
+	recoderCmd.AddCommand(recoderCallCmd)
+	recoderCallCmd.Flags().StringVar(&recoderCallArgsFlag, "args", "", "JSON object of tool arguments (alternative to positional arg)")
 }
 
 func recoderBackendURL() string {
@@ -254,6 +280,27 @@ func recoderFirstNonEmpty(values ...string) string {
 	return ""
 }
 
+func recoderIsKnownServer(serverId string) bool {
+	for _, s := range RecoderKnownServers {
+		if s == serverId {
+			return true
+		}
+	}
+	return false
+}
+
+func recoderParseJSONArgs(jsonStr string) (map[string]interface{}, error) {
+	jsonStr = strings.TrimSpace(jsonStr)
+	if jsonStr == "" || jsonStr == "null" {
+		return nil, nil
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		return nil, fmt.Errorf("invalid JSON args: %w", err)
+	}
+	return result, nil
+}
+
 func recoderRetrievalSearchRun(cmd *cobra.Command, args []string) (rtnErr error) {
 	defer func() {
 		sendActivity("recoder:retrieval:search", rtnErr == nil)
@@ -313,6 +360,47 @@ func recoderPalPlanRun(cmd *cobra.Command, args []string) (rtnErr error) {
 		toolArgs["scope"] = recoderPalScope
 	}
 	result, err := recoderCallTool("recoder.pal-plan", "pal.plan", toolArgs)
+	if err != nil {
+		return err
+	}
+	recoderPrintResult(result)
+	return nil
+}
+
+func recoderCallRun(cmd *cobra.Command, args []string) (rtnErr error) {
+	defer func() {
+		sendActivity("recoder:call", rtnErr == nil)
+	}()
+	serverId := args[0]
+	toolName := strings.TrimSpace(args[1])
+	if !recoderIsKnownServer(serverId) {
+		return fmt.Errorf("unknown server %q; run 'wsh recoder tools' to see known capability servers", serverId)
+	}
+	if toolName == "" {
+		OutputHelpMessage(cmd)
+		return fmt.Errorf("toolName is required")
+	}
+	var rawJSON string
+	if len(args) == 3 {
+		rawJSON = args[2]
+	} else if recoderCallArgsFlag != "" {
+		rawJSON = recoderCallArgsFlag
+	}
+	if rawJSON == "-" {
+		stdinBytes, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("reading stdin: %w", err)
+		}
+		rawJSON = strings.TrimSpace(string(stdinBytes))
+	}
+	toolArgs, err := recoderParseJSONArgs(rawJSON)
+	if err != nil {
+		return err
+	}
+	if toolArgs == nil {
+		toolArgs = map[string]interface{}{}
+	}
+	result, err := recoderCallTool(serverId, toolName, toolArgs)
 	if err != nil {
 		return err
 	}
