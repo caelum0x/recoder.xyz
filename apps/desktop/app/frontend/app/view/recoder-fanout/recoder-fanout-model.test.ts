@@ -3,9 +3,11 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+const { createBlockMock } = vi.hoisted(() => ({ createBlockMock: vi.fn().mockResolvedValue("blk-1") }));
+
 vi.mock("@/app/store/global", async () => {
     const { createStore } = await import("jotai");
-    return { globalStore: createStore() };
+    return { globalStore: createStore(), createBlock: createBlockMock };
 });
 
 vi.mock("./recoder-fanout", () => ({
@@ -18,6 +20,7 @@ import { RecoderFanoutViewModel } from "./recoder-fanout-model";
 const CockpitUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_cockpit/call";
 const FanoutUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_fanout/call";
 const ReFanUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_refan/call";
+const ComposeUrl = "http://127.0.0.1:3100/api/conductor/workspaces/compare/grp-ready/converge";
 
 function makeModel(): RecoderFanoutViewModel {
     return new RecoderFanoutViewModel({ blockId: "b1" } as ViewModelInitType);
@@ -521,5 +524,160 @@ describe("RecoderFanoutViewModel.reFan", () => {
 
         expect(fetchMock).not.toHaveBeenCalled();
         expect(globalStore.get(model.refanNoticeAtom)).toContain("at least 2");
+    });
+});
+
+describe("RecoderFanoutViewModel.converge", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        createBlockMock.mockClear();
+    });
+
+    // A convergeReady snapshot for the pinned group `grp-ready`, carrying one
+    // synthesizable contested path so the compose selection is asserted end-to-end.
+    function readySnapshot(convergeReady: boolean) {
+        return {
+            taskGroup: "grp-ready",
+            agents: [
+                { workspaceId: "ws1", kind: "claude", state: "review_ready", settled: true, nativeStatus: true },
+                { workspaceId: "ws2", kind: "codex", state: "review_ready", settled: true, nativeStatus: true },
+            ],
+            settledCount: 2,
+            totalCount: 2,
+            contested: [{ path: "src/a.ts", agents: ["ws1", "ws2"], synthesizable: true }],
+            autoMergeableCount: 1,
+            needsPickCount: 0,
+            cleanCount: 3,
+            fileVersions: [],
+            convergeReady,
+            summaryLine: "2/2 settled · 1 auto-mergeable · 0 needs a pick",
+            degraded: false,
+        };
+    }
+
+    // The compose edge envelope: `{ data: { convergence: { workspaceId, branch } } }`.
+    function composeOk(convergence: unknown) {
+        return ok({ convergence });
+    }
+
+    // Pin `grp-ready` + load a cockpit snapshot (ready or not) so converge() has state.
+    async function primeReady(model: RecoderFanoutViewModel, fetchMock: ReturnType<typeof vi.fn>) {
+        vi.stubGlobal("fetch", fetchMock);
+        model.setTaskGroup("grp-ready");
+        await model.loadCockpit();
+    }
+
+    function composeCalls(fetchMock: ReturnType<typeof vi.fn>) {
+        return fetchMock.mock.calls.filter((c) => String(c[0]) == ComposeUrl);
+    }
+
+    it("posts the compose edge for the pinned group with a synthesize selection, then pins the converged branch", async () => {
+        const fetchMock = vi.fn().mockImplementation((url: string) => {
+            if (String(url) == ComposeUrl) {
+                return Promise.resolve(composeOk({ workspaceId: "ws-converged", branch: "recoder/converge-ready" }));
+            }
+            return Promise.resolve(completedSnapshot(readySnapshot(true)));
+        });
+
+        const model = makeModel();
+        await primeReady(model, fetchMock);
+        await model.converge();
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            ComposeUrl,
+            expect.objectContaining({
+                method: "POST",
+                body: JSON.stringify({ selection: { "src/a.ts": "@synthesize" } }),
+            })
+        );
+        expect(globalStore.get(model.convergedAtom)).toEqual({
+            workspaceId: "ws-converged",
+            branch: "recoder/converge-ready",
+        });
+        expect(globalStore.get(model.convergeNoticeAtom)).toBe("");
+        expect(globalStore.get(model.convergingAtom)).toBe(false);
+    });
+
+    it("surfaces a backend refusal verbatim and never fabricates a branch", async () => {
+        const reason = "converge conflict: src/a.ts needs a pick";
+        const fetchMock = vi.fn().mockImplementation((url: string) => {
+            if (String(url) == ComposeUrl) {
+                return Promise.resolve({
+                    ok: false,
+                    status: 409,
+                    json: async () => ({ error: { message: reason } }),
+                });
+            }
+            return Promise.resolve(completedSnapshot(readySnapshot(true)));
+        });
+
+        const model = makeModel();
+        await primeReady(model, fetchMock);
+        await model.converge();
+
+        expect(composeCalls(fetchMock)).toHaveLength(1);
+        expect(globalStore.get(model.convergedAtom)).toBeNull();
+        expect(globalStore.get(model.convergeNoticeAtom)).toBe(reason);
+        expect(globalStore.get(model.convergingAtom)).toBe(false);
+    });
+
+    it("degrades truthfully on a transport failure without fabricating a branch", async () => {
+        const fetchMock = vi.fn().mockImplementation((url: string) => {
+            if (String(url) == ComposeUrl) {
+                return Promise.reject(new Error("ECONNREFUSED"));
+            }
+            return Promise.resolve(completedSnapshot(readySnapshot(true)));
+        });
+
+        const model = makeModel();
+        await primeReady(model, fetchMock);
+        await model.converge();
+
+        expect(composeCalls(fetchMock)).toHaveLength(1);
+        expect(globalStore.get(model.convergedAtom)).toBeNull();
+        expect(globalStore.get(model.convergeNoticeAtom)).toContain("Converge unavailable");
+    });
+
+    it("is a no-op when the snapshot is not convergeReady", async () => {
+        const fetchMock = vi.fn().mockResolvedValue(completedSnapshot(readySnapshot(false)));
+
+        const model = makeModel();
+        await primeReady(model, fetchMock);
+        await model.converge();
+
+        expect(composeCalls(fetchMock)).toHaveLength(0);
+        expect(globalStore.get(model.convergedAtom)).toBeNull();
+    });
+
+    it("is a no-op the second time — an already-converged group composes only once", async () => {
+        const fetchMock = vi.fn().mockImplementation((url: string) => {
+            if (String(url) == ComposeUrl) {
+                return Promise.resolve(composeOk({ workspaceId: "ws-converged", branch: "recoder/converge-ready" }));
+            }
+            return Promise.resolve(completedSnapshot(readySnapshot(true)));
+        });
+
+        const model = makeModel();
+        await primeReady(model, fetchMock);
+        await model.converge();
+        await model.converge();
+
+        expect(composeCalls(fetchMock)).toHaveLength(1);
+    });
+
+    it("openConvergedReview opens the recoder-diff review surface for the workspace id", () => {
+        const model = makeModel();
+        model.openConvergedReview("ws-converged");
+
+        expect(createBlockMock).toHaveBeenCalledWith({
+            meta: { view: "recoder-diff", "recoder:workspaceid": "ws-converged" },
+        });
+    });
+
+    it("openConvergedReview opens nothing for an empty id", () => {
+        const model = makeModel();
+        model.openConvergedReview("   ");
+
+        expect(createBlockMock).not.toHaveBeenCalled();
     });
 });

@@ -14,15 +14,21 @@ import {
 
 const REFRESH_MS = 6000;
 
-// One crimson accent, reserved for the single load-bearing "ready to converge" signal;
-// everything else stays graphite so the strip reads as a terminal, not a stoplight.
-const CRIMSON_CHIP = "rounded border border-red-500/40 bg-red-500/10 text-red-300 px-1.5 py-0.5 text-xs whitespace-nowrap";
+// One crimson accent, reserved for the single load-bearing convergence signal (the merge
+// button + the review affordance) — everything else stays graphite so the strip reads as a
+// terminal, not a stoplight. Both surfaces share the SAME accent (never a second color).
+const CRIMSON_BTN =
+    "rounded border border-red-500/40 bg-red-500/10 text-red-300 px-2 py-0.5 text-xs whitespace-nowrap hover:bg-red-500/20 transition-colors cursor-pointer disabled:opacity-60";
 
 function SettleStrip({ model }: { model: RecoderFanoutViewModel }) {
     const snapshot = useAtomValue(model.snapshotAtom);
+    const converging = useAtomValue(model.convergingAtom);
+    const converged = useAtomValue(model.convergedAtom);
+    const convergeNotice = useAtomValue(model.convergeNoticeAtom);
     if (snapshot == null) {
         return null;
     }
+    const canConverge = snapshot.convergeReady && converged == null;
     return (
         <div className="flex flex-wrap items-center gap-2">
             <span className={STATE_CHIP}>
@@ -32,7 +38,21 @@ function SettleStrip({ model }: { model: RecoderFanoutViewModel }) {
             <span className={STATE_CHIP}>{snapshot.autoMergeableCount} auto-mergeable</span>
             <span className={STATE_CHIP}>{snapshot.needsPickCount} needs a pick</span>
             <span className={STATE_CHIP}>{snapshot.cleanCount} clean</span>
-            {snapshot.convergeReady && <span className={CRIMSON_CHIP}>ready to converge</span>}
+            {canConverge && (
+                <button disabled={converging} className={CRIMSON_BTN} onClick={() => model.converge()}>
+                    {converging ? "Converging…" : "Converge"}
+                </button>
+            )}
+            {converged != null && (
+                <button
+                    className={CRIMSON_BTN}
+                    title={converged.workspaceId}
+                    onClick={() => model.openConvergedReview(converged.workspaceId)}
+                >
+                    Review converged branch{converged.branch != "" ? ` → ${converged.branch}` : ""}
+                </button>
+            )}
+            {convergeNotice != "" && <span className="text-secondary text-xs">{convergeNotice}</span>}
         </div>
     );
 }
@@ -178,9 +198,13 @@ function LaunchForm({ model }: { model: RecoderFanoutViewModel }) {
                             group {result.taskGroup}
                         </span>
                         {result.converged != null ? (
-                            <span className={CRIMSON_CHIP} title={result.converged.workspaceId}>
-                                converged → {result.converged.branch}
-                            </span>
+                            <button
+                                className={CRIMSON_BTN}
+                                title={result.converged.workspaceId}
+                                onClick={() => model.openConvergedReview(result.converged.workspaceId)}
+                            >
+                                Review converged branch → {result.converged.branch}
+                            </button>
                         ) : (
                             <span className={STATE_CHIP}>{result.convergeReason || "nothing converged"}</span>
                         )}
@@ -275,9 +299,13 @@ function ReFanForm({ model }: { model: RecoderFanoutViewModel }) {
                             </span>
                         )}
                         {result.converged != null ? (
-                            <span className={CRIMSON_CHIP} title={result.converged.workspaceId}>
-                                converged → {result.converged.branch}
-                            </span>
+                            <button
+                                className={CRIMSON_BTN}
+                                title={result.converged.workspaceId}
+                                onClick={() => model.openConvergedReview(result.converged.workspaceId)}
+                            >
+                                Review converged branch → {result.converged.branch}
+                            </button>
                         ) : (
                             <span className={STATE_CHIP}>{result.convergeReason || "nothing converged"}</span>
                         )}
