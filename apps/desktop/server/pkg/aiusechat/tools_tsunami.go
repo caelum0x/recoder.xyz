@@ -45,38 +45,69 @@ func handleTsunamiBlockDesc(block *waveobj.Block) string {
 	return "tsunami widget - unknown description"
 }
 
+// tsunamiGetJSON GETs apiPath from the running tsunami app HTTP server and decodes
+// the JSON body. Shared by every read tool so the fetch/timeout/error handling lives
+// in one place.
+func tsunamiGetJSON(status *blockcontroller.BlockControllerRuntimeStatus, apiPath string) (any, error) {
+	if status.TsunamiPort == 0 {
+		return nil, fmt.Errorf("tsunami port not available")
+	}
+
+	url := fmt.Sprintf("http://localhost:%d%s", status.TsunamiPort, apiPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request to tsunami: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("tsunami returned status %d", resp.StatusCode)
+	}
+
+	var result any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode tsunami response: %w", err)
+	}
+
+	return result, nil
+}
+
 func makeTsunamiGetCallback(status *blockcontroller.BlockControllerRuntimeStatus, apiPath string) func(any, *uctypes.UIMessageDataToolUse) (any, error) {
 	return func(input any, toolUseData *uctypes.UIMessageDataToolUse) (any, error) {
-		if status.TsunamiPort == 0 {
-			return nil, fmt.Errorf("tsunami port not available")
-		}
+		return tsunamiGetJSON(status, apiPath)
+	}
+}
 
-		url := fmt.Sprintf("http://localhost:%d%s", status.TsunamiPort, apiPath)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+// makeTsunamiGetDataCallback returns the widget's live data ALONGSIDE its generated
+// data schema (field descriptions, units like `ms`/`GiB`, enums) so the agent reasons
+// over documented fields instead of guessing from bare JSON keys. The schema is
+// best-effort context: if it cannot be fetched the data is still returned — semantics
+// are auxiliary, never a gate on the read (and never faked when absent).
+func makeTsunamiGetDataCallback(status *blockcontroller.BlockControllerRuntimeStatus) func(any, *uctypes.UIMessageDataToolUse) (any, error) {
+	return func(input any, toolUseData *uctypes.UIMessageDataToolUse) (any, error) {
+		data, err := tsunamiGetJSON(status, "/api/data")
 		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
+			return nil, err
 		}
 
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to make request to tsunami: %w", err)
+		out := map[string]any{"data": data}
+		if schemas, err := tsunamiGetJSON(status, "/api/schemas"); err == nil {
+			if m, ok := schemas.(map[string]any); ok {
+				if dataSchema, ok := m["data"]; ok {
+					out["schema"] = dataSchema
+				}
+			}
 		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("tsunami returned status %d", resp.StatusCode)
-		}
-
-		var result any
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return nil, fmt.Errorf("failed to decode tsunami response: %w", err)
-		}
-
-		return result, nil
+		return out, nil
 	}
 }
 
@@ -141,7 +172,7 @@ func GetTsunamiGetDataToolDefinition(block *waveobj.Block, rtInfo *waveobj.ObjRT
 		ToolCallDesc: func(input any, output any, toolUseData *uctypes.UIMessageDataToolUse) string {
 			return fmt.Sprintf("getting data from %s (%s)", desc, blockIdPrefix)
 		},
-		ToolAnyCallback: makeTsunamiGetCallback(status, "/api/data"),
+		ToolAnyCallback: makeTsunamiGetDataCallback(status),
 	}
 }
 
