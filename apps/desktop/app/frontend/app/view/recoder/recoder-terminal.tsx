@@ -296,6 +296,7 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
     const boundSummary = workspaces.find((w) => w.workspaceId == workspaceId) ?? null;
     const detailIdentity = {
         branch: boundSummary?.branch ?? "",
+        repo: boundSummary?.projectId,
         agent: boundSummary?.runtimeId ? agentLabel(boundSummary.runtimeId) : undefined,
         stateChip: { label: statusText(status), tone: statusTone(status) },
     };

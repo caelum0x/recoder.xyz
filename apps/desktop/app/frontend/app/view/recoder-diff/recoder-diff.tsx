@@ -853,6 +853,7 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     const selectedWorkspace = workspaces.find((w) => w.workspaceId == selectedId) ?? null;
     const detailIdentity = {
         branch: selectedWorkspace?.branch ?? "",
+        repo: selectedWorkspace?.projectId,
         agent: selectedWorkspace?.runtimeId ? agentLabel(selectedWorkspace.runtimeId) : undefined,
         stateChip:
             selectedWorkspace != null && selectedWorkspace.state != ""

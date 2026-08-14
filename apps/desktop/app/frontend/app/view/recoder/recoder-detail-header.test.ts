@@ -4,12 +4,23 @@
 import { describe, expect, it } from "vitest";
 import {
     detailSegments,
+    detailRepoLabel,
     segmentTitle,
     shouldShowSwitcher,
     workspaceOptionLabel,
     type RecoderDetailFace,
     type RecoderDetailSegmentVM,
 } from "./recoder-detail-header";
+
+describe("detailRepoLabel", () => {
+    it("renders a concrete project identity and hides blank/default values", () => {
+        expect(detailRepoLabel("acme-api")).toBe("acme-api");
+        expect(detailRepoLabel("  acme-api  ")).toBe("acme-api");
+        expect(detailRepoLabel("default")).toBeNull();
+        expect(detailRepoLabel("   ")).toBeNull();
+        expect(detailRepoLabel()).toBeNull();
+    });
+});
 
 function byId(segments: RecoderDetailSegmentVM[], id: string): RecoderDetailSegmentVM {
     const seg = segments.find((s) => s.id == id);

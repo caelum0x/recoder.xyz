@@ -27,6 +27,7 @@ type TerminalWorkspaceSummary = {
     branch: string;
     state: string;
     runtimeId: string;
+    projectId?: string;
     sessionName?: string;
     worktreePath?: string;
 };
