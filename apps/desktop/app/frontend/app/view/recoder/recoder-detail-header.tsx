@@ -4,6 +4,7 @@
 import { cn } from "@/util/util";
 import type { ReactNode } from "react";
 import { PAGE_TITLE } from "./recoder-styles";
+import { DEFAULT_PROJECT_ID } from "./recoder-board-logic";
 
 // One workspace-detail has three faces the operator moves between: the live
 // Session (recoder-terminal), the Review diff (recoder-diff), and the raw
@@ -22,9 +23,15 @@ type RecoderStateChip = { label: string; tone: RecoderStateTone };
 // from the same list edge). Absent fields simply don't render — never faked.
 type RecoderDetailIdentity = {
     branch: string;
+    repo?: string;
     agent?: string;
     stateChip?: RecoderStateChip;
 };
+
+function detailRepoLabel(repo?: string): string | null {
+    const value = repo?.trim();
+    return value != null && value != "" && value != DEFAULT_PROJECT_ID ? value : null;
+}
 
 type RecoderDetailOption = { id: string; label: string };
 type RecoderDetailSwitcher = {
@@ -147,6 +154,7 @@ function RecoderDetailHeader({
     const segments = detailSegments(view, hasWorkspace, onOpenTerminal != null);
     const showSwitcher = switcher != null && shouldShowSwitcher(switcher.options);
     const branchLabel = identity.branch.trim() != "" ? identity.branch : hasWorkspace ? workspaceId : "No workspace";
+    const repoLabel = detailRepoLabel(identity.repo);
 
     const onSegment = (seg: RecoderDetailSegmentVM) => {
         if (!seg.enabled) {
@@ -161,6 +169,11 @@ function RecoderDetailHeader({
 
     return (
         <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border shrink-0">
+            {repoLabel != null && (
+                <span className="text-xs text-secondary truncate shrink-0" title={repoLabel}>
+                    {repoLabel}
+                </span>
+            )}
             <span className={cn(PAGE_TITLE, "truncate")} title={hasWorkspace ? workspaceId : undefined}>
                 {branchLabel}
             </span>
@@ -219,6 +232,7 @@ RecoderDetailHeader.displayName = "RecoderDetailHeader";
 
 export {
     detailSegments,
+    detailRepoLabel,
     RecoderDetailHeader,
     segmentTitle,
     shouldShowSwitcher,

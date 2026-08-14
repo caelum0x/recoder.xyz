@@ -22,6 +22,7 @@ type RecoderWorkspace = {
     branch: string;
     state: string;
     runtimeId: string;
+    projectId?: string;
     taskId?: string;
     runId?: string;
     // Ride on the same conductor Workspace record the list edge returns; they let
