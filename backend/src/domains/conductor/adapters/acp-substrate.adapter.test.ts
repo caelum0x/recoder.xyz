@@ -11,6 +11,9 @@
  * worktree git; teardown stops the agent + removes the worktree.
  */
 import { describe, it, expect, vi } from 'vitest';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   createAcpSubstrate,
   extractUpdateText,
@@ -192,7 +195,7 @@ describe('createAcpSubstrate', () => {
     await expect(s.launch(launchInput)).rejects.toThrow(/unavailable/);
   });
 
-  it('launch adds a worktree, handshakes, and streams session/update into capture', async () => {
+  it('launch checks out an existing branch as-is, handshakes, and streams session/update into capture', async () => {
     const git = fakeGit();
     const s = createAcpSubstrate(
       baseDeps({
@@ -204,17 +207,54 @@ describe('createAcpSubstrate', () => {
 
     expect(handle.ref).toBe('ws-1');
     expect(handle.worktreePath).toContain('/tmp/wt');
-    // git worktree add ran against the repo with the branch + baseRef.
+    // An existing branch is checked out unchanged: never `-B` force-reset and no
+    // base ref that could reset it.
     const worktreeAdd = git.calls.find(
       c => c.includes('worktree') && c.includes('add')
     );
     expect(worktreeAdd).toBeDefined();
-    expect(worktreeAdd).toContain('-B');
-    expect(worktreeAdd).toContain('recoder/ws-1');
+    expect(worktreeAdd).toEqual([
+      'git',
+      '-C',
+      '/repo',
+      'worktree',
+      'add',
+      '/tmp/wt/recoder-ws-1',
+      'recoder/ws-1',
+    ]);
+    expect(worktreeAdd).not.toContain('-B');
+    expect(worktreeAdd).not.toContain('-b');
 
     await flush(); // let the background prompt + streamed update settle
     const out = await s.capture(handle);
     expect(out).toContain('hello from acp');
+  });
+
+  it('launch creates a fresh branch with -b when the branch is absent (never -B)', async () => {
+    const git = fakeGit();
+    const exec: ExecFn = async (bin, args, options) => {
+      if (args.includes('show-ref')) throw new Error('branch absent');
+      return git.exec(bin, args, options);
+    };
+    const s = createAcpSubstrate(baseDeps({ exec }));
+
+    await s.launch({ ...launchInput, branch: 'recoder/new', baseRef: 'main' });
+
+    const worktreeAdd = git.calls.find(
+      c => c.includes('worktree') && c.includes('add')
+    );
+    expect(worktreeAdd).toEqual([
+      'git',
+      '-C',
+      '/repo',
+      'worktree',
+      'add',
+      '-b',
+      'recoder/new',
+      '/tmp/wt/recoder-ws-1',
+      'main',
+    ]);
+    expect(worktreeAdd).not.toContain('-B');
   });
 
   it('appends a STRUCTURED marker to capture for a tool_call session/update', async () => {
@@ -316,6 +356,18 @@ describe('createAcpSubstrate', () => {
     expect(remove).toContain('--force');
     // handle is forgotten → capture is null afterward.
     expect(await s.capture(handle)).toBeNull();
+  });
+
+  it('teardown after restart never recursively removes an unverifiable directory', async () => {
+    const userDir = mkdtempSync(join(tmpdir(), 'recoder-acp-not-a-worktree-'));
+    try {
+      const s = createAcpSubstrate(baseDeps({ exists: existsSync }));
+      await s.teardown({ ref: 'ws-restarted', worktreePath: userDir });
+
+      expect(existsSync(userDir)).toBe(true);
+    } finally {
+      rmSync(userDir, { recursive: true, force: true });
+    }
   });
 
   it('continueRun reuses the session for another turn', async () => {

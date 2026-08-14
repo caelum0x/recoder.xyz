@@ -44,6 +44,12 @@
  * to the worktree: permissions use the worktree-isolation policy by default (or an
  * injected `resolvePermission` gate bridge), and fs reads/writes are path-CONTAINED
  * to that worktree — the isolation boundary is enforced, never trusted.
+ *
+ * Git-hygiene safety mirrors the tmux substrate: launch never uses `git worktree
+ * add -B`, because it force-resets an existing branch and can silently lose
+ * commits. A pre-existing branch is checked out as-is; only an absent branch is
+ * created with `-b`. The post-restart directory-removal fallback is likewise
+ * gated on proving that the path is a real git worktree checkout.
  */
 import path from 'node:path';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -226,6 +232,57 @@ export function createAcpSubstrate(
   const exists: (path: string) => boolean = deps.exists ?? existsSync;
   const cancelGraceMs = deps.cancelGraceMs ?? 2000;
   const isSecretEnvKey = deps.isSecretEnvKey ?? isSecretAgentEnvKey;
+
+  /** A failed probe creates with `-b`, which fails loudly if the branch exists. */
+  async function branchExists(repo: string, branch: string): Promise<boolean> {
+    try {
+      await exec('git', [
+        '-C',
+        repo,
+        'show-ref',
+        '--verify',
+        '--quiet',
+        `refs/heads/${branch}`,
+      ]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Prove a path is a linked git worktree before recursive fallback removal. */
+  async function isRepoWorktreeCheckout(wtPath: string): Promise<boolean> {
+    let pointer: string;
+    try {
+      pointer = readFileSync(path.join(wtPath, '.git'), 'utf8');
+    } catch {
+      return false;
+    }
+    const gitdirLine = pointer
+      .split('\n')
+      .map(line => line.trim())
+      .find(line => line.startsWith('gitdir:'));
+    if (!gitdirLine) return false;
+    const gitdirRaw = gitdirLine.slice('gitdir:'.length).trim();
+    if (!gitdirRaw) return false;
+    const gitdir = path.resolve(wtPath, gitdirRaw);
+    let commonDir: string;
+    try {
+      const { stdout } = await exec('git', [
+        '-C',
+        wtPath,
+        'rev-parse',
+        '--git-common-dir',
+      ]);
+      const trimmed = stdout.trim();
+      if (!trimmed) return false;
+      commonDir = path.resolve(wtPath, trimmed);
+    } catch {
+      return false;
+    }
+    const worktreesAdmin = path.join(commonDir, 'worktrees') + path.sep;
+    return (gitdir + path.sep).startsWith(worktreesAdmin);
+  }
 
   /**
    * The env handed to the agent subprocess: the base env (injected or `process.env`)
@@ -524,18 +581,21 @@ export function createAcpSubstrate(
       const name = tmuxNameFor(input.workspaceId);
       const worktreePath = path.join(worktreeRoot, name);
 
-      // Isolated worktree on its own branch — same as tmux, so parallel agents
-      // (ACP or PTY) never collide.
-      await exec('git', [
-        '-C',
-        input.repoPath,
-        'worktree',
-        'add',
-        '-B',
-        branch,
-        worktreePath,
-        input.baseRef || 'HEAD',
-      ]);
+      // NEVER `-B`: it force-resets an existing branch to base and silently drops
+      // its commits. Check out a known branch unchanged; only create a fresh one.
+      const worktreeAddArgs = (await branchExists(input.repoPath, branch))
+        ? ['-C', input.repoPath, 'worktree', 'add', worktreePath, branch]
+        : [
+            '-C',
+            input.repoPath,
+            'worktree',
+            'add',
+            '-b',
+            branch,
+            worktreePath,
+            input.baseRef || 'HEAD',
+          ];
+      await exec('git', worktreeAddArgs);
 
       // Persist a NON-default binary so reattach re-spawns the same agent after a
       // restart (the default needs no marker — reattach falls back to it).
@@ -774,7 +834,7 @@ export function createAcpSubstrate(
           err: message(err),
         });
       }
-    } else if (exists(wtPath)) {
+    } else if (exists(wtPath) && (await isRepoWorktreeCheckout(wtPath))) {
       try {
         rmSync(wtPath, { recursive: true, force: true });
       } catch {
