@@ -5,6 +5,7 @@ import { createBlock, globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
+import { fetchPreviewVerification } from "../recoder-diff/recoder-evidence-logic";
 import { readErrorReason } from "../recoder/recoder-errors";
 import {
     correlateRunToWorkspace,
@@ -53,6 +54,11 @@ type RecoderRunEvent = {
 //   ready          — events loaded
 type SelectedRunStatus = "idle" | "loading" | "not-correlated" | "not-connected" | "empty" | "ready";
 
+// The compact verdict shown on a correlated run card. `unavailable` is distinct
+// from `failed`: the preview read could not prove either result. Uncorrelated
+// runs are absent from the map entirely, so they do not claim a verdict.
+type PreviewVerificationRunStatus = "passed" | "failed" | "degraded" | "not-verified" | "unavailable";
+
 // Show the most recent events first, capped so the stream stays readable.
 const MaxEvents = 40;
 
@@ -74,6 +80,7 @@ class RecoderRunsViewModel implements ViewModel {
     // each row knows whether it can open a Session/Review and drill into events.
     workspacesAtom: PrimitiveAtom<WorkspaceCorrelation[]>;
     correlationAtom: PrimitiveAtom<Map<string, string>>;
+    previewStatusAtom: PrimitiveAtom<Map<string, PreviewVerificationRunStatus>>;
     // Reconciler drift findings + a truthful missing-source flag: "unavailable"
     // means the findings read failed, which is NOT the same as a clean [].
     findingsAtom: PrimitiveAtom<RunsDriftFinding[]>;
@@ -95,6 +102,7 @@ class RecoderRunsViewModel implements ViewModel {
         this.connectedAtom = atom(false) as PrimitiveAtom<boolean>;
         this.workspacesAtom = atom([]) as PrimitiveAtom<WorkspaceCorrelation[]>;
         this.correlationAtom = atom(new Map()) as PrimitiveAtom<Map<string, string>>;
+        this.previewStatusAtom = atom(new Map()) as PrimitiveAtom<Map<string, PreviewVerificationRunStatus>>;
         this.findingsAtom = atom([]) as PrimitiveAtom<RunsDriftFinding[]>;
         this.findingsStatusAtom = atom("ok") as PrimitiveAtom<"ok" | "unavailable">;
         this.selectedRunIdAtom = atom("") as PrimitiveAtom<string>;
@@ -123,12 +131,17 @@ class RecoderRunsViewModel implements ViewModel {
             ]);
             globalStore.set(this.runsAtom, runs);
             globalStore.set(this.eventsAtom, events);
+            const correlation = correlateRuns(runs, workspaces);
             globalStore.set(this.workspacesAtom, workspaces);
-            globalStore.set(this.correlationAtom, correlateRuns(runs, workspaces));
+            globalStore.set(this.correlationAtom, correlation);
+            globalStore.set(this.previewStatusAtom, new Map());
             globalStore.set(this.findingsAtom, findings ?? []);
             globalStore.set(this.findingsStatusAtom, findings == null ? "unavailable" : "ok");
             globalStore.set(this.connectedAtom, true);
             RecoderConnectionModel.getInstance().noteRefresh(true);
+            // Preview status is an optional read per workspace. Never hold the
+            // primary runs list hostage to a slow or unavailable verifier.
+            void this.refreshPreviewStatuses(correlation);
             await this.refreshSelectedEvents();
         } catch (e) {
             globalStore.set(this.connectedAtom, false);
@@ -137,6 +150,7 @@ class RecoderRunsViewModel implements ViewModel {
             globalStore.set(this.eventsAtom, []);
             globalStore.set(this.workspacesAtom, []);
             globalStore.set(this.correlationAtom, new Map());
+            globalStore.set(this.previewStatusAtom, new Map());
             globalStore.set(this.findingsAtom, []);
             globalStore.set(this.findingsStatusAtom, "unavailable");
             globalStore.set(this.errorAtom, e instanceof Error ? e.message : String(e));
@@ -174,6 +188,51 @@ class RecoderRunsViewModel implements ViewModel {
         } catch {
             return null;
         }
+    }
+
+    // Reads each correlated workspace once, even when a legacy correlation makes
+    // several runs point at it. The endpoint helper never throws, so an unavailable
+    // preview cannot take down the run list or masquerade as a failed verification.
+    async fetchPreviewStatuses(
+        correlation: ReadonlyMap<string, string>,
+    ): Promise<Map<string, PreviewVerificationRunStatus>> {
+        const byWorkspace = new Map<string, Promise<PreviewVerificationRunStatus>>();
+        for (const workspaceId of correlation.values()) {
+            if (!byWorkspace.has(workspaceId)) {
+                byWorkspace.set(workspaceId, this.fetchPreviewStatus(workspaceId));
+            }
+        }
+        await Promise.all(byWorkspace.values());
+        const statuses = new Map<string, PreviewVerificationRunStatus>();
+        for (const [runId, workspaceId] of correlation) {
+            statuses.set(runId, await byWorkspace.get(workspaceId)!);
+        }
+        return statuses;
+    }
+
+    // Do not let an older refresh overwrite the cards after a newer correlation
+    // has arrived. Map identity is deliberate: each refresh creates one fresh
+    // correlation map before starting this optional asynchronous read.
+    async refreshPreviewStatuses(correlation: ReadonlyMap<string, string>): Promise<void> {
+        const statuses = await this.fetchPreviewStatuses(correlation);
+        if (globalStore.get(this.correlationAtom) !== correlation) {
+            return;
+        }
+        globalStore.set(this.previewStatusAtom, statuses);
+    }
+
+    async fetchPreviewStatus(workspaceId: string): Promise<PreviewVerificationRunStatus> {
+        const result = await fetchPreviewVerification(workspaceId);
+        if (!result.ok || result.view == null) {
+            return result.reason == "not-verified" ? "not-verified" : "unavailable";
+        }
+        if (result.view.degraded) {
+            return "degraded";
+        }
+        if (result.view.status == "passed" || result.view.status == "failed") {
+            return result.view.status;
+        }
+        return "unavailable";
     }
 
     // Look up the workspace a run belongs to from the live workspaces list. Returns
@@ -296,4 +355,10 @@ class RecoderRunsViewModel implements ViewModel {
     }
 }
 
-export { RecoderRunsViewModel, type RecoderRun, type RecoderRunEvent, type SelectedRunStatus };
+export {
+    RecoderRunsViewModel,
+    type PreviewVerificationRunStatus,
+    type RecoderRun,
+    type RecoderRunEvent,
+    type SelectedRunStatus,
+};

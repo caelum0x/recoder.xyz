@@ -93,6 +93,36 @@ function eventsFetch(byWorkspace: Record<string, () => Promise<unknown>>) {
     });
 }
 
+function refreshFetch(previews: Record<string, unknown>) {
+    return vi.fn().mockImplementation((url: string) => {
+        const path = String(url);
+        if (path.endsWith("/api/agent-os/runs")) {
+            return okJson([run({ runId: "r1" }), run({ runId: "r2" })]);
+        }
+        if (path.endsWith("/api/agent-os/events")) {
+            return okJson([]);
+        }
+        if (path.endsWith("/api/conductor/workspaces")) {
+            return okJson({ workspaces: [workspace({ workspaceId: "w1", runId: "r1" }), workspace({ workspaceId: "w2", runId: "r2" })] });
+        }
+        if (path.endsWith("/api/conductor/reconcile/findings")) {
+            return okJson([]);
+        }
+        const preview = path.match(/\/api\/conductor\/workspaces\/([^/]+)\/preview-verification$/);
+        if (preview) {
+            const value = previews[decodeURIComponent(preview[1])];
+            if (value == null) {
+                return Promise.resolve({ ok: false, status: 404, json: async () => ({ message: "preview not verified" }) });
+            }
+            if (value instanceof Error) {
+                return Promise.reject(value);
+            }
+            return okJson({ verification: value });
+        }
+        return okJson([]);
+    });
+}
+
 afterEach(() => {
     vi.unstubAllGlobals();
 });
@@ -114,6 +144,42 @@ describe("RecoderRunsViewModel.workspaceIdForRun", () => {
         const model = makeModel();
         seed(model, [run({ runId: "r1", taskId: "t9", spaceId: "s9" })], [workspace({ runId: "rX" })]);
         expect(model.workspaceIdForRun("r1")).toBe("");
+    });
+});
+
+describe("RecoderRunsViewModel preview verification", () => {
+    it("projects the per-workspace verdict onto each correlated run without duplicating workspace reads", async () => {
+        const fetchMock = refreshFetch({
+            w1: { status: "passed", degraded: false },
+            w2: { status: "failed", degraded: true },
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        const model = makeModel();
+
+        const statuses = await model.fetchPreviewStatuses(new Map([["r1", "w1"], ["r2", "w2"], ["r3", "w2"]]));
+
+        expect(statuses).toEqual(new Map([
+            ["r1", "passed"],
+            ["r2", "degraded"],
+            ["r3", "degraded"],
+        ]));
+        expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/preview-verification"))).toHaveLength(2);
+    });
+
+    it("keeps absent and unreachable records distinct from a failed preview", async () => {
+        vi.stubGlobal(
+            "fetch",
+            refreshFetch({ w2: { status: "failed", degraded: false }, w3: new Error("ECONNREFUSED") }),
+        );
+        const model = makeModel();
+
+        const statuses = await model.fetchPreviewStatuses(new Map([["r1", "w1"], ["r2", "w2"], ["r3", "w3"]]));
+
+        expect(statuses).toEqual(new Map([
+            ["r1", "not-verified"],
+            ["r2", "failed"],
+            ["r3", "unavailable"],
+        ]));
     });
 });
 

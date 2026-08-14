@@ -13,7 +13,13 @@ import {
     unpinnedDriftFindings,
     type RunsDriftFinding,
 } from "./recoder-runs-findings";
-import { RecoderRun, RecoderRunEvent, RecoderRunsViewModel, SelectedRunStatus } from "./recoder-runs-model";
+import {
+    PreviewVerificationRunStatus,
+    RecoderRun,
+    RecoderRunEvent,
+    RecoderRunsViewModel,
+    SelectedRunStatus,
+} from "./recoder-runs-model";
 
 const REFRESH_MS = 6000;
 
@@ -36,6 +42,21 @@ function runLabel(run: RecoderRun): string {
     return run.taskId || run.runId;
 }
 
+function previewBadge(status: PreviewVerificationRunStatus): { label: string; className: string } {
+    switch (status) {
+        case "passed":
+            return { label: "preview passed", className: "text-success border-success/40" };
+        case "failed":
+            return { label: "preview failed", className: "text-error border-error/40" };
+        case "degraded":
+            return { label: "preview degraded", className: "text-warning border-warning/40" };
+        case "not-verified":
+            return { label: "not verified", className: "text-secondary border-border" };
+        case "unavailable":
+            return { label: "preview unavailable", className: "text-meta border-border" };
+    }
+}
+
 function shortTime(iso?: string): string {
     if (!iso) {
         return "";
@@ -52,12 +73,14 @@ interface RunRowProps {
     correlated: boolean;
     selected: boolean;
     drift: RunsDriftFinding[];
+    previewStatus?: PreviewVerificationRunStatus;
     onSelect: () => void;
     onSession: () => void;
     onReview: () => void;
 }
 
-function RunRow({ run, correlated, selected, drift, onSelect, onSession, onReview }: RunRowProps) {
+function RunRow({ run, correlated, selected, drift, previewStatus, onSelect, onSession, onReview }: RunRowProps) {
+    const preview = previewStatus == null ? null : previewBadge(previewStatus);
     // Session/Review live inside the row; stop propagation so opening a block
     // doesn't also toggle the drilldown selection.
     const openSession = (e: React.MouseEvent) => {
@@ -95,6 +118,11 @@ function RunRow({ run, correlated, selected, drift, onSelect, onSession, onRevie
                 {run.state}
             </span>
             <span className="text-sm truncate">{runLabel(run)}</span>
+            {preview != null && (
+                <span className={cn("rounded border px-1.5 py-0.5 text-xs whitespace-nowrap", preview.className)}>
+                    {preview.label}
+                </span>
+            )}
             {drift.length > 0 && (
                 <i
                     className="fa-solid fa-triangle-exclamation text-xs text-secondary"
@@ -213,6 +241,7 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
     const selectedStatus = useAtomValue(model.selectedStatusAtom);
     const findings = useAtomValue(model.findingsAtom);
     const findingsStatus = useAtomValue(model.findingsStatusAtom);
+    const previewStatuses = useAtomValue(model.previewStatusAtom);
 
     useEffect(() => {
         model.refresh();
@@ -267,6 +296,7 @@ function RecoderRunsView({ model }: ViewComponentProps<RecoderRunsViewModel>) {
                             correlated={correlation.has(run.runId)}
                             selected={run.runId == selectedRunId}
                             drift={driftForRun(run.runId, correlation, drift)}
+                            previewStatus={previewStatuses.get(run.runId)}
                             onSelect={() => model.selectRun(run.runId)}
                             onSession={() => model.openRunSession(run.runId)}
                             onReview={() => model.openRunReview(run.runId)}
