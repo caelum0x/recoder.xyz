@@ -35,7 +35,7 @@ class RecoderIngestViewModel implements ViewModel {
     blockId: string;
     textAtom: PrimitiveAtom<string>;
     ingestingAtom: PrimitiveAtom<boolean>;
-    outcomeAtom: PrimitiveAtom<RecoderIngestOutcome>;
+    outcomeAtom: PrimitiveAtom<RecoderIngestOutcome | null>;
     errorAtom: PrimitiveAtom<string>;
     loadingAtom: PrimitiveAtom<boolean>;
     connectedAtom: PrimitiveAtom<boolean>;
@@ -49,7 +49,7 @@ class RecoderIngestViewModel implements ViewModel {
         this.viewName = atom("Teach");
         this.textAtom = atom("") as PrimitiveAtom<string>;
         this.ingestingAtom = atom(false) as PrimitiveAtom<boolean>;
-        this.outcomeAtom = atom(null) as PrimitiveAtom<RecoderIngestOutcome>;
+        this.outcomeAtom = atom(null) as PrimitiveAtom<RecoderIngestOutcome | null>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
         this.loadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.connectedAtom = atom(false) as PrimitiveAtom<boolean>;
