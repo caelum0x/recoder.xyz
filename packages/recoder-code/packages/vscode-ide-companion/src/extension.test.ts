@@ -9,6 +9,18 @@ import * as vscode from 'vscode';
 import { activate } from './extension.js';
 
 vi.mock('vscode', () => ({
+  TreeItem: class {
+    iconPath: unknown;
+    constructor(..._args: unknown[]) {}
+  },
+  TreeItemCollapsibleState: { None: 0 },
+  StatusBarAlignment: { Right: 2 },
+  ThemeIcon: class {
+    constructor(..._args: unknown[]) {}
+  },
+  ThemeColor: class {
+    constructor(..._args: unknown[]) {}
+  },
   window: {
     createOutputChannel: vi.fn(() => ({
       appendLine: vi.fn(),
@@ -18,6 +30,13 @@ vi.mock('vscode', () => ({
       show: vi.fn(),
       sendText: vi.fn(),
     })),
+    createStatusBarItem: vi.fn(() => ({
+      show: vi.fn(),
+      hide: vi.fn(),
+      dispose: vi.fn(),
+    })),
+    registerTreeDataProvider: vi.fn(() => ({ dispose: vi.fn() })),
+    withProgress: vi.fn(),
     onDidChangeActiveTextEditor: vi.fn(),
     activeTextEditor: undefined,
     tabGroups: {
@@ -29,7 +48,15 @@ vi.mock('vscode', () => ({
   },
   workspace: {
     workspaceFolders: [],
+    getConfiguration: vi.fn(() => ({ get: vi.fn(() => false) })),
+    createFileSystemWatcher: vi.fn(() => ({
+      onDidCreate: vi.fn(),
+      onDidChange: vi.fn(),
+      onDidDelete: vi.fn(),
+      dispose: vi.fn(),
+    })),
     onDidCloseTextDocument: vi.fn(),
+    onDidChangeConfiguration: vi.fn(() => ({ dispose: vi.fn() })),
     registerTextDocumentContentProvider: vi.fn(),
     onDidChangeWorkspaceFolders: vi.fn(),
   },
@@ -37,6 +64,11 @@ vi.mock('vscode', () => ({
     registerCommand: vi.fn(),
     executeCommand: vi.fn(),
   },
+  languages: {
+    registerCodeLensProvider: vi.fn(() => ({ dispose: vi.fn() })),
+    registerInlineCompletionItemProvider: vi.fn(() => ({ dispose: vi.fn() })),
+  },
+  ProgressLocation: { Notification: 15 },
   Uri: {
     joinPath: vi.fn(),
   },
@@ -86,7 +118,9 @@ describe('activate', () => {
   });
 
   it('should not show the info message on subsequent activations', async () => {
-    vi.mocked(context.globalState.get).mockReturnValue(true);
+    vi.mocked(context.globalState.get).mockImplementation(
+      (key) => key === 'recoderCodeInfoMessageShown' ? true : undefined,
+    );
     await activate(context);
     expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
   });
@@ -101,7 +135,7 @@ describe('activate', () => {
     await new Promise(process.nextTick); // Wait for the promise to resolve
     const commandCallback = vi
       .mocked(vscode.commands.registerCommand)
-      .mock.calls.find((call) => call[0] === 'qwen-code.runQwenCode')?.[1];
+      .mock.calls.find((call) => call[0] === 'recoder-code.runRecoder')?.[1];
 
     expect(commandCallback).toBeDefined();
   });

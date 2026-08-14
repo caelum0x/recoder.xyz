@@ -33,6 +33,5 @@
   "packages/core/src/utils/filesearch/crawler.test.ts",
   "packages/core/src/utils/filesearch/fileSearch.test.ts",
   "packages/core/src/utils/filesearch/ignore.test.ts",
-  "packages/core/src/utils/pathReader.test.ts",
-  "packages/vscode-ide-companion/src/extension.test.ts"
+  "packages/core/src/utils/pathReader.test.ts"
 ]
