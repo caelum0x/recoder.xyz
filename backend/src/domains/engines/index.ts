@@ -209,6 +209,10 @@ export interface EnginesModule {
     serverId: string,
     tools: readonly McpToolRegistration[],
   ): DomainToolsRegistration;
+  /** Bind the live Loom-pane credential verifier used by the governed MCP edge. */
+  setPaneCapabilityValidator(
+    validator: (paneId: string, token: string) => Promise<boolean>,
+  ): void;
   /** Truthful live health for every declared engine. */
   listHealth(): Promise<readonly EngineHealth[]>;
   /**

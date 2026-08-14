@@ -92,6 +92,7 @@ enum PaneLaunchIdentity {
         workspace_id: String,
         tab_id: String,
         pane_id: String,
+        capability_token: Option<String>,
     },
     OmitPane,
 }
@@ -114,8 +115,18 @@ impl PaneLaunchEnv {
             workspace_id,
             tab_id,
             pane_id,
+            capability_token: crate::integration::generate_pane_capability_token(),
         };
         self
+    }
+
+    pub(crate) fn capability_token(&self) -> Option<String> {
+        match &self.identity {
+            PaneLaunchIdentity::Managed {
+                capability_token, ..
+            } => capability_token.clone(),
+            PaneLaunchIdentity::Inherit | PaneLaunchIdentity::OmitPane => None,
+        }
     }
 
     pub(crate) fn without_pane_identity(mut self) -> Self {
@@ -138,11 +149,12 @@ fn apply_pane_launch_env(cmd: &mut CommandBuilder, launch_env: &PaneLaunchEnv) {
             workspace_id,
             tab_id,
             pane_id,
+            capability_token,
         } => {
             cmd.env(crate::integration::LOOM_WORKSPACE_ID_ENV_VAR, workspace_id);
             cmd.env(crate::integration::LOOM_TAB_ID_ENV_VAR, tab_id);
             cmd.env(crate::integration::LOOM_PANE_ID_ENV_VAR, pane_id);
-            crate::integration::apply_managed_pane_handshake_env(cmd);
+            crate::integration::apply_managed_pane_handshake_env(cmd, capability_token.as_deref());
         }
         PaneLaunchIdentity::OmitPane => {
             cmd.env_remove(crate::integration::LOOM_PANE_ID_ENV_VAR);

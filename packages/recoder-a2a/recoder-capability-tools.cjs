@@ -437,6 +437,8 @@ function createCapabilityTools(options = {}) {
     process.env.RECODER_DOCKER_URL ||
     'http://localhost:3001';
   const serviceKey = process.env.INTERNAL_SERVICE_KEY || '';
+  const paneId = process.env.LOOM_PANE_ID || '';
+  const paneToken = process.env.RECODER_PANE_TOKEN || '';
   const hasInteropAuth = () => Boolean(serviceKey);
 
   async function callInteropTool(serverId, toolName, args) {
@@ -448,7 +450,13 @@ function createCapabilityTools(options = {}) {
       `${internalUrl.replace(/\/+$/, '')}/api/mcp/tools/${encodeURIComponent(serverId)}/${encodeURIComponent(toolName)}/call`,
       {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-internal-service-key': serviceKey },
+        headers: {
+          'content-type': 'application/json',
+          'x-internal-service-key': serviceKey,
+          ...(paneId && paneToken
+            ? { 'x-recoder-pane-id': paneId, 'x-recoder-pane-token': paneToken }
+            : {}),
+        },
         body: JSON.stringify({ actor, args }),
       },
     );

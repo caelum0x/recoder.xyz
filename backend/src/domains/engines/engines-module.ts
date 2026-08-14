@@ -252,6 +252,9 @@ export class EnginesComposer implements EnginesModule {
   private readonly notifyEngine: NotifyEngine;
   private readonly hostBundle: InteropHostBundle;
   private hostReady = false;
+  private paneCapabilityValidator:
+    | ((paneId: string, token: string) => Promise<boolean>)
+    | undefined;
   private napiRegistration: NapiEngineRegistration | null = null;
   private started = false;
 
@@ -618,6 +621,12 @@ export class EnginesComposer implements EnginesModule {
     return this.hostBundle;
   }
 
+  setPaneCapabilityValidator(
+    validator: (paneId: string, token: string) => Promise<boolean>,
+  ): void {
+    this.paneCapabilityValidator = validator;
+  }
+
   /**
    * Late-bind the observability telemetry seam onto the gated MCP host (BE-7.3).
    * SINGLE-WRITER: called once by bootstrap after observability is composed —
@@ -748,6 +757,9 @@ export class EnginesComposer implements EnginesModule {
         host: this.hostBundle,
         mw: this.middleware,
         log: this.log,
+        ...(this.paneCapabilityValidator
+          ? { validatePaneCapability: this.paneCapabilityValidator }
+          : {}),
         restartEngine: (id, requestedBy, reason) =>
           this.restartEngineById(id, requestedBy, reason),
       })

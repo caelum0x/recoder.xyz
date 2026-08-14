@@ -208,6 +208,10 @@ pub struct AgentPromptParams {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AgentInfo {
     pub terminal_id: String,
+    /// Runtime-only bearer credential for a managed pane's Recoder MCP route.
+    /// It is absent for unmanaged panes and is never written into session snapshots.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capability_token: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

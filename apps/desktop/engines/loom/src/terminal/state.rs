@@ -133,6 +133,7 @@ pub struct TerminalState {
     pub agent_name: Option<String>,
     agent_name_owner: Option<AgentNameOwner>,
     managed_agent: Option<ManagedAgent>,
+    pane_capability_token: Option<String>,
     hook_report_sequences: HashMap<String, u64>,
     suppressed_full_lifecycle_hook_reports: HashMap<String, SuppressedFullLifecycleHookReport>,
     stale_full_lifecycle_hook_sessions: HashMap<String, Vec<StaleFullLifecycleHookSession>>,
@@ -174,6 +175,7 @@ impl TerminalState {
             agent_name: None,
             agent_name_owner: None,
             managed_agent: None,
+            pane_capability_token: None,
             hook_report_sequences: HashMap::new(),
             suppressed_full_lifecycle_hook_reports: HashMap::new(),
             stale_full_lifecycle_hook_sessions: HashMap::new(),
@@ -2006,6 +2008,19 @@ impl TerminalState {
         });
     }
 
+    pub fn with_pane_capability_token(mut self, capability_token: Option<String>) -> Self {
+        self.set_pane_capability_token(capability_token);
+        self
+    }
+
+    pub fn set_pane_capability_token(&mut self, capability_token: Option<String>) {
+        self.pane_capability_token = capability_token;
+    }
+
+    pub fn pane_capability_token(&self) -> Option<&str> {
+        self.pane_capability_token.as_deref()
+    }
+
     pub fn managed_agent_launch_pending(&self) -> bool {
         self.managed_agent.is_some_and(|managed| {
             matches!(
@@ -2335,6 +2350,12 @@ mod tests {
         assert_eq!(terminal.agent_name.as_deref(), Some("reviewer"));
         assert!(terminal.reconcile_managed_agent_at(now + Duration::from_secs(2), true));
         assert_eq!(terminal.agent_name, None);
+    }
+
+    #[test]
+    fn pane_capability_token_is_runtime_only_terminal_state() {
+        let terminal = test_terminal().with_pane_capability_token(Some("token".into()));
+        assert_eq!(terminal.pane_capability_token(), Some("token"));
     }
 
     #[test]
