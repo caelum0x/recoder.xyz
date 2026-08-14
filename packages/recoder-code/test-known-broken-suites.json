@@ -18,7 +18,6 @@
   "packages/cli/src/utils/installationInfo.test.ts",
   "packages/cli/src/validateNonInterActiveAuth.test.ts",
   "packages/cli/tests/commands/byok.test.ts",
-  "packages/cli/tests/commands/core-commands.test.ts",
   "packages/cli/tests/commands/file-operations.test.ts",
   "packages/cli/tests/commands/fileCommands.test.ts",
   "packages/core/src/code_assist/oauth2.test.ts",
