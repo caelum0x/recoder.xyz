@@ -20,11 +20,21 @@ const ROW =
 
 function NeedsYouRow({ model, entry }: { model: RecoderNeedsYouViewModel; entry: NeedsYouEntry }) {
     const topPriority = entry.state == model.topPriorityState;
+    const nativeStatus = entry.nativeStatus == "" ? "unknown" : entry.nativeStatus;
     return (
         <button className={ROW} title={entry.workspaceId} onClick={() => model.focusWorkspace(entry.workspaceId)}>
+            {!entry.seen && (
+                <span
+                    aria-label="unread attention"
+                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
+                    title="New attention since this pane was last seen"
+                />
+            )}
             <span className="text-sm font-medium truncate">{entry.agentKind || entry.workspaceId}</span>
             <span className={`${topPriority ? CRIMSON_CHIP : STATE_CHIP} ml-auto`}>{entry.state}</span>
-            {entry.nativeStatus == "unknown" && <span className={STATE_CHIP}>no native status</span>}
+            <span className={STATE_CHIP} title="Raw Loom agent status">
+                {nativeStatus == "unknown" ? "no native status" : nativeStatus}
+            </span>
         </button>
     );
 }
