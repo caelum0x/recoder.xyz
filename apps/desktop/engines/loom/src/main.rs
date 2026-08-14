@@ -463,7 +463,18 @@ pane_history = false
 "##;
 
 // Bundled at build time so the printed skill always matches this binary's release.
-const SKILL: &str = include_str!("../skills/loom/SKILL.md");
+const LOOM_SKILL: &str = include_str!("../skills/loom/SKILL.md");
+const RECODER_SKILL: &str = include_str!("../skills/recoder/SKILL.md");
+
+// An unknown profile deliberately falls back to the established Loom contract;
+// only the exact opt-in value changes the agent's instruction bundle.
+fn skill_for_profile(profile: Option<&str>) -> &'static str {
+    if profile.map(str::trim) == Some("recoder") {
+        RECODER_SKILL
+    } else {
+        LOOM_SKILL
+    }
+}
 
 fn should_block_nested(config: &config::Config) -> bool {
     should_block_nested_for_env(config, std::env::var(LOOM_ENV_VAR).ok().as_deref())
@@ -729,7 +740,7 @@ fn main() -> io::Result<()> {
     }
 
     if args.iter().any(|a| a == "--skill") {
-        print!("{SKILL}");
+        print!("{}", skill_for_profile(std::env::var("LOOM_SKILL_PROFILE").ok().as_deref()));
         return Ok(());
     }
 
@@ -954,6 +965,15 @@ mod tests {
         assert!(NESTED_LOOM_MESSAGES
             .iter()
             .all(|message| !message.starts_with("loom:")));
+    }
+
+    #[test]
+    fn skill_profile_selects_recoder_only_on_exact_opt_in() {
+        assert_eq!(skill_for_profile(None), LOOM_SKILL);
+        assert_eq!(skill_for_profile(Some("")), LOOM_SKILL);
+        assert_eq!(skill_for_profile(Some("Recoder")), LOOM_SKILL);
+        assert_eq!(skill_for_profile(Some("recoder")), RECODER_SKILL);
+        assert!(skill_for_profile(Some("recoder")).contains("RECODER_PANE_TOKEN"));
     }
 
     #[cfg(unix)]
