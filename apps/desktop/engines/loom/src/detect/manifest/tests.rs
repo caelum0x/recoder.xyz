@@ -39,6 +39,27 @@ id = "codex"
     )
 }
 
+struct ManifestDirsGuard {
+    old_config: Option<std::ffi::OsString>,
+    old_state: Option<std::ffi::OsString>,
+    base: std::path::PathBuf,
+}
+
+impl Drop for ManifestDirsGuard {
+    fn drop(&mut self) {
+        match self.old_config.take() {
+            Some(value) => std::env::set_var("XDG_CONFIG_HOME", value),
+            None => std::env::remove_var("XDG_CONFIG_HOME"),
+        }
+        match self.old_state.take() {
+            Some(value) => std::env::set_var("XDG_STATE_HOME", value),
+            None => std::env::remove_var("XDG_STATE_HOME"),
+        }
+        reload_manifests();
+        let _ = std::fs::remove_dir_all(&self.base);
+    }
+}
+
 fn with_manifest_dirs<T>(name: &str, f: impl FnOnce() -> T) -> T {
     let _guard = crate::config::test_config_env_lock().lock().unwrap();
     let old_config = std::env::var_os("XDG_CONFIG_HOME");
@@ -53,18 +74,12 @@ fn with_manifest_dirs<T>(name: &str, f: impl FnOnce() -> T) -> T {
     std::env::set_var("XDG_CONFIG_HOME", &config_dir);
     std::env::set_var("XDG_STATE_HOME", &state_dir);
     reload_manifests();
-    let result = f();
-    match old_config {
-        Some(value) => std::env::set_var("XDG_CONFIG_HOME", value),
-        None => std::env::remove_var("XDG_CONFIG_HOME"),
-    }
-    match old_state {
-        Some(value) => std::env::set_var("XDG_STATE_HOME", value),
-        None => std::env::remove_var("XDG_STATE_HOME"),
-    }
-    reload_manifests();
-    let _ = std::fs::remove_dir_all(&base);
-    result
+    let _dirs = ManifestDirsGuard {
+        old_config,
+        old_state,
+        base,
+    };
+    f()
 }
 
 fn write_remote_codex(content: &str) {
