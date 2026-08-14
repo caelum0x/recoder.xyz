@@ -94,15 +94,17 @@ export async function reconcile(
       live.push(ws.workspaceId);
       if (await rebindLiveWorkspace(deps, ws)) rebound.push(ws.workspaceId);
       if (await relockLiveWorkspace(deps, ws)) relocked.push(ws.workspaceId);
-    } else if (ws.state === 'running' || ws.state === 'awaiting_approval') {
+    } else if (ws.state === 'running') {
       // CRASHED ORPHAN: a non-terminal workspace whose session is gone.
       orphanedWorkspaces.push(ws.workspaceId);
       // Prefer a LOSSLESS native resume when the agent has its own durable session
       // (the agent replays its history) over a lossy finalize-to-failed.
-      if (await maybeResumeOrphan(deps, ws, resumedSessions)) {
+      const resumeOutcome = await maybeResumeOrphan(deps, ws, resumedSessions);
+      if (resumeOutcome === 'resumed') {
         resumed.push(ws.workspaceId);
         continue;
       }
+      if (resumeOutcome === 'deferred') continue;
       // No resumable native session (or the relaunch faulted) ⇒ finalize truthfully:
       // read the true exit code, emit a terminal RunEvent, advance the record + run
       // to a terminal state, and free its lock — instead of leaving it dangling.
@@ -157,6 +159,8 @@ async function rebindLiveWorkspace(
       substrate: ws.substrate,
       sessionName: ws.sessionName,
       worktreePath: ws.worktreePath,
+      runtimeId: ws.runtimeId,
+      onNativeSessionRef: nativeSessionCapture(deps, ws.workspaceId),
     });
     return true;
   } catch (err) {
@@ -166,6 +170,25 @@ async function rebindLiveWorkspace(
     });
     return false;
   }
+}
+
+/** Persist a driver-observed native session ref without overwriting concurrent metadata. */
+function nativeSessionCapture(
+  deps: WorkspaceEngineDeps,
+  workspaceId: string,
+): (sessionRef: string) => Promise<void> {
+  return async (sessionRef) => {
+    const current = await deps.repository.getWorkspace(workspaceId);
+    if (!current) return;
+    const resume = current.metadata?.['resume'];
+    const prior = resume && typeof resume === 'object' ? resume as Record<string, unknown> : {};
+    if (prior['sessionRef'] === sessionRef) return;
+    await deps.repository.upsertWorkspace({
+      ...current,
+      updatedAt: deps.clock.now(),
+      metadata: { ...(current.metadata ?? {}), resume: { ...prior, sessionRef } },
+    });
+  };
 }
 
 /**
@@ -223,6 +246,22 @@ function readResumeSessionRef(ws: Workspace): string | undefined {
   return typeof ref === 'string' && ref.length > 0 ? ref : undefined;
 }
 
+const MAX_RESUME_ATTEMPTS = 3;
+const INITIAL_RESUME_BACKOFF_MS = 30_000;
+
+function readResumeAttemptState(ws: Workspace): { attempts: number; nextAttemptAt?: string } {
+  const raw = ws.metadata?.['resume'];
+  if (!raw || typeof raw !== 'object') return { attempts: 0 };
+  const resume = raw as Record<string, unknown>;
+  const attempts = typeof resume['attempts'] === 'number' && Number.isInteger(resume['attempts']) && resume['attempts'] >= 0
+    ? resume['attempts']
+    : 0;
+  return {
+    attempts,
+    ...(typeof resume['nextAttemptAt'] === 'string' ? { nextAttemptAt: resume['nextAttemptAt'] } : {}),
+  };
+}
+
 /**
  * Shell-quote one argv element for a substrate whose relaunch takes a command
  * STRING (tmux_worktree). The registry already carries the session ref as validated
@@ -253,19 +292,19 @@ async function maybeResumeOrphan(
   deps: WorkspaceEngineDeps,
   ws: Workspace,
   resumedSessions: Set<string>
-): Promise<boolean> {
+): Promise<'resumed' | 'deferred' | 'unavailable'> {
   const planner = deps.resume;
-  if (!planner) return false;
+  if (!planner) return 'unavailable';
   const sessionRef = readResumeSessionRef(ws);
-  if (!sessionRef) return false;
-  if (!ws.worktreePath) return false; // nothing to relaunch into
+  if (!sessionRef) return 'unavailable';
+  if (!ws.worktreePath) return 'unavailable'; // nothing to relaunch into
 
   const runtimeId = ws.runtimeId;
   const key = planner.dedupeKey(runtimeId, sessionRef);
-  if (resumedSessions.has(key)) return false; // resumed at most once per session
+  if (resumedSessions.has(key)) return 'unavailable'; // resumed at most once per session
 
   const plan = planner.plan(runtimeId, sessionRef);
-  if (!plan || plan.argv.length === 0) return false; // no native resume ⇒ finalize
+  if (!plan || plan.argv.length === 0) return 'unavailable'; // no native resume ⇒ finalize
 
   let substrate;
   try {
@@ -275,9 +314,34 @@ async function maybeResumeOrphan(
       workspaceId: ws.workspaceId,
       err,
     });
-    return false;
+    return 'unavailable';
   }
-  if (!substrate.continueRun) return false; // no in-place relaunch ⇒ finalize
+  if (!substrate.continueRun) return 'unavailable'; // no in-place relaunch ⇒ finalize
+
+  const attempt = readResumeAttemptState(ws);
+  if (attempt.attempts >= MAX_RESUME_ATTEMPTS) return 'unavailable';
+  const nowMs = deps.clock.nowMs();
+  if (attempt.nextAttemptAt && Date.parse(attempt.nextAttemptAt) > nowMs) return 'deferred';
+
+  const nextAttempts = attempt.attempts + 1;
+  const nextAttemptAt = new Date(
+    nowMs + INITIAL_RESUME_BACKOFF_MS * 2 ** attempt.attempts,
+  ).toISOString();
+  const resume = ws.metadata?.['resume'];
+  const prior = resume && typeof resume === 'object' ? resume as Record<string, unknown> : {};
+  try {
+    await deps.repository.upsertWorkspace({
+      ...ws,
+      updatedAt: deps.clock.now(),
+      metadata: {
+        ...(ws.metadata ?? {}),
+        resume: { ...prior, attempts: nextAttempts, nextAttemptAt, lastAttemptAt: deps.clock.now() },
+      },
+    });
+  } catch (err) {
+    deps.logger.warn('reconcile: resume attempt persist failed', { workspaceId: ws.workspaceId, err });
+    return 'unavailable';
+  }
 
   // Claim the session BEFORE the async relaunch so a concurrent duplicate cannot
   // double-launch; release the claim if the relaunch faults so finalize can run.
@@ -302,7 +366,7 @@ async function maybeResumeOrphan(
       workspaceId: ws.workspaceId,
       err,
     });
-    return false;
+    return 'deferred';
   }
 
   // The resumed run is live again: rebind streaming + re-hold the write-lock. The
@@ -336,7 +400,7 @@ async function maybeResumeOrphan(
     }
   }
 
-  return true;
+  return 'resumed';
 }
 
 /**

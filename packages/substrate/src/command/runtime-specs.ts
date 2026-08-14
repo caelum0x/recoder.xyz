@@ -28,7 +28,7 @@ export const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
   claude_code: {
     bin: 'claude',
     build: (o) =>
-      `claude -p ${shellQuote(o.prompt)} --permission-mode acceptEdits${modelFlag('--model', o.model)}${extraArgs(o)}`,
+      `claude -p ${shellQuote(o.prompt)} --output-format stream-json --verbose --permission-mode acceptEdits${modelFlag('--model', o.model)}${extraArgs(o)}`,
     // Interactive: the real Claude Code TUI, opened with the initial prompt (no
     // `-p`, so it stays live). Edits auto-accepted in the isolated worktree.
     buildInteractive: (o) =>
@@ -40,14 +40,14 @@ export const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
     // allows edits under the cwd (the isolated worktree) while staying sandboxed.
     bin: 'codex',
     build: (o) =>
-      `codex exec ${shellQuote(o.prompt)} --sandbox workspace-write${modelFlag('--model', o.model)}${extraArgs(o)}`,
+      `codex exec --json ${shellQuote(o.prompt)} --sandbox workspace-write${modelFlag('--model', o.model)}${extraArgs(o)}`,
     // Interactive: the Codex TUI (no `exec`), started with the prompt.
     buildInteractive: (o) =>
       `codex ${initialPrompt(o)}--sandbox workspace-write${modelFlag('--model', o.model)}${extraArgs(o)}`,
   },
   opencode: {
     bin: 'opencode',
-    build: (o) => `opencode run ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${extraArgs(o)}`,
+    build: (o) => `opencode run --format json ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${extraArgs(o)}`,
     // Interactive: the opencode TUI (no `run`). The TUI's POSITIONAL arg is a
     // project path, NOT a prompt (`opencode [project]`), so the initial prompt
     // must go through `--prompt` (verified against `opencode --help`).
@@ -76,7 +76,7 @@ export const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
     // completion. `-ne` skips extensions for a clean non-interactive run.
     bin: 'pi',
     build: (o) =>
-      `pi --print ${shellQuote(o.prompt)} -ne${modelFlag('--model', o.model)}${extraArgs(o)}`,
+      `pi --mode json -p ${shellQuote(o.prompt)} --no-extensions${modelFlag('--model', o.model)}${extraArgs(o)}`,
     // Interactive: the pi TUI, started with the prompt (drop `--print`).
     buildInteractive: (o) =>
       `pi ${initialPrompt(o)}${modelFlag('--model', o.model)}${extraArgs(o)}`.trimEnd(),

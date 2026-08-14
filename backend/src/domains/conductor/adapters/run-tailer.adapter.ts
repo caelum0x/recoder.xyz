@@ -45,6 +45,8 @@ export interface RunTailerAttachInput {
   readonly substrate: string;
   readonly sessionName: string;
   readonly worktreePath?: string;
+  readonly runtimeId?: string;
+  readonly onNativeSessionRef?: (sessionRef: string) => Promise<void>;
 }
 
 /** The narrow attach port the engine calls (structurally = substrate `RunTailerPort`). */
@@ -169,6 +171,8 @@ export function createRunTailer(deps: RunTailerDeps): ConductorRunTailer {
             sessionName: input.sessionName,
             inner,
             sink,
+            ...(input.runtimeId ? { runtimeId: input.runtimeId } : {}),
+            ...(input.onNativeSessionRef ? { onNativeSessionRef: input.onNativeSessionRef } : {}),
           },
           {
             config: driver.config,
@@ -225,6 +229,8 @@ export function createRunTailer(deps: RunTailerDeps): ConductorRunTailer {
           runId: input.runId,
           sessionName: input.sessionName,
           ...(input.worktreePath ? { worktreePath: input.worktreePath } : {}),
+          ...(input.runtimeId ? { runtimeId: input.runtimeId } : {}),
+          ...(input.onNativeSessionRef ? { onNativeSessionRef: input.onNativeSessionRef } : {}),
         },
         {
           substrate,

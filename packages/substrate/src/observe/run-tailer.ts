@@ -22,6 +22,7 @@ import type { RunEventSink } from './event-sink.port.js';
 import { TailRegistry, type TailHandle } from './tail-registry.js';
 import { computeDelta, MAX_DELTA_CHARS } from './delta.js';
 import { detectInputWait } from './input-wait.js';
+import { findNativeSessionRef } from './native-session-ref.js';
 
 /** Default poll interval — promoted from the backend tailer (3s). */
 export const DEFAULT_INTERVAL_MS = 3000;
@@ -50,6 +51,8 @@ export interface RunTailInput {
   /** Session/handle ref hosting the agent (e.g. tmux session name). */
   sessionName: string;
   worktreePath?: string;
+  runtimeId?: string;
+  onNativeSessionRef?: (sessionRef: string) => Promise<void>;
   intervalMs?: number;
   maxMs?: number;
   /** Per-tick delta cap (defaults to MAX_DELTA_CHARS). */
@@ -96,6 +99,7 @@ export function startRunTail(input: RunTailInput, deps: RunTailerDeps): TailHand
   // The prompt the agent is currently blocked on (deduped: needs_input is
   // emitted once on ENTERING a wait, again only for a different prompt).
   let lastWaitPrompt: string | null = null;
+  let observedSessionRef: string | undefined;
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -151,6 +155,15 @@ export function startRunTail(input: RunTailInput, deps: RunTailerDeps): TailHand
       lastCapture = pane;
       if (delta) {
         await appendEvent('log', delta, { source: 'tmux' });
+      }
+      const sessionRef = input.runtimeId ? findNativeSessionRef(input.runtimeId, pane) : undefined;
+      if (sessionRef && sessionRef !== observedSessionRef) {
+        observedSessionRef = sessionRef;
+        try {
+          await input.onNativeSessionRef?.(sessionRef);
+        } catch (err) {
+          logger.warn('native session reference persist failed', { workspaceId: input.workspaceId, runtimeId: input.runtimeId, err });
+        }
       }
     }
     // Blocked-on-input triage: when the pane tail is a recognized interactive

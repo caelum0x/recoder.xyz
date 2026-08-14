@@ -46,7 +46,7 @@ test('a malicious prompt cannot escape the resolved command word', () => {
   assert.ok(resolved.commandLine.startsWith("claude -p '"));
   // Reconstruct the prompt the shell would actually pass to `claude -p` and
   // confirm it is exactly the malicious string (not a second command).
-  const line = `printf %s ${resolved.commandLine.replace(/^claude -p /, '').replace(/ --permission-mode acceptEdits$/, '')}`;
+  const line = `printf %s ${resolved.commandLine.replace(/^claude -p /, '').replace(/ --output-format stream-json --verbose --permission-mode acceptEdits$/, '')}`;
   const seen = execFileSync('/bin/sh', ['-c', line], { encoding: 'utf8' });
   assert.equal(seen, malicious);
 });

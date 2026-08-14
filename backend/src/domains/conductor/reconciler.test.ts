@@ -163,6 +163,8 @@ describe('conductor reconciler (restart-survivable)', () => {
     // The record is NOT transitioned to a terminal state — the agent's run is live.
     const ws = await repository.getWorkspace('ws_resumable');
     expect(ws?.state).toBe('running');
+    expect((ws?.metadata?.resume as { attempts?: number }).attempts).toBe(1);
+    expect((ws?.metadata?.resume as { nextAttemptAt?: string }).nextAttemptAt).toBeTruthy();
 
     // A truthful resume RunEvent is recorded (never a fabricated completion/failure).
     const events = await repository.listEvents();
@@ -209,6 +211,47 @@ describe('conductor reconciler (restart-survivable)', () => {
     expect((await repository.getWorkspace('ws_no_resume'))?.state).toBe(
       'failed'
     );
+  });
+
+  it('does not resume an awaiting-approval orphan', async () => {
+    const repository = createWorkspaceRepository({ executor: makeExecutor(false) });
+    await repository.upsertWorkspace(
+      runningWorkspace({
+        workspaceId: 'ws_waiting',
+        state: 'awaiting_approval',
+        metadata: { resume: { sessionRef: 'sess-waiting' } },
+      })
+    );
+    const { module } = composeConductor({
+      substrates: [new FakeSubstrate({ id: 'tmux_worktree' })],
+      repository,
+    });
+
+    const result = await module.reconcile(makePrincipal());
+    expect(result.ok).toBe(true);
+    expect(result.value!.resumed).not.toContain('ws_waiting');
+    expect(result.value!.orphanedWorkspaces).not.toContain('ws_waiting');
+    expect((await repository.getWorkspace('ws_waiting'))?.state).toBe('awaiting_approval');
+  });
+
+  it('finalizes after the persisted native-resume attempt limit', async () => {
+    const repository = createWorkspaceRepository({ executor: makeExecutor(false) });
+    await repository.upsertWorkspace(
+      runningWorkspace({
+        workspaceId: 'ws_resume_limit',
+        metadata: { resume: { sessionRef: 'sess-limit', attempts: 3 } },
+      })
+    );
+    const { module } = composeConductor({
+      substrates: [new FakeSubstrate({ id: 'tmux_worktree' })],
+      repository,
+    });
+
+    const result = await module.reconcile(makePrincipal());
+    expect(result.ok).toBe(true);
+    expect(result.value!.resumed).not.toContain('ws_resume_limit');
+    expect(result.value!.finalized).toContain('ws_resume_limit');
+    expect((await repository.getWorkspace('ws_resume_limit'))?.state).toBe('failed');
   });
 
   it('DEDUPE: two orphans sharing one native session resume it at most once', async () => {

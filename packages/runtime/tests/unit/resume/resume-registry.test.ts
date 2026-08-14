@@ -23,23 +23,23 @@ test('codex resumes via the `resume <id>` subcommand', () => {
   assert.deepEqual(plan, { argv: ['codex', 'resume', '0f9a-conv'] });
 });
 
-test('pi resumes by ABSOLUTE session path (path-addressed)', () => {
-  const plan = resumePlan('pi', '/home/agent/.pi/sessions/s1.json');
+test('pi resumes by the session id emitted in its JSON header', () => {
+  const plan = resumePlan('pi', 'pi-session-1');
   assert.deepEqual(plan, {
-    argv: ['pi', '--session', '/home/agent/.pi/sessions/s1.json'],
+    argv: ['pi', '--session', 'pi-session-1'],
   });
 });
 
-test('recoder_code shares pi path-addressed resume', () => {
-  const plan = resumePlan('recoder_code', '/abs/session');
-  assert.deepEqual(plan, { argv: ['pi', '--session', '/abs/session'] });
+test('recoder_code shares pi session-id resume', () => {
+  const plan = resumePlan('recoder_code', 'recoder-session-1');
+  assert.deepEqual(plan, { argv: ['pi', '--session', 'recoder-session-1'] });
 });
 
 test('the ref is never interpolated — special chars stay one argv element', () => {
-  // A path with a space must remain a single argv datum (no shell splitting here).
-  const plan = resumePlan('pi', '/tmp/a b/session.json');
+  // An id with a space must remain a single argv datum (no shell splitting here).
+  const plan = resumePlan('pi', 'pi session');
   assert.deepEqual(plan, {
-    argv: ['pi', '--session', '/tmp/a b/session.json'],
+    argv: ['pi', '--session', 'pi session'],
   });
 });
 
@@ -82,17 +82,10 @@ test('validation rejects a leading-dash ref (argv-flag injection guard)', () => 
   assert.equal(resumePlan('codex', '-c'), null);
 });
 
-test('path-kind refs must be ABSOLUTE', () => {
-  assert.equal(resumePlan('pi', 'relative/session.json'), null);
-  assert.equal(resumePlan('pi', 'session.json'), null);
-  assert.equal(resumePlan('recoder_code', './rel'), null);
-  // absolute is accepted
-  assert.ok(resumePlan('pi', '/abs/ok') != null);
-});
-
 test('id-kind refs do NOT require an absolute path', () => {
   assert.ok(resumePlan('claude_code', 'plain-id') != null);
   assert.ok(resumePlan('codex', 'plain-id') != null);
+  assert.ok(resumePlan('pi', 'plain-id') != null);
 });
 
 test('dedupeKey is stable for identical inputs', () => {

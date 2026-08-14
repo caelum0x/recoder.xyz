@@ -1,7 +1,7 @@
 /**
  * pi-runtime smoke test — guards the PRIMARY export `resolveRuntimeCommand`
  * against regressions in the recently-promoted `pi` headless invocation
- * (`pi --print <prompt> -ne`, see runtime-specs.ts). Asserts the full
+ * (`pi --mode json -p <prompt> --no-extensions`, see runtime-specs.ts). Asserts the full
  * ResolvedRuntimeCommand shape and that the UNTRUSTED prompt stays contained
  * and ordered correctly when model + extraArgs are supplied together.
  */
@@ -14,11 +14,11 @@ test('resolveRuntimeCommand("pi", ...) returns a well-formed headless command', 
 
   assert.equal(resolved.runtimeId, 'pi');
   assert.equal(resolved.bin, 'pi');
-  assert.equal(resolved.commandLine, "pi --print 'do the task' -ne");
+  assert.equal(resolved.commandLine, "pi --mode json -p 'do the task' --no-extensions");
   // The prompt must remain single-quoted (the untrusted chokepoint), and the
-  // headless flags must bracket it: --print before, -ne after.
-  assert.ok(resolved.commandLine.startsWith("pi --print '"));
-  assert.ok(resolved.commandLine.endsWith("' -ne"));
+  // headless flags must bracket it: -p before, --no-extensions after.
+  assert.ok(resolved.commandLine.startsWith("pi --mode json -p '"));
+  assert.ok(resolved.commandLine.endsWith("' --no-extensions"));
 });
 
 test('resolveRuntimeCommand("pi", ...) appends model then extraArgs in order', () => {
@@ -28,5 +28,5 @@ test('resolveRuntimeCommand("pi", ...) appends model then extraArgs in order', (
     extraArgs: ['--debug'],
   });
 
-  assert.equal(resolved.commandLine, "pi --print 'do the task' -ne --model 'opus-4' --debug");
+  assert.equal(resolved.commandLine, "pi --mode json -p 'do the task' --no-extensions --model 'opus-4' --debug");
 });
