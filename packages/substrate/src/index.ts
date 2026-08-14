@@ -129,6 +129,7 @@ export {
   DEFAULT_INTERVAL_MS,
   DEFAULT_MAX_MS,
   CAPTURE_LINES,
+  findNativeSessionRef,
   decodeControlModeData,
   stripAnsi,
   stripDcsEnvelope,

@@ -34,6 +34,7 @@ import {
   stripDcsEnvelope,
   supportsControlMode,
   DEFAULT_MAX_MS,
+  findNativeSessionRef,
   MAX_DELTA_CHARS,
   type LoggerPort,
   type RunEventSink,
@@ -242,6 +243,8 @@ export interface ControlModeTailInput {
   readonly inner: TailSubstrate;
   /** The same terminal-stream seam the poll tailer feeds (RunEvent sink). */
   readonly sink: RunEventSink;
+  readonly runtimeId?: string;
+  readonly onNativeSessionRef?: (sessionRef: string) => Promise<void>;
 }
 
 export interface ControlModeTailDeps {
@@ -316,6 +319,16 @@ export function startControlModeTail(
   let maxTimer: ReturnType<typeof setTimeout> | undefined;
 
   const appendLog = (text: string): void => {
+    const sessionRef = input.runtimeId ? findNativeSessionRef(input.runtimeId, text) : undefined;
+    if (sessionRef && input.onNativeSessionRef) {
+      void input.onNativeSessionRef(sessionRef).catch((err) => {
+        logger.warn('control-mode native session reference persist failed', {
+          workspaceId: input.workspaceId,
+          runtimeId: input.runtimeId,
+          err: message(err),
+        });
+      });
+    }
     seq += 1;
     const at = nowMs();
     const event: RunEvent = {

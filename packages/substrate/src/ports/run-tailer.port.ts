@@ -22,6 +22,8 @@ export interface RunTailAttachInput {
   /** Session/handle ref hosting the agent (e.g. tmux session name). */
   sessionName: string;
   worktreePath?: string;
+  runtimeId?: string;
+  onNativeSessionRef?: (sessionRef: string) => Promise<void>;
 }
 
 export interface RunTailerPort {

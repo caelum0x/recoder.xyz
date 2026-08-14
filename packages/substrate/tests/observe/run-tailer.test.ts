@@ -18,6 +18,7 @@ import {
   TailRegistry,
   type TailSubstrate,
   type RunTailerDeps,
+  findNativeSessionRef,
 } from '../../src/observe/index.js';
 
 /** A controllable substrate: tests push output, set alive, and an exit code. */
@@ -82,6 +83,14 @@ const baseInput = {
   runId: 'run_ws_1',
   sessionName: 'recoder-ws_1',
 };
+
+test('extracts only safe native session references from each structured driver stream', () => {
+  assert.equal(findNativeSessionRef('claude_code', '{"type":"system","session_id":"claude-1"}'), 'claude-1');
+  assert.equal(findNativeSessionRef('codex', '{"type":"thread.started","thread_id":"thread-1"}'), 'thread-1');
+  assert.equal(findNativeSessionRef('opencode', '{"type":"text","sessionID":"open-1"}'), 'open-1');
+  assert.equal(findNativeSessionRef('pi', '{"type":"session","id":"pi-1"}'), 'pi-1');
+  assert.equal(findNativeSessionRef('codex', '{"type":"thread.started","thread_id":"-bad"}'), undefined);
+});
 
 /** Spin the event loop a few times so the timer-driven tick can run. */
 async function settle(): Promise<void> {

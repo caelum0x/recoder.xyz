@@ -254,6 +254,21 @@ export class WorkspaceEngine {
         substrate: workspace.substrate,
         sessionName: handle.sessionName ?? handle.ref,
         worktreePath: handle.worktreePath,
+        runtimeId: workspace.runtimeId,
+        onNativeSessionRef: async (sessionRef) => {
+          const current = await repository.getWorkspace(workspaceId);
+          if (!current) return;
+          const resume = current.metadata?.['resume'];
+          const prior = resume && typeof resume === 'object'
+            ? resume as Record<string, unknown>
+            : {};
+          if (prior['sessionRef'] === sessionRef) return;
+          await repository.upsertWorkspace({
+            ...current,
+            updatedAt: clock.now(),
+            metadata: { ...(current.metadata ?? {}), resume: { ...prior, sessionRef } },
+          });
+        },
       });
 
       logger.info('workspace created + running', {

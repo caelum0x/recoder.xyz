@@ -18,7 +18,7 @@
  *  - claude_code → `claude --resume <sessionId>`   (drivers/claude-code/claude-args.ts)
  *  - opencode    → `opencode run --session <id>`    (drivers/opencode/opencode-args.ts)
  *  - codex       → `codex resume <id>`              (codex resume subcommand)
- *  - pi          → `pi --session <absolute-path>`   (pi session host; path-addressed)
+ *  - pi          → `pi --session <sessionId>`        (pi JSON session header)
  *
  * A runtime with NO native resume is simply absent from the table ⇒ `resumePlan`
  * returns `null` and that workspace stays truthfully finalized-to-failed.
@@ -50,8 +50,8 @@ const RESUME_SPECS: Readonly<Record<string, RuntimeResumeSpec>> = {
   claude_code: { kind: 'id', build: ref => ['claude', '--resume', ref] },
   opencode: { kind: 'id', build: ref => ['opencode', 'run', '--session', ref] },
   codex: { kind: 'id', build: ref => ['codex', 'resume', ref] },
-  pi: { kind: 'path', build: ref => ['pi', '--session', ref] },
-  recoder_code: { kind: 'path', build: ref => ['pi', '--session', ref] },
+  pi: { kind: 'id', build: ref => ['pi', '--session', ref] },
+  recoder_code: { kind: 'id', build: ref => ['pi', '--session', ref] },
 };
 
 /** True when `value` contains an ASCII control char (C0 range or DEL). */

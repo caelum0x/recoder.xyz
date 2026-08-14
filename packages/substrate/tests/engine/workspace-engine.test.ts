@@ -101,3 +101,19 @@ test('metadata.prompt survives the running transition and later metadata merges'
   // lockScope was merged in during create — the prompt must not have been lost.
   assert.ok(stored?.metadata?.lockScope);
 });
+
+test('native session refs observed by the tailer are persisted for recovery', async () => {
+  const { deps, workspaces } = makeDeps();
+  let capture: ((sessionRef: string) => Promise<void>) | undefined;
+  deps.runTailer = { start: (input) => { capture = input.onNativeSessionRef; } };
+  const engine = new WorkspaceEngine(deps);
+  const ws = await engine.createWorkspace({
+    spaceId: 's', projectId: 'p', taskId: 't', runtimeId: 'codex', createdBy: 'u',
+    repoPath: '/tmp/repo', prompt: 'do the task',
+  });
+
+  assert.ok(capture);
+  await capture!('thread-123');
+  const stored = workspaces.get(ws.workspaceId);
+  assert.equal((stored?.metadata?.resume as { sessionRef?: string }).sessionRef, 'thread-123');
+});
