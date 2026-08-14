@@ -26,9 +26,10 @@
  * unit-tested against fakes with no real Loom daemon, git, or gate.
  *
  * HONESTY INVARIANTS (non-negotiable, all shipped):
- *  - Loom natively knows claude/codex/cursor/opencode/pi/gemini; recoder_code /
- *    qwen_code / crush fall back to raw pane input and FORFEIT native status — this
- *    is REPORTED per-agent (`nativeStatus:false`), never faked.
+ *  - Loom launches every known kind as a managed `agent.start` pane. Only
+ *    claude/codex/cursor/opencode/pi/gemini currently have native status
+ *    detection; recoder_code/qwen_code/crush therefore report
+ *    `nativeStatus:false`, never a fabricated status signal.
  *  - A pane that never settles (timeout / superseded / stream-ended) is reported
  *    `settled:false` and EXCLUDED from the converge set — never a fabricated "done".
  *  - A pane that settles into `error` is truthful (`settled:true`) but is NOT
@@ -54,8 +55,9 @@ import {
 } from '../converge/converge-plan.service.js';
 
 /**
- * The agent kinds Loom drives with NATIVE agent-status events (Working→Blocked→Done
- * flows straight from the engine). A kind here reports `nativeStatus:true`.
+ * The agent kinds Loom currently drives with NATIVE agent-status events
+ * (Working→Blocked→Done flows straight from the engine). A kind here reports
+ * `nativeStatus:true`.
  */
 export const LOOM_NATIVE_KINDS: readonly string[] = [
   'claude',
@@ -67,20 +69,26 @@ export const LOOM_NATIVE_KINDS: readonly string[] = [
 ];
 
 /**
- * The agent kinds Recoder accepts but Loom cannot drive natively — they fall back to
- * raw pane input and FORFEIT native status (`nativeStatus:false`). Included in the
- * KNOWN set (so the tool validates them) but always truthfully flagged non-native.
+ * The agent kinds Loom can launch as managed `agent.start` panes but which do not
+ * yet have evidence-backed screen-status detection. They keep
+ * `nativeStatus:false`: launch/resume support must not be represented as a status
+ * signal until the detector can report one truthfully.
  */
-export const LOOM_FALLBACK_KINDS: readonly string[] = [
+export const LOOM_MANAGED_NO_STATUS_KINDS: readonly string[] = [
   'recoder_code',
   'qwen_code',
   'crush',
 ];
 
-/** Every agent kind `recoder_converge_fanout` accepts (native + fallback). */
-export const KNOWN_AGENT_KINDS: readonly string[] = [
+/** Every kind accepted by Loom's managed `agent.start` launch path. */
+export const LOOM_MANAGED_KINDS: readonly string[] = [
   ...LOOM_NATIVE_KINDS,
-  ...LOOM_FALLBACK_KINDS,
+  ...LOOM_MANAGED_NO_STATUS_KINDS,
+];
+
+/** Every agent kind `recoder_converge_fanout` accepts. */
+export const KNOWN_AGENT_KINDS: readonly string[] = [
+  ...LOOM_MANAGED_KINDS,
 ];
 
 /** Fan-out N bounds — clamp to a sane parallel-run count (the tool enforces these). */
@@ -101,7 +109,7 @@ export const DONE_ISH_STATES: readonly AttentionState[] = [
   'awaiting_approval',
 ];
 
-/** True when Loom drives this kind with native agent-status (else raw-pane fallback). */
+/** True when Loom can report this kind's native agent status. */
 export function isNativeKind(kind: string): boolean {
   return LOOM_NATIVE_KINDS.includes(kind);
 }
@@ -232,7 +240,7 @@ export interface FanoutInput {
 /** One agent's truthful fan-out outcome (never fabricated). */
 export interface FanoutAgentResult {
   readonly kind: string;
-  /** Whether Loom drives this kind natively (false = raw-pane fallback). */
+  /** Whether Loom can report this kind's native agent status. */
   readonly nativeStatus: boolean;
   /** The created workspace id, or `null` when the governed create failed. */
   readonly workspaceId: string | null;

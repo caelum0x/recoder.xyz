@@ -137,7 +137,7 @@ describe('ConvergeCockpitService.snapshot', () => {
     expect(snap.convergeReady).toBe(false);
   });
 
-  it('reports native vs raw-pane fallback truthfully', async () => {
+  it('reports native status detection truthfully for managed kinds', async () => {
     const { service } = build({
       panes: {
         taskGroup: 'grp',

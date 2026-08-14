@@ -9,7 +9,8 @@
  *  - a timed-out pane is `settled:false` + EXCLUDED from the converge set;
  *  - an `error`-settled pane is truthful (`settled:true`) but still excluded (not done-ish);
  *  - fewer than 2 done panes → `converged:null` with a truthful reason (plan/compose never run);
- *  - a non-native kind reports `nativeStatus:false` (never faked native);
+ *  - a managed kind without screen-status detection reports `nativeStatus:false`
+ *    (managed launch support is never misrepresented as native status);
  *  - one create failure is reported per-agent and the other kinds still converge;
  *  - a synthesizable contested path is auto-selected `@synthesize`; a compose failure
  *    degrades to `converged:null` + the real reason (never a fabricated branch).
@@ -353,7 +354,7 @@ describe('ConvergeFanoutService', () => {
     expect(converge.composeCalls).toHaveLength(0);
   });
 
-  it('reports nativeStatus:false for a non-native kind (never faked native)', async () => {
+  it('reports nativeStatus:false for a managed kind without status detection (never faked native)', async () => {
     const creator = new FakeCreator();
     const wait = new FakeWait(
       new Map([
