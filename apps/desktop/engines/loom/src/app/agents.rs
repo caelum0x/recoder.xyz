@@ -219,9 +219,15 @@ impl App {
         let shell_name = available_shell_name(runtime)
             .ok_or_else(|| AgentStartError::TargetBusy(params.pane_id.clone()))?;
 
-        let extra_env = crate::integration::sanitize_caller_pane_env(params.env);
-        if !extra_env.is_empty() && crate::platform::is_powershell_process_name(&shell_name) {
+        let mut extra_env = crate::integration::sanitize_caller_pane_env(params.env);
+        let powershell = crate::platform::is_powershell_process_name(&shell_name);
+        if !extra_env.is_empty() && powershell {
             return Err(AgentStartError::EnvUnsupportedForShell);
+        }
+        if !powershell {
+            // This marker is host-provided rather than caller-provided, so native
+            // integrations can prove which managed agent they are reporting for.
+            extra_env.push(("LOOM_AGENT".to_string(), kind.label().to_string()));
         }
 
         let argv = agent_start_argv(kind, params.args);
@@ -530,11 +536,27 @@ mod tests {
     }
 
     #[test]
-    fn command_argv_has_no_env_prefix_without_caller_env() {
+    fn command_argv_has_no_env_prefix_without_extra_env() {
         let agent_argv = vec!["pi".to_string(), "--no-session".to_string()];
         assert_eq!(
             agent_start_command_argv(&[], &agent_argv),
             vec!["pi".to_string(), "--no-session".to_string()]
+        );
+    }
+
+    #[test]
+    fn managed_launch_marks_the_agent_kind() {
+        let agent_argv =
+            vec![
+                crate::detect::interactive_agent_executable(crate::detect::Agent::RecoderCode)
+                    .to_string(),
+            ];
+        assert_eq!(
+            agent_start_command_argv(
+                &[("LOOM_AGENT".to_string(), "recoder_code".to_string())],
+                &agent_argv,
+            ),
+            vec!["env", "LOOM_AGENT=recoder_code", "recoder-code"]
         );
     }
 
