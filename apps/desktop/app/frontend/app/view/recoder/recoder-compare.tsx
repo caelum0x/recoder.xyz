@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { agentLabel } from "./recoder-agent-labels";
+import { buildCompareHeatmap } from "./recoder-compare-heatmap";
 import { fileVersionsKey } from "./recoder-compare-logic";
 import type { FileVersionColumn as FileVersionEntry, FileVersionsFetchResult } from "./recoder-compare-logic";
 import {
@@ -84,6 +85,45 @@ const VERDICT_LABEL: Record<string, string> = {
 
 function verdictLabel(verdict: string): string {
     return VERDICT_LABEL[verdict] ?? verdict;
+}
+
+function ConflictHeatmap({ compareView }: { compareView: CompareView }) {
+    const heatmap = buildCompareHeatmap(compareView.siblings, compareView.contested);
+    if (heatmap.rows.length == 0 || heatmap.columns.length == 0) {
+        return null;
+    }
+    return (
+        <div className="overflow-x-auto rounded border border-error/20 p-2">
+            <div className={`${FIELD_LABEL} mb-1`}>Conflict map</div>
+            <div
+                className="grid gap-1 text-xs min-w-max"
+                style={{ gridTemplateColumns: `minmax(9rem, 1fr) repeat(${heatmap.columns.length}, minmax(4rem, 1fr))` }}
+            >
+                <span className="text-meta">file</span>
+                {heatmap.columns.map((column) => (
+                    <span key={column.workspaceId} className="text-secondary truncate text-center" title={column.workspaceId}>
+                        {column.label}
+                    </span>
+                ))}
+                {heatmap.rows.map((row) => (
+                    <Fragment key={row.path}>
+                        <span key={`${row.path}:path`} className="text-primary truncate" title={row.path}>
+                            {row.path}
+                        </span>
+                        {row.cells.map((cell) => (
+                            <span
+                                key={`${row.path}:${cell.workspaceId}`}
+                                className={`rounded px-1 py-0.5 text-center ${cell.hot ? "bg-error/20 text-error" : "bg-white/[0.03] text-meta"}`}
+                                title={`${row.path} · ${cell.workspaceId}: ${cell.hot ? "contested" : "not in this collision"}`}
+                            >
+                                {cell.hot ? "hot" : "—"}
+                            </span>
+                        ))}
+                    </Fragment>
+                ))}
+            </div>
+        </div>
+    );
 }
 
 function ReadinessBadge({ readiness }: { readiness: ReadinessView }) {
@@ -742,6 +782,7 @@ function RecoderComparePanel({
     return (
         <div className="flex flex-col gap-1.5 rounded border border-white/8 p-2">
             {summary != "" && <div className={META}>{summary}</div>}
+            <ConflictHeatmap compareView={compareView} />
             {compareView.siblings.length >= 2 && (
                 <ConvergePanel
                     taskGroup={taskGroup}
