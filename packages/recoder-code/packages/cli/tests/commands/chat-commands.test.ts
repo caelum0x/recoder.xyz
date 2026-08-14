@@ -1,7 +1,7 @@
 /**
  * Chat Management Command Tests
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 
 describe('Chat Commands', () => {
   it('should test /chat save command', () => {

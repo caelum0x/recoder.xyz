@@ -1,7 +1,7 @@
 /**
  * Setup Command Tests
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 
 describe('Setup Commands', () => {
   it('should test /setup command', () => {

@@ -3,7 +3,7 @@
  * Tests for essential interactive chat commands
  */
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { CommandContext } from '../../src/ui/commands/types';
 
 // Mock context builder
