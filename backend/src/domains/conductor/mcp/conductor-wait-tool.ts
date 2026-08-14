@@ -52,8 +52,6 @@ const SETTLE_STATES: readonly AttentionState[] = [
   'review_ready',
   'awaiting_approval',
   'error',
-  'working',
-  'unknown',
 ];
 
 /** Trim to a non-empty string, or `undefined`. */
