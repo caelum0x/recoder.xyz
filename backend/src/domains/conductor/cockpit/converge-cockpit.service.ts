@@ -102,7 +102,7 @@ export interface CockpitAgent {
   readonly state: AttentionState;
   /** True when {@link isSettledState}(state) — never for `working`/`unknown`. */
   readonly settled: boolean;
-  /** True when Loom drives this kind with NATIVE agent-status (else raw-pane fallback). */
+  /** True when Loom can report this kind's native agent status. */
   readonly nativeStatus: boolean;
 }
 

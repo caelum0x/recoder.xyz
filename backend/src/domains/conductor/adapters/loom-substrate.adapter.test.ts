@@ -265,6 +265,34 @@ describe('createLoomSubstrate', () => {
     });
   });
 
+  it.each(['recoder_code', 'qwen_code', 'crush'])(
+    'launch(): starts %s as a managed Loom agent, not raw pane input',
+    async kind => {
+      const fake = await withFake({
+        ping: () => pong(20),
+        'worktree.create': () => worktreeCreated('/tmp/wt/ws_1', 'pane_root'),
+        'agent.start': () => agentStarted('term_1'),
+      });
+      const substrate = createLoomSubstrate({ socketPath: fake.socketPath });
+
+      await substrate.launch({
+        workspaceId: `ws_${kind}`,
+        command: 'do the task',
+        repoPath: '/repo',
+        branch: `recoder/fan-${kind}`,
+        baseRef: 'HEAD',
+        env: { RECODER_LOOM_KIND: kind },
+      });
+
+      const start = fake.requests.find(r => r.method === 'agent.start');
+      expect(start?.params).toMatchObject({
+        kind,
+        pane_id: 'pane_root',
+        args: ['do the task'],
+      });
+    }
+  );
+
   it('launch(): clamps an out-of-range timeout into loom\'s (3000, 300000] window', async () => {
     const fake = await withFake({
       ping: () => pong(20),
