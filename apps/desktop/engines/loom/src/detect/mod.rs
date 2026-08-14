@@ -341,6 +341,7 @@ pub(crate) fn full_lifecycle_hook_authority(source: &str, agent_label: &str) -> 
             | ("loom:opencode", "opencode")
             | ("loom:kilo", "kilo")
             | ("loom:kimi", "kimi")
+            | ("loom:recoder_code", "recoder_code")
     )
 }
 
@@ -874,6 +875,15 @@ mod tests {
             "mastracode"
         ));
         assert!(!Agent::SCREEN_MANIFEST_AGENTS.contains(&Agent::Mastracode));
+    }
+
+    #[test]
+    fn recoder_code_is_hook_authority_without_screen_manifest() {
+        assert!(full_lifecycle_hook_authority(
+            "loom:recoder_code",
+            "recoder_code"
+        ));
+        assert!(!Agent::SCREEN_MANIFEST_AGENTS.contains(&Agent::RecoderCode));
     }
 
     #[test]
