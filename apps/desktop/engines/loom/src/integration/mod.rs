@@ -14,8 +14,8 @@ pub(crate) use actions::{install_target, uninstall_target};
 #[cfg(test)]
 pub(crate) use env::integration_env_lock;
 pub(crate) use env::{
-    apply_managed_pane_handshake_env, apply_pane_base_env, sanitize_caller_pane_env,
-    LOOM_PANE_ID_ENV_VAR, LOOM_TAB_ID_ENV_VAR, LOOM_WORKSPACE_ID_ENV_VAR,
+    apply_managed_pane_handshake_env, apply_pane_base_env, generate_pane_capability_token,
+    sanitize_caller_pane_env, LOOM_PANE_ID_ENV_VAR, LOOM_TAB_ID_ENV_VAR, LOOM_WORKSPACE_ID_ENV_VAR,
 };
 pub(crate) use registry::{
     installed_integration_statuses, integration_recommendations, integration_target_label,
@@ -226,8 +226,7 @@ const ANTIGRAVITY_CLI_HOOK_INSTALL_NAME: &str = "loom-agent-state.sh";
 const ANTIGRAVITY_CLI_HOOK_ASSET: &str =
     include_str!("assets/antigravity_cli/loom-agent-state.ps1");
 #[cfg(not(windows))]
-const ANTIGRAVITY_CLI_HOOK_ASSET: &str =
-    include_str!("assets/antigravity_cli/loom-agent-state.sh");
+const ANTIGRAVITY_CLI_HOOK_ASSET: &str = include_str!("assets/antigravity_cli/loom-agent-state.sh");
 const ANTIGRAVITY_CLI_INTEGRATION_VERSION: u32 = 1;
 /// Antigravity CLI keys `hooks.json` by hook name, so every Loom entry lives
 /// under one Loom-owned block that install rewrites and uninstall removes.

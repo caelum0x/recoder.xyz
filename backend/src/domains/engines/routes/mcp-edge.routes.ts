@@ -59,6 +59,8 @@ export interface McpEdgeRoutesDeps {
     requestedBy: string,
     reason?: string,
   ) => Promise<RestartOutcome>;
+  /** Optional runtime verifier for Loom-managed pane credentials. */
+  readonly validatePaneCapability?: (paneId: string, token: string) => Promise<boolean>;
 }
 
 // --- body validation (zod at the system boundary; the bridge's wire shape) ---
@@ -203,6 +205,23 @@ export function buildMcpEdgeRouter(deps: McpEdgeRoutesDeps): Router {
   const { host, mw, log } = deps;
   const router = Router();
 
+  const validatePaneCapability = asyncHandler(async (req, res, next) => {
+    const paneId = req.get('x-recoder-pane-id')?.trim() ?? '';
+    const token = req.get('x-recoder-pane-token')?.trim() ?? '';
+    // Legacy or non-Loom launches carry neither header. A partial credential is
+    // always rejected; a supplied credential is accepted only after Loom confirms
+    // it belongs to that live pane.
+    if (!paneId && !token) {
+      next();
+      return;
+    }
+    if (!paneId || !token || !deps.validatePaneCapability || !(await deps.validatePaneCapability(paneId, token))) {
+      sendError(res, createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Invalid pane capability.'));
+      return;
+    }
+    next();
+  });
+
   router.get(
     '/servers',
     mw.authenticate,
@@ -294,6 +313,7 @@ export function buildMcpEdgeRouter(deps: McpEdgeRoutesDeps): Router {
   router.post(
     '/tools/:server/:tool/call',
     mw.authenticateMutating,
+    validatePaneCapability,
     handleCall(({ params, body }) => {
       const parsed = callBodySchema.safeParse(body ?? {});
       if (!parsed.success) return null;
@@ -308,6 +328,7 @@ export function buildMcpEdgeRouter(deps: McpEdgeRoutesDeps): Router {
   router.post(
     '/call',
     mw.authenticateMutating,
+    validatePaneCapability,
     handleCall(({ body }) => {
       const parsed = bodyCallSchema.safeParse(body ?? {});
       if (!parsed.success) return null;

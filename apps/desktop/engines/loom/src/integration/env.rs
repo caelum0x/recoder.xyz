@@ -49,13 +49,16 @@ pub(crate) fn apply_pane_base_env(cmd: &mut CommandBuilder) {
 /// only when the host actually exported one; the token is set only when the OS
 /// RNG produced one. This is scoped to managed panes on purpose so a plain user
 /// shell or popup never receives a capability token.
-pub(crate) fn apply_managed_pane_handshake_env(cmd: &mut CommandBuilder) {
+pub(crate) fn apply_managed_pane_handshake_env(
+    cmd: &mut CommandBuilder,
+    capability_token: Option<&str>,
+) {
     if let Some(socket) =
         std::env::var_os(RECODER_MCP_SOCKET_ENV_VAR).filter(|value| !value.is_empty())
     {
         cmd.env(RECODER_MCP_SOCKET_ENV_VAR, socket);
     }
-    if let Some(token) = generate_pane_capability_token() {
+    if let Some(token) = capability_token {
         cmd.env(RECODER_PANE_TOKEN_ENV_VAR, token);
     }
 }
@@ -449,7 +452,8 @@ mod managed_pane_env_tests {
         std::env::set_var(RECODER_MCP_SOCKET_ENV_VAR, "/run/recoder/mcp.sock");
 
         let mut cmd = CommandBuilder::new("sh");
-        apply_managed_pane_handshake_env(&mut cmd);
+        let token = generate_pane_capability_token();
+        apply_managed_pane_handshake_env(&mut cmd, token.as_deref());
         let injected = injected_env(&cmd);
 
         assert_eq!(
@@ -475,7 +479,8 @@ mod managed_pane_env_tests {
         std::env::remove_var(RECODER_MCP_SOCKET_ENV_VAR);
 
         let mut cmd = CommandBuilder::new("sh");
-        apply_managed_pane_handshake_env(&mut cmd);
+        let token = generate_pane_capability_token();
+        apply_managed_pane_handshake_env(&mut cmd, token.as_deref());
         let injected = injected_env(&cmd);
 
         assert!(!injected.contains_key(RECODER_MCP_SOCKET_ENV_VAR));

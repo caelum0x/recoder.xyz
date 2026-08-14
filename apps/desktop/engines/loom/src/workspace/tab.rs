@@ -174,7 +174,8 @@ impl Tab {
                 TerminalState::new(terminal_id.clone(), initial_cwd).with_launch_argv(argv.to_vec())
             }
             None => TerminalState::new(terminal_id.clone(), initial_cwd),
-        };
+        }
+        .with_pane_capability_token(launch_env.capability_token());
         let mut panes = HashMap::new();
         panes.insert(root_id, PaneState::new(terminal_id));
 
@@ -434,7 +435,8 @@ impl Tab {
                 TerminalState::new(terminal_id.clone(), actual_cwd).with_launch_argv(argv)
             }
             None => TerminalState::new(terminal_id.clone(), actual_cwd),
-        };
+        }
+        .with_pane_capability_token(launch_env.capability_token());
         if focus_new_pane {
             self.layout.focus_pane(new_id);
         }

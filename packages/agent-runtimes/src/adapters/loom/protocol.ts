@@ -355,6 +355,8 @@ export interface AgentSessionInfo {
 
 export interface AgentInfo {
   terminal_id: string;
+  /** Runtime-only managed-pane credential for Recoder's governed MCP edge. */
+  capability_token?: string;
   name?: string;
   agent?: string;
   title?: string;

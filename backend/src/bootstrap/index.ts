@@ -14,6 +14,7 @@
  * (before the route table is built) without changing this file's shape.
  */
 import type http from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
 import { resolve as resolvePath } from 'node:path';
 import express, { type Router } from 'express';
 
@@ -836,6 +837,21 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   const loomSub = createLoomSubstrate({
     socketPath: loomDaemon.socketPath,
     logger: childLogger('conductor-loom'),
+  });
+  const loomPaneCapabilityClient = new LoomSocketClient({
+    socketPath: loomDaemon.socketPath,
+  });
+  engines.setPaneCapabilityValidator(async (paneId, token) => {
+    const result = await loomPaneCapabilityClient.call('agent.get', { target: paneId });
+    if (result.type !== 'agent_info') return false;
+    const agent = result.agent;
+    const expected =
+      agent && typeof agent === 'object' && 'capability_token' in agent
+        ? (agent as { capability_token?: unknown }).capability_token
+        : undefined;
+    if (typeof expected !== 'string') return false;
+    if (!expected || expected.length !== token.length) return false;
+    return timingSafeEqual(Buffer.from(expected), Buffer.from(token));
   });
   // Loom is THE default runtime — spawn the supervised daemon by DEFAULT so the
   // durable always-on herd backs every unqualified launch. An operator can opt OUT

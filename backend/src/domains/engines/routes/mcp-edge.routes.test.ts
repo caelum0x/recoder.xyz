@@ -43,7 +43,7 @@ import {
 function request(
   base: string,
   path: string,
-  init: { method?: string; body?: unknown } = {},
+  init: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
 ): Promise<{ status: number; json: () => unknown }> {
   return new Promise((resolve, reject) => {
     const url = new URL(base + path);
@@ -54,7 +54,10 @@ function request(
         port: url.port,
         path: url.pathname,
         method: init.method ?? 'GET',
-        headers: payload === undefined ? {} : { 'content-type': 'application/json' },
+        headers: {
+          ...(payload === undefined ? {} : { 'content-type': 'application/json' }),
+          ...(init.headers ?? {}),
+        },
       },
       (res) => {
         const chunks: Buffer[] = [];
@@ -275,6 +278,45 @@ describe('governed MCP edge (mocked host)', () => {
     expect(res.status).toBe(400);
     expect(res.json()).toMatchObject({ success: false, error: { code: 'VALIDATION_ERROR' } });
     expect(callSpy.mock.calls.length).toBe(before);
+  });
+
+  it('rejects a partial or invalid Loom pane credential before calling the host', async () => {
+    const built = buildMockedDeps({
+      validatePaneCapability: async (paneId, token) => paneId === 'pane_1' && token === 'valid',
+    });
+    const scoped = await startServer(buildMcpEdgeRouter(built.deps));
+    try {
+      const partial = await request(scoped.base, '/tools/demo/demo.echo/call', {
+        method: 'POST',
+        body: {},
+        headers: { 'x-recoder-pane-id': 'pane_1' },
+      });
+      expect(partial.status).toBe(403);
+
+      const invalid = await request(scoped.base, '/tools/demo/demo.echo/call', {
+        method: 'POST',
+        body: {},
+        headers: {
+          'x-recoder-pane-id': 'pane_1',
+          'x-recoder-pane-token': 'invalid',
+        },
+      });
+      expect(invalid.status).toBe(403);
+      expect(built.callSpy).not.toHaveBeenCalled();
+
+      const valid = await request(scoped.base, '/tools/demo/demo.echo/call', {
+        method: 'POST',
+        body: {},
+        headers: {
+          'x-recoder-pane-id': 'pane_1',
+          'x-recoder-pane-token': 'valid',
+        },
+      });
+      expect(valid.status).toBe(200);
+      expect(built.callSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      await new Promise<void>((resolve) => scoped.server.close(() => resolve()));
+    }
   });
 
   it('POST /call (body-addressed) runs the same gated route', async () => {

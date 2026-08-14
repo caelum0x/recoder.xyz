@@ -596,6 +596,24 @@ mod tests {
     }
 
     #[test]
+    fn session_snapshot_never_persists_pane_capability_tokens() {
+        let mut state = state_with_workspaces(&["capability-token"]);
+        let root = state.workspaces[0].tabs[0].root_pane;
+        let terminal_id = state.workspaces[0].tabs[0].panes[&root]
+            .attached_terminal_id
+            .clone();
+        let token = "runtime-only-capability-token";
+        state
+            .terminals
+            .get_mut(&terminal_id)
+            .unwrap()
+            .set_pane_capability_token(Some(token.into()));
+
+        let serialized = serde_json::to_string(&capture_from_state(&state)).unwrap();
+        assert!(!serialized.contains(token));
+    }
+
+    #[test]
     fn round_trip_empty_session() {
         let snap = SessionSnapshot {
             version: SNAPSHOT_VERSION,
