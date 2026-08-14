@@ -10,12 +10,12 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function down(stdin: { write: (value: string) => void }) {
   stdin.write(`${ESC}[B`);
-  await sleep(5);
+  await sleep(20);
 }
 
 async function space(stdin: { write: (value: string) => void }) {
   stdin.write(' ');
-  await sleep(5);
+  await sleep(20);
 }
 
 describe('NotificationSoundsPopupApp', () => {

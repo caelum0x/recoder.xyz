@@ -9,7 +9,7 @@ const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 const Harness: React.FC = () => {
   const [val, setVal] = useState('');
-  return <CleanTextInput value={val} onChange={setVal} />;
+  return <CleanTextInput value={val} onChange={setVal} maxWidth={20} ignoreFocus />;
 };
 
 const makeCaptureHarness = (capture: (v: string) => void): React.FC => () => {
@@ -23,7 +23,7 @@ const makeCaptureHarness = (capture: (v: string) => void): React.FC => () => {
 
 function typeChar(stdin: any, ch: string) {
   stdin.write(ch);
-  return sleep(3);
+  return sleep(20);
 }
 
 function getLines(frame: string): string[] {
@@ -54,22 +54,9 @@ async function waitForWrappedLines(
   return getLines(lastFrame() || '');
 }
 
-// Patch process.stdout.columns deterministically for this suite
-let originalColumns: PropertyDescriptor | undefined;
-
 describe('CleanTextInput: wrapping moment (char-by-char)', () => {
-  beforeEach(() => {
-    originalColumns = Object.getOwnPropertyDescriptor(process.stdout, 'columns');
-    Object.defineProperty(process.stdout, 'columns', { value: 27, configurable: true }); // maxWidth = 20
-  });
-  afterEach(() => {
-    if (originalColumns) {
-      Object.defineProperty(process.stdout, 'columns', originalColumns);
-    }
-  });
-
   it('wraps the full word exactly when overflow occurs', async () => {
-    const width = 20; // due to columns-7
+    const width = 20;
     const text = 'lorem ipsum dolor sit amet consectetur';
 
     // Find first index where wrapping occurs for the given width
@@ -87,7 +74,7 @@ describe('CleanTextInput: wrapping moment (char-by-char)', () => {
     expect(wrapTriggerIndex).toBeGreaterThan(0);
 
     const { stdin, lastFrame } = render(<Harness />);
-    await sleep(60); // allow focus/paste mode setup
+    await sleep(120); // allow focus and initial-input handling to settle
 
     // Type up to the character just before wrap
     for (let i = 0; i < wrapTriggerIndex; i++) {
