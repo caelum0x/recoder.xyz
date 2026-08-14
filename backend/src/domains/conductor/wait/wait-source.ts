@@ -55,7 +55,14 @@ export function createPollingWaitSource(
         async *[Symbol.asyncIterator](): AsyncIterator<WaitFrame> {
           let seq = sinceSeq;
           for (;;) {
-            const data = await deps.probe(workspaceId);
+            let data: WaitFrameData | null;
+            try {
+              data = await deps.probe(workspaceId);
+            } catch {
+              // A read failure must not become a detached rejection after the wait
+              // has resolved. End the source truthfully, like a missing workspace.
+              return;
+            }
             if (data == null) return; // gone → truthful stream end (no faked settle)
             seq += 1;
             yield { seq, ...data };
