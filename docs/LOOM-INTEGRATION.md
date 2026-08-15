@@ -9,7 +9,7 @@
 
 A standalone Rust binary (`loom` v0.8.0, Rust 1.96.1) with a **headless server**
 (`loom server`) exposing a **newline-delimited JSON (NDJSON) Unix-socket control
-API** (~45 methods, `PROTOCOL_VERSION=20`). Maps to the tmux/dmux "bundled binary +
+API** (~94 methods, `PROTOCOL_VERSION=20`). Maps to the tmux/dmux "bundled binary +
 `execFile` spawn + resolver" precedent (NOT openfang's in-process NAPI).
 
 ## Socket protocol (the client contract)

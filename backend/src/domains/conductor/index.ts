@@ -314,9 +314,9 @@ export interface ConductorModuleDeps {
    */
   readonly githubStatus?: GithubStatusPort;
   /**
-   * Optional live send-keys transport (`steerWorkspace`): delivers the user's
-   * steer text into the workspace's interactive session (tmux-backed at the
-   * composition root, addressed by the workspace's `sessionName`). Absent ⇒
+   * Optional substrate-routed live transport (`steerWorkspace`): delivers the user's
+   * steer text into the workspace's interactive session (routed by substrate at
+   * the composition root, addressed by the workspace's `sessionName`). Absent ⇒
    * steering is refused truthfully (never faked); a delivery fault surfaces as
    * `ok:false` with the transport's reason.
    */

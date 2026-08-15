@@ -48,6 +48,7 @@ describe('conductor steer path', () => {
     expect(result.ok).toBe(true);
     expect(transport.sent).toHaveLength(1);
     expect(transport.sent[0]).toEqual({
+      substrate: workspace.substrate,
       sessionName: workspace.sessionName,
       keys: 'try the other branch',
       submit: true, // defaults to submit at the module seam
@@ -99,7 +100,7 @@ describe('conductor steer path', () => {
     expect(gate.audits.some((a) => a.action === 'workspace.steer')).toBe(false);
   });
 
-  it('refuses truthfully when no send-keys transport is wired', async () => {
+  it('refuses truthfully when no live substrate transport is wired', async () => {
     const { module } = composeConductor({ substrates: [new FakeSubstrate()] });
     const created = await module.createWorkspace(makeCreateInput(), makePrincipal());
 
@@ -109,7 +110,7 @@ describe('conductor steer path', () => {
     );
 
     expect(result.ok).toBe(false);
-    expect(result.reason).toMatch(/send-keys transport/);
+    expect(result.reason).toMatch(/substrate transport/);
   });
 
   it('refuses truthfully when the workspace has no live session handle', async () => {

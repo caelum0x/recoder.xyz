@@ -3,18 +3,21 @@
  *
  * The composer holds the workspace record (state of record) and the governance
  * verdict; this port is ONLY the transport: inject the user's steer text into the
- * live agent session addressed by the substrate's session name (the tmux session
- * for `tmux_worktree`). The tmux-backed adapter lives in
- * `adapters/steer-transport.adapter.ts`; bootstrap wires it at the composition
- * root. Absent transport ⇒ the composer refuses steering truthfully (never faked).
+ * live agent session addressed by the substrate's session name. Bootstrap wires
+ * a substrate router with concrete Loom/tmux transports. Absent transport, or a
+ * substrate with no transport, refuses steering truthfully (never faked).
  *
- * Contract: `sendKeys` THROWS when delivery is impossible (session gone, tmux
+ * Contract: `sendKeys` THROWS when delivery is impossible (session gone, engine
  * errored) — a truthful failure the composer surfaces as `ok:false`; it never
  * silently drops keys.
  */
 
+import type { SubstrateKind } from '../types.js';
+
 /** One steer delivery: text/keys into the session, optionally submitted (Enter). */
 export interface SteerKeysInput {
+  /** Selects the concrete transport; never infer this from session-name syntax. */
+  readonly substrate: SubstrateKind;
   /** The substrate session address (the workspace's `sessionName`). */
   readonly sessionName: string;
   /** The literal text to inject (sent as-is, never interpreted as key names). */

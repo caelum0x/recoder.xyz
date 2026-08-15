@@ -61,6 +61,8 @@ import { createCliRuntimeSubstrate } from '../domains/conductor/adapters/cli-run
 import { createOpenfangRuntimeSubstrate } from '../domains/conductor/adapters/openfang-runtime.adapter.js';
 import { createAcpSubstrate } from '../domains/conductor/adapters/acp-substrate.adapter.js';
 import { createLoomSubstrate } from '../domains/conductor/adapters/loom-substrate.adapter.js';
+import { createLoomSteerTransport } from '../domains/conductor/adapters/loom-steer-transport.adapter.js';
+import { createSteerTransportRouter } from '../domains/conductor/adapters/steer-transport-router.adapter.js';
 import { createSwarmUnblockDeps } from '../domains/conductor/adapters/swarm-unblock-wiring.js';
 import { createRemoteAttachDeps } from '../domains/conductor/adapters/remote-attach-wiring.js';
 import { LoomSocketClient } from '@recoder/agent-runtimes/loom';
@@ -908,12 +910,31 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     env: bootEnv,
     logger: childLogger('conductor-github'),
   });
-  // Live steer transport: tmux send-keys into the workspace's session (the same
-  // session addressing the tmux_worktree substrate launches with). This un-refuses
-  // `steerWorkspace` for path (a); a gone session still refuses truthfully.
-  const conductorSteer = createTmuxSteerTransport({
+  // Live steer transport: route by the workspace's canonical substrate. tmux
+  // keeps literal send-keys; Loom uses its agent-aware socket verbs. Unsupported
+  // substrates refuse explicitly instead of being misrouted into tmux.
+  const conductorTmuxSteer = createTmuxSteerTransport({
     config: conductorSubstrateConfig,
-    logger: childLogger('conductor-steer'),
+    logger: childLogger('conductor-tmux-steer'),
+  });
+  const loomSteerSocketClient = new LoomSocketClient({
+    socketPath: loomDaemon.socketPath,
+  });
+  const conductorLoomSteer = createLoomSteerTransport({
+    client: {
+      call(method, params) {
+        // The transport owns this two-verb vocabulary; the socket client simply
+        // serializes the validated method string onto Loom's NDJSON wire.
+        return loomSteerSocketClient.call(method as never, params);
+      },
+    },
+    logger: childLogger('conductor-loom-steer'),
+  });
+  const conductorSteer = createSteerTransportRouter({
+    transports: {
+      tmux_worktree: conductorTmuxSteer,
+      loom: conductorLoomSteer,
+    },
   });
   // Reconcile-GC substrate scan source: feed the engines-domain DEEP tmux
   // introspection (`list-sessions` over the pinned binary the Conductor drives)
