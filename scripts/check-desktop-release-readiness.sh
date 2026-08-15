@@ -2,15 +2,6 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO_SLUG="${REPO_SLUG:-caelum0x/recoder.xyz}"
-
-REQUIRED_SECRETS=(
-  "DESKTOP_CSC_LINK"
-  "DESKTOP_CSC_KEY_PASSWORD"
-  "DESKTOP_APPLE_ID"
-  "DESKTOP_APPLE_APP_SPECIFIC_PASSWORD"
-  "DESKTOP_APPLE_TEAM_ID"
-)
 
 PASS=0
 FAIL=0
@@ -18,39 +9,48 @@ FAIL=0
 pass() { echo "  PASS: $1"; ((PASS+=1)); }
 fail() { echo "  FAIL: $1"; ((FAIL+=1)); }
 
-echo "== Desktop Release Readiness =="
-echo "repo: $REPO_SLUG"
+echo "== Desktop Private Beta Release Readiness =="
 echo "root: $REPO_ROOT"
 echo
 
-if ! command -v gh >/dev/null 2>&1; then
-  fail "GitHub CLI (gh) is not installed"
+if [[ "$(uname -s)" != "Darwin" ]]; then
+  fail "manual desktop beta release must run on macOS"
 else
-  pass "GitHub CLI available"
+  pass "running on macOS"
 fi
 
-if ! gh api user >/dev/null 2>&1; then
-  fail "gh auth invalid/expired or missing API scope (run: gh auth login -h github.com -w -s repo,workflow,read:org,gist)"
-else
-  pass "gh auth is valid"
-fi
-
-if [[ "$FAIL" -eq 0 ]]; then
-  if ! secret_names="$(gh secret list --repo "$REPO_SLUG" --json name --jq '.[].name' 2>/dev/null)"; then
-    fail "unable to read repo secrets (check repo access/permissions: $REPO_SLUG)"
+for cmd in node pnpm openssl codesign xcrun spctl ditto security; do
+  if command -v "$cmd" >/dev/null 2>&1; then
+    pass "tool available: $cmd"
   else
-    pass "repo secret list readable"
-    if [[ -z "$secret_names" ]]; then
-      fail "no repository secrets configured for $REPO_SLUG"
-    fi
-    for key in "${REQUIRED_SECRETS[@]}"; do
-      if echo "$secret_names" | grep -Fxq "$key"; then
-        pass "secret present: $key"
-      else
-        fail "secret missing: $key"
-      fi
-    done
+    fail "required macOS release tool missing: $cmd"
   fi
+done
+
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "Developer ID Application"; then
+  pass "Developer ID Application identity present in local keychain"
+else
+  fail "no Developer ID Application identity found in local keychain"
+fi
+
+if [[ -n "${APPLE_API_KEY:-}" && -n "${APPLE_API_KEY_ID:-}" && -n "${APPLE_API_ISSUER:-}" ]]; then
+  pass "Apple notarization API credentials present in environment"
+elif [[ -n "${APPLE_ID:-}" && -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" && -n "${APPLE_TEAM_ID:-}" ]]; then
+  pass "Apple ID notarization credentials present in environment"
+else
+  fail "missing Apple notarization credentials in environment"
+fi
+
+if [[ -f "$REPO_ROOT/apps/desktop/app/electron-builder.config.cjs" ]]; then
+  pass "desktop packaging config present"
+else
+  fail "missing apps/desktop/app/electron-builder.config.cjs"
+fi
+
+if [[ -x "$REPO_ROOT/scripts/publish-desktop-release-local.sh" ]]; then
+  pass "local publish script present"
+else
+  fail "missing executable scripts/publish-desktop-release-local.sh"
 fi
 
 echo
@@ -60,13 +60,13 @@ echo "========================================="
 
 if [[ "$FAIL" -gt 0 ]]; then
   echo
-  echo "desktop release readiness: FAIL ($FAIL issue(s))"
+  echo "desktop private-beta release readiness: FAIL ($FAIL issue(s))"
   echo "next:"
-  echo "  1) gh auth login -h github.com"
-  echo "  2) set required desktop secrets"
-  echo "  3) push tag v* to trigger desktop release"
+  echo "  1) run this on the macOS arm64 release machine"
+  echo "  2) install the Developer ID identity and notarization credentials"
+  echo "  3) build from main, then run pnpm run verify:desktop-release"
   exit 1
 fi
 
 echo
-echo "desktop release readiness: PASS"
+echo "desktop private-beta release readiness: PASS"

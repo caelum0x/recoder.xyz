@@ -3,13 +3,11 @@
 # publish-desktop-release-local.sh — turn a LOCALLY built + signed + notarized
 # desktop DMG into a hosted, auto-updating release, WITHOUT any CI/CD.
 #
-# This project has no GitHub Actions release pipeline (the `desktop-release.yml`
-# scripts in this dir require CI + repo secrets we don't run). This script is the
-# manual, local equivalent: it verifies the on-disk artifact is genuinely
+# This project keeps desktop release handling manual for the private beta. This
+# script is the local release path: it verifies the on-disk artifact is genuinely
 # installable through Gatekeeper, regenerates a CORRECT electron-updater manifest
 # that matches the real artifact (the checked-in `latest-mac.yml` drifts), and
-# assembles the exact directory to rsync to `dl.recoder.xyz/releases` — the URL
-# the site (`site/lib/releases.ts`) and the app auto-updater both read.
+# assembles the exact directory to rsync to `dl.recoder.xyz/releases`.
 #
 # Producing the signed+notarized DMG this script verifies (no side-configs):
 # signing/notarization is env-gated in the committed
@@ -130,9 +128,11 @@ if [[ "$MODE" == "verify" ]]; then
   echo
   printf '\033[32mVERIFY OK\033[0m — artifact is signed, notarized, stapled. Run \033[1mpublish\033[0m to assemble the release dir.\n'
   echo
-  echo "When published, wire the site with:"
+  echo "For an invite-only beta, distribute the direct artifact URL out-of-band."
+  echo "Keep the public site dark unless launch is intentional:"
   echo "  NEXT_PUBLIC_DOWNLOAD_MACOS_URL=$BASE_URL/$DMG_NAME"
   echo "  NEXT_PUBLIC_RELEASE_VERSION=v$VERSION"
+  echo "  NEXT_PUBLIC_RELEASE_VISIBILITY=private-beta   # default / recommended"
   exit 0
 fi
 
@@ -183,10 +183,12 @@ echo
 echo "== Next steps (owner) =="
 echo "1. Upload the release dir to the host that serves $BASE_URL:"
 echo "     rsync -avz --progress $OUT_DIR/ <user>@<host>:/srv/dl.recoder.xyz/releases/"
-echo "2. Wire the site env (site/.env or the deploy env) and rebuild the site:"
+echo "2. For invite-only beta, keep the public site in early-access mode and share"
+echo "   the DMG URL directly with authenticated testers."
+echo "3. When broader launch is approved, wire the site env and rebuild the site:"
 echo "     NEXT_PUBLIC_DOWNLOAD_MACOS_URL=$BASE_URL/$DMG_NAME"
 echo "     NEXT_PUBLIC_RELEASE_VERSION=v$VERSION"
-echo "3. Verify: curl -fsI $BASE_URL/$DMG_NAME  (expect 200 + content-length $DMG_SIZE)"
+echo "     NEXT_PUBLIC_RELEASE_VISIBILITY=public"
+echo "4. Verify: curl -fsI $BASE_URL/$DMG_NAME  (expect 200 + content-length $DMG_SIZE)"
 echo "     curl -fs $BASE_URL/latest-mac.yml    (expect version $VERSION)"
-echo "   The Download page flips from 'early access' to real download automatically"
-echo "   once NEXT_PUBLIC_DOWNLOAD_MACOS_URL is set (see releasesArePublic())."
+echo "   The Download page stays private-beta until NEXT_PUBLIC_RELEASE_VISIBILITY=public."
