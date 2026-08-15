@@ -64,7 +64,7 @@ export type {
   BrainProvenanceRef,
 } from './brain.port.js';
 
-// --- Live steering (send-keys transport into the interactive session) ---
+// --- Live steering (substrate-routed transport into the interactive session) ---
 export type {
   SteerTransportPort,
   SteerKeysInput,

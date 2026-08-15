@@ -9,9 +9,10 @@
 // (github.com/herdrdev/herdr, Apache-2.0) vendored + rebranded; these wire types
 // are derived from herdr's protocol. Copyright (c) herdr contributors.
 //
-// Only the ~10 methods a substrate needs are typed here (ping, session.snapshot,
+// Only the narrow methods Recoder needs are typed here (ping, session.snapshot,
 // worktree.create, worktree.remove, agent.start, agent.get, agent.read,
-// agent.prompt, agent.wait, events.subscribe). The full engine exposes ~45.
+// agent.prompt, agent.wait, pane.send_text, events.subscribe). The full engine
+// exposes a much larger control surface.
 
 /**
  * loom `PROTOCOL_VERSION`. A `ping` reply whose `protocol` differs from this is
@@ -38,6 +39,7 @@ export type LoomMethod =
   | 'agent.read'
   | 'agent.prompt'
   | 'agent.wait'
+  | 'pane.send_text'
   | 'events.subscribe';
 
 export interface LoomRequest<Params = Record<string, unknown>> {
@@ -136,6 +138,12 @@ export interface AgentWaitParams {
   target: string;
   until?: AgentStatus[];
   timeout_ms?: number;
+}
+
+/** Raw pane text injection without an implicit Enter/submit. */
+export interface PaneSendTextParams {
+  pane_id: string;
+  text: string;
 }
 
 // --- agent.query filter/sort vocabulary -------------------------------------

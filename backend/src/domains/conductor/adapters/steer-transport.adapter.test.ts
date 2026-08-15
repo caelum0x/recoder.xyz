@@ -36,7 +36,12 @@ describe('tmux steer-transport adapter', () => {
     const { exec, calls } = makeExec();
     const transport = createTmuxSteerTransport({ config: CONFIG, exec });
 
-    await transport.sendKeys({ sessionName: 'recoder-ws_1', keys: '-try again', submit: true });
+    await transport.sendKeys({
+      substrate: 'tmux_worktree',
+      sessionName: 'recoder-ws_1',
+      keys: '-try again',
+      submit: true,
+    });
 
     expect(calls[0]?.args).toEqual(['has-session', '-t', 'recoder-ws_1']);
     // Literal (-l) + option-terminated (--) so text is never a key name or flag.
@@ -48,7 +53,12 @@ describe('tmux steer-transport adapter', () => {
     const { exec, calls } = makeExec();
     const transport = createTmuxSteerTransport({ config: CONFIG, exec });
 
-    await transport.sendKeys({ sessionName: 'recoder-ws_1', keys: 'partial', submit: false });
+    await transport.sendKeys({
+      substrate: 'tmux_worktree',
+      sessionName: 'recoder-ws_1',
+      keys: 'partial',
+      submit: false,
+    });
 
     const sendCalls = calls.filter((c) => c.args[0] === 'send-keys');
     expect(sendCalls).toHaveLength(1);
@@ -60,7 +70,12 @@ describe('tmux steer-transport adapter', () => {
     const transport = createTmuxSteerTransport({ config: CONFIG, exec });
 
     await expect(
-      transport.sendKeys({ sessionName: 'recoder-ws_gone', keys: 'hello', submit: true }),
+      transport.sendKeys({
+        substrate: 'tmux_worktree',
+        sessionName: 'recoder-ws_gone',
+        keys: 'hello',
+        submit: true,
+      }),
     ).rejects.toThrow(/session not found/);
     expect(calls.some((c) => c.args[0] === 'send-keys')).toBe(false);
   });
@@ -72,7 +87,12 @@ describe('tmux steer-transport adapter', () => {
       exec,
     });
 
-    await transport.sendKeys({ sessionName: 'recoder-ws_1', keys: 'x', submit: true });
+    await transport.sendKeys({
+      substrate: 'tmux_worktree',
+      sessionName: 'recoder-ws_1',
+      keys: 'x',
+      submit: true,
+    });
 
     expect(calls.every((c) => c.bin === '/opt/recoder/tmux')).toBe(true);
   });

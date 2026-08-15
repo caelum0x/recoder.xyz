@@ -49,7 +49,10 @@ export function createTmuxSteerTransport(deps: CreateTmuxSteerTransportDeps): St
 
   return {
     async sendKeys(input: SteerKeysInput): Promise<void> {
-      const { sessionName, keys, submit } = input;
+      const { substrate, sessionName, keys, submit } = input;
+      if (substrate !== 'tmux_worktree') {
+        throw new Error(`tmux steer transport cannot deliver to substrate ${substrate}`);
+      }
       // Truthful liveness probe first — a gone session is a refusal, not a drop.
       try {
         await exec(tmuxBin, ['has-session', '-t', sessionName]);

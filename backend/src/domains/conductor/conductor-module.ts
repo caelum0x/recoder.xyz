@@ -356,7 +356,7 @@ export class ConductorComposer implements ConductorModule {
   private readonly colbertIndex?: ConductorModuleDeps['colbertIndex'];
   /** OPTIONAL GitHub identity seam (`GET /github/status`); absent ⇒ truthful not-connected. */
   private readonly github?: GithubStatusPort;
-  /** OPTIONAL live send-keys transport; absent ⇒ steering refuses truthfully. */
+  /** OPTIONAL substrate-routed live transport; absent ⇒ steering refuses truthfully. */
   private readonly steerTransport?: SteerTransportPort;
   /** OPTIONAL per-worktree `.mcp.json` injector (Recoder toolbelt); absent ⇒ truthful skip. */
   private readonly mcpInject?: McpInjectPort;

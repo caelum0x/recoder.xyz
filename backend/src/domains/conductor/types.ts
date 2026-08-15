@@ -85,9 +85,9 @@ export interface WorkspaceView {
 }
 
 /**
- * Input to steer a live agent: raw keys/text sent into the terminal session. The
- * conductor only accepts steering for interactive substrates (tmux); non-live or
- * terminal-state workspaces reject it truthfully.
+ * Input to steer a live agent: raw keys/text sent into the substrate session. The
+ * conductor routes interactive substrates through their own transport; non-live,
+ * unsupported, or terminal-state workspaces reject it truthfully.
  */
 export interface SteerInput {
   readonly workspaceId: string;

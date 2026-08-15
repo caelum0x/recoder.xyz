@@ -333,7 +333,7 @@ export class FakeSubstrate implements ConductorSubstrate {
   }
 }
 
-/** A recording in-memory send-keys transport; `fail` makes delivery throw truthfully. */
+/** A recording in-memory steer transport; `fail` makes delivery throw truthfully. */
 export class FakeSteerTransport implements SteerTransportPort {
   readonly sent: SteerKeysInput[] = [];
   #failReason: string | null = null;
@@ -364,7 +364,7 @@ export interface ComposeOptions {
   plan?: ConductorModuleDeps['plan'];
   /** OPTIONAL ColBERT PLAID index seam (absent ⇒ no per-repo index build). */
   colbertIndex?: ConductorModuleDeps['colbertIndex'];
-  /** OPTIONAL live send-keys transport (absent ⇒ steering refuses truthfully). */
+  /** OPTIONAL live substrate transport (absent ⇒ steering refuses truthfully). */
   steerTransport?: ConductorModuleDeps['steerTransport'];
   /** OPTIONAL per-worktree `.mcp.json` injector (absent ⇒ injection is a truthful skip). */
   mcpInject?: ConductorModuleDeps['mcpInject'];

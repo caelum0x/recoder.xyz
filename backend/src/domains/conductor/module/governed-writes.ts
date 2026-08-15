@@ -557,14 +557,14 @@ export class ConductorGovernedWrites {
         reason: `workspace is ${workspace.state}, not running`,
       };
     }
-    // The live send-keys transport is wired at the composition root (tmux-backed);
-    // absent it, steering is refused truthfully (never faked).
+    // The live transport router is wired at the composition root and dispatches
+    // by the workspace's persisted substrate; absent it, steering is refused.
     if (!this.ctx.steerTransport) {
       return {
         ok: false,
         verdict,
         reason:
-          'steering requires a live send-keys transport (none wired in this composition)',
+          'steering requires a live substrate transport (none wired in this composition)',
       };
     }
     // No live session address ⇒ nothing to steer into (never launched / torn down).
@@ -581,6 +581,7 @@ export class ConductorGovernedWrites {
     }
     try {
       await this.ctx.steerTransport.sendKeys({
+        substrate: workspace.substrate,
         sessionName: workspace.sessionName,
         keys,
         submit: input.submit ?? true,

@@ -48,11 +48,10 @@ export const TERMINAL_WORKSPACE_STATES: readonly WorkspaceState[] = [
  * - `acp`           — local git worktree driving an Agent Client Protocol agent
  *                     (`claude-code-acp`) over JSON-RPC/stdio instead of a PTY.
  *                     Opt-in only; registered when the ACP agent binary is on PATH.
- * - `loom`         — the vendored `loom` engine (headless `loom server` over an
- *                     NDJSON Unix socket) driving native git worktrees + PTYs with
- *                     native agent-status detection. Opt-in only; registered when
- *                     the supervised loom daemon is healthy (binary present +
- *                     `ping` protocol 20), else reported unavailable with a reason.
+ * - `loom`         — the default desktop substrate: vendored `loom` headless server
+ *                     driving native git worktrees + PTYs with native agent status.
+ *                     Operators may explicitly disable it and fall back to tmux;
+ *                     an unhealthy daemon fails loud instead of silently switching.
  */
 export type WorkspaceSubstrate =
   'tmux_worktree' | 'daytona' | 'in_process' | 'ssh' | 'acp' | 'loom';
@@ -73,7 +72,7 @@ export type Workspace = {
   baseRef: string;
   /** Absolute worktree path (tmux_worktree substrate) or sandbox id (daytona). */
   worktreePath?: string;
-  /** Terminal session name (tmux) hosting the agent. */
+  /** Substrate-owned live session address (tmux session or Loom pane id). */
   sessionName?: string;
   state: WorkspaceState;
   createdBy: string;
