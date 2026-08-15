@@ -2,27 +2,32 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TAG=""
+MODE="${1:-verify}"
+VERSION="${2:-}"
 WRITE=false
-SET_SECRETS=false
-ENV_FILE=""
 
 usage() {
   cat <<'EOF'
 Usage:
-  bash scripts/desktop-release-closeout.sh <tag> [--write] [--set-secrets] [--from-env-file <path>]
+  bash scripts/desktop-release-closeout.sh verify
+  bash scripts/desktop-release-closeout.sh publish [--write]
+  bash scripts/desktop-release-closeout.sh hosted [version]
 
 Examples:
-  bash scripts/desktop-release-closeout.sh v1.0.0
-  bash scripts/desktop-release-closeout.sh v1.0.0 --write --set-secrets --from-env-file .env.desktop-release
+  bash scripts/desktop-release-closeout.sh verify
+  bash scripts/desktop-release-closeout.sh publish --write
+  bash scripts/desktop-release-closeout.sh hosted 0.16.1
 
 Behavior:
   - always runs readiness checks first
-  - dry-run by default for git tag push
-  - with --set-secrets, syncs desktop release secrets
-  - with --write, performs real secret upsert and real tag push
+  - verify checks the local signed/notarized/stapled macOS arm64 artifact
+  - publish is dry-run by default; with --write it assembles the release dir
+  - hosted verifies the published macOS arm64 DMG + update manifest
+  - manual clean-machine install/boot smoke remains required before invites
 EOF
 }
+
+shift || true
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -33,21 +38,13 @@ while [[ $# -gt 0 ]]; do
       WRITE=true
       shift
       ;;
-    --set-secrets)
-      SET_SECRETS=true
-      shift
-      ;;
-    --from-env-file)
-      ENV_FILE="${2:-}"
-      shift 2
-      ;;
     -h|--help)
       usage
       exit 0
       ;;
     *)
-      if [[ -z "$TAG" || "$TAG" == "$1" ]]; then
-        TAG="$1"
+      if [[ -z "$VERSION" || "$VERSION" == "$1" ]]; then
+        VERSION="$1"
         shift
       else
         echo "unknown arg: $1"
@@ -58,58 +55,44 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$TAG" ]]; then
-  echo "missing required tag argument"
-  usage
-  exit 2
+echo "== Desktop Private Beta Release Closeout =="
+echo "mode: $MODE"
+if [[ -n "$VERSION" ]]; then
+  echo "version: $VERSION"
 fi
-
-if [[ -n "$ENV_FILE" && "$SET_SECRETS" == false ]]; then
-  echo "--from-env-file requires --set-secrets"
-  exit 2
-fi
-
-echo "== Desktop Release Closeout =="
-echo "tag: $TAG"
 echo "mode: $([[ "$WRITE" == true ]] && echo write || echo dry-run)"
-echo "set-secrets: $SET_SECRETS"
 echo
 
-pnpm -C "$REPO_ROOT" run check:desktop-release-readiness || true
+pnpm -C "$REPO_ROOT" run check:desktop-release-readiness
 
-if [[ "$SET_SECRETS" == true ]]; then
-  secret_args=()
-  if [[ -n "$ENV_FILE" ]]; then
-    secret_args+=(--from-env-file "$ENV_FILE")
-  fi
-  if [[ "$WRITE" == true ]]; then
-    secret_args+=(--write)
-  fi
-  bash "$REPO_ROOT/scripts/set-desktop-release-secrets.sh" "${secret_args[@]}"
-fi
+case "$MODE" in
+  verify)
+    pnpm -C "$REPO_ROOT" run verify:desktop-release
+    ;;
+  publish)
+    if [[ "$WRITE" == true ]]; then
+      bash "$REPO_ROOT/scripts/publish-desktop-release-local.sh" publish
+    else
+      echo "[dry-run] would assemble the private-beta release dir:"
+      echo "          bash scripts/publish-desktop-release-local.sh publish"
+    fi
+    ;;
+  hosted)
+    if [[ -z "$VERSION" ]]; then
+      echo "hosted mode requires a version argument"
+      exit 2
+    fi
+    pnpm -C "$REPO_ROOT" run verify:desktop-release -- hosted "$VERSION"
+    ;;
+  *)
+    usage
+    exit 2
+    ;;
+esac
 
-if git -C "$REPO_ROOT" rev-parse "$TAG" >/dev/null 2>&1; then
-  echo "tag already exists locally: $TAG"
-else
-  if [[ "$WRITE" == true ]]; then
-    git -C "$REPO_ROOT" tag "$TAG"
-    echo "created local tag: $TAG"
-  else
-    echo "[dry-run] would create local tag: $TAG"
-  fi
-fi
-
-if [[ "$WRITE" == true ]]; then
-  git -C "$REPO_ROOT" push origin "$TAG"
-  echo "pushed tag: $TAG"
-else
-  echo "[dry-run] would push tag: $TAG"
-fi
-
-if [[ "$WRITE" == true ]]; then
-  echo "waiting 10s for workflow indexing..."
-  sleep 10
-  pnpm -C "$REPO_ROOT" run verify:desktop-release -- "$TAG"
-else
-  echo "[dry-run] would verify workflow/assets: pnpm run verify:desktop-release -- $TAG"
-fi
+echo
+echo "Required before inviting testers:"
+echo "  1) clean-machine install of the signed DMG"
+echo "  2) first boot without Gatekeeper warnings"
+echo "  3) sign-in, workspace launch, terminal attach"
+echo "  4) diff review, governed approval, and merge on a representative repo"

@@ -1,0 +1,123 @@
+name: Private Beta PR Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/private-beta-pr.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "backend/**"
+      - "apps/desktop/app/**"
+      - "site/**"
+      - "scripts/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/private-beta-pr.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "backend/**"
+      - "apps/desktop/app/**"
+      - "site/**"
+      - "scripts/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-beta-pr-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  workspace-checks:
+    name: Backend + Desktop Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            site/pnpm-lock.yaml
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run backend edge checks
+        run: pnpm -C backend run ci:check
+
+      - name: Typecheck desktop app
+        run: pnpm run typecheck:desktop
+
+  desktop-packaging-config:
+    name: Desktop Packaging Config
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run desktop packaging config tests
+        run: pnpm -C apps/desktop/app exec vitest run tests/packaging-config.test.ts tests/assert-extra-resources.test.ts
+
+  site-release-gate:
+    name: Site Invite-Only Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            site/pnpm-lock.yaml
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install site dependencies
+        run: pnpm -C site install --frozen-lockfile
+
+      - name: Typecheck site
+        run: pnpm -C site run typecheck
+
+      - name: Run invite-only release gate test
+        run: node --import tsx --test site/lib/releases.test.ts

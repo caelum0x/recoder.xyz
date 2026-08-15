@@ -12,6 +12,9 @@
  *   - NEXT_PUBLIC_DOWNLOAD_WINDOWS_URL — direct Windows artifact (.exe / .msi)
  *   - NEXT_PUBLIC_DOWNLOAD_LINUX_URL   — direct Linux artifact (.AppImage / .deb)
  *   - NEXT_PUBLIC_RELEASE_VERSION      — optional human label (e.g. "v0.4.0")
+ *   - NEXT_PUBLIC_RELEASE_VISIBILITY   — "public" to light up the public
+ *     Download CTA. Any other value (or unset) keeps the site in invite-only
+ *     private-beta mode even when direct artifact URLs exist for testers.
  *
  * Per-platform direct URLs are optional. Only macOS may fall back to the bare
  * releases page: shipped builds are macOS-arm64-only today (the desktop app's
@@ -26,6 +29,7 @@
  */
 
 export type PlatformId = "macos" | "windows" | "linux";
+export type ReleaseVisibility = "private-beta" | "public";
 
 /** Only accept absolute http(s) URLs so a misconfigured value never renders. */
 function httpUrl(raw: string | undefined): string | undefined {
@@ -37,6 +41,13 @@ function httpUrl(raw: string | undefined): string | undefined {
 /** The GitHub releases page, if configured. */
 export function releasesPageUrl(): string | undefined {
   return httpUrl(process.env.NEXT_PUBLIC_GITHUB_RELEASES_URL);
+}
+
+/** Public site visibility is explicit, never inferred from an artifact URL. */
+export function releaseVisibility(): ReleaseVisibility {
+  return process.env.NEXT_PUBLIC_RELEASE_VISIBILITY?.trim().toLowerCase() === "public"
+    ? "public"
+    : "private-beta";
 }
 
 /** A direct download URL for a specific platform, if configured. */
@@ -97,11 +108,12 @@ export function releaseVersionLabel(): string | undefined {
 }
 
 /**
- * True once any public build is reachable — either the releases page or at
- * least one per-platform artifact is configured. Drives whether the Download
- * page serves real builds or the honest "notify me" fallback.
+ * True once a release is both reachable and explicitly marked public. Invite-
+ * only beta artifacts may exist behind direct links while the site honestly
+ * stays in the "Get early access" state.
  */
 export function releasesArePublic(): boolean {
+  if (releaseVisibility() !== "public") return false;
   return Boolean(
     releasesPageUrl() ||
       platformDownloadUrl("macos") ||
