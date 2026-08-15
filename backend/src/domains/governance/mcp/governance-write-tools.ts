@@ -219,8 +219,10 @@ export function buildGovernanceWriteTools(
         const body = asObject(raw);
         const { actorId, principal } = resolveActor(body, caller);
         const action = reqString(body, 'action');
+        const target = reqString(body, 'target');
         const riskTier = optString(body, 'riskTier') as RiskTier | undefined;
         if (!action) return inputError('action is required');
+        if (!target) return inputError('target is required');
         if (!riskTier || !RISK_TIERS.includes(riskTier)) {
           return inputError(`riskTier must be one of: ${RISK_TIERS.join(', ')}`);
         }
@@ -235,7 +237,7 @@ export function buildGovernanceWriteTools(
           taskId: optString(body, 'taskId') ?? null,
           runId: optString(body, 'runId') ?? null,
           reason: optString(body, 'reason') ?? null,
-          target: optString(body, 'target') ?? null,
+          target,
           ...(optPositiveNumber(body, 'ttlMs') != null ? { ttlMs: optPositiveNumber(body, 'ttlMs')! } : {}),
         });
         return { ok: true, verdict, approval };

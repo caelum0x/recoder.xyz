@@ -187,6 +187,7 @@ export class GovernanceGateService implements GovernanceGate {
       engine: effective.engine,
       auditHash: auditHash ?? effective.auditHash,
       approvalId,
+      target: resourceOf(ctx),
       createdAt: now,
     };
   }
@@ -373,9 +374,9 @@ export class GovernanceGateService implements GovernanceGate {
       //    otherwise defeat the TTL. (recoder-nnqx)
       //  - requester — bound to `principal.userId` in the list() query above, so a
       //    peer sharing a taskId cannot inherit the approval. (recoder-xiqj)
-      //  - target — an approval for one concrete path/command must NOT clear the
-      //    same action on a DIFFERENT target; a null/absent stored target stays
-      //    task-wide (backward-compatible). (recoder-adsk)
+      //  - target — an approval for one concrete resource must NOT clear the
+      //    same action on a DIFFERENT target; historical null-target rows never
+      //    clear a new decision. (recoder-adsk)
       const nowMs = Date.now();
       const ctxTarget = resourceOf(ctx);
       return records.find(
@@ -506,13 +507,11 @@ function isApprovalExpired(expiresAt: string | null | undefined, nowMs: number):
 
 /**
  * Whether a stored approval target matches the action's current target
- * (recoder-adsk). A null/absent/blank stored target is backward-compatible: it
- * clears the action task-wide (the pre-fix behavior), so approvals minted before
- * the `target` column existed are not broken. A concrete stored target clears
- * ONLY the same target — an approval for one path/command never clears the
- * action on another. `ctxTarget` is `resourceOf(ctx)`, always a stable string.
+ * (recoder-adsk). A null/absent/blank stored target is historical, unactionable
+ * data: it never clears a new decision. A concrete stored target clears ONLY the
+ * same target. `ctxTarget` is `resourceOf(ctx)`, always a stable string.
  */
 function approvalTargetMatches(storedTarget: string | null | undefined, ctxTarget: string): boolean {
-  if (storedTarget == null || storedTarget === '') return true;
+  if (storedTarget == null || storedTarget === '') return false;
   return storedTarget === ctxTarget;
 }

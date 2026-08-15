@@ -33,6 +33,7 @@ import { readRepoPassages } from '../adapters/repo-passages.adapter.js';
 import { resolveRepoDefaultBranch } from '../git-default-branch.js';
 import {
   conductorAuditEntry,
+  conductorTarget,
   guardConductorWrite,
   recordConductorAudit,
 } from '../audit/conductor-audit.js';
@@ -309,7 +310,7 @@ export class ConductorGovernedWrites {
       action,
       principal,
       {
-        target: { path: input.repoPath },
+        target: conductorTarget('repository', input.repoPath),
         ...(input.taskId ? { taskId: input.taskId } : {}),
         metadata: {
           projectId: input.projectId,
@@ -387,7 +388,7 @@ export class ConductorGovernedWrites {
                   'coordination.reroute',
                   principal,
                   {
-                    target: { path: input.repoPath },
+                    target: conductorTarget('repository', input.repoPath),
                     taskId: issueId,
                     metadata: { issueId },
                   }
@@ -541,7 +542,7 @@ export class ConductorGovernedWrites {
       action,
       principal,
       {
-        target: { path: input.workspaceId },
+        target: conductorTarget('workspace', input.workspaceId),
         ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
         metadata: { workspaceId: input.workspaceId },
       }
@@ -698,7 +699,7 @@ export class ConductorGovernedWrites {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('workspace', workspaceId),
         ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
         metadata: { workspaceId },
       }
@@ -812,7 +813,7 @@ export class ConductorGovernedWrites {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('workspace', workspaceId),
         ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
         metadata: { workspaceId, to },
       }
@@ -873,7 +874,7 @@ export class ConductorGovernedWrites {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('global', 'reconcile'),
         metadata: { op: 'reconcile' },
       }
     );
@@ -900,7 +901,7 @@ export class ConductorGovernedWrites {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('workspace', workspaceId),
         metadata: { workspaceId },
       }
     );
@@ -945,7 +946,7 @@ export class ConductorGovernedWrites {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('workspace', workspaceId, 'paths', ...[...paths].sort()),
         ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
         metadata: { workspaceId, pathCount: paths.length },
       }
@@ -1010,7 +1011,13 @@ export class ConductorGovernedWrites {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget(
+          'workspace',
+          workspaceId,
+          'hunks',
+          filePath,
+          [...hunkIndexes].sort((a, b) => a - b).join(',')
+        ),
         ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
         metadata: {
           workspaceId,
@@ -1072,7 +1079,7 @@ export class ConductorGovernedWrites {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('workspace', workspaceId),
         ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
         metadata: { workspaceId, base: input.base },
       }
@@ -1113,7 +1120,7 @@ export class ConductorGovernedWrites {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('workspace', workspaceId),
         ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
         metadata: { workspaceId, strategy: input.strategy },
       }
@@ -1440,7 +1447,7 @@ export class ConductorGovernedWrites {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('workspace', workspaceId),
         metadata: { workspaceId },
       }
     );

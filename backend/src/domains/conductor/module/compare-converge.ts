@@ -50,6 +50,7 @@ import { signEvidenceExport } from '../evidence/evidence-signing.js';
 import type { GroupGridArrangement } from '../ports/workspace-grid.port.js';
 import {
   conductorAuditEntry,
+  conductorTarget,
   guardConductorWrite,
   recordConductorAudit,
 } from '../audit/conductor-audit.js';
@@ -378,7 +379,7 @@ export class ConductorCompareConverge {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('task-group', taskGroup),
         metadata: { taskGroup },
       }
     );
@@ -574,7 +575,7 @@ export class ConductorCompareConverge {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('task-group', input.taskGroup),
         metadata: { taskGroup: input.taskGroup },
       }
     );
@@ -728,7 +729,7 @@ export class ConductorCompareConverge {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('task-group', groupId),
         metadata: {
           taskGroup: groupId,
           adHoc: true,

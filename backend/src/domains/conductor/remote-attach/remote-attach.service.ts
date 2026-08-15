@@ -54,7 +54,7 @@ export interface RemoteAttachApprovalPort {
     readonly requestedBy: string;
     readonly reason?: string | null;
     readonly taskId?: string | null;
-    readonly target?: string | null;
+    readonly target: string;
   }): Promise<{ readonly id: string }>;
 }
 

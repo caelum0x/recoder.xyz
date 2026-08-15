@@ -14,6 +14,7 @@ type RecoderApproval = {
     riskTier: "low" | "medium" | "high" | "critical";
     status: "pending" | "approved" | "denied" | "expired";
     requestedBy: string;
+    target?: string;
     reason?: string;
     createdAt: string;
 };

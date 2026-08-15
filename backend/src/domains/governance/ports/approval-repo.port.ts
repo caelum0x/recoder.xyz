@@ -19,11 +19,10 @@ export interface ApprovalRequestInput {
   readonly reason?: string | null;
   /**
    * The action's concrete target (a path/command, derived like `resourceOf(ctx)`).
-   * When set, the approval clears the action ONLY on this exact target; a
-   * null/absent target clears the action task-wide (backward-compatible with
-   * approvals minted before targets were recorded). (recoder-adsk)
+   * A concrete value clears the action ONLY on this exact target. Null/absent
+   * values exist only on historical rows and never clear a new decision.
    */
-  readonly target?: string | null;
+  readonly target: string;
   /** ISO-8601 expiry; a `pending` record past this is treated as `expired`. */
   readonly expiresAt?: string | null;
 }

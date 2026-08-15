@@ -107,6 +107,8 @@ export interface GateVerdict {
   readonly auditHash?: string;
   /** The approval gate/record id when `effect === 'needs_approval'`. */
   readonly approvalId?: string;
+  /** Canonical resource this verdict governs; pass unchanged when requesting approval. */
+  readonly target?: string;
   readonly createdAt: string;
 }
 
@@ -227,8 +229,8 @@ export interface ApprovalRecord {
   readonly requestedBy: string;
   /**
    * The action's concrete target (path/command) this approval was granted for.
-   * A stored target clears the action ONLY on that exact target; a null/absent
-   * target clears the action task-wide (backward-compatible). (recoder-adsk)
+   * A stored target clears the action ONLY on that exact target. A null/absent
+   * target marks a historical row that cannot clear a new decision. (recoder-adsk)
    */
   readonly target?: string | null;
   readonly decidedBy?: string | null;

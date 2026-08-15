@@ -64,6 +64,7 @@ export function buildGovernanceApprovalsRouter(deps: GovernanceApprovalsRouterDe
     asyncHandler(async (req, res) => {
       const body = asObject(req.body);
       const action = requireString(body, 'action');
+      const target = requireString(body, 'target');
       const riskTier = requireRiskTier(body);
       const record = await approvals.request({
         action,
@@ -72,7 +73,7 @@ export function buildGovernanceApprovalsRouter(deps: GovernanceApprovalsRouterDe
         taskId: optionalString(body, 'taskId') ?? null,
         runId: optionalString(body, 'runId') ?? null,
         reason: optionalString(body, 'reason') ?? null,
-        target: optionalString(body, 'target') ?? null,
+        target,
         ttlMs: optionalNumber(body, 'ttlMs'),
         expiresAt: optionalString(body, 'expiresAt') ?? null,
       });

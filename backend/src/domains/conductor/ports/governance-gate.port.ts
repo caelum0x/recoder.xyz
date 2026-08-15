@@ -20,6 +20,7 @@ export type { GovernanceGate as GovernanceGatePort } from '../../governance/port
 export type {
   GovernanceAction,
   GateDecisionContext,
+  GateTarget,
   GateVerdict,
   GovernanceEffect,
   RiskTier,

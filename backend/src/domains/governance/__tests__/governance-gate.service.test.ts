@@ -85,7 +85,7 @@ describe('GovernanceGateService — decide → risk → audit', () => {
 
   it('CLEARS a needs_approval verdict when a real approved record exists for the task+action', async () => {
     const approvals = new InMemoryApprovalRepository();
-    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: '/repo/a.ts' });
     await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
 
     const { gate, auditRepo } = buildGate(NEEDS, { approvals });
@@ -105,6 +105,7 @@ describe('GovernanceGateService — decide → risk → audit', () => {
     const approvals = new InMemoryApprovalRepository();
     const created = await approvals.create({
       action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1',
+      target: '/repo/a.ts',
       expiresAt: new Date(Date.now() - 60_000).toISOString(), // already past
     });
     await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
@@ -123,6 +124,7 @@ describe('GovernanceGateService — decide → risk → audit', () => {
     const approvals = new InMemoryApprovalRepository();
     const created = await approvals.create({
       action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1',
+      target: '/repo/a.ts',
       expiresAt: new Date(Date.now() + 3_600_000).toISOString(), // 1h out
     });
     await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
@@ -138,7 +140,7 @@ describe('GovernanceGateService — decide → risk → audit', () => {
     // task+action. Actor u2's approved record must never clear u1's action —
     // otherwise any actor sharing a taskId inherits another's approval.
     const approvals = new InMemoryApprovalRepository();
-    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u2', taskId: 't1' });
+    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u2', taskId: 't1', target: '/repo/a.ts' });
     await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
 
     const { gate } = buildGate(NEEDS, { approvals });
@@ -181,18 +183,20 @@ describe('GovernanceGateService — decide → risk → audit', () => {
     expect(v.approvalId).toBe(created.id);
   });
 
-  it('a NULL-target approval still clears the action task-wide (backward-compatible, recoder-adsk)', async () => {
-    // Approvals minted before the target column existed carry a null target and
-    // must keep clearing the action on any target (no regression for old grants).
+  it('a historical NULL-target approval never clears a new action (recoder-adsk)', async () => {
+    // Rows minted before target capture remain readable but cannot authorize an
+    // unrelated target. This removes the task-wide legacy bypass.
     const approvals = new InMemoryApprovalRepository();
-    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const created = await approvals.create({
+      action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: null as never,
+    });
     await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
 
     const { gate } = buildGate(NEEDS, { approvals });
     const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1', target: { path: '/some/other/path.ts' } }));
 
-    expect(v.effect).toBe('allow');
-    expect(v.approvalId).toBe(created.id);
+    expect(v.effect).toBe('needs_approval');
+    expect(v.approvalId).toBeUndefined();
   });
 
   it('SOLO MODE (bootstrap-injected, never env): clears a needs_approval to allow and seals it', async () => {
@@ -230,7 +234,7 @@ describe('GovernanceGateService — decide → risk → audit', () => {
 
   it('does NOT clear on a pending (undecided) approval record', async () => {
     const approvals = new InMemoryApprovalRepository();
-    await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: '/repo/a.ts' });
 
     const { gate } = buildGate(NEEDS, { approvals });
     const v = await gate.decide('pr.merge', principal(), ctx({ taskId: 't1' }));
@@ -239,7 +243,7 @@ describe('GovernanceGateService — decide → risk → audit', () => {
 
   it('does NOT clear on an approved record for a DIFFERENT action', async () => {
     const approvals = new InMemoryApprovalRepository();
-    const created = await approvals.create({ action: 'branch.push', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const created = await approvals.create({ action: 'branch.push', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: '/repo/a.ts' });
     await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
 
     const { gate } = buildGate(NEEDS, { approvals });
@@ -249,7 +253,7 @@ describe('GovernanceGateService — decide → risk → audit', () => {
 
   it('does NOT clear without a taskId to correlate the approval to', async () => {
     const approvals = new InMemoryApprovalRepository();
-    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: '/repo/a.ts' });
     await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
 
     const { gate } = buildGate(NEEDS, { approvals });
@@ -259,7 +263,7 @@ describe('GovernanceGateService — decide → risk → audit', () => {
 
   it('FAIL-CLOSED: an approval-cleared allow that cannot be sealed downgrades to a synthetic deny', async () => {
     const approvals = new InMemoryApprovalRepository();
-    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: '/repo/a.ts' });
     await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
 
     const { gate } = buildGate(NEEDS, { approvals, failAudit: true });
@@ -437,7 +441,7 @@ describe('GovernanceGateService — high-risk consensus review (pal)', () => {
 
   it('an approval-CLEARED high-risk allow SKIPS consensus (human already decided)', async () => {
     const approvals = new InMemoryApprovalRepository();
-    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: '/repo/a.ts' });
     await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
 
     const { port, calls } = stubConsensus(review('block'));
@@ -508,7 +512,7 @@ describe('GovernanceGateService.enforceTool — the per-tool teeth', () => {
 describe('GovernanceGateService — durable ApprovalRepository is the SOLE clearance store', () => {
   it('RETIRE-REGRESSION: clears a needs_approval via the durable repo with NO kernel store wired', async () => {
     const approvals = new InMemoryApprovalRepository();
-    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const created = await approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: '/repo/a.ts' });
     await approvals.decide(created.id, { decision: 'approved', decidedBy: 'admin' });
 
     // No `approvalStore` param exists anymore — the durable repo is the only path.

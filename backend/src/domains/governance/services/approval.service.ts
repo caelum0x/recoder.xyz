@@ -62,12 +62,10 @@ export interface RequestApprovalParams {
   readonly runId?: string | null;
   readonly reason?: string | null;
   /**
-   * The action's concrete target (path/command). When set, the resulting
-   * approval clears the action ONLY on this exact target; absent ⇒ task-wide
-   * (backward-compatible). Makes the recoder-adsk target binding effective at the
-   * creation side. (recoder-adsk follow-through)
+   * The action's concrete target. Required for every new request; historical
+   * null-target rows remain readable but cannot authorize a new decision.
    */
-  readonly target?: string | null;
+  readonly target: string;
   /** Lease length in ms; clamped to [1m, 30d]. Ignored when `expiresAt` is given. */
   readonly ttlMs?: number;
   /** Explicit ISO-8601 expiry; overrides `ttlMs` when present. */
@@ -118,6 +116,7 @@ export class ApprovalService {
   async request(params: RequestApprovalParams): Promise<ApprovalRecord> {
     const action = requireNonEmpty(params.action, 'action');
     const requestedBy = requireNonEmpty(params.requestedBy, 'requestedBy');
+    const target = requireNonEmpty(params.target, 'target');
     const riskTier = normalizeTier(params.riskTier);
     const expiresAt = this.resolveExpiry(params);
 
@@ -128,12 +127,12 @@ export class ApprovalService {
       taskId: params.taskId ?? null,
       runId: params.runId ?? null,
       reason: params.reason ?? null,
-      target: params.target ?? null,
+      target,
       expiresAt,
     });
 
     this.log.info(
-      { approvalId: record.id, action, riskTier, requestedBy, taskId: record.taskId },
+      { approvalId: record.id, action, target, riskTier, requestedBy, taskId: record.taskId },
       'approval requested',
     );
     await this.seal(record, 'needs_approval', requestedBy);

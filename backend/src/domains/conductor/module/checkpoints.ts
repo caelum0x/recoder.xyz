@@ -20,6 +20,7 @@ import {
 } from '../services/checkpoint.service.js';
 import {
   conductorAuditEntry,
+  conductorTarget,
   guardConductorWrite,
   recordConductorAudit,
 } from '../audit/conductor-audit.js';
@@ -60,7 +61,7 @@ export class ConductorCheckpoints {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('workspace', workspaceId),
         ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
         metadata: { workspaceId },
       }
@@ -119,7 +120,7 @@ export class ConductorCheckpoints {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('workspace', workspaceId, 'checkpoint', checkpointId),
         ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
         metadata: { workspaceId, checkpointId },
       }
@@ -172,7 +173,7 @@ export class ConductorCheckpoints {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('workspace', workspaceId, 'checkpoint', checkpointId),
         ...(source?.taskId ? { taskId: source.taskId } : {}),
         metadata: { workspaceId, checkpointId },
       }
