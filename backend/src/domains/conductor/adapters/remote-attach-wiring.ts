@@ -83,7 +83,7 @@ export function createRemoteAttachDeps(
 ): RemoteAttachExternalDeps {
   const logger = deps.logger ?? NOOP_LOGGER;
 
-  /** Resolve a workspace's loom terminal id (`sessionName`) steer target, or `null`. */
+  /** Resolve a workspace's public Loom pane id (`sessionName`), or `null`. */
   async function loomTarget(workspaceId: string): Promise<string | null> {
     const ws = await deps.getWorkspace(workspaceId);
     const session = ws?.sessionName;

@@ -167,7 +167,7 @@ function notFound(): Reply {
 const HANDLE = {
   ref: 'ws_1',
   worktreePath: '/tmp/wt/ws_1',
-  sessionName: 'term_1',
+  sessionName: 'pane_root',
 };
 
 describe('createLoomSubstrate', () => {
@@ -257,12 +257,40 @@ describe('createLoomSubstrate', () => {
       timeout_ms: 90000,
       args: ['claude --headless "do the task"'],
     });
-    // handle = { ref: workspaceId, worktreePath: worktree.path, sessionName: terminal_id }
+    // The handle persists the public pane id. Loom agent verbs do not accept the
+    // engine-internal terminal_id returned in AgentInfo.
     expect(handle).toEqual({
       ref: 'ws_1',
       worktreePath: '/tmp/wt/ws_1',
-      sessionName: 'term_1',
+      sessionName: 'pane_root',
     });
+  });
+
+  it('launch(): the persisted pane id remains a valid target for later agent verbs', async () => {
+    const fake = await withFake({
+      ping: () => pong(20),
+      'worktree.create': () => worktreeCreated('/tmp/wt/ws_1', 'pane_root'),
+      'agent.start': () => agentStarted('term_internal'),
+      'agent.read': params =>
+        params.target === 'pane_root'
+          ? paneRead('still attached')
+          : notFound(),
+    });
+    const substrate = createLoomSubstrate({ socketPath: fake.socketPath });
+
+    const handle = await substrate.launch({
+      workspaceId: 'ws_1',
+      command: 'claude',
+      repoPath: '/repo',
+      branch: 'feat/x',
+      baseRef: 'main',
+    });
+
+    expect(handle.sessionName).toBe('pane_root');
+    expect(await substrate.capture(handle, 20)).toBe('still attached');
+    expect(fake.requests.find(r => r.method === 'agent.read')?.params.target).toBe(
+      'pane_root'
+    );
   });
 
   it.each(['recoder_code', 'qwen_code', 'crush'])(
@@ -337,7 +365,7 @@ describe('createLoomSubstrate', () => {
     expect(text).toBe('build passed\n$ ');
     const read = fake.requests.find(r => r.method === 'agent.read');
     expect(read?.params).toEqual({
-      target: 'term_1',
+      target: 'pane_root',
       source: 'recent',
       lines: 120,
       strip_ansi: true,
@@ -423,11 +451,11 @@ describe('createLoomSubstrate', () => {
       prompt: 'now add tests',
     });
     const prompt = fake.requests.find(r => r.method === 'agent.prompt');
-    expect(prompt?.params).toEqual({ target: 'term_1', text: 'now add tests' });
+    expect(prompt?.params).toEqual({ target: 'pane_root', text: 'now add tests' });
     expect(next).toEqual({
       ref: 'ws_1',
       worktreePath: '/tmp/wt/ws_1',
-      sessionName: 'term_1',
+      sessionName: 'pane_root',
     });
   });
 

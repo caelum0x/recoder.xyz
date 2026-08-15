@@ -6,7 +6,7 @@
  * runs the escalate-by-default decision loop over live sources:
  *
  *  - `agentRead`     → the loom control API (`agent.read` recent, strip-ANSI) on
- *    the blocked pane's terminal id (the workspace's persisted `sessionName`).
+ *    the blocked pane's public pane id (the workspace's persisted `sessionName`).
  *    Any fault / no live session ⇒ `null` (the service escalates truthfully).
  *  - `agentPrompt`   → the loom control API (`agent.prompt`) into that SAME live
  *    pane. No live session / a non-`agent_prompted` reply THROWS (a failed
@@ -200,7 +200,7 @@ export function createSwarmUnblockDeps(
 ): SwarmUnblockDeps {
   const logger = deps.logger ?? NOOP_LOGGER;
 
-  /** Resolve a workspace's loom terminal id (`sessionName`) target, or `null`. */
+  /** Resolve a workspace's public Loom pane id (`sessionName`), or `null`. */
   async function loomTarget(workspaceId: string): Promise<string | null> {
     const ws = await deps.getWorkspace(workspaceId);
     const session = ws?.sessionName;
