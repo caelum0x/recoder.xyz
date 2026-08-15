@@ -96,6 +96,7 @@
     "beads:sync": "pnpm exec tsx scripts/beads-sync.ts",
     "beads:task:create": "pnpm exec tsx scripts/beads-task-create.ts",
     "beads:task:status": "pnpm exec tsx scripts/beads-task-status.ts",
+    "beta:run-artifact": "pnpm exec tsx scripts/private-beta-run-artifact.ts",
     "test:contracts:agent-os": "node --import tsx --test tests/contracts/agent-os/*.test.ts",
     "test:evals:agent-os": "node --import tsx --test tests/evals/agent-os/*.test.ts",
     "link:cli": "echo 'CLI is published package - install with: npm install -g recoder-cli'",
