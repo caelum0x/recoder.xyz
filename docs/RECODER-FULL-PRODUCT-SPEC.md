@@ -254,9 +254,13 @@ Every beta run artifact must contain, with secrets redacted:
 - user-visible failure text;
 - links or ids for logs, audit, and exported evidence.
 
-The existing collector covers only part of this contract. Completing architecture,
-auth/refresh, run identity, and exact approval-target capture is tracked by
-`recoder-0w03`; the clean-machine proof remains `recoder-1ejn`.
+The v2 collector at `scripts/private-beta-run-artifact.ts` captures host architecture,
+the installed artifact hash, workspace/task/run identity, repository, task-scoped
+approval decisions and exact targets, and all backend-derived review evidence. A
+redacted context file supplies sign-in, refresh, terminal-attach, and reconnect
+observations that cannot be read safely outside Electron. `contract.complete` is
+false with named missing fields until the full evidence shape is present. The real
+clean-machine proof remains `recoder-1ejn`.
 
 ## 9. Private-beta acceptance
 

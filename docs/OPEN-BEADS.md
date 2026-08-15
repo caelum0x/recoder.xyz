@@ -1,9 +1,10 @@
 # Open Beads Architecture Map
 
-Snapshot: 2026-08-15, from `bd list --status open --json --limit 0` before the
-documentation task `recoder-h66l` is closed. The snapshot contains 40 open beads:
-one P0, two P1, 35 P2, and two P3. It includes `recoder-b7qh`, `recoder-0w03`, and
-`recoder-vxvq`, discovered during this architecture pass.
+Snapshot: 2026-08-15, from `bd list --status open --json --limit 0` after the
+architecture and first implementation passes. The snapshot contains 38 open beads:
+one P0, one P1, 34 P2, and two P3. `recoder-b7qh` and `recoder-0w03` are now closed;
+`recoder-vxvq` remains as the workspace-detail implementation follow-up discovered
+during the architecture pass.
 
 This is an inventory and planning view, not a replacement for Beads. Current status,
 notes, dependencies, and claims remain authoritative in `bd show <id> --json`.
@@ -26,13 +27,11 @@ Disposition vocabulary:
 |---|---:|---|---|---|
 | `recoder-5iqy` | 0 | SECURITY: prod box coreutils tampered - cp/tr/su MISSING, rm checksum MODIFIED (dpkg -V) | Beta gate / owner | Revalidate current notes and either establish hosted auth integrity or remediate; close if the original finding was conclusively a false positive. |
 | `recoder-rxn0` | 1 | LICENSE AUDIT: recodergit is PolyForm-NONCOMMERCIAL and ships in the public DMG; multica is Dify-style restricted-Apache | Beta gate / owner | Distribution exposure is mostly fixed. Confirm Multica is not linked, keep RecoderGit excluded, and close with evidence. |
-| `recoder-b7qh` | 1 | Desktop health marks license-excluded RecoderGit as packaged-required | Beta gate | Remove RecoderGit from the packaged-required health roster or add an explicit intentionally-excluded state; preserve truthful unavailable behavior. |
 | `recoder-mhyt` | 2 | P0: no canonical release line - origin/main frozen ~2mo, all work on feature branch (~552 conflicts) [OWNER-GATED] | Beta gate / owner | Make `main` canonical and release only from it. |
 | `recoder-fi6w` | 2 | release: changesets pipeline has no automated consumer - ALL GitHub workflows live in .github/workflows.disabled | Beta gate / owner | Restore minimal validation or document the intentionally manual release consumer. Publishing/signing remain manual. |
 | `recoder-adsk` | 2 | [medium] Approval clearance ignores the target (path/command) - an approval for one target clears the same action on ANY | Beta gate | Bind approval clearance to normalized action and exact target before approval-dependent runs. |
 | `recoder-4d8i` | 2 | SECURITY REVIEW (owner decision): gated control-plane findings from survey-2 | Beta gate / owner | Decide which findings apply to the local beta and disable or remediate affected surfaces. |
 | `recoder-1ejn` | 2 | Private-beta Phase 1: run clean-machine install and core workflow smoke on the signed macOS arm64 build | Beta live verification | Execute the full acceptance flow and attach structured run artifacts. |
-| `recoder-0w03` | 2 | Complete private-beta artifact collector coverage for acceptance evidence | Beta gate | Capture architecture, hosted sign-in/refresh, run identity, and exact approval targets so the evidence contract is executable. |
 | `recoder-4wdp` | 2 | DT-7.1 live-launch verify: renderer adopts reassigned backend port end-to-end | Beta live verification | Occupy the preferred port and verify all renderer HTTP/WS traffic follows the IPC-injected URL. |
 | `recoder-lyzr` | 2 | DT-7.3b/7.4/stale-gate live-launch verify (GUI-gated residuals) | Beta live verification | Prove real GUI reconnect, stale-gate recovery, event replay, and session reconciliation. |
 | `recoder-qtac` | 2 | website: prod is behind repo on convergence positioning + cli-auth identity - approval-gated deploy batch untracked | Beta supporting / owner | Deploy only the device-auth/account changes needed by invited testers; marketing rollout is separate. |
@@ -93,19 +92,15 @@ The following changes make the issue graph usable as an architecture backlog:
 5. Close `recoder-rxn0` after the final Multica/non-bundling evidence is attached.
 6. Reclassify `recoder-wisp-6v7` as memory rather than active product work.
 7. Keep commercial billing beads grouped and excluded from private-beta acceptance.
-8. Track the newly discovered RecoderGit packaged-health mismatch separately: the
-   packager excludes it legally, but the Electron supervisor still treats
-   `recodergit:cli` as packaged-required.
 
 ## 6. Critical path
 
 ```text
 main/release line (recoder-mhyt)
-  -> license + packaged-health truth (recoder-rxn0 + recoder-b7qh)
+  -> license truth (recoder-rxn0)
   -> approval/security disposition (recoder-adsk, recoder-4d8i, swarm gate if enabled)
   -> signed/notarized/stapled arm64 artifact
   -> dynamic-port + restart GUI proof (recoder-4wdp, recoder-lyzr)
-  -> complete evidence capture (recoder-0w03)
   -> clean-machine core loop (recoder-1ejn)
   -> invite cohort
 ```
