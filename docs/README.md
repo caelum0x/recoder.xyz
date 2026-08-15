@@ -7,8 +7,9 @@ with memory, retrieval, browsing, governance, and an audit trail the agents use
 through a single MCP host. The product is a terminal; everything below is the
 power behind it.
 
-> Start here, then follow the map. Every doc is code-grounded and reconciled to
-> what actually shipped.
+> Start with the four canonical private-beta documents below. Older roadmaps remain
+> useful implementation history, but do not override their product scope, status
+> vocabulary, connection boundaries, or delivery gates.
 
 ---
 
@@ -35,6 +36,9 @@ is the task-oriented walkthrough — install, first parallel run, connecting age
 
 | Doc | What it is |
 |---|---|
+| [RECODER-FULL-PRODUCT-SPEC.md](RECODER-FULL-PRODUCT-SPEC.md) | **Canonical private-beta product contract:** user flows, surfaces, ownership, state, evidence, acceptance. |
+| [RECODER-PRIVATE-BETA-PLAN.md](RECODER-PRIVATE-BETA-PLAN.md) | **Canonical active delivery plan:** release readiness, live product validation, beta operations, expansion triggers. |
+| [OPEN-BEADS.md](OPEN-BEADS.md) | Complete open-bead inventory grouped by architectural lane and beta disposition. |
 | [PRODUCT-THESIS.md](PRODUCT-THESIS.md) | The convergence thesis + locked product decisions. **Read first.** |
 | [RECODER-PRODUCT-DESIGN.md](RECODER-PRODUCT-DESIGN.md) | Design principles: clean-first, backend/frontend split, no engine names in the UI. |
 | [SECURITY-POSTURE.md](SECURITY-POSTURE.md) | Honest security posture: the 21-vuln sweep (fixed) + residual risk + before-multi-tenant-launch checklist. |
@@ -45,6 +49,7 @@ is the task-oriented walkthrough — install, first parallel run, connecting age
 
 | Doc | What it is |
 |---|---|
+| [RECODER-CONNECTION-ARCHITECTURE.md](RECODER-CONNECTION-ARCHITECTURE.md) | **Canonical runtime topology:** Electron, Go shell, Node control plane, engines, protocols, state, trust, packaging. |
 | [RECODER-ARCHITECTURE.md](RECODER-ARCHITECTURE.md) | Canonical layer stack + engine→module map. |
 | [RECODER-MODULES.md](RECODER-MODULES.md) | Per-module capability index (links to the specs below). |
 | [architecture/TERMINAL-UNIFICATION.md](architecture/TERMINAL-UNIFICATION.md) | Desktop↔backend terminal unification (buckets A/B). |

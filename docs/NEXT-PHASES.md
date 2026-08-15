@@ -1,5 +1,12 @@
 # Recoder — Next Phases: Product Strategy + Technical Plan
 
+> **Historical strategy (superseded for active work on 2026-08-15):** use
+> [RECODER-PRIVATE-BETA-PLAN.md](./RECODER-PRIVATE-BETA-PLAN.md) for current sequencing,
+> [RECODER-FULL-PRODUCT-SPEC.md](./RECODER-FULL-PRODUCT-SPEC.md) for product scope, and
+> [OPEN-BEADS.md](./OPEN-BEADS.md) for the current issue map. This file preserves
+> prior strategy and implementation evidence; its future-tense milestones and broad
+> completion claims are not the private-beta release gate.
+
 Status: 2026-08-04 v2 (deep). Owner-facing. Built from three surface audits +
 three technical-seam recons (file:line evidence throughout), graded against the
 locked thesis ([PRODUCT-THESIS.md](./PRODUCT-THESIS.md) §12–13),
@@ -8,8 +15,9 @@ locked thesis ([PRODUCT-THESIS.md](./PRODUCT-THESIS.md) §12–13),
 [DESIGN-REFERENCE.md](./DESIGN-REFERENCE.md).
 Context: v0.16.1 signed+notarized+stapled macOS-arm64 DMG is publicly downloadable as of 2026-08-07 (dl.recoder.xyz/releases + /download now a real public download, not early access; existing installs auto-update via the feed). Human end-to-end boot verification still pending.
 
-> **📌 2026-08-07 status reconciliation → see [PLAN.md](./PLAN.md) for the current
-> now-plan.** The Part II technical roadmap below is essentially **built**: re-verified
+> **Historical 2026-08-07 status reconciliation:** [PLAN.md](./PLAN.md) captured the
+> plan at that date. The Part II technical roadmap below was described as essentially
+> **built**: re-verified
 > against code, **17 of 18 phases are DONE** (Desktop A1–A6, Backend B1–B6, Website
 > C1–C5) and only **C6 (billing unification)** is OWNER-GATED. The remaining work is no
 > longer "build these phases" — it is **(a) deepen the moat** (line-level/AST merge

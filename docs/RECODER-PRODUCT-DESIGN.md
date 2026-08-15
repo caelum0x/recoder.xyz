@@ -1,5 +1,11 @@
 # Recoder — Product & Frontend Design
 
+> **Design reference:** the authoritative private-beta surface inventory and product
+> behavior are now in
+> [RECODER-FULL-PRODUCT-SPEC.md](./RECODER-FULL-PRODUCT-SPEC.md). If this historical
+> narrative conflicts about whether a component is primary, diagnostic, or retired,
+> the inventory there wins.
+
 > **What Recoder is:** the **Cursor of AI coding agents** — a clean desktop app (conductor.build
 > model) where you run coding agents (Claude Code, Codex, …) in parallel isolated git worktrees,
 > watch them, review the diff, and merge. The OSS engines (memory, governance, retrieval,
