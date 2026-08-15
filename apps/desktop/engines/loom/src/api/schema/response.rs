@@ -173,6 +173,12 @@ pub enum ResponseResult {
     PaneRead {
         read: PaneReadResult,
     },
+    TerminalStreamStarted {
+        pane_id: String,
+        mode: super::panes::PaneTerminalStreamMode,
+        cols: u16,
+        rows: u16,
+    },
     PaneGraphicsFrameAck {
         sequence: u64,
         revision: u64,

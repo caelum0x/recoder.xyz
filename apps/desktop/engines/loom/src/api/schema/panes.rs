@@ -363,6 +363,23 @@ pub struct PaneGraphicsStreamParams {
     pub owner: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PaneTerminalStreamMode {
+    Control,
+    Observe,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PaneTerminalStreamParams {
+    pub pane_id: String,
+    pub mode: PaneTerminalStreamMode,
+    pub cols: u16,
+    pub rows: u16,
+    #[serde(default)]
+    pub takeover: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PaneReportAgentParams {
     pub pane_id: String,

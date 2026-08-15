@@ -23,6 +23,7 @@ use crate::ipc::{
 };
 
 mod pane_graphics_stream;
+mod pane_terminal_stream;
 
 const SOCKET_PERMISSION_MODE: u32 = 0o600;
 pub(super) const CONNECTION_POLL_INTERVAL: Duration = Duration::from_millis(100);
@@ -202,6 +203,26 @@ fn handle_connection_with_stop(
     crate::logging::api_request_started(&request_id, method, changes_ui);
 
     match request.method {
+        Method::PaneTerminalStream(params) => {
+            let result = pane_terminal_stream::serve(
+                stream,
+                request_id.clone(),
+                params,
+                running,
+            );
+            match &result {
+                Ok(()) => crate::logging::api_request_completed(
+                    &request_id,
+                    method,
+                    "stream_closed",
+                    changes_ui,
+                ),
+                Err(err) => {
+                    crate::logging::api_request_failed(&request_id, method, &err.to_string())
+                }
+            }
+            result
+        }
         Method::PaneGraphicsStream(params) => {
             let result =
                 pane_graphics_stream::serve(stream, request_id.clone(), params, api_tx, running);
@@ -448,6 +469,7 @@ fn api_method_name(method: &Method) -> &'static str {
         Method::PaneSendKeys(_) => "pane.send_keys",
         Method::PaneSendInput(_) => "pane.send_input",
         Method::PaneRead(_) => "pane.read",
+        Method::PaneTerminalStream(_) => "pane.terminal.stream",
         Method::PaneGraphicsSet(_) => "pane.graphics.set",
         Method::PaneGraphicsClear(_) => "pane.graphics.clear",
         Method::PaneGraphicsInfo(_) => "pane.graphics.info",

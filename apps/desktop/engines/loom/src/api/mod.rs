@@ -58,6 +58,7 @@ pub(crate) fn request_changes_ui(request: &Request) -> bool {
             | Method::PaneFocus(_)
             | Method::PaneInputSet(_)
             | Method::PaneRename(_)
+            | Method::PaneTerminalStream(_)
             | Method::PaneGraphicsSet(_)
             | Method::PaneGraphicsClear(_)
             | Method::PaneGraphicsStream(_)
