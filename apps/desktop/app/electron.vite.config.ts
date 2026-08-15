@@ -85,7 +85,20 @@ export default defineConfig({
             outDir: "dist/main",
             externalizeDeps: false,
         },
-        plugins: [tsconfigPaths()],
+        plugins: [
+            tsconfigPaths({
+                root: ".",
+                projects: ["tsconfig.json"],
+                ignoreConfigErrors: true,
+                skip: (dir) =>
+                    dir.includes("/.scratch/") ||
+                    dir.includes("/.claude/") ||
+                    dir.includes("/node_modules/") ||
+                    dir.includes("/apps/desktop/docs") ||
+                    dir.includes("/apps/desktop/server/engines/multica") ||
+                    dir.includes("/packages/recoder-code/"),
+            }),
+        ],
         resolve: {
             alias: {
                 "@": "frontend",
@@ -119,7 +132,20 @@ export default defineConfig({
         server: {
             open: false,
         },
-        plugins: [tsconfigPaths()],
+        plugins: [
+            tsconfigPaths({
+                root: ".",
+                projects: ["tsconfig.json"],
+                ignoreConfigErrors: true,
+                skip: (dir) =>
+                    dir.includes("/.scratch/") ||
+                    dir.includes("/.claude/") ||
+                    dir.includes("/node_modules/") ||
+                    dir.includes("/apps/desktop/docs") ||
+                    dir.includes("/apps/desktop/server/engines/multica") ||
+                    dir.includes("/packages/recoder-code/"),
+            }),
+        ],
     },
     renderer: {
         root: ".",
@@ -175,7 +201,18 @@ export default defineConfig({
             },
         },
         plugins: [
-            tsconfigPaths(),
+            tsconfigPaths({
+                root: ".",
+                projects: ["tsconfig.json"],
+                ignoreConfigErrors: true,
+                skip: (dir) =>
+                    dir.includes("/.scratch/") ||
+                    dir.includes("/.claude/") ||
+                    dir.includes("/node_modules/") ||
+                    dir.includes("/apps/desktop/docs") ||
+                    dir.includes("/apps/desktop/server/engines/multica") ||
+                    dir.includes("/packages/recoder-code/"),
+            }),
             { ...ViteImageOptimizer(), apply: "build" },
             svgr({
                 svgrOptions: { exportType: "default", ref: true, svgo: false, titleProp: true },

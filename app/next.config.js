@@ -14,11 +14,17 @@ const nextConfig = {
   // .pnpm store (where next/prisma/etc. physically live) is inside the traced
   // root now that app/ is a pnpm member (see docs/STATUS.md #22).
   outputFileTracingRoot: path.resolve(__dirname, '..'),
+  // The monorepo root pnpm store contains lockfile-referenced optional esbuild
+  // platform packages for many OS/CPU combinations. They are build-time only
+  // and are not actually installed in this checkout, so standalone tracing can
+  // try to copy missing paths like @esbuild/aix-ppc64 or @esbuild/win32-x64 and
+  // stall/fail the product build. Exclude those optional platform packages from
+  // every server trace; the runtime app does not execute them.
+  outputFileTracingExcludes: {
+    '/*': ['../node_modules/.pnpm/@esbuild+*/node_modules/@esbuild/*'],
+  },
   typescript: {
     ignoreBuildErrors: true, // Pre-existing TS errors in doc pages (template literals in JSX)
-  },
-  eslint: {
-    ignoreDuringBuilds: false,
   },
 
   // Skip static page generation errors

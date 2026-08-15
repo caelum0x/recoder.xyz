@@ -227,7 +227,10 @@ impl App {
         if !powershell {
             // This marker is host-provided rather than caller-provided, so native
             // integrations can prove which managed agent they are reporting for.
-            extra_env.push(("LOOM_AGENT".to_string(), kind.label().to_string()));
+            extra_env.push((
+                "LOOM_AGENT".to_string(),
+                crate::detect::agent_label(kind).to_string(),
+            ));
         }
 
         let argv = agent_start_argv(kind, params.args);
