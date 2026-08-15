@@ -40,9 +40,9 @@ transport is missing.
 3. **Recoder owns orchestration; runtimes remain replaceable.** Claude Code, Codex,
    Cursor, opencode, pi, OpenFang, Loom, and future runtimes execute work. They do not
    own workspace lifecycle, policy, audit, or durable product state.
-4. **Writes are governed and attributable.** A sensitive write must carry a principal,
-   action, target, decision, and audit evidence. An approval for one target must not
-   clear another target (`recoder-adsk`).
+4. **Writes are governed and attributable.** A sensitive write carries a principal,
+   action, normalized exact target, decision, and audit evidence. Approval clearance
+   is bound to that exact target; historical targetless records do not clear writes.
 5. **Failure is visible.** Missing CLIs, dead sidecars, stale sessions, merge conflicts,
    expired auth, and denied policy decisions surface their real reason. They never
    collapse into a green health state or fabricated success.
@@ -192,6 +192,16 @@ navigation must follow this table.
 - **Agent CLIs:** user-installed execution runtimes discovered from `PATH`; Recoder
   does not bundle their credentials or claim they are authenticated based on presence.
 
+Loom is an internal execution substrate, not a second desktop product. Recoder uses
+its daemon persistence, worktrees, native agent state, prompts, snapshots, and status
+events. Wave/Electron continues to own windows, tabs, pane layout, and terminal UI;
+Recoder does not expose Loom's TUI, layout/graphics API, plugin marketplace, or SSH
+remote installer. The exact capability matrix is canonical in
+[RECODER-CONNECTION-ARCHITECTURE.md](./RECODER-CONNECTION-ARCHITECTURE.md#loom-capability-boundary).
+Today Loom output reaches the UI through polled capture and durable RunEvents, not a
+true bidirectional PTY stream. Closing `recoder-wtlm` is required for full terminal
+parity while preserving the Wave-owned renderer and governed input boundary.
+
 ### Packaged native capabilities
 
 - **OpenFang NAPI:** optional in-process runtime.
@@ -212,6 +222,9 @@ navigation must follow this table.
 - **Multica, Ziti, xDS:** optional/deferred. They may enrich squads or future remote
   infrastructure but do not gate local workspaces.
 - **Tsunami apps:** supported shell extension mechanism, not a beta product dependency.
+- **Loom remote attach/plugins/layout UI:** engine capabilities are not automatically
+  product capabilities. Remote attach and governed skills remain unfinished product
+  contracts (`recoder-n5pc`, `recoder-ne6o`, `recoder-ubyg`); Wave remains layout owner.
 
 ## 7. Product state model
 

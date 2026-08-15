@@ -1,52 +1,105 @@
-# Recoder × Loom — Feature Roadmap
+# Recoder x Loom Product Roadmap
 
-> Status: 2026-08-12. **Loom** is Recoder's rebranded, wholesale-absorbed
-> agent-multiplexer engine (originally **herdr**, Apache-2.0 — see `NOTICE`).
-> It is integrated as a live substrate (`docs/LOOM-INTEGRATION.md`): socket client,
-> substrate adapter, native agent-state, supervised daemon. This roadmap is the
-> *new* product surface that absorption unlocks — graph-engineered (6-analyst pass),
-> ranked by moat depth + first-timer leverage. Every item is grounded in shipped
-> socket/adapter/native-state/converge primitives.
+Status: 2026-08-15. Loom is Recoder's vendored Apache-2.0 agent multiplexer and
+default local execution substrate. Recoder absorbs Loom capabilities behind the
+Conductor; it does not embed Loom's complete TUI or expose every socket verb.
 
-## SHIPPED STATUS (updated 2026-08-13, branch feat/enterprise-s0-p0)
+The canonical capability boundary is
+[RECODER-CONNECTION-ARCHITECTURE.md](./RECODER-CONNECTION-ARCHITECTURE.md#loom-capability-boundary).
 
-**§0 killer feature `recoder_converge_fanout`** — ✅ SHIPPED (backend service + tool).
-**§1 build-now wave:** #1 live convergence cockpit ✅ (`recoder_converge_cockpit` + desktop `recoder-fanout` view) · #2 instant converge-ready ⏳ (cockpit exposes `convergeReady`; push-driven signal pending) · #3 swarm auto-unblock ✅ (service + tool + **live seam-wiring** + desktop `recoder-swarm` view; now **decidable** via engine `blocked_kind` routing — approval/trust always escalate) · #4 live Needs-You push-queue ✅ (`recoder_needs_you` + desktop `recoder-needs-you` view) · #5 native status columns ✅ (`recoder_status_board` MCP tool; desktop KANBAN deliberately NOT shipped as a user nav dashboard per the "plain-as-a-terminal" audit — bd recoder-3zwy) · #6 second-round re-fan ✅ (`recoder_converge_refan` + desktop re-fan affordance).
-**§2 bigger bets:** A governed skill model — ✅ SHIPPED end-to-end (backend: signed ed25519, capability-typed, policy-gated `skill.action.invoke`, `backend/src/domains/conductor/skill/`; ENGINE half: plugin-spawn RCE gate, default-deny, both spawn surfaces closed. Bootstrap executor wiring + workspace-path validation = bd recoder-ubyg) · B orchestration playbooks ✅ SHIPPED (3 recipes + `recoder_playbook_run/list` + desktop `recoder-playbooks` view) · C governed remote/mobile attach — backend ✅ SHIPPED + **wired live** (`recoder_remote_attach/snapshot/steer`; auth+ownership re-verified every call, policy-gated steer, audit; the transport front-half + durable session store remain = bd recoder-n5pc).
+## 1. Current product use
 
-Engine tiers backing the above (see `docs/LOOM-ENGINE-CHANGES.md`): keystone native kinds ✅, `agent.query` ✅, rule-id ✅, blocked_kind ✅, worktree.status ✅, delta cursor ✅, plugin-gate ✅, aggregate-status ✅; #7/#8 optional. Both `tsc` gates green.
+Shipped source paths:
 
-## 0. THE KILLER FEATURE — the fusion moat
+- one supervised, secret-stripped Loom daemon on a Recoder-owned protocol-20 socket;
+- default workspace substrate, with explicit opt-out to the tmux substrate;
+- Loom-native worktree create/remove and agent start;
+- public pane-id handles accepted by Loom agent verbs;
+- native status/read/prompt, session snapshots, and agent-status event subscription;
+- substrate-aware steering: `agent.prompt` for submit and `pane.send_text` for text;
+- Needs You/status read models, fanout/convergence services, re-fan, playbooks, and
+  local governed remote-attach service seams;
+- host Git diff/review/merge, with Recoder retaining durable workspace and audit truth.
 
-### `recoder_converge_fanout` — one verb: fan a task to N agents, auto-converge to one governed branch
-**Neither tool can do this alone: Loom fans out, Recoder converges.**
+This is not equivalent to full Loom coverage. Current production composition calls
+ten of roughly 94 public methods. The typed client additionally exposes
+`agent.query`, `agent.wait`, and `worktree.status`, but those are not core composition
+dependencies.
 
-1. Per agent kind, `loom-substrate` launch: `worktree.create{base, branch:recoder/fan-<agent>-<short>}` → `agent.start{kind, pane_id}`.
-2. Stamp every resulting Recoder Workspace with ONE shared `metadata.taskGroup` — **Recoder stays system-of-record; Loom only executes.**
-3. Deliver identical task text to each pane via `agent.prompt{wait:{until:['done','blocked']}}` (`callAndWait`).
-4. On all-Done, run the SHIPPED `planConvergence(taskGroup,{probe:true})` → `composeConvergence` (converge.ops.ts) to fold N sibling diffs into **one reviewable, evidence-backed branch** through the existing governed merge path.
+## 2. Truthful status
 
-**Why it wins:** the dev types one task and gets ONE trusted PR instead of N conflicting branches to hand-referee — the "divergent-branch hell" the thesis names as the beachhead. Loom keeps N panes alive but has no notion they're N attempts at ONE task; free orchestrators dump the diffs on your desk.
+| Product capability | Status | Remaining contract |
+|---|---|---|
+| Default Loom launch and teardown | Source-wired | Signed clean-machine artifact proof (`recoder-1ejn`). |
+| Live status and user steer | Source-wired | Source-current Electron/restart proof; no tmux misrouting. |
+| Interactive terminal attachment | Missing | Current output is polled `agent.read` capture into RunEvents; add a bounded bidirectional adapter (`recoder-wtlm`). |
+| Fanout -> compare -> governed converge | Source-wired | Live representative-repository proof and failure recovery. |
+| Instant converge-ready push | Partial | Drive readiness from the final sibling status event without poll-only lag. |
+| Needs You queue/status board | Source-wired | Keep contextual/terminal-plain; do not add an engine dashboard. |
+| Swarm auto-unblock | Unsafe for broad enablement | Replace synthetic permissive profile with deny-capable workspace-agent policy (`recoder-trk0`, `recoder-vbg2`). |
+| Governed skills | Dormant/partial | Concrete executor, pinned registry, publisher keys, and canonical worktree containment (`recoder-ne6o`, `recoder-ubyg`). |
+| Remote/mobile attach | Local backend seam only | Authenticated remote transport and durable shared session store (`recoder-n5pc`). |
+| Loom plugin marketplace | Intentionally not inherited | Owner chose full Recoder rebrand and a separate governed skill model (`recoder-klhy`). |
+| Loom layout/TUI/graphics/SSH installer | Not a Recoder surface | Adopt only a bounded capability that closes measured product pain. |
 
-**Honesty invariants:** Loom natively knows claude/codex/cursor/opencode/pi/gemini; recoder_code/qwen/crush fall back to raw pane input and forfeit native status (report, never fake). Tasks past the 300s prompt-wait cap re-arm via `agent.wait`. **Effort L** · all deps shipped.
+## 3. Delivery order
 
-## 1. BUILD-NOW WAVE (ranked)
+### Wave A: prove the core Loom desktop loop
 
-| # | Feature | Moat | Effort | Grounded in |
-|---|---|---|---|---|
-| 1 | **Live convergence cockpit** — subscribe `pane.agent_status_changed`; as each fanned pane goes Working→Blocked→Done, recompute a terminal-plain strip from `planConvergence(probe)` + `probeSynthesizability` → "K/N settled · C contested · A auto-mergeable · P need a pick"; `gatherFileVersions` backs the N-up column view | ✅ | M | subscribe + native status + probes |
-| 2 | **Instant converge-ready signal** — drive the board `ClusterConvergePhase running→ready` off native per-pane `done`; the merge CTA lights the moment the LAST sibling flips Done | ✅ | M | subscribe(done) → convergePhase |
-| 3 | **Swarm auto-unblock** — on native Blocked, `agent.read` the question, resolve from cross-runtime **memory** + a sibling pane that already passed the decision; **default = escalate via approval gate**, auto-answer opt-in per policy; every injected answer = an evidenced memory candidate | ✅ | L | agent.wait/read/prompt + memory + governance |
-| 4 | **Live "Needs You" queue (push not poll)** — one long-lived `events.subscribe` → `mapLoomStatus → nativeAttention → classifyAttention`, ranked by `effectiveRank`; moves on the state-machine edge, not the next tick; click jumps to the pane | — | M | subscribe + attention-priority |
-| 5 | **Native status columns** — hydrate a kanban from ONE `session.snapshot` (all panes' status at once); `unknown` falls back to the tail path; Feature-4's stream moves cards live | — | M | session.snapshot + mapLoomStatus |
-| 6 | **Second-round re-fan (improve loop)** — when the composed branch fails verification, re-fan a narrowed task with `base = recoder/converge-<id>`, carrying `plan.assisted`/`ConvergenceProvenance` + memory; converge again | ✅ | M | worktree.create{base} + provenance |
+1. Launch the packaged Loom daemon and one installed agent CLI from the signed DMG.
+2. Close `recoder-wtlm`, then verify worktree, branch, pane-id handle, interactive
+   terminal I/O, native state, and both steer modes through renderer/backend restarts.
+3. Produce a real diff, exact-target approval, refusal path, and governed merge.
+4. Capture the artifact/run evidence without provider or auth secrets.
 
-## 2. BIGGER BETS
+This wave is the private-beta gate. It adds no Loom TUI, plugins, remote installer,
+or second layout system.
 
-- **A. Governed skill/plugin model** — `recoder.skill.json`: a signed, capability-typed, **policy-gated** action model over the Loom socket that replaces the foregone 592-plugin ecosystem *without* its free-argv RCE surface. A `skill.action.invoke` verb builds a `PolicyInput` from the invocation context and runs `evaluatePolicy` FIRST (allow → run in the worktree; needs_approval → approval gate; deny/unsigned/unpinned → refuse). No ambient env, no inherited secrets. Captures the ecosystem UX + wires skills into convergence + memory (which Loom plugins structurally cannot reach). **XL.**
-- **B. Multi-agent orchestration recipes** — saved Recoder *playbooks* that choreograph N Loom panes: dispatch → wait-until-blocked → cross-pollinate → gate on approval → converge, built on `agent.prompt{wait}`/`agent.wait`/events + the workflow engine. **L.**
-- **C. Governed remote/mobile attach** — auth'd, policy-gated remote monitor+steer of your Loom-run agents (the daemon persists them across lid-close); `session.snapshot` + Recoder auth. Answers the thesis's distribution weakness with a governed version of what Loom's ecosystem did ungoverned. **L–XL.**
+### Wave B: harden parallel convergence
 
-## Dependencies
-- The `recoder_converge_fanout` verb + build-now wave use only shipped Loom-integration primitives.
-- All identifiers here follow the **Loom** rename (Phase 5); the underlying engine remains Apache-2.0 herdr with attribution preserved in `NOTICE`.
+1. Make sibling completion event-driven and derive converge-ready from authoritative
+   Recoder workspace attribution plus Loom native state.
+2. Keep fanout attempts isolated, show contested/mergeable files, and produce one
+   governed output branch.
+3. Re-fan only after verification failure with provenance from the previous attempt.
+4. Enable swarm auto-unblock only after `recoder-trk0`/`recoder-vbg2` is deny-capable.
+
+### Wave C: governed extension model
+
+1. Finish the signed `recoder.skill.json` registry and explicit publisher trust.
+2. Resolve user input to an owned canonical worktree and execute through a bounded
+   executor with no ambient backend secrets.
+3. Run policy before execution; persist exact action/target/verdict/evidence.
+4. Do not route inherited Loom `plugin.action.invoke` directly into the product.
+
+### Wave D: remote continuity
+
+1. Define hosted identity -> workspace ownership for remote sessions.
+2. Replace the process-local session store with durable shared state.
+3. Add authenticated transport for snapshot/monitor/steer with exact-target policy.
+4. Revalidate ownership and policy on every call; revoke on sign-out/session expiry.
+
+## 4. Adoption rule
+
+A new Loom method enters Recoder only when all conditions hold:
+
+1. It solves repeated terminal/review/merge pain observed in beta.
+2. It has one clear owner and does not duplicate Wave or Conductor state.
+3. Its input can be validated and governed at the backend boundary.
+4. Its failure can be reported truthfully without breaking the core loop.
+5. It has an installed-product verification path.
+
+Likely candidates are `agent.wait`, `agent.query`, and `worktree.status` because they
+can replace polling or enrich truthful read models. Layout, graphics, plugin, popup,
+window-title, notification, and remote-install families are not roadmap defaults.
+
+## 5. Product invariants
+
+- Recoder owns workspace, run, policy, review, merge, and audit state.
+- Loom owns live PTYs, panes, native agent state, and Loom-created worktrees.
+- A Loom internal terminal id is never stored as an agent target; store the pane id.
+- Loom failure never silently launches the workspace on tmux.
+- React never opens the Loom socket directly.
+- Host Git remains diff and merge truth.
+- The full Loom plugin ecosystem remains excluded unless a new owner decision replaces
+  the current governed-skills direction.

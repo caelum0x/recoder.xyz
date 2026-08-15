@@ -822,14 +822,10 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   // PATH), spawns it on a RECODER-OWNED socket path (NOT ~/.config/loom) with a
   // denylist-stripped env (the prompt-injectable daemon/agents never inherit
   // backend secrets), and reports healthy ONLY after a real `ping` (protocol 20).
-  // Fully OPT-IN and non-default: the substrate is always REGISTERED (so it lists
-  // in `/substrates` and is selectable with `substrate: 'loom'`) but the selector
-  // keeps `tmux_worktree` as the CLI default, so nothing rides loom unasked. The
-  // supervised daemon is spawned only when explicitly enabled
-  // (`CONDUCTOR_LOOM_ENABLED`), best-effort and fire-and-forget: on failure the
-  // substrate's `available()` ping simply reports down with the real reason. The
-  // substrate is constructed against the daemon's Recoder-owned `socketPath`
-  // (injected — the adapter reads no env for it).
+  // Loom is registered as the default substrate below. The supervised daemon uses
+  // a Recoder-owned socket and starts unless CONDUCTOR_LOOM_DISABLED opts the whole
+  // product back to tmux. Its adapter reports real protocol/health failures rather
+  // than silently redirecting a Loom workspace to another substrate.
   const loomSocketPath = defaultRecoderLoomSocketPath(bootEnv);
   const loomDaemon = createLoomDaemon({
     socketPath: loomSocketPath,

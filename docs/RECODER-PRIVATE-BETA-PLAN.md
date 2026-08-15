@@ -57,8 +57,8 @@ Outcome: one trustworthy release source and one installable candidate.
 
 - Resolve the remaining licensing confirmation in `recoder-rxn0`.
 - Keep RecoderGit absent from `extraResources` and unavailable at runtime.
-- Remove the supervisor mismatch that still classifies license-excluded RecoderGit as
-  a packaged-required engine; health must describe it as intentionally unavailable.
+- Preserve the shipped supervisor behavior that classifies license-excluded
+  RecoderGit as intentionally unavailable rather than packaged-required.
 - Confirm Multica source is not linked into the shipped Go binary.
 - Verify the required resources listed in
   `apps/desktop/app/electron-builder.config.cjs:90-189` exist for arm64.
@@ -68,8 +68,8 @@ Outcome: one trustworthy release source and one installable candidate.
 - Revalidate `recoder-5iqy` and either document the production host as clean or carry
   explicit remediation. The hosted device-auth surface cannot be trusted while host
   integrity is unresolved.
-- Fix `recoder-adsk` before enabling approval-dependent beta workflows: clearance must
-  bind to the same action and target that produced the verdict.
+- Preserve the shipped exact-target approval contract: clearance must bind to the
+  same normalized action and target that produced the verdict.
 - Resolve or explicitly disable the affected swarm-unblock surface for the overlapping
   `recoder-trk0` / `recoder-vbg2` policy-profile issue.
 - Review `recoder-4d8i` and record which owner-gated findings apply to the local beta.
@@ -113,6 +113,12 @@ Outcome: repeated, evidence-backed product runs on actual desktop installs.
   and one unavailable path.
 - Run the default Loom path with the packaged binary and protocol-20 socket.
 - Run the configured tmux fallback path with Loom disabled.
+- Resolve `recoder-wtlm`: the default Loom workspace needs a bounded bidirectional
+  terminal attachment, not only polled capture plus submitted steer.
+- Exercise the Recoder-owned Loom slice: worktree launch, pane-id handle, native
+  status, output capture, submitted and non-submitted steer, restart reattachment,
+  review, and teardown. Do not make beta acceptance depend on Loom's TUI, layouts,
+  plugin marketplace, or SSH remote-install features.
 - Verify repository selection, base ref, worktree, branch, setup step, and task/run
   records all match the same workspace.
 - Confirm no optional engine prevents the local launch path.
@@ -187,6 +193,7 @@ These lanes begin only when beta evidence shows repeated need.
 | Review/convergence depth | `recoder-p8f3`, `recoder-ry9c`, `recoder-elhh` | Repeated review latency, large-diff pain, or same-region conflicts | Preserve one governed merge boundary |
 | Board to issue graph | `recoder-uou2` | Testers repeatedly start work from beads and manually close/link it | Beads remains issue/memory source, not UI duplication |
 | Workspace detail UX | `recoder-vxvq` (decision: `recoder-r96t`) | GUI evidence validates in-container switching and pop-out tiling | Keep terminal and diff side-by-side possible |
+| Loom terminal parity | `recoder-wtlm` | Default Loom is used by beta workspaces | Wave renders a bounded bidirectional stream; backend owns Loom socket and governance |
 | Remote/mobile attach | `recoder-n5pc` | Repeated need to monitor away from the Mac | Authenticated transport plus durable shared session store first |
 | Governed skills | `recoder-ne6o`, `recoder-ubyg` | Repeated, reusable task procedures need execution | Pinned registry, publisher keys, workspace containment, concrete executor |
 | Loom swarm policy | `recoder-trk0`, `recoder-vbg2` | Swarm auto-unblock is enabled for users | Real workspace-agent profile, deny-capable gate, target/evidence binding |
