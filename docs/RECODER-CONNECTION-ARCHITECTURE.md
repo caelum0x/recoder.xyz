@@ -70,6 +70,27 @@ Evidence: Electron's Node-backend boot contract is documented in
 `apps/desktop/server/cmd/server/main-server.go:4-52`; the Node composition root is
 `backend/src/bootstrap/index.ts:1787-1800`.
 
+### 2.1 Source-tree ownership
+
+| Source tree | Architectural role | Private-beta posture |
+|---|---|---|
+| `app/` | Hosted Next account plane: invite, auth, device-code issue/authorization/token/refresh, account UI | Required only for invited identity; never owns local execution or merge |
+| `apps/desktop/` | Desktop distribution root containing Electron/Wave app, Go shell, native engines, packaging, and optional extensions | Product artifact boundary |
+| `apps/desktop/engines/dmux` | Vendored multiplexing/layout engine consumed through a narrow CLI/pure-layout adapter | Optional compare-grid/attention helper; not a UI authority |
+| `apps/desktop/engines/loom` | Vendored Rust PTY/worktree/agent daemon and public NDJSON protocol | Default execution substrate; narrow governed capability absorption |
+| `apps/desktop/engines/openclaw` | Connector and social-ingress implementation used by the backend social domain | Deferred from local private-beta workflow |
+| `apps/desktop/engines/recodergit` | Vendored code-graph/GitHub engine | Development/self-host only; excluded from DMG by license gate |
+| `apps/desktop/engines/tmux` | Pinned tmux source/binary and session substrate | Configured fallback, recovery, and control-mode path |
+| `apps/desktop/server` | Wave-derived Go shell server, wsh RPC, blocks, generic terminal/file/SSH primitives, secret-store writer | Required desktop shell host; not agent control plane |
+| `apps/desktop/tsunami` | Go/VDOM Wave extension framework and demos | Optional extension mechanism; not beta core or a second control plane |
+| `backend/engines/py` | Python browser, memory, rerank, signals, and deliberation sidecars | Optional and not bundled in arm64 beta |
+| `backend/engines/rust` | OpenFang, TensorZero, and governance native implementations/NAPI artifacts | Capability engines behind TypeScript ports; degrade truthfully when absent |
+| `backend/src` | Node product control plane: bootstrap, identity, governance, Agent OS, Conductor, engines, HTTP/WS/MCP, persistence, evidence | Canonical local orchestration boundary |
+
+Vendored engine trees are implementation supply, not automatically active product
+surface. Activation occurs only through a backend-owned port with lifecycle, health,
+policy, and failure contracts.
+
 ## 3. Connection catalog
 
 ### 3.1 Renderer to Electron
@@ -262,11 +283,48 @@ handle and the run-event record contains the launch outcome.
   starts or adopts a healthy daemon, and passes the same socket to all Loom clients.
 - **Launch:** `worktree.create`, then `agent.start`; failed start best-effort removes
   the new worktree (`backend/src/domains/conductor/adapters/loom-substrate.adapter.ts:215-281`).
-- **Streaming/control:** `agent.read`, `agent.get`, `agent.prompt`, subscriptions, and
-  snapshots use the same daemon, not duplicate processes.
+- **Handle:** Recoder persists Loom's public root pane id, not its internal terminal
+  id. Agent verbs accept pane ids or unique agent names
+  (`backend/src/domains/conductor/adapters/loom-substrate.adapter.ts:257-283`).
+- **Output/control:** `agent.read`, `agent.get`, `agent.prompt`, `pane.send_text`,
+  subscriptions, and snapshots use the same daemon, not duplicate processes. Current
+  workspace output is captured by the generic poll tailer and emitted as RunEvents;
+  Loom does not yet have a bidirectional PTY stream equivalent to tmux control mode
+  (`backend/src/domains/conductor/adapters/run-tailer.adapter.ts:1-23`).
+- **Steering:** submitted messages use agent-aware `agent.prompt`; non-submitted text
+  uses `pane.send_text`. Routing is selected from the workspace's stored substrate,
+  so a Loom pane id is never sent to tmux
+  (`backend/src/domains/conductor/adapters/loom-steer-transport.adapter.ts:19-63`).
 - **Default:** Loom is enabled/default unless `CONDUCTOR_LOOM_DISABLED`; if default
   Loom is unhealthy, the launch fails instead of silently changing substrate
   (`backend/src/bootstrap/index.ts:856-887`).
+
+#### Loom capability boundary
+
+Recoder does **not** expose the whole Loom application inside the desktop. The
+vendored engine has roughly 94 public protocol methods. The TypeScript protocol
+adapter deliberately types 13 methods, and current production composition directly
+uses ten: `ping`, `session.snapshot`, `worktree.create`, `worktree.remove`,
+`agent.start`, `agent.get`, `agent.read`, `agent.prompt`, `pane.send_text`, and
+`events.subscribe`. This is deep substrate use, not full API coverage.
+
+| Loom capability family | Recoder status | Product ownership |
+|---|---|---|
+| Daemon health/adoption and protocol negotiation | Used | Node backend supervises one secret-stripped daemon and fails loud. |
+| Native worktree create/remove | Used | Loom performs isolation; Recoder stores canonical workspace/run identity. |
+| Native agent start/status/read/prompt | Used | Drives launch, polled capture, liveness, continue, swarm, remote-attach service, and user steer. |
+| Bidirectional terminal byte stream | Missing product adapter | Current Loom output is captured into RunEvents and input is governed steer, not PTY parity (`recoder-wtlm`). |
+| Session snapshots and agent-status events | Used | Feeds needs-attention and status read models; Recoder owns attribution and durable events. |
+| Server-side `agent.query`, `agent.wait`, `worktree.status` | Typed, not in the core composition | Adopt only when they replace a concrete polling/read bottleneck; host Git remains review truth. |
+| Workspace/tab/pane focus, split, resize, layout, graphics | Not used | Wave/Electron owns product windows, tiling, terminal rendering, and navigation. Two layout authorities would conflict. |
+| Loom TUI, popup, window-title, native notification UI | Not used | Recoder keeps one terminal-plain desktop shell and contextual notifications. |
+| Loom integrations and 592-plugin ecosystem | Intentionally not exposed | Arbitrary plugin argv bypasses Recoder governance. Governed skills are separate unfinished work (`recoder-ne6o`, `recoder-ubyg`). |
+| Loom SSH remote install/attach/update flow | Not connected to Recoder | A real remote product requires hosted authentication, policy, transport, and durable shared state (`recoder-n5pc`). |
+| Server config reload/live handoff/agent-manifest management | Internal/unadopted | Recoder controls process lifecycle and runtime discovery; adoption requires an explicit lifecycle contract. |
+
+The design rule is capability absorption, not UI absorption: add a Loom verb when it
+strengthens the terminal -> review -> merge loop behind Recoder governance. Do not
+mirror Loom's complete TUI or plugin product into React.
 
 ### 6.3 tmux path
 
@@ -320,7 +378,7 @@ Every long-lived loopback service binds `127.0.0.1`, never a routable interface
 | BYOK secrets | Go writer/Electron crypto | One encrypted `secrets.enc` | Read allowlist at backend spawn |
 | Workspaces/tasks/runs/events | Agent OS + conductor | Embedded `state-of-record.sqlite` in desktop; Postgres in shared deployment | Durable |
 | Git source/change truth | Git | Repository + isolated worktrees + branches/commits | Durable until explicit cleanup |
-| Live terminal/runtime | Loom/tmux/agent | UDS daemon and tmux/process state | Reattach/reconcile where possible |
+| Live terminal/runtime | Loom/tmux/agent | Loom pane id + UDS daemon or tmux/process state | Reattach/reconcile where possible |
 | Issue graph/memory | Beads/memory domain | Repository `.beads`/Dolt and memory stores | Reviewable and durable per engine |
 | Retrieval vectors | Memory/Lance or external Qdrant | Private backend data dir or configured service | Optional/degraded |
 | Governance audit/evidence | Governance/conductor | State repository + exported artifacts | Durable and append-oriented |
