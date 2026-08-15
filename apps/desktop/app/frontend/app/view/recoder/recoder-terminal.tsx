@@ -15,6 +15,8 @@ import {
     type TurnLine,
 } from "./recoder-conversation-logic";
 import { RecoderDetailHeader, workspaceOptionLabel, type RecoderStateTone } from "./recoder-detail-header";
+import { useRecoderDetailNavigation } from "./recoder-detail-navigation";
+import { openWorkspaceDetail } from "./recoder-detail-open";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { type MeteringDisplay } from "./recoder-metering";
 import { openWorkspaceTerminal } from "./recoder-open-terminal";
@@ -203,23 +205,8 @@ function statusTone(status: RecoderTerminalStatus): RecoderStateTone {
     return "neutral";
 }
 
-// Open the Review face for the SAME workspace as its own block — the exact view
-// meta the hub's openReview uses, so the shared header's Review segment navigates
-// this Session's workspace. Fire-and-forget; a failed open never crashes Session.
-async function openReviewBlock(workspaceId: string) {
-    // Loosely-typed def (like the hub's openBlock) so the workspace-id meta key
-    // isn't rejected by the block MetaType literal check.
-    const blockDef: { meta: Record<string, unknown> } = {
-        meta: { view: "recoder-diff", "recoder:workspaceid": workspaceId },
-    };
-    try {
-        await createBlock(blockDef);
-    } catch {
-        // degrade-safe: opening the sibling Review block must not take down Session
-    }
-}
-
 function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewModel>) {
+    const detailNavigate = useRecoderDetailNavigation();
     const entries = useAtomValue(model.entriesAtom);
     const status = useAtomValue(model.statusAtom);
     const error = useAtomValue(model.errorAtom);
@@ -308,7 +295,13 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                       label: workspaceOptionLabel(w.branch, w.state),
                   })),
                   selectedId: workspaceId,
-                  onSelect: (id: string) => model.switchWorkspace(id),
+                  onSelect: (id: string) => {
+                      if (detailNavigate != null) {
+                          detailNavigate("session", id);
+                      } else {
+                          model.switchWorkspace(id);
+                      }
+                  },
               }
             : undefined;
     const onOpenTerminal = boundSummary?.sessionName
@@ -331,7 +324,12 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                 identity={detailIdentity}
                 switcher={detailSwitcher}
                 onNavigate={(target) => {
-                    if (target == "review") void openReviewBlock(workspaceId);
+                    if (target != "review") return;
+                    if (detailNavigate != null) {
+                        detailNavigate(target, workspaceId);
+                    } else {
+                        void openWorkspaceDetail(target, workspaceId);
+                    }
                 }}
                 onOpenTerminal={onOpenTerminal}
                 primaryAction={reconnectBtn}

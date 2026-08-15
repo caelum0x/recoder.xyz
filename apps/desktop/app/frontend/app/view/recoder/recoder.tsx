@@ -33,6 +33,7 @@ import {
     repoPickerHint,
 } from "./recoder-github-logic";
 import { RecoderIdentityAffordance } from "./recoder-identity";
+import { workspaceDetailMeta } from "./recoder-detail-open";
 import {
     launchDisabledReason,
     orderedRecentRepos,
@@ -107,11 +108,11 @@ async function openBlock(blockDef: { meta: Record<string, unknown> }) {
 }
 
 function openSession(workspaceId: string) {
-    openBlock({ meta: { view: "recoder-terminal", "recoder:workspaceid": workspaceId } });
+    openBlock({ meta: workspaceDetailMeta("session", workspaceId) });
 }
 
 function openReview(workspaceId?: string) {
-    openBlock({ meta: { view: "recoder-diff", ...(workspaceId ? { "recoder:workspaceid": workspaceId } : {}) } });
+    openBlock({ meta: workspaceDetailMeta("review", workspaceId) });
 }
 
 // Open any Recoder surface (runs/approvals/memory/board/settings) as its own

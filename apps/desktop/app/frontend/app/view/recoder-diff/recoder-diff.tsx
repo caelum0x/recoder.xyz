@@ -1,10 +1,12 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { createBlock, getApi } from "@/app/store/global";
+import { getApi } from "@/app/store/global";
 import type { RecoderApproval } from "@/app/view/recoder-approvals/recoder-approvals-model";
 import { agentLabel } from "@/app/view/recoder/recoder-agent-labels";
 import { RecoderDetailHeader, workspaceOptionLabel } from "@/app/view/recoder/recoder-detail-header";
+import { useRecoderDetailNavigation } from "@/app/view/recoder/recoder-detail-navigation";
+import { openWorkspaceDetail } from "@/app/view/recoder/recoder-detail-open";
 import { openWorkspaceTerminal } from "@/app/view/recoder/recoder-open-terminal";
 import { prChipLabel, prChipTone, prCreateGate, type RecoderPrChip } from "@/app/view/recoder/recoder-pr-status";
 import { RecoderEmpty, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
@@ -724,24 +726,8 @@ function InlineApprovalCard({
 
 InlineApprovalCard.displayName = "InlineApprovalCard";
 
-// Open the OTHER detail face for the SAME workspace as its own block — the exact
-// view meta the hub's openSession/openReview use, so the shared header's segments
-// navigate the three faces as one detail. Fire-and-forget: a failed cross-block
-// open must never crash the Review view.
-async function openDetailBlock(view: "recoder-terminal" | "recoder-diff", workspaceId: string) {
-    // Loosely-typed def (like the hub's openBlock) so the workspace-id meta key
-    // isn't rejected by the block MetaType literal check.
-    const blockDef: { meta: Record<string, unknown> } = {
-        meta: { view, "recoder:workspaceid": workspaceId },
-    };
-    try {
-        await createBlock(blockDef);
-    } catch {
-        // degrade-safe: opening a sibling block should never take down Review
-    }
-}
-
 function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
+    const detailNavigate = useRecoderDetailNavigation();
     const workspaces = useAtomValue(model.workspacesAtom);
     const selectedId = useAtomValue(model.selectedIdAtom);
     const diff = useAtomValue(model.diffAtom);
@@ -868,7 +854,13 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                       label: workspaceOptionLabel(w.branch, w.state),
                   })),
                   selectedId,
-                  onSelect: (id: string) => model.selectWorkspace(id),
+                  onSelect: (id: string) => {
+                      if (detailNavigate != null) {
+                          detailNavigate("review", id);
+                      } else {
+                          void model.selectWorkspace(id);
+                      }
+                  },
               }
             : undefined;
     const onOpenTerminal = selectedWorkspace?.sessionName
@@ -894,9 +886,13 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                 view="review"
                 identity={detailIdentity}
                 switcher={detailSwitcher}
-                onNavigate={(target) =>
-                    openDetailBlock(target == "session" ? "recoder-terminal" : "recoder-diff", selectedId)
-                }
+                onNavigate={(target) => {
+                    if (detailNavigate != null) {
+                        detailNavigate(target, selectedId);
+                    } else {
+                        void openWorkspaceDetail(target, selectedId);
+                    }
+                }}
                 onOpenTerminal={onOpenTerminal}
                 primaryAction={hasHeaderPrimary ? headerPrimary : undefined}
             />

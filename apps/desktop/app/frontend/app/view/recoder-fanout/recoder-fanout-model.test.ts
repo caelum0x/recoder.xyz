@@ -665,12 +665,16 @@ describe("RecoderFanoutViewModel.converge", () => {
         expect(composeCalls(fetchMock)).toHaveLength(1);
     });
 
-    it("openConvergedReview opens the recoder-diff review surface for the workspace id", () => {
+    it("openConvergedReview opens the unified review surface for the workspace id", () => {
         const model = makeModel();
         model.openConvergedReview("ws-converged");
 
         expect(createBlockMock).toHaveBeenCalledWith({
-            meta: { view: "recoder-diff", "recoder:workspaceid": "ws-converged" },
+            meta: {
+                view: "recoder-detail",
+                "recoder:detailface": "review",
+                "recoder:workspaceid": "ws-converged",
+            },
         });
     });
 

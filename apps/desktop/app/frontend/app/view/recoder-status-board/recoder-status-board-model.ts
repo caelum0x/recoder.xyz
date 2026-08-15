@@ -6,6 +6,7 @@ import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { readErrorReason } from "../recoder/recoder-errors";
+import { workspaceDetailMeta } from "../recoder/recoder-detail-open";
 import { RecoderStatusBoardView } from "./recoder-status-board";
 
 const STATUS_COLUMNS = ["awaiting_approval", "agent_idle_prompt", "review_ready", "working", "error", "unknown"] as const;
@@ -62,7 +63,7 @@ class RecoderStatusBoardViewModel implements ViewModel {
         } catch (error) { globalStore.set(this.errorAtom, error instanceof Error ? error.message : "Status board unavailable."); RecoderConnectionModel.getInstance().noteRefresh(false); }
         finally { globalStore.set(this.loadingAtom, false); }
     }
-    async focusWorkspace(workspaceId: string) { if (workspaceId.trim() == "") return; const meta: Record<string, unknown> = { view: "recoder-terminal", "recoder:workspaceid": workspaceId }; try { await createBlock({ meta }); } catch {} }
+    async focusWorkspace(workspaceId: string) { if (workspaceId.trim() == "") return; const meta = workspaceDetailMeta("session", workspaceId); try { await createBlock({ meta }); } catch {} }
 }
 
 export { RecoderStatusBoardViewModel, STATUS_COLUMNS, projectBoard, type StatusBoardView, type StatusCell, type StatusColumn };

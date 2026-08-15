@@ -17,6 +17,7 @@ import { WaveConfigViewModel } from "../view/waveconfig/waveconfig-model";
 import { blockViewToIcon, blockViewToName } from "./blockutil";
 import { HelpViewModel } from "@/view/helpview/helpview";
 import { RecoderViewModel } from "@/app/view/recoder/recoder-model";
+import { RecoderDetailViewModel } from "@/app/view/recoder/recoder-detail-model";
 import { RecoderTerminalViewModel } from "@/app/view/recoder/recoder-terminal-model";
 import { RecoderDiffViewModel } from "@/app/view/recoder-diff/recoder-diff-model";
 import { RecoderAgentsViewModel } from "@/app/view/recoder-agents/recoder-agents-model";
@@ -57,6 +58,8 @@ BlockRegistry.set("aifilediff", AiFileDiffViewModel);
 BlockRegistry.set("waveconfig", WaveConfigViewModel);
 BlockRegistry.set("processviewer", ProcessViewerViewModel);
 BlockRegistry.set("recoder", RecoderViewModel);
+BlockRegistry.set("recoder-detail", RecoderDetailViewModel);
+// Keep the standalone faces registered so existing saved layouts still open.
 BlockRegistry.set("recoder-terminal", RecoderTerminalViewModel);
 BlockRegistry.set("recoder-diff", RecoderDiffViewModel);
 BlockRegistry.set("recoder-board", RecoderBoardViewModel);

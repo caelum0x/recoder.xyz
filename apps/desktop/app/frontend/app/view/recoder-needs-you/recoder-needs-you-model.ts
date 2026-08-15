@@ -5,6 +5,7 @@ import { createBlock, globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
+import { workspaceDetailMeta } from "../recoder/recoder-detail-open";
 import { readErrorReason } from "../recoder/recoder-errors";
 import { RecoderNeedsYouView } from "./recoder-needs-you";
 
@@ -129,7 +130,7 @@ class RecoderNeedsYouViewModel implements ViewModel {
         if (ws == "") {
             return;
         }
-        const meta: Record<string, unknown> = { view: "recoder-terminal", "recoder:workspaceid": ws };
+        const meta = workspaceDetailMeta("session", ws);
         try {
             await createBlock({ meta });
         } catch {
