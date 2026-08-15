@@ -261,12 +261,16 @@ describe("RecoderNeedsYouViewModel.focusWorkspace", () => {
         vi.clearAllMocks();
     });
 
-    it("opens the workspace terminal block for a focused pane", async () => {
+    it("opens the workspace session face for a focused pane", async () => {
         const model = makeModel();
         await model.focusWorkspace("ws-approve");
 
         expect(createBlock).toHaveBeenCalledWith({
-            meta: { view: "recoder-terminal", "recoder:workspaceid": "ws-approve" },
+            meta: {
+                view: "recoder-detail",
+                "recoder:detailface": "session",
+                "recoder:workspaceid": "ws-approve",
+            },
         });
     });
 

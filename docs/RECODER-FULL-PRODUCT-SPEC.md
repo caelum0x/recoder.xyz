@@ -114,9 +114,11 @@ The sign-in unification remainder is tracked by `recoder-po7g`.
 
 ### 3.5 Observe and intervene
 
-1. The workspace detail surface shows the real terminal session, not a reconstructed
-   chat transcript.
-2. Terminal output and structured RunEvents stream independently; reconnect replays
+1. The workspace detail surface switches in place between Session and Review for one
+   workspace. Session renders the durable transcript plus live RunEvents; it does not
+   pretend to be the raw terminal.
+2. Raw tmux remains an explicit pop-out that preserves Wave side-by-side tiling.
+   Terminal output and structured RunEvents stream independently; reconnect replays
    durable events and reattaches to the live substrate when possible.
 3. A policy decision that needs a human appears inline at the affected run/diff action.
    Approval or rejection resumes or refuses that exact action and target.

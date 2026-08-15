@@ -6,6 +6,7 @@ import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
 import { composeConvergence, SYNTHESIZE_VALUE } from "../recoder/recoder-converge-logic";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
+import { workspaceDetailMeta } from "../recoder/recoder-detail-open";
 import { readErrorReason } from "../recoder/recoder-errors";
 import { RecoderFanoutView } from "./recoder-fanout";
 
@@ -526,7 +527,7 @@ class RecoderFanoutViewModel implements ViewModel {
         }
     }
 
-    // Open the recoder-diff Review surface for a converged workspace — the SAME
+    // Open the unified Review surface for a converged workspace — the SAME
     // createBlock affordance the hub's openReview uses, so the composed branch stops
     // dead-ending and flows into review + createPr. Fire-and-forget + degrade-safe:
     // an empty id opens nothing, a failed open never crashes the cockpit.
@@ -535,7 +536,7 @@ class RecoderFanoutViewModel implements ViewModel {
         if (id == "") {
             return;
         }
-        const meta: Record<string, unknown> = { view: "recoder-diff", "recoder:workspaceid": id };
+        const meta = workspaceDetailMeta("review", id);
         void createBlock({ meta }).catch(() => {});
     }
 

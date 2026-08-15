@@ -5,6 +5,8 @@ import { createBlock, globalStore } from "@/app/store/global";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { RecoderConnectionModel } from "../recoder/recoder-connection-model";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
+import { workspaceDetailMeta } from "../recoder/recoder-detail-open";
+import type { RecoderDetailFace } from "../recoder/recoder-detail-header";
 import { fetchPreviewVerification } from "../recoder-diff/recoder-evidence-logic";
 import { readErrorReason } from "../recoder/recoder-errors";
 import {
@@ -314,19 +316,19 @@ class RecoderRunsViewModel implements ViewModel {
     // its own block — the same view meta the hub uses. Fire-and-forget from event
     // handlers: a missing correlation is a no-op and a failed open never throws.
     async openRunSession(runId: string) {
-        await this.openRunWorkspace(runId, "recoder-terminal");
+        await this.openRunWorkspace(runId, "session");
     }
 
     async openRunReview(runId: string) {
-        await this.openRunWorkspace(runId, "recoder-diff");
+        await this.openRunWorkspace(runId, "review");
     }
 
-    async openRunWorkspace(runId: string, view: string) {
+    async openRunWorkspace(runId: string, face: RecoderDetailFace) {
         const workspaceId = this.workspaceIdForRun(runId);
         if (workspaceId == "") {
             return;
         }
-        const meta: Record<string, unknown> = { view, "recoder:workspaceid": workspaceId };
+        const meta = workspaceDetailMeta(face, workspaceId);
         try {
             await createBlock({ meta });
         } catch {

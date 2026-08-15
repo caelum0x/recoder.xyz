@@ -4,6 +4,7 @@
 import { useAtomValue } from "jotai";
 import { useEffect, useState } from "react";
 import { createBlock } from "@/app/store/global";
+import { workspaceDetailMeta } from "./recoder-detail-open";
 import {
     CHECKPOINTS_EMPTY,
     checkpointDisplayLabel,
@@ -27,9 +28,7 @@ type WorkspaceCheckpointsProps = {
 async function openSession(workspaceId: string) {
     // Route through a loosely-typed def (like the board's openBlock) so the
     // workspace-id meta key isn't rejected by the block MetaType literal check.
-    const blockDef: { meta: Record<string, unknown> } = {
-        meta: { view: "recoder-terminal", "recoder:workspaceid": workspaceId },
-    };
+    const blockDef = { meta: workspaceDetailMeta("session", workspaceId) };
     try {
         await createBlock(blockDef);
     } catch {

@@ -135,7 +135,8 @@ The frontend is the **Wave-native `recoder-*` views** embedded in the desktop sh
 Preact "cockpit" SPA that once mirrored these surfaces was **deleted** — 2026-07-31, recoder-flgn).
 It consumes ONLY the backend workspace/run/auth edges; it never renders an engine. The surfaces the
 principles above describe are all live: the board (`recoder`/`recoder-board`), workspace detail
-(`recoder-terminal`, `recoder-diff`), runs (`recoder-runs`), inline approvals (`recoder-approvals`),
+(`recoder-detail`, with legacy `recoder-terminal`/`recoder-diff` layout compatibility), runs
+(`recoder-runs`), inline approvals (`recoder-approvals`),
 and memory (`recoder-memory`), plus checkpoints, multi-agent compare, converge, board search, and
 repo/PR status on the proven conductor seams — all governed and truthful-degrading, all inside the
 workspace/board mental model. The marketing home carries a dependency-free CSS-3D `HeroCube` +
