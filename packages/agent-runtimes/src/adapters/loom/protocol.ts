@@ -18,7 +18,7 @@
  * loom `PROTOCOL_VERSION`. A `ping` reply whose `protocol` differs from this is
  * an incompatible server; callers must reject rather than proceed.
  */
-export const LOOM_PROTOCOL_VERSION = 20;
+export const LOOM_PROTOCOL_VERSION = 21;
 
 // --- Request envelope -------------------------------------------------------
 
@@ -40,6 +40,7 @@ export type LoomMethod =
   | 'agent.prompt'
   | 'agent.wait'
   | 'pane.send_text'
+  | 'pane.terminal.stream'
   | 'events.subscribe';
 
 export interface LoomRequest<Params = Record<string, unknown>> {
@@ -145,6 +146,33 @@ export interface PaneSendTextParams {
   pane_id: string;
   text: string;
 }
+
+/** A public terminal attachment over Loom's owner-only control socket. */
+export interface PaneTerminalStreamParams {
+  pane_id: string;
+  mode: 'control' | 'observe';
+  cols: number;
+  rows: number;
+  takeover?: boolean;
+}
+
+export interface LoomTerminalFrame {
+  type: 'terminal.frame';
+  seq: number;
+  encoding: 'ansi';
+  width: number;
+  height: number;
+  full: boolean;
+  /** Base64-encoded ANSI bytes. */
+  bytes: string;
+}
+
+export interface LoomTerminalClosed {
+  type: 'terminal.closed';
+  reason?: string;
+}
+
+export type LoomTerminalEvent = LoomTerminalFrame | LoomTerminalClosed;
 
 // --- agent.query filter/sort vocabulary -------------------------------------
 //
@@ -654,6 +682,25 @@ export function isLoomSubscriptionEvent(
     typeof value.event === 'string' &&
     !('result' in value) &&
     !('error' in value)
+  );
+}
+
+/** Validate the two server-to-client messages on a terminal stream. */
+export function isLoomTerminalEvent(value: unknown): value is LoomTerminalEvent {
+  if (!isRecord(value)) return false;
+  if (value.type === 'terminal.closed') {
+    return value.reason == null || typeof value.reason === 'string';
+  }
+  return (
+    value.type === 'terminal.frame' &&
+    typeof value.seq === 'number' &&
+    Number.isInteger(value.seq) &&
+    value.seq >= 0 &&
+    value.encoding === 'ansi' &&
+    typeof value.width === 'number' &&
+    typeof value.height === 'number' &&
+    typeof value.full === 'boolean' &&
+    typeof value.bytes === 'string'
   );
 }
 

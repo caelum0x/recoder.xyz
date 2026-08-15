@@ -30,6 +30,7 @@ type TerminalWorkspaceSummary = {
     projectId?: string;
     sessionName?: string;
     worktreePath?: string;
+    substrate?: string;
 };
 
 // The cost/token strip's truthful state: idle (no workspace / not asked yet),

@@ -932,6 +932,22 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       loom: conductorLoomSteer,
     },
   });
+  const loomInteractiveTerminalClient = new LoomSocketClient({
+    socketPath: loomDaemon.socketPath,
+  });
+  const conductorInteractiveTerminal = {
+    async attach(input: { paneId: string; cols: number; rows: number }) {
+      return loomInteractiveTerminalClient.terminalStream({
+        pane_id: input.paneId,
+        // Observe owns only this renderer viewport. Keyboard input remains on
+        // the conductor's governed pane.send_text path instead of bypassing it.
+        mode: 'observe',
+        cols: input.cols,
+        rows: input.rows,
+        takeover: false,
+      });
+    },
+  };
   // Reconcile-GC substrate scan source: feed the engines-domain DEEP tmux
   // introspection (`list-sessions` over the pinned binary the Conductor drives)
   // into reconcile so it sees the REAL live `recoder-*` sessions on the box and
@@ -1147,6 +1163,7 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
     colbertIndex: memory.colbertSearch(),
     githubStatus: conductorGithub,
     steerTransport: conductorSteer,
+    interactiveTerminal: conductorInteractiveTerminal,
     mcpInject: conductorMcpInject,
     ...(conductorSubstrateScan
       ? { substrateScan: conductorSubstrateScan }

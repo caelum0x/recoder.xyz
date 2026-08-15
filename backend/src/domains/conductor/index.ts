@@ -26,7 +26,7 @@ import type { QueryExecutor } from '../persistence/ports/query-executor.port.js'
 import type { AuthMiddleware } from '../identity/middleware/authenticate.middleware.js';
 import type { Principal } from '../identity/types.js';
 import type { ConductorConfigOverrides } from './config.js';
-import type { GovernanceGatePort, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView, SteerTransportPort, AuditReaderPort, AuditRecord } from './ports/index.js';
+import type { GovernanceGatePort, TerminalStreamPort, GithubStatusPort, GithubStatusView, GithubRepoView, SteerTransportPort, InteractiveTerminalPort, AuditReaderPort, AuditRecord } from './ports/index.js';
 import type { McpInjectPort } from './ports/mcp-inject.port.js';
 import type { CoordinationAdmissionPort } from './ports/coordination-admission.port.js';
 import type { EntitlementGate } from './ports/entitlement-gate.port.js';
@@ -321,6 +321,8 @@ export interface ConductorModuleDeps {
    * `ok:false` with the transport's reason.
    */
   readonly steerTransport?: SteerTransportPort;
+  /** Public Loom terminal renderer used by the authenticated `/terminal` bridge. */
+  readonly interactiveTerminal?: InteractiveTerminalPort;
   /**
    * Optional per-worktree `.mcp.json` injector: on a successful launch the composer
    * writes a secret-free `.mcp.json` into the workspace's worktree pointing the

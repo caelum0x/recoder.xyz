@@ -28,6 +28,7 @@ import {
   isLoomErrorResponse,
   isLoomSubscriptionEvent,
   isLoomSuccessResponse,
+  isLoomTerminalEvent,
   parseAgentQueryResult,
   parseEventSeq,
   parseWorktreeStatusResult,
@@ -39,6 +40,8 @@ import {
   type LoomSubscriptionEvent,
   type EventsSubscribeParams,
   type PongResult,
+  type LoomTerminalEvent,
+  type PaneTerminalStreamParams,
   type WorktreeStatus,
   type WorktreeStatusParams,
 } from './protocol';
@@ -104,6 +107,14 @@ export interface LoomEventStream extends AsyncIterable<LoomSubscriptionEvent> {
    * unaffected by snapshot events that carry no `seq`.
    */
   cursor(): number | undefined;
+}
+
+/** A public Loom terminal renderer/control stream on `loom.sock`. */
+export interface LoomTerminalStream extends AsyncIterable<LoomTerminalEvent> {
+  sendInput(data: string): void;
+  resize(cols: number, rows: number): void;
+  scroll(direction: 'up' | 'down', lines: number): void;
+  close(): void;
 }
 
 /**
@@ -425,6 +436,134 @@ export class LoomSocketClient {
       [Symbol.asyncIterator]: () => iterator,
       close: () => settle(),
       cursor: () => cursor,
+    };
+  }
+
+  /**
+   * Attach to one public pane through Loom's terminal renderer. The stream uses
+   * Loom's bounded render queue and emits base64 ANSI frames; callers never
+   * connect to the private thin-client socket.
+   */
+  terminalStream(params: PaneTerminalStreamParams): LoomTerminalStream {
+    const socket = createConnection(this.socketPath);
+    const request: LoomRequest<PaneTerminalStreamParams> = {
+      id: this.nextId(),
+      method: 'pane.terminal.stream',
+      params,
+    };
+    const lineBuffer = new LineBuffer();
+    const queued: LoomTerminalEvent[] = [];
+    let resolveNext: ((result: IteratorResult<LoomTerminalEvent>) => void) | null = null;
+    let rejectNext: ((reason: unknown) => void) | null = null;
+    let failure: unknown = null;
+    let finished = false;
+    let acknowledged = false;
+
+    const settle = (reason?: unknown): void => {
+      if (finished) return;
+      finished = true;
+      if (reason != null) failure = reason;
+      socket.destroy();
+      if (reason != null && rejectNext != null) {
+        const reject = rejectNext;
+        resolveNext = null;
+        rejectNext = null;
+        reject(reason);
+      } else if (resolveNext != null) {
+        const resolve = resolveNext;
+        resolveNext = null;
+        rejectNext = null;
+        resolve({ value: undefined, done: true });
+      }
+    };
+
+    const emit = (event: LoomTerminalEvent): void => {
+      if (resolveNext != null) {
+        const resolve = resolveNext;
+        resolveNext = null;
+        rejectNext = null;
+        resolve({ value: event, done: false });
+      } else {
+        queued.push(event);
+      }
+    };
+
+    const write = (message: unknown): void => {
+      if (!finished && acknowledged && socket.writable) {
+        socket.write(`${JSON.stringify(message)}\n`);
+      }
+    };
+
+    socket.on('connect', () => socket.write(`${JSON.stringify(request)}\n`));
+    socket.on('error', err => settle(err));
+    socket.on('close', () => {
+      if (!finished) settle(new LoomError('connection_closed', 'loom terminal stream closed'));
+    });
+    socket.on('data', chunk => {
+      for (const line of lineBuffer.push(chunk)) {
+        if (line.trim().length === 0) continue;
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          settle(new LoomError('malformed_event', 'loom terminal stream emitted non-JSON'));
+          return;
+        }
+        if (isLoomErrorResponse(parsed)) {
+          settle(new LoomError(parsed.error.code, parsed.error.message));
+          return;
+        }
+        if (!acknowledged) {
+          if (
+            isLoomSuccessResponse(parsed) &&
+            parsed.result.type === 'terminal_stream_started'
+          ) {
+            acknowledged = true;
+            continue;
+          }
+          settle(new LoomError('unexpected_response', 'loom terminal stream was not acknowledged'));
+          return;
+        }
+        if (isLoomTerminalEvent(parsed)) {
+          emit(parsed);
+          if (parsed.type === 'terminal.closed') settle();
+          continue;
+        }
+        settle(new LoomError('unexpected_event', 'loom terminal stream emitted an unknown frame'));
+        return;
+      }
+    });
+
+    const iterator: AsyncIterator<LoomTerminalEvent> = {
+      next: () => {
+        if (queued.length > 0) {
+          return Promise.resolve({ value: queued.shift() as LoomTerminalEvent, done: false });
+        }
+        if (failure != null) return Promise.reject(failure);
+        if (finished) return Promise.resolve({ value: undefined, done: true });
+        return new Promise<IteratorResult<LoomTerminalEvent>>((resolve, reject) => {
+          resolveNext = resolve;
+          rejectNext = reject;
+        });
+      },
+      return: () => {
+        write({ type: 'terminal.release' });
+        settle();
+        return Promise.resolve({ value: undefined, done: true });
+      },
+    };
+
+    return {
+      [Symbol.asyncIterator]: () => iterator,
+      sendInput: data =>
+        write({ type: 'terminal.input', bytes: Buffer.from(data, 'utf8').toString('base64') }),
+      resize: (cols, rows) => write({ type: 'terminal.resize', cols, rows }),
+      scroll: (direction, lines) =>
+        write({ type: 'terminal.scroll', direction, lines, source: 'wheel' }),
+      close: () => {
+        write({ type: 'terminal.release' });
+        settle();
+      },
     };
   }
 
