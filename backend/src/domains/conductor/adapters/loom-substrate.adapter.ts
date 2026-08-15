@@ -14,7 +14,8 @@
  *    events, so the poller does not drive capture); PTY/Diff/IsolationRemoval:true.
  *  - `launch()`  = `worktree.create{cwd,branch,base}` → `agent.start{name,kind,
  *    pane_id:root_pane, timeout_ms}`; handle carries `{ref:workspaceId,
- *    worktreePath:worktree.path, sessionName:agent.terminal_id}`.
+ *    worktreePath:worktree.path, sessionName:root_pane.pane_id}`. Loom agent
+ *    methods resolve public pane ids or unique agent names, never terminal ids.
  *  - `capture()` = `agent.read{target,source:'recent',strip_ansi:true}`; `null`
  *    on a dead handle.
  *  - `alive()`   = `agent.get{target}` resolves to an `AgentInfo`.
@@ -173,7 +174,7 @@ export function createLoomSubstrate(
   const client: LoomClientPort =
     deps.client ?? new LoomSocketClient({ socketPath: deps.socketPath! });
 
-  /** The agent-method `target` for a handle: the loom terminal id (sessionName). */
+  /** The agent-method `target` for a handle: the public Loom pane id. */
   function targetOf(handle: SubstrateHandle): string | null {
     return handle.sessionName != null && handle.sessionName !== ''
       ? handle.sessionName
@@ -276,9 +277,10 @@ export function createLoomSubstrate(
         kind,
         terminalId,
       });
-      // sessionName = the loom terminal id (the agent-method `target`); persisted
-      // by the engine so the handle is restart-re-derivable.
-      return { ref: input.workspaceId, worktreePath, sessionName: terminalId };
+      // `sessionName` is the public pane id used by every Loom agent verb. The
+      // engine's internal terminal id is intentionally NOT persisted as a target:
+      // `resolve_agent_target` accepts only pane ids or unique agent names.
+      return { ref: input.workspaceId, worktreePath, sessionName: paneId };
     },
 
     async capture(
@@ -361,7 +363,7 @@ export function createLoomSubstrate(
     ): Promise<SubstrateHandle> {
       const target = targetOf(handle);
       if (target == null) {
-        throw new Error('loom continueRun requires a live loom terminal id');
+        throw new Error('loom continueRun requires a live loom agent target');
       }
       // ACP-style: the agent is still LIVE in its pane/worktree (unlike the tmux
       // respawn), so a new instruction is delivered as a prompt into the same

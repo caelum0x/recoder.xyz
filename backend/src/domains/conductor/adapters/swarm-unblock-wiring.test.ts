@@ -114,7 +114,7 @@ function workspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
     workspaceId: 'ws-1',
     createdBy: 'user-1',
-    sessionName: 'term-1',
+    sessionName: 'pane-1',
     ...overrides,
   } as unknown as Workspace;
 }
@@ -185,7 +185,7 @@ describe('createSwarmUnblockDeps — real seam mapping', () => {
     expect(text).toBe('Proceed?');
     const read = calls.find(c => c.method === 'agent.read');
     expect(read?.params).toMatchObject({
-      target: 'term-1',
+      target: 'pane-1',
       source: 'recent',
       strip_ansi: true,
     });
@@ -208,7 +208,7 @@ describe('createSwarmUnblockDeps — real seam mapping', () => {
     });
     expect(await deps.blockedKindRead?.read('ws-1', ACTOR)).toBe('approval');
     const get = calls.find(c => c.method === 'agent.get');
-    expect(get?.params).toMatchObject({ target: 'term-1' });
+    expect(get?.params).toMatchObject({ target: 'pane-1' });
   });
 
   it('blockedKindRead is undefined when the AgentInfo declares no kind (manifest-less)', async () => {
@@ -249,7 +249,7 @@ describe('createSwarmUnblockDeps — real seam mapping', () => {
     });
     await deps.agentPrompt.deliver({ workspaceId: 'ws-1', text: 'hi', actor: ACTOR });
     expect(okCalls.find(c => c.method === 'agent.prompt')?.params).toMatchObject({
-      target: 'term-1',
+      target: 'pane-1',
       text: 'hi',
     });
 
@@ -294,8 +294,8 @@ describe('createSwarmUnblockDeps — real seam mapping', () => {
         taskGroup: 'grp',
         workspaceIds: ['ws-1', 'ws-2'],
         siblings: [
-          { workspaceId: 'ws-1', sessionName: 'term-1' },
-          { workspaceId: 'ws-2', sessionName: 'term-2' },
+          { workspaceId: 'ws-1', sessionName: 'pane-1' },
+          { workspaceId: 'ws-2', sessionName: 'pane-2' },
         ],
         contested: [],
       }) as unknown as CompareView,
@@ -320,8 +320,8 @@ describe('createSwarmUnblockDeps — real seam mapping', () => {
         taskGroup: 'grp',
         workspaceIds: ['ws-1', 'ws-2'],
         siblings: [
-          { workspaceId: 'ws-1', sessionName: 'term-1' },
-          { workspaceId: 'ws-2', sessionName: 'term-2' },
+          { workspaceId: 'ws-1', sessionName: 'pane-1' },
+          { workspaceId: 'ws-2', sessionName: 'pane-2' },
         ],
         contested: [],
       }) as unknown as CompareView,

@@ -43,7 +43,7 @@ Implements Recoder's `ConductorSubstrate` (the conductor drives the narrow
 |---|---|---|
 | `available()` | `ping` → `pong{protocol}` | reject if `protocol!==20`; missing bin/`ECONNREFUSED` → `{available:false,reason}` (never fake) |
 | `capabilities()` | — | `capturesByPolling:false` (loom has native events), supportsPty/Diff/IsolationRemoval:true |
-| `launch(input)` | `worktree.create{cwd,branch,base}` → `{workspace,tab,root_pane,worktree}`; then `agent.start{name,kind,pane_id:root_pane.pane_id,timeout_ms}` | `timeout_ms` must be `>3000 && ≤300000`; handle `{ref:workspaceId, worktreePath:worktree.path, sessionName:agent.terminal_id}` |
+| `launch(input)` | `worktree.create{cwd,branch,base}` → `{workspace,tab,root_pane,worktree}`; then `agent.start{name,kind,pane_id:root_pane.pane_id,timeout_ms}` | `timeout_ms` must be `>3000 && ≤300000`; handle `{ref:workspaceId, worktreePath:worktree.path, sessionName:root_pane.pane_id}` because agent verbs accept pane ids/names, not terminal ids |
 | `capture(handle,lines)` | `agent.read{target,source:"recent",lines,strip_ansi:true}` | null on dead handle |
 | `alive(handle)` | `agent.get{target}` → `AgentInfo` present | |
 | `exitCode?` | `agent.get` → `AgentStatus` | Done⇒0; live⇒**undefined** (never fabricate 0); gone/error⇒null. No OS exit code — same as acp |
