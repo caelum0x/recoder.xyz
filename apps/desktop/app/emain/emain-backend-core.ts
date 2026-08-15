@@ -624,15 +624,15 @@ export interface EngineRoster {
 
 /**
  * Engines whose native/CLI artifact the packaging gate REQUIRES present (the
- * §2a arch-sensitive `.node` set plus the always-bundled beads/dmux/tmux/
- * recodergit CLIs). A `down` here is built-but-broken — a real fault worth a
- * louder line — not a deliberate cloud-or-degrade absence (mem0/colbert/…).
+ * arch-sensitive `.node` set plus the always-bundled beads/dmux/tmux CLIs).
+ * RecoderGit is intentionally absent because its engine license does not permit
+ * commercial distribution; its truthful `down` entry remains ordinary degraded
+ * capability. A required engine reporting `down` is built-but-broken.
  */
 export const PACKAGED_REQUIRED_ENGINES: ReadonlySet<string> = new Set([
     "beads:cli",
     "dmux:cli",
     "tmux:cli",
-    "recodergit:cli",
     "governance:napi",
     "openfang:napi",
     "tensorzero:napi",
