@@ -1,5 +1,15 @@
 # Recoder — Canonical Layered Architecture
 
+> **Private-beta precedence (2026-08-15):** this file remains the canonical layered
+> engine/module map. Product scope and claim-level status now come from
+> [RECODER-FULL-PRODUCT-SPEC.md](./RECODER-FULL-PRODUCT-SPEC.md); process, transport,
+> state, and trust boundaries come from
+> [RECODER-CONNECTION-ARCHITECTURE.md](./RECODER-CONNECTION-ARCHITECTURE.md); active
+> sequencing comes from [RECODER-PRIVATE-BETA-PLAN.md](./RECODER-PRIVATE-BETA-PLAN.md).
+> Where historical prose below says "fully realized" or "verified," apply the status
+> vocabulary and acceptance evidence in those documents instead of treating it as a
+> release-readiness claim.
+
 > **The analogy:** Recoder is to VSCode what Cursor is to VSCode — a base substrate wrapped in
 > owned layers. Here the base is **tmux + git worktrees + a versioned store**, and the owned layers
 > are **engines → modules → edges → apps**. Every OSS directory is a first-class **engine used in

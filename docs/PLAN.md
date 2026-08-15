@@ -1,7 +1,14 @@
-# Recoder — Plan (current, actionable)
+# Recoder - Historical Plan Snapshot (2026-08-07)
 
-> Status: 2026-08-07. Owner-facing, evidence-grounded. This is the **now** plan;
-> the full strategy + per-seam technical roadmap lives in
+> **Superseded for active sequencing on 2026-08-15:** the invite-only BYOK plan is
+> [RECODER-PRIVATE-BETA-PLAN.md](./RECODER-PRIVATE-BETA-PLAN.md), backed by the
+> [full product spec](./RECODER-FULL-PRODUCT-SPEC.md),
+> [connection architecture](./RECODER-CONNECTION-ARCHITECTURE.md), and
+> [open-bead map](./OPEN-BEADS.md). This file remains historical evidence for the
+> convergence strategy and previously shipped slices.
+
+> Historical status recorded on 2026-08-07. The then-current strategy and per-seam
+> technical roadmap lived in
 > [NEXT-PHASES.md](./NEXT-PHASES.md), the locked strategy in
 > [PRODUCT-THESIS.md](./PRODUCT-THESIS.md), and the release/credential remainder in
 > [OWNER-RUNBOOK.md](./OWNER-RUNBOOK.md). Nothing here is asserted without evidence
@@ -20,7 +27,8 @@ pack, never a dashboard. (PRODUCT-THESIS.md:13-20, NEXT-PHASES.md:14-30)
 
 ## 0. Where we are (2026-08-07) — honest state
 
-**The product loop is shipped and the app is live.** Desktop **v0.16.1** is
+**Historical 2026-08-07 claim:** the product loop was described as shipped and the
+app as live. Desktop **v0.16.1** was
 signed + notarized (Accepted) + stapled + published to `dl.recoder.xyz`
 (`latest-mac.yml=0.16.1`, `/download` public); existing installs auto-update
 (bd `recoder-ahxt`, `recoder-fjod` closed). The end-to-end convergence flow —
@@ -28,7 +36,8 @@ fan N agents → they talk mid-run and share memory → N-up compare → assiste
 synthesize → governed, evidence-producing merge → clear the losers — is proven
 end-to-end (commit `5078e82f9`).
 
-**The technical roadmap is essentially done.** Of the 18 Part-II phases in
+**Historical 2026-08-07 claim:** the technical roadmap was described as essentially
+done. Of the 18 Part-II phases in
 NEXT-PHASES, **17 are DONE and 1 (C6 billing unification) is owner-gated** —
 re-verified against code, not asserted (see §2). The last two shipping waves were
 *clarity* (calmer desktop, keyboard board nav, at-a-glance divergence summary,

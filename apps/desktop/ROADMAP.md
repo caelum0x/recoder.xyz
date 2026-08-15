@@ -1,5 +1,13 @@
 # Recoder Terminal Roadmap
 
+> **Historical upstream-shell roadmap:** this file does not define current Recoder
+> product scope. The active invite-only BYOK plan is
+> [`../../docs/RECODER-PRIVATE-BETA-PLAN.md`](../../docs/RECODER-PRIVATE-BETA-PLAN.md),
+> and the authoritative surface contract is
+> [`../../docs/RECODER-FULL-PRODUCT-SPEC.md`](../../docs/RECODER-FULL-PRODUCT-SPEC.md).
+> Provider/widget/file-tool ideas below remain reference material unless promoted by
+> beta evidence and a Beads issue.
+
 This roadmap outlines major upcoming features and improvements for Recoder Terminal. As with any roadmap, priorities and timelines may shift as development progresses.
 
 Legend: ✅ Done | 🔧 In Progress | 🔷 Planned | 🤞 Stretch Goal
