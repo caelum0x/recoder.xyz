@@ -34,6 +34,7 @@ import type { RepoConfigFile } from './repo-config-file.js';
 import type { ConductorWriteResult } from '../conductor-module.js';
 import {
   conductorAuditEntry,
+  conductorTarget,
   guardConductorWrite,
   recordConductorAudit,
 } from '../audit/conductor-audit.js';
@@ -168,7 +169,7 @@ export class RepoSetupService {
       REPO_SETUP_ACTION,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('repository', repoKey),
         metadata: { repoKey, scriptLength: script.length },
       }
     );

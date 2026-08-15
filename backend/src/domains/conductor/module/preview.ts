@@ -28,6 +28,7 @@ import {
 } from '../evidence/preview-evidence.js';
 import {
   conductorAuditEntry,
+  conductorTarget,
   guardConductorWrite,
   recordConductorAudit,
 } from '../audit/conductor-audit.js';
@@ -107,7 +108,7 @@ export class ConductorPreview {
       action,
       principal,
       {
-        target: { environment: 'conductor' },
+        target: conductorTarget('workspace', workspaceId),
         metadata: { workspaceId },
       }
     );

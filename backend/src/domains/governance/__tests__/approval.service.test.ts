@@ -6,6 +6,8 @@ import type { ApprovalAuditSink } from '../services/approval.service.js';
 import type { AuditEntryInput, AuditRecord } from '../types.js';
 import { InMemoryApprovalRepository, InMemoryAuditRepository, silentLogger } from './_fakes.js';
 
+const TARGET = 'conductor:workspace:ws-1';
+
 function build(opts: { audit?: ApprovalAuditSink } = {}) {
   const repo = new InMemoryApprovalRepository();
   const service = new ApprovalService({ repo, logger: silentLogger, audit: opts.audit });
@@ -23,7 +25,7 @@ function chainSink() {
 describe('ApprovalService — request → decide lifecycle', () => {
   it('opens a pending request', async () => {
     const { service } = build();
-    const rec = await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const rec = await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: TARGET });
     expect(rec.status).toBe('pending');
     expect(rec.action).toBe('pr.merge');
     expect(rec.requestedBy).toBe('u1');
@@ -38,16 +40,17 @@ describe('ApprovalService — request → decide lifecycle', () => {
     expect((await repo.findById(rec.id))?.target).toBe('/repo/a.ts');
   });
 
-  it('defaults target to null when the requester supplies none (task-wide, backward-compatible)', async () => {
+  it('rejects a targetless request instead of creating task-wide authorization', async () => {
     const { service } = build();
-    const rec = await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
-    expect(rec.target ?? null).toBeNull();
+    await expect(service.request({
+      action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: '',
+    })).rejects.toBeInstanceOf(AppError);
   });
 
   it('seals a needs_approval entry into the audit chain on request', async () => {
     const { auditRepo, sink } = chainSink();
     const { service } = build({ audit: sink });
-    await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: TARGET });
     expect(auditRepo.rows).toHaveLength(1);
     expect(auditRepo.rows[0]?.effect).toBe('needs_approval');
   });
@@ -55,7 +58,7 @@ describe('ApprovalService — request → decide lifecycle', () => {
   it('APPROVE transitions pending → approved and seals an allow', async () => {
     const { auditRepo, sink } = chainSink();
     const { service } = build({ audit: sink });
-    const rec = await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const rec = await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: TARGET });
     const decided = await service.decide(rec.id, { decision: 'approved', decidedBy: 'admin' });
 
     expect(decided.status).toBe('approved');
@@ -66,7 +69,7 @@ describe('ApprovalService — request → decide lifecycle', () => {
   it('REJECT transitions pending → denied and seals a deny', async () => {
     const { auditRepo, sink } = chainSink();
     const { service } = build({ audit: sink });
-    const rec = await service.request({ action: 'branch.push', riskTier: 'high', requestedBy: 'u1' });
+    const rec = await service.request({ action: 'branch.push', riskTier: 'high', requestedBy: 'u1', target: TARGET });
     const decided = await service.decide(rec.id, { decision: 'denied', decidedBy: 'admin' });
 
     expect(decided.status).toBe('denied');
@@ -75,7 +78,7 @@ describe('ApprovalService — request → decide lifecycle', () => {
 
   it('is idempotent: re-deciding a resolved record throws NOT_FOUND', async () => {
     const { service } = build();
-    const rec = await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1' });
+    const rec = await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', target: TARGET });
     await service.decide(rec.id, { decision: 'approved', decidedBy: 'admin' });
 
     await expect(service.decide(rec.id, { decision: 'denied', decidedBy: 'admin' })).rejects.toMatchObject({
@@ -90,7 +93,7 @@ describe('ApprovalService — request → decide lifecycle', () => {
 
   it('hasApproval clears only after an approve (ties to a needs_approval gate)', async () => {
     const { service } = build();
-    const rec = await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const rec = await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: TARGET });
     expect(await service.hasApproval('t1', 'pr.merge')).toBe(false);
     await service.decide(rec.id, { decision: 'approved', decidedBy: 'admin' });
     expect(await service.hasApproval('t1', 'pr.merge')).toBe(true);
@@ -99,24 +102,24 @@ describe('ApprovalService — request → decide lifecycle', () => {
   it('best-effort audit: a failing sink does not roll back the human decision', async () => {
     const sink: ApprovalAuditSink = { recordAudit: vi.fn(async () => { throw new Error('audit down'); }) };
     const { service } = build({ audit: sink });
-    const rec = await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1' });
+    const rec = await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', target: TARGET });
     const decided = await service.decide(rec.id, { decision: 'approved', decidedBy: 'admin' });
     expect(decided.status).toBe('approved'); // durable state stands despite audit fault
   });
 
   it('validates input at the boundary', async () => {
     const { service } = build();
-    await expect(service.request({ action: '', riskTier: 'high', requestedBy: 'u1' })).rejects.toBeInstanceOf(AppError);
+    await expect(service.request({ action: '', riskTier: 'high', requestedBy: 'u1', target: TARGET })).rejects.toBeInstanceOf(AppError);
     await expect(
-      service.request({ action: 'x', riskTier: 'nope' as never, requestedBy: 'u1' }),
+      service.request({ action: 'x', riskTier: 'nope' as never, requestedBy: 'u1', target: TARGET }),
     ).rejects.toBeInstanceOf(AppError);
-    const rec = await service.request({ action: 'x', riskTier: 'low', requestedBy: 'u1' });
+    const rec = await service.request({ action: 'x', riskTier: 'low', requestedBy: 'u1', target: TARGET });
     await expect(service.decide(rec.id, { decision: 'maybe' as never, decidedBy: 'a' })).rejects.toBeInstanceOf(AppError);
   });
 
   it('get + list return stored records', async () => {
     const { service } = build();
-    const rec = await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const rec = await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: TARGET });
     expect((await service.get(rec.id))?.id).toBe(rec.id);
     expect(await service.list({ taskId: 't1' })).toHaveLength(1);
   });

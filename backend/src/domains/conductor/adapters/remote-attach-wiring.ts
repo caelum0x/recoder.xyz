@@ -119,7 +119,7 @@ export function createRemoteAttachDeps(
         requestedBy: params.requestedBy,
         reason: params.reason ?? null,
         taskId: params.taskId ?? null,
-        target: params.target ?? null,
+        target: params.target,
       });
       return { id: record.id };
     },

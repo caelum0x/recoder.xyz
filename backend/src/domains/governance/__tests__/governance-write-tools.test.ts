@@ -144,7 +144,7 @@ describe('governance_request_approval', () => {
   it('happy: opens a pending approval behind an allow gate', async () => {
     const h = buildHarness(ALLOW);
     const out = (await h.tool('governance_request_approval').handler(
-      { action: 'pr.merge', riskTier: 'high', taskId: 't1' },
+      { action: 'pr.merge', riskTier: 'high', taskId: 't1', target: 'conductor:workspace:ws-1' },
       callerFor('u1'),
     )) as { ok: boolean; approval: { id: string; status: string } };
     expect(out.ok).toBe(true);
@@ -155,7 +155,7 @@ describe('governance_request_approval', () => {
   it('gated-deny: refuses and opens no record', async () => {
     const h = buildHarness(DENY);
     const out = (await h.tool('governance_request_approval').handler(
-      { action: 'pr.merge', riskTier: 'high' },
+      { action: 'pr.merge', riskTier: 'high', target: 'conductor:workspace:ws-1' },
       callerFor('u1'),
     )) as { ok: boolean; gated?: boolean; verdict: { effect: string } };
     expect(out.ok).toBe(false);
@@ -167,7 +167,7 @@ describe('governance_request_approval', () => {
   it('rejects an invalid riskTier before any gate call', async () => {
     const h = buildHarness(ALLOW);
     const out = (await h.tool('governance_request_approval').handler(
-      { action: 'pr.merge', riskTier: 'nope' },
+      { action: 'pr.merge', riskTier: 'nope', target: 'conductor:workspace:ws-1' },
       callerFor('u1'),
     )) as {
       ok: boolean;
@@ -181,7 +181,7 @@ describe('governance_request_approval', () => {
 describe('governance_approval_decide', () => {
   it('happy: the OWNER grants their own pending approval behind an allow gate', async () => {
     const h = buildHarness(ALLOW);
-    const created = await h.approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const created = await h.approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: 'conductor:workspace:ws-1' });
     const out = (await h.tool('governance_approval_decide').handler(
       { approvalId: created.id, decision: 'approved' },
       callerFor('u1'),
@@ -193,7 +193,7 @@ describe('governance_approval_decide', () => {
 
   it('OWNERSHIP: a non-owner, non-privileged caller CANNOT decide another tenant’s approval (no-oracle)', async () => {
     const h = buildHarness(ALLOW);
-    const created = await h.approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const created = await h.approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: 'conductor:workspace:ws-1' });
     // u2 is authenticated + passes the self-gate but does not OWN u1's approval.
     const out = (await h.tool('governance_approval_decide').handler(
       { approvalId: created.id, decision: 'approved' },
@@ -209,7 +209,7 @@ describe('governance_approval_decide', () => {
 
   it('a privileged (admin) operator MAY decide any tenant’s approval', async () => {
     const h = buildHarness(ALLOW);
-    const created = await h.approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const created = await h.approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: 'conductor:workspace:ws-1' });
     const out = (await h.tool('governance_approval_decide').handler(
       { approvalId: created.id, decision: 'approved' },
       callerFor('ops', ['admin']),
@@ -220,7 +220,7 @@ describe('governance_approval_decide', () => {
 
   it('gated-deny: refuses and leaves the approval pending', async () => {
     const h = buildHarness(DENY);
-    const created = await h.approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const created = await h.approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: 'conductor:workspace:ws-1' });
     const out = (await h.tool('governance_approval_decide').handler(
       { approvalId: created.id, decision: 'approved' },
       callerFor('admin-user'),
@@ -350,7 +350,7 @@ describe('governance_secret_set', () => {
 describe('governance write tools — subject-spoof defense', () => {
   const WRITE_CALLS: readonly { readonly tool: string; readonly args: Record<string, unknown> }[] = [
     { tool: 'governance_decide', args: { action: 'file.write', path: '/repo/a.ts' } },
-    { tool: 'governance_request_approval', args: { action: 'pr.merge', riskTier: 'high' } },
+    { tool: 'governance_request_approval', args: { action: 'pr.merge', riskTier: 'high', target: 'conductor:workspace:ws-1' } },
     { tool: 'governance_approval_decide', args: { approvalId: 'appr_x', decision: 'approved' } },
     { tool: 'governance_acquire_lock', args: { resourcePath: '/repo/x.ts' } },
     { tool: 'governance_release_lock', args: { lockId: 'lock_x' } },
@@ -423,7 +423,7 @@ describe('governance write tools — subject-spoof defense', () => {
 
   it('approval_decide: decidedBy is the caller, and a non-privileged spoof is blocked before deciding', async () => {
     const h = buildHarness(ALLOW);
-    const created = await h.approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1' });
+    const created = await h.approvals.create({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: 'conductor:workspace:ws-1' });
     // Attacker tries to attribute the decision to a privileged approver.
     await expect(
       h.tool('governance_approval_decide').handler(
@@ -439,7 +439,7 @@ describe('governance write tools — subject-spoof defense', () => {
   it('request_approval: requestedBy is bound to the caller, not a spoofed args.actorId', async () => {
     const h = buildHarness(ALLOW);
     const out = (await h.tool('governance_request_approval').handler(
-      { action: 'pr.merge', riskTier: 'high', actorId: 'victim-user' },
+      { action: 'pr.merge', riskTier: 'high', actorId: 'victim-user', target: 'conductor:workspace:ws-1' },
       callerFor('victim-user'),
     )) as { ok: boolean; approval: { requestedBy: string } };
     // A matching own actorId is fine and attributed to the caller.
@@ -448,7 +448,7 @@ describe('governance write tools — subject-spoof defense', () => {
     // But a DIFFERENT actorId from a non-owning caller is refused.
     await expect(
       h.tool('governance_request_approval').handler(
-        { action: 'pr.merge', riskTier: 'high', actorId: 'someone-else' },
+        { action: 'pr.merge', riskTier: 'high', actorId: 'someone-else', target: 'conductor:workspace:ws-1' },
         callerFor('attacker'),
       ),
     ).rejects.toMatchObject({ code: ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED });

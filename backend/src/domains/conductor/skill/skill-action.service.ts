@@ -54,6 +54,7 @@ export interface SkillApprovalPort {
     readonly requestedBy: string;
     readonly reason?: string | null;
     readonly taskId?: string | null;
+    readonly target: string;
   }): Promise<{ readonly id: string }>;
 }
 
@@ -187,6 +188,7 @@ export class SkillActionService {
         requestedBy: actorId,
         reason: decision.reason ?? null,
         taskId: input.taskId ?? null,
+        target: trustedWorkspace,
       });
       this.log.info({ skillId, actionId, actorId, requestId: record.id }, 'skill invoke gated: approval requested');
       return { status: 'needs_approval', requestId: record.id, reason: decision.reason || 'approval required' };

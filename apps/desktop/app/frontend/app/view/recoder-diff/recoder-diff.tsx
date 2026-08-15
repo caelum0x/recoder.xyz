@@ -699,6 +699,7 @@ function InlineApprovalCard({
     onReject: () => void;
 }) {
     const action = approval.action || "";
+    const target = approval.target?.trim() ?? "";
     const reason = approval.reason || "This run is waiting on your approval before it can continue.";
     return (
         <div className="flex flex-col gap-2 rounded border border-accent/40 bg-accent/5 p-3">
@@ -711,6 +712,11 @@ function InlineApprovalCard({
             </div>
             <div className="text-sm text-primary/90">{reason}</div>
             {action != "" && <div className="text-xs font-mono text-secondary truncate">{action}</div>}
+            {target != "" && (
+                <div className="truncate text-xs font-mono text-secondary" title={target}>
+                    Target: {target}
+                </div>
+            )}
             <div className="flex items-center gap-2">
                 <button className={PRIMARY_BTN} disabled={deciding} onClick={onApprove}>
                     {deciding ? "…" : "Approve"}

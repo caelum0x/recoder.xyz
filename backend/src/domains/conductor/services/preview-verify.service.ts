@@ -23,6 +23,7 @@ import type { Principal } from '../../identity/types.js';
 import type { GateVerdict, GovernanceGatePort } from '../ports/index.js';
 import {
   conductorAuditEntry,
+  conductorTarget,
   guardConductorWrite,
   recordConductorAudit,
 } from '../audit/conductor-audit.js';
@@ -97,7 +98,7 @@ export async function verifyWorkspacePreview(
     deps.gate,
     PREVIEW_VERIFY_ACTION,
     principal,
-    { target: { environment: 'conductor' }, metadata: { workspaceId } },
+    { target: conductorTarget('workspace', workspaceId), metadata: { workspaceId } },
   );
   if (!allowed) return { ok: false, verdict, reason: verdict.reason };
 

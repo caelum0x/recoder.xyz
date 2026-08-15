@@ -92,6 +92,7 @@ export type {
   GovernanceGatePort,
   GovernanceAction,
   GateDecisionContext,
+  GateTarget,
   GateVerdict,
   GovernanceEffect,
   RiskTier,

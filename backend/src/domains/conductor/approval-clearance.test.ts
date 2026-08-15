@@ -18,6 +18,7 @@ import {
 import type { GovernanceKernelPort } from '../governance/ports/kernel.port.js';
 import type { KernelRequest, KernelVerdict } from '../governance/types.js';
 import { createConductorModule, type ConductorModule } from './index.js';
+import { conductorResource } from './audit/conductor-audit.js';
 import {
   FakeSubstrate,
   makeConfig,
@@ -78,12 +79,14 @@ async function approve(
   approvals: InMemoryApprovalRepository,
   taskId: string,
   action: string,
+  target: string,
 ): Promise<string> {
   const record = await approvals.create({
     taskId,
     action,
     riskTier: 'high',
     requestedBy: 'user_test',
+    target,
   });
   const decided = await approvals.decide(record.id, { decision: 'approved', decidedBy: 'admin' });
   expect(decided?.status).toBe('approved');
@@ -102,7 +105,12 @@ describe('conductor approval clearance (real GovernanceGateService)', () => {
     expect(await module.listWorkspaces()).toHaveLength(0);
 
     // 2. A human approves (taskId 'task_1' comes from makeCreateInput).
-    const approvalId = await approve(approvals, 'task_1', 'workspace.create');
+    const approvalId = await approve(
+      approvals,
+      'task_1',
+      'workspace.create',
+      conductorResource('repository', '/tmp/fake-repo'),
+    );
 
     // 3. Retried: the gate clears on the approved record and the write happens.
     const retried = await module.createWorkspace(makeCreateInput(), principal);
@@ -132,10 +140,16 @@ describe('conductor approval clearance (real GovernanceGateService)', () => {
     const blocked = await module.mergeWorkspace(workspaceId, {}, principal);
     expect(blocked.ok).toBe(false);
     expect(blocked.verdict.effect).toBe('needs_approval');
+    expect(blocked.verdict.target).toBe(conductorResource('workspace', workspaceId));
     expect(blocked.reason).toBe(blocked.verdict.reason); // governance blocker, verbatim
 
     // 2. A human approves the merge for the workspace's task.
-    const approvalId = await approve(approvals, 'task_1', 'workspace.merge');
+    const approvalId = await approve(
+      approvals,
+      'task_1',
+      'workspace.merge',
+      conductorResource('workspace', workspaceId),
+    );
 
     // 3. Retried: the gate CLEARS (allow + approvalId) and the merge proceeds
     //    into execution. The fake worktree is not a real git checkout, so any
@@ -150,9 +164,37 @@ describe('conductor approval clearance (real GovernanceGateService)', () => {
     }
   });
 
+  it('workspace.merge: approval for sibling A never clears sibling B in the same task', async () => {
+    const { module, approvals } = composeWithRealGate(['workspace.merge']);
+    const principal = makePrincipal();
+    const first = await module.createWorkspace(makeCreateInput({ prompt: 'first' }), principal);
+    const second = await module.createWorkspace(makeCreateInput({ prompt: 'second' }), principal);
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    const firstId = first.value!.workspaceId;
+    const secondId = second.value!.workspaceId;
+
+    await approve(
+      approvals,
+      'task_1',
+      'workspace.merge',
+      conductorResource('workspace', firstId),
+    );
+
+    const result = await module.mergeWorkspace(secondId, {}, principal);
+    expect(result.ok).toBe(false);
+    expect(result.verdict.effect).toBe('needs_approval');
+    expect(result.verdict.target).toBe(conductorResource('workspace', secondId));
+  });
+
   it('an approval for a DIFFERENT action does not clear the gate', async () => {
     const { module, approvals } = composeWithRealGate(['workspace.create']);
-    await approve(approvals, 'task_1', 'workspace.merge'); // wrong action
+    await approve(
+      approvals,
+      'task_1',
+      'workspace.merge',
+      conductorResource('repository', '/tmp/fake-repo'),
+    ); // wrong action
 
     const result = await module.createWorkspace(makeCreateInput(), makePrincipal());
     expect(result.ok).toBe(false);

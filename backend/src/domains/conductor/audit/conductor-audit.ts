@@ -18,10 +18,36 @@ import type {
   AuditEntryInput,
   AuditRecord,
   GateDecisionContext,
+  GateTarget,
   GovernanceAction,
   GovernanceGatePort,
   GateVerdict,
 } from '../ports/index.js';
+
+/**
+ * Stable, namespaced resource identity for conductor governance decisions.
+ * Every segment is encoded independently so ids containing `:` or `/` cannot
+ * collide with another scope. Approval records persist this exact string.
+ */
+export function conductorResource(
+  scope: 'global' | 'repository' | 'task-group' | 'workspace',
+  id: string,
+  ...detail: readonly string[]
+): string {
+  const segments = ['conductor', scope, id, ...detail].map(value =>
+    encodeURIComponent(value.trim())
+  );
+  return segments.join(':');
+}
+
+/** Build the GateTarget whose `resourceOf(ctx)` value is conductorResource(...). */
+export function conductorTarget(
+  scope: 'global' | 'repository' | 'task-group' | 'workspace',
+  id: string,
+  ...detail: readonly string[]
+): GateTarget {
+  return { environment: conductorResource(scope, id, ...detail) };
+}
 
 /** The outcome of a guarded write: the verdict + a decoded `allowed` boolean. */
 export interface GuardedWrite {

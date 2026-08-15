@@ -30,6 +30,8 @@ export interface AgentOsGateDecision {
   readonly reason: string;
   /** The approval gate id when `effect === 'needs_approval'`. */
   readonly approvalId?: string;
+  /** Canonical governed resource to bind into an approval request. */
+  readonly target?: string;
   /** True whenever the verdict did not come from the in-proc napi kernel. */
   readonly degraded: boolean;
 }
@@ -78,6 +80,7 @@ export function createGovernanceGateAdapter(gate: GovernanceGate): AgentOsGovern
           effect: verdict.effect,
           reason: verdict.reason,
           ...(verdict.approvalId ? { approvalId: verdict.approvalId } : {}),
+          ...(verdict.target ? { target: verdict.target } : {}),
           degraded: verdict.degraded,
         };
       } catch (error) {
