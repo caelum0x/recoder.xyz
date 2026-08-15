@@ -82,6 +82,13 @@ export type {
   WorkspaceSyncEvent,
 } from './terminal-stream.port.js';
 export type {
+  InteractiveTerminalPort,
+  InteractiveTerminalSession,
+  InteractiveTerminalEvent,
+  InteractiveTerminalFrame,
+  InteractiveTerminalClosed,
+} from './interactive-terminal.port.js';
+export type {
   GithubStatusPort,
   GithubStatusView,
   GithubStatusSource,

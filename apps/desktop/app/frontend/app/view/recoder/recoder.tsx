@@ -125,7 +125,15 @@ function openView(view: string) {
 // Attach the workspace's live tmux session as a real wave term block, using the
 // conductor-pinned tmux (from setup health) so we hit the same tmux server.
 function openTerminal(ws: RecoderWorkspace, tmuxBin: string) {
-    openWorkspaceTerminal({ sessionName: ws.sessionName, cwd: ws.worktreePath }, tmuxBin || undefined);
+    openWorkspaceTerminal(
+        {
+            sessionName: ws.sessionName,
+            cwd: ws.worktreePath,
+            workspaceId: ws.workspaceId,
+            substrate: ws.substrate,
+        },
+        tmuxBin || undefined
+    );
 }
 
 // The picker is the only entry path for a repo, so paths are always absolute;

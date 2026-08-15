@@ -19,6 +19,7 @@ import { HelpViewModel } from "@/view/helpview/helpview";
 import { RecoderViewModel } from "@/app/view/recoder/recoder-model";
 import { RecoderDetailViewModel } from "@/app/view/recoder/recoder-detail-model";
 import { RecoderTerminalViewModel } from "@/app/view/recoder/recoder-terminal-model";
+import { RecoderLoomTerminalViewModel } from "@/app/view/recoder/recoder-loom-terminal-model";
 import { RecoderDiffViewModel } from "@/app/view/recoder-diff/recoder-diff-model";
 import { RecoderAgentsViewModel } from "@/app/view/recoder-agents/recoder-agents-model";
 import { RecoderAuditViewModel } from "@/app/view/recoder-audit/recoder-audit-model";
@@ -61,6 +62,7 @@ BlockRegistry.set("recoder", RecoderViewModel);
 BlockRegistry.set("recoder-detail", RecoderDetailViewModel);
 // Keep the standalone faces registered so existing saved layouts still open.
 BlockRegistry.set("recoder-terminal", RecoderTerminalViewModel);
+BlockRegistry.set("recoder-loom-terminal", RecoderLoomTerminalViewModel);
 BlockRegistry.set("recoder-diff", RecoderDiffViewModel);
 BlockRegistry.set("recoder-board", RecoderBoardViewModel);
 BlockRegistry.set("recoder-memory", RecoderMemoryViewModel);

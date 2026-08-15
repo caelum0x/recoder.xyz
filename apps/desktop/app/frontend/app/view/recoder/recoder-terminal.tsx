@@ -305,7 +305,13 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
               }
             : undefined;
     const onOpenTerminal = boundSummary?.sessionName
-        ? () => openWorkspaceTerminal({ sessionName: boundSummary.sessionName, cwd: boundSummary.worktreePath })
+        ? () =>
+              openWorkspaceTerminal({
+                  sessionName: boundSummary.sessionName,
+                  cwd: boundSummary.worktreePath,
+                  workspaceId: boundSummary.workspaceId,
+                  substrate: boundSummary.substrate,
+              })
         : undefined;
     // Reconnect only exists when there's a bound session to reconnect to — an
     // unbound Session (pick a workspace from the switcher first) shows no action.

@@ -76,6 +76,7 @@ import type { ConductorRunTailer } from './adapters/run-tailer.adapter.js';
 import { createSubstrateScan } from './adapters/substrate-scan.adapter.js';
 import { TerminalStreamService } from './terminal/terminal-stream.js';
 import { buildConductorRoutes } from './routes/conductor.routes.js';
+import { canAccessWorkspace } from './routes/workspace-access.js';
 import { buildConductorMcpTools } from './mcp/conductor-engine.js';
 import {
   buildConductorWriteTools,
@@ -560,6 +561,29 @@ export class ConductorComposer implements ConductorModule {
         const result = await this.steerWorkspace(input, ctx.principal);
         if (!result.ok) throw new Error(result.reason ?? 'steer denied');
       },
+      ...(deps.interactiveTerminal
+        ? {
+            attach: async (workspaceId, cols, rows, ctx) => {
+              const workspace = await this.engine.getWorkspace(workspaceId);
+              if (
+                !workspace ||
+                !canAccessWorkspace(ctx.principal, workspace, {
+                  soloMode: this.cfg.soloMode,
+                })
+              ) {
+                throw new Error('workspace unavailable');
+              }
+              if (workspace.substrate !== 'loom' || !workspace.sessionName) {
+                throw new Error('workspace has no Loom terminal');
+              }
+              return deps.interactiveTerminal!.attach({
+                paneId: workspace.sessionName,
+                cols,
+                rows,
+              });
+            },
+          }
+        : {}),
     });
 
     // Run-event pipeline: local durable+live sink → external fan-out → completion

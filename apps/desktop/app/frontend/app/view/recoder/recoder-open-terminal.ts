@@ -3,6 +3,7 @@
 
 import { createBlock } from "@/app/store/global";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
+import { WorkspaceIdMetaKey } from "./recoder-detail-open";
 
 const OpenWorkspaceTerminalChannel = "recoder:open-workspace-terminal";
 const FallbackTmuxBin = "tmux";
@@ -15,6 +16,8 @@ const SessionNameRegex = /^[A-Za-z0-9_][A-Za-z0-9_-]{0,127}$/;
 type OpenWorkspaceTerminalPayload = {
     sessionName: string;
     cwd?: string;
+    workspaceId?: string;
+    substrate?: string;
 };
 
 // The conductor's own tmux server, sourced from its `/health` payload: the pinned
@@ -133,6 +136,17 @@ async function resolveConductorTmuxBin(): Promise<string> {
 // affordance sources binary+socket from health so it hits the conductor's server.
 async function openWorkspaceTerminal(payload: OpenWorkspaceTerminalPayload, tmuxBin?: string): Promise<void> {
     try {
+        if (payload.substrate == "loom") {
+            const workspaceId = payload.workspaceId?.trim() ?? "";
+            if (workspaceId == "") return;
+            await createBlock({
+                meta: {
+                    view: "recoder-loom-terminal",
+                    [WorkspaceIdMetaKey]: workspaceId,
+                },
+            });
+            return;
+        }
         if (tmuxBin != null && tmuxBin.trim() != "") {
             await createBlock({ meta: buildAttachBlockMeta(payload, tmuxBin.trim()) });
             return;
