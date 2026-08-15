@@ -48,6 +48,14 @@ class RecoderIdentityModel {
     }
 
     async refresh() {
+        // The main process refreshes only when the stored device-auth session is
+        // near expiry. A failed refresh must not hide an identity that remains
+        // readable from the local session store.
+        try {
+            await getApi().ensureRecoderSession?.();
+        } catch {
+            // Best-effort only; continue with the display-identity read below.
+        }
         try {
             const identity = await getApi().getRecoderIdentity();
             globalStore.set(this.identityAtom, identity ?? null);
