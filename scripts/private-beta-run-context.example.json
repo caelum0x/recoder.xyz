@@ -1,0 +1,24 @@
+{
+  "installArtifactPath": "../dist/Recoder-arm64.dmg",
+  "installSource": "signed-notarized-stapled-dmg",
+  "signIn": {
+    "outcome": "succeeded",
+    "reason": null,
+    "observedAt": "2026-08-15T12:00:00Z"
+  },
+  "refresh": {
+    "outcome": "succeeded",
+    "reason": null,
+    "observedAt": "2026-08-15T12:05:00Z"
+  },
+  "terminalAttach": {
+    "outcome": "succeeded",
+    "reason": null,
+    "observedAt": "2026-08-15T12:10:00Z"
+  },
+  "backendReconnect": {
+    "outcome": "succeeded",
+    "reason": null,
+    "observedAt": "2026-08-15T12:15:00Z"
+  }
+}

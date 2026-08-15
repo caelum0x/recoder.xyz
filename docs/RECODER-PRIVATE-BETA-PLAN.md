@@ -130,6 +130,14 @@ Outcome: repeated, evidence-backed product runs on actual desktop installs.
 
 ### 1.5 Resolve only live-run defects
 
+- Run `pnpm run beta:run-artifact -- <workspace-id> --context <context.json>`
+  after the workflow. The context follows
+  `scripts/private-beta-run-context.example.json` and supplies observations that
+  cannot be read safely outside Electron: sign-in, refresh, terminal attach,
+  backend reconnect, and the installed DMG path. Relative DMG paths resolve from
+  the context file's directory.
+- Accept an artifact as complete only when its `contract.complete` is `true`; a
+  partial collection lists every absent field under `contract.missing`.
 - File every reproducible defect as a bead linked to `recoder-1ejn` or the run issue.
 - Include app version/commit, repository shape, runtime/substrate, steps, expected and
   actual behavior, logs/artifact ids, and exact user-visible failure.
@@ -202,8 +210,8 @@ decisions, and GUI verification. Before treating it as a sprint backlog:
 - keep `recoder-ry9c`, not the closed parent `recoder-8ti9`, as the AST remainder;
 - close decision records such as `recoder-r96t` after their implementation residue is
   assigned; `recoder-vxvq` now owns that GUI remainder;
-- complete the evidence collector contract under `recoder-0w03` before treating a
-  clean-machine artifact as acceptance evidence.
+- use the v2 collector delivered under `recoder-0w03`; only artifacts with
+  `contract.complete: true` qualify as clean-machine acceptance evidence.
 
 ## 8. Delivery invariants
 
