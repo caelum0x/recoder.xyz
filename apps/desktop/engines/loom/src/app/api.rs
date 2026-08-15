@@ -1152,6 +1152,13 @@ impl App {
             Method::PaneInputSet(params) => return self.handle_pane_input_set(request.id, params),
             Method::PaneRename(params) => return self.handle_pane_rename(request.id, params),
             Method::PaneRead(params) => return self.handle_pane_read(request.id, params),
+            Method::PaneTerminalStream(_) => {
+                return responses::encode_error(
+                    request.id,
+                    "stream_transport_required",
+                    "pane.terminal.stream requires the streaming socket transport",
+                );
+            }
             Method::PaneGraphicsSet(params) => {
                 return self.handle_pane_graphics_set(request.id, params);
             }

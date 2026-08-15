@@ -1115,7 +1115,7 @@ enum TerminalControlScrollSource {
     PageKey,
 }
 
-fn terminal_control_command_from_json(raw: &str) -> Result<ClientMessage, String> {
+pub(crate) fn terminal_control_command_from_json(raw: &str) -> Result<ClientMessage, String> {
     let command = serde_json::from_str::<TerminalControlCommand>(raw)
         .map_err(|err| format!("invalid json command: {err}"))?;
     match command {
