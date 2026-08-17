@@ -248,7 +248,11 @@ export class ApprovalService {
       if (when <= Date.now()) {
         throw new AppError(ErrorCode.INVALID_INPUT, 'expiresAt must be in the future');
       }
-      return new Date(when).toISOString();
+      // Cap an explicit expiry at the SAME 30d ceiling `ttlMs` is clamped to —
+      // otherwise `expiresAt` is an uncapped bypass of MAX_APPROVAL_TTL, minting a
+      // multi-decade approval that never expires in practice (recoder-4d8i #5).
+      const maxWhen = Date.now() + MAX_APPROVAL_TTL_MS;
+      return new Date(Math.min(when, maxWhen)).toISOString();
     }
     const ttl = params.ttlMs != null ? clampTtl(params.ttlMs) : this.defaultTtlMs;
     return new Date(Date.now() + ttl).toISOString();

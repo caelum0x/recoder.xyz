@@ -31,6 +31,7 @@ import {
   subjectIdFromMetadata,
   unconfiguredCheckoutError,
   verifyHmacHex,
+  webhookBodyHashId,
   type ProviderAdapterDeps,
 } from './shared.js';
 
@@ -171,7 +172,12 @@ export function createCreemAdapter(deps: ProviderAdapterDeps): BillingProviderPo
       }
       const type = str(payload.eventType) ?? str(payload.type) ?? 'unknown';
       const data = (payload.object ?? payload.data ?? {}) as CreemSubscription;
-      const eventId = str(payload.id) ?? `creem_${Date.now()}`;
+      // Idempotency key: the provider event id when present, else a DETERMINISTIC
+      // hash of the raw body — NEVER a fresh `Date.now()` id (which let a captured
+      // valid body be replayed forever, since every replay minted a new eventId
+      // that the consumer's dedupe treated as a brand-new event). A body hash makes
+      // an identical replay dedupe against the original (recoder-4d8i).
+      const eventId = str(payload.id) ?? webhookBodyHashId(rawBody, 'creem');
       const subscription = toProviderSubscription(data, planFor);
       return {
         provider: 'creem',
