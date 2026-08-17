@@ -139,12 +139,14 @@ async function openWorkspaceTerminal(payload: OpenWorkspaceTerminalPayload, tmux
         if (payload.substrate == "loom") {
             const workspaceId = payload.workspaceId?.trim() ?? "";
             if (workspaceId == "") return;
-            await createBlock({
-                meta: {
-                    view: "recoder-loom-terminal",
-                    [WorkspaceIdMetaKey]: workspaceId,
-                },
-            });
+            // Build meta as a Record (not a fresh inline literal) so the custom
+            // `recoder:workspaceid` key does not trip MetaType's excess-property
+            // check — mirrors buildAttachBlockMeta / workspaceDetailMeta.
+            const meta: Record<string, unknown> = {
+                view: "recoder-loom-terminal",
+                [WorkspaceIdMetaKey]: workspaceId,
+            };
+            await createBlock({ meta });
             return;
         }
         if (tmuxBin != null && tmuxBin.trim() != "") {
