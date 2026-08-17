@@ -88,6 +88,16 @@ export interface MergeResultView {
    * best-effort-skipped (truthful, never fabricated).
    */
   evidenceHash?: string | null;
+  /**
+   * A non-blocking MERGE TRUST advisory (`warn` mode, or a `block`-mode medium-trust
+   * merge): the trust summary + the specific things to review. ABSENT when the trust
+   * gate is `off` or the merge was high-trust. A `block`-mode LOW-trust merge never
+   * reaches here — it is refused before the merge runs.
+   */
+  trustWarning?: string;
+  /** The convergence trust tier/score this merge was gated on (echoed for the UI/audit). */
+  trustTier?: 'high' | 'medium' | 'low';
+  trustScore?: number;
 }
 
 async function requireWorktree(

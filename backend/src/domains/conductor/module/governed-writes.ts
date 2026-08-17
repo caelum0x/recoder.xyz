@@ -77,6 +77,8 @@ import {
   type EvidenceConvergence,
   type EvidenceGovernance,
 } from '../evidence/convergence-evidence.js';
+import { computeConvergenceTrust } from '../evidence/convergence-trust.js';
+import { evaluateMergeTrustGate } from '../evidence/merge-trust-gate.js';
 import {
   ADVANCE_TARGET_STATES,
   buildReviewDeps,
@@ -1138,6 +1140,59 @@ export class ConductorGovernedWrites {
         principal
       );
 
+      // MERGE TRUST GATE (product): fold the pre-merge signals (readiness verdict +
+      // blockers, the merge verdict, breadth) into the convergence trust score and
+      // enforce the deployment posture. `off` (default) never interferes; `block`
+      // REFUSES a low-trust merge BEFORE it mutates; `warn` proceeds with an
+      // advisory. Degrade-truthful: the trust only ever downgrades allowed→warned/
+      // blocked, and every block carries the score's own reasons.
+      let trustAdvisory:
+        | { warning?: string; tier: 'high' | 'medium' | 'low'; score: number }
+        | undefined;
+      const trustMode = this.ctx.cfg.mergeTrustGate;
+      if (trustMode !== 'off') {
+        const view = preMerge.verification?.view;
+        const trust = computeConvergenceTrust({
+          verification: view
+            ? {
+                ...(view.verdict ? { verdict: view.verdict } : {}),
+                blockers: view.blockers,
+                ...(preMerge.verification?.reason
+                  ? { reason: preMerge.verification.reason }
+                  : {}),
+              }
+            : {
+                available: false,
+                reason: preMerge.verification?.reason ?? 'merge readiness unavailable',
+              },
+          governance: {
+            degraded: verdict.degraded,
+            riskTier: verdict.tier,
+            effect: verdict.effect,
+            ...(verdict.approvalId ? { approvalId: verdict.approvalId } : {}),
+          },
+          candidateCount: preMerge.candidates.length,
+        });
+        const gate = evaluateMergeTrustGate(trust, trustMode);
+        if (!gate.allow) {
+          await recordConductorAudit(
+            this.ctx.gate,
+            conductorAuditEntry(action, principal, verdict, {
+              workspaceId,
+              trustGate: 'blocked',
+              trustTier: gate.tier,
+              trustScore: gate.score,
+            })
+          );
+          return { ok: false, verdict, reason: gate.reason };
+        }
+        trustAdvisory = {
+          ...(gate.warning ? { warning: gate.warning } : {}),
+          tier: gate.tier,
+          score: gate.score,
+        };
+      }
+
       const deps: PublishOpsDeps = buildReviewDeps(this.ctx);
       const result = await mergeWorkspaceOp(deps, workspaceId, input);
 
@@ -1176,6 +1231,13 @@ export class ConductorGovernedWrites {
         auditSeq: emitted.sealed?.seq ?? null,
         auditEntryHash: emitted.sealed?.entryHash ?? null,
         evidenceHash: emitted.record?.evidence.contentHash ?? null,
+        ...(trustAdvisory
+          ? {
+              ...(trustAdvisory.warning ? { trustWarning: trustAdvisory.warning } : {}),
+              trustTier: trustAdvisory.tier,
+              trustScore: trustAdvisory.score,
+            }
+          : {}),
       };
       // Delivery-feedback fusion: a MERGED workspace is THE positive delivery
       // outcome. When the run's routed inference_id was persisted onto the record

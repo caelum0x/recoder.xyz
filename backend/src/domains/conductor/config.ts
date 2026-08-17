@@ -92,6 +92,13 @@ export const conductorConfigSchema = z.object({
    * `null` (unsigned) holds. The value is a secret — never logged, never committed.
    */
   evidenceSigningKey: z.string().nullable(),
+  /**
+   * The merge TRUST-GATE posture (was `RECODER_MERGE_TRUST_GATE`). `off` (default)
+   * never blocks/warns on convergence trust; `warn` advises on a non-high-trust
+   * merge; `block` REFUSES a low-trust merge. A converged merge's trust is folded
+   * from its pre-merge readiness + provenance; see `evidence/merge-trust-gate.ts`.
+   */
+  mergeTrustGate: z.enum(['off', 'warn', 'block']),
 });
 
 export type ConductorConfig = z.infer<typeof conductorConfigSchema>;
@@ -127,6 +134,8 @@ export interface ConductorConfigOverrides {
   readonly evidenceSigningKey?: string | null;
   /** The CLI-launch default substrate; production injects `'loom'`, unset -> `'tmux_worktree'`. */
   readonly defaultSubstrate?: ConductorDefaultSubstrate;
+  /** Merge trust-gate posture (`off`/`warn`/`block`); unset -> `'off'` (non-breaking). */
+  readonly mergeTrustGate?: ConductorConfig['mergeTrustGate'];
 }
 
 /**
@@ -151,6 +160,7 @@ export function sliceConductorConfig(
     defaultSubstrate: overrides.defaultSubstrate ?? 'tmux_worktree',
     isProduction: app.runtime.isProduction,
     evidenceSigningKey: overrides.evidenceSigningKey ?? null,
+    mergeTrustGate: overrides.mergeTrustGate ?? 'off',
   });
 }
 

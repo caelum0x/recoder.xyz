@@ -54,6 +54,7 @@ import { createInteropModule } from '../domains/interop/index.js';
 import { createAgentOsModule } from '../domains/agent-os/index.js';
 import { createConductorModule } from '../domains/conductor/index.js';
 import { createGovernedSkillModel } from '../domains/conductor/skill/skill-bootstrap.js';
+import { parseMergeTrustGateMode } from '../domains/conductor/evidence/merge-trust-gate.js';
 import type { SkillApprovalPort } from '../domains/conductor/skill/skill-action.service.js';
 import type { SkillManifest } from '../domains/conductor/skill/skill.types.js';
 import {
@@ -1312,6 +1313,9 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
       // authority and falls back to the attach marker for unregistered substrates).
       tmuxControlMode: config.conductor.tmuxControlMode,
       caps: config.conductor.caps,
+      // Merge trust-gate posture (RECODER_MERGE_TRUST_GATE): off (default) / warn /
+      // block. `block` refuses a low-trust converged merge before it delivers.
+      mergeTrustGate: parseMergeTrustGateMode(bootEnv.RECODER_MERGE_TRUST_GATE),
     },
   });
   container.registerValue(DOMAIN_TOKENS.conductor, conductor);

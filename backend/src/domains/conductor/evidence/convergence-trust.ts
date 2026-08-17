@@ -11,7 +11,34 @@
  * deduction. Pure over the sealed record — no I/O, no mutation — so it is fully
  * unit-tested and can be recomputed identically from the exportable evidence.
  */
-import type { ConvergenceEvidence } from './convergence-evidence.js';
+/**
+ * The structural signals the trust fold reads — a subset satisfied BOTH by a sealed
+ * {@link import('./convergence-evidence.js').ConvergenceEvidence} (post-merge) AND
+ * by the pre-merge inputs the merge gate assembles (candidates + readiness + the
+ * merge verdict), so the SAME scoring math powers the post-merge score and the
+ * pre-merge gate without duplicating it.
+ */
+export interface ConvergenceTrustInput {
+  readonly verification: {
+    readonly available?: boolean;
+    readonly verdict?: string;
+    readonly blockers?: readonly string[];
+    readonly reason?: string;
+  };
+  readonly convergence?: {
+    readonly fileCount: number;
+    readonly selections?: readonly { readonly mode: string; readonly contested: boolean }[];
+    readonly assisted?: readonly { readonly path: string }[];
+  };
+  readonly governance: {
+    readonly degraded: boolean;
+    readonly riskTier: string;
+    readonly effect: string;
+    readonly approvalId?: string;
+    readonly reason?: string;
+  };
+  readonly candidateCount: number;
+}
 
 /** How a factor moved the score — for a truthful, colour-free breakdown. */
 export type TrustImpact = 'positive' | 'caution' | 'negative';
@@ -56,7 +83,7 @@ function tierOf(score: number): ConvergenceTrust['tier'] {
  * Fold the sealed evidence into a trust assessment. Weights are fixed + documented
  * so two reviewers reading the same merge always see the same score + reasons.
  */
-export function computeConvergenceTrust(evidence: ConvergenceEvidence): ConvergenceTrust {
+export function computeConvergenceTrust(evidence: ConvergenceTrustInput): ConvergenceTrust {
   const factors: TrustFactor[] = [];
   const reviewFlags: string[] = [];
   let score = BASE;
