@@ -24,7 +24,7 @@ export const RECODER_BUILTIN_PUBLISHER_KEY_ID = 'recoder-builtin';
  * by the publisher and used only to re-sign the manifest when it changes.
  */
 export const RECODER_BUILTIN_PUBLIC_KEY_HEX =
-  '7304fd380d12cc9fc1c379e468dfcd4e3acc35d98f5ceb8369841a7411363129';
+  '32dcfc3e305a1100790c012fd64fc5641c02a3bab168e49c8da8bd1f637497ba';
 
 /**
  * The committed ed25519 signature over the first-party manifest's canonical body
@@ -32,7 +32,7 @@ export const RECODER_BUILTIN_PUBLIC_KEY_HEX =
  * verifies against {@link RECODER_BUILTIN_PUBLIC_KEY_HEX}; a locked test proves it.
  */
 export const RECODER_WORKSPACE_SIGNATURE =
-  '1488b43bd7496abb6f1e9b8b844e2bc684cd073ec7615eeeccd4eb0645aaf8292e445180b5c23be8f79af71d7060ea1fb8f1f2f7b269444744b75d33cdf60c0c';
+  'fa79cde3774666c25baeb15558cf2702c63619dca8ba5438d9228340081e1bf26aad575f7f39ea89f504852e458d96bd05065979c46edc8fa37c636781b32803';
 
 /** The pinned id + version of the first-party workspace skill. */
 export const RECODER_WORKSPACE_SKILL_ID = 'recoder.workspace';
