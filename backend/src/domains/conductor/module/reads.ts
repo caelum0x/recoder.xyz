@@ -48,6 +48,7 @@ import {
   foldReadiness,
   type ReadinessView,
 } from '../services/readiness.service.js';
+import { foldOpenWork, type OpenWorkView } from '../services/openwork.service.js';
 import {
   buildReviewDeps,
   type ConductorContext,
@@ -366,9 +367,9 @@ export class ConductorReads {
   }
 
   /**
-   * Fold the five merge-decision signals (lifecycle, worktree open-work,
-   * mergeability, PR checks, preview verification) into ONE truthful read-model
-   * (`GET …/readiness`). PURE read: no gate, no audit, no mutation. Each probe is
+   * Fold the six merge-decision signals (lifecycle, worktree open-work,
+   * mergeability, PR checks, preview verification, unresolved open work) into ONE
+   * truthful read-model (`GET …/readiness`). PURE read: no gate, no audit, no mutation. Each probe is
    * settled INDEPENDENTLY via `Promise.allSettled`, so a rejected/hung probe degrades to
    * an ABSENT input — the corresponding signal reports `'unknown'` and the edge
    * never 500s, never a fabricated pass. `state` is read from the already-fetched
@@ -381,12 +382,13 @@ export class ConductorReads {
   async workspaceReadiness(workspaceId: string): Promise<ReadinessView> {
     const workspace = await this.ctx.engine.getWorkspace(workspaceId);
     if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
-    const [mergeR, prR, worktreeR, previewR, viewR] = await Promise.allSettled([
+    const [mergeR, prR, worktreeR, previewR, viewR, openWorkR] = await Promise.allSettled([
       this.ctx.mergeability.probe(workspace),
       this.ctx.prStatus.status(workspace),
       this.ctx.worktreeStatus.probe(workspace),
       this.ctx.getPreviewVerification(workspaceId),
       this.buildWorkspaceView(workspace),
+      this.probeOpenWork(workspace),
     ]);
     const review = await this.probePrReview(workspace, prR);
     return foldReadiness({
@@ -401,7 +403,38 @@ export class ConductorReads {
         : {}),
       ...(previewR.status === 'fulfilled' ? { preview: previewR.value } : {}),
       ...(review ? { review } : {}),
+      ...(openWorkR.status === 'fulfilled' ? { openWork: openWorkR.value } : {}),
     });
+  }
+
+  /**
+   * Gather the three OPEN-WORK sources into one truthful {@link OpenWorkView}: the
+   * task issue's unchecked acceptance criteria (via `codeIntel.readIssue`), the
+   * TODO/FIXME markers the change ADDS (scanned from the working-tree-vs-base
+   * patch), and non-closed linked issues. Each source degrades to `null`
+   * INDEPENDENTLY (unwired port, absent task, or a git/bd fault) so it contributes
+   * nothing rather than a fabricated item; the pure {@link foldOpenWork} decides
+   * availability. Never throws (the caller settles it, but this stays self-safe).
+   *
+   * NOTE: the linked-issue source is unwired pending a memory-facet listing verb
+   * for non-closed issues under a task — it degrades to `null` (truthfully absent)
+   * today, so no issue is ever fabricated. See the follow-up bd issue.
+   */
+  private async probeOpenWork(workspace: Workspace): Promise<OpenWorkView> {
+    const taskId = workspace.taskId?.trim();
+    const [bodyR, diffR] = await Promise.allSettled([
+      taskId && this.ctx.codeIntel?.readIssue
+        ? this.ctx.codeIntel.readIssue(taskId)
+        : Promise.resolve(null),
+      workspace.worktreePath
+        ? workspaceDiffOp(buildReviewDeps(this.ctx), workspace.workspaceId)
+        : Promise.resolve(null),
+    ]);
+    const taskBody =
+      bodyR.status === 'fulfilled' && bodyR.value ? bodyR.value.description ?? null : null;
+    const diffText =
+      diffR.status === 'fulfilled' && diffR.value ? diffR.value.patch : null;
+    return foldOpenWork({ taskBody, diffText, openIssues: null });
   }
 
   /**

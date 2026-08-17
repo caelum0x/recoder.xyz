@@ -1,10 +1,10 @@
 /**
- * ReadinessService — a PURE fold of the four merge-decision signals a reviewer
+ * ReadinessService — a PURE fold of the six merge-decision signals a reviewer
  * weighs before merging a workspace into one truthful read-model (the
  * `GET /workspaces/:id/readiness` payload). It has NO side effects: it takes the
- * already-probed views (lifecycle state, mergeability, PR checks, preview
- * verification) and derives a verdict + the four constituent signals + any hard
- * blockers.
+ * already-probed views (lifecycle state, worktree, mergeability, PR checks, preview
+ * verification, open work) and derives a verdict + the six constituent signals +
+ * any hard blockers + soft open-work advisories.
  *
  * The whole file obeys ONE law: DEGRADE-TRUTHFUL. A signal we could not judge is
  * `'unknown'` (never a fabricated pass); a `'ready'` verdict is the HARDEST gate —
@@ -24,10 +24,11 @@ import type { PrStatusView } from './pr-status.service.js';
 import type { WorktreeStatusView } from './worktree-status.service.js';
 import type { PreviewVerificationView } from '../ports/preview-verify.port.js';
 import type { PrReviewEvidenceView } from '../ports/pr-review.port.js';
+import type { OpenWorkView } from './openwork.service.js';
 
-/** One of the five merge-decision signals, projected truthfully. */
+/** One of the six merge-decision signals, projected truthfully. */
 export interface ReadinessSignal {
-  readonly id: 'lifecycle' | 'worktree' | 'merge' | 'checks' | 'preview';
+  readonly id: 'lifecycle' | 'worktree' | 'merge' | 'checks' | 'preview' | 'openWork';
   /** `'unknown'` is a real value (we could not judge) — never coerced to a pass. */
   readonly status: 'pass' | 'fail' | 'pending' | 'unknown';
   readonly detail: string;
@@ -50,10 +51,18 @@ export interface ReadinessView {
    * to `'not_ready'` with an "agent still working" detail.
    */
   readonly verdict: 'ready' | 'blocked' | 'not_ready' | 'unknown' | 'delivered' | 'terminal';
-  /** ALWAYS 5 signals, fixed order: lifecycle, worktree, merge, checks, preview. */
+  /** ALWAYS 6 signals, fixed order: lifecycle, worktree, merge, checks, preview, openWork. */
   readonly signals: readonly ReadinessSignal[];
   /** Populated ONLY on hard blockers (a real merge conflict or a failing check). */
   readonly blockers: readonly string[];
+  /**
+   * SOFT "discouraged" reasons — unresolved open work that downgrades a `ready`
+   * merge to `not_ready` without hard-blocking it: unchecked task-spec criteria,
+   * added TODO/FIXME diff markers, and non-closed linked issues. Empty when there
+   * is no open work OR the open-work source could not be probed. Distinct from
+   * {@link blockers} (hard conflict/failing-check) so the reviewer sees both tiers.
+   */
+  readonly advisories: readonly string[];
   /** The open PR's identity (number/state/draft/url); null when there is no PR. */
   readonly pr: ReadinessPr | null;
   /**
@@ -78,6 +87,8 @@ export interface ReadinessInput {
   readonly preview?: PreviewVerificationView | null;
   /** ADVISORY auto-review evidence; absent ⇒ probe unwired/skipped/rejected. */
   readonly review?: PrReviewEvidenceView;
+  /** Unresolved open work (criteria/TODOs/linked issues); absent ⇒ probe rejected/unwired. */
+  readonly openWork?: OpenWorkView;
 }
 
 /**
@@ -246,6 +257,30 @@ function derivePreview(preview?: PreviewVerificationView | null): ReadinessSigna
 }
 
 /**
+ * Open-work signal — unresolved work DISCOURAGES a merge (soft, like uncommitted
+ * worktree). `pending` when any open-work item was found; `pass` when a probed
+ * source found none; `unknown` when no source could be probed (never a fabricated
+ * pass). The detail summarizes the counts by kind.
+ */
+function deriveOpenWork(openWork?: OpenWorkView): ReadinessSignal {
+  if (!openWork || openWork.available === false) {
+    return { id: 'openWork', status: 'unknown', detail: openWork?.reason ?? 'open-work status unavailable' };
+  }
+  const items = openWork.items;
+  if (items.length === 0) {
+    return { id: 'openWork', status: 'pass', detail: 'no unresolved open work' };
+  }
+  const criteria = items.filter((i) => i.kind === 'criterion').length;
+  const todos = items.filter((i) => i.kind === 'todo').length;
+  const issues = items.filter((i) => i.kind === 'issue').length;
+  const parts: string[] = [];
+  if (criteria > 0) parts.push(`${criteria} unchecked criteria`);
+  if (todos > 0) parts.push(`${todos} TODO/FIXME`);
+  if (issues > 0) parts.push(`${issues} open issue(s)`);
+  return { id: 'openWork', status: 'pending', detail: `${parts.join(', ')} — resolve before merging` };
+}
+
+/**
  * Compute the hard blockers — populated ONLY when the merge preflight is a real
  * conflict OR checks are failing. A conflicting merge lists the conflicted paths
  * (or a truthful placeholder when git could not name them); a failing check names
@@ -269,7 +304,7 @@ function deriveBlockers(
 }
 
 /**
- * Fold the four merge-decision signals into one truthful {@link ReadinessView}.
+ * Fold the six merge-decision signals into one truthful {@link ReadinessView}.
  * PURE — no I/O, no mutation. The verdict priority (degrade-truthful, `ready` is
  * the hardest gate):
  *
@@ -295,43 +330,59 @@ export function foldReadiness(input: ReadinessInput): ReadinessView {
   const merge = deriveMerge(input.mergeability);
   const checks = deriveChecks(input.prStatus);
   const preview = derivePreview(input.preview);
+  const openWork = deriveOpenWork(input.openWork);
   const pr = derivePr(input.prStatus);
   // ADVISORY pass-through: the review evidence NEVER joins the signals array
   // and NEVER moves the verdict fold below — it rides the view untouched.
   const review = input.review ?? null;
-  const signals: readonly ReadinessSignal[] = [lifecycle, worktree, merge, checks, preview];
+  const signals: readonly ReadinessSignal[] = [lifecycle, worktree, merge, checks, preview, openWork];
+  // Soft advisories — the itemized open work (criteria/TODOs/linked issues). Only
+  // present when a source was probed AND found work; an unavailable probe carries
+  // none (never fabricated). Rides every verdict (informational at any state).
+  const advisories: readonly string[] =
+    input.openWork && input.openWork.available ? input.openWork.items.map((i) => i.label) : [];
+
+  /** Close over the shared parts so every verdict path stays one line + truthful. */
+  const mk = (verdict: ReadinessView['verdict'], blockers: readonly string[] = []): ReadinessView => ({
+    verdict,
+    signals,
+    pr,
+    review,
+    blockers,
+    advisories,
+  });
 
   // Delivered/closed states are decided by lifecycle truth BEFORE the merge/checks
   // fold: an already-merged or closed workspace is never reported as blocked or
   // "agent still working" on the panel meant to prove its convergence.
   if (lifecycleClass === 'delivered') {
-    return { verdict: 'delivered', signals, pr, review, blockers: [] };
+    return mk('delivered');
   }
   if (lifecycleClass === 'terminal') {
-    return { verdict: 'terminal', signals, pr, review, blockers: [] };
+    return mk('terminal');
   }
   if (lifecycleClass === 'failed') {
-    return { verdict: 'blocked', signals, pr, review, blockers: ['workspace delivery failed'] };
+    return mk('blocked', ['workspace delivery failed']);
   }
 
   if (merge.status === 'fail' || checks.status === 'fail') {
-    return { verdict: 'blocked', signals, pr, review, blockers: deriveBlockers(merge, checks, input) };
+    return mk('blocked', deriveBlockers(merge, checks, input));
   }
   if (lifecycleClass === 'working') {
-    return { verdict: 'not_ready', signals, pr, review, blockers: [] };
+    return mk('not_ready');
   }
   if (merge.status === 'pass' && preview.status !== 'fail') {
-    // Open (uncommitted) work DISCOURAGES a merge: the merge operates on committed
-    // state, so a dirty worktree would silently drop the agent's unstaged changes.
-    // This is a soft downgrade to not_ready, NOT a hard blocker — the reviewer can
-    // still merge, but the panel tells the truth that work is uncommitted.
-    if (worktree.status === 'pending') {
-      return { verdict: 'not_ready', signals, pr, review, blockers: [] };
+    // Open work DISCOURAGES a merge: uncommitted worktree changes would be silently
+    // dropped (the merge operates on committed state), and unresolved criteria/TODOs/
+    // linked issues mean the work isn't done. Both are SOFT downgrades to not_ready,
+    // NOT hard blockers — the reviewer can still merge, but the panel tells the truth.
+    if (worktree.status === 'pending' || openWork.status === 'pending') {
+      return mk('not_ready');
     }
-    return { verdict: 'ready', signals, pr, review, blockers: [] };
+    return mk('ready');
   }
   if (merge.status === 'unknown') {
-    return { verdict: 'unknown', signals, pr, review, blockers: [] };
+    return mk('unknown');
   }
-  return { verdict: 'not_ready', signals, pr, review, blockers: [] };
+  return mk('not_ready');
 }

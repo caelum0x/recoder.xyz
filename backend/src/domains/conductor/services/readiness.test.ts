@@ -251,7 +251,7 @@ describe('foldReadiness', () => {
     const view = foldReadiness(input);
     expect(view.verdict).toBe('not_ready');
     expect(view.blockers).toEqual([]);
-    expect(view.signals.map((s) => s.id)).toEqual(['lifecycle', 'worktree', 'merge', 'checks', 'preview']);
+    expect(view.signals.map((s) => s.id)).toEqual(['lifecycle', 'worktree', 'merge', 'checks', 'preview', 'openWork']);
     expect(signalOf(view, 'lifecycle')?.status).toBe('pending');
     expect(signalOf(view, 'worktree')?.status).toBe('unknown');
     expect(signalOf(view, 'merge')?.status).toBe('unknown');
@@ -333,13 +333,50 @@ describe('foldReadiness — worktree open-work signal', () => {
     expect(view.blockers).toEqual(['src/a.ts']);
   });
 
-  it('always emits exactly 5 signals in fixed order', () => {
+  it('always emits exactly 6 signals in fixed order', () => {
     const view = foldReadiness({ ...base, worktree: cleanWorktree() });
-    expect(view.signals.map((s) => s.id)).toEqual(['lifecycle', 'worktree', 'merge', 'checks', 'preview']);
+    expect(view.signals.map((s) => s.id)).toEqual(['lifecycle', 'worktree', 'merge', 'checks', 'preview', 'openWork']);
+  });
+
+  it('unresolved open work DISCOURAGES merge (not_ready, soft) and lists advisories', () => {
+    const view = foldReadiness({
+      ...base,
+      worktree: cleanWorktree(),
+      openWork: { available: true, items: [{ kind: 'criterion', label: '[ ] handle null' }, { kind: 'todo', label: 'a.ts: TODO x' }] },
+    });
+    expect(view.verdict).toBe('not_ready');
+    expect(view.blockers).toEqual([]);
+    expect(view.advisories).toEqual(['[ ] handle null', 'a.ts: TODO x']);
+    expect(signalOf(view, 'openWork')?.status).toBe('pending');
+  });
+
+  it('a probed open-work source with NO items keeps ready and carries no advisories', () => {
+    const view = foldReadiness({ ...base, worktree: cleanWorktree(), openWork: { available: true, items: [] } });
+    expect(view.verdict).toBe('ready');
+    expect(view.advisories).toEqual([]);
+    expect(signalOf(view, 'openWork')?.status).toBe('pass');
+  });
+
+  it('an unavailable open-work probe is unknown and never downgrades a ready verdict', () => {
+    const view = foldReadiness({ ...base, worktree: cleanWorktree(), openWork: { available: false, items: [], reason: 'down' } });
+    expect(view.verdict).toBe('ready');
+    expect(view.advisories).toEqual([]);
+    expect(signalOf(view, 'openWork')?.status).toBe('unknown');
+  });
+
+  it('a hard blocker still wins over open work (blocked, advisories still itemized)', () => {
+    const view = foldReadiness({
+      state: 'awaiting_review' as WorkspaceState,
+      mergeability: conflictingMerge(['src/a.ts']),
+      openWork: { available: true, items: [{ kind: 'issue', label: 'recoder-x: follow-up' }] },
+    });
+    expect(view.verdict).toBe('blocked');
+    expect(view.blockers).toEqual(['src/a.ts']);
+    expect(view.advisories).toEqual(['recoder-x: follow-up']);
   });
 });
 
-describe('foldReadiness — advisory review facet (NEVER a 6th signal)', () => {
+describe('foldReadiness — advisory review facet (NEVER a signal)', () => {
   const reviewEvidence: PrReviewEvidenceView = {
     available: true,
     pr: 7,
@@ -365,8 +402,8 @@ describe('foldReadiness — advisory review facet (NEVER a 6th signal)', () => {
     expect(view.verdict).toBe(without.verdict);
     expect(view.signals).toEqual(without.signals);
     expect(view.blockers).toEqual(without.blockers);
-    // …and stays evidence, never a 6th signal.
-    expect(view.signals.map((s) => s.id)).toEqual(['lifecycle', 'worktree', 'merge', 'checks', 'preview']);
+    // …and stays evidence, never a signal (openWork is the 6th signal; review is not).
+    expect(view.signals.map((s) => s.id)).toEqual(['lifecycle', 'worktree', 'merge', 'checks', 'preview', 'openWork']);
   });
 
   it('(b) no review input → review: null (truthful absence)', () => {

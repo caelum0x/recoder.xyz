@@ -292,7 +292,7 @@ type MergeabilityView = {
 // value (we could not judge) — never coerced to a pass. `worktree` reports
 // uncommitted open work: it is `pending` (discouraged) when the worktree is dirty.
 type ReadinessSignal = {
-    id: "lifecycle" | "worktree" | "merge" | "checks" | "preview";
+    id: "lifecycle" | "worktree" | "merge" | "checks" | "preview" | "openWork";
     status: "pass" | "fail" | "pending" | "unknown";
     detail: string;
 };
@@ -305,6 +305,10 @@ type ReadinessView = {
     verdict: "ready" | "blocked" | "not_ready" | "unknown" | "delivered" | "terminal";
     signals: ReadinessSignal[];
     blockers: string[];
+    // SOFT "discouraged" reasons — unresolved open work (unchecked task-spec criteria,
+    // added TODO/FIXME markers, non-closed linked issues) that downgrades a ready merge
+    // to not_ready without hard-blocking it. Empty when there is none or it was unprobed.
+    advisories?: string[];
     // The open PR's identity (number/state/draft/url) when one exists; null otherwise.
     pr?: ReadinessPr | null;
 };

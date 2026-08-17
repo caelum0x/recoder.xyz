@@ -138,6 +138,11 @@ function ReadinessBadge({ readiness }: { readiness: ReadinessView }) {
     const blockers = Array.isArray(readiness.blockers)
         ? readiness.blockers.filter((b): b is string => typeof b == "string" && b.trim() != "")
         : [];
+    // SOFT open-work advisories (unchecked criteria / TODO-FIXME / linked issues) — the
+    // "discouraged, not blocked" tier. Quieter than the error-toned hard blockers.
+    const advisories = Array.isArray(readiness.advisories)
+        ? readiness.advisories.filter((a): a is string => typeof a == "string" && a.trim() != "")
+        : [];
     return (
         <div className="flex flex-col gap-1">
             <div className="flex items-center gap-1.5">
@@ -168,6 +173,16 @@ function ReadinessBadge({ readiness }: { readiness: ReadinessView }) {
                         <li key={i} className="flex gap-1">
                             <span aria-hidden="true">›</span>
                             <span>{b}</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+            {advisories.length > 0 && (
+                <ul className="ml-1 flex flex-col gap-0.5 text-[11px] text-secondary">
+                    {advisories.map((a, i) => (
+                        <li key={i} className="flex gap-1">
+                            <span aria-hidden="true">›</span>
+                            <span>{a}</span>
                         </li>
                     ))}
                 </ul>
