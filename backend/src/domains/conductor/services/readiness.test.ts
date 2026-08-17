@@ -350,6 +350,28 @@ describe('foldReadiness — worktree open-work signal', () => {
     expect(signalOf(view, 'openWork')?.status).toBe('pending');
   });
 
+  it('surfaces a diff-vs-issue COMPLIANCE advisory when the change only partly addresses the criteria', () => {
+    const view = foldReadiness({
+      ...base,
+      worktree: cleanWorktree(),
+      openWork: {
+        available: true,
+        items: [],
+        compliance: { rating: 'partial', metCount: 1, total: 2, unmet: ['[ ] emit audit line'], summary: 'change addresses 1/2 acceptance criteria (1 unmet).' },
+      },
+    });
+    expect(view.advisories[0]).toMatch(/1\/2 acceptance criteria/i);
+  });
+
+  it('a full-compliance open-work source adds no compliance advisory', () => {
+    const view = foldReadiness({
+      ...base,
+      worktree: cleanWorktree(),
+      openWork: { available: true, items: [], compliance: { rating: 'full', metCount: 2, total: 2, unmet: [], summary: 'all criteria addressed' } },
+    });
+    expect(view.advisories).toEqual([]);
+  });
+
   it('a probed open-work source with NO items keeps ready and carries no advisories', () => {
     const view = foldReadiness({ ...base, worktree: cleanWorktree(), openWork: { available: true, items: [] } });
     expect(view.verdict).toBe('ready');
