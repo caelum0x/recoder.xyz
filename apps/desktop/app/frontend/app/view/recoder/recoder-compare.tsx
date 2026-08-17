@@ -39,7 +39,7 @@ import {
     type SiblingCompareEntry,
 } from "./recoder-model";
 import { RecoderEmpty } from "./recoder-states";
-import { summarizeChecks } from "./recoder-checks-summary";
+import { summarizeChecks, buildChecksTable } from "./recoder-checks-summary";
 import { FIELD_LABEL, META, QUIET_BTN_XS, SAVE_BTN } from "./recoder-styles";
 
 // Explicit sign so a pairwise delta can never be mistaken for an absolute count;
@@ -821,6 +821,74 @@ function PairwisePanel({ pair, taskGroup }: { pair: PairwiseCompareView; taskGro
 
 PairwisePanel.displayName = "PairwisePanel";
 
+// The DEDICATED "Checks" view — one consolidated merge-readiness row per sibling
+// (verdict headline + itemized hard blockers + soft open-work advisories), folded by
+// the pure buildChecksTable. A calm at-a-glance "can I merge each of these?" table,
+// distinct from the side-by-side Compare columns. Degrade-truthful: a sibling with no
+// probed views reads "checks unavailable", never a fabricated status.
+function ChecksPanel({
+    siblings,
+    readinessMap,
+}: {
+    siblings: SiblingCompareEntry[];
+    readinessMap: Record<string, { readiness?: ReadinessView; mergeability?: MergeabilityView }>;
+}) {
+    const rows = buildChecksTable(siblings, readinessMap);
+    return (
+        <div className="flex flex-col gap-1.5">
+            <div className={FIELD_LABEL}>
+                Merge checks — {rows.length} agent{rows.length == 1 ? "" : "s"}
+            </div>
+            {rows.map((row) => {
+                const tone =
+                    row.summary?.tone == "blocked"
+                        ? "text-error"
+                        : row.summary?.tone == "ready"
+                          ? "text-accent"
+                          : "text-secondary";
+                return (
+                    <div
+                        key={row.workspaceId}
+                        className="flex flex-col gap-0.5 rounded border border-white/8 px-2 py-1.5"
+                    >
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-primary">{agentLabel(row.agent)}</span>
+                            <span className="truncate font-mono text-xs text-secondary" title={row.branch}>
+                                {row.branch}
+                            </span>
+                            <span className={`ml-auto text-xs ${tone}`} title={row.summary?.detail}>
+                                {row.summary != null ? row.summary.headline : "checks unavailable"}
+                            </span>
+                        </div>
+                        {row.blockers.length > 0 && (
+                            <ul className="ml-1 flex flex-col gap-0.5 text-[11px] text-error">
+                                {row.blockers.map((b, i) => (
+                                    <li key={i} className="flex gap-1">
+                                        <span aria-hidden="true">›</span>
+                                        <span>{b}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                        {row.advisories.length > 0 && (
+                            <ul className="ml-1 flex flex-col gap-0.5 text-[11px] text-secondary">
+                                {row.advisories.map((a, i) => (
+                                    <li key={i} className="flex gap-1">
+                                        <span aria-hidden="true">›</span>
+                                        <span>{a}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
+ChecksPanel.displayName = "ChecksPanel";
+
 function RecoderComparePanel({
     model,
     compareView,
@@ -840,6 +908,9 @@ function RecoderComparePanel({
     const fileVersionsMap = useAtomValue(model.fileVersionsAtom);
     const setFileVersions = useSetAtom(model.fileVersionsAtom);
     const [openFilePath, setOpenFilePath] = useState("");
+    // Compare (side-by-side columns) vs the dedicated Checks table. Local-only view
+    // state — a calm toggle, no route change, so the reviewer keeps their group.
+    const [checksTab, setChecksTab] = useState(false);
     const taskGroup = compareView.taskGroup ?? "";
     // A fresh open / a group switch always starts the winner selection AND the N-up
     // file view clean so one group's picks or loaded file versions can never leak into
@@ -870,33 +941,57 @@ function RecoderComparePanel({
     };
     return (
         <div className="flex flex-col gap-1.5 rounded border border-white/8 p-2">
-            {summary != "" && <div className={META}>{summary}</div>}
-            <ConflictHeatmap compareView={compareView} />
-            {compareView.siblings.length >= 2 && (
-                <ConvergePanel
-                    taskGroup={taskGroup}
-                    contested={compareView.contested ?? []}
-                    siblings={compareView.siblings}
-                    selection={selection}
-                    onSelectionChange={setSelection}
-                    onReview={onReview}
-                    onOpenFile={onOpenFile}
-                    openFilePath={openFilePath}
-                />
-            )}
-            {openFilePath != "" && (
-                <FileVersionsPanel
-                    model={model}
-                    taskGroup={taskGroup}
-                    path={openFilePath}
-                    result={fileVersionsMap[fileVersionsKey(taskGroup, openFilePath)]}
-                    onClose={() => setOpenFilePath("")}
-                />
-            )}
-            {pair != null && <PairwisePanel pair={pair} taskGroup={taskGroup} />}
-            <div className="overflow-x-auto">
-                <div className="flex gap-1">
-                    {compareView.siblings.map((sibling, i) => {
+            <div className="flex items-center gap-2">
+                {summary != "" && <div className={META}>{summary}</div>}
+                <div className="ml-auto flex items-center gap-1" role="tablist" aria-label="Compare views">
+                    <button
+                        role="tab"
+                        aria-selected={!checksTab}
+                        className={`rounded px-2 py-0.5 text-xs cursor-pointer recoder-transition ${!checksTab ? "bg-accent/15 text-primary border border-accent/50" : "text-secondary border border-transparent hover:bg-white/[0.04]"}`}
+                        onClick={() => setChecksTab(false)}
+                    >
+                        Compare
+                    </button>
+                    <button
+                        role="tab"
+                        aria-selected={checksTab}
+                        className={`rounded px-2 py-0.5 text-xs cursor-pointer recoder-transition ${checksTab ? "bg-accent/15 text-primary border border-accent/50" : "text-secondary border border-transparent hover:bg-white/[0.04]"}`}
+                        onClick={() => setChecksTab(true)}
+                    >
+                        Checks
+                    </button>
+                </div>
+            </div>
+            {checksTab ? (
+                <ChecksPanel siblings={compareView.siblings} readinessMap={readinessMap} />
+            ) : (
+                <>
+                    <ConflictHeatmap compareView={compareView} />
+                    {compareView.siblings.length >= 2 && (
+                        <ConvergePanel
+                            taskGroup={taskGroup}
+                            contested={compareView.contested ?? []}
+                            siblings={compareView.siblings}
+                            selection={selection}
+                            onSelectionChange={setSelection}
+                            onReview={onReview}
+                            onOpenFile={onOpenFile}
+                            openFilePath={openFilePath}
+                        />
+                    )}
+                    {openFilePath != "" && (
+                        <FileVersionsPanel
+                            model={model}
+                            taskGroup={taskGroup}
+                            path={openFilePath}
+                            result={fileVersionsMap[fileVersionsKey(taskGroup, openFilePath)]}
+                            onClose={() => setOpenFilePath("")}
+                        />
+                    )}
+                    {pair != null && <PairwisePanel pair={pair} taskGroup={taskGroup} />}
+                    <div className="overflow-x-auto">
+                        <div className="flex gap-1">
+                            {compareView.siblings.map((sibling, i) => {
                         const merge = readinessMap[sibling.workspaceId];
                         return (
                             <SiblingCompareColumn
@@ -920,9 +1015,11 @@ function RecoderComparePanel({
                                 }
                             />
                         );
-                    })}
-                </div>
-            </div>
+                            })}
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 }

@@ -66,3 +66,41 @@ export function summarizeChecks(
     // 'unknown' / 'terminal' / absent verdict — we could not fully judge; say so.
     return { headline: "checks incomplete", tone: "quiet", detail };
 }
+
+// One row of the consolidated "Checks" table — a sibling's identity plus its rolled-up
+// merge verdict and the itemized hard blockers / soft advisories behind it.
+export type ChecksRow = {
+    workspaceId: string;
+    agent: string;
+    branch: string;
+    // null when neither readiness nor mergeability could be probed for this sibling.
+    summary: ChecksSummary | null;
+    blockers: string[];
+    advisories: string[];
+};
+
+// The already-probed merge-decision views for one sibling (the readinessAtom entry shape).
+type SiblingReadiness = { readiness?: ReadinessView | null; mergeability?: MergeabilityView | null };
+
+// Build the dedicated Checks table: ONE consolidated row per sibling, folding each
+// sibling's readiness + mergeability into a verdict + itemized blockers/advisories.
+// PURE + degrade-truthful: a sibling with no probed views yields a null summary +
+// empty lists (rendered as "—"), never a fabricated status.
+export function buildChecksTable(
+    siblings: readonly { workspaceId: string; agent: string; branch: string }[],
+    readinessMap: Record<string, SiblingReadiness>,
+): ChecksRow[] {
+    return siblings.map((sibling) => {
+        const entry = readinessMap[sibling.workspaceId];
+        const readiness = entry?.readiness ?? null;
+        const mergeability = entry?.mergeability ?? null;
+        return {
+            workspaceId: sibling.workspaceId,
+            agent: sibling.agent,
+            branch: sibling.branch,
+            summary: summarizeChecks(readiness, mergeability),
+            blockers: cleanList(readiness?.blockers),
+            advisories: cleanList(readiness?.advisories),
+        };
+    });
+}
