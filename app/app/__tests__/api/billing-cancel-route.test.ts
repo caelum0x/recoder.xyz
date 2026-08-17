@@ -32,23 +32,26 @@ vi.mock('@/lib/auth-config', () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
 
-vi.mock('@/lib/billing-credentials', () => ({
-  resolvePaddleVendorId: vi.fn(() => null),
-  resolvePaddleAuthCode: vi.fn(() => null),
-  resolveDodoApiKey: vi.fn(() => null),
+// The active payment provider (Creem) — cancellation MUST route through it and
+// gate success on it. Default mock is a configured provider that cancels OK; the
+// fail-loud tests override cancelSubscription / configured.
+const mockCancelSubscription = vi.fn(async () => ({ ok: true as const, status: 'canceled' }));
+vi.mock('@/lib/payments/registry', () => ({
+  getProvider: vi.fn(() => ({
+    name: 'creem',
+    configured: true,
+    cancelSubscription: mockCancelSubscription,
+  })),
 }));
-
-// Stub global fetch for external payment API calls
-vi.stubGlobal('fetch', vi.fn(() =>
-  Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) })
-));
 
 import { POST } from '@/app/api/billing/subscription/cancel/route';
 import { requireAuth } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
+import { getProvider } from '@/lib/payments/registry';
 
 const mockRequireAuth = vi.mocked(requireAuth);
 const mockPrisma = vi.mocked(prisma);
+const mockGetProvider = vi.mocked(getProvider);
 
 function buildRequest(body: Record<string, unknown>): NextRequest {
   return new NextRequest('http://localhost/api/billing/subscription/cancel', {
@@ -61,6 +64,13 @@ function buildRequest(body: Record<string, unknown>): NextRequest {
 describe('POST /api/billing/subscription/cancel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Restore the default: a configured Creem provider that cancels successfully.
+    mockCancelSubscription.mockResolvedValue({ ok: true as const, status: 'canceled' });
+    mockGetProvider.mockReturnValue({
+      name: 'creem',
+      configured: true,
+      cancelSubscription: mockCancelSubscription,
+    } as any);
   });
 
   it('returns 401 when user is not authenticated', async () => {
@@ -131,6 +141,10 @@ describe('POST /api/billing/subscription/cancel', () => {
     expect(data.success).toBe(true);
     expect(data.message).toContain('will be cancelled');
 
+    // The provider cancel MUST have been called with the stored subscription id
+    // BEFORE the DB was marked cancelled.
+    expect(mockCancelSubscription).toHaveBeenCalledWith('sub_123');
+
     // Verify subscription status is set to 'cancelling' (not immediate)
     expect(mockPrisma.users.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -196,5 +210,60 @@ describe('POST /api/billing/subscription/cancel', () => {
         }),
       })
     );
+  });
+
+  // --- fail-loud safety (recoder-sl5b): never report success / mark the DB
+  // cancelled while the provider still charges the card ---
+
+  it('FAILS LOUD when the provider cancel fails — no DB change, no success', async () => {
+    mockCancelSubscription.mockResolvedValue({ ok: false as const, reason: 'creem_cancel_failed' } as any);
+    mockRequireAuth.mockResolvedValue({
+      error: false,
+      user: { id: 'user-1', email: 'test@example.com' },
+    } as any);
+    mockPrisma.users.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'test@example.com',
+      subscriptionId: 'sub_123',
+      subscriptionEndDate: new Date('2026-04-01'),
+      plan: 'pro',
+    } as any);
+
+    const res = await POST(buildRequest({ reason: 'too expensive' }));
+
+    expect(res.status).toBe(502);
+    const data = await res.json();
+    expect(data.success).toBeUndefined();
+    expect(data.error).toMatch(/payment provider/i);
+    // Critical: the DB was NOT marked cancelled while the card is still active.
+    expect(mockPrisma.users.update).not.toHaveBeenCalled();
+    expect(mockPrisma.audit_logs.create).not.toHaveBeenCalled();
+  });
+
+  it('FAILS LOUD (503) when the provider is not configured — no DB change, no success', async () => {
+    mockGetProvider.mockReturnValue({
+      name: 'creem',
+      configured: false,
+      cancelSubscription: mockCancelSubscription,
+    } as any);
+    mockRequireAuth.mockResolvedValue({
+      error: false,
+      user: { id: 'user-1', email: 'test@example.com' },
+    } as any);
+    mockPrisma.users.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'test@example.com',
+      subscriptionId: 'sub_123',
+      plan: 'pro',
+    } as any);
+
+    const res = await POST(buildRequest({ reason: 'x' }));
+
+    expect(res.status).toBe(503);
+    const data = await res.json();
+    expect(data.success).toBeUndefined();
+    // The provider was never even asked to cancel, and nothing was mutated.
+    expect(mockCancelSubscription).not.toHaveBeenCalled();
+    expect(mockPrisma.users.update).not.toHaveBeenCalled();
   });
 });
