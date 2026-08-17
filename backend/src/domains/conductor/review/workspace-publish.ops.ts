@@ -105,6 +105,12 @@ export interface MergeResultView {
    * bare tier/score badge into an actionable checklist at the merge decision point.
    */
   trustFlags?: readonly string[];
+  /**
+   * The cross-candidate self-consistency vote (recoder-je8w) — how much the N
+   * independent agents agreed on the files they both touched. ABSENT for a `solo`
+   * merge (nothing to vote on); the compare view renders converged/diverged rows.
+   */
+  vote?: import('../evidence/finding-vote.js').CandidateVote;
 }
 
 async function requireWorktree(

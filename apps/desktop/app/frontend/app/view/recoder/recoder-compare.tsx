@@ -40,6 +40,7 @@ import {
 } from "./recoder-model";
 import { RecoderEmpty } from "./recoder-states";
 import { summarizeChecks, buildChecksTable } from "./recoder-checks-summary";
+import { projectVote } from "./recoder-trust";
 import { FIELD_LABEL, META, QUIET_BTN_XS, SAVE_BTN } from "./recoder-styles";
 
 // Explicit sign so a pairwise delta can never be mistaken for an absolute count;
@@ -281,6 +282,13 @@ function MergeVerdictLine({ record }: { record: RecoderMergeRecord }) {
     const trustFlags = Array.isArray(record.merge?.trustFlags)
         ? record.merge.trustFlags.filter((f): f is string => typeof f == "string" && f.trim() != "")
         : [];
+    // The CROSS-CANDIDATE consensus vote (Recoder's uniquely-ownable signal): of the
+    // files MULTIPLE parallel agents changed, which CONVERGED (auto-merged) vs had one
+    // version PICKED (diverged). Projected defensively from the untrusted merge wire; an
+    // absent / malformed vote degrades to `solo` and simply does not render. Colour-free
+    // per the design: only a `weak` verdict uses the crimson marker; strong/mixed stay quiet.
+    const vote = projectVote((record.merge as { vote?: unknown } | undefined)?.vote);
+    const voteWeak = vote.verdict == "weak";
     return (
         <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -306,6 +314,31 @@ function MergeVerdictLine({ record }: { record: RecoderMergeRecord }) {
                         </li>
                     ))}
                 </ul>
+            )}
+            {vote.verdict != "solo" && (
+                <div className="flex flex-col gap-0.5">
+                    <span
+                        className={`text-[11px] ${voteWeak ? "text-error" : "text-secondary"}`}
+                        title={vote.summary || undefined}
+                    >
+                        consensus: {vote.verdict} · {vote.converged.length}/{vote.contestedCount} shared file
+                        {vote.contestedCount == 1 ? "" : "s"} converged
+                    </span>
+                    {vote.picked.length > 0 && (
+                        <ul className="ml-1 flex flex-col gap-0.5 text-[11px] text-secondary">
+                            {vote.picked.map((path, i) => (
+                                <li key={i} className="flex gap-1">
+                                    <span className={voteWeak ? "text-error" : "text-secondary"} aria-hidden="true">
+                                        ›
+                                    </span>
+                                    <span className="truncate font-mono" title={path}>
+                                        {path}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
             )}
         </div>
     );
