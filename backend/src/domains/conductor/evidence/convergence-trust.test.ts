@@ -55,6 +55,17 @@ describe('computeConvergenceTrust', () => {
     expect(t.score).toBeLessThanOrEqual(30);
     expect(t.reviewFlags.join(' ')).toMatch(/blocker/i);
     expect(t.summary).toMatch(/do not merge/i);
+    // A BLOCKED verdict is JUDGED (bad), not unjudgeable — it earned its low score.
+    expect(t.unjudgeable).toBe(false);
+  });
+
+  it('marks a merge UNJUDGEABLE when the crux verification could not run (vs a verified one)', () => {
+    const cannot = computeConvergenceTrust(
+      evidence({ verification: { available: false, signals: [], blockers: [] } as ConvergenceEvidence['verification'] }),
+    );
+    expect(cannot.unjudgeable).toBe(true);
+    // A verified merge is judgeable.
+    expect(computeConvergenceTrust(evidence()).unjudgeable).toBe(false);
   });
 
   it('ALWAYS surfaces an LLM-authored merge region as a review flag', () => {

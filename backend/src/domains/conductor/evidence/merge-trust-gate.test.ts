@@ -7,8 +7,13 @@ import { describe, it, expect } from 'vitest';
 import { evaluateMergeTrustGate, parseMergeTrustGateMode } from './merge-trust-gate.js';
 import type { ConvergenceTrust } from './convergence-trust.js';
 
-function trust(tier: ConvergenceTrust['tier'], score: number, reviewFlags: string[] = []): ConvergenceTrust {
-  return { score, tier, factors: [], reviewFlags, summary: `${tier} trust (${score}/100)` };
+function trust(
+  tier: ConvergenceTrust['tier'],
+  score: number,
+  reviewFlags: string[] = [],
+  unjudgeable = false,
+): ConvergenceTrust {
+  return { score, tier, unjudgeable, factors: [], reviewFlags, summary: `${tier} trust (${score}/100)` };
 }
 
 describe('parseMergeTrustGateMode', () => {
@@ -61,6 +66,29 @@ describe('evaluateMergeTrustGate', () => {
     const d = evaluateMergeTrustGate(trust('high', 88), 'block');
     expect(d.allow).toBe(true);
     expect(d.blocked).toBe(false);
+    expect(d.escalated).toBe(false);
     expect(d.warning).toBeUndefined();
+  });
+
+  it('block: ESCALATES an unjudgeable merge to a human (refused but NOT blocked)', () => {
+    const d = evaluateMergeTrustGate(trust('low', 40, ['verification unavailable'], true), 'block');
+    expect(d.allow).toBe(false);
+    expect(d.escalated).toBe(true);
+    expect(d.blocked).toBe(false); // escalate is a human-routing, not a "bad merge" block
+    expect(d.reason).toMatch(/escalated to human review/i);
+    expect(d.reason).toMatch(/could not be judged/i);
+  });
+
+  it('warn: an unjudgeable merge is allowed but flagged for human escalation', () => {
+    const d = evaluateMergeTrustGate(trust('medium', 55, [], true), 'warn');
+    expect(d.allow).toBe(true);
+    expect(d.escalated).toBe(true);
+    expect(d.warning).toMatch(/escalate to a human/i);
+  });
+
+  it('off: an unjudgeable merge still passes untouched (no escalation)', () => {
+    const d = evaluateMergeTrustGate(trust('low', 30, [], true), 'off');
+    expect(d.allow).toBe(true);
+    expect(d.escalated).toBe(false);
   });
 });

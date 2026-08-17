@@ -57,6 +57,13 @@ export interface ConvergenceTrust {
   /** 0-100 — higher is more trustworthy. Deterministic from the evidence. */
   readonly score: number;
   readonly tier: 'high' | 'medium' | 'low';
+  /**
+   * True when the CRUX verification signal could not run (verification unavailable),
+   * so trust could not be MEANINGFULLY judged — distinct from a low score earned by
+   * real negative evidence. The merge gate ESCALATES an unjudgeable change to a human
+   * rather than forcing it into pass/block.
+   */
+  readonly unjudgeable: boolean;
   /** The weighted factors that produced the score (most-impactful first). */
   readonly factors: readonly TrustFactor[];
   /** Specific things a human should review BEFORE trusting the merge (may be empty). */
@@ -98,6 +105,9 @@ export function computeConvergenceTrust(evidence: ConvergenceTrustInput): Conver
   //    low; an unknown/unavailable verdict is a real deduction (we could not prove it).
   const v = evidence.verification;
   const blockers = v.blockers ?? [];
+  // The crux signal could not run ⇒ trust is UNJUDGEABLE (route to a human), not a
+  // score earned by real negative evidence.
+  const unjudgeable = v.available === false;
   if (v.available === false) {
     add('verification', 'negative', -18, v.reason ?? 'merge verification was unavailable');
   } else if (v.verdict === 'blocked' || blockers.length > 0) {
@@ -176,5 +186,5 @@ export function computeConvergenceTrust(evidence: ConvergenceTrustInput): Conver
         ? `Medium trust (${score}/100): mergeable but review ${reviewFlags.length || 'the flagged'} item(s) first.`
         : `Low trust (${score}/100): do not merge until the flagged issues are resolved.`;
 
-  return { score, tier, factors, reviewFlags, summary };
+  return { score, tier, unjudgeable, factors, reviewFlags, summary };
 }
