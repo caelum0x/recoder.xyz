@@ -20,6 +20,7 @@
  * never a fabricated "no open work" pass). Open work DISCOURAGES a merge (a soft
  * readiness downgrade), it never hard-blocks — the reviewer can still merge.
  */
+import { rateCompliance, type ComplianceRating } from './compliance-rating.js';
 
 /** What kind of open-work item this is (drives the reviewer-facing label prefix). */
 export type OpenWorkKind = 'issue' | 'todo' | 'criterion';
@@ -37,6 +38,12 @@ export interface OpenWorkView {
   readonly available: boolean;
   /** The unresolved open-work items across all probed sources (capped). */
   readonly items: readonly OpenWorkItem[];
+  /**
+   * The diff-vs-issue COMPLIANCE rating (recoder-cm5f) — how much the change appears
+   * to address the task's unchecked acceptance criteria. ABSENT when there were no
+   * criteria OR no diff to judge against (degrade-truthful, never fabricated).
+   */
+  readonly compliance?: ComplianceRating;
   /** Truthful reason when unavailable (never a fabricated empty pass). */
   readonly reason?: string;
 }
@@ -126,5 +133,23 @@ export function foldOpenWork(input: OpenWorkProbeInput): OpenWorkView {
   if (!probedAny) {
     return { available: false, items: [], reason: 'open-work sources unavailable' };
   }
-  return { available: true, items: items.slice(0, MAX_OPEN_WORK_ITEMS) };
+
+  // Diff-vs-issue COMPLIANCE (recoder-cm5f): rate how much the diff addresses the
+  // task's unchecked acceptance criteria. Only when BOTH the criteria and a diff were
+  // probed — else there is nothing to judge (rateCompliance returns 'unknown', which
+  // we omit so the view stays honest about "not judged").
+  let compliance: ComplianceRating | undefined;
+  if (input.taskBody !== null && input.diffText !== null) {
+    const criteria = parseUncheckedCriteria(input.taskBody).map((c) => c.label);
+    if (criteria.length > 0) {
+      const rated = rateCompliance({ criteria, changedPaths: [], diffText: input.diffText });
+      if (rated.rating !== 'unknown') compliance = rated;
+    }
+  }
+
+  return {
+    available: true,
+    items: items.slice(0, MAX_OPEN_WORK_ITEMS),
+    ...(compliance ? { compliance } : {}),
+  };
 }

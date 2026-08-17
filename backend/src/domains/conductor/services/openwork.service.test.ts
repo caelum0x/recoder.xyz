@@ -101,4 +101,21 @@ describe('foldOpenWork', () => {
     const view = foldOpenWork({ taskBody: null, diffText: `+++ b/a.ts\n${many}`, openIssues: null });
     expect(view.items).toHaveLength(50);
   });
+
+  it('rates diff-vs-issue COMPLIANCE when criteria + a diff are both probed', () => {
+    const view = foldOpenWork({
+      taskBody: '- [ ] handle null token\n- [ ] emit audit line',
+      diffText: '+++ b/auth.ts\n+function handle(token) { if (token == null) return; }',
+      openIssues: null,
+    });
+    // "handle null token" is addressed by the diff; "emit audit line" is not.
+    expect(view.compliance?.rating).toBe('partial');
+    expect(view.compliance?.total).toBe(2);
+    expect(view.compliance?.unmet.join(' ')).toMatch(/audit/i);
+  });
+
+  it('omits compliance when there is nothing to judge (no criteria or no diff)', () => {
+    expect(foldOpenWork({ taskBody: 'no checkboxes here', diffText: '+x', openIssues: null }).compliance).toBeUndefined();
+    expect(foldOpenWork({ taskBody: '- [ ] do it', diffText: null, openIssues: [] }).compliance).toBeUndefined();
+  });
 });

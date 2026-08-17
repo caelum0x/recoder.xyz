@@ -336,11 +336,20 @@ export function foldReadiness(input: ReadinessInput): ReadinessView {
   // and NEVER moves the verdict fold below — it rides the view untouched.
   const review = input.review ?? null;
   const signals: readonly ReadinessSignal[] = [lifecycle, worktree, merge, checks, preview, openWork];
-  // Soft advisories — the itemized open work (criteria/TODOs/linked issues). Only
-  // present when a source was probed AND found work; an unavailable probe carries
-  // none (never fabricated). Rides every verdict (informational at any state).
-  const advisories: readonly string[] =
-    input.openWork && input.openWork.available ? input.openWork.items.map((i) => i.label) : [];
+  // Soft advisories — a diff-vs-issue COMPLIANCE note (when the change only partly
+  // addresses the acceptance criteria) followed by the itemized open work
+  // (criteria/TODOs/linked issues). Only present when a source was probed; an
+  // unavailable probe carries none (never fabricated). Rides every verdict.
+  const advisories: readonly string[] = (() => {
+    if (!input.openWork || !input.openWork.available) return [];
+    const out: string[] = [];
+    const compliance = input.openWork.compliance;
+    if (compliance && (compliance.rating === 'partial' || compliance.rating === 'none')) {
+      out.push(compliance.summary);
+    }
+    out.push(...input.openWork.items.map((i) => i.label));
+    return out;
+  })();
 
   /** Close over the shared parts so every verdict path stays one line + truthful. */
   const mk = (verdict: ReadinessView['verdict'], blockers: readonly string[] = []): ReadinessView => ({
