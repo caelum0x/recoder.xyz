@@ -123,9 +123,14 @@ export function createAuthMiddleware(deps: AuthMiddlewareDeps): AuthMiddleware {
       // no sign-in plane and the minted sk_ key can't validate without a DB, so
       // the caller resolves anonymous — which would 401 every mutating route
       // (create workspace, run agent, merge). Promote the local caller to a
-      // synthetic non-anonymous owner. A cloud deploy never sets solo mode, so
-      // it keeps the fail-closed AUTH_REQUIRED below.
-      if (config.soloMode) {
+      // synthetic non-anonymous owner.
+      //
+      // HARD BUILD-GUARD (recoder-4d8i #7): solo-mode promotion is DISABLED in
+      // production. If RECODER_SOLO_MODE ever leaks into a cloud deploy (or a
+      // verifier fault drops a real caller to anonymous), this must NOT become a
+      // full auth bypass that hands every anonymous request the owner identity —
+      // production always fails closed to AUTH_REQUIRED below.
+      if (config.soloMode && !config.isProduction) {
         attach(req, principal.getSoloOwnerIdentity());
         return next();
       }

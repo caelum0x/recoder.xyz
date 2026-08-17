@@ -329,6 +329,25 @@ describe('authenticateMutating', () => {
     expect(req.userId).toBe('solo-owner');
     expect(state.statusCode).toBeUndefined();
   });
+
+  it('BUILD-GUARD: soloMode NEVER promotes in production — fails closed (recoder-4d8i #7)', async () => {
+    // If RECODER_SOLO_MODE leaks into a cloud deploy, an anonymous caller must
+    // still 401 — never be handed the owner identity.
+    const mw = makeMw({
+      verifier: makeVerifier({ resolves: anon() }),
+      config: makeConfig({ soloMode: true, isProduction: true }),
+    });
+    const req = makeReq();
+    const { res, state } = makeRes();
+    const next = vi.fn<NextFunction>();
+
+    mw.authenticateMutating(req, res, next);
+    await flush();
+
+    expect(next).not.toHaveBeenCalled();
+    expect(state.statusCode).toBe(401);
+    expect(errorCodeOf(state)).toBe('AUTH_REQUIRED');
+  });
 });
 
 // --- requireAdmin ----------------------------------------------------------
