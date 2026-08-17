@@ -61,7 +61,9 @@ export async function POST(request: NextRequest) {
     }
 
     const cancelResult = await provider.cancelSubscription(user.subscriptionId);
-    if (!cancelResult.ok) {
+    // `=== false` (not `!cancelResult.ok`): this tsconfig is non-strict, where
+    // truthiness checks do not narrow discriminated unions (see checkout/creem).
+    if (cancelResult.ok === false) {
       logger.error('Provider subscription cancel failed', {
         route: 'api/billing/subscription/cancel',
         provider: providerName,

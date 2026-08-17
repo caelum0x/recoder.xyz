@@ -16,6 +16,7 @@ import { NextRequest } from 'next/server';
 
 interface QuotaRow {
   id: string;
+  userId?: string;
   sessionsPerDay: number;
   sessionsUsedToday: number;
   tokensPerSession: number;
@@ -55,7 +56,7 @@ class ApiKeyResolverError extends Error {
 }
 
 const findQuotaMock = vi.fn(async () => (state.quota ? { ...state.quota } : null));
-const updateQuotaMock = vi.fn(async () => ({}));
+const updateQuotaMock = vi.fn(async (_args?: { where?: unknown; data?: { sessionsUsedToday?: number } }) => ({}));
 const createQuotaMock = vi.fn(async (args: { data: Partial<QuotaRow> }) => ({
   id: 'q-new',
   sessionsUsedToday: 0,
