@@ -15,6 +15,19 @@
  * success. A slow or down engine must never block or fail a workspace launch.
  */
 
+/**
+ * A minimal, decoupled read of a bd issue — just what "start a workspace from a bd
+ * issue" needs to seed the agent's task prompt. Structurally satisfied by the memory
+ * facet's richer `IssueDetail` (the conductor never imports the memory domain).
+ */
+export interface IssueRead {
+  /** bd issue id (also becomes the workspace `taskId`, closing the track/close loop). */
+  readonly id: string;
+  readonly title: string;
+  /** Full body when available (used to seed the launch prompt). */
+  readonly description?: string;
+}
+
 /** The issue-graph subset (beads): claim on launch, note + close on completion. */
 export interface IssueGraphPort {
   /**
@@ -29,6 +42,16 @@ export interface IssueGraphPort {
    * terminal-event path. No-op + log when `taskId` is absent.
    */
   completeWork(taskId: string, outcome: 'completed' | 'failed'): Promise<void>;
+  /**
+   * READ a bd issue's title/description so a workspace can be STARTED FROM it (the
+   * reverse of `trackWork`: Board issue → seeded agent launch). Returns `null` — a
+   * truthful skip — when the issue is unknown, the beads engine is down, or `id` is
+   * absent. Best-effort + degrade-safe: NEVER throws and NEVER fabricates an issue.
+   *
+   * OPTIONAL on the port so pre-existing implementors stay valid; callers probe
+   * `codeIntel.readIssue` before use and refuse truthfully when absent.
+   */
+  readIssue?(id: string): Promise<IssueRead | null>;
 }
 
 /** The full code-intel seam: recodergit index + the beads issue-graph subset. */

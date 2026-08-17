@@ -41,22 +41,22 @@ export interface ConvergeFanoutSurface {
 }
 
 /** A fail-fast validation error (bad tool input; no fan-out started). */
-interface ToolInputError {
+export interface ToolInputError {
   readonly ok: false;
   readonly error: string;
 }
 
-function inputError(error: string): ToolInputError {
+export function inputError(error: string): ToolInputError {
   return { ok: false, error };
 }
 
 /** Coerce raw MCP args to a record without trusting the shape. */
-function asObject(raw: unknown): Record<string, unknown> {
+export function asObject(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
 }
 
 /** Read a required non-empty string, or `null`. */
-function reqString(
+export function reqString(
   body: Record<string, unknown>,
   field: string
 ): string | null {
@@ -73,7 +73,7 @@ function isPrivileged(caller: McpToolCaller): boolean {
 }
 
 /** The resolved acting tenant of the fan-out: its gate principal. */
-interface ResolvedCaller {
+export interface ResolvedCaller {
   readonly principal: Principal;
 }
 
@@ -83,7 +83,7 @@ interface ResolvedCaller {
  * only act as its OWN subject; only `admin`/`internal` may name another; absent a
  * caller the tool refuses. Mirrors the conductor write tools exactly.
  */
-function resolveCaller(
+export function resolveCaller(
   body: Record<string, unknown>,
   caller: McpToolCaller | undefined
 ): ResolvedCaller | ToolInputError {
@@ -111,7 +111,7 @@ function resolveCaller(
 }
 
 /** Type guard: did a parse/resolve step fail (a refusal, not a resolved value)? */
-function isInputError<T>(r: T | ToolInputError): r is ToolInputError {
+export function isInputError<T>(r: T | ToolInputError): r is ToolInputError {
   return (
     typeof r === 'object' && r !== null && (r as ToolInputError).ok === false
   );
@@ -123,7 +123,7 @@ function isInputError<T>(r: T | ToolInputError): r is ToolInputError {
  * [{@link MIN_FANOUT_AGENTS}, {@link MAX_FANOUT_AGENTS}]. Returns the normalized
  * list, or a fail-fast {@link ToolInputError}.
  */
-function parseAgentKinds(raw: unknown): readonly string[] | ToolInputError {
+export function parseAgentKinds(raw: unknown): readonly string[] | ToolInputError {
   if (!Array.isArray(raw)) {
     return inputError('agentKinds must be an array of agent kinds');
   }
@@ -151,7 +151,7 @@ function parseAgentKinds(raw: unknown): readonly string[] | ToolInputError {
 }
 
 /** Read the optional per-pane settle budget (positive integer ms), or `undefined`. */
-function parseSettleTimeoutMs(raw: unknown): number | undefined {
+export function parseSettleTimeoutMs(raw: unknown): number | undefined {
   if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) {
     return undefined;
   }

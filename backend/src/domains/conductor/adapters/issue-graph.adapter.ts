@@ -18,7 +18,7 @@
  * launch and the terminal-event path proceed unaffected.
  */
 import type { Logger } from '../../../shared/logger.js';
-import type { IssueGraphPort } from '../ports/code-intel.port.js';
+import type { IssueGraphPort, IssueRead } from '../ports/code-intel.port.js';
 
 /**
  * The injected module slice — the three issue-graph WRITE verbs the conductor
@@ -34,6 +34,12 @@ export interface IssueGraphWriter {
   update(id: string, patch: { status?: string }, actor: string): Promise<boolean>;
   /** Close the bd issue with a reason. Resolves `false` when nothing was written. */
   close(id: string, reason: string, actor: string): Promise<boolean>;
+  /**
+   * READ a bd issue (`bd show`). Resolves `null` when the issue is unknown or the
+   * engine is down. The memory facet's `show(id, {long})` satisfies this
+   * structurally (its richer `IssueDetail` is assignable to the read shape).
+   */
+  show(id: string, opts?: { long?: boolean }): Promise<{ id: string; title: string; description?: string } | null>;
 }
 
 export interface IssueGraphTrackerDeps {
@@ -100,6 +106,45 @@ export function createIssueGraphTracker(deps: IssueGraphTrackerDeps): IssueGraph
           () => beads.close(id, 'Completed via Recoder workspace run', actor),
           logger, { taskId: id }, 'close issue',
         );
+      }
+    },
+
+    async readIssue(id: string): Promise<IssueRead | null> {
+      const issueId = id?.trim();
+      if (!issueId) {
+        logger.debug({}, 'issue-graph: no id — readIssue skipped');
+        return null;
+      }
+      if (!beads) {
+        logger.debug({ issueId }, 'issue-graph: seam not wired — readIssue skipped');
+        return null;
+      }
+      // Bounded + degrade-safe: a slow/down engine, a miss, or a (contract-
+      // violating) throw folds to `null` — never a fabricated issue, never a stall.
+      try {
+        const detail = await Promise.race([
+          beads.show(issueId, { long: true }),
+          new Promise<'timeout'>((resolve) => {
+            const timer = setTimeout(() => resolve('timeout'), BEADS_TIMEOUT_MS);
+            timer.unref?.();
+          }),
+        ]);
+        if (detail === 'timeout') {
+          logger.warn({ issueId, timeoutMs: BEADS_TIMEOUT_MS }, 'issue-graph: readIssue timed out — skipped');
+          return null;
+        }
+        if (!detail || !detail.id || !detail.title) {
+          logger.debug({ issueId }, 'issue-graph: readIssue found no issue — skipped');
+          return null;
+        }
+        return {
+          id: detail.id,
+          title: detail.title,
+          ...(detail.description ? { description: detail.description } : {}),
+        };
+      } catch (err) {
+        logger.warn({ issueId, err }, 'issue-graph: readIssue errored — skipped');
+        return null;
       }
     },
   };

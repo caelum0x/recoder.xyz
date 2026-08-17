@@ -382,5 +382,8 @@ export function createConductorCodeIntel(
     trackWork: (taskId, workspaceId) =>
       issueGraph.trackWork(taskId, workspaceId),
     completeWork: (taskId, outcome) => issueGraph.completeWork(taskId, outcome),
+    // Read a bd issue to START a workspace from it (reverse of trackWork). The
+    // tracker's readIssue is always present here; the guard keeps the type honest.
+    readIssue: (id) => issueGraph.readIssue?.(id) ?? Promise.resolve(null),
   };
 }
