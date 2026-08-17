@@ -176,6 +176,7 @@ class RecoderFanoutViewModel implements ViewModel {
     connectedAtom: PrimitiveAtom<boolean>;
 
     launchTaskAtom: PrimitiveAtom<string>;
+    issueIdAtom: PrimitiveAtom<string>;
     launchKindsAtom: PrimitiveAtom<string[]>;
     repoPathAtom: PrimitiveAtom<string>;
     spaceIdAtom: PrimitiveAtom<string>;
@@ -215,6 +216,7 @@ class RecoderFanoutViewModel implements ViewModel {
         this.connectedAtom = atom(false) as PrimitiveAtom<boolean>;
 
         this.launchTaskAtom = atom("") as PrimitiveAtom<string>;
+        this.issueIdAtom = atom("") as PrimitiveAtom<string>;
         this.launchKindsAtom = atom([]) as PrimitiveAtom<string[]>;
         this.repoPathAtom = atom("") as PrimitiveAtom<string>;
         this.spaceIdAtom = atom("") as PrimitiveAtom<string>;
@@ -279,6 +281,10 @@ class RecoderFanoutViewModel implements ViewModel {
 
     setLaunchTask(value: string) {
         globalStore.set(this.launchTaskAtom, value);
+    }
+
+    setIssueId(value: string) {
+        globalStore.set(this.issueIdAtom, value);
     }
 
     setRepoPath(value: string) {
@@ -371,6 +377,60 @@ class RecoderFanoutViewModel implements ViewModel {
         try {
             const outcome = await fetchFanout(getRecoderBackendUrl(), {
                 task: trimmedTask,
+                agentKinds: kinds.slice(0, this.maxAgents),
+                repoPath,
+                spaceId,
+                projectId,
+            });
+            globalStore.set(this.launchResultAtom, outcome.result);
+            globalStore.set(this.launchNoticeAtom, outcome.notice);
+            globalStore.set(this.connectedAtom, true);
+            if (outcome.result != null && outcome.result.taskGroup != "") {
+                globalStore.set(this.taskGroupAtom, outcome.result.taskGroup);
+                await this.loadCockpit(outcome.result.taskGroup);
+            }
+        } catch {
+            globalStore.set(this.launchResultAtom, null);
+            globalStore.set(this.launchNoticeAtom, "Not connected.");
+            globalStore.set(this.connectedAtom, false);
+        } finally {
+            globalStore.set(this.launchingAtom, false);
+        }
+    }
+
+    // Fan out a bd ISSUE to N agents (Board -> bd wiring): the backend reads the
+    // issue, seeds the task from its title+description, and fans it with
+    // taskId=issueId so the issue is claimed on launch and closed on a successful
+    // converge. Reuses the SAME governed context (repoPath/spaceId/projectId) and
+    // agent set as launch(); the tool returns the SAME FanoutResult, so the launch
+    // result/cockpit flow is identical. Fail-fast + truthful, mirroring launch():
+    // an empty issue id / too-small kind set / missing context posts NOTHING; an
+    // unknown-issue refusal surfaces the reason verbatim; a throw shows "Not connected.".
+    async launchFromIssue(issueId: string, agentKinds: string[]) {
+        const trimmedIssue = issueId.trim();
+        const kinds = dedupeKinds(agentKinds, this.knownKinds);
+        globalStore.set(this.launchNoticeAtom, "");
+        globalStore.set(this.launchResultAtom, null);
+        this.resetConverge();
+        if (trimmedIssue == "") {
+            globalStore.set(this.launchNoticeAtom, "A bd issue id is required to fan out from an issue.");
+            return;
+        }
+        if (kinds.length < this.minAgents) {
+            globalStore.set(this.launchNoticeAtom, `Pick at least ${this.minAgents} distinct agents to fan out.`);
+            return;
+        }
+        const repoPath = globalStore.get(this.repoPathAtom).trim();
+        const spaceId = globalStore.get(this.spaceIdAtom).trim();
+        const projectId = globalStore.get(this.projectIdAtom).trim();
+        if (repoPath == "" || spaceId == "" || projectId == "") {
+            globalStore.set(this.launchNoticeAtom, MissingContextNotice);
+            return;
+        }
+        globalStore.set(this.launchingAtom, true);
+        try {
+            const outcome = await fetchFanoutFromIssue(getRecoderBackendUrl(), {
+                issueId: trimmedIssue,
                 agentKinds: kinds.slice(0, this.maxAgents),
                 repoPath,
                 spaceId,
@@ -763,6 +823,26 @@ async function fetchFanout(
     args: { task: string; agentKinds: string[]; repoPath: string; spaceId: string; projectId: string }
 ): Promise<FanoutOutcome> {
     const res = await fetch(`${base}/api/mcp/tools/conductor/recoder_converge_fanout/call`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ args }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+        return { result: null, notice: readErrorReason(body) || `Fan-out unavailable (${res.status})` };
+    }
+    return projectFanoutWire(body);
+}
+
+// Run ONE governed fan-out-from-issue launch. The tool reads the bd issue, seeds the
+// task, and returns the SAME FanoutResult shape as recoder_converge_fanout — so the
+// wire projection is shared. A non-2xx yields a truthful notice; an unknown-issue
+// refusal rides the tool's { ok:false, error } shape. Throws only on transport failure.
+async function fetchFanoutFromIssue(
+    base: string,
+    args: { issueId: string; agentKinds: string[]; repoPath: string; spaceId: string; projectId: string }
+): Promise<FanoutOutcome> {
+    const res = await fetch(`${base}/api/mcp/tools/conductor/recoder_fanout_from_issue/call`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ args }),
