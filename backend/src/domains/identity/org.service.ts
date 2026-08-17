@@ -108,7 +108,8 @@ export class OrgServiceImpl implements OrgService {
     return org;
   }
 
-  async addTeam(orgId: string, slug: string, name: string): Promise<Team> {
+  async addTeam(orgId: string, slug: string, name: string, actorUserId: string): Promise<Team> {
+    if (!actorUserId) throw new AppError(ErrorCode.INVALID_INPUT, 'actorUserId is required');
     const teamSlug = normalizeSlug(slug);
     if (!teamSlug) throw new AppError(ErrorCode.INVALID_INPUT, 'team slug is required');
     if (!name.trim()) throw new AppError(ErrorCode.INVALID_INPUT, 'team name is required');
@@ -116,7 +117,10 @@ export class OrgServiceImpl implements OrgService {
     const org = await this.stores.orgs.findById(orgId);
     if (!org) throw new AppError(ErrorCode.NOT_FOUND, 'organization not found');
 
-    await this.gate('team:create', org.ownerUserId, { orgId, slug: teamSlug });
+    // Gate on the CALLER, never the org owner — authorizing as `org.ownerUserId`
+    // let any caller who reached this method act with the owner's rights
+    // (recoder-4d8i #8). Mirrors `invite`, which gates on `params.invitedBy`.
+    await this.gate('team:create', actorUserId, { orgId, slug: teamSlug });
 
     const team = await this.stores.teams.insert({ id: randomUUID(), orgId, slug: teamSlug, name: name.trim() });
     this.log.info({ orgId, teamId: team.id, slug: team.slug }, 'team created');

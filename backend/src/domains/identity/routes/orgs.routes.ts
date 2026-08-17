@@ -104,7 +104,7 @@ export function buildOrgsRouter(deps: OrgsRouterDeps): Router {
     asyncHandler(async (req, res) => {
       const slug = requireString(req.body, 'slug');
       const name = requireString(req.body, 'name');
-      const team = await orgService.addTeam(req.params.id, slug, name);
+      const team = await orgService.addTeam(req.params.id, slug, name, req.principal!.userId);
       sendSuccess(res, { team }, { statusCode: 201 });
     }),
   );

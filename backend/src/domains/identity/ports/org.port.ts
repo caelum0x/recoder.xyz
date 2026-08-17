@@ -93,7 +93,8 @@ export interface InviteParams {
 /** The org lifecycle service surface (governance-gated writes). */
 export interface OrgService {
   createOrg(params: CreateOrgParams): Promise<Org>;
-  addTeam(orgId: string, slug: string, name: string): Promise<Team>;
+  /** `actorUserId` is the CALLER — the governance gate authorizes as them, not the org owner. */
+  addTeam(orgId: string, slug: string, name: string, actorUserId: string): Promise<Team>;
   invite(params: InviteParams): Promise<Membership>;
   /**
    * Activate an invited membership. `callerUserId` MUST own the membership

@@ -139,7 +139,32 @@ describe('OrgServiceImpl — lifecycle', () => {
 
   it('addTeam requires the org to exist', async () => {
     const { svc } = build();
-    await expect(svc.addTeam('missing-org', 'core', 'Core')).rejects.toThrow(/not found/);
+    await expect(svc.addTeam('missing-org', 'core', 'Core', 'u1')).rejects.toThrow(/not found/);
+  });
+
+  it('addTeam gates on the CALLER, not the org owner (recoder-4d8i #8)', async () => {
+    const decide = vi.fn(async () => ({ allowed: true as const }));
+    const { svc } = build({ decide });
+    const org = await svc.createOrg({ name: 'Acme', slug: 'acme', ownerUserId: 'owner1' });
+    decide.mockClear();
+    await svc.addTeam(org.id, 'core', 'Core', 'caller2');
+    // The governance decision must be evaluated as the CALLER (caller2), never as
+    // the org owner (owner1) — else any caller acts with the owner's rights.
+    expect(decide).toHaveBeenCalledWith(expect.objectContaining({ action: 'team:create', actorUserId: 'caller2' }));
+    expect(decide).not.toHaveBeenCalledWith(expect.objectContaining({ actorUserId: 'owner1' }));
+  });
+
+  it('a denying governance gate blocks addTeam for a non-owner caller', async () => {
+    // Allow org:create, deny team:create — so the org exists but the gate refuses
+    // the team for this caller.
+    const gate: GovernanceGate = {
+      decide: vi.fn(async ({ action }: { action: string }) =>
+        action === 'team:create' ? { allowed: false as const, reason: 'policy: not a team admin' } : { allowed: true as const },
+      ),
+    };
+    const { svc } = build(gate);
+    const org = await svc.createOrg({ name: 'Acme', slug: 'acme', ownerUserId: 'owner1' });
+    await expect(svc.addTeam(org.id, 'core', 'Core', 'intruder')).rejects.toThrow();
   });
 
   it('invite creates an invited membership and blocks a duplicate', async () => {
