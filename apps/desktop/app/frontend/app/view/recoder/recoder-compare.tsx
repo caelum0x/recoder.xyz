@@ -39,6 +39,7 @@ import {
     type SiblingCompareEntry,
 } from "./recoder-model";
 import { RecoderEmpty } from "./recoder-states";
+import { summarizeChecks } from "./recoder-checks-summary";
 import { FIELD_LABEL, META, QUIET_BTN_XS, SAVE_BTN } from "./recoder-styles";
 
 // Explicit sign so a pairwise delta can never be mistaken for an absolute count;
@@ -192,6 +193,26 @@ function ReadinessBadge({ readiness }: { readiness: ReadinessView }) {
 }
 
 ReadinessBadge.displayName = "ReadinessBadge";
+
+// The consolidated one-glance "Checks" rollup — folds readiness + mergeability into
+// a single merge verdict headline atop the detailed badges below. Colour-free per
+// the design: only a hard BLOCKED merge is toned error; ready reads accent, the
+// soft "discouraged" + incomplete stay quiet. Renders nothing when unprobed.
+function ChecksSummary({ readiness, mergeability }: { readiness: ReadinessView; mergeability: MergeabilityView }) {
+    const summary = summarizeChecks(readiness, mergeability);
+    if (summary == null) {
+        return null;
+    }
+    const tone =
+        summary.tone == "blocked" ? "text-error" : summary.tone == "ready" ? "text-accent" : "text-secondary";
+    return (
+        <span className={`self-start rounded border border-border px-1.5 py-0.5 text-xs ${tone}`} title={summary.detail}>
+            Checks: {summary.headline}
+        </span>
+    );
+}
+
+ChecksSummary.displayName = "ChecksSummary";
 
 function MergeabilityBadge({ mergeability }: { mergeability: MergeabilityView }) {
     if (mergeability == null) {
@@ -390,6 +411,7 @@ function SiblingCompareColumn({
                     suggested · {suggestedReason}
                 </span>
             )}
+            <ChecksSummary readiness={readiness} mergeability={mergeability} />
             <ReadinessBadge readiness={readiness} />
             <MergeabilityBadge mergeability={mergeability} />
             {merged ? (
