@@ -48,3 +48,11 @@ export type {
   PalRouteRequest,
   PalConsensusRequest,
 } from './pal-comms.binder.js';
+export {
+  palVerdictEngineBinder,
+  recoderPalBrainServer,
+  parseVerdictRequest,
+  PAL_CONSENSUS_VERDICT_TOOL,
+  PAL_DEBATE_VERDICT_TOOL,
+} from './pal-brain.binder.js';
+export type { PalVerdictFacet } from './pal-brain.binder.js';

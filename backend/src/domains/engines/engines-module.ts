@@ -89,6 +89,7 @@ import {
   browserSessionEngineBinder,
   palPlanEngineBinder,
   palCommsEngineBinder,
+  palVerdictEngineBinder,
 } from './adapters/sidecar/index.js';
 import {
   BeadsAdapter,
@@ -366,6 +367,12 @@ export class EnginesComposer implements EnginesModule {
         // surface over the raw `EngineClientPort` transport — NOT re-pointed at the
         // facet (the facet + binder are two thin surfaces over one frozen transport).
         palCommsEngineBinder(this.adapters.get('pal-mcp') ?? null),
+        // `recoder.pal-brain` (consensus_verdict/debate_verdict) — the deny-biased
+        // VERDICT surface over the SAME facet, parallel to the raw pal-comms tools:
+        // agents get the truthful-abstain `{recommendation,reason,models,degraded}`
+        // decision instead of raw answers. Thin over the ONE owned pal seam (pal()
+        // is always non-null; the sidecar verbs abstain when pal-mcp is down).
+        palVerdictEngineBinder(this.pal()),
         githubEngineBinder(this.githubModule),
         repoEngineBinder({ repoRoot: this.cfg.repoRoot ?? null }),
         // The four previously-dead catalog servers, now bound over REAL engines:

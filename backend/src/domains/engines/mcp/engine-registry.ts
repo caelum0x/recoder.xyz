@@ -29,7 +29,7 @@ import type { McpServerRegistration } from '@recoder/interop';
 import { browserExtMcpServer } from './browser-ext-engine.js';
 import { tensorzeroInferenceMcpServer } from './tensorzero-inference-engine.js';
 import { dmuxLayoutMcpServer } from './dmux-layout-engine.js';
-import { recoderPalCommsServer } from '../adapters/sidecar/index.js';
+import { recoderPalCommsServer, recoderPalBrainServer } from '../adapters/sidecar/index.js';
 
 /**
  * The canonical in-proc server catalog the host exposes (registration only).
@@ -77,6 +77,9 @@ export const IN_PROC_SERVERS: readonly McpServerRegistration[] = [
   dmuxLayoutMcpServer,
   // Pal multi-model comms (route/consensus/debate/models) over the pal adapter.
   recoderPalCommsServer,
+  // Pal brain deny-biased consensus/debate VERDICT (consensus_verdict/debate_verdict)
+  // over the facet — the truthful-abstain decision surface parallel to pal-comms.
+  recoderPalBrainServer,
 ];
 
 /** The error a mis-wired engine raises at boot (so the failure is loud + actionable). */
