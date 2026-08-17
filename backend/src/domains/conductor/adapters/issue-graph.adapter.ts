@@ -47,6 +47,13 @@ export interface IssueGraphWriter {
    * pre-existing writers stay valid; resolves `[]` when the engine is down.
    */
   blocked?(opts?: { parent?: string }): Promise<readonly { id: string; title: string; status: string }[]>;
+  /**
+   * Flat dependency/dependent records for an issue (`bd dep list`). `direction:'up'`
+   * lists DEPENDENTS — issues discovered-from / depending on the task, i.e. its open
+   * linked work. Returns raw bd records (narrowed defensively at the call site); the
+   * memory facet's `depList` (which returns `unknown | null`) satisfies it.
+   */
+  depList?(id: string, opts?: { direction?: 'down' | 'up'; type?: string }): Promise<unknown>;
 }
 
 export interface IssueGraphTrackerDeps {
@@ -161,30 +168,38 @@ export function createIssueGraphTracker(deps: IssueGraphTrackerDeps): IssueGraph
         logger.debug({}, 'issue-graph: no taskId — openLinkedWork skipped');
         return null;
       }
-      // `null` (not `[]`) when the source cannot be probed, so the open-work fold
-      // treats it as UNAVAILABLE rather than a fabricated "no linked work".
-      if (!beads || typeof beads.blocked !== 'function') {
-        logger.debug({ taskId: id }, 'issue-graph: blocked verb unwired — openLinkedWork skipped');
-        return null;
-      }
-      const blocked = beads.blocked;
-      try {
-        const result = await Promise.race([
-          blocked({ parent: id }),
+      // Prefer `dep list --direction up` (DEPENDENTS — the work discovered-from /
+      // depending on the task, i.e. ALL its open linked work). Fall back to the
+      // narrower `blocked({parent})` (open blocked children) when the richer verb
+      // is unwired. `null` (not `[]`) when neither can be probed, so the open-work
+      // fold treats it as UNAVAILABLE rather than a fabricated "no linked work".
+      const bounded = <T>(p: Promise<T>): Promise<T | 'timeout'> =>
+        Promise.race([
+          p,
           new Promise<'timeout'>((resolve) => {
             const timer = setTimeout(() => resolve('timeout'), BEADS_TIMEOUT_MS);
             timer.unref?.();
           }),
         ]);
-        if (result === 'timeout') {
-          logger.warn({ taskId: id, timeoutMs: BEADS_TIMEOUT_MS }, 'issue-graph: openLinkedWork timed out — skipped');
-          return null;
+      try {
+        if (beads && typeof beads.depList === 'function') {
+          const raw = await bounded(beads.depList(id, { direction: 'up' }));
+          if (raw === 'timeout') {
+            logger.warn({ taskId: id, timeoutMs: BEADS_TIMEOUT_MS }, 'issue-graph: openLinkedWork(deps) timed out — skipped');
+            return null;
+          }
+          return parseOpenLinkedIssues(raw, id);
         }
-        // Defensive: keep only well-formed, NON-CLOSED issues (never fabricate).
-        return (Array.isArray(result) ? result : [])
-          .filter((issue) => issue && typeof issue.id === 'string' && issue.id.trim() !== '')
-          .filter((issue) => !isClosedStatus(issue.status))
-          .map((issue) => ({ id: issue.id, title: typeof issue.title === 'string' ? issue.title : '' }));
+        if (beads && typeof beads.blocked === 'function') {
+          const raw = await bounded(beads.blocked({ parent: id }));
+          if (raw === 'timeout') {
+            logger.warn({ taskId: id, timeoutMs: BEADS_TIMEOUT_MS }, 'issue-graph: openLinkedWork(blocked) timed out — skipped');
+            return null;
+          }
+          return parseOpenLinkedIssues(raw, id);
+        }
+        logger.debug({ taskId: id }, 'issue-graph: no linked-work verb wired — openLinkedWork skipped');
+        return null;
       } catch (err) {
         logger.warn({ taskId: id, err }, 'issue-graph: openLinkedWork errored — skipped');
         return null;
@@ -192,6 +207,32 @@ export function createIssueGraphTracker(deps: IssueGraphTrackerDeps): IssueGraph
     },
   };
 }
+
+/**
+ * Defensively narrow a raw `bd dep list` / `bd blocked` result into the open linked
+ * work `{id,title}[]`: keep only well-formed records with a non-empty id, DROP the
+ * task itself and any CLOSED issue, dedupe by id, and cap the count. Never throws,
+ * never fabricates — a non-array or unrecognized shape yields `[]`.
+ */
+function parseOpenLinkedIssues(raw: unknown, taskId: string): readonly { id: string; title: string }[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: { id: string; title: string }[] = [];
+  for (const rec of raw) {
+    if (!rec || typeof rec !== 'object') continue;
+    const r = rec as Record<string, unknown>;
+    const id = typeof r.id === 'string' ? r.id.trim() : '';
+    if (!id || id === taskId || seen.has(id)) continue;
+    if (isClosedStatus(r.status)) continue;
+    seen.add(id);
+    out.push({ id, title: typeof r.title === 'string' ? r.title : '' });
+    if (out.length >= MAX_LINKED_ISSUES) break;
+  }
+  return out;
+}
+
+/** Cap linked issues so a pathological dep graph can't flood the open-work signal. */
+const MAX_LINKED_ISSUES = 25;
 
 /** bd terminal statuses that are NOT open work (case-insensitive). */
 const CLOSED_STATUSES = new Set(['closed', 'done', 'completed', 'resolved', 'cancelled', 'canceled']);
