@@ -1147,7 +1147,7 @@ export class ConductorGovernedWrites {
       // advisory. Degrade-truthful: the trust only ever downgrades allowed→warned/
       // blocked, and every block carries the score's own reasons.
       let trustAdvisory:
-        | { warning?: string; tier: 'high' | 'medium' | 'low'; score: number }
+        | { warning?: string; tier: 'high' | 'medium' | 'low'; score: number; flags: readonly string[] }
         | undefined;
       const trustMode = this.ctx.cfg.mergeTrustGate;
       if (trustMode !== 'off') {
@@ -1190,6 +1190,7 @@ export class ConductorGovernedWrites {
           ...(gate.warning ? { warning: gate.warning } : {}),
           tier: gate.tier,
           score: gate.score,
+          flags: trust.reviewFlags,
         };
       }
 
@@ -1236,6 +1237,7 @@ export class ConductorGovernedWrites {
               ...(trustAdvisory.warning ? { trustWarning: trustAdvisory.warning } : {}),
               trustTier: trustAdvisory.tier,
               trustScore: trustAdvisory.score,
+              ...(trustAdvisory.flags.length > 0 ? { trustFlags: trustAdvisory.flags } : {}),
             }
           : {}),
       };

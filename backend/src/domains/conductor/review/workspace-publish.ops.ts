@@ -98,6 +98,13 @@ export interface MergeResultView {
   /** The convergence trust tier/score this merge was gated on (echoed for the UI/audit). */
   trustTier?: 'high' | 'medium' | 'low';
   trustScore?: number;
+  /**
+   * The specific things a reviewer should check before trusting this merge (the
+   * trust review flags, e.g. "LLM-assisted merge", "N files were contested").
+   * ABSENT/empty when the gate is `off` or there is nothing to flag. Turns the
+   * bare tier/score badge into an actionable checklist at the merge decision point.
+   */
+  trustFlags?: readonly string[];
 }
 
 async function requireWorktree(
