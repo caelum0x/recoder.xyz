@@ -215,10 +215,26 @@ function MergeVerdictLine({ record }: { record: RecoderMergeRecord }) {
               : record.status == "blocked"
                 ? "blocked"
                 : "could not complete";
+    // Convergence TRUST the merge was gated on (present only when the gate is not
+    // `off`). Colour-free per the design constraints: only a LOW-trust merge is toned
+    // crimson (text-error); high/medium read quiet.
+    const trustTier = record.merge?.trustTier;
+    const trustScore = record.merge?.trustScore;
+    const trustWarning = record.merge?.trustWarning;
     return (
-        <div className={`text-xs ${tone}`} title={record.reason || meta || head}>
-            merge verdict: {head}
-            {meta ? ` — ${meta}` : ""}
+        <div className="flex flex-wrap items-center gap-1.5">
+            <span className={`text-xs ${tone}`} title={record.reason || meta || head}>
+                merge verdict: {head}
+                {meta ? ` — ${meta}` : ""}
+            </span>
+            {trustTier != null && (
+                <span
+                    className={`text-xs rounded px-1 border ${trustTier == "low" ? "text-error border-error/40" : "text-secondary border-border"}`}
+                    title={trustWarning || `convergence trust: ${trustScore ?? "?"}/100 (${trustTier})`}
+                >
+                    trust {trustScore ?? "?"} · {trustTier}
+                </span>
+            )}
         </div>
     );
 }
