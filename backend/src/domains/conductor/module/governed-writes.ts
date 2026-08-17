@@ -1179,7 +1179,7 @@ export class ConductorGovernedWrites {
             this.ctx.gate,
             conductorAuditEntry(action, principal, verdict, {
               workspaceId,
-              trustGate: 'blocked',
+              trustGate: gate.escalated ? 'escalated' : 'blocked',
               trustTier: gate.tier,
               trustScore: gate.score,
             })
