@@ -46,7 +46,6 @@
     "@recoder/brain": "workspace:*",
     "@recoder/browser-tools": "workspace:*",
     "@recoder/browser-verification": "workspace:*",
-    "@recoder/connectors": "workspace:*",
     "@recoder/context7-sdk": "workspace:*",
     "@recoder/coordination": "workspace:*",
     "@recoder/distribution": "workspace:*",

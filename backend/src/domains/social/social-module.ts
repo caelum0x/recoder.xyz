@@ -140,8 +140,9 @@ export function createSocialComposer(deps: SocialComposerDeps): SocialComposite 
   /** Normalize a verified webhook payload → InboundEnvelope(s) → run the pipeline. */
   async function onVerifiedWebhook(channel: ChannelId, parsed: unknown): Promise<void> {
     const port = await channels.get(channel);
-    if (!port || typeof port.normalize !== 'function') return;
-    const normalized = await safe(() => Promise.resolve(port.normalize(parsed, 'default')));
+    const normalize = port?.normalize;
+    if (!port || typeof normalize !== 'function') return;
+    const normalized = await safe(() => Promise.resolve(normalize.call(port, parsed, 'default')));
     if (!normalized) return;
     const env = toInboundEnvelope(channel, normalized);
     if (env) await safe(() => pipeline.ingest(env));
