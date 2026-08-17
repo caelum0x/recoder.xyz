@@ -332,6 +332,13 @@ type RecoderMergeOutcome = {
     auditId?: string | null;
     auditSeq?: number | null;
     auditEntryHash?: string | null;
+    // The convergence TRUST the merge was gated on (RECODER_MERGE_TRUST_GATE). Present
+    // only when the gate is not `off`. `trustWarning` is a non-blocking advisory
+    // (warn mode / a block-mode medium merge); a block-mode LOW merge never returns a
+    // 200 (it is refused with a 403-style reason), so it never reaches here.
+    trustWarning?: string;
+    trustTier?: "high" | "medium" | "low";
+    trustScore?: number;
 };
 
 // One entry of the durable governance Merkle chain returned by GET
