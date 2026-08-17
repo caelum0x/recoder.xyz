@@ -161,11 +161,12 @@ describe('createIssueGraphTracker — completeWork', () => {
   });
 });
 
-/** A writer fake that also answers `blocked` (the openLinkedWork backing verb). */
-function makeBlockedWriter(
-  blockedResult: readonly { id: string; title: string; status: string }[],
-): IssueGraphWriter {
-  return {
+/** A writer fake that answers the openLinkedWork backing verbs (depList / blocked). */
+function makeLinkedWriter(opts: {
+  depList?: (id: string, o?: { direction?: string }) => Promise<unknown>;
+  blocked?: () => Promise<readonly { id: string; title: string; status: string }[]>;
+}): IssueGraphWriter {
+  const base: IssueGraphWriter = {
     async note() {
       return true;
     },
@@ -178,43 +179,78 @@ function makeBlockedWriter(
     async show() {
       return null;
     },
-    async blocked() {
-      return blockedResult;
-    },
+  };
+  return {
+    ...base,
+    ...(opts.depList ? { depList: opts.depList } : {}),
+    ...(opts.blocked ? { blocked: opts.blocked } : {}),
   };
 }
 
 describe('createIssueGraphTracker — openLinkedWork', () => {
-  it('maps non-closed blocked child issues to {id,title}', async () => {
-    const writer = makeBlockedWriter([
-      { id: 'bd-2', title: 'wire the thing', status: 'open' },
-      { id: 'bd-3', title: 'done already', status: 'closed' },
-      { id: 'bd-4', title: 'in flight', status: 'in_progress' },
-    ]);
+  it('prefers dep-list dependents (direction up): maps non-closed to {id,title}, drops closed + the task itself', async () => {
+    const calls: { id: string; direction?: string }[] = [];
+    const writer = makeLinkedWriter({
+      depList: async (id, o) => {
+        calls.push({ id, direction: o?.direction });
+        return [
+          { id: 'bd-2', title: 'wire the thing', status: 'open', dependency_type: 'discovered-from' },
+          { id: 'bd-3', title: 'done already', status: 'closed' },
+          { id: 'bd-4', title: 'in flight', status: 'in_progress' },
+          { id: 'bd-1', title: 'the task itself', status: 'open' },
+        ];
+      },
+    });
     const tracker = createIssueGraphTracker({ beads: writer, logger: makeLogger() });
 
     const linked = await tracker.openLinkedWork!('bd-1');
 
+    expect(calls).toEqual([{ id: 'bd-1', direction: 'up' }]);
     expect(linked).toEqual([
       { id: 'bd-2', title: 'wire the thing' },
       { id: 'bd-4', title: 'in flight' },
     ]);
   });
 
+  it('dedupes by id and tolerates malformed records (never throws/fabricates)', async () => {
+    const writer = makeLinkedWriter({
+      depList: async () => [
+        { id: 'bd-2', title: 'a', status: 'open' },
+        { id: 'bd-2', title: 'dup', status: 'open' },
+        null,
+        { title: 'no id', status: 'open' },
+        'garbage',
+      ],
+    });
+    const tracker = createIssueGraphTracker({ beads: writer, logger: makeLogger() });
+    await expect(tracker.openLinkedWork!('bd-1')).resolves.toEqual([{ id: 'bd-2', title: 'a' }]);
+  });
+
+  it('falls back to blocked({parent}) when depList is unwired', async () => {
+    const writer = makeLinkedWriter({
+      blocked: async () => [
+        { id: 'bd-5', title: 'blocked child', status: 'open' },
+        { id: 'bd-6', title: 'closed child', status: 'closed' },
+      ],
+    });
+    const tracker = createIssueGraphTracker({ beads: writer, logger: makeLogger() });
+    await expect(tracker.openLinkedWork!('bd-1')).resolves.toEqual([{ id: 'bd-5', title: 'blocked child' }]);
+  });
+
   it('returns [] when the task has no open linked work', async () => {
-    const tracker = createIssueGraphTracker({ beads: makeBlockedWriter([]), logger: makeLogger() });
+    const tracker = createIssueGraphTracker({ beads: makeLinkedWriter({ depList: async () => [] }), logger: makeLogger() });
     await expect(tracker.openLinkedWork!('bd-1')).resolves.toEqual([]);
   });
 
-  it('returns null (not probed) when taskId is absent, the seam is unwired, or blocked is missing', async () => {
-    const withVerb = createIssueGraphTracker({ beads: makeBlockedWriter([]), logger: makeLogger() });
+  it('returns null (not probed) when taskId is absent, the seam is unwired, or no verb is present', async () => {
+    const withVerb = createIssueGraphTracker({ beads: makeLinkedWriter({ depList: async () => [] }), logger: makeLogger() });
     await expect(withVerb.openLinkedWork!('')).resolves.toBeNull();
 
     const unwired = createIssueGraphTracker({ beads: null, logger: makeLogger() });
     await expect(unwired.openLinkedWork!('bd-1')).resolves.toBeNull();
 
-    // A writer WITHOUT the optional `blocked` verb ⇒ source unavailable (null).
-    const noBlocked = createIssueGraphTracker({ beads: makeWriter().writer, logger: makeLogger() });
-    await expect(noBlocked.openLinkedWork!('bd-1')).resolves.toBeNull();
+    // A writer WITHOUT depList or blocked ⇒ source unavailable (null).
+    const noVerb = createIssueGraphTracker({ beads: makeWriter().writer, logger: makeLogger() });
+    await expect(noVerb.openLinkedWork!('bd-1')).resolves.toBeNull();
   });
 });
