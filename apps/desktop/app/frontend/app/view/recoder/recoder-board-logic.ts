@@ -339,6 +339,10 @@ type RecoderMergeOutcome = {
     trustWarning?: string;
     trustTier?: "high" | "medium" | "low";
     trustScore?: number;
+    // The specific things to review before trusting this merge (server-computed trust
+    // review flags). Present only when the gate is not `off` and there is something to
+    // flag; turns the bare tier/score badge into an actionable checklist.
+    trustFlags?: string[];
 };
 
 // One entry of the durable governance Merkle chain returned by GET

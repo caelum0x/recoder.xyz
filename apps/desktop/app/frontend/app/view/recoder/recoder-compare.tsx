@@ -221,19 +221,36 @@ function MergeVerdictLine({ record }: { record: RecoderMergeRecord }) {
     const trustTier = record.merge?.trustTier;
     const trustScore = record.merge?.trustScore;
     const trustWarning = record.merge?.trustWarning;
+    // The actionable "review before trusting this merge" checklist. Defensive: the
+    // wire is untrusted, so keep only non-empty strings; absent/empty ⇒ no list.
+    const trustFlags = Array.isArray(record.merge?.trustFlags)
+        ? record.merge.trustFlags.filter((f): f is string => typeof f == "string" && f.trim() != "")
+        : [];
     return (
-        <div className="flex flex-wrap items-center gap-1.5">
-            <span className={`text-xs ${tone}`} title={record.reason || meta || head}>
-                merge verdict: {head}
-                {meta ? ` — ${meta}` : ""}
-            </span>
-            {trustTier != null && (
-                <span
-                    className={`text-xs rounded px-1 border ${trustTier == "low" ? "text-error border-error/40" : "text-secondary border-border"}`}
-                    title={trustWarning || `convergence trust: ${trustScore ?? "?"}/100 (${trustTier})`}
-                >
-                    trust {trustScore ?? "?"} · {trustTier}
+        <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+                <span className={`text-xs ${tone}`} title={record.reason || meta || head}>
+                    merge verdict: {head}
+                    {meta ? ` — ${meta}` : ""}
                 </span>
+                {trustTier != null && (
+                    <span
+                        className={`text-xs rounded px-1 border ${trustTier == "low" ? "text-error border-error/40" : "text-secondary border-border"}`}
+                        title={trustWarning || `convergence trust: ${trustScore ?? "?"}/100 (${trustTier})`}
+                    >
+                        trust {trustScore ?? "?"} · {trustTier}
+                    </span>
+                )}
+            </div>
+            {trustFlags.length > 0 && (
+                <ul className="ml-1 flex flex-col gap-0.5 text-[11px] text-secondary">
+                    {trustFlags.map((flag, i) => (
+                        <li key={i} className="flex gap-1">
+                            <span className={trustTier == "low" ? "text-error" : "text-secondary"}>›</span>
+                            <span>{flag}</span>
+                        </li>
+                    ))}
+                </ul>
             )}
         </div>
     );
