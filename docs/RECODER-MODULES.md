@@ -236,11 +236,13 @@ external ingress refuses HMAC-only untrusted requests (401), trusted/loopback ke
 `backend/engines/py/pal-mcp-server` (multi-model orchestration, conversation threading, `clink` subagent
 bridge, 18 real tools via a live MCP handshake) is a **supervised sidecar** (`PalMcpAdapter` in the
 ENGINES domain, health `up` only when the uv venv answers). **Wired (2026-07-31):** pal's heavy orchestration now routed through conductor launch-path;
-diff review comments now state-route back into the agent loop.
+diff review comments now state-route back into the agent loop. **Consult capability shipped:** agents reach pal's
+multi-model deliberation as MCP tools — the RAW answers-for-synthesis surface `recoder.pal-comms`
+(`pal.route`/`pal.consensus`/`pal.debate`/`pal.models`) AND the deny-biased VERDICT surface `recoder.pal-brain`
+(`pal.consensus_verdict`/`pal.debate_verdict`), which returns the facet's truthful `{recommendation:'allow'|'block'|'abstain', reason, models, degraded, engine}` (abstain-on-fault) parallel to the raw tools.
 **Deep target:** a `CommunicationModule` that IS the conductor's decision layer (every workspace launch
-calls `plan()` for runtime/risk/approval) and the A2A spine (agent handoff/messaging). pal's consensus +
-escalation available to agents as a "consult" capability.
-**Build:** (a) module unifies pal + a2a; (b) launch path calls plan(); (c) consult capability + desktop UI.
+calls `plan()` for runtime/risk/approval) and the A2A spine (agent handoff/messaging).
+**Build:** (a) module unifies pal + a2a; (b) launch path calls plan(); (c) ~~consult capability~~ (shipped, backend tools) + desktop UI.
 
 ---
 
