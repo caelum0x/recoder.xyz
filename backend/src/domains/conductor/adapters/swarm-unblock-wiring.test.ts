@@ -337,7 +337,7 @@ describe('createSwarmUnblockDeps — real seam mapping', () => {
     ).toBeNull();
   });
 
-  it('policyGate returns a deterministic allow for a benign auto-answer', async () => {
+  it('policyGate returns a deterministic allow for a benign LOW-risk auto-answer', async () => {
     const { deps } = makeWiring();
     const verdict = await deps.policyGate.evaluate({
       workspaceId: 'ws-1',
@@ -352,6 +352,40 @@ describe('createSwarmUnblockDeps — real seam mapping', () => {
       actor: ACTOR,
     });
     expect(verdict.effect).toBe('allow');
+  });
+
+  it('policyGate is deny-capable: a MEDIUM-risk candidate needs approval (never auto-answered)', async () => {
+    const { deps } = makeWiring();
+    const verdict = await deps.policyGate.evaluate({
+      workspaceId: 'ws-1',
+      question: 'Which DB?',
+      candidate: {
+        answer: 'Use Postgres.',
+        source: 'memory:mem0',
+        confidence: 0.95,
+        risk: 'medium',
+        evidence: 'mem0:ref',
+      },
+      actor: ACTOR,
+    });
+    expect(verdict.effect).toBe('needs_approval');
+  });
+
+  it('policyGate is deny-capable: a HIGH-risk candidate is denied (never machine-delivered)', async () => {
+    const { deps } = makeWiring();
+    const verdict = await deps.policyGate.evaluate({
+      workspaceId: 'ws-1',
+      question: 'Which DB?',
+      candidate: {
+        answer: 'rm -rf and recreate.',
+        source: 'memory:mem0',
+        confidence: 0.99,
+        risk: 'high',
+        evidence: 'mem0:ref',
+      },
+      actor: ACTOR,
+    });
+    expect(verdict.effect).toBe('deny');
   });
 
   it('approvalGate opens a real approval and returns its id', async () => {
