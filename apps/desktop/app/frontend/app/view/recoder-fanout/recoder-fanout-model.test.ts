@@ -19,6 +19,7 @@ import { RecoderFanoutViewModel, cockpitPollDelayMs, resolveConvergeSelection } 
 
 const CockpitUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_cockpit/call";
 const FanoutUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_fanout/call";
+const FromIssueUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_fanout_from_issue/call";
 const ReFanUrl = "http://127.0.0.1:3100/api/mcp/tools/conductor/recoder_converge_refan/call";
 const ComposeUrl = "http://127.0.0.1:3100/api/conductor/workspaces/compare/grp-ready/converge";
 
@@ -341,6 +342,96 @@ describe("RecoderFanoutViewModel.launch", () => {
         expect(globalStore.get(model.launchNoticeAtom)).toBe("Not connected.");
         expect(globalStore.get(model.launchResultAtom)).toBeNull();
         expect(globalStore.get(model.launchingAtom)).toBe(false);
+    });
+});
+
+describe("RecoderFanoutViewModel.launchFromIssue", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("posts issueId (not task) to the from-issue tool and pins the returned taskGroup", async () => {
+        const fanoutResult = {
+            status: "completed",
+            risk: "high",
+            result: {
+                taskGroup: "grp-iss",
+                workspaceIds: ["ws1", "ws2"],
+                converged: { workspaceId: "wsc", branch: "converge/grp-iss" },
+                perAgent: [
+                    { kind: "claude", nativeStatus: true, workspaceId: "ws1", settled: true, reason: "review_ready" },
+                    { kind: "codex", nativeStatus: true, workspaceId: "ws2", settled: true, reason: "review_ready" },
+                ],
+            },
+            auditEventId: "e",
+        };
+        const fetchMock = vi.fn().mockImplementation((url: string) => {
+            if (String(url) == FromIssueUrl) {
+                return Promise.resolve(ok(fanoutResult));
+            }
+            return Promise.resolve(completedSnapshot(null));
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        model.setRepoPath("/repo");
+        model.setSpaceId("space1");
+        model.setProjectId("proj1");
+        await model.launchFromIssue("recoder-abc", ["claude", "codex"]);
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            FromIssueUrl,
+            expect.objectContaining({
+                method: "POST",
+                body: JSON.stringify({
+                    args: {
+                        issueId: "recoder-abc",
+                        agentKinds: ["claude", "codex"],
+                        repoPath: "/repo",
+                        spaceId: "space1",
+                        projectId: "proj1",
+                    },
+                }),
+            })
+        );
+        const result = globalStore.get(model.launchResultAtom);
+        expect(result!.taskGroup).toBe("grp-iss");
+        expect(globalStore.get(model.taskGroupAtom)).toBe("grp-iss");
+    });
+
+    it("fails fast with a truthful notice and posts nothing when the issue id is empty", async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        model.setRepoPath("/repo");
+        model.setSpaceId("space1");
+        model.setProjectId("proj1");
+        await model.launchFromIssue("  ", ["claude", "codex"]);
+
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(globalStore.get(model.launchNoticeAtom)).toContain("bd issue id");
+    });
+
+    it("surfaces the tool's unknown-issue refusal verbatim without pinning a group", async () => {
+        const refusal = {
+            status: "completed",
+            risk: "low",
+            result: { ok: false, error: "bd issue 'recoder-zzz' could not be read (unknown issue or the issue graph is unavailable)" },
+            auditEventId: "e",
+        };
+        const fetchMock = vi.fn().mockResolvedValue(ok(refusal));
+        vi.stubGlobal("fetch", fetchMock);
+
+        const model = makeModel();
+        model.setRepoPath("/repo");
+        model.setSpaceId("space1");
+        model.setProjectId("proj1");
+        await model.launchFromIssue("recoder-zzz", ["claude", "codex"]);
+
+        expect(globalStore.get(model.launchResultAtom)).toBeNull();
+        expect(globalStore.get(model.launchNoticeAtom)).toContain("could not be read");
+        expect(globalStore.get(model.taskGroupAtom)).toBe("");
     });
 });
 

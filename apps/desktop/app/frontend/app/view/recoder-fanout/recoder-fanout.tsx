@@ -158,6 +158,7 @@ FileColumns.displayName = "FileColumns";
 
 function LaunchForm({ model }: { model: RecoderFanoutViewModel }) {
     const task = useAtomValue(model.launchTaskAtom);
+    const issueId = useAtomValue(model.issueIdAtom);
     const kinds = useAtomValue(model.launchKindsAtom);
     const repoPath = useAtomValue(model.repoPathAtom);
     const spaceId = useAtomValue(model.spaceIdAtom);
@@ -175,6 +176,21 @@ function LaunchForm({ model }: { model: RecoderFanoutViewModel }) {
                 value={task}
                 onChange={(e) => model.setLaunchTask(e.target.value)}
             />
+            <div className="flex items-center gap-2">
+                <input
+                    className={`${INPUT} flex-1`}
+                    placeholder="…or a bd issue id (seeds the task from the issue)"
+                    value={issueId}
+                    onChange={(e) => model.setIssueId(e.target.value)}
+                />
+                <button
+                    disabled={launching}
+                    className={QUIET_BTN_XS}
+                    onClick={() => model.launchFromIssue(issueId, kinds)}
+                >
+                    {launching ? "Fanning out…" : "Fan out from issue"}
+                </button>
+            </div>
             <div className="flex flex-wrap gap-1">
                 {model.knownKinds.map((kind) => {
                     const on = kinds.includes(kind);
