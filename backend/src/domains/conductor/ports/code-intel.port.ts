@@ -52,6 +52,18 @@ export interface IssueGraphPort {
    * `codeIntel.readIssue` before use and refuse truthfully when absent.
    */
   readIssue?(id: string): Promise<IssueRead | null>;
+  /**
+   * LIST non-closed open work linked UNDER a task issue (open blocked child
+   * issues), so the merge-readiness `openWork` signal can DISCOURAGE a merge while
+   * linked work is unfinished. Returns `null` — a truthful skip — when the seam is
+   * unwired, the beads engine is down, or `taskId` is absent; `[]` when the task
+   * has no open linked work. Best-effort + degrade-safe: NEVER throws, NEVER
+   * fabricates an issue.
+   *
+   * OPTIONAL on the port so pre-existing implementors stay valid; callers probe
+   * `codeIntel.openLinkedWork` before use and treat its absence as "not probed".
+   */
+  openLinkedWork?(taskId: string): Promise<readonly { id: string; title: string }[] | null>;
 }
 
 /** The full code-intel seam: recodergit index + the beads issue-graph subset. */

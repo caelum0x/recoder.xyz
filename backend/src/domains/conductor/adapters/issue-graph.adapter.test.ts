@@ -160,3 +160,61 @@ describe('createIssueGraphTracker — completeWork', () => {
     await expect(unwired.completeWork('bd-1', 'completed')).resolves.toBeUndefined();
   });
 });
+
+/** A writer fake that also answers `blocked` (the openLinkedWork backing verb). */
+function makeBlockedWriter(
+  blockedResult: readonly { id: string; title: string; status: string }[],
+): IssueGraphWriter {
+  return {
+    async note() {
+      return true;
+    },
+    async update() {
+      return true;
+    },
+    async close() {
+      return true;
+    },
+    async show() {
+      return null;
+    },
+    async blocked() {
+      return blockedResult;
+    },
+  };
+}
+
+describe('createIssueGraphTracker — openLinkedWork', () => {
+  it('maps non-closed blocked child issues to {id,title}', async () => {
+    const writer = makeBlockedWriter([
+      { id: 'bd-2', title: 'wire the thing', status: 'open' },
+      { id: 'bd-3', title: 'done already', status: 'closed' },
+      { id: 'bd-4', title: 'in flight', status: 'in_progress' },
+    ]);
+    const tracker = createIssueGraphTracker({ beads: writer, logger: makeLogger() });
+
+    const linked = await tracker.openLinkedWork!('bd-1');
+
+    expect(linked).toEqual([
+      { id: 'bd-2', title: 'wire the thing' },
+      { id: 'bd-4', title: 'in flight' },
+    ]);
+  });
+
+  it('returns [] when the task has no open linked work', async () => {
+    const tracker = createIssueGraphTracker({ beads: makeBlockedWriter([]), logger: makeLogger() });
+    await expect(tracker.openLinkedWork!('bd-1')).resolves.toEqual([]);
+  });
+
+  it('returns null (not probed) when taskId is absent, the seam is unwired, or blocked is missing', async () => {
+    const withVerb = createIssueGraphTracker({ beads: makeBlockedWriter([]), logger: makeLogger() });
+    await expect(withVerb.openLinkedWork!('')).resolves.toBeNull();
+
+    const unwired = createIssueGraphTracker({ beads: null, logger: makeLogger() });
+    await expect(unwired.openLinkedWork!('bd-1')).resolves.toBeNull();
+
+    // A writer WITHOUT the optional `blocked` verb ⇒ source unavailable (null).
+    const noBlocked = createIssueGraphTracker({ beads: makeWriter().writer, logger: makeLogger() });
+    await expect(noBlocked.openLinkedWork!('bd-1')).resolves.toBeNull();
+  });
+});

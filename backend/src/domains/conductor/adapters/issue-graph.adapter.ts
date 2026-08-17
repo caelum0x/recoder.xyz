@@ -40,6 +40,13 @@ export interface IssueGraphWriter {
    * structurally (its richer `IssueDetail` is assignable to the read shape).
    */
   show(id: string, opts?: { long?: boolean }): Promise<{ id: string; title: string; description?: string } | null>;
+  /**
+   * List issues UNDER a parent that have open blockers (`bd blocked --parent`).
+   * The memory facet's `blocked({parent})` satisfies this structurally (its
+   * `BlockedIssue[]` is assignable to this narrowed read shape). OPTIONAL so
+   * pre-existing writers stay valid; resolves `[]` when the engine is down.
+   */
+  blocked?(opts?: { parent?: string }): Promise<readonly { id: string; title: string; status: string }[]>;
 }
 
 export interface IssueGraphTrackerDeps {
@@ -147,7 +154,51 @@ export function createIssueGraphTracker(deps: IssueGraphTrackerDeps): IssueGraph
         return null;
       }
     },
+
+    async openLinkedWork(taskId: string): Promise<readonly { id: string; title: string }[] | null> {
+      const id = taskId?.trim();
+      if (!id) {
+        logger.debug({}, 'issue-graph: no taskId — openLinkedWork skipped');
+        return null;
+      }
+      // `null` (not `[]`) when the source cannot be probed, so the open-work fold
+      // treats it as UNAVAILABLE rather than a fabricated "no linked work".
+      if (!beads || typeof beads.blocked !== 'function') {
+        logger.debug({ taskId: id }, 'issue-graph: blocked verb unwired — openLinkedWork skipped');
+        return null;
+      }
+      const blocked = beads.blocked;
+      try {
+        const result = await Promise.race([
+          blocked({ parent: id }),
+          new Promise<'timeout'>((resolve) => {
+            const timer = setTimeout(() => resolve('timeout'), BEADS_TIMEOUT_MS);
+            timer.unref?.();
+          }),
+        ]);
+        if (result === 'timeout') {
+          logger.warn({ taskId: id, timeoutMs: BEADS_TIMEOUT_MS }, 'issue-graph: openLinkedWork timed out — skipped');
+          return null;
+        }
+        // Defensive: keep only well-formed, NON-CLOSED issues (never fabricate).
+        return (Array.isArray(result) ? result : [])
+          .filter((issue) => issue && typeof issue.id === 'string' && issue.id.trim() !== '')
+          .filter((issue) => !isClosedStatus(issue.status))
+          .map((issue) => ({ id: issue.id, title: typeof issue.title === 'string' ? issue.title : '' }));
+      } catch (err) {
+        logger.warn({ taskId: id, err }, 'issue-graph: openLinkedWork errored — skipped');
+        return null;
+      }
+    },
   };
+}
+
+/** bd terminal statuses that are NOT open work (case-insensitive). */
+const CLOSED_STATUSES = new Set(['closed', 'done', 'completed', 'resolved', 'cancelled', 'canceled']);
+
+/** True when a bd status string names a terminal (not-open) state. */
+function isClosedStatus(status: unknown): boolean {
+  return typeof status === 'string' && CLOSED_STATUSES.has(status.trim().toLowerCase());
 }
 
 /**

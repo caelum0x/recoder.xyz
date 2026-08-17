@@ -416,25 +416,30 @@ export class ConductorReads {
    * nothing rather than a fabricated item; the pure {@link foldOpenWork} decides
    * availability. Never throws (the caller settles it, but this stays self-safe).
    *
-   * NOTE: the linked-issue source is unwired pending a memory-facet listing verb
-   * for non-closed issues under a task — it degrades to `null` (truthfully absent)
-   * today, so no issue is ever fabricated. See the follow-up bd issue.
+   * The linked-issue source surfaces non-closed open work UNDER the task (open
+   * blocked child issues, via `codeIntel.openLinkedWork`); it degrades to `null`
+   * (truthfully absent, never fabricated) when the seam is unwired or the engine
+   * is down.
    */
   private async probeOpenWork(workspace: Workspace): Promise<OpenWorkView> {
     const taskId = workspace.taskId?.trim();
-    const [bodyR, diffR] = await Promise.allSettled([
+    const [bodyR, diffR, issuesR] = await Promise.allSettled([
       taskId && this.ctx.codeIntel?.readIssue
         ? this.ctx.codeIntel.readIssue(taskId)
         : Promise.resolve(null),
       workspace.worktreePath
         ? workspaceDiffOp(buildReviewDeps(this.ctx), workspace.workspaceId)
         : Promise.resolve(null),
+      taskId && this.ctx.codeIntel?.openLinkedWork
+        ? this.ctx.codeIntel.openLinkedWork(taskId)
+        : Promise.resolve(null),
     ]);
     const taskBody =
       bodyR.status === 'fulfilled' && bodyR.value ? bodyR.value.description ?? null : null;
     const diffText =
       diffR.status === 'fulfilled' && diffR.value ? diffR.value.patch : null;
-    return foldOpenWork({ taskBody, diffText, openIssues: null });
+    const openIssues = issuesR.status === 'fulfilled' ? issuesR.value : null;
+    return foldOpenWork({ taskBody, diffText, openIssues });
   }
 
   /**
