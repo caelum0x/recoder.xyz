@@ -160,7 +160,10 @@ export function sliceConductorConfig(
     defaultSubstrate: overrides.defaultSubstrate ?? 'tmux_worktree',
     isProduction: app.runtime.isProduction,
     evidenceSigningKey: overrides.evidenceSigningKey ?? null,
-    mergeTrustGate: overrides.mergeTrustGate ?? 'off',
+    // Default to advisory `warn`: every merge computes convergence trust and
+    // surfaces a low-trust warning, but never blocks. Set RECODER_MERGE_TRUST_GATE
+    // to `block` to refuse low-trust merges, or `off` to disable entirely.
+    mergeTrustGate: overrides.mergeTrustGate ?? 'warn',
   });
 }
 

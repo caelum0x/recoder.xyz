@@ -32,10 +32,15 @@ export interface MergeTrustGateDecision {
   readonly score: number;
 }
 
-/** Parse `RECODER_MERGE_TRUST_GATE`; anything unrecognized ⇒ `off` (fail-open, non-breaking). */
+/**
+ * Parse `RECODER_MERGE_TRUST_GATE`. Unset/blank ⇒ advisory `warn` (compute trust
+ * and surface a low-trust warning, but never block). Explicit `off` disables trust
+ * computation at merge; explicit `block` refuses low-trust merges.
+ */
 export function parseMergeTrustGateMode(raw: string | undefined): MergeTrustGateMode {
   const v = (raw ?? '').toLowerCase().trim();
-  return v === 'warn' || v === 'block' ? v : 'off';
+  if (v === 'off' || v === 'warn' || v === 'block') return v;
+  return 'warn';
 }
 
 /** Compose the trust summary + its review flags into one advisory line. */
