@@ -79,13 +79,28 @@ export function buildBillingRouter(deps: BillingRouterDeps): Router {
    * ready-to-send AppError when the verdict blocks. Fails safe: a deny/needs
    * approval surfaces truthfully, never a fabricated allow.
    */
+  // One-time visibility for the fail-open path (recoder-4d8i #3): a silently
+  // ungated billing gate is invisible in prod, so the first ungated mutation
+  // WARNs loudly (once, to avoid per-call spam) instead of proceeding quietly.
+  let warnedUnwiredGate = false;
+
   async function guardMutation(
     action: 'billing.checkout' | 'billing.cancel',
     principal: Principal,
     metadata: Readonly<Record<string, unknown>>,
   ): Promise<ReturnType<typeof createError> | null> {
     const writeGate = getGate();
-    if (!writeGate) return null; // degrade-safe: ungated until bootstrap wires it
+    if (!writeGate) {
+      // degrade-safe: ungated until bootstrap wires it — but say so, once.
+      if (!warnedUnwiredGate) {
+        warnedUnwiredGate = true;
+        logger.warn(
+          { action },
+          'billing governance gate is NOT wired — mutations proceed UNGATED (fail-open). Wire BillingWriteGate at bootstrap for policy + audit.',
+        );
+      }
+      return null;
+    }
     const verdict = await writeGate.decide(action, principal, {
       target: { toolName: action },
       metadata,
