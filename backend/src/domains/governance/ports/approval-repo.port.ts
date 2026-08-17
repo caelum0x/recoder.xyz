@@ -62,6 +62,11 @@ export interface ApprovalRepository {
   /**
    * Whether an actionable `approved` (and not expired) record exists for the
    * given task+action — the evidence that clears a `needs_approval` verdict.
+   *
+   * Pass `requestedBy` to SCOPE the check to one requester. Omitting it answers
+   * "approved for ANYONE" — which MUST NOT be used as per-actor gate clearance
+   * (recoder-4d8i #6): one user's approval would otherwise clear another user's
+   * gate on the same task+action.
    */
-  hasApproval(taskId: string, action: string): Promise<boolean>;
+  hasApproval(taskId: string, action: string, requestedBy?: string): Promise<boolean>;
 }

@@ -231,9 +231,13 @@ export class InMemoryApprovalRepository implements ApprovalRepository {
     return query.limit ? out.slice(0, query.limit) : out;
   }
 
-  async hasApproval(taskId: string, action: string): Promise<boolean> {
+  async hasApproval(taskId: string, action: string, requestedBy?: string): Promise<boolean> {
     return [...this.rows.values()].some(
-      (r) => r.taskId === taskId && r.action === action && r.status === 'approved',
+      (r) =>
+        r.taskId === taskId &&
+        r.action === action &&
+        r.status === 'approved' &&
+        (requestedBy === undefined || r.requestedBy === requestedBy),
     );
   }
 }
