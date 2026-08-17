@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from "@/lib/auth-helpers";
-import { auth } from '@/lib/auth-config';
-import { headers } from 'next/headers';
 
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { resolveDodoApiKey, resolvePaddleAuthCode, resolvePaddleVendorId } from '@/lib/billing-credentials';
+import { getProvider } from '@/lib/payments/registry';
+
+/**
+ * The active merchant-of-record. Cancellation MUST reach this provider before we
+ * mark the DB cancelled — otherwise the card keeps being charged while the UI
+ * reports success (the bug this route previously shipped: the old `paddle_`/`dodo_`
+ * prefix branches were dead because ids are never stored with those prefixes, so
+ * NO provider was ever called and failures were swallowed). Defaults to `creem`
+ * (the active MoR); `PAYMENT_PROVIDER` overrides it.
+ */
+function activeProviderName(): string {
+  const explicit = (process.env.PAYMENT_PROVIDER || '').toLowerCase().trim();
+  return explicit !== '' ? explicit : 'creem';
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,8 +43,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No active subscription' }, { status: 400 });
     }
 
-    const cancellationDate = cancelImmediate 
-      ? new Date() 
+    // Cancel at the PROVIDER first and gate success on it. A provider that is not
+    // configured, or a failed/denied cancel, MUST fail loud — we never mark the DB
+    // cancelled (which would stop the user seeing the charge) while the card keeps
+    // being billed.
+    const providerName = activeProviderName();
+    const provider = getProvider(providerName);
+    if (!provider.configured) {
+      logger.error('Cannot cancel — payment provider not configured', {
+        route: 'api/billing/subscription/cancel',
+        provider: providerName,
+      });
+      return NextResponse.json(
+        { error: 'Billing provider is not configured; cannot cancel the subscription. Please contact support.' },
+        { status: 503 }
+      );
+    }
+
+    const cancelResult = await provider.cancelSubscription(user.subscriptionId);
+    if (!cancelResult.ok) {
+      logger.error('Provider subscription cancel failed', {
+        route: 'api/billing/subscription/cancel',
+        provider: providerName,
+        reason: cancelResult.reason,
+      });
+      return NextResponse.json(
+        { error: 'Failed to cancel the subscription with the payment provider. No changes were made; please try again or contact support.' },
+        { status: 502 }
+      );
+    }
+
+    const cancellationDate = cancelImmediate
+      ? new Date()
       : user.subscriptionEndDate || new Date();
 
     await prisma.users.update({
@@ -57,6 +98,8 @@ export async function POST(request: NextRequest) {
           reason,
           feedback,
           cancelImmediate,
+          provider: providerName,
+          providerStatus: cancelResult.status,
           oldPlan: user.plan,
           subscriptionId: user.subscriptionId
         },
@@ -64,16 +107,10 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    if (user.subscriptionId.startsWith('paddle_')) {
-      await cancelPaddleSubscription(user.subscriptionId);
-    } else if (user.subscriptionId.startsWith('dodo_')) {
-      await cancelDodoSubscription(user.subscriptionId);
-    }
-
     return NextResponse.json({
       success: true,
-      message: cancelImmediate 
-        ? 'Subscription cancelled immediately' 
+      message: cancelImmediate
+        ? 'Subscription cancelled immediately'
         : `Subscription will be cancelled on ${cancellationDate.toLocaleDateString()}`,
       cancellationDate
     });
@@ -84,64 +121,5 @@ export async function POST(request: NextRequest) {
       { error: 'Failed to cancel subscription' },
       { status: 500 }
     );
-  }
-}
-
-async function cancelPaddleSubscription(subscriptionId: string) {
-  try {
-    const PADDLE_VENDOR_ID = resolvePaddleVendorId();
-    const PADDLE_API_KEY = resolvePaddleAuthCode();
-
-    if (!PADDLE_VENDOR_ID || !PADDLE_API_KEY) {
-      logger.error('Paddle credentials not configured', { route: 'api/billing/subscription/cancel' });
-      return;
-    }
-
-    const response = await fetch('https://vendors.paddle.com/api/2.0/subscription/users_cancel', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        vendor_id: PADDLE_VENDOR_ID,
-        vendor_auth_code: PADDLE_API_KEY,
-        subscription_id: subscriptionId.replace('paddle_', '')
-      })
-    });
-
-    const data = await response.json();
-    
-    if (!data.success) {
-      logger.error('Paddle cancellation failed', { route: 'api/billing/subscription/cancel', data });
-    }
-  } catch (error) {
-    logger.error('Error cancelling Paddle subscription', { route: 'api/billing/subscription/cancel', error: error instanceof Error ? error.message : String(error) });
-  }
-}
-
-async function cancelDodoSubscription(subscriptionId: string) {
-  try {
-    const DODO_API_KEY = resolveDodoApiKey();
-
-    if (!DODO_API_KEY) {
-      logger.error('DODO API key not configured', { route: 'api/billing/subscription/cancel' });
-      return;
-    }
-
-    const response = await fetch(`https://api.dodopayments.com/v1/subscriptions/${subscriptionId.replace('dodo_', '')}/cancel`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${DODO_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const data = await response.json();
-    
-    if (!response.ok) {
-      logger.error('DODO cancellation failed', { route: 'api/billing/subscription/cancel', data });
-    }
-  } catch (error) {
-    logger.error('Error cancelling DODO subscription', { route: 'api/billing/subscription/cancel', error: error instanceof Error ? error.message : String(error) });
   }
 }
