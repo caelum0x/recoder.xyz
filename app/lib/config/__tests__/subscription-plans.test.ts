@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SUBSCRIPTION_PLANS } from '../subscription-plans';
-import { ENFORCED_QUOTAS, enforcedTierForPlanId } from '../enforced-quotas';
+import { ENFORCED_QUOTAS, enforcedTierForPlanId, BYOK_REQUIRED, UNLIMITED } from '../enforced-quotas';
 
 /**
  * Defect P1: the pricing page advertised ~10x the quota the backend gate
@@ -27,5 +27,15 @@ describe('subscription plan advertised quotas == enforced quotas', () => {
 
   it('falls back to free for unknown plan ids', () => {
     expect(enforcedTierForPlanId('mystery')).toBe('free');
+  });
+
+  // recoder-ll7l: Free is BYOK-only — it must NOT advertise a positive platform
+  // token allowance (the backend refuses a keyless Free user). The BYOK sentinel
+  // is distinct from UNLIMITED so Free never reads as "unlimited tokens".
+  it('advertises Free as BYOK-required, never a positive token allowance or unlimited', () => {
+    expect(ENFORCED_QUOTAS.free.tokens).toBe(BYOK_REQUIRED);
+    expect(ENFORCED_QUOTAS.free.tokens).not.toBe(UNLIMITED);
+    expect(ENFORCED_QUOTAS.free.tokens).toBeLessThan(0);
+    expect(SUBSCRIPTION_PLANS.free.limits.tokens).toBe(BYOK_REQUIRED);
   });
 });
