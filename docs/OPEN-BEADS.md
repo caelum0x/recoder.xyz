@@ -1,8 +1,8 @@
 # Open Beads Architecture Map
 
-Snapshot: 2026-08-15. The unresolved graph contains 62 beads: 37 with
-`status=open` and 25 with `status=in_progress`. By priority that is one P0, 13 P1,
-46 P2, and two P3. The live graph remains authoritative:
+Snapshot: 2026-08-17. The unresolved graph contains 59 beads: 32 with
+`status=open` and 27 with `status=in_progress`. By priority that is one P0, 13 P1,
+44 P2, and one P3. The live graph remains authoritative:
 
 ```bash
 bd list --status open --json --limit 0
@@ -10,6 +10,24 @@ bd list --status in_progress --json --limit 0
 ```
 
 This document maps that graph to product architecture. It is not a second tracker.
+
+### Session update 2026-08-17 (swarm-safety + agent-deliberation + Board↔bd)
+
+Resolved/advanced this session (see each bead's notes for evidence + commits):
+
+- `recoder-vbg2` **closed** — the permissive synthetic swarm-unblock policy actor is
+  gone; replaced with a deny-biased actor (commit `8b76edf6`).
+- `recoder-trk0` **advanced** — the auto-unblock gate is now genuinely deny-capable on
+  `candidate.risk` (high⇒deny, medium⇒needs_approval). Residual: a real per-workspace
+  agent policy profile (blocked — `Workspace` carries no durable `toolRules` yet).
+- `recoder-jgrx` **closed** — the deny-biased pal-brain consensus/debate VERDICT is now
+  agent-callable as `recoder.pal-brain` (`pal.consensus_verdict`/`pal.debate_verdict`),
+  parallel to the raw `recoder.pal-comms` tools (commit `3fb75be4`).
+- `recoder-uou2` **closed (backend)** — `recoder_fanout_from_issue` starts a governed
+  fan-out from a bd issue with `taskId=issueId`, closing the existing
+  trackWork→completeWork loop; FE Board button filed as `recoder-b4qx` (commit `af34da73`).
+- `recoder-4xn2` **closed** — a2a-sdk flake: port-race hypothesis disproven (the suite is
+  network-free); not reproducible.
 
 Disposition vocabulary:
 
@@ -48,13 +66,13 @@ Disposition vocabulary:
 
 | ID | P | Product disposition | Required outcome |
 |---|---:|---|---|
-| `recoder-trk0` | 2 | Swarm safety gate if exposed | Give auto-unblock a real workspace-agent policy profile and a deny-capable decision path. |
-| `recoder-vbg2` | 2 | Duplicate swarm root cause | Consolidate with `recoder-trk0`; remove the permissive synthetic profile. |
+| `recoder-trk0` | 2 | Swarm safety gate if exposed | **Advanced 2026-08-17:** deny-capable decision path shipped (candidate.risk); residual = a real per-workspace agent policy profile (blocked on `Workspace` having no `toolRules`). |
+| `recoder-vbg2` | 2 | ~~Duplicate swarm root cause~~ **Closed 2026-08-17** | Permissive synthetic profile removed (deny-biased actor); done. |
 | `recoder-ne6o` | 2 | Governed skills expansion | Define the signed `recoder.skill.json` product contract without inheriting Loom's arbitrary-command plugin marketplace. |
 | `recoder-ubyg` | 2 | Governed skills partial | Complete pinned registry, publisher trust, concrete executor, and canonical/symlink-safe worktree containment. |
 | `recoder-n5pc` | 2 | Remote attach expansion | Existing local service/tools are not a remote product; add authenticated transport and a durable shared session store. |
 | `recoder-klhy` | 2 | Close/reclassify decision | Record the chosen Recoder-owned governed ecosystem and no direct 592-plugin inheritance, then close. |
-| `recoder-jgrx` | 2 | Optional agent deliberation | Expose only when a deny-biased, governed, evidence-visible verdict improves real runs. |
+| `recoder-jgrx` | 2 | ~~Optional agent deliberation~~ **Closed 2026-08-17** | Deny-biased verdict exposed as `recoder.pal-brain` (`pal.consensus_verdict`/`pal.debate_verdict`). |
 
 ## 4. Evidence-driven product expansion
 
@@ -62,7 +80,7 @@ Disposition vocabulary:
 |---|---:|---|---|
 | `recoder-p8f3` | 2 | Diff renderer expansion | Adopt `@pierre/diffs` only if review evidence shows the current diff surface is the bottleneck. |
 | `recoder-ry9c` | 2 | Convergence expansion | Add an AST/tree-sitter merge tier only for repeated same-region conflict failures. |
-| `recoder-uou2` | 2 | Board <-> Beads expansion | Start a workspace from a bead and link/close on governed merge while Beads remains the issue/memory authority. |
+| `recoder-uou2` | 2 | ~~Board <-> Beads expansion~~ **Closed 2026-08-17 (backend)** | `recoder_fanout_from_issue` + existing trackWork/completeWork loop. FE button = `recoder-b4qx`. |
 | `recoder-4keq` | 2 | Unattended-agent expansion | Define lifecycle, notifications, review ownership, and merge governance before background or PR-review agents. |
 | `recoder-55v9` | 2 | Platform expansion | Add per-architecture x64/universal artifacts after arm64 beta demand is proven. |
 | `recoder-b8ol` | 2 | Engine packaging expansion | Package only Python sidecars with demonstrated product value and bounded relocatable distributions. |
@@ -85,7 +103,7 @@ Disposition vocabulary:
 | `recoder-d6bg` | 2 | Operations/deferred | Remove legacy references only with the affected routing/deploy decisions; avoid unrelated production changes. |
 | `recoder-3wth` | 2 | Explicitly deferred | Keep OpenShip inbound email out for at least two quarters and require a clean non-Hetzner host if reconsidered. |
 | `recoder-wisp-6v7` | 2 | Memory, not roadmap | Preserve the sqlx dotenv fact as evidence-backed memory, not scheduled product work. |
-| `recoder-4xn2` | 3 | Flake watch | Investigate only after recurrence with a complete captured log. |
+| `recoder-4xn2` | 3 | ~~Flake watch~~ **Closed 2026-08-17** | Port-race hypothesis disproven (network-free suite); not reproducible. |
 
 ## 7. Other claimed active work
 
@@ -135,7 +153,9 @@ host integrity + license truth + canonical main
 
 Immediate graph cleanup:
 
-1. Consolidate `recoder-trk0` and `recoder-vbg2` under one swarm-policy owner.
+1. ~~Consolidate `recoder-trk0` and `recoder-vbg2`~~ — done 2026-08-17: `vbg2` closed,
+   `trk0` advanced (deny-capable path shipped; only the per-workspace agent policy
+   profile remains, blocked on the `Workspace` data model).
 2. Close `recoder-r96t` and `recoder-klhy` after their decisions are recorded.
 3. Close `recoder-j8i4` after fresh desktop confirmation.
 4. Keep billing, x64, Python sidecars, remote attach, AST merge, and background agents out of the beta critical path.
