@@ -42,6 +42,7 @@ import {
   type FileVersionsView,
 } from '../converge/converge.ops.js';
 import type { ConvergenceEvidenceRecord } from '../evidence/convergence-evidence.js';
+import { computeConvergenceTrust, type ConvergenceTrust } from '../evidence/convergence-trust.js';
 import {
   renderEvidenceExport,
   type EvidenceExport,
@@ -434,6 +435,22 @@ export class ConductorCompareConverge {
       ?.convergenceEvidence;
     if (!raw || typeof raw !== 'object') return null;
     return raw as ConvergenceEvidenceRecord;
+  }
+
+  /**
+   * The CONVERGENCE TRUST assessment for a workspace's merge (`GET …/convergence-trust`)
+   * — a deterministic, explainable 0-100 "should I trust this merge?" score folded
+   * PURELY from the sealed {@link ConvergenceEvidenceRecord} (clean-merge ratio,
+   * LLM-assisted regions, blockers, degraded governance, breadth). Read-only: no
+   * gate, no mutation. `null` when the workspace does not exist OR was never merged
+   * with evidence (⇒ 404 at the edge) — never a fabricated score.
+   */
+  async getConvergenceTrust(
+    workspaceId: string
+  ): Promise<ConvergenceTrust | null> {
+    const record = await this.getConvergenceEvidence(workspaceId);
+    if (!record) return null;
+    return computeConvergenceTrust(record.evidence);
   }
 
   /**

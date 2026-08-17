@@ -15,6 +15,7 @@
  *   GET    /api/conductor/workspaces/:id/mergeability  pre-merge conflict + base-divergence probe
  *   GET    /api/conductor/workspaces/:id/readiness  folded merge-readiness read-model (4 signals + verdict)
  *   GET    /api/conductor/workspaces/:id/evidence  exportable convergence evidence record (404 when unmerged)
+ *   GET    /api/conductor/workspaces/:id/convergence-trust  "should I trust this merge?" score + factors (404 when unmerged)
  *   GET    /api/conductor/workspaces/:id/evidence/export  framework-mapped evidence pack (`?format=md` for text)
  *   GET    /api/conductor/workspaces/:id/dev-command  detected dev command (or null)
  *   GET    /api/conductor/workspaces/:id/run-config  committed scripts + RECODER_PORT + detected cmd
@@ -340,6 +341,35 @@ export function buildConductorRoutes(deps: ConductorRouterDeps): Router {
         );
       } catch (err) {
         sendError(res, toReadError(err, 'evidence read failed'));
+      }
+    }),
+  );
+
+  // The CONVERGENCE TRUST assessment — the single "should I trust this merge?"
+  // signal folded PURELY from the sealed evidence (0-100 score + tier + weighted
+  // factors + the specific things to review). Read-only (no gate). A never-merged /
+  // evidence-less workspace is a truthful 404, never a fabricated score.
+  router.get(
+    '/workspaces/:id/convergence-trust',
+    middleware.authenticate,
+    access,
+    asyncHandler(async (req, res) => {
+      try {
+        const trust = await module.getConvergenceTrust(req.params.id);
+        if (trust) {
+          sendSuccess(res, { trust });
+          return;
+        }
+        const workspace = await module.getWorkspace(req.params.id);
+        sendError(
+          res,
+          createError(
+            ErrorCode.NOT_FOUND,
+            workspace ? 'no convergence evidence to score (not merged)' : 'workspace not found',
+          ),
+        );
+      } catch (err) {
+        sendError(res, toReadError(err, 'convergence-trust read failed'));
       }
     }),
   );
