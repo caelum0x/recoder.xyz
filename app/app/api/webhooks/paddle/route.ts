@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { sendPaymentFailedEmail, sendSubscriptionCancelledEmail } from '@/lib/email';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { emitSubscriptionCreated } from '@/lib/analytics';
+import { parsePassthrough, getString, type JsonObject } from './passthrough';
 
 const webhookRateLimiter = rateLimit(rateLimitConfigs.webhook);
 const PADDLE_PUBLIC_KEY = process.env.PADDLE_PUBLIC_KEY;
@@ -13,27 +14,6 @@ if (!PADDLE_PUBLIC_KEY && process.env.NODE_ENV === 'production') {
   console.error('[paddle-webhook] PADDLE_PUBLIC_KEY is not configured — webhook verification will reject all requests');
 }
 
-type JsonObject = Record<string, unknown>;
-
-function getString(value: unknown): string {
-  return typeof value === 'string' ? value : '';
-}
-
-function parsePassthrough(data: JsonObject): { userId: string; plan?: string } | null {
-  const passthrough = getString(data.passthrough);
-  if (!passthrough) return null;
-  try {
-    const parsed = JSON.parse(passthrough);
-    if (!parsed || typeof parsed !== 'object') return null;
-    const record = parsed as Record<string, unknown>;
-    const userId = getString(record.user_id);
-    if (!userId) return null;
-    const plan = getString(record.plan) || undefined;
-    return { userId, plan };
-  } catch {
-    return null;
-  }
-}
 
 function verifyPaddleSignature(body: JsonObject): boolean {
   if (!PADDLE_PUBLIC_KEY) return false;
