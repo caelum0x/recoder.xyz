@@ -14,6 +14,7 @@
  * a hit. Both ports are INJECTED, so this is unit-tested with in-memory fakes and
  * touches no network; production passes the inference embed gateway + Qdrant.
  */
+import { createHash } from 'node:crypto';
 import {
   createSemanticIndex,
   type EmbeddingPort,
@@ -81,12 +82,52 @@ export function createPermissiveSymbolSearch(
 }
 
 /**
+ * The `recodergit-service` fallback shape — the exact seam `RecoderGitServiceDeps
+ * .fallbackSymbolSearch` expects, so bootstrap can wire this straight in.
+ */
+export type PermissiveSymbolSearchFallback = (input: {
+  readonly repoRoot: string;
+  readonly query: string;
+  readonly limit: number;
+}) => Promise<readonly PermissiveSymbolHit[] | null>;
+
+/**
+ * Build the recodergit-service fallback: a per-repo permissive symbol search that
+ * LAZILY indexes each repo once per process (keyed by a stable collection derived
+ * from the repo root) and then serves semantic searches. Returns `null` on no hits
+ * so the service keeps its truthful 'unavailable' degrade. The embedder + store are
+ * the SAME shared ports the memory domain runs (inference embed + Qdrant).
+ */
+export function createPermissiveSymbolSearchFallback(deps: {
+  readonly embedder: EmbeddingPort;
+  readonly store: VectorStorePort;
+  /** Override the per-repo collection derivation (default: `code_<sha256(root)[:16]>`). */
+  readonly collectionFor?: (repoRoot: string) => string;
+}): PermissiveSymbolSearchFallback {
+  const indexed = new Set<string>();
+  const collectionFor =
+    deps.collectionFor ?? ((root: string) => `code_${createHash('sha256').update(root).digest('hex').slice(0, 16)}`);
+  return async ({ repoRoot, query, limit }) => {
+    const collection = collectionFor(repoRoot);
+    const search = createPermissiveSymbolSearch({ embedder: deps.embedder, store: deps.store, collection });
+    if (!indexed.has(collection)) {
+      const built = await search.index(repoRoot);
+      // Only mark indexed when a real build happened (embedder+store configured);
+      // else retry next call rather than caching an empty index.
+      if (built.configured) indexed.add(collection);
+    }
+    const hits = await search.search(query, limit);
+    return hits.length > 0 ? hits : null;
+  };
+}
+
+/**
  * Adapt a backend `embed(texts) → number[][]` function to the MIT
  * {@link EmbeddingPort}. A thrown/absent embedder degrades to `null` so the whole
  * index build no-ops truthfully (never a fabricated vector).
  */
 export function embeddingPortFrom(
-  embed: ((texts: string[]) => Promise<number[][]>) | null,
+  embed: ((texts: string[]) => Promise<number[][] | null>) | null,
   provider?: string,
 ): EmbeddingPort {
   return {

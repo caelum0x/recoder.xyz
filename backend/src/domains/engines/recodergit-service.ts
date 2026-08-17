@@ -45,6 +45,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { assertEgressAllowedResolved, type HostResolver } from '../../shared/egress-guard.js';
+import type { PermissiveSymbolHit } from './permissive-code-search.js';
 
 // Resolve every address for a host so the egress guard can block a name that maps
 // into private/metadata space (SSRF via a public-looking clone URL).
@@ -375,6 +376,20 @@ export interface RecoderGitServiceDeps {
   now?: () => string;
   /** Fail-safe error sink. Defaults to console.error. */
   logger?: RecoderGitServiceLogger;
+  /**
+   * PERMISSIVE (MIT) symbol-search fallback (recoder-rxn0 Path B). When the vendored
+   * PolyForm engine lib is ABSENT, `codeIntel('symbol_search', …)` routes here (over
+   * the MIT `@recoder/recodergit` semantic index) instead of returning 'unavailable',
+   * so semantic symbol search still works in the shipped DMG. Returns `null` (or is
+   * absent) ⇒ the existing truthful 'unavailable' degrade holds. `find_references` /
+   * `call_graph` / `definition` are NOT rerouted — they need the heavy engine's
+   * tree-sitter scope resolution and keep degrading truthfully.
+   */
+  fallbackSymbolSearch?: (input: {
+    readonly repoRoot: string;
+    readonly query: string;
+    readonly limit: number;
+  }) => Promise<readonly PermissiveSymbolHit[] | null>;
   /**
    * Root dir for cloned repos (connectRepo). Each repo lands in
    * `<workdirRoot>/<repoId>`. Defaults to `<DATA_DIR>/code-graph`.
@@ -913,7 +928,11 @@ export class RecoderGitService {
       deps.serverReadyTimeoutMs ?? SERVER_READY_TIMEOUT_MS;
     this.serverReadyIntervalMs =
       deps.serverReadyIntervalMs ?? SERVER_READY_INTERVAL_MS;
+    if (deps.fallbackSymbolSearch) this.fallbackSymbolSearch = deps.fallbackSymbolSearch;
   }
+
+  /** The permissive (MIT) symbol-search fallback for the engine-absent path. */
+  private readonly fallbackSymbolSearch?: RecoderGitServiceDeps['fallbackSymbolSearch'];
 
   /** True unless the gate env var is an explicit falsy token. Default ON. */
   isEnabled(): boolean {
@@ -1509,6 +1528,30 @@ export class RecoderGitService {
 
     const lib = await this.engineLib();
     if (!lib?.callTool) {
+      // PERMISSIVE (MIT) PATH B: the heavy PolyForm engine is absent, but a semantic
+      // `symbol_search` still works over the MIT semantic index when the fallback is
+      // wired. Only symbol_search reroutes; the scope-resolved ops keep degrading.
+      const query = typeof params.query === 'string' ? params.query.trim() : '';
+      if (op === 'symbol_search' && query && this.fallbackSymbolSearch) {
+        try {
+          const hits = await this.fallbackSymbolSearch({
+            repoRoot,
+            query,
+            limit: typeof params.limit === 'number' && params.limit > 0 ? params.limit : 10,
+          });
+          if (hits && hits.length > 0) {
+            return {
+              enabled: true,
+              op,
+              repoId,
+              available: true,
+              result: { engine: 'permissive-mit', hits },
+            };
+          }
+        } catch (error) {
+          this.logger.error('[recodergit-service] permissive symbol_search fallback failed', error);
+        }
+      }
       return {
         enabled: true,
         ...unavailableCodeIntel(

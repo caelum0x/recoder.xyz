@@ -296,8 +296,12 @@ export class EnginesComposer implements EnginesModule {
     });
 
     // ONE shared recodergit service backs both the CLI adapter and the unified
-    // GitHub module, so freshness/health state is a single source of truth.
-    this.recodergitService = createRecoderGitService();
+    // GitHub module, so freshness/health state is a single source of truth. The
+    // permissive (MIT) symbol-search fallback (Path B) is threaded when bootstrap
+    // wires it, so symbol_search works even without the vendored PolyForm engine.
+    this.recodergitService = createRecoderGitService(
+      deps.codeSearchFallback ? { fallbackSymbolSearch: deps.codeSearchFallback } : undefined
+    );
     this.adapters = this.buildAdapters();
 
     // The unified GitHub module: gh CLI + recodergit facets, ONE GithubHealth.
