@@ -142,6 +142,22 @@ export class DeviceFlowServiceImpl implements DeviceFlowService, DeviceTokenVali
     return this.store.approve(grant.id, userId);
   }
 
+  /**
+   * DENY a pending device grant (the browser "deny" action). A real transition —
+   * NOT a cosmetic 200: the grant flips to `denied` so a later approve can't
+   * succeed and the polling CLI gets a truthful `access_denied` instead of
+   * polling until expiry (recoder-4d8i #9). Returns `true` when a pending grant
+   * was actually denied.
+   */
+  async deny(userCode: string, userId: string): Promise<boolean> {
+    const normalized = normalizeUserCode(userCode);
+    if (!normalized || !userId) return false;
+    const grant = await this.store.findByUserCode(normalized);
+    if (!grant) return false;
+    if (this.isExpired(grant.expiresAt) || grant.status !== 'pending') return false;
+    return this.store.deny(grant.id, userId);
+  }
+
   async pollStatus(deviceCode: string): Promise<DevicePollOutcome> {
     const grant = await this.store.findByDeviceCodeHash(sha256(deviceCode));
     // Unknown or already-consumed device code → treat as expired (RFC-8628 invalid).
@@ -151,6 +167,12 @@ export class DeviceFlowServiceImpl implements DeviceFlowService, DeviceTokenVali
       // Opportunistically flip the row so health/audit stay truthful.
       await this.safeExpire();
       return { status: 'expired_token' };
+    }
+
+    // A denied grant is terminal — surface RFC-8628 `access_denied` so the CLI
+    // stops polling immediately instead of waiting out the grant's expiry.
+    if (grant.status === 'denied') {
+      return { status: 'access_denied' };
     }
 
     if (grant.status === 'approved') {

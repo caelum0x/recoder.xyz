@@ -148,14 +148,21 @@ export function buildDeviceRouter(deps: DeviceRouterDeps): Router {
     asyncHandler(async (req, res) => {
       const body = parseBody(approveSchema, req, res);
       if (!body) return;
-      if (body.action === 'deny') {
-        // Nothing to persist for a deny in this impl; report it truthfully.
-        sendSuccess(res, { approved: false, denied: true });
-        return;
-      }
       const userId = req.principal?.userId;
       if (!userId) {
         sendError(res, createError(ErrorCode.AUTH_REQUIRED));
+        return;
+      }
+      if (body.action === 'deny') {
+        // A REAL deny: flip the pending grant to `denied` so a later approve can't
+        // succeed and the CLI polls `access_denied`. A miss (already used/expired/
+        // unknown code) is reported truthfully rather than a fake success.
+        const denied = await service.deny(body.user_code, userId);
+        if (!denied) {
+          sendError(res, createError(ErrorCode.NOT_FOUND, 'That code is invalid, already used, or expired.'));
+          return;
+        }
+        sendSuccess(res, { approved: false, denied: true });
         return;
       }
       const ok = await service.approve(body.user_code, userId);

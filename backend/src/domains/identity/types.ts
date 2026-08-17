@@ -131,7 +131,7 @@ export interface DeviceGrant {
   readonly createdAt: Date;
 }
 
-export type DeviceGrantStatus = 'pending' | 'approved' | 'consumed' | 'expired';
+export type DeviceGrantStatus = 'pending' | 'approved' | 'consumed' | 'expired' | 'denied';
 
 /** An organization (tenant boundary above a user). */
 export interface Org {
