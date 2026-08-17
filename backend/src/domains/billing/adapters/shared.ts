@@ -11,7 +11,7 @@
  * from `BillingConfig` by the composer; base URLs default per provider only when
  * the injected `baseUrl` override is absent.
  */
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { ProviderCredential } from '../config.js';
 import type { Logger } from '../../../shared/logger.js';
 import { AppError, ErrorCode, createError } from '../../../shared/errors.js';
@@ -370,6 +370,18 @@ function decodeWebhookSecret(secret: string): Buffer {
   return b64.length > 0 && b64.toString('base64').replace(/=+$/, '') === stripped.replace(/=+$/, '')
     ? b64
     : Buffer.from(secret, 'utf8');
+}
+
+/**
+ * A DETERMINISTIC idempotency id derived from the raw webhook body, for providers
+ * whose events may lack a stable `id` (Creem). Using a body hash — instead of a
+ * fresh `Date.now()` id — means a REPLAYED identical body yields the SAME eventId,
+ * so the consumer's `(provider,eventId)` idempotency dedupe rejects the replay
+ * (replay defense for a body-only-HMAC provider that carries no signed timestamp).
+ */
+export function webhookBodyHashId(rawBody: Buffer, provider: string): string {
+  const hash = createHash('sha256').update(rawBody).digest('hex');
+  return `${provider}_sha256:${hash}`;
 }
 
 /** Verify a hex HMAC-SHA256 of the raw body (Creem: `creem-signature`). */

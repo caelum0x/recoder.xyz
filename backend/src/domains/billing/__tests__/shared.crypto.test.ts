@@ -30,6 +30,7 @@ import {
   verifyHmacHex,
   verifyPaddleSignature,
   verifyStandardWebhook,
+  webhookBodyHashId,
 } from '../adapters/shared.js';
 
 const appConfig = { runtime: { isProduction: false } } as unknown as Parameters<
@@ -55,6 +56,20 @@ function standardSig(id: string, ts: number, body: string, secret = WHSEC): stri
   const key = Buffer.from(secret.slice('whsec_'.length), 'base64');
   return createHmac('sha256', key).update(`${id}.${ts}.${body}`).digest('base64');
 }
+
+describe('webhookBodyHashId — deterministic idempotency id (Creem replay defense)', () => {
+  it('is stable for the SAME body (a replayed identical body dedupes)', () => {
+    const body = Buffer.from(JSON.stringify({ type: 'subscription.active', object: { id: 'sub_1' } }));
+    expect(webhookBodyHashId(body, 'creem')).toBe(webhookBodyHashId(Buffer.from(body), 'creem'));
+  });
+
+  it('differs for a DIFFERENT body and is namespaced by provider', () => {
+    const a = webhookBodyHashId(Buffer.from('{"a":1}'), 'creem');
+    const b = webhookBodyHashId(Buffer.from('{"a":2}'), 'creem');
+    expect(a).not.toBe(b);
+    expect(a.startsWith('creem_sha256:')).toBe(true);
+  });
+});
 
 describe('verifyStandardWebhook — fail-closed signature gate (Polar/Dodo)', () => {
   const body = JSON.stringify({ type: 'subscription.active', data: { id: 'sub_1' } });

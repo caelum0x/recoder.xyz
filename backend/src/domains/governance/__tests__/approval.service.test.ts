@@ -31,6 +31,30 @@ describe('ApprovalService — request → decide lifecycle', () => {
     expect(rec.requestedBy).toBe('u1');
   });
 
+  it('caps an explicit far-future expiresAt at the 30d MAX_APPROVAL_TTL (recoder-4d8i #5)', async () => {
+    const { service } = build();
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+    const farFuture = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString(); // ~100 years
+    const rec = await service.request({
+      action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: TARGET,
+      expiresAt: farFuture,
+    });
+    const ttl = Date.parse(rec.expiresAt) - Date.now();
+    // Capped to ~30d (allow a small execution-time slack), NOT the requested ~100y.
+    expect(ttl).toBeLessThanOrEqual(thirtyDaysMs);
+    expect(ttl).toBeGreaterThan(thirtyDaysMs - 60_000);
+  });
+
+  it('honors an explicit near-future expiresAt below the cap unchanged', async () => {
+    const { service } = build();
+    const oneHour = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const rec = await service.request({
+      action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: TARGET,
+      expiresAt: oneHour,
+    });
+    expect(rec.expiresAt).toBe(oneHour);
+  });
+
   it('threads a concrete target through to the stored approval (recoder-adsk create-side)', async () => {
     const { service, repo } = build();
     const rec = await service.request({
