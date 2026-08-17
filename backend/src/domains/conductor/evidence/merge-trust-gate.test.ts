@@ -12,11 +12,14 @@ function trust(tier: ConvergenceTrust['tier'], score: number, reviewFlags: strin
 }
 
 describe('parseMergeTrustGateMode', () => {
-  it('parses warn/block and defaults everything else to off', () => {
+  it('parses off/warn/block and defaults everything else to advisory warn', () => {
+    expect(parseMergeTrustGateMode('off')).toBe('off');
     expect(parseMergeTrustGateMode('block')).toBe('block');
     expect(parseMergeTrustGateMode('WARN')).toBe('warn');
-    expect(parseMergeTrustGateMode(undefined)).toBe('off');
-    expect(parseMergeTrustGateMode('nonsense')).toBe('off');
+    // Unset/blank/unrecognized ⇒ advisory warn (compute trust, never block).
+    expect(parseMergeTrustGateMode(undefined)).toBe('warn');
+    expect(parseMergeTrustGateMode('')).toBe('warn');
+    expect(parseMergeTrustGateMode('nonsense')).toBe('warn');
   });
 });
 
