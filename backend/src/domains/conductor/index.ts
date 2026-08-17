@@ -131,6 +131,7 @@ import type { MergeabilityView } from './services/mergeability.service.js';
 import type { ReadinessView } from './services/readiness.service.js';
 export type { ReadinessView, ReadinessSignal } from './services/readiness.service.js';
 import type { ConvergenceEvidenceRecord } from './evidence/convergence-evidence.js';
+import type { ConvergenceTrust } from './evidence/convergence-trust.js';
 export type {
   ConvergenceEvidence,
   ConvergenceEvidenceRecord,
@@ -864,6 +865,14 @@ export interface ConductorModule {
    * evidence-less) workspace is a truthful `null` (⇒ 404), never a fabricated record.
    */
   getConvergenceEvidence(workspaceId: string): Promise<ConvergenceEvidenceRecord | null>;
+  /**
+   * The CONVERGENCE TRUST assessment (`GET …/convergence-trust`) — a deterministic,
+   * explainable 0-100 "should I trust this merge?" score folded PURELY from the
+   * sealed evidence (clean-merge ratio, LLM-assisted regions, blockers, degraded
+   * governance, breadth) + the specific things to review. Read-only. `null` ⇒ 404
+   * (no evidence), never a fabricated score.
+   */
+  getConvergenceTrust(workspaceId: string): Promise<ConvergenceTrust | null>;
   /**
    * The framework-mapped, exportable evidence PACK (`GET …/evidence/export`) —
    * renders the stored convergence evidence record into a control-mapped artifact

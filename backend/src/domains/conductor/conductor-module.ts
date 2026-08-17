@@ -160,6 +160,7 @@ import {
 } from './services/session-transcript.service.js';
 import type { ReadinessView } from './services/readiness.service.js';
 import type { ConvergenceEvidenceRecord } from './evidence/convergence-evidence.js';
+import type { ConvergenceTrust } from './evidence/convergence-trust.js';
 import type { EvidenceExport } from './evidence/evidence-export.js';
 import { loadEvidenceSigningKey } from './evidence/evidence-signing.js';
 import type { PreviewEvidencePack } from './evidence/preview-evidence.js';
@@ -1413,6 +1414,12 @@ export class ConductorComposer implements ConductorModule {
     workspaceId: string
   ): Promise<ConvergenceEvidenceRecord | null> {
     return this.compareConverge.getConvergenceEvidence(workspaceId);
+  }
+
+  async getConvergenceTrust(
+    workspaceId: string
+  ): Promise<ConvergenceTrust | null> {
+    return this.compareConverge.getConvergenceTrust(workspaceId);
   }
 
   async getConvergenceEvidenceExport(
