@@ -59,6 +59,34 @@ describe('computeConvergenceTrust', () => {
     expect(t.unjudgeable).toBe(false);
   });
 
+  it('carries the cross-candidate VOTE and surfaces divergence as review flags', () => {
+    // Two agents diverged on b.ts (contested + picked) → the vote flags it for review.
+    const t = computeConvergenceTrust(
+      evidence({
+        candidateCount: 2,
+        convergence: {
+          fromTaskGroup: 'grp-1',
+          sourceCount: 2,
+          fileCount: 2,
+          selections: [
+            { path: 'a.ts', mode: 'synthesize', contested: true, contributors: ['ws-a', 'ws-b'] },
+            { path: 'b.ts', mode: 'pick', contested: true, sourceWorkspaceId: 'ws-b' },
+          ],
+        } as ConvergenceEvidence['convergence'],
+      }),
+    );
+    expect(t.vote.verdict).toBe('mixed');
+    expect(t.vote.converged).toEqual(['a.ts']);
+    expect(t.vote.picked).toEqual(['b.ts']);
+    expect(t.reviewFlags.join(' ')).toMatch(/diverged on 1 shared file/i);
+    expect(t.factors.some((f) => f.label === 'candidate-consensus')).toBe(true);
+  });
+
+  it('reports a SOLO vote for a single-candidate merge (nothing to vote on)', () => {
+    const t = computeConvergenceTrust(evidence({ candidateCount: 1 }));
+    expect(t.vote.verdict).toBe('solo');
+  });
+
   it('marks a merge UNJUDGEABLE when the crux verification could not run (vs a verified one)', () => {
     const cannot = computeConvergenceTrust(
       evidence({ verification: { available: false, signals: [], blockers: [] } as ConvergenceEvidence['verification'] }),
