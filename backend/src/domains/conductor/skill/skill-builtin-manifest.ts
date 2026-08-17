@@ -17,6 +17,23 @@ import { CAP_WORKSPACE_READ_FILE, CAP_WORKSPACE_LIST_FILES } from './skill-capab
 /** The publisher key id the first-party manifest is signed under (trust-anchor name). */
 export const RECODER_BUILTIN_PUBLISHER_KEY_ID = 'recoder-builtin';
 
+/**
+ * The FIRST-PARTY publisher PUBLIC key (raw 32-byte ed25519, hex) — the trust
+ * anchor for the built-in `recoder.workspace` skill, safe to ship in the binary
+ * (a public key reveals no secret). The matching PRIVATE key is held out-of-repo
+ * by the publisher and used only to re-sign the manifest when it changes.
+ */
+export const RECODER_BUILTIN_PUBLIC_KEY_HEX =
+  '7304fd380d12cc9fc1c379e468dfcd4e3acc35d98f5ceb8369841a7411363129';
+
+/**
+ * The committed ed25519 signature over the first-party manifest's canonical body
+ * ({@link recoderWorkspaceSkillBody}), produced by the publisher private key. It
+ * verifies against {@link RECODER_BUILTIN_PUBLIC_KEY_HEX}; a locked test proves it.
+ */
+export const RECODER_WORKSPACE_SIGNATURE =
+  '1488b43bd7496abb6f1e9b8b844e2bc684cd073ec7615eeeccd4eb0645aaf8292e445180b5c23be8f79af71d7060ea1fb8f1f2f7b269444744b75d33cdf60c0c';
+
 /** The pinned id + version of the first-party workspace skill. */
 export const RECODER_WORKSPACE_SKILL_ID = 'recoder.workspace';
 export const RECODER_WORKSPACE_SKILL_VERSION = '1.0.0';
@@ -51,4 +68,9 @@ export function recoderWorkspaceSkillBody(): Omit<SkillManifest, 'signature'> {
 /** The pinned {id → version} allow-list entry for the first-party skill. */
 export function recoderWorkspaceSkillPin(): Readonly<Record<string, string>> {
   return { [RECODER_WORKSPACE_SKILL_ID]: RECODER_WORKSPACE_SKILL_VERSION };
+}
+
+/** The SIGNED first-party manifest (body + committed signature) — trusted by default. */
+export function recoderWorkspaceSignedManifest(): SkillManifest {
+  return { ...recoderWorkspaceSkillBody(), signature: RECODER_WORKSPACE_SIGNATURE };
 }

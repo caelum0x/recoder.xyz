@@ -28,7 +28,12 @@ import {
 import { createEd25519SkillSignatureVerifier } from './skill-signature-verifier.js';
 import { createCapabilityDispatchExecutor, type SkillCapabilityHandlers } from './skill-executor.js';
 import { builtinReadOnlyWorkspaceCapabilities } from './skill-capabilities.js';
-import { recoderWorkspaceSkillPin } from './skill-builtin-manifest.js';
+import {
+  recoderWorkspaceSkillPin,
+  recoderWorkspaceSignedManifest,
+  RECODER_BUILTIN_PUBLISHER_KEY_ID,
+  RECODER_BUILTIN_PUBLIC_KEY_HEX,
+} from './skill-builtin-manifest.js';
 import {
   createOwnedWorkspaceResolver,
   type OwnedWorkspaceLookup,
@@ -42,6 +47,13 @@ export interface GovernedSkillModelDeps {
   readonly manifests: readonly SkillManifest[];
   /** Extra {id → version} pins beyond the first-party skill (optional). */
   readonly extraPins?: Readonly<Record<string, string>>;
+  /**
+   * Whether to TRUST the built-in first-party `recoder.workspace` skill by default
+   * (its committed public key + signed manifest merged into the trust set). Default
+   * `true` — the read-only, sandboxed skill is batteries-included. Set `false` to run
+   * a deployment with ONLY its own publisher keys/manifests.
+   */
+  readonly includeFirstParty?: boolean;
   /** The enabled built-in capability handlers; defaults to the read-only workspace set. */
   readonly capabilities?: SkillCapabilityHandlers;
   /** The conductor workspace store seam (owned-worktree resolution). */
@@ -66,7 +78,19 @@ export interface GovernedSkillModel {
 export async function createGovernedSkillModel(
   deps: GovernedSkillModelDeps,
 ): Promise<GovernedSkillModel | null> {
-  const keyIds = Object.keys(deps.publisherKeys);
+  // Merge the first-party trust (public key + signed manifest) in by default so the
+  // read-only, sandboxed `recoder.workspace` skill is batteries-included; a
+  // deployment's own SKILL_PUBLISHER_KEYS / SKILL_MANIFESTS add to it.
+  const firstParty = deps.includeFirstParty !== false;
+  const publisherKeys: Record<string, string> = {
+    ...(firstParty ? { [RECODER_BUILTIN_PUBLISHER_KEY_ID]: RECODER_BUILTIN_PUBLIC_KEY_HEX } : {}),
+    ...deps.publisherKeys,
+  };
+  const manifests = firstParty
+    ? [recoderWorkspaceSignedManifest(), ...deps.manifests]
+    : deps.manifests;
+
+  const keyIds = Object.keys(publisherKeys);
   if (keyIds.length === 0) {
     deps.logger.info({}, 'governed skill model OFF: no publisher keys configured');
     return null;
@@ -74,11 +98,11 @@ export async function createGovernedSkillModel(
 
   const verifier = createEd25519SkillSignatureVerifier({
     resolveKey: (id) =>
-      Object.prototype.hasOwnProperty.call(deps.publisherKeys, id) ? deps.publisherKeys[id] : null,
+      Object.prototype.hasOwnProperty.call(publisherKeys, id) ? publisherKeys[id] : null,
   });
   const pinned = { ...recoderWorkspaceSkillPin(), ...(deps.extraPins ?? {}) };
   const registry = createSkillRegistry({ verifier, pinned, logger: deps.logger });
-  const loadReport = await registry.load(deps.manifests);
+  const loadReport = await registry.load(manifests);
 
   const executor = createCapabilityDispatchExecutor({
     handlers: deps.capabilities ?? builtinReadOnlyWorkspaceCapabilities(),
@@ -97,7 +121,7 @@ export async function createGovernedSkillModel(
 
   const admitted = loadReport.filter((r) => r.ok).length;
   deps.logger.info(
-    { publishers: keyIds.length, manifests: deps.manifests.length, admitted },
+    { publishers: keyIds.length, manifests: manifests.length, admitted, firstParty },
     'governed skill model ON',
   );
   return { registry, service, loadReport };
