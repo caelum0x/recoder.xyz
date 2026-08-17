@@ -54,7 +54,7 @@ import type {
   WorkspaceView,
 } from './types.js';
 import type { ConductorModule, ConductorModuleDeps } from './index.js';
-import type { CodeIntelPort } from './ports/code-intel.port.js';
+import type { CodeIntelPort, IssueRead } from './ports/code-intel.port.js';
 import type {
   PreviewVerifyPort,
   PreviewVerificationView,
@@ -209,6 +209,7 @@ import {
   type FanoutWorkspaceCreateRequest,
 } from './fanout/converge-fanout.service.js';
 import { buildConductorFanoutTools } from './mcp/conductor-fanout-tool.js';
+import { buildConductorFanoutFromIssueTools } from './mcp/conductor-fanout-from-issue-tool.js';
 import {
   buildConductorSkillTools,
   type VerifiedSkillView,
@@ -1501,6 +1502,15 @@ export class ConductorComposer implements ConductorModule {
    * Every downstream method self-gates under the caller; a blocked verdict surfaces
    * as a truthful per-agent failure, never a faked launch/merge.
    */
+  /**
+   * READ a bd issue so `recoder_fanout_from_issue` can START a workspace from it.
+   * Delegates to the degrade-safe issue-graph reader (`codeIntel.readIssue`); an
+   * unwired/absent seam ⇒ `null` (the tool then refuses truthfully). Never throws.
+   */
+  async readIssue(id: string): Promise<IssueRead | null> {
+    return (await this.codeIntel?.readIssue?.(id)) ?? null;
+  }
+
   async fanout(input: FanoutInput): Promise<FanoutResult> {
     const actor = input.actor;
     const service = new ConvergeFanoutService({
@@ -1777,6 +1787,7 @@ export class ConductorComposer implements ConductorModule {
       ...buildConductorWaitTools(this),
       // THE fusion verb: fan a task to N agents in Loom panes -> auto-converge (§0).
       ...buildConductorFanoutTools(this),
+      ...buildConductorFanoutFromIssueTools(this),
       // SECOND-ROUND re-fan: iterate a prior convergence as the new base (§1 build-now #6).
       ...buildConductorReFanTools(this),
       // The LIVE convergence cockpit read — makes a fan-out observable (§1 build-now #1).
