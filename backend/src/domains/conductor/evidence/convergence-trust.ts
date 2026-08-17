@@ -18,6 +18,8 @@
  * merge verdict), so the SAME scoring math powers the post-merge score and the
  * pre-merge gate without duplicating it.
  */
+import { computeCandidateVote, type CandidateVote } from './finding-vote.js';
+
 export interface ConvergenceTrustInput {
   readonly verification: {
     readonly available?: boolean;
@@ -27,7 +29,7 @@ export interface ConvergenceTrustInput {
   };
   readonly convergence?: {
     readonly fileCount: number;
-    readonly selections?: readonly { readonly mode: string; readonly contested: boolean }[];
+    readonly selections?: readonly { readonly path?: string; readonly mode: string; readonly contested: boolean }[];
     readonly assisted?: readonly { readonly path: string }[];
   };
   readonly governance: {
@@ -64,6 +66,12 @@ export interface ConvergenceTrust {
    * rather than forcing it into pass/block.
    */
   readonly unjudgeable: boolean;
+  /**
+   * The CROSS-CANDIDATE self-consistency vote: how much the N independent agents
+   * AGREED on the files they both touched (converged vs one-version-picked). A real
+   * confidence signal Recoder uniquely owns — `solo` when there is nothing to vote on.
+   */
+  readonly vote: CandidateVote;
   /** The weighted factors that produced the score (most-impactful first). */
   readonly factors: readonly TrustFactor[];
   /** Specific things a human should review BEFORE trusting the merge (may be empty). */
@@ -157,6 +165,27 @@ export function computeConvergenceTrust(evidence: ConvergenceTrustInput): Conver
     add('convergence', 'caution', -5, 'single-agent merge (no parallel convergence)');
   }
 
+  // 2b) CROSS-CANDIDATE VOTE — the N independent agents' agreement, a signal Recoder
+  //     uniquely owns. INFORMATIONAL in the score (the model starts at 100 and only
+  //     deducts, and the divergence penalty already lives in `contested-picks` — a
+  //     bonus here would have no headroom and could MASK a real deduction). The vote's
+  //     value is truthful surfacing: its verdict as a factor, its SPECIFIC review flags
+  //     for the diverged files, and the `vote` object the Checks surface renders.
+  const vote = computeCandidateVote({
+    candidateCount: evidence.candidateCount,
+    selections: (c?.selections ?? []).map((s) => ({
+      ...(s.path ? { path: s.path } : {}),
+      mode: s.mode,
+      contested: s.contested,
+    })),
+  });
+  if (vote.verdict !== 'solo') {
+    const impact: TrustImpact =
+      vote.verdict === 'strong' ? 'positive' : vote.verdict === 'weak' ? 'negative' : 'caution';
+    add('candidate-consensus', impact, 0, vote.summary);
+  }
+  reviewFlags.push(...vote.reviewFlags);
+
   // 3) GOVERNANCE — a degraded gate path or a high-risk action lowers trust.
   const g = evidence.governance;
   if (g.degraded) {
@@ -186,5 +215,5 @@ export function computeConvergenceTrust(evidence: ConvergenceTrustInput): Conver
         ? `Medium trust (${score}/100): mergeable but review ${reviewFlags.length || 'the flagged'} item(s) first.`
         : `Low trust (${score}/100): do not merge until the flagged issues are resolved.`;
 
-  return { score, tier, unjudgeable, factors, reviewFlags, summary };
+  return { score, tier, unjudgeable, vote, factors, reviewFlags, summary };
 }
