@@ -31,6 +31,7 @@ import {
   type SkillWorkspaceResolver,
 } from './skill-workspace-resolver.js';
 import { qualifiedSkillToolName } from './skill-actor.js';
+import { createCapabilityDispatchExecutor } from './skill-executor.js';
 import type {
   SkillActionContext,
   SkillActionExecutor,
@@ -416,5 +417,61 @@ describe('SkillActionService', () => {
     // raw client path was NEVER trusted.
     expect(policy.inputs).toHaveLength(0);
     expect(executor.calls).toHaveLength(0);
+  });
+});
+
+// End-to-end composition over the REAL capability-dispatch executor (recoder-ubyg):
+// the full pipeline (verified registry → params → workspace → policy → executor)
+// runs a fs.write action ONLY when a handler for that capability is wired, and
+// refuses fail-closed when it is not — no fakes on the executor seam.
+describe('SkillActionService × real capability-dispatch executor', () => {
+  it('EXECUTES an fs.write action when its capability has a wired handler', async () => {
+    const registry = await loadedRegistry();
+    const seen: SkillActionContext[] = [];
+    const executor = createCapabilityDispatchExecutor({
+      handlers: {
+        'fs.write': {
+          async execute(ctx) {
+            seen.push(ctx);
+            return { ok: true, output: `wrote ${String(ctx.params.path)} in ${ctx.workspace}` };
+          },
+        },
+      },
+      logger: silentLogger,
+    });
+    const service = createSkillActionService({
+      registry,
+      evaluatePolicy: new FakePolicy('allow').evaluate,
+      approval: new FakeApproval(),
+      resolveWorkspace: new FakeResolver(),
+      executor,
+      logger: silentLogger,
+    });
+
+    const out = await service.invoke(BASE_INPUT);
+    expect(out).toEqual({ status: 'executed', result: { ok: true, output: 'wrote src/a.ts in /trusted/checkout/ws-1' } });
+    // The handler saw ONLY the capability-scoped, resolved-path context.
+    expect(seen[0].workspace).toBe(TRUSTED_PATH);
+    expect(seen[0].capabilities).toEqual(['fs.write']);
+  });
+
+  it('REFUSES fail-closed (executed:ok=false) when no handler is wired for the capability', async () => {
+    const registry = await loadedRegistry();
+    const executor = createCapabilityDispatchExecutor({ handlers: {}, logger: silentLogger });
+    const service = createSkillActionService({
+      registry,
+      evaluatePolicy: new FakePolicy('allow').evaluate,
+      approval: new FakeApproval(),
+      resolveWorkspace: new FakeResolver(),
+      executor,
+      logger: silentLogger,
+    });
+
+    const out = await service.invoke(BASE_INPUT);
+    expect(out.status).toBe('executed');
+    if (out.status === 'executed') {
+      expect(out.result.ok).toBe(false);
+      expect(out.result.error).toMatch(/no handler wired for capability: fs\.write/);
+    }
   });
 });
