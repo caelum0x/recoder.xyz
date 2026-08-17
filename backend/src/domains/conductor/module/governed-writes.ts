@@ -78,6 +78,7 @@ import {
   type EvidenceGovernance,
 } from '../evidence/convergence-evidence.js';
 import { computeConvergenceTrust } from '../evidence/convergence-trust.js';
+import type { CandidateVote } from '../evidence/finding-vote.js';
 import { evaluateMergeTrustGate } from '../evidence/merge-trust-gate.js';
 import {
   ADVANCE_TARGET_STATES,
@@ -1147,7 +1148,7 @@ export class ConductorGovernedWrites {
       // advisory. Degrade-truthful: the trust only ever downgrades allowed→warned/
       // blocked, and every block carries the score's own reasons.
       let trustAdvisory:
-        | { warning?: string; tier: 'high' | 'medium' | 'low'; score: number; flags: readonly string[] }
+        | { warning?: string; tier: 'high' | 'medium' | 'low'; score: number; flags: readonly string[]; vote: CandidateVote }
         | undefined;
       const trustMode = this.ctx.cfg.mergeTrustGate;
       if (trustMode !== 'off') {
@@ -1191,6 +1192,7 @@ export class ConductorGovernedWrites {
           tier: gate.tier,
           score: gate.score,
           flags: trust.reviewFlags,
+          vote: trust.vote,
         };
       }
 
@@ -1238,6 +1240,9 @@ export class ConductorGovernedWrites {
               trustTier: trustAdvisory.tier,
               trustScore: trustAdvisory.score,
               ...(trustAdvisory.flags.length > 0 ? { trustFlags: trustAdvisory.flags } : {}),
+              // Forward the cross-candidate vote so the compare view can render the
+              // converged/diverged rows; omit a `solo` vote (nothing to surface).
+              ...(trustAdvisory.vote.verdict !== 'solo' ? { vote: trustAdvisory.vote } : {}),
             }
           : {}),
       };

@@ -19,13 +19,30 @@ export type TrustFactor = {
     detail: string;
 };
 
+// The CROSS-CANDIDATE consensus vote (backend CandidateVote): of the files MULTIPLE
+// parallel agents changed, how many CONVERGED (their changes auto-merged) vs had one
+// version PICKED as the winner (the agents diverged). Recoder's uniquely-ownable
+// confidence signal. `solo` ⇒ a single candidate / no shared files ⇒ nothing to vote on.
+export type VoteView = {
+    verdict: "strong" | "mixed" | "weak" | "solo";
+    agreementRatio: number;
+    contestedCount: number;
+    converged: string[];
+    picked: string[];
+    reviewFlags: string[];
+    summary: string;
+};
+
 // The folded trust view the server returns. Every field is projected defensively from
 // the (untrusted) wire; a malformed payload degrades to null at the fetch boundary.
+// `vote` is optional so an older/leaner backend (no vote) still projects — it is always
+// SET by projectTrust, degraded to the `solo` shape when absent, never fabricated.
 export type TrustView = {
     score: number;
     tier: "high" | "medium" | "low";
     factors: TrustFactor[];
     reviewFlags: string[];
+    vote?: VoteView;
     summary: string;
 };
 
@@ -50,6 +67,32 @@ function asTier(v: unknown): TrustView["tier"] {
     return v == "high" || v == "medium" || v == "low" ? (v as TrustView["tier"]) : "low";
 }
 
+function asVoteVerdict(v: unknown): VoteView["verdict"] {
+    return v == "strong" || v == "mixed" || v == "weak" ? (v as VoteView["verdict"]) : "solo";
+}
+
+// Keep only non-empty strings — the untrusted wire may carry blanks / non-strings in a
+// file or flag list; those are noise, not review signal.
+function stringList(v: unknown): string[] {
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x == "string" && x.trim() != "") : [];
+}
+
+// Project the (untrusted) cross-candidate vote into a VoteView. Mirrors the defensive
+// projection of factors/reviewFlags: a malformed / absent vote degrades to the `solo`
+// shape (nothing to vote on), never throws, never fabricates a consensus.
+export function projectVote(raw: unknown): VoteView {
+    const o = (raw ?? {}) as Record<string, unknown>;
+    return {
+        verdict: asVoteVerdict(o.verdict),
+        agreementRatio: asNumber(o.agreementRatio),
+        contestedCount: asNumber(o.contestedCount),
+        converged: stringList(o.converged),
+        picked: stringList(o.picked),
+        reviewFlags: stringList(o.reviewFlags),
+        summary: asString(o.summary),
+    };
+}
+
 // Project the (untrusted) trust wire into a TrustView, or null when the shape is not a
 // recognizable trust object. Never throws.
 export function projectTrust(raw: unknown): TrustView | null {
@@ -71,7 +114,7 @@ export function projectTrust(raw: unknown): TrustView | null {
               .filter((f) => f.label != "")
         : [];
     const reviewFlags = Array.isArray(r.reviewFlags) ? r.reviewFlags.filter((x): x is string => typeof x == "string") : [];
-    return { score: asNumber(r.score), tier: asTier(r.tier), factors, reviewFlags, summary: asString(r.summary) };
+    return { score: asNumber(r.score), tier: asTier(r.tier), factors, reviewFlags, vote: projectVote(r.vote), summary: asString(r.summary) };
 }
 
 // PURE badge projection: the short label + the single allowed tone. Only a LOW tier is
