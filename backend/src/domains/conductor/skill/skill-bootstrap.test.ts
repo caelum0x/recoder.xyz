@@ -32,24 +32,22 @@ describe('createGovernedSkillModel', () => {
   const getWorkspace = async (id: string) =>
     id === 'ws-1' ? { createdBy: 'user-1', worktreePath: worktree } : null;
 
-  it('is OFF (null) when no publisher keys are configured', async () => {
+  it('is OFF (null) only when first-party is disabled AND no publisher keys are configured', async () => {
     const model = await createGovernedSkillModel({
-      publisherKeys: {}, manifests: [], getWorkspace, approval, logger: log,
+      publisherKeys: {}, manifests: [], includeFirstParty: false, getWorkspace, approval, logger: log,
     });
     expect(model).toBeNull();
   });
 
-  it('is ON with keys + a signed manifest, and invokes end-to-end against the worktree', async () => {
-    const { publicKeyHex, privateKeyPem } = generateSkillPublisherKeypair();
-    const signed = signManifest(recoderWorkspaceSkillBody(), privateKeyPem);
+  it('trusts the FIRST-PARTY recoder.workspace by DEFAULT and invokes it end-to-end (no env config)', async () => {
+    // No publisher keys / manifests supplied — the committed first-party key+manifest
+    // are batteries-included.
     const model = await createGovernedSkillModel({
-      publisherKeys: { [RECODER_BUILTIN_PUBLISHER_KEY_ID]: publicKeyHex },
-      manifests: [signed],
-      getWorkspace, approval, logger: log,
+      publisherKeys: {}, manifests: [], getWorkspace, approval, logger: log,
     });
     expect(model).not.toBeNull();
     expect(model!.loadReport).toEqual([{ id: 'recoder.workspace', ok: true }]);
-    expect(model!.registry.list()).toHaveLength(1);
+    expect(model!.registry.list().map((s) => s.manifest.id)).toEqual(['recoder.workspace']);
 
     const out = await model!.service.invoke({
       skillId: 'recoder.workspace', actionId: 'read_file',
@@ -67,6 +65,8 @@ describe('createGovernedSkillModel', () => {
     const trusted = generateSkillPublisherKeypair();
     const signed = signManifest(recoderWorkspaceSkillBody(), foreign.privateKeyPem);
     const model = await createGovernedSkillModel({
+      // Disable first-party so this tests ONLY the env manifest's rejection.
+      includeFirstParty: false,
       publisherKeys: { [RECODER_BUILTIN_PUBLISHER_KEY_ID]: trusted.publicKeyHex },
       manifests: [signed],
       getWorkspace, approval, logger: log,
