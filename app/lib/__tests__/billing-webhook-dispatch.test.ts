@@ -10,9 +10,9 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const usersUpdate = vi.fn(async () => ({}));
-const subsUpdateMany = vi.fn(async () => ({ count: 1 }));
-const auditCreate = vi.fn(async () => ({}));
+const usersUpdate = vi.fn(async (..._a: unknown[]) => ({}));
+const subsUpdateMany = vi.fn(async (..._a: unknown[]) => ({ count: 1 }));
+const auditCreate = vi.fn(async (..._a: unknown[]) => ({}));
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {

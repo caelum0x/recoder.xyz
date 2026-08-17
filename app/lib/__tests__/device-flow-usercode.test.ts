@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const findFirst = vi.fn(async () => null);
+const findFirst = vi.fn(async (..._a: unknown[]) => null);
 vi.mock('@/lib/prisma', () => ({ prisma: { deviceCode: { findFirst: (...a: unknown[]) => findFirst(...a) } } }));
 
 import { getDeviceFlowRequestByUserCode } from '@/lib/device-flow-storage';
