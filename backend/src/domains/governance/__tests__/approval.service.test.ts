@@ -123,6 +123,17 @@ describe('ApprovalService — request → decide lifecycle', () => {
     expect(await service.hasApproval('t1', 'pr.merge')).toBe(true);
   });
 
+  it('hasApproval scopes to requestedBy — one user\'s approval never clears another\'s gate (recoder-4d8i #6)', async () => {
+    const { service } = build();
+    const rec = await service.request({ action: 'pr.merge', riskTier: 'high', requestedBy: 'u1', taskId: 't1', target: TARGET });
+    await service.decide(rec.id, { decision: 'approved', decidedBy: 'admin' });
+    // Scoped to the real requester → cleared; scoped to a DIFFERENT user → not.
+    expect(await service.hasApproval('t1', 'pr.merge', 'u1')).toBe(true);
+    expect(await service.hasApproval('t1', 'pr.merge', 'u2')).toBe(false);
+    // Unscoped stays "approved for anyone" (the documented footgun, unchanged).
+    expect(await service.hasApproval('t1', 'pr.merge')).toBe(true);
+  });
+
   it('best-effort audit: a failing sink does not roll back the human decision', async () => {
     const sink: ApprovalAuditSink = { recordAudit: vi.fn(async () => { throw new Error('audit down'); }) };
     const { service } = build({ audit: sink });

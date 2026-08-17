@@ -193,11 +193,13 @@ export class ApprovalService {
 
   /**
    * Whether an actionable `approved` (un-expired) record exists for a task+action
-   * — the evidence a caller passes to clear a `needs_approval` gate verdict.
+   * — the evidence a caller passes to clear a `needs_approval` gate verdict. Pass
+   * `requestedBy` to scope it to one requester; omitting it is "approved for
+   * anyone" and MUST NOT be used as per-actor gate clearance (recoder-4d8i #6).
    */
-  async hasApproval(taskId: string, action: string): Promise<boolean> {
+  async hasApproval(taskId: string, action: string, requestedBy?: string): Promise<boolean> {
     if (!taskId || !action) return false;
-    return this.repo.hasApproval(taskId, action);
+    return this.repo.hasApproval(taskId, action, requestedBy);
   }
 
   // --- internals -------------------------------------------------------------

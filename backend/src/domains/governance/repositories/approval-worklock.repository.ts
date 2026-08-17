@@ -90,13 +90,23 @@ class SqlApprovalRepository implements ApprovalRepository {
     return rows.map(mapApproval);
   }
 
-  async hasApproval(taskId: string, action: string): Promise<boolean> {
+  async hasApproval(taskId: string, action: string, requestedBy?: string): Promise<boolean> {
+    // WARNING (recoder-4d8i #6): WITHOUT `requestedBy` this answers "is this
+    // task+action approved for ANYONE" — do NOT use that as per-actor gate
+    // clearance (one user's approval would clear another user's gate on the same
+    // task+action). A gate-clearance caller MUST pass `requestedBy` to scope it.
+    const params: Record<string, unknown> = { task_id: taskId, action };
+    let requestedByClause = '';
+    if (requestedBy) {
+      requestedByClause = ' and requested_by = :requested_by';
+      params.requested_by = requestedBy;
+    }
     const row = await this.qe.one<QueryRow>(
       `select 1 as ok from governance_approvals
-        where task_id = :task_id and action = :action and status = 'approved'
+        where task_id = :task_id and action = :action and status = 'approved'${requestedByClause}
           and (expires_at is null or expires_at > now())
         limit 1`,
-      { task_id: taskId, action },
+      params,
     );
     return row != null;
   }

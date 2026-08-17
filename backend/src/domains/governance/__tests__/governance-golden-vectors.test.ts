@@ -135,6 +135,7 @@ describe('governance golden vectors — the decide() verdict envelope shape', ()
       'engine',
       'reason',
       'requestId',
+      'target',
       'tier',
       'verdictId',
     ]);
