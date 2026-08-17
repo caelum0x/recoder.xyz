@@ -131,27 +131,46 @@ function ReadinessBadge({ readiness }: { readiness: ReadinessView }) {
         return <span className={META}>readiness unavailable</span>;
     }
     const style = VERDICT_STYLE[readiness.verdict] ?? VERDICT_STYLE.unknown;
+    // The hard blockers (real merge conflict / failing check) — WHY the merge is
+    // held. Computed server-side and shipped in the readiness view but, until now,
+    // only reachable via per-signal tooltips. Defensive: the wire is untrusted, so
+    // keep only non-empty strings; absent/empty ⇒ no list (a ready merge shows none).
+    const blockers = Array.isArray(readiness.blockers)
+        ? readiness.blockers.filter((b): b is string => typeof b == "string" && b.trim() != "")
+        : [];
     return (
-        <div className="flex items-center gap-1.5">
-            <span className={`rounded px-1.5 py-0.5 text-xs ${style}`}>{verdictLabel(readiness.verdict)}</span>
-            <div className="flex items-center gap-1">
-                {readiness.signals.map((s: ReadinessSignal) => (
+        <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5">
+                <span className={`rounded px-1.5 py-0.5 text-xs ${style}`}>{verdictLabel(readiness.verdict)}</span>
+                <div className="flex items-center gap-1">
+                    {readiness.signals.map((s: ReadinessSignal) => (
+                        <span
+                            key={s.id}
+                            className={`text-xs ${SIGNAL_STYLE[s.status] ?? SIGNAL_STYLE.unknown}`}
+                            title={`${s.id}: ${s.status}${s.detail ? ` — ${s.detail}` : ""}`}
+                        >
+                            {s.id} {SIGNAL_GLYPH[s.status] ?? SIGNAL_GLYPH.unknown}
+                        </span>
+                    ))}
+                </div>
+                {readiness.pr != null && (
                     <span
-                        key={s.id}
-                        className={`text-xs ${SIGNAL_STYLE[s.status] ?? SIGNAL_STYLE.unknown}`}
-                        title={`${s.id}: ${s.status}${s.detail ? ` — ${s.detail}` : ""}`}
+                        className="text-xs text-secondary border border-border rounded px-1"
+                        title={readiness.pr.url || `PR #${readiness.pr.number}`}
                     >
-                        {s.id} {SIGNAL_GLYPH[s.status] ?? SIGNAL_GLYPH.unknown}
+                        PR #{readiness.pr.number} {readiness.pr.draft ? "(draft)" : readiness.pr.state}
                     </span>
-                ))}
+                )}
             </div>
-            {readiness.pr != null && (
-                <span
-                    className="text-xs text-secondary border border-border rounded px-1"
-                    title={readiness.pr.url || `PR #${readiness.pr.number}`}
-                >
-                    PR #{readiness.pr.number} {readiness.pr.draft ? "(draft)" : readiness.pr.state}
-                </span>
+            {blockers.length > 0 && (
+                <ul className="ml-1 flex flex-col gap-0.5 text-[11px] text-error">
+                    {blockers.map((b, i) => (
+                        <li key={i} className="flex gap-1">
+                            <span aria-hidden="true">›</span>
+                            <span>{b}</span>
+                        </li>
+                    ))}
+                </ul>
             )}
         </div>
     );
