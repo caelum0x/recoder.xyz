@@ -55,6 +55,14 @@ import { createAgentOsModule } from '../domains/agent-os/index.js';
 import { createConductorModule } from '../domains/conductor/index.js';
 import { createGovernedSkillModel } from '../domains/conductor/skill/skill-bootstrap.js';
 import { parseMergeTrustGateMode } from '../domains/conductor/evidence/merge-trust-gate.js';
+import { sliceMemoryConfig } from '../domains/memory/config.js';
+import { createEmbeddingAdapter } from '../domains/memory/adapters/embedding.adapter.js';
+import { createQdrantAdapter } from '../domains/memory/adapters/qdrant.adapter.js';
+import {
+  createPermissiveSymbolSearchFallback,
+  embeddingPortFrom,
+  vectorStorePortFrom,
+} from '../domains/engines/permissive-code-search.js';
 import type { SkillApprovalPort } from '../domains/conductor/skill/skill-action.service.js';
 import type { SkillManifest } from '../domains/conductor/skill/skill.types.js';
 import {
@@ -492,9 +500,23 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
   const openfangEngineRunSink = createEngineRunSink(
     childLogger('engines-openfang-sink'),
   );
+  // recoder-rxn0 Path B: the PERMISSIVE (MIT) symbol-search fallback for the
+  // code-graph — composed over the memory domain's SAME embed + Qdrant adapters so
+  // `symbol_search` works in the shipped DMG without the PolyForm engine. Degrade-
+  // safe: an unconfigured embedder/store makes the ports no-op, so the service keeps
+  // its truthful 'unavailable' rather than a fabricated hit.
+  const codeSearchMemCfg = sliceMemoryConfig(config, config.memory);
+  const codeSearchEmbed = createEmbeddingAdapter(codeSearchMemCfg);
+  const codeSearchStore = createQdrantAdapter(codeSearchMemCfg);
+  const codeSearchFallback = createPermissiveSymbolSearchFallback({
+    embedder: embeddingPortFrom(texts => codeSearchEmbed.embed(texts)),
+    store: vectorStorePortFrom(codeSearchStore),
+  });
+
   const engines = await createEnginesModule({
     config,
     logger: childLogger('engines'),
+    codeSearchFallback,
     executor: persistence.executor(),
     middleware: identity.middleware(),
     kernel: governance.kernel(),

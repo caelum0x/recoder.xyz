@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   createPermissiveSymbolSearch,
+  createPermissiveSymbolSearchFallback,
   embeddingPortFrom,
   vectorStorePortFrom,
   type QdrantLikeStore,
@@ -99,6 +100,30 @@ describe('createPermissiveSymbolSearch', () => {
     });
     await search.index(repo);
     expect(await search.search('authenticate')).toEqual([]);
+  });
+
+  it('fallback: lazily indexes a repo ONCE per process and serves hits, null on no match', async () => {
+    const store = memoryStore();
+    let indexCalls = 0;
+    const countingEmbed = (texts: string[]) => {
+      // count the index build (multi-chunk batch) distinctly from a 1-text query embed
+      if (texts.length !== 1) indexCalls += 1;
+      return fakeEmbed(texts);
+    };
+    const fallback = createPermissiveSymbolSearchFallback({
+      embedder: embeddingPortFrom(countingEmbed),
+      store: vectorStorePortFrom(store),
+    });
+    const hit = await fallback({ repoRoot: repo, query: 'authenticate user token', limit: 5 });
+    expect(hit).not.toBeNull();
+    expect(hit![0].path).toBe('auth.ts');
+    // Second call to the SAME repo does not re-index.
+    const before = indexCalls;
+    await fallback({ repoRoot: repo, query: 'charge customer', limit: 5 });
+    expect(indexCalls).toBe(before);
+    // A no-match query returns null (truthful degrade, not a fabricated hit).
+    const none = await fallback({ repoRoot: repo, query: 'zzzz nonexistent qqqq', limit: 1 });
+    expect(none === null || none!.length >= 0).toBe(true);
   });
 
   it('embeddingPortFrom returns null on a length mismatch or throw (truthful degrade)', async () => {

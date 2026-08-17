@@ -22,6 +22,7 @@
 import type { Router } from 'express';
 import type { AppConfig } from '../../shared/app-config.js';
 import type { Logger } from '../../shared/logger.js';
+import type { PermissiveSymbolSearchFallback } from './permissive-code-search.js';
 import type { ComponentHealth } from '../../shared/health-types.js';
 import type { McpToolRegistration } from '../../shared/module-base.js';
 import type { QueryExecutor } from '../persistence/ports/query-executor.port.js';
@@ -87,6 +88,13 @@ export interface EnginesModuleDeps {
    * standalone) ⇒ the driver's warn-and-drop default applies (visible, truthful).
    */
   readonly openfangRunSink?: OpenfangRunEventSink;
+  /**
+   * PERMISSIVE (MIT) symbol-search fallback for the code-graph service (recoder-rxn0
+   * Path B). Bootstrap composes it from the memory domain's embed + Qdrant so
+   * `symbol_search` works in the shipped DMG without the PolyForm engine. Absent ⇒
+   * the service keeps its truthful 'unavailable' degrade.
+   */
+  readonly codeSearchFallback?: PermissiveSymbolSearchFallback;
   /** Not-yet-in-AppConfig engine values (paths / URLs / venvs / flags). */
   readonly overrides?: EnginesConfigOverrides;
 }

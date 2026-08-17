@@ -476,3 +476,49 @@ describe('RecodergitAdapter — code-intel op routing', () => {
     expect(res).toMatchObject({ ok: false, code: 'bad_input' });
   });
 });
+
+describe('RecoderGitService.codeIntel — permissive (MIT) Path B fallback', () => {
+  it('symbol_search routes to the permissive fallback when the engine lib is ABSENT', async () => {
+    const service = createRecoderGitService({
+      loadEngineLib: async () => null, // heavy PolyForm engine absent (e.g. shipped DMG)
+      store: storeWith('r1', '/repo/r1'),
+      logger: NOOP_LOG,
+      fallbackSymbolSearch: async ({ query, limit }) => {
+        expect(query).toBe('authenticate user');
+        expect(limit).toBe(10);
+        return [{ path: 'auth.ts', startLine: 1, endLine: 5, score: 0.9, preview: 'authenticateUser' }];
+      },
+    });
+    const res = await service.codeIntel('symbol_search', 'r1', { query: 'authenticate user' });
+    expect(res.enabled).toBe(true);
+    if (res.enabled) {
+      expect(res.available).toBe(true);
+      expect(res.result).toMatchObject({ engine: 'permissive-mit' });
+      expect((res.result as { hits: Array<{ path: string }> }).hits[0].path).toBe('auth.ts');
+    }
+  });
+
+  it('a scope-resolved op (find_references) does NOT reroute — stays truthfully unavailable', async () => {
+    const service = createRecoderGitService({
+      loadEngineLib: async () => null,
+      store: storeWith('r1', '/repo/r1'),
+      logger: NOOP_LOG,
+      fallbackSymbolSearch: async () => [{ path: 'x.ts', startLine: 1, endLine: 1, score: 1, preview: '' }],
+    });
+    const res = await service.codeIntel('find_references', 'r1', { symbol: 'foo' });
+    expect(res.enabled).toBe(true);
+    if (res.enabled) expect(res.available).toBe(false);
+  });
+
+  it('symbol_search stays unavailable when the fallback returns no hits (truthful degrade)', async () => {
+    const service = createRecoderGitService({
+      loadEngineLib: async () => null,
+      store: storeWith('r1', '/repo/r1'),
+      logger: NOOP_LOG,
+      fallbackSymbolSearch: async () => [],
+    });
+    const res = await service.codeIntel('symbol_search', 'r1', { query: 'nothing matches' });
+    expect(res.enabled).toBe(true);
+    if (res.enabled) expect(res.available).toBe(false);
+  });
+});
