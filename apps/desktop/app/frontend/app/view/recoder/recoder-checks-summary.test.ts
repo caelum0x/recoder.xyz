@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect } from "vitest";
-import { summarizeChecks } from "./recoder-checks-summary";
+import { summarizeChecks, buildChecksTable } from "./recoder-checks-summary";
 import type { ReadinessView, MergeabilityView } from "./recoder-board-logic";
 
 function readiness(over: Partial<ReadinessView>): ReadinessView {
@@ -66,5 +66,35 @@ describe("summarizeChecks", () => {
         const s = summarizeChecks(readiness({ verdict: "unknown" }), null);
         expect(s?.tone).toBe("quiet");
         expect(s?.headline).toBe("checks incomplete");
+    });
+});
+
+describe("buildChecksTable", () => {
+    const siblings = [
+        { workspaceId: "ws-a", agent: "claude", branch: "a" },
+        { workspaceId: "ws-b", agent: "codex", branch: "b" },
+        { workspaceId: "ws-c", agent: "cursor", branch: "c" },
+    ];
+
+    it("folds one consolidated row per sibling with itemized blockers/advisories", () => {
+        const rows = buildChecksTable(siblings, {
+            "ws-a": { readiness: readiness({ verdict: "ready" }), mergeability: mergeability({}) },
+            "ws-b": { readiness: readiness({ verdict: "blocked", blockers: ["x.ts"] }) },
+            "ws-c": { readiness: readiness({ verdict: "not_ready", advisories: ["[ ] later"] }) },
+        });
+        expect(rows.map((r) => [r.agent, r.summary?.tone])).toEqual([
+            ["claude", "ready"],
+            ["codex", "blocked"],
+            ["cursor", "discouraged"],
+        ]);
+        expect(rows[1].blockers).toEqual(["x.ts"]);
+        expect(rows[2].advisories).toEqual(["[ ] later"]);
+    });
+
+    it("a sibling with no probed views yields a null summary + empty lists (never fabricated)", () => {
+        const rows = buildChecksTable([siblings[0]], {});
+        expect(rows[0].summary).toBeNull();
+        expect(rows[0].blockers).toEqual([]);
+        expect(rows[0].advisories).toEqual([]);
     });
 });
