@@ -66,6 +66,13 @@ class MemoryGrantStore implements DeviceGrantStore {
     return true;
   }
 
+  async deny(id: string, userId: string): Promise<boolean> {
+    const g = this.rows.get(id);
+    if (!g || g.status !== 'pending' || g.expiresAt.getTime() <= Date.now()) return false;
+    this.rows.set(id, { ...g, status: 'denied', userId, approvedAt: new Date() });
+    return true;
+  }
+
   async consume(id: string): Promise<boolean> {
     const g = this.rows.get(id);
     if (!g || g.status !== 'approved') return false;
@@ -174,6 +181,24 @@ describe('DeviceFlowService — RFC-8628 CLI device flow', () => {
     expect(await svc.exchange(grant.deviceCode)).toBeNull();
     // And polling a consumed grant reads as expired.
     expect((await svc.pollStatus(grant.deviceCode)).status).toBe('expired_token');
+  });
+
+  it('deny is a REAL transition: poll returns access_denied and a later approve fails (recoder-4d8i #9)', async () => {
+    const { svc } = build();
+    const grant = await svc.requestGrant({ clientId: 'cli', scopes: ['read'] });
+
+    // Deny a pending grant → true (it actually transitioned).
+    expect(await svc.deny(grant.userCode, 'user-9')).toBe(true);
+
+    // The CLI now polls access_denied (terminal) instead of pending-forever.
+    expect((await svc.pollStatus(grant.deviceCode)).status).toBe('access_denied');
+
+    // A denied grant can no longer be approved, and exchange yields nothing.
+    expect(await svc.approve(grant.userCode, 'user-42')).toBe(false);
+    expect(await svc.exchange(grant.deviceCode)).toBeNull();
+
+    // Denying again (no longer pending) is a truthful false, not a fake success.
+    expect(await svc.deny(grant.userCode, 'user-9')).toBe(false);
   });
 
   it('enforces the polling interval (slow_down) on a too-fast second poll', async () => {

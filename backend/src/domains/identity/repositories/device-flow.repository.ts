@@ -84,6 +84,18 @@ export class DeviceGrantRepository implements DeviceGrantStore {
     return count > 0;
   }
 
+  async deny(id: string, userId: string): Promise<boolean> {
+    // Only a still-pending, unexpired grant can be denied — a single atomic
+    // transition so a deny can't race an approve into an inconsistent state.
+    const count = await this.executor.mutate(
+      `update ${TABLE}
+         set user_id = :user_id, status = 'denied', approved_at = now()
+       where id = :id and status = 'pending' and expires_at > now()`,
+      { id, user_id: userId },
+    );
+    return count > 0;
+  }
+
   async consume(id: string): Promise<boolean> {
     // Single-use: only an approved grant transitions to consumed, and only once.
     const count = await this.executor.mutate(

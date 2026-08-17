@@ -42,6 +42,8 @@ export interface DeviceGrantStore {
   findByUserCode(userCode: string): Promise<DeviceGrant | null>;
   /** Bind a grant to a user + mark `approved`; returns `true` when a row changed. */
   approve(id: string, userId: string): Promise<boolean>;
+  /** Mark a still-pending grant `denied` (records the denier); `true` when it transitioned. */
+  deny(id: string, userId: string): Promise<boolean>;
   /** Mark a grant `consumed` (single-use); returns `true` when it transitioned. */
   consume(id: string): Promise<boolean>;
   /** Record a poll (updates `last_polled_at` for interval rate-limiting). */
@@ -109,6 +111,8 @@ export interface DeviceFlowService {
   requestGrant(params: RequestGrantParams): Promise<RequestedGrant>;
   /** Browser approval: bind a `user_code` to the approving principal's user. */
   approve(userCode: string, userId: string): Promise<boolean>;
+  /** Browser denial: flip a pending `user_code` grant to `denied` (real transition). */
+  deny(userCode: string, userId: string): Promise<boolean>;
   /** Poll a `device_code`: returns pending/slow_down/expired or the approved grant. */
   pollStatus(deviceCode: string): Promise<DevicePollOutcome>;
   /** Exchange an approved `device_code` for an `sk_` key + single-consume the grant. */
