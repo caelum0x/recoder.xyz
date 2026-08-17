@@ -53,6 +53,9 @@ import { createGovernanceModule } from '../domains/governance/index.js';
 import { createInteropModule } from '../domains/interop/index.js';
 import { createAgentOsModule } from '../domains/agent-os/index.js';
 import { createConductorModule } from '../domains/conductor/index.js';
+import { createGovernedSkillModel } from '../domains/conductor/skill/skill-bootstrap.js';
+import type { SkillApprovalPort } from '../domains/conductor/skill/skill-action.service.js';
+import type { SkillManifest } from '../domains/conductor/skill/skill.types.js';
 import {
   reconcileOnBoot,
   SYSTEM_RECONCILE_PRINCIPAL,
@@ -227,6 +230,44 @@ export interface StartOptions {
  * `public` per-mount guard — so the edge adds NO second auth/interop layer over a
  * router that already guards itself (conflict-free: exactly one mount, one auth).
  */
+/**
+ * Parse the OPT-IN governed-skill-model config from env (both default to empty ⇒
+ * the feature stays OFF and skill tools refuse truthfully). Never throws — a
+ * malformed value degrades to empty rather than aborting boot.
+ *  - `SKILL_PUBLISHER_KEYS`: JSON object `{ "<keyId>": "<ed25519 public key hex>" }`.
+ *  - `SKILL_MANIFESTS`: JSON array of SIGNED skill manifests to admit.
+ */
+function parseSkillConfig(env: Record<string, string | undefined>): {
+  publisherKeys: Record<string, string>;
+  manifests: SkillManifest[];
+} {
+  const publisherKeys: Record<string, string> = {};
+  const rawKeys = env.SKILL_PUBLISHER_KEYS?.trim();
+  if (rawKeys) {
+    try {
+      const parsed = JSON.parse(rawKeys) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        for (const [id, key] of Object.entries(parsed as Record<string, unknown>)) {
+          if (typeof key === 'string' && key.trim() !== '') publisherKeys[id] = key.trim();
+        }
+      }
+    } catch {
+      /* malformed ⇒ no keys ⇒ feature stays off (truthful) */
+    }
+  }
+  let manifests: SkillManifest[] = [];
+  const rawManifests = env.SKILL_MANIFESTS?.trim();
+  if (rawManifests) {
+    try {
+      const parsed = JSON.parse(rawManifests) as unknown;
+      if (Array.isArray(parsed)) manifests = parsed as SkillManifest[];
+    } catch {
+      /* malformed ⇒ no manifests ⇒ registry admits nothing (truthful) */
+    }
+  }
+  return { publisherKeys, manifests };
+}
+
 function routerProvider(
   key: string,
   basePath: string,
@@ -1114,12 +1155,42 @@ export async function start(options: StartOptions = {}): Promise<BootHandle> {
         }));
       }
     : undefined;
+  // GOVERNED SKILL MODEL (LOOM Bigger Bet A): OPT-IN. Constructed only when a
+  // publisher-key allow-list is configured; absent ⇒ null ⇒ the conductor's
+  // recoder_skill_* tools keep refusing SERVICE_UNAVAILABLE truthfully. The
+  // signature verifier trusts SKILL_PUBLISHER_KEYS (keyId→ed25519 public key) and
+  // admits only signed+pinned manifests from SKILL_MANIFESTS. getWorkspace is
+  // LATE-BOUND to the conductor built just below (closure runs at invoke time).
+  const skillApproval: SkillApprovalPort = {
+    async request(p) {
+      const record = await governance.approvals().request({
+        action: p.action,
+        riskTier: p.riskTier === 'critical' ? 'high' : p.riskTier,
+        requestedBy: p.requestedBy,
+        target: p.target,
+        ...(p.taskId != null ? { taskId: p.taskId } : {}),
+        ...(p.reason != null ? { reason: p.reason } : {}),
+      });
+      return { id: record.id };
+    },
+  };
+  const skillCfg = parseSkillConfig(bootEnv);
+  const skillModel = await createGovernedSkillModel({
+    publisherKeys: skillCfg.publisherKeys,
+    manifests: skillCfg.manifests,
+    getWorkspace: id =>
+      conductorRef ? conductorRef.getWorkspace(id) : Promise.resolve(null),
+    approval: skillApproval,
+    logger: childLogger('conductor-skill'),
+  });
+
   const conductor = createConductorModule({
     config,
     logger: childLogger('conductor'),
     executor: persistence.executor(),
     middleware: identity.middleware(),
     gate: governance.gate(),
+    ...(skillModel ? { skillRegistry: skillModel.registry, skillActions: skillModel.service } : {}),
     // Idempotency-Key replay guard on the duplicate-spawning POST /workspaces (BE-10.3).
     idempotency,
     runEventSink: conductorRunSink,
