@@ -99,10 +99,12 @@ export interface SealConnectorIngressInput {
 /**
  * Seal a structural connector message into a canonical, HMAC-signed envelope.
  *
- * The signed bytes are `canonicalJson(payload)` — byte-identical to every other
- * interop envelope — so the existing edge verifies it with no special-casing.
- * This is the connector gateway's vouch: it has already normalized + gated the
- * traffic, and now signs it so the edge can re-prove that vouch independently.
+ * The signed bytes are the canonical `signedEnvelopeSigningObject` (payload AND
+ * the signature metadata: algorithm/key_id/signed_at/expires_at) — byte-identical
+ * to every other interop envelope — so the existing edge verifies it with no
+ * special-casing (recoder-i834). This is the connector gateway's vouch: it has
+ * already normalized + gated the traffic, and now signs it so the edge can
+ * re-prove that vouch independently.
  */
 export function sealConnectorIngress(
   input: SealConnectorIngressInput,

@@ -2,9 +2,9 @@
  * Social domain value types — the vocabulary the connector ingress, trust
  * boundary (mention gate + webhook), and dispatch bind to.
  *
- * The 8 foundation channels come from `@recoder/connectors`
- * (telegram/slack/discord/signal/imessage/whatsapp/line/feishu). Seven are LIVE;
- * `discord` stays in the foundation but is NOT wired to a live runtime here.
+ * The 8 channel connectors (telegram/slack/discord/signal/imessage/whatsapp/
+ * line/feishu) are resolved lazily at runtime by the openclaw gateway. Seven are
+ * LIVE; `discord` is recognized but NOT wired to a live runtime here.
  */
 
 /** The 8 connector channels the foundation supports. */

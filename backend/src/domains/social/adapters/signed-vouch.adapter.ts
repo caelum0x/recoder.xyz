@@ -17,7 +17,7 @@
  * admits on error.
  */
 import { sealConnectorIngress, type ConnectorIngressPayload } from '@recoder/interop';
-import { verifyHmacSha256Signature } from '@recoder/a2a-sdk';
+import { signedEnvelopeSigningObject, verifyHmacSha256Signature } from '@recoder/a2a-sdk';
 import type { SignedVouch } from './mention-gate.adapter.js';
 import type { InboundEnvelope } from '../types.js';
 
@@ -67,8 +67,18 @@ export function createSealedIngressVouch(deps: SignedVouchDeps): SignedVouch | n
           signedAt: at.toISOString(),
         });
         // Independent re-verification of the sealed signature over the SAME
-        // canonical payload — the edge's own verify primitive, no special case.
-        return verifyHmacSha256Signature(sealed.payload, sealed.signature.signature, secret);
+        // signing object the signer built — payload AND signature metadata
+        // (algorithm/key_id/signed_at/expires_at). Verifying against the payload
+        // alone would never match, since the MAC binds that metadata too
+        // (recoder-i834). This mirrors the interop admit path exactly.
+        const signingObject = signedEnvelopeSigningObject({
+          payload: sealed.payload,
+          algorithm: sealed.signature.algorithm,
+          keyId: sealed.signature.key_id,
+          signedAt: sealed.signature.signed_at,
+          expiresAt: sealed.signature.expires_at,
+        });
+        return verifyHmacSha256Signature(signingObject, sealed.signature.signature, secret);
       } catch {
         return false; // fault ⇒ drop (never admit on error)
       }
