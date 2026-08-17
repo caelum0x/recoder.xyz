@@ -21,9 +21,11 @@
  *    OTHER workspaces, read each sibling's live pane, and (only when a sibling has
  *    demonstrably moved PAST the SAME question) quote its verbatim follow-on line
  *    as a low-risk, evidenced precedent. No such sibling ⇒ `null`.
- *  - `policyGate`    → the deterministic `evaluatePolicy` (agent-policy). The
- *    auto-answer is modeled as a benign `tool.call` on `swarm.unblock`; the
- *    verdict flows back verbatim (`allow` | `deny` | `needs_approval`).
+ *  - `policyGate`    → a genuine function of the candidate's REAL risk: a `high`
+ *    answer is denied and a `medium` answer needs approval (never machine-
+ *    delivered), while a `low` answer runs the deterministic `evaluatePolicy`
+ *    (agent-policy) as a `tool.call` on `swarm.unblock` over a DENY-BIASED actor.
+ *    The verdict flows back verbatim (`allow` | `deny` | `needs_approval`).
  *  - `approvalGate`  → the real `ApprovalService.request` (governance domain),
  *    returning the durable approval id as the escalation `requestId`.
  *  - `rememberCandidate` → the evidenced memory-candidate lifecycle
@@ -113,40 +115,51 @@ function truncate(text: string, max: number): string {
   return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed;
 }
 
+/** The fully-qualified policy tool name for a swarm auto-answer (stable, greppable). */
+export const SWARM_UNBLOCK_TOOL_NAME = 'swarm.unblock';
+
 /**
- * A permissive-but-honest {@link import('@recoder/agent-policy').PolicyInput}'s
- * actor derived from the invoking principal. The deterministic gate evaluates the
- * ACTION (a benign `swarm.unblock` tool call), not a per-agent permission matrix;
- * a human owner carries no tool-deny rules, so the gate's verdict is driven by the
- * action rules alone. Only the fields the policy rules read are populated.
+ * A DENY-BIASED {@link import('@recoder/agent-policy').PolicyInput} actor for a
+ * swarm auto-answer, mirroring the SAME shape `buildSkillActor` (skill model) and
+ * `buildSteerActor` (remote attach) hand the policy engine — so all three governed
+ * conductor `tool.call`s share ONE deny-biased posture. The actor carries NO
+ * standing high-risk rights (no file/network/shell/git/pr/secrets grants, no
+ * auto-approval), so the verdict is driven by the ACTION rules alone rather than by
+ * a permissive synthetic profile that would silently pass a future risk rule.
+ *
+ * NOTE: this is derived from the invoking principal, NOT from the blocked
+ * WORKSPACE AGENT's own policy profile — the `Workspace` record carries no durable
+ * per-agent `toolRules` today, so a deny rule set by the blocked agent cannot yet be
+ * threaded here. Until a per-workspace agent policy profile exists, the real gate is
+ * `candidate.risk` (below) plus the service's escalate-by-default posture.
  */
-function policyActor(actor: Principal): PolicyInput['actor'] {
+function unblockActor(actor: Principal): PolicyInput['actor'] {
   const nowIso = new Date(0).toISOString();
   return {
     agentId: actor.userId,
-    displayName: actor.userId,
+    displayName: `Swarm unblock ${actor.userId}`,
     vendorSurface: 'custom',
-    connectorId: 'recoder',
+    connectorId: 'swarm-unblock',
     runtimeKind: 'local',
     capabilities: [],
     tools: [],
     supportedTaskIntents: [],
     permissions: {
-      defaultFileEffect: 'allow',
+      defaultFileEffect: 'deny',
       pathRules: [],
       toolRules: [],
-      allowNetwork: true,
+      allowNetwork: false,
       allowShell: false,
       allowGitWrite: false,
       allowPrCreation: false,
       allowSecretsAccess: false,
       maxParallelSubagents: 1,
-      writeLockRequired: false,
+      writeLockRequired: true,
     },
     approvalPolicy: {
       mode: 'policy',
       requiredRules: [],
-      allowAutoApprovalForLowRisk: true,
+      allowAutoApprovalForLowRisk: false,
     },
     memoryScope: 'repo',
     cwdPolicy: { mode: 'workspace_root', allowedRoots: [] },
@@ -341,10 +354,24 @@ export function createSwarmUnblockDeps(
         readonly candidate: UnblockCandidate;
         readonly actor: Principal;
       }): Promise<{ readonly effect: 'allow' | 'deny' | 'needs_approval' }> {
+        // The gate is a genuine function of the candidate's REAL risk — not a
+        // constant `allow`. The service only forwards a low-risk candidate here,
+        // but a seam must be self-sufficiently deny-capable: a `medium`/`high`
+        // answer that ever reaches this gate is NEVER auto-delivered.
+        //  - high   ⇒ deny (a high-risk answer is never machine-delivered);
+        //  - medium ⇒ needs_approval (a human-reviewable proposal);
+        //  - low    ⇒ the deterministic policy chain over a DENY-BIASED actor
+        //    (allow unless a real rule denies the qualified tool call).
+        if (request.candidate.risk === 'high') {
+          return { effect: 'deny' };
+        }
+        if (request.candidate.risk === 'medium') {
+          return { effect: 'needs_approval' };
+        }
         const verdict = evaluatePolicy({
-          actor: policyActor(request.actor),
+          actor: unblockActor(request.actor),
           action: 'tool.call',
-          target: { toolName: 'swarm.unblock' },
+          target: { toolName: SWARM_UNBLOCK_TOOL_NAME },
         });
         return { effect: verdict.effect };
       },
