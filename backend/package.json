@@ -21,7 +21,8 @@
     "ci:check": "pnpm run ci:preflight && tsc --noEmit && vitest --run src/bootstrap src/shared/__tests__",
     "ci:check:noninteractive": "CI=1 pnpm run ci:check",
     "ci:install-and-check": "pnpm run ci:check:noninteractive",
-    "ci:install-and-check:local": "pnpm run ci:check:noninteractive"
+    "ci:install-and-check:local": "pnpm run ci:check:noninteractive",
+    "skill:rotate-key": "tsx scripts/rotate-skill-publisher-key.ts"
   },
   "dependencies": {
     "@babel/parser": "^7.29.0",
