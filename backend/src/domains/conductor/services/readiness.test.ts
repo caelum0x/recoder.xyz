@@ -386,6 +386,22 @@ describe('foldReadiness — worktree open-work signal', () => {
     expect(signalOf(view, 'openWork')?.status).toBe('unknown');
   });
 
+  it('a SECRET added by the diff HARD-BLOCKS the merge even when everything else is clean', () => {
+    const view = foldReadiness({
+      ...base,
+      worktree: cleanWorktree(),
+      security: { findings: [{ rule: 'aws-access-key', file: 'config.ts', evidence: 'aws-access-key: AKIA…(20 chars)' }], summary: '1 potential secret(s) added' },
+    });
+    expect(view.verdict).toBe('blocked');
+    expect(view.blockers.join(' ')).toMatch(/secret added: aws-access-key/i);
+    expect(view.blockers.join(' ')).toMatch(/config\.ts/);
+  });
+
+  it('no security findings never fabricates a block', () => {
+    const view = foldReadiness({ ...base, worktree: cleanWorktree(), security: { findings: [], summary: 'no secrets detected in the diff' } });
+    expect(view.verdict).toBe('ready');
+  });
+
   it('a hard blocker still wins over open work (blocked, advisories still itemized)', () => {
     const view = foldReadiness({
       state: 'awaiting_review' as WorkspaceState,

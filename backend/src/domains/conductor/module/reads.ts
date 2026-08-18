@@ -49,6 +49,7 @@ import {
   type ReadinessView,
 } from '../services/readiness.service.js';
 import { foldOpenWork, type OpenWorkView } from '../services/openwork.service.js';
+import { scanDiffForSecrets, type SecurityScanResult } from '../services/security-scan.service.js';
 import {
   buildReviewDeps,
   type ConductorContext,
@@ -403,7 +404,8 @@ export class ConductorReads {
         : {}),
       ...(previewR.status === 'fulfilled' ? { preview: previewR.value } : {}),
       ...(review ? { review } : {}),
-      ...(openWorkR.status === 'fulfilled' ? { openWork: openWorkR.value } : {}),
+      ...(openWorkR.status === 'fulfilled' ? { openWork: openWorkR.value.openWork } : {}),
+      ...(openWorkR.status === 'fulfilled' ? { security: openWorkR.value.security } : {}),
     });
   }
 
@@ -421,7 +423,9 @@ export class ConductorReads {
    * (truthfully absent, never fabricated) when the seam is unwired or the engine
    * is down.
    */
-  private async probeOpenWork(workspace: Workspace): Promise<OpenWorkView> {
+  private async probeOpenWork(
+    workspace: Workspace,
+  ): Promise<{ openWork: OpenWorkView; security: SecurityScanResult }> {
     const taskId = workspace.taskId?.trim();
     const [bodyR, diffR, issuesR] = await Promise.allSettled([
       taskId && this.ctx.codeIntel?.readIssue
@@ -439,7 +443,13 @@ export class ConductorReads {
     const diffText =
       diffR.status === 'fulfilled' && diffR.value ? diffR.value.patch : null;
     const openIssues = issuesR.status === 'fulfilled' ? issuesR.value : null;
-    return foldOpenWork({ taskBody, diffText, openIssues });
+    // The diff is fetched ONCE here and feeds two signals: open-work (TODO/criteria/
+    // compliance) and the secret scan (recoder-tcn1). Scanning the same patch avoids a
+    // second git-diff on this polled edge.
+    return {
+      openWork: foldOpenWork({ taskBody, diffText, openIssues }),
+      security: scanDiffForSecrets({ diffText }),
+    };
   }
 
   /**

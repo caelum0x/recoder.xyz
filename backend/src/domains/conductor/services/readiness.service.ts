@@ -25,6 +25,7 @@ import type { WorktreeStatusView } from './worktree-status.service.js';
 import type { PreviewVerificationView } from '../ports/preview-verify.port.js';
 import type { PrReviewEvidenceView } from '../ports/pr-review.port.js';
 import type { OpenWorkView } from './openwork.service.js';
+import type { SecurityScanResult } from './security-scan.service.js';
 
 /** One of the six merge-decision signals, projected truthfully. */
 export interface ReadinessSignal {
@@ -89,6 +90,8 @@ export interface ReadinessInput {
   readonly review?: PrReviewEvidenceView;
   /** Unresolved open work (criteria/TODOs/linked issues); absent ⇒ probe rejected/unwired. */
   readonly openWork?: OpenWorkView;
+  /** Secrets the diff ADDS (recoder-tcn1) — a HARD blocker; absent ⇒ probe rejected. */
+  readonly security?: SecurityScanResult;
 }
 
 /**
@@ -280,11 +283,16 @@ function deriveOpenWork(openWork?: OpenWorkView): ReadinessSignal {
   return { id: 'openWork', status: 'pending', detail: `${parts.join(', ')} — resolve before merging` };
 }
 
+/** Redacted secret findings the diff ADDS — always a hard blocker (recoder-tcn1). */
+function securityBlockers(input: ReadinessInput): readonly string[] {
+  return (input.security?.findings ?? []).map((f) => `secret added: ${f.evidence}${f.file ? ` (${f.file})` : ''}`);
+}
+
 /**
  * Compute the hard blockers — populated ONLY when the merge preflight is a real
- * conflict OR checks are failing. A conflicting merge lists the conflicted paths
- * (or a truthful placeholder when git could not name them); a failing check names
- * the count.
+ * conflict, checks are failing, OR the diff adds a secret. A conflicting merge lists
+ * the conflicted paths (or a truthful placeholder when git could not name them); a
+ * failing check names the count; a secret names its redacted rule + file.
  */
 function deriveBlockers(
   merge: ReadinessSignal,
@@ -300,6 +308,7 @@ function deriveBlockers(
   if (checks.status === 'fail') {
     blockers.push(`${input.prStatus?.checks?.failed ?? 0} check(s) failing`);
   }
+  blockers.push(...securityBlockers(input));
   return blockers;
 }
 
@@ -374,7 +383,9 @@ export function foldReadiness(input: ReadinessInput): ReadinessView {
     return mk('blocked', ['workspace delivery failed']);
   }
 
-  if (merge.status === 'fail' || checks.status === 'fail') {
+  // A conflict, a failing check, OR a secret added by the diff is a HARD block — a
+  // leaked credential must never merge, even when everything else is clean.
+  if (merge.status === 'fail' || checks.status === 'fail' || securityBlockers(input).length > 0) {
     return mk('blocked', deriveBlockers(merge, checks, input));
   }
   if (lifecycleClass === 'working') {
