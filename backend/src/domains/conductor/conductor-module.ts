@@ -153,6 +153,7 @@ import { createWorktreeCheckRunner, type CheckSpec } from './adapters/check-runn
 import type { CheckRunnerPort } from './services/check-run.service.js';
 import { createLlmReviewGenerator } from './adapters/review-generator.adapter.js';
 import { validateFindings, type ReviewFindingsPort, type ValidatedFindings } from './services/review-findings.service.js';
+import { conductorTarget, guardConductorWrite } from './audit/conductor-audit.js';
 import {
   EnvironmentImportService,
   type EnvironmentImportView,
@@ -236,6 +237,7 @@ import {
   type StatusBoardSnapshot,
 } from './attention/status-board.service.js';
 import { buildConductorStatusBoardTools } from './mcp/conductor-status-board-tool.js';
+import { buildConductorReviewTools } from './mcp/conductor-review-tool.js';
 import {
   RemoteAttachService,
   type RemoteAttachExternalDeps,
@@ -1360,7 +1362,22 @@ export class ConductorComposer implements ConductorModule {
    * per readiness poll — so the LLM cost is paid only when a reviewer asks. Degrade-safe:
    * no inference / no diff / a bad reply ⇒ zero findings, never fabricated.
    */
-  async generateReviewFindings(workspaceId: string): Promise<ValidatedFindings> {
+  async generateReviewFindings(workspaceId: string, principal: Principal): Promise<ValidatedFindings> {
+    // OWNERSHIP GATE (SECURITY): reveal a workspace's diff-derived review ONLY to a caller
+    // authorized on that workspace — the same governance guard the write ops use, so this
+    // is no cross-tenant review oracle. A denied caller is refused, never served findings.
+    const workspace = await this.engine.getWorkspace(workspaceId);
+    const { allowed, verdict } = await guardConductorWrite(this.gate, 'workspace.review', principal, {
+      target: conductorTarget('workspace', workspaceId),
+      ...(workspace?.taskId ? { taskId: workspace.taskId } : {}),
+      metadata: { workspaceId },
+    });
+    if (!allowed) {
+      throw createError(
+        ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED,
+        verdict.reason ?? 'not authorized to review this workspace',
+      );
+    }
     const diff = await this.reads.workspaceDiff(workspaceId).catch(() => null);
     const diffText = diff?.patch ?? '';
     const candidates = await this.reviewGenerator.review({ diffText, workspaceId });
@@ -1872,6 +1889,7 @@ export class ConductorComposer implements ConductorModule {
       ...buildConductorNeedsYouTools(this),
       // LIVE native status board — a kanban of ALL the caller's live panes (§1 build-now #5).
       ...buildConductorStatusBoardTools(this),
+      ...buildConductorReviewTools(this),
       // GOVERNED REMOTE ATTACH (Bigger Bet C) — an authenticated, policy-gated remote/mobile
       // client monitors + opt-in steers the caller's OWN live agents (mint/monitor/steer).
       ...buildConductorRemoteAttachTools(this),
