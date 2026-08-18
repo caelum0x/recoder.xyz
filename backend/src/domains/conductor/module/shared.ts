@@ -30,6 +30,7 @@ import type { WorkspaceRepositoryPort } from '../ports/workspace-repository.port
 import type { WorkspaceView } from '../types.js';
 import type { ConductorModuleDeps } from '../index.js';
 import type { CodeIntelPort } from '../ports/code-intel.port.js';
+import type { CheckRunnerPort } from '../services/check-run.service.js';
 import type {
   PreviewVerifyPort,
   PreviewVerificationView,
@@ -172,6 +173,9 @@ export interface ConductorContext {
   readonly sessionTranscriptService: SessionTranscriptService;
   readonly brain?: ConductorBrainMemory;
   readonly codeIntel?: CodeIntelPort;
+  /** Runs Recoder's OWN checks (tests/typecheck/lint) in a sandbox — recoder-fxee.
+   *  Absent ⇒ the readiness `checks` signal stays GitHub-only (degrade-truthful). */
+  readonly checkRunner?: CheckRunnerPort;
   readonly previewVerify?: PreviewVerifyPort;
   readonly plan?: ConductorPlanPort;
   readonly coordinationAdmission: CoordinationAdmissionPort | null;
