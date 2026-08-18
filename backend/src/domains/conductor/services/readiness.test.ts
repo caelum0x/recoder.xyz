@@ -386,6 +386,26 @@ describe('foldReadiness — worktree open-work signal', () => {
     expect(signalOf(view, 'openWork')?.status).toBe('unknown');
   });
 
+  it('a LOCAL check failure hard-blocks the merge and names the failing checks (recoder-fxee)', () => {
+    const view = foldReadiness({
+      ...base,
+      worktree: cleanWorktree(),
+      localChecks: { rollup: 'failing', passed: 1, failed: 2, total: 3, failing: ['tests', 'typecheck'] },
+    });
+    expect(view.verdict).toBe('blocked');
+    expect(view.blockers.join(' ')).toMatch(/local checks failing: tests, typecheck/i);
+  });
+
+  it('a LOCAL pass FILLS the checks hollow center when GitHub reports nothing', () => {
+    const view = foldReadiness({
+      ...base,
+      worktree: cleanWorktree(),
+      localChecks: { rollup: 'passing', passed: 3, failed: 0, total: 3, failing: [] },
+    });
+    expect(signalOf(view, 'checks')?.status).toBe('pass');
+    expect(signalOf(view, 'checks')?.detail).toMatch(/local checks passing/i);
+  });
+
   it('a SECRET added by the diff HARD-BLOCKS the merge even when everything else is clean', () => {
     const view = foldReadiness({
       ...base,

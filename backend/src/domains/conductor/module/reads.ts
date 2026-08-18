@@ -50,6 +50,7 @@ import {
 } from '../services/readiness.service.js';
 import { foldOpenWork, type OpenWorkView } from '../services/openwork.service.js';
 import { scanDiffForSecrets, type SecurityScanResult } from '../services/security-scan.service.js';
+import { foldCheckRuns } from '../services/check-run.service.js';
 import {
   buildReviewDeps,
   type ConductorContext,
@@ -383,13 +384,18 @@ export class ConductorReads {
   async workspaceReadiness(workspaceId: string): Promise<ReadinessView> {
     const workspace = await this.ctx.engine.getWorkspace(workspaceId);
     if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
-    const [mergeR, prR, worktreeR, previewR, viewR, openWorkR] = await Promise.allSettled([
+    const [mergeR, prR, worktreeR, previewR, viewR, openWorkR, localChecksR] = await Promise.allSettled([
       this.ctx.mergeability.probe(workspace),
       this.ctx.prStatus.status(workspace),
       this.ctx.worktreeStatus.probe(workspace),
       this.ctx.getPreviewVerification(workspaceId),
       this.buildWorkspaceView(workspace),
       this.probeOpenWork(workspace),
+      // Recoder's OWN checks (recoder-fxee) — only when a sandbox runner is wired;
+      // absent ⇒ resolves to no local checks, so `checks` stays GitHub-only.
+      this.ctx.checkRunner
+        ? this.ctx.checkRunner.run(workspace.workspaceId).then((runs) => foldCheckRuns(runs))
+        : Promise.resolve(undefined),
     ]);
     const review = await this.probePrReview(workspace, prR);
     return foldReadiness({
@@ -406,6 +412,9 @@ export class ConductorReads {
       ...(review ? { review } : {}),
       ...(openWorkR.status === 'fulfilled' ? { openWork: openWorkR.value.openWork } : {}),
       ...(openWorkR.status === 'fulfilled' ? { security: openWorkR.value.security } : {}),
+      ...(localChecksR.status === 'fulfilled' && localChecksR.value
+        ? { localChecks: localChecksR.value }
+        : {}),
     });
   }
 

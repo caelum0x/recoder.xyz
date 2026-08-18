@@ -26,6 +26,7 @@ import type { PreviewVerificationView } from '../ports/preview-verify.port.js';
 import type { PrReviewEvidenceView } from '../ports/pr-review.port.js';
 import type { OpenWorkView } from './openwork.service.js';
 import type { SecurityScanResult } from './security-scan.service.js';
+import type { LocalChecksRollup } from './check-run.service.js';
 
 /** One of the six merge-decision signals, projected truthfully. */
 export interface ReadinessSignal {
@@ -92,6 +93,13 @@ export interface ReadinessInput {
   readonly openWork?: OpenWorkView;
   /** Secrets the diff ADDS (recoder-tcn1) — a HARD blocker; absent ⇒ probe rejected. */
   readonly security?: SecurityScanResult;
+  /**
+   * Recoder's OWN check run (tests/typecheck/lint in a sandbox — recoder-fxee), folded
+   * into the `checks` signal ALONGSIDE GitHub's rollup: a local FAIL hard-blocks, and a
+   * local pass/pending FILLS GitHub's hollow center when the repo has no CI. Absent ⇒
+   * no runner wired ⇒ the signal is GitHub-only, exactly as before.
+   */
+  readonly localChecks?: LocalChecksRollup;
 }
 
 /**
@@ -189,38 +197,43 @@ function deriveMerge(mergeability?: MergeabilityView): ReadinessSignal {
   };
 }
 
-/** Checks signal — only `available && rollup 'failing'` is a hard fail; else truthful. */
-function deriveChecks(prStatus?: PrStatusView): ReadinessSignal {
+/**
+ * Checks signal — combines GitHub's status-check rollup with Recoder's OWN check run
+ * (recoder-fxee). A FAIL on EITHER side is a hard fail (local named first — it is this
+ * change's actual test/typecheck/lint run); a real PASS from either side passes, so a
+ * local run FILLS the hollow center when the repo has no CI; else pending/unknown. A
+ * local run is only consulted when it actually executed (`total > 0`).
+ */
+function deriveChecks(prStatus?: PrStatusView, localChecks?: LocalChecksRollup): ReadinessSignal {
+  const local = localChecks && localChecks.total > 0 ? localChecks : undefined;
+  const gh = prStatus && prStatus.available !== false ? prStatus.checks : undefined;
+
+  if (local?.rollup === 'failing') {
+    return {
+      id: 'checks',
+      status: 'fail',
+      detail: `${local.failed} of ${local.total} local checks failing: ${local.failing.slice(0, 3).join(', ')}`,
+    };
+  }
+  if (gh?.rollup === 'failing') {
+    return { id: 'checks', status: 'fail', detail: `${gh.failed} of ${gh.total} checks failing` };
+  }
+  if (gh?.rollup === 'passing') {
+    return { id: 'checks', status: 'pass', detail: `${gh.passed} of ${gh.total} checks passing` };
+  }
+  if (local?.rollup === 'passing') {
+    return { id: 'checks', status: 'pass', detail: `${local.passed} of ${local.total} local checks passing` };
+  }
+  if (gh?.rollup === 'pending') {
+    return { id: 'checks', status: 'pending', detail: `${gh.pending} of ${gh.total} checks pending` };
+  }
+  if (local?.rollup === 'pending') {
+    return { id: 'checks', status: 'pending', detail: `${local.total - local.passed - local.failed} of ${local.total} local checks pending` };
+  }
   if (!prStatus || prStatus.available === false) {
     return { id: 'checks', status: 'unknown', detail: prStatus?.reason ?? 'checks unavailable' };
   }
-  const checks = prStatus.checks;
-  if (!checks) {
-    return { id: 'checks', status: 'unknown', detail: 'no checks reported' };
-  }
-  switch (checks.rollup) {
-    case 'failing':
-      return {
-        id: 'checks',
-        status: 'fail',
-        detail: `${checks.failed} of ${checks.total} checks failing`,
-      };
-    case 'passing':
-      return {
-        id: 'checks',
-        status: 'pass',
-        detail: `${checks.passed} of ${checks.total} checks passing`,
-      };
-    case 'pending':
-      return {
-        id: 'checks',
-        status: 'pending',
-        detail: `${checks.pending} of ${checks.total} checks pending`,
-      };
-    default:
-      // 'none' — no PR / no checks reported.
-      return { id: 'checks', status: 'unknown', detail: 'no checks reported' };
-  }
+  return { id: 'checks', status: 'unknown', detail: 'no checks reported' };
 }
 
 /** PR identity projection — null unless a real PR with a number was found. */
@@ -306,7 +319,12 @@ function deriveBlockers(
     else blockers.push('merge conflicts (paths unavailable)');
   }
   if (checks.status === 'fail') {
-    blockers.push(`${input.prStatus?.checks?.failed ?? 0} check(s) failing`);
+    const local = input.localChecks && input.localChecks.total > 0 ? input.localChecks : undefined;
+    if (local?.rollup === 'failing') {
+      blockers.push(`local checks failing: ${local.failing.slice(0, 3).join(', ')}`);
+    } else {
+      blockers.push(`${input.prStatus?.checks?.failed ?? 0} check(s) failing`);
+    }
   }
   blockers.push(...securityBlockers(input));
   return blockers;
@@ -337,7 +355,7 @@ export function foldReadiness(input: ReadinessInput): ReadinessView {
   const lifecycle = deriveLifecycle(input.state, lifecycleClass);
   const worktree = deriveWorktree(input.worktree);
   const merge = deriveMerge(input.mergeability);
-  const checks = deriveChecks(input.prStatus);
+  const checks = deriveChecks(input.prStatus, input.localChecks);
   const preview = derivePreview(input.preview);
   const openWork = deriveOpenWork(input.openWork);
   const pr = derivePr(input.prStatus);
