@@ -31,7 +31,7 @@ describe('InstructionBundle contract', () => {
       verification_commands: [
         'pnpm check-types',
         'pnpm test',
-        'pnpm -F recoder-agents build',
+        'pnpm -F backend build',
       ],
       forbidden_actions: [
         'touch .env files',
@@ -51,7 +51,7 @@ describe('InstructionBundle contract', () => {
         {
           memory_id: 'mem-build-command',
           scope: MemoryReferenceScopeEnum.Repo,
-          title: 'recoder-agents build command',
+          title: 'backend build command',
           evidence_task_id: 'task-1',
           evidence_artifact_id: 'artifact-1',
         },

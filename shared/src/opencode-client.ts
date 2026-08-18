@@ -3,8 +3,8 @@
  *
  * Recoder's client for talking to an opencode backend service.
  *
- * This is the single integration point that recoder-agents,
- * backend, and recoder-code all use to dispatch coding work to
+ * This is the single integration point that backend and recoder-code
+ * use to dispatch coding work to
  * the opencode runtime. The opencode server runs as a persistent HTTP
  * service (Bun/Hono) — this client speaks its REST API.
  *
