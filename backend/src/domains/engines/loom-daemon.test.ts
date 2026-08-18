@@ -42,7 +42,7 @@ if (dump) {
 }
 try { fs.mkdirSync(path.dirname(socketPath), { recursive: true }); } catch {}
 try { fs.rmSync(socketPath, { force: true }); } catch {}
-const protocol = Number(process.env.FAKE_PROTOCOL || '20');
+const protocol = Number(process.env.FAKE_PROTOCOL || '21');
 const server = net.createServer((sock) => {
   let buf = '';
   sock.on('data', (chunk) => {
@@ -104,7 +104,7 @@ afterEach(async () => {
 });
 
 describe('createLoomDaemon — real lifecycle against a fake loom server', () => {
-  it('spawns, ping-handshakes protocol 20 healthy, then stops without an orphan', async () => {
+  it('spawns, ping-handshakes protocol 21 healthy, then stops without an orphan', async () => {
     const bin = writeFake(HEALTHY_FAKE);
     const socketPath = socketFor();
     const daemon = createLoomDaemon({
@@ -118,7 +118,7 @@ describe('createLoomDaemon — real lifecycle against a fake loom server', () =>
 
     const status = await daemon.start();
     expect(status.running).toBe(true);
-    expect(status.protocol).toBe(20);
+    expect(status.protocol).toBe(21);
     expect(status.socketPath).toBe(socketPath);
     expect(status.pid).toBeGreaterThan(0);
     expect(existsSync(socketPath)).toBe(true);
@@ -239,7 +239,7 @@ describe('createLoomDaemon — adopt an existing healthy server (durability/reat
     };
   }
 
-  it('adopts an already-healthy protocol-20 server without spawning', async () => {
+  it('adopts an already-healthy protocol-21 server without spawning', async () => {
     const socketPath = socketFor();
     writeFileSync(socketPath, ''); // an existing socket that must NOT be rm-ed
     let spawnCalls = 0;
@@ -247,7 +247,7 @@ describe('createLoomDaemon — adopt an existing healthy server (durability/reat
       socketPath,
       resolveBin: () => ({ bin: '/does/not/matter/loom' }),
       exists: () => true,
-      makeClient: () => ({ ping: async () => ({ protocol: 20, version: 'live' }) }),
+      makeClient: () => ({ ping: async () => ({ protocol: 21, version: 'live' }) }),
       spawn: () => {
         spawnCalls += 1;
         throw new Error('spawn must not be called when adopting a healthy server');
@@ -259,7 +259,7 @@ describe('createLoomDaemon — adopt an existing healthy server (durability/reat
     expect(spawnCalls).toBe(0);
     expect(status.running).toBe(true);
     expect(status.adopted).toBe(true);
-    expect(status.protocol).toBe(20);
+    expect(status.protocol).toBe(21);
     expect(status.pid).toBeUndefined();
     // The adopted server's socket is left intact (never reclaimed).
     expect(existsSync(socketPath)).toBe(true);
@@ -327,7 +327,7 @@ describe('createLoomDaemon — adopt an existing healthy server (durability/reat
       socketPath,
       resolveBin: () => ({ bin: null, reason: 'loom binary not found' }),
       exists: () => true,
-      makeClient: () => ({ ping: async () => ({ protocol: 20 }) }),
+      makeClient: () => ({ ping: async () => ({ protocol: 21 }) }),
       spawn: () => {
         spawnCalls += 1;
         throw new Error('must not spawn — a healthy server is already up');
@@ -349,7 +349,7 @@ describe('createLoomDaemon — adopt an existing healthy server (durability/reat
       socketPath,
       resolveBin: () => ({ bin: null, reason: 'no local binary' }),
       exists: () => true,
-      makeClient: () => ({ ping: async () => ({ protocol: 20 }) }),
+      makeClient: () => ({ ping: async () => ({ protocol: 21 }) }),
       spawn: () => {
         spawnCalls += 1;
         throw new Error('adopt path must not spawn');

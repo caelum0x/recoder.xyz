@@ -2,19 +2,19 @@
  * loom-daemon — a supervised manager for the vendored `loom server` sidecar.
  *
  * loom (apps/desktop/engines/loom, Apache-2.0) runs a headless server exposing
- * an NDJSON Unix-socket control API (PROTOCOL_VERSION 20). The conductor drives
+ * an NDJSON Unix-socket control API (PROTOCOL_VERSION 21). The conductor drives
  * it as a third execution substrate beside `tmux_worktree` and `acp`
  * (docs/LOOM-INTEGRATION.md §Phase 2). This module owns that server process the
  * way `openfang-daemon.ts` / `colbert-daemon.ts` own theirs: resolve the binary →
  * spawn `loom server` on a RECODER-OWNED socket path with a denylist-stripped env
- * → poll the socket + a real `ping` (protocol 20) until healthy or a bounded
+ * → poll the socket + a real `ping` (protocol 21) until healthy or a bounded
  * timeout → expose that socket path so `createLoomSubstrate` can be constructed
  * against it → signal the whole process group on `stop()`.
  *
  * TRUTHFUL BY CONSTRUCTION:
  *   - The binary absent ⇒ `start()` returns `{ running:false, reason }` and NEVER
  *     spawns a phantom; the substrate then reports unavailable with that reason.
- *   - Health is a REAL `ping` handshake (protocol 20), never the mere existence of
+ *   - Health is a REAL `ping` handshake (protocol 21), never the mere existence of
  *     a child pid — a server that never binds its socket is reported down.
  *   - A spawn error / early exit / health timeout is caught and reported as down;
  *     a sidecar problem NEVER throws out of `start()`.
@@ -49,7 +49,7 @@ import { createLogger } from '../../shared/logger.js';
 const logger = createLogger('conductor:loom-daemon');
 
 /** loom `PROTOCOL_VERSION` — a `ping` must handshake exactly this. */
-export const LOOM_PROTOCOL_VERSION = 20;
+export const LOOM_PROTOCOL_VERSION = 21;
 
 /** Env var an operator can use to pin the Recoder-owned loom socket path. */
 export const LOOM_SOCKET_PATH_ENV = 'CONDUCTOR_LOOM_SOCKET_PATH';
@@ -118,7 +118,7 @@ function safeUser(): string {
 
 /** Truthful snapshot of the daemon's supervised state. */
 export interface LoomDaemonStatus {
-  /** True ONLY after a real `ping` handshake (protocol 20) succeeded. */
+  /** True ONLY after a real `ping` handshake (protocol 21) succeeded. */
   readonly running: boolean;
   /** The Recoder-owned socket path the server was told to bind. */
   readonly socketPath: string;
@@ -317,7 +317,7 @@ export function createLoomDaemon(deps: CreateLoomDaemonDeps): LoomDaemon {
     // DURABILITY / REATTACH: if a healthy server is already listening on our socket
     // (e.g. a detached one that kept the herd alive across a backend restart), ADOPT
     // it rather than deleting its socket and spawning a fresh server that orphans the
-    // herd. Adoption demands a REAL protocol-20 ping — a stale socket file that refuses
+    // herd. Adoption demands a REAL protocol-21 ping — a stale socket file that refuses
     // (ECONNREFUSED) or mishandshakes is NOT adopted and falls through to reclaim below.
     // Probed BEFORE resolveBin so a genuinely live server is reattached even when the
     // local binary cannot be resolved; the probe is a single bounded ping, not a poll.

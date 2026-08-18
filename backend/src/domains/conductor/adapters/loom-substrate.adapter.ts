@@ -7,7 +7,7 @@
  * {@link LoomSocketClient} (reused verbatim from `@recoder/agent-runtimes`).
  *
  * Port → loom verb (see docs/LOOM-INTEGRATION.md):
- *  - `available()`  = `ping` → `pong{protocol}`; rejects unless `protocol===20`;
+ *  - `available()`  = `ping` → `pong{protocol}`; rejects unless `protocol===21`;
  *    a missing binary / `ECONNREFUSED` / timeout degrades to
  *    `{available:false, reason}` — NEVER a fabricated "available".
  *  - `capabilities()` = `capturesByPolling:false` (loom emits native status
