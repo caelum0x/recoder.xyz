@@ -116,7 +116,7 @@ function startFakeLoom(
 }
 
 // Canned loom result payloads (the substrate only reads a few fields).
-function pong(protocol = 20): Reply {
+function pong(protocol = 21): Reply {
   return { result: { type: 'pong', version: '0.8.0', protocol } };
 }
 function worktreeCreated(path: string, paneId: string): Reply {
@@ -199,8 +199,8 @@ describe('createLoomSubstrate', () => {
     });
   });
 
-  it('available(): ping protocol 20 → available:true', async () => {
-    const fake = await withFake({ ping: () => pong(20) });
+  it('available(): ping protocol 21 → available:true', async () => {
+    const fake = await withFake({ ping: () => pong(21) });
     const substrate = createLoomSubstrate({ socketPath: fake.socketPath });
     const avail = await substrate.available();
     expect(avail.available).toBe(true);
@@ -227,7 +227,7 @@ describe('createLoomSubstrate', () => {
 
   it('launch(): worktree.create then agent.start, mapped to the right verbs/params + handle', async () => {
     const fake = await withFake({
-      ping: () => pong(20),
+      ping: () => pong(21),
       'worktree.create': () => worktreeCreated('/tmp/wt/ws_1', 'pane_root'),
       'agent.start': () => agentStarted('term_1'),
     });
@@ -268,7 +268,7 @@ describe('createLoomSubstrate', () => {
 
   it('launch(): the persisted pane id remains a valid target for later agent verbs', async () => {
     const fake = await withFake({
-      ping: () => pong(20),
+      ping: () => pong(21),
       'worktree.create': () => worktreeCreated('/tmp/wt/ws_1', 'pane_root'),
       'agent.start': () => agentStarted('term_internal'),
       'agent.read': params =>
@@ -297,7 +297,7 @@ describe('createLoomSubstrate', () => {
     'launch(): starts %s as a managed Loom agent, not raw pane input',
     async kind => {
       const fake = await withFake({
-        ping: () => pong(20),
+        ping: () => pong(21),
         'worktree.create': () => worktreeCreated('/tmp/wt/ws_1', 'pane_root'),
         'agent.start': () => agentStarted('term_1'),
       });
@@ -323,7 +323,7 @@ describe('createLoomSubstrate', () => {
 
   it('launch(): clamps an out-of-range timeout into loom\'s (3000, 300000] window', async () => {
     const fake = await withFake({
-      ping: () => pong(20),
+      ping: () => pong(21),
       'worktree.create': () => worktreeCreated('/tmp/wt/ws_1', 'pane_root'),
       'agent.start': () => agentStarted('term_1'),
     });

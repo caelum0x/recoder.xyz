@@ -4,7 +4,7 @@
  * Proves the reused Phase-0 {@link LoomSocketClient} drives the REAL vendored
  * `loom` engine (not just the in-memory fake): it spawns `loom server` with a
  * Recoder-owned temp `LOOM_SOCKET_PATH`, waits for the socket, then over the
- * client performs `ping` (asserting protocol 20), `worktree.create` in a throwaway
+ * client performs `ping` (asserting protocol 21), `worktree.create` in a throwaway
  * git repo, and `worktree.remove`, before shutting the server down.
  *
  * It deliberately does NOT launch a real coding agent (that needs the agent CLIs).
@@ -105,12 +105,12 @@ async function runSmoke(): Promise<SmokeResult> {
 
     const client = new LoomSocketClient({ socketPath, callTimeoutMs: 10_000 });
 
-    // 1) ping — must handshake protocol 20.
+    // 1) ping — must handshake protocol 21.
     const pong = await client.ping();
-    if (pong.protocol !== 20) {
+    if (pong.protocol !== 21) {
       return {
         status: 'failed',
-        detail: `ping returned protocol ${pong.protocol}, expected 20`,
+        detail: `ping returned protocol ${pong.protocol}, expected 21`,
       };
     }
 
