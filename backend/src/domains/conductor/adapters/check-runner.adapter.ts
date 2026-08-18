@@ -16,6 +16,8 @@
  * allowlist is EXPLICIT (no shell, argv only) so the runner cannot execute arbitrary
  * agent-controlled input.
  */
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { execFileSafe } from '@recoder/substrate';
 import type { ExecOptions, ExecResult } from '@recoder/substrate';
 import type { Workspace } from '@recoder/agent-os';
@@ -36,16 +38,56 @@ export interface CheckRunnerExec {
 
 export interface CheckRunnerDeps {
   readonly getWorkspace: (id: string) => Promise<Workspace | null>;
-  /** The checks to run. EMPTY ⇒ the runner is inert (opt-in). */
+  /**
+   * Operator-configured fallback checks. Usually EMPTY — the checks are normally
+   * declared PER-REPO in `<worktree>/.recoder/checks.json` (the repo owns its own
+   * check allowlist, explicit argv, opt-in). Empty here + no repo config ⇒ inert.
+   */
   readonly checks: readonly CheckSpec[];
   readonly logger: Logger;
   readonly exec?: CheckRunnerExec;
+  /**
+   * Read the per-repo check config from a worktree; `null` when absent/unreadable.
+   * Defaults to reading `<worktree>/.recoder/checks.json`. Injectable for tests.
+   */
+  readonly readWorktreeChecks?: (worktreePath: string) => Promise<string | null>;
   /** Per-command deadline (default 120s). */
   readonly timeoutMs?: number;
 }
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_BUFFER = 4 * 1024 * 1024;
+/** Cap repo-declared checks so a pathological config can't run unbounded commands. */
+const MAX_CHECKS = 20;
+
+/**
+ * Parse `.recoder/checks.json` into check specs. PURE + defensive: a check needs a
+ * non-empty name + command and an args array of strings; malformed entries are dropped,
+ * the list is capped, and any parse error yields `[]` (never throws). This is the
+ * security boundary — only the EXPLICIT argv a repo commits runs, never a shell string.
+ */
+export function parseCheckSpecs(json: string | null): readonly CheckSpec[] {
+  if (!json) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return [];
+  }
+  const arr = Array.isArray(parsed) ? parsed : Array.isArray((parsed as { checks?: unknown })?.checks) ? (parsed as { checks: unknown[] }).checks : [];
+  const out: CheckSpec[] = [];
+  for (const item of arr) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item as Record<string, unknown>;
+    const name = typeof o.name === 'string' ? o.name.trim() : '';
+    const command = typeof o.command === 'string' ? o.command.trim() : '';
+    if (!name || !command) continue;
+    const args = Array.isArray(o.args) ? o.args.filter((a): a is string => typeof a === 'string') : [];
+    out.push({ name, command, args });
+    if (out.length >= MAX_CHECKS) break;
+  }
+  return out;
+}
 
 /** First non-empty line of some output, truncated — a compact, safe detail. */
 export function detailFrom(text: unknown): string {
@@ -82,14 +124,17 @@ export async function runOneCheck(
   }
 }
 
-/** Build the worktree check runner. Inert (`[]`) until checks are configured. */
+/** Build the worktree check runner. Inert (`[]`) until a repo declares checks (or an operator default is set). */
 export function createWorktreeCheckRunner(deps: CheckRunnerDeps): CheckRunnerPort {
   const exec: CheckRunnerExec = deps.exec ?? { execFile: (bin, args, options) => execFileSafe(bin, args, options) };
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const readWorktreeChecks =
+    deps.readWorktreeChecks ??
+    (async (worktreePath: string) =>
+      readFile(join(worktreePath, '.recoder', 'checks.json'), 'utf8').catch(() => null));
 
   return {
     async run(workspaceId: string): Promise<readonly LocalCheckRun[]> {
-      if (deps.checks.length === 0) return [];
       let workspace: Workspace | null = null;
       try {
         workspace = await deps.getWorkspace(workspaceId);
@@ -98,8 +143,13 @@ export function createWorktreeCheckRunner(deps: CheckRunnerDeps): CheckRunnerPor
         return [];
       }
       if (!workspace?.worktreePath) return [];
+      // PER-REPO checks (`.recoder/checks.json` in the worktree) win — the repo owns its
+      // allowlist; the operator-configured `checks` is the fallback. Absent both ⇒ inert.
+      const repoChecks = parseCheckSpecs(await readWorktreeChecks(workspace.worktreePath));
+      const checks = repoChecks.length > 0 ? repoChecks : deps.checks;
+      if (checks.length === 0) return [];
       const runs: LocalCheckRun[] = [];
-      for (const spec of deps.checks) {
+      for (const spec of checks) {
         runs.push(await runOneCheck(spec, workspace.worktreePath, exec, timeoutMs));
       }
       return runs;
