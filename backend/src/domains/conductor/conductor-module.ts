@@ -151,6 +151,8 @@ import {
 import { WorktreeStatusService } from './services/worktree-status.service.js';
 import { createWorktreeCheckRunner, type CheckSpec } from './adapters/check-runner.adapter.js';
 import type { CheckRunnerPort } from './services/check-run.service.js';
+import { createLlmReviewGenerator } from './adapters/review-generator.adapter.js';
+import { validateFindings, type ReviewFindingsPort, type ValidatedFindings } from './services/review-findings.service.js';
 import {
   EnvironmentImportService,
   type EnvironmentImportView,
@@ -282,6 +284,21 @@ export type {
 /** How many trailing terminal lines the attention probe captures. */
 const ATTENTION_TAIL_LINES = 60;
 
+/** Flatten a TensorZero inference `content` (string | text-block array) to text. */
+function inferenceContentToText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((block) => {
+      if (typeof block === 'string') return block;
+      if (block && typeof block === 'object' && typeof (block as { text?: unknown }).text === 'string') {
+        return (block as { text: string }).text;
+      }
+      return '';
+    })
+    .join('');
+}
+
 export class ConductorComposer implements ConductorModule {
   readonly name = 'conductor' as const;
 
@@ -405,6 +422,7 @@ export class ConductorComposer implements ConductorModule {
   /** Read-only worktree open-work (uncommitted changes) probe (git-native, degrade-truthful). */
   private readonly worktreeStatus: WorktreeStatusService;
   private readonly checkRunner: CheckRunnerPort;
+  private readonly reviewGenerator: ReviewFindingsPort;
   /** Read-only first-run environment-import probe (git identity, agent configs, gh, shell). */
   private readonly environmentImportService: EnvironmentImportService;
   /** Read-only bounded search over Claude session transcripts (~/.claude/projects). */
@@ -519,6 +537,22 @@ export class ConductorComposer implements ConductorModule {
       checks: configuredChecks,
       logger: this.log,
     });
+    // LLM review generator (recoder-7z42) — ACTIVATED over the SAME injected inference
+    // one-shot that assisted convergence uses (`this.infer`, TZ function 'recoder_default').
+    // Absent inference ⇒ a null-completing generator (inert). Findings it produces are
+    // CANDIDATES; `generateReviewFindings` runs the deterministic validator over them.
+    const reviewComplete: (prompt: string) => Promise<string | null> = this.infer
+      ? async (prompt) => {
+          const res = await this.infer!({
+            function_name: 'recoder_default',
+            input: { messages: [{ role: 'user', content: prompt }] },
+          });
+          if (!res.routed) return null;
+          const text = inferenceContentToText(res.content);
+          return text.trim() ? text : null;
+        }
+      : async () => null;
+    this.reviewGenerator = createLlmReviewGenerator({ complete: reviewComplete, logger: this.log });
     // Read-only first-run environment probe (git identity, agent configs, gh, shell)
     // over the SAME exec seam; never throws, degrades each field independently.
     this.environmentImportService = new EnvironmentImportService({
@@ -1317,6 +1351,20 @@ export class ConductorComposer implements ConductorModule {
 
   async workspaceMergeability(workspaceId: string): Promise<MergeabilityView> {
     return this.reads.workspaceMergeability(workspaceId);
+  }
+
+  /**
+   * ON-DEMAND line-level AI review (recoder-7z42): generate candidate findings over the
+   * workspace diff via the injected inference one-shot, then run the DETERMINISTIC
+   * validator (evidence-grounding + confidence floor + dedup/rank/cap). On-demand — NOT
+   * per readiness poll — so the LLM cost is paid only when a reviewer asks. Degrade-safe:
+   * no inference / no diff / a bad reply ⇒ zero findings, never fabricated.
+   */
+  async generateReviewFindings(workspaceId: string): Promise<ValidatedFindings> {
+    const diff = await this.reads.workspaceDiff(workspaceId).catch(() => null);
+    const diffText = diff?.patch ?? '';
+    const candidates = await this.reviewGenerator.review({ diffText, workspaceId });
+    return validateFindings(candidates);
   }
 
   async workspaceReadiness(workspaceId: string): Promise<ReadinessView> {
