@@ -149,6 +149,8 @@ import {
   type MergeabilityView,
 } from './services/mergeability.service.js';
 import { WorktreeStatusService } from './services/worktree-status.service.js';
+import { createWorktreeCheckRunner, type CheckSpec } from './adapters/check-runner.adapter.js';
+import type { CheckRunnerPort } from './services/check-run.service.js';
 import {
   EnvironmentImportService,
   type EnvironmentImportView,
@@ -402,6 +404,7 @@ export class ConductorComposer implements ConductorModule {
   private readonly mergeability: MergeabilityService;
   /** Read-only worktree open-work (uncommitted changes) probe (git-native, degrade-truthful). */
   private readonly worktreeStatus: WorktreeStatusService;
+  private readonly checkRunner: CheckRunnerPort;
   /** Read-only first-run environment-import probe (git identity, agent configs, gh, shell). */
   private readonly environmentImportService: EnvironmentImportService;
   /** Read-only bounded search over Claude session transcripts (~/.claude/projects). */
@@ -506,6 +509,16 @@ export class ConductorComposer implements ConductorModule {
     // Read-only worktree open-work probe over the SAME git seam (never throws;
     // truthful `available:false` when git/worktree is absent — never a fake clean).
     this.worktreeStatus = new WorktreeStatusService({ logger: this.log });
+    // Recoder's OWN check runner (recoder-fxee): live-wired but OPT-IN — it runs the
+    // configured check allowlist in the worktree and folds real pass/fail into the
+    // `checks` readiness signal. Default is EMPTY (inert, GitHub-only) so no behavior
+    // changes until a deployment supplies a checks list; configuring `checks` activates it.
+    const configuredChecks: readonly CheckSpec[] = [];
+    this.checkRunner = createWorktreeCheckRunner({
+      getWorkspace: (id) => this.getWorkspace(id),
+      checks: configuredChecks,
+      logger: this.log,
+    });
     // Read-only first-run environment probe (git identity, agent configs, gh, shell)
     // over the SAME exec seam; never throws, degrades each field independently.
     this.environmentImportService = new EnvironmentImportService({
@@ -735,6 +748,9 @@ export class ConductorComposer implements ConductorModule {
       },
       get worktreeStatus() {
         return self.worktreeStatus;
+      },
+      get checkRunner() {
+        return self.checkRunner;
       },
       get environmentImportService() {
         return self.environmentImportService;
