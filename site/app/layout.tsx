@@ -9,9 +9,9 @@ const inter = Inter({
   display: "swap",
 });
 
-const TITLE = "Recoder — Run your coding agents in parallel";
+const TITLE = "Recoder — Run Claude Code, Codex & Cursor Agents in Parallel";
 const DESCRIPTION =
-  "Recoder is a desktop app for running your own Claude Code, Codex, Cursor, and opencode agents in isolated git-worktree workspaces — see what they're doing, review their diffs, and merge. Your agents, your keys.";
+  "Recoder runs your own Claude Code, Codex, Cursor & opencode agents in parallel — each in an isolated git-worktree workspace. Watch them work, review the diffs, and merge the best. Your keys, your code, local-first.";
 const SITE_URL = "https://recoder.xyz";
 
 export const metadata: Metadata = {
@@ -42,16 +42,31 @@ export const metadata: Metadata = {
   alternates: { canonical: SITE_URL },
 };
 
-// Structured data describes the organization/product without overstating
-// availability: desktop builds are not public yet, so we do NOT advertise a
-// downloadable SoftwareApplication with an OS list and a $0 offer to crawlers.
+// Structured data describes the organization + website without overstating
+// availability: desktop builds are not public yet, so we deliberately do NOT
+// advertise a downloadable SoftwareApplication with an OS list and a $0 offer
+// to crawlers. Organization + WebSite are always-true entities that improve
+// entity/knowledge-graph recognition without implying a shipped download.
 const JSON_LD = {
   "@context": "https://schema.org",
-  "@type": "Organization",
-  name: "Recoder",
-  url: SITE_URL,
-  description: DESCRIPTION,
-  slogan: "The control plane for coding agents.",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${SITE_URL}/#organization`,
+      name: "Recoder",
+      url: SITE_URL,
+      description: DESCRIPTION,
+      slogan: "The control plane for coding agents.",
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      name: "Recoder",
+      url: SITE_URL,
+      description: DESCRIPTION,
+      publisher: { "@id": `${SITE_URL}/#organization` },
+    },
+  ],
 };
 
 export default function RootLayout({
