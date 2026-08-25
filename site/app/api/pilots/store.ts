@@ -409,15 +409,17 @@ function isPrivateOrReservedIpv6(hostname: string): boolean {
 }
 
 /**
- * Extract the embedded IPv4 from an IPv4-mapped IPv6 address so a mapped
- * loopback/private/metadata host (e.g. ::ffff:169.254.169.254) can't tunnel past
- * the private-IP denylist. `new URL()` canonicalises the dotted form to hex
- * (::ffff:127.0.0.1 → ::ffff:7f00:1), so both encodings must be decoded.
+ * Extract the embedded IPv4 from an IPv4-mapped or IPv4-compatible IPv6 address
+ * so a loopback/private/metadata host (e.g. ::ffff:169.254.169.254) can't tunnel
+ * past the private-IP denylist. `new URL()` canonicalises the dotted forms to hex
+ * (::ffff:127.0.0.1 → ::ffff:7f00:1, and the deprecated compatible ::127.0.0.1 →
+ * ::7f00:1, ::169.254.169.254 → ::a9fe:a9fe), so the optional `ffff:` prefix must
+ * be accepted to decode both encodings.
  */
 function mappedIpv4From(hostname: string): string | null {
-  const dotted = hostname.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)?.[1];
+  const dotted = hostname.match(/^::(?:ffff:)?(\d+\.\d+\.\d+\.\d+)$/)?.[1];
   if (dotted) return dotted;
-  const hex = hostname.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  const hex = hostname.match(/^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
   if (!hex) return null;
   const high = parseInt(hex[1], 16);
   const low = parseInt(hex[2], 16);
