@@ -35,6 +35,7 @@
     "seo:bing": "node scripts/bing-submit.mjs",
     "smoke:static": "bash scripts/smoke-static-assets.sh",
     "smoke:admin-push": "bash scripts/smoke-admin-push.sh",
+    "pilot:evidence:import": "node scripts/import-pilot-evidence.mjs",
     "load-test": "k6 run k6-load-test.js",
     "load-test:cloud": "k6 cloud k6-load-test.js"
   },

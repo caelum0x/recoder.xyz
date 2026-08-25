@@ -10,6 +10,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/docs",
     ...DOC_PAGES.map((p) => `/docs/${p.slug}`),
     "/enterprise",
+    "/design-partners",
+    "/proof",
     "/self-host",
     "/pricing",
     "/changelog",
@@ -18,7 +20,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   ];
   return routes.map((r) => ({
     url: `${base}${r}`,
-    lastModified: new Date("2026-06-24"),
+    lastModified: new Date("2026-08-23"),
     changeFrequency: "weekly",
     priority: r === "" ? 1 : 0.7,
   }));

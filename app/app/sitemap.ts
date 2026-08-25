@@ -49,6 +49,8 @@ const corePages: SitemapPage[] = [
   { path: '/integrations',            changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/partnerships',            changeFrequency: 'monthly',  priority: 0.6 },
   { path: '/changelog',               changeFrequency: 'weekly',   priority: 0.7 },
+  { path: '/design-partners',         changeFrequency: 'monthly',  priority: 0.6 },
+  { path: '/proof',                   changeFrequency: 'weekly',   priority: 0.6 },
   { path: '/blog',                    changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/alternatives',            changeFrequency: 'monthly',  priority: 0.8 },
 ];

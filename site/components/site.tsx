@@ -87,6 +87,8 @@ const NAV_LINKS = [
   { href: "/how-it-works", label: "How it works" },
   { href: "/docs", label: "Docs" },
   { href: "/enterprise", label: "Enterprise" },
+  { href: "/design-partners", label: "Pilot" },
+  { href: "/proof", label: "Proof" },
   { href: "/pricing", label: "Pricing" },
   { href: "/changelog", label: "Changelog" },
 ];

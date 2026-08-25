@@ -42,6 +42,11 @@ export default function AdminHomePage() {
           description="Validate push config and run dry-run/direct web push delivery tests."
           href="/admin/push"
         />
+        <AdminCard
+          title="Pilot Evidence"
+          description="Operate measured design-partner pilots with revision and evidence-chain checks."
+          href="/admin/pilots"
+        />
       </div>
     </div>
   );

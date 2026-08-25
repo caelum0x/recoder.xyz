@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { LegalPage, type LegalSection } from "../legal/legal-page";
 
-const UPDATED = "2026-06-28";
+const UPDATED = "2026-08-23";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — Recoder",
@@ -32,8 +32,21 @@ const SECTIONS: LegalSection[] = [
     ],
     bullets: [
       "Contact details you submit — such as your email and message when you request access, contact sales, or sign up for download notifications.",
+      "Product-fit details you submit for a design-partner pilot — such as team size, coding agents in use, deployment model, weekly run range, primary bottleneck, pilot timing, and interview consent.",
+      "Pilot records created by an authorized Recoder administrator, including the linked intake record, baseline measure, target, measured outcome, proof link, and lifecycle dates.",
       "Basic, privacy-respecting website analytics — aggregate page views and referrers, collected only when analytics are enabled and without third-party advertising cookies.",
       "Operational data for optional hosted or team features you choose to enable — for example coordination metadata needed to synchronize agents across machines.",
+    ],
+  },
+  {
+    heading: "Public product evidence",
+    body: [
+      "The public proof page reports separate aggregate counts for design-partner intakes, started pilots, completed pilots, and verified outcomes. A verified outcome must come from a completed pilot with a public HTTP or HTTPS proof link.",
+    ],
+    bullets: [
+      "The public summary does not include company details, email addresses, workflow descriptions, metric names, raw metric values, lead IDs, pilot IDs, or proof URLs.",
+      "Target-attainment totals remain hidden until at least three verified outcomes qualify for the aggregate.",
+      "A storage read error appears as unavailable. Recoder does not report that error as a zero count.",
     ],
   },
   {

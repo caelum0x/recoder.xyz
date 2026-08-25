@@ -29,6 +29,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           >
             Push Tools
           </Link>
+          <Link
+            href="/admin/pilots"
+            className="rounded-lg border border-white/10 px-3 py-1.5 text-zinc-300 hover:border-white/20 hover:text-white"
+          >
+            Pilots
+          </Link>
         </div>
         {children}
       </div>

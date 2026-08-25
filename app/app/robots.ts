@@ -30,6 +30,7 @@ const DISALLOWED_PATHS = [
   '/account',
   '/billing',
   '/settings',
+  '/admin',
   '/api',
   '/onboarding',
   '/checkout',
