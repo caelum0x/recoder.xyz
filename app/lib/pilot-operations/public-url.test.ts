@@ -36,6 +36,19 @@ describe('isPublicHttpUrl — proof-link SSRF guard (app/ Prisma path)', () => {
     assert.equal(isPublicHttpUrl('http://8.8.8.8/x'), true);
   });
 
+  it('rejects IANA special-purpose IPv4 ranges (parity with the site/ guard)', () => {
+    // These are non-globally-routable ranges the site/ pilot-proof guard already
+    // blocks; the app/ guard must make the identical trust decision so the same
+    // host can't be accepted as public proof on one funnel surface but not the other.
+    assert.equal(isPublicHttpUrl('http://192.0.0.1/x'), false); // IETF protocol assignments
+    assert.equal(isPublicHttpUrl('http://198.18.0.1/x'), false); // benchmarking 198.18.0.0/15
+    assert.equal(isPublicHttpUrl('http://198.19.5.5/x'), false); // benchmarking 198.18.0.0/15
+    assert.equal(isPublicHttpUrl('http://198.51.100.10/x'), false); // TEST-NET-2
+    assert.equal(isPublicHttpUrl('http://203.0.113.5/x'), false); // TEST-NET-3
+    // A neighbouring genuinely public host stays reachable (no over-block).
+    assert.equal(isPublicHttpUrl('http://198.20.0.1/x'), true);
+  });
+
   it('rejects reserved IPv6 including IPv4-mapped addresses', () => {
     assert.equal(isPublicHttpUrl('http://[::1]/x'), false);
     assert.equal(isPublicHttpUrl('http://[fe80::1]/x'), false);
@@ -47,5 +60,9 @@ describe('isPublicHttpUrl — proof-link SSRF guard (app/ Prisma path)', () => {
     // Mapped cloud metadata address — the regression this rung closes.
     assert.equal(isPublicHttpUrl('http://[::ffff:169.254.169.254]/x'), false);
     assert.equal(isPublicHttpUrl('http://[::ffff:8.8.8.8]/x'), true);
+    // The mapped-IPv4 decode must feed the FULL reserved denylist: a mapped
+    // IANA special-purpose address must be rejected, not just the classic ranges.
+    assert.equal(isPublicHttpUrl('http://[::ffff:198.18.0.1]/x'), false);
+    assert.equal(isPublicHttpUrl('http://[::ffff:203.0.113.5]/x'), false);
   });
 });
