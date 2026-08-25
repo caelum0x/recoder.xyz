@@ -40,8 +40,8 @@ describe('sitemap.ts (MetadataRoute.Sitemap)', () => {
 
     // A URL "advertises" a dead path only when its pathname EXACTLY equals that
     // path, optionally under a locale prefix (e.g. /cli or /tr/cli). An
-    // endsWith()/substring check would wrongly flag legitimate nested routes
-    // such as /docs/cli, whose pathname ends with "/cli".
+    // endsWith()/substring check is wrong here: it wrongly flags legitimate
+    // nested routes such as /docs/cli, whose pathname ends with "/cli".
     const pathnameOf = (u: string): string => {
       const p = new URL(String(u)).pathname.replace(/\/+$/, '');
       return p === '' ? '/' : p;
@@ -56,6 +56,7 @@ describe('sitemap.ts (MetadataRoute.Sitemap)', () => {
     for (const path of dead404Paths) {
       expect(urls).not.toContain(`${BASE}${path}`);
     }
+    // Neither primary URLs nor hreflang alternates may resurrect a dead path.
     for (const entry of entries) {
       expect(advertisesDeadPath(entry.url)).toBe(false);
       const languages = Object.values(entry.alternates?.languages ?? {});
