@@ -27,6 +27,40 @@ export type AdminAccessResult =
   | { ok: true; admin: AdminAccess }
   | { ok: false; response: NextResponse };
 
+/**
+ * Require the production web session and the platform-admin database role.
+ * Unlike ensureAdminAccess this never accepts ADMIN_SECRET, so new private
+ * operator surfaces cannot accidentally reintroduce browser-held shared keys.
+ */
+export async function ensureSessionAdminAccess(request: NextRequest): Promise<AdminAccessResult> {
+  const auth = await requireAuth(request);
+  if (auth.error) {
+    return { ok: false, response: auth.response };
+  }
+
+  const viewer = await prisma.users.findFirst({
+    where: {
+      OR: [{ id: auth.user.id }, { email: auth.user.email }],
+    },
+    select: { id: true, email: true, role: true },
+  });
+
+  if (!viewer || viewer.role !== 'admin') {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { success: false, error: 'Admin access required' },
+        { status: 403, headers: { 'Cache-Control': 'no-store' } },
+      ),
+    };
+  }
+
+  return {
+    ok: true,
+    admin: { via: 'session', userId: viewer.id, email: viewer.email },
+  };
+}
+
 export async function ensureAdminAccess(request: NextRequest): Promise<AdminAccessResult> {
   const adminSecret = process.env.ADMIN_SECRET;
   const secretHeader = request.headers.get('x-admin-secret');

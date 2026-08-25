@@ -6,16 +6,43 @@ import os from "node:os";
 // team/enterprise sales inquiry. Persisted to a newline-delimited JSON log.
 export interface Lead {
   readonly id: string;
-  readonly kind: "notify" | "sales";
+  readonly kind: "notify" | "sales" | "design-partner";
   readonly email: string;
   readonly platform?: string;
   readonly plan?: string;
   readonly message?: string;
   readonly source?: string;
+  readonly teamSize?: string;
+  readonly currentAgents?: string[];
+  readonly deployment?: string;
+  readonly primaryPain?: string;
+  readonly weeklyRuns?: string;
+  readonly evidenceRequired?: boolean;
+  readonly pilotTiming?: string;
+  readonly interviewConsent?: boolean;
+  readonly createdAt: string;
+}
+
+export interface ValidationSummary {
+  readonly generatedAt: string;
+  readonly designPartners: number;
+  readonly interviewConsents: number;
+  readonly evidenceRequired: number;
+  readonly readyNow: number;
+  readonly highFrequencyTeams: number;
+  readonly lastResponseAt: string | null;
+  readonly primaryPains: Readonly<Record<string, number>>;
+  readonly activeAgents: Readonly<Record<string, number>>;
+}
+
+export interface AdminDesignPartnerLeadRef {
+  readonly id: string;
   readonly createdAt: string;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PUBLIC_PAIN_KEYS = new Set(["compare", "merge", "governance", "privacy", "cost", "reliability"]);
+const PUBLIC_AGENT_KEYS = new Set(["claude code", "codex", "cursor", "opencode", "other"]);
 
 /**
  * Hard cap on the leads log (≈2k+ leads at ~2.3KB each). The prod box runs
@@ -87,6 +114,13 @@ export class LeadsLogFullError extends Error {
   }
 }
 
+class LeadsLogCorruptError extends Error {
+  constructor() {
+    super("leads log contains an invalid complete record");
+    this.name = "LeadsLogCorruptError";
+  }
+}
+
 async function assertUnderSizeCap(file: string): Promise<void> {
   try {
     const stat = await fs.stat(file);
@@ -115,5 +149,122 @@ function cryptoRandomId(): string {
   return (
     Date.now().toString(36) +
     Math.random().toString(36).slice(2, 10)
+  );
+}
+
+/**
+ * Read a privacy-safe aggregate of design-partner responses. Individual emails,
+ * messages and identifiers never leave the lead store. An interrupted final
+ * append is ignored; a malformed complete record fails loudly so corruption
+ * cannot be misreported as a lower count.
+ */
+export async function readValidationSummary(): Promise<ValidationSummary> {
+  const leads = [...(await readStoredDesignPartnerLeads()).values()];
+  const primaryPains: Record<string, number> = {};
+  const activeAgents: Record<string, number> = {};
+  for (const lead of leads) {
+    if (lead.primaryPain && PUBLIC_PAIN_KEYS.has(lead.primaryPain)) {
+      primaryPains[lead.primaryPain] = (primaryPains[lead.primaryPain] || 0) + 1;
+    }
+    for (const agent of lead.currentAgents || []) {
+      if (PUBLIC_AGENT_KEYS.has(agent)) {
+        activeAgents[agent] = (activeAgents[agent] || 0) + 1;
+      }
+    }
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    designPartners: leads.length,
+    interviewConsents: leads.filter((lead) => lead.interviewConsent).length,
+    evidenceRequired: leads.filter((lead) => lead.evidenceRequired).length,
+    readyNow: leads.filter((lead) => lead.pilotTiming === "now").length,
+    highFrequencyTeams: leads.filter((lead) => ["21-100", "101+"].includes(lead.weeklyRuns || "")).length,
+    lastResponseAt: leads.map((lead) => lead.createdAt).sort().at(-1) || null,
+    primaryPains,
+    activeAgents,
+  };
+}
+
+/** Confirm an admin-supplied pilot parent without returning private lead data. */
+export async function hasDesignPartnerLead(id: string): Promise<boolean> {
+  return (await readStoredDesignPartnerLeads()).has(id);
+}
+
+/**
+ * Return the minimum private lead reference needed by the pilot operator.
+ * Email, company context, workflow text, and intake answers stay in this store.
+ */
+export async function readAdminDesignPartnerLeadRefs(): Promise<AdminDesignPartnerLeadRef[]> {
+  const leads = [...(await readStoredDesignPartnerLeads()).values()];
+  return leads
+    .map((lead) => {
+      if (lead.id.length > 160 || lead.createdAt.length > 64) {
+        throw new LeadsLogCorruptError();
+      }
+      return { id: lead.id, createdAt: lead.createdAt };
+    })
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+async function readStoredDesignPartnerLeads(): Promise<Map<string, Lead>> {
+  const preferred = leadsFile(resolveDataDir());
+  const fallback = leadsFile(path.join(os.tmpdir(), "recoder-leads"));
+  const files = preferred === fallback ? [preferred] : [preferred, fallback];
+  const byId = new Map<string, Lead>();
+
+  for (const file of files) {
+    let contents = "";
+    try {
+      contents = await fs.readFile(file, "utf8");
+    } catch (error) {
+      if (isMissingFile(error)) continue;
+      throw error;
+    }
+    const lines = contents.split("\n");
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (!line.trim()) continue;
+      let candidate: unknown;
+      try {
+        candidate = JSON.parse(line);
+      } catch {
+        const interruptedFinalAppend = index === lines.length - 1 && !contents.endsWith("\n");
+        if (interruptedFinalAppend) continue;
+        throw new LeadsLogCorruptError();
+      }
+      if (isDesignPartnerLead(candidate)) {
+        byId.set(candidate.id, candidate);
+      } else if (
+        typeof candidate === "object" &&
+        candidate !== null &&
+        "kind" in candidate &&
+        candidate.kind === "design-partner"
+      ) {
+        throw new LeadsLogCorruptError();
+      }
+    }
+  }
+  return byId;
+}
+
+function isDesignPartnerLead(value: unknown): value is Lead {
+  if (typeof value !== "object" || value === null) return false;
+  const lead = value as Partial<Lead>;
+  return (
+    lead.kind === "design-partner" &&
+    typeof lead.id === "string" &&
+    lead.id.length > 0 &&
+    typeof lead.email === "string" &&
+    typeof lead.createdAt === "string"
+  );
+}
+
+function isMissingFile(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
   );
 }

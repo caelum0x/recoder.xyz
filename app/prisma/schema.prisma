@@ -2541,6 +2541,9 @@ model users {
   analytics_reports                                  analytics_reports[]
   api_keys                                           api_keys[]
   audit_logs                                         audit_logs[]
+  pilot_evidence_created                            pilot_evidence_pilots[]   @relation("PilotEvidenceCreatedBy")
+  pilot_evidence_updated                            pilot_evidence_pilots[]   @relation("PilotEvidenceUpdatedBy")
+  pilot_evidence_events                             pilot_evidence_events[]
   backup_access                                      backup_access?
   batch_requests                                     batch_requests[]
   user_chat_sessions                                 chat_sessions[]           @relation("UserChatSessions")
@@ -2909,4 +2912,114 @@ model marketplace_agents {
   @@index([published])
   @@index([downloads])
   @@index([createdAt])
+}
+
+/// Private design-partner intake records that may be linked to a measured pilot.
+/// This table is intentionally separate from public proof aggregates: email and
+/// product-fit answers must never cross the public read boundary.
+model pilot_design_partner_leads {
+  id                String                   @id @default(uuid())
+  source            String                   @default("design-partners")
+  sourceRef         String?                  @unique
+  requestFingerprint String                  @unique
+  requestHash        String
+  email             String
+  teamSize          String
+  currentAgents     String[]
+  deployment        String
+  primaryPain       String
+  weeklyRuns        String
+  evidenceRequired  Boolean                  @default(false)
+  pilotTiming       String
+  interviewConsent  Boolean                  @default(false)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  pilots            pilot_evidence_pilots[]
+
+  @@index([createdAt])
+  @@index([pilotTiming, createdAt])
+}
+
+/// Current pilot state. Every mutation also appends a pilot_evidence_events row
+/// in the same transaction, so the operational state and its evidence trail do
+/// not diverge.
+model pilot_evidence_pilots {
+  id                    String                       @id @default(uuid())
+  designPartnerLeadId   String
+  metricName            String
+  metricUnit            String
+  metricDirection       String
+  baselineValue         Float
+  targetValue           Float
+  outcomeValue          Float?
+  proofUrl              String?
+  status                String                       @default("started")
+  startedAt             DateTime                     @default(now())
+  completedAt           DateTime?
+  verifiedAt            DateTime?
+  cancelledAt           DateTime?
+  revision              Int                          @default(1)
+  createdById           String
+  updatedById           String
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  designPartnerLead     pilot_design_partner_leads   @relation(fields: [designPartnerLeadId], references: [id], onDelete: Restrict)
+  createdBy             users                        @relation("PilotEvidenceCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy             users                        @relation("PilotEvidenceUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  events                pilot_evidence_events[]
+
+  @@index([status, updatedAt])
+  @@index([designPartnerLeadId, createdAt])
+}
+
+/// Append-only, actor-attributed lifecycle evidence. requestFingerprint is the
+/// durable idempotency boundary; requestHash rejects reuse with a new payload.
+/// previousHash/eventHash form a verifiable per-pilot integrity chain.
+model pilot_evidence_events {
+  id                  String                   @id @default(uuid())
+  pilotId             String
+  actorUserId         String
+  action              String
+  fromStatus          String?
+  toStatus            String
+  revision            Int
+  requestFingerprint  String                   @unique
+  requestHash         String
+  requestId           String
+  previousHash        String?
+  eventHash           String                   @unique
+  snapshot            Json
+  createdAt           DateTime                 @default(now())
+  pilot               pilot_evidence_pilots    @relation(fields: [pilotId], references: [id], onDelete: Restrict)
+  actor               users                    @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([pilotId, revision])
+  @@index([pilotId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+/// Shared application-side operator quota. The reverse proxy still enforces
+/// coarse IP limits; this table enforces a per-admin mutation budget across app
+/// instances instead of relying on process memory.
+model pilot_operator_rate_limits {
+  bucketKey    String   @id
+  actorUserId  String
+  windowStart  DateTime
+  count        Int      @default(1)
+  updatedAt    DateTime @updatedAt
+
+  @@index([windowStart])
+  @@index([actorUserId, windowStart])
+}
+
+/// Shared public-intake quota keyed by a one-way IP digest and UTC hour. Raw IP
+/// addresses are never persisted in the pilot domain.
+model pilot_intake_rate_limits {
+  bucketKey    String   @id
+  ipDigest     String
+  windowStart  DateTime
+  count        Int      @default(1)
+  updatedAt    DateTime @updatedAt
+
+  @@index([windowStart])
 }

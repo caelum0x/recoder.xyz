@@ -6,8 +6,21 @@ import { clientIpFrom, isHoneypotTripped, takeRateLimitToken } from "./guards";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const KINDS = new Set(["notify", "sales"]);
+const KINDS = new Set(["notify", "sales", "design-partner"]);
 const PLATFORMS = new Set(["macos", "windows", "linux", "any"]);
+const TEAM_SIZES = new Set(["1", "2-10", "11-50", "51-200", "201+"]);
+const DEPLOYMENTS = new Set(["local", "cloud", "both"]);
+const PRIMARY_PAINS = new Set([
+  "compare",
+  "merge",
+  "governance",
+  "privacy",
+  "cost",
+  "reliability",
+]);
+const WEEKLY_RUNS = new Set(["0-5", "6-20", "21-100", "101+"]);
+const PILOT_TIMINGS = new Set(["now", "30-days", "quarter", "research"]);
+const CURRENT_AGENTS = new Set(["claude code", "codex", "cursor", "opencode", "other"]);
 
 interface LeadBody {
   kind?: unknown;
@@ -16,6 +29,14 @@ interface LeadBody {
   plan?: unknown;
   message?: unknown;
   source?: unknown;
+  teamSize?: unknown;
+  currentAgents?: unknown;
+  deployment?: unknown;
+  primaryPain?: unknown;
+  weeklyRuns?: unknown;
+  evidenceRequired?: unknown;
+  pilotTiming?: unknown;
+  interviewConsent?: unknown;
   /** Honeypot — never rendered in the real form; bots autofill it. */
   website?: unknown;
 }
@@ -67,15 +88,41 @@ export async function POST(request: Request): Promise<NextResponse> {
   const plan = clampString(body.plan, 64);
   const message = clampString(body.message, 2000);
   const source = clampString(body.source, 128);
+  const teamSize = enumString(body.teamSize, TEAM_SIZES);
+  const currentAgents = enumList(body.currentAgents, CURRENT_AGENTS, 5);
+  const deployment = enumString(body.deployment, DEPLOYMENTS);
+  const primaryPain = enumString(body.primaryPain, PRIMARY_PAINS);
+  const weeklyRuns = enumString(body.weeklyRuns, WEEKLY_RUNS);
+  const pilotTiming = enumString(body.pilotTiming, PILOT_TIMINGS);
+  const evidenceRequired = typeof body.evidenceRequired === "boolean" ? body.evidenceRequired : undefined;
+  const interviewConsent = typeof body.interviewConsent === "boolean" ? body.interviewConsent : undefined;
+
+  if (
+    kind === "design-partner" &&
+    (!teamSize || currentAgents.length === 0 || !deployment || !primaryPain || !weeklyRuns || !pilotTiming)
+  ) {
+    return NextResponse.json(
+      { success: false, error: "Complete every product-fit field." },
+      { status: 400 },
+    );
+  }
 
   try {
     const lead = await saveLead({
-      kind: kind as "notify" | "sales",
+      kind: kind as "notify" | "sales" | "design-partner",
       email: body.email,
       platform,
       plan,
       message,
       source,
+      teamSize,
+      currentAgents: currentAgents.length ? currentAgents : undefined,
+      deployment,
+      primaryPain,
+      weeklyRuns,
+      evidenceRequired,
+      pilotTiming,
+      interviewConsent,
     });
     return NextResponse.json({ success: true, id: lead.id }, { status: 201 });
   } catch (error: unknown) {
@@ -97,4 +144,19 @@ function clampString(value: unknown, max: number): string | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   return trimmed.slice(0, max);
+}
+
+function enumString(value: unknown, allowed: Set<string>): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toLowerCase();
+  return allowed.has(normalized) ? normalized : undefined;
+}
+
+function enumList(value: unknown, allowed: Set<string>, maxItems: number): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(
+    value
+      .map((item) => (typeof item === "string" ? item.trim().toLowerCase() : ""))
+      .filter((item) => allowed.has(item)),
+  )).slice(0, maxItems);
 }
