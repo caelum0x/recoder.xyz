@@ -25,8 +25,43 @@ describe('sitemap.ts (MetadataRoute.Sitemap)', () => {
   });
 
   it('lists the known public routes', () => {
-    for (const path of ['', '/pricing', '/features', '/docs', '/blog', '/terms', '/privacy', '/cli']) {
+    for (const path of ['', '/pricing', '/features', '/docs', '/blog', '/terms', '/privacy']) {
       expect(urls).toContain(`${BASE}${path}`);
+    }
+  });
+
+  // '/cli' and '/cli/setup' have no backing page.tsx (only /cli/auth and
+  // /cli/authorize exist) and no rewrite/redirect, so they 404 on the live
+  // site and caused GSC "Not found (404)" errors. They must not reappear in
+  // the sitemap until real 200-OK pages ship.
+  it('never advertises URLs that 404 on the live site', () => {
+    const dead404Paths = ['/cli', '/cli/setup', '/auth/forgot-password'];
+    const locales = ['en', 'tr', 'es', 'zh', 'de'];
+
+    // A URL "advertises" a dead path only when its pathname EXACTLY equals that
+    // path, optionally under a locale prefix (e.g. /cli or /tr/cli). An
+    // endsWith()/substring check would wrongly flag legitimate nested routes
+    // such as /docs/cli, whose pathname ends with "/cli".
+    const pathnameOf = (u: string): string => {
+      const p = new URL(String(u)).pathname.replace(/\/+$/, '');
+      return p === '' ? '/' : p;
+    };
+    const advertisesDeadPath = (u: string): boolean => {
+      const p = pathnameOf(u);
+      return dead404Paths.some(
+        (dead) => p === dead || locales.some((loc) => p === `/${loc}${dead}`)
+      );
+    };
+
+    for (const path of dead404Paths) {
+      expect(urls).not.toContain(`${BASE}${path}`);
+    }
+    for (const entry of entries) {
+      expect(advertisesDeadPath(entry.url)).toBe(false);
+      const languages = Object.values(entry.alternates?.languages ?? {});
+      for (const alt of languages) {
+        expect(advertisesDeadPath(String(alt))).toBe(false);
+      }
     }
   });
 

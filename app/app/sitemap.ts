@@ -63,10 +63,12 @@ const blogPostPages: SitemapPage[] = [
 ];
 
 // ── CLI pages ─────────────────────────────────────────────────────────────
-const cliPages: SitemapPage[] = [
-  { path: '/cli',                     changeFrequency: 'weekly',   priority: 0.9 },
-  { path: '/cli/setup',               changeFrequency: 'monthly',  priority: 0.7 },
-];
+// NOTE: '/cli' and '/cli/setup' were removed — no page.tsx backs those bare
+// segments (only /cli/auth and /cli/authorize exist, and next.config has no
+// rewrite/redirect for them), so they returned HTTP 404 and produced Google
+// Search Console "Not found (404)" errors. Re-add them here only when real
+// 200-OK pages ship. ('/docs/cli' below is a live docs route and stays.)
+const cliPages: SitemapPage[] = [];
 
 // ── Docs pages ────────────────────────────────────────────────────────────
 const docsPages: SitemapPage[] = [
