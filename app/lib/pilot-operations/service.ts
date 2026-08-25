@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { isIP } from 'node:net';
 import { prisma } from '@/lib/prisma';
+import { isPublicHttpUrl } from './public-url';
+
+export { isPublicHttpUrl } from './public-url';
 
 export const PILOT_STATUSES = ['started', 'completed', 'verified', 'cancelled'] as const;
 export const METRIC_DIRECTIONS = ['increase', 'decrease', 'exact'] as const;
@@ -481,50 +483,6 @@ function iso(value: Date | string | null | undefined): string | null {
 
 function isFiniteMeasure(value: number): boolean {
   return Number.isFinite(value) && Math.abs(value) <= 1_000_000_000_000;
-}
-
-function isPublicHttpUrl(value: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return false;
-  }
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || !url.hostname) return false;
-  const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
-  if (
-    hostname === 'localhost' ||
-    hostname.endsWith('.localhost') ||
-    hostname.endsWith('.local') ||
-    hostname.endsWith('.internal') ||
-    hostname.endsWith('.lan') ||
-    hostname.endsWith('.test') ||
-    hostname.endsWith('.invalid') ||
-    hostname.endsWith('.example')
-  ) return false;
-  const version = isIP(hostname);
-  if (version === 4) return !isPrivateIpv4(hostname);
-  if (version === 6) return !isPrivateIpv6(hostname);
-  return hostname.includes('.');
-}
-
-function isPrivateIpv4(hostname: string): boolean {
-  const [a, b] = hostname.split('.').map(Number);
-  return (
-    a === 0 || a === 10 || a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    a >= 224
-  );
-}
-
-function isPrivateIpv6(hostname: string): boolean {
-  const normalized = hostname.toLowerCase();
-  return normalized === '::' || normalized === '::1' || normalized.startsWith('fc') ||
-    normalized.startsWith('fd') || normalized.startsWith('fe8') || normalized.startsWith('fe9') ||
-    normalized.startsWith('fea') || normalized.startsWith('feb');
 }
 
 function canonicalJson(value: unknown): string {
