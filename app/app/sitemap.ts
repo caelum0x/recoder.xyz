@@ -65,9 +65,11 @@ const blogPostPages: SitemapPage[] = [
 // ── CLI pages ─────────────────────────────────────────────────────────────
 // NOTE: '/cli' and '/cli/setup' were removed — no page.tsx backs those bare
 // segments (only /cli/auth and /cli/authorize exist, and next.config has no
-// rewrite/redirect for them), so they returned HTTP 404 and produced Google
-// Search Console "Not found (404)" errors. Re-add them here only when real
-// 200-OK pages ship. ('/docs/cli' below is a live docs route and stays.)
+// rewrite/redirect for them), so they returned HTTP 404 (verified 2026-08-25
+// via Googlebot UA, incl. every /{locale}/cli* variant) and produced Google
+// Search Console "Not found (404)" errors — one for the sitemap URL plus one
+// per hreflang locale alternate. Re-add them here only when real 200-OK pages
+// ship. ('/docs/cli' below is a live docs route and stays.)
 const cliPages: SitemapPage[] = [];
 
 // ── Docs pages ────────────────────────────────────────────────────────────
@@ -97,7 +99,10 @@ const authPages: SitemapPage[] = [
   { path: '/auth/signup',             changeFrequency: 'monthly',  priority: 0.7 },
   { path: '/auth/signin',             changeFrequency: 'monthly',  priority: 0.6 },
   { path: '/auth/register',           changeFrequency: 'monthly',  priority: 0.6 },
-  { path: '/auth/forgot-password',    changeFrequency: 'monthly',  priority: 0.4 },
+  // `/auth/forgot-password` has no backing route and returns HTTP 404 on the
+  // live site (verified 2026-08-25, incl. every /{locale}/auth/forgot-password
+  // variant). Removed to clear the Google Search Console "Not found (404)"
+  // errors it produced; re-add when the page exists and returns 200.
 ];
 
 // ── Support / contact ─────────────────────────────────────────────────────
