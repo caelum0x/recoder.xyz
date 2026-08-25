@@ -173,5 +173,12 @@ describe("isPublicHttpUrl — proof-link SSRF guard", () => {
     assert.equal(isPublicHttpUrl("http://[::ffff:10.0.0.1]/x"), false);
     assert.equal(isPublicHttpUrl("http://[::ffff:169.254.169.254]/x"), false); // mapped cloud metadata
     assert.equal(isPublicHttpUrl("http://[::ffff:8.8.8.8]/x"), true); // mapped public IP stays public
+    // IPv4-compatible IPv6 (::a.b.c.d) canonicalises to bare hex (::HHHH:HHHH)
+    // with no ffff: prefix — the guard must decode it too or an internal host
+    // tunnels past the denylist. ::a9fe:a9fe = ::169.254.169.254 (metadata),
+    // ::7f00:1 = ::127.0.0.1 (loopback), ::a00:1 = ::10.0.0.1 (private).
+    assert.equal(isPublicHttpUrl("http://[::a9fe:a9fe]/x"), false);
+    assert.equal(isPublicHttpUrl("http://[::7f00:1]/x"), false);
+    assert.equal(isPublicHttpUrl("http://[::a00:1]/x"), false);
   });
 });
