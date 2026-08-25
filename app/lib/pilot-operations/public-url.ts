@@ -34,13 +34,16 @@ export function isPublicHttpUrl(value: string): boolean {
 }
 
 function isPrivateIpv4(hostname: string): boolean {
-  const [a, b] = hostname.split('.').map(Number);
+  const [a, b, c] = hostname.split('.').map(Number);
   return (
     a === 0 || a === 10 || a === 127 ||
     (a === 100 && b >= 64 && b <= 127) ||
     (a === 169 && b === 254) ||
     (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 0) ||
     (a === 192 && b === 168) ||
+    (a === 198 && [18, 19, 51].includes(b)) ||
+    (a === 203 && b === 0 && c === 113) ||
     a >= 224
   );
 }
