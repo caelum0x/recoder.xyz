@@ -160,6 +160,8 @@
     "verify:desktop-release": "bash scripts/verify-desktop-release.sh",
     "set:desktop-release-secrets": "bash scripts/set-desktop-release-secrets.sh",
     "closeout:desktop-release": "bash scripts/desktop-release-closeout.sh",
+    "release:desktop": "bash scripts/release-desktop.sh release",
+    "release:desktop:dry": "bash scripts/release-desktop.sh dry-run",
     "check:plan-evidence": "bash scripts/check-plan-evidence.sh",
     "check:eval-gate": "node scripts/check-eval-gate.js",
     "eval:harness": "node scripts/run-eval-benchmark.js",

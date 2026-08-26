@@ -4,7 +4,7 @@
 # See docs/RECODER-PRODUCT-ARCHITECTURE.md §4 and §6.
 
 .DEFAULT_GOAL := help
-.PHONY: help all verify ts site backend go-beads bd go-ziti rust-openfang rust-claw py-pal py-ops heavy build-tmux build-dmux substrate substrate-binaries
+.PHONY: help all verify ts site backend go-beads bd go-ziti rust-openfang rust-claw py-pal py-ops heavy build-tmux build-dmux substrate substrate-binaries release release-dry
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -75,3 +75,11 @@ heavy: go-beads go-ziti rust-openfang rust-claw ## CI-grade builds (needs disk +
 
 all: ts backend site go-beads py-pal py-ops ## Build the laptop-feasible product surface
 	@echo "✓ feasible product surface built"
+
+# ---- Desktop release (macOS arm64 signed + notarized DMG) ----
+# Single orchestrator; see RELEASE.md. `release` needs macOS + Apple certs in env.
+release-dry: ## Validate the desktop release pipeline (headless, no build, no certs)
+	bash scripts/release-desktop.sh dry-run
+
+release: ## Full macOS arm64 signed+notarized DMG release (needs certs; see RELEASE.md)
+	bash scripts/release-desktop.sh release --publish
