@@ -26,13 +26,19 @@ function projectBoard(raw: unknown): StatusBoardView {
     const board = emptyBoard();
     board.degraded = source.degraded === true;
     board.reason = typeof source.reason == "string" ? source.reason : "";
+    // A workspace has exactly one attention state, so it belongs to exactly one
+    // column. De-dupe by workspaceId across the WHOLE board (most-urgent column
+    // wins — STATUS_COLUMNS is ordered by urgency) so an untrusted wire that
+    // repeats an id never renders a duplicate card or inflates the truthful count.
+    const seen = new Set<string>();
     for (const state of STATUS_COLUMNS) {
         const values = Array.isArray(source.columns && typeof source.columns == "object" ? (source.columns as Record<string, unknown>)[state] : null)
             ? (source.columns as Record<string, unknown>)[state] as unknown[] : [];
         board.columns[state] = values.flatMap(value => {
             const cell = value != null && typeof value == "object" ? value as Record<string, unknown> : {};
             const workspaceId = typeof cell.workspaceId == "string" ? cell.workspaceId : "";
-            if (workspaceId == "") return [];
+            if (workspaceId == "" || seen.has(workspaceId)) return [];
+            seen.add(workspaceId);
             return [{ workspaceId, agentKind: typeof cell.agentKind == "string" ? cell.agentKind : workspaceId, ...(typeof cell.taskGroup == "string" ? { taskGroup: cell.taskGroup } : {}), nativeStatus: typeof cell.nativeStatus == "string" ? cell.nativeStatus : "unknown" }];
         });
         board.totals[state] = board.columns[state].length;
