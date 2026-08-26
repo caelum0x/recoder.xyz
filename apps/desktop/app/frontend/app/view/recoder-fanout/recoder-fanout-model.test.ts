@@ -14,6 +14,7 @@ vi.mock("./recoder-fanout", () => ({
     RecoderFanoutView: () => null,
 }));
 
+import { atom as jotaiAtom } from "jotai";
 import { globalStore } from "@/app/store/global";
 import { RecoderFanoutViewModel, cockpitPollDelayMs, resolveConvergeSelection } from "./recoder-fanout-model";
 
@@ -25,6 +26,16 @@ const ComposeUrl = "http://127.0.0.1:3100/api/conductor/workspaces/compare/grp-r
 
 function makeModel(): RecoderFanoutViewModel {
     return new RecoderFanoutViewModel({ blockId: "b1" } as ViewModelInitType);
+}
+
+// A model whose block carries the given meta (mirrors how the diff-model tests stub
+// waveEnv.wos) — used to exercise the Board → "Fan out from issue" seed path.
+function makeModelWithBlockMeta(meta: Record<string, unknown>): RecoderFanoutViewModel {
+    const blockAtom = jotaiAtom({ meta } as unknown as Block);
+    return new RecoderFanoutViewModel({
+        blockId: "b1",
+        waveEnv: { wos: { getWaveObjectAtom: () => blockAtom } },
+    } as unknown as ViewModelInitType);
 }
 
 // Wrap a governed-edge `data` envelope in the sendSuccess shape the edge returns.
@@ -432,6 +443,39 @@ describe("RecoderFanoutViewModel.launchFromIssue", () => {
         expect(globalStore.get(model.launchResultAtom)).toBeNull();
         expect(globalStore.get(model.launchNoticeAtom)).toContain("could not be read");
         expect(globalStore.get(model.taskGroupAtom)).toBe("");
+    });
+});
+
+describe("RecoderFanoutViewModel.seedIssueIdFromBlock (Board → Fan out from issue)", () => {
+    it("seeds an empty issue-id field from the block's recoder:issueid meta", () => {
+        const model = makeModelWithBlockMeta({ "recoder:issueid": "recoder-b4qx" });
+        model.seedIssueIdFromBlock();
+        expect(globalStore.get(model.issueIdAtom)).toBe("recoder-b4qx");
+    });
+
+    it("trims a padded seed", () => {
+        const model = makeModelWithBlockMeta({ "recoder:issueid": "  recoder-b4qx  " });
+        model.seedIssueIdFromBlock();
+        expect(globalStore.get(model.issueIdAtom)).toBe("recoder-b4qx");
+    });
+
+    it("never clobbers an issue-id the dev already typed", () => {
+        const model = makeModelWithBlockMeta({ "recoder:issueid": "recoder-b4qx" });
+        model.setIssueId("mine-123");
+        model.seedIssueIdFromBlock();
+        expect(globalStore.get(model.issueIdAtom)).toBe("mine-123");
+    });
+
+    it("is a harmless no-op when the block carries no seed", () => {
+        const model = makeModelWithBlockMeta({});
+        model.seedIssueIdFromBlock();
+        expect(globalStore.get(model.issueIdAtom)).toBe("");
+    });
+
+    it("degrades to a no-op when waveEnv/block is absent (preview/test callers)", () => {
+        const model = makeModel();
+        model.seedIssueIdFromBlock();
+        expect(globalStore.get(model.issueIdAtom)).toBe("");
     });
 });
 

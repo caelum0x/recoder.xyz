@@ -395,6 +395,7 @@ function RecoderFanoutView({ model }: ViewComponentProps<RecoderFanoutViewModel>
     const connected = useAtomValue(model.connectedAtom);
 
     useEffect(() => {
+        model.seedIssueIdFromBlock();
         let cancelled = false;
         let timer: ReturnType<typeof setTimeout> | undefined;
         const tick = async () => {
