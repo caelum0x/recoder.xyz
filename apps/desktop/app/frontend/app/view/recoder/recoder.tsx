@@ -502,6 +502,7 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
     const allWorkspaces = useAtomValue(model.combinedWorkspacesAtom);
     const groups = useAtomValue(model.groupsAtom);
     const columns = useAtomValue(model.boardColumnsAtom);
+    const digest = useAtomValue(model.boardDigestAtom);
     const selectMode = useAtomValue(model.selectModeAtom);
     const selectedForConverge = useAtomValue(model.selectedForConvergeAtom);
     const adHocConvergeError = useAtomValue(model.adHocConvergeErrorAtom);
@@ -1557,6 +1558,14 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         Cancel
                     </button>
                     {adHocConvergeError != "" && <span className="text-error">{adHocConvergeError}</span>}
+                </div>
+            )}
+            {allWorkspaces.length > 0 && digest.summary != "" && (
+                <div className={`${META} flex items-center gap-1.5`} aria-label="What needs you">
+                    {digest.attentionCount > 0 && (
+                        <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                    )}
+                    <span className={digest.attentionCount > 0 ? "text-primary" : undefined}>{digest.summary}</span>
                 </div>
             )}
             {allWorkspaces.length > 0 && (

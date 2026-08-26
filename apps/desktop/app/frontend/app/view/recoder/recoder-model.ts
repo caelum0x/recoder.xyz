@@ -6,6 +6,7 @@ import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { agentLabel } from "./recoder-agent-labels";
 import {
     deriveLifecycleColumns,
+    deriveBoardDigest,
     adHocCompareIds,
     convergeSelectionRepo,
     workspaceProjectId,
@@ -33,6 +34,7 @@ import {
     type RecoderAttentionEvent,
     type RecoderAuditEntry,
     type RecoderLifecycleColumn,
+    type BoardDigest,
     type RecoderBoardShow,
     type RecoderDiffSummary,
     type RecoderMergeOutcome,
@@ -360,6 +362,11 @@ class RecoderViewModel implements ViewModel {
     // (queued → running → needs-review → done) — exactly the order the board renders
     // and keyboard nav walks. Grouped by STATE (PW3 #8), not recency.
     boardColumnsAtom!: Atom<RecoderLifecycleColumn[]>;
+    // The board's resting attention digest: one glanceable "what needs me now" fold
+    // of the visible board (human-turns + converge-ready + running). Derived from the
+    // SAME visible list and compare map the columns/cards use, so the header glance
+    // can never disagree with the board beneath it.
+    boardDigestAtom!: Atom<BoardDigest>;
     // Ad-hoc converge selection (PW1 #1): the board's "tick 2+ separately-launched
     // workspaces to converge them" affordance. selectModeAtom toggles the quiet
     // checkboxes; selectedForConvergeAtom is the ticked id set. Cleared together when
@@ -548,6 +555,10 @@ class RecoderViewModel implements ViewModel {
         this.boardColumnsAtom = atom((get) =>
             deriveLifecycleColumns(groupByTaskGroup(get(this.boardWorkspacesAtom)))
         );
+        this.boardDigestAtom = atom((get) => {
+            const visible = get(this.boardWorkspacesAtom);
+            return deriveBoardDigest(visible, groupByTaskGroup(visible), get(this.compareAtom));
+        });
         wireAttentionClicks(this);
     }
 

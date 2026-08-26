@@ -36,6 +36,7 @@ import {
     workspaceLifecycle,
     groupLifecycle,
     deriveLifecycleColumns,
+    deriveBoardDigest,
     convergeSelectionRepo,
     convergeSelectDisabled,
     deriveAdHocConverge,
@@ -1485,5 +1486,119 @@ describe("ad-hoc converge selection (PW1 #1)", () => {
         const mixed = deriveAdHocConverge([a, b, c], new Set(["a", "c"]));
         expect(mixed.canConverge).toBe(false);
         expect(mixed.reason).toMatch(/different repos/);
+    });
+});
+
+describe("deriveBoardDigest — the board's resting 'what needs me' glance", () => {
+    function grouped(taskGroup: string, ...ws: Partial<RecoderWorkspace>[]): RecoderWorkspace[] {
+        return ws.map((o) => makeWs({ ...o, metadata: { taskGroup } }));
+    }
+
+    it("is fully calm on an empty board — every count zero, no summary, no primary", () => {
+        expect(deriveBoardDigest([], [])).toMatchObject({
+            needsApproval: 0,
+            needsInput: 0,
+            changesRequested: 0,
+            needsReview: 0,
+            running: 0,
+            convergeReady: 0,
+            attentionCount: 0,
+            primary: "",
+            summary: "",
+        });
+    });
+
+    it("counts running rows but gives a running-only board NO actionable primary", () => {
+        const ws = [makeWs({ state: "running" }), makeWs({ state: "merging" }), makeWs({ state: "ready" })];
+        const d = deriveBoardDigest(ws, groupByTaskGroup(ws));
+        expect(d.running).toBe(2);
+        expect(d.attentionCount).toBe(0);
+        expect(d.primary).toBe("");
+        expect(d.summary).toBe("2 running");
+    });
+
+    it("classifies each human-turn state and sums them into attentionCount", () => {
+        const ws = [
+            makeWs({ state: "awaiting_review" }),
+            makeWs({ state: "awaiting_review" }),
+            makeWs({ state: "changes_requested" }),
+            makeWs({ state: "awaiting_approval" }),
+            makeWs({ state: "running", attention: "agent_idle_prompt" }),
+        ];
+        const d = deriveBoardDigest(ws, groupByTaskGroup(ws));
+        expect(d).toMatchObject({ needsReview: 2, changesRequested: 1, needsApproval: 1, needsInput: 1 });
+        expect(d.attentionCount).toBe(5);
+    });
+
+    it("counts attention-driven approval/input even when the lifecycle state does not", () => {
+        const ws = [
+            makeWs({ state: "running", attention: "awaiting_approval" }),
+            makeWs({ state: "ready", attention: "agent_idle_prompt" }),
+        ];
+        const d = deriveBoardDigest(ws, groupByTaskGroup(ws));
+        expect(d.needsApproval).toBe(1);
+        expect(d.needsInput).toBe(1);
+    });
+
+    it("bills each workspace to ONE human-turn — approval outranks a co-occurring idle prompt", () => {
+        const ws = [makeWs({ state: "awaiting_approval", attention: "agent_idle_prompt" })];
+        const d = deriveBoardDigest(ws, groupByTaskGroup(ws));
+        expect(d.needsApproval).toBe(1);
+        expect(d.needsInput).toBe(0);
+        expect(d.attentionCount).toBe(1);
+    });
+
+    it("ranks the primary accent approval → input → changes → review", () => {
+        expect(deriveBoardDigest([makeWs({ state: "awaiting_review" })], []).primary).toBe("1 needs review");
+        expect(
+            deriveBoardDigest([makeWs({ state: "awaiting_review" }), makeWs({ state: "changes_requested" })], []).primary
+        ).toBe("1 changes requested");
+        expect(
+            deriveBoardDigest(
+                [makeWs({ state: "awaiting_review" }), makeWs({ state: "running", attention: "agent_idle_prompt" })],
+                []
+            ).primary
+        ).toBe("1 needs input");
+        expect(
+            deriveBoardDigest([makeWs({ state: "awaiting_review" }), makeWs({ state: "awaiting_approval" })], []).primary
+        ).toBe("1 needs approval");
+    });
+
+    it("pluralizes the needs-verb (1 needs / 2 need)", () => {
+        expect(deriveBoardDigest([makeWs({ state: "awaiting_review" })], []).summary).toBe("1 needs review");
+        expect(
+            deriveBoardDigest([makeWs({ state: "awaiting_review" }), makeWs({ state: "awaiting_review" })], []).summary
+        ).toBe("2 need review");
+    });
+
+    it("counts a settled multi-sibling group as converge-ready — and still surfaces its review siblings", () => {
+        const ws = grouped("grp_a", { state: "awaiting_review" }, { state: "awaiting_review" });
+        const d = deriveBoardDigest(ws, groupByTaskGroup(ws));
+        expect(d.convergeReady).toBe(1);
+        expect(d.needsReview).toBe(2);
+        expect(d.summary).toBe("2 need review · 1 ready to converge");
+    });
+
+    it("does NOT count a still-running group, or a solo workspace, as converge-ready", () => {
+        const running = grouped("grp_a", { state: "awaiting_review" }, { state: "running" });
+        expect(deriveBoardDigest(running, groupByTaskGroup(running)).convergeReady).toBe(0);
+
+        const solo = [makeWs({ state: "awaiting_review" })];
+        expect(deriveBoardDigest(solo, groupByTaskGroup(solo)).convergeReady).toBe(0);
+    });
+
+    it("orders the summary clauses actionable-first, then converge, then running", () => {
+        const ws = [
+            ...grouped("grp_a", { state: "awaiting_review" }, { state: "awaiting_review" }),
+            makeWs({ state: "awaiting_approval" }),
+            makeWs({ state: "running", attention: "agent_idle_prompt" }),
+            makeWs({ state: "changes_requested" }),
+            makeWs({ state: "running" }),
+        ];
+        const d = deriveBoardDigest(ws, groupByTaskGroup(ws));
+        expect(d.summary).toBe(
+            "1 needs approval · 1 needs input · 1 changes requested · 2 need review · 1 ready to converge · 2 running"
+        );
+        expect(d.primary).toBe("1 needs approval");
     });
 });
