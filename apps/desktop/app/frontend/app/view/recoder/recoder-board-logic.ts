@@ -1360,6 +1360,141 @@ function deriveLifecycleColumns(groups: RecoderWorkspaceGroup[]): RecoderLifecyc
     return result;
 }
 
+// The board's at-rest attention digest: a single glanceable fold of the active
+// board answering "what needs me right now" — the scan the lifecycle columns make
+// possible but never total into one line. Every human-turn count is a MUTUALLY
+// EXCLUSIVE per-workspace classification (most-urgent wins), so attentionCount is a
+// clean sum and no workspace is billed twice. Purely client-side over the
+// already-loaded board — no fetch, no backend — and distinct from the owner-scoped
+// Needs-You queue: this is the resting home-board glance, that is a dedicated
+// ranked pane. Degrade-safe: an unknown state/attention counts toward nothing (it
+// still shows in its column) rather than a fabricated signal.
+type BoardDigest = {
+    needsApproval: number;
+    needsInput: number;
+    changesRequested: number;
+    needsReview: number;
+    running: number;
+    // Multi-sibling groups whose whole fan-out has settled and are worth comparing
+    // (deriveClusterState phase "ready"). A group here may also contribute its
+    // awaiting_review siblings to needsReview — both facts are true (review one, or
+    // converge them), so the digest surfaces both rather than hiding either.
+    convergeReady: number;
+    // needsApproval + needsInput + changesRequested + needsReview — the total
+    // human-turns waiting on the dev. running/convergeReady are NOT human-turns
+    // (nothing is blocked on the dev), so they are excluded from this sum.
+    attentionCount: number;
+    // The single most-urgent ACTIONABLE phrase for the header accent; "" when
+    // nothing waits and nothing is converge-ready (a running-only or idle board).
+    primary: string;
+    // The compact " · "-joined read: actionable clauses first (approval → input →
+    // changes → review), then converge, then the informational running count; ""
+    // when the board is fully calm (nothing waiting, nothing running).
+    summary: string;
+};
+
+type BoardHumanTurn = "approval" | "input" | "changes" | "review" | "";
+
+// Pure: the single human-turn a workspace is waiting on, most-urgent first, or ""
+// when it is not waiting on the dev. awaiting_approval (by state OR attention)
+// outranks a needs-input idle prompt, which outranks changes_requested, which
+// outranks a plain awaiting_review. Anything else is not a human-turn.
+function workspaceHumanTurn(ws: RecoderWorkspace): BoardHumanTurn {
+    if (ws.state == "awaiting_approval" || ws.attention == "awaiting_approval") {
+        return "approval";
+    }
+    if (ws.attention == "agent_idle_prompt") {
+        return "input";
+    }
+    if (ws.state == "changes_requested") {
+        return "changes";
+    }
+    if (ws.state == "awaiting_review") {
+        return "review";
+    }
+    return "";
+}
+
+function needsVerb(n: number): string {
+    return n == 1 ? "needs" : "need";
+}
+
+// Pure + degrade-safe: fold the active board (its workspaces + task groups, plus the
+// loaded compare-by-group when present) into the resting attention digest. Reuses
+// the SAME derivations the cards and columns use (workspaceLifecycle for running,
+// deriveClusterState for converge-readiness) so the glance can never disagree with
+// the board beneath it. No fetch, no mutation.
+function deriveBoardDigest(
+    workspaces: readonly RecoderWorkspace[],
+    groups: readonly RecoderWorkspaceGroup[],
+    compareByGroup?: Record<string, CompareView>
+): BoardDigest {
+    let needsApproval = 0;
+    let needsInput = 0;
+    let changesRequested = 0;
+    let needsReview = 0;
+    let running = 0;
+    for (const ws of workspaces) {
+        if (workspaceLifecycle(ws.state) == "running") {
+            running += 1;
+        }
+        const turn = workspaceHumanTurn(ws);
+        if (turn == "approval") {
+            needsApproval += 1;
+        } else if (turn == "input") {
+            needsInput += 1;
+        } else if (turn == "changes") {
+            changesRequested += 1;
+        } else if (turn == "review") {
+            needsReview += 1;
+        }
+    }
+    let convergeReady = 0;
+    for (const group of groups) {
+        if (group.taskGroup == null || group.workspaces.length < 2) {
+            continue;
+        }
+        const cluster = deriveClusterState(group.workspaces, compareByGroup?.[group.taskGroup]);
+        if (cluster != null && cluster.phase == "ready") {
+            convergeReady += 1;
+        }
+    }
+    const attentionCount = needsApproval + needsInput + changesRequested + needsReview;
+    const clauses: string[] = [];
+    if (needsApproval > 0) {
+        clauses.push(`${needsApproval} ${needsVerb(needsApproval)} approval`);
+    }
+    if (needsInput > 0) {
+        clauses.push(`${needsInput} ${needsVerb(needsInput)} input`);
+    }
+    if (changesRequested > 0) {
+        clauses.push(`${changesRequested} changes requested`);
+    }
+    if (needsReview > 0) {
+        clauses.push(`${needsReview} ${needsVerb(needsReview)} review`);
+    }
+    if (convergeReady > 0) {
+        clauses.push(`${convergeReady} ready to converge`);
+    }
+    // Captured BEFORE the running clause: a running-only board has no actionable
+    // primary — there is nothing yet for the dev to act on.
+    const primary = clauses[0] ?? "";
+    if (running > 0) {
+        clauses.push(`${running} running`);
+    }
+    return {
+        needsApproval,
+        needsInput,
+        changesRequested,
+        needsReview,
+        running,
+        convergeReady,
+        attentionCount,
+        primary,
+        summary: clauses.join(" · "),
+    };
+}
+
 // The repo (projectId) an ad-hoc converge selection is LOCKED to — the first
 // selected workspace's repo, or null when nothing is selected yet. Converging
 // across repos is nonsense (the backend rejects it too), so this is the key the
@@ -1496,6 +1631,7 @@ export {
     workspaceLifecycle,
     groupLifecycle,
     deriveLifecycleColumns,
+    deriveBoardDigest,
     convergeSelectionRepo,
     convergeSelectDisabled,
     deriveAdHocConverge,
@@ -1544,6 +1680,7 @@ export {
     type RecoderBoardBucket,
     type RecoderLifecyclePhase,
     type RecoderLifecycleColumn,
+    type BoardDigest,
     type AdHocConvergeDecision,
     type ClusterConvergePhase,
     type ClusterState,
