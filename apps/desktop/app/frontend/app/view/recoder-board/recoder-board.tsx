@@ -1,27 +1,15 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { createBlock } from "@/app/store/global";
 import { RecoderEmpty, RecoderSkeleton } from "@/app/view/recoder/recoder-states";
 import { FIELD_LABEL, PAGE_TITLE, QUIET_BTN, STATE_CHIP } from "@/app/view/recoder/recoder-styles";
+import { openFanoutFromIssue } from "@/app/view/recoder-fanout/recoder-fanout-open";
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { BoardStatus, RecoderBoardViewModel } from "./recoder-board-model";
 
 const REFRESH_MS = 6000;
-
-async function pickUpIssue(title: string) {
-    const meta: Record<string, unknown> = { view: "recoder" };
-    if (title != "") {
-        meta["recoder:prefilltask"] = title;
-    }
-    try {
-        await createBlock({ meta });
-    } catch {
-        // Opening the launch form is best-effort; a failure here must not crash the board.
-    }
-}
 
 const STATUS_MESSAGES: Record<BoardStatus, string> = {
     loading: "",
@@ -67,8 +55,8 @@ function RecoderBoardView({ model }: ViewComponentProps<RecoderBoardViewModel>) 
                         {issue.id != "" && (
                             <span className="text-xs text-secondary font-mono ml-auto shrink-0">{issue.id}</span>
                         )}
-                        <button className={`${QUIET_BTN} shrink-0`} onClick={() => pickUpIssue(issue.title)}>
-                            Pick up
+                        <button className={`${QUIET_BTN} shrink-0`} onClick={() => openFanoutFromIssue(issue.id)}>
+                            Fan out
                         </button>
                     </div>
                 ))}
@@ -86,11 +74,7 @@ function RecoderBoardView({ model }: ViewComponentProps<RecoderBoardViewModel>) 
                             <span className="text-sm truncate">{sig.detail != "" ? sig.detail : sig.workspaceId}</span>
                             <button
                                 className={`${QUIET_BTN} shrink-0 ml-auto`}
-                                onClick={() =>
-                                    pickUpIssue(
-                                        sig.detail != "" ? sig.detail : `Pick up stuck work from ${sig.workspaceId}`
-                                    )
-                                }
+                                onClick={() => openFanoutFromIssue()}
                             >
                                 Pick up
                             </button>

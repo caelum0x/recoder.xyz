@@ -9,6 +9,7 @@ import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { workspaceDetailMeta } from "../recoder/recoder-detail-open";
 import { readErrorReason } from "../recoder/recoder-errors";
 import { RecoderFanoutView } from "./recoder-fanout";
+import { readSeedIssueId } from "./recoder-fanout-open";
 
 // The agent kinds the fan-out launch offers. Loom drives the NATIVE set with real
 // agent-status; the FALLBACK set is accepted but forfeits native status (reported
@@ -168,6 +169,10 @@ class RecoderFanoutViewModel implements ViewModel {
     viewIcon: Atom<string>;
     viewName: Atom<string>;
     blockId: string;
+    // The block object carrying this view's meta (the Board threads a bd issue id in
+    // via recoder:issueid). Guarded: preview/test callers may omit waveEnv, in which
+    // case the seed read simply degrades to "" and nothing is pre-filled.
+    blockAtom: Atom<Block>;
     taskGroupAtom: PrimitiveAtom<string>;
     snapshotAtom: PrimitiveAtom<CockpitView | null>;
     noticeAtom: PrimitiveAtom<string>;
@@ -205,6 +210,8 @@ class RecoderFanoutViewModel implements ViewModel {
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
+        this.blockAtom = (initOpts.waveEnv?.wos?.getWaveObjectAtom<Block>(`block:${initOpts.blockId}`) ??
+            atom(null)) as Atom<Block>;
         this.viewType = "recoder-fanout";
         this.viewIcon = atom("code-fork");
         this.viewName = atom("Converge Fan-out");
@@ -285,6 +292,21 @@ class RecoderFanoutViewModel implements ViewModel {
 
     setIssueId(value: string) {
         globalStore.set(this.issueIdAtom, value);
+    }
+
+    // Board → "Fan out from issue": seed the launch issue-id ONCE from the block meta
+    // the Board threaded in (recoder:issueid), so the form opens on that bd issue and a
+    // launch tracks taskId=issueId. Only fills an EMPTY field — never clobbers what the
+    // dev typed, and a missing seed / missing block is a harmless no-op.
+    seedIssueIdFromBlock() {
+        const current = globalStore.get(this.issueIdAtom);
+        if (typeof current == "string" && current.trim() != "") {
+            return;
+        }
+        const seed = readSeedIssueId(globalStore.get(this.blockAtom));
+        if (seed != "") {
+            globalStore.set(this.issueIdAtom, seed);
+        }
     }
 
     setRepoPath(value: string) {
